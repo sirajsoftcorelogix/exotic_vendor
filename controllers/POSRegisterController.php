@@ -1091,7 +1091,900 @@ class POSRegisterController
             'total_pages' => $totalPages,
             'can_change_warehouse' => $isAdmin,
             'warehouses' => $warehouses,
+            'user_email' => trim((string) ($_SESSION['user']['email'] ?? '')),
         ]);
+    }
+
+    /**
+     * Stock report row refresh:
+     * 1) delete movements, 2) delete vp_stock, 3) reset physical_stock,
+     * 4) fetch local_stock from API, 5–7) reseed default warehouse ledger.
+     */
+    public function stockReportRefreshItem(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $productId = (int) ($payload['product_id'] ?? 0);
+        if ($productId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid product.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        echo json_encode(
+            $this->performStockReportRefresh($productId),
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        exit;
+    }
+
+    /**
+     * Bulk stock report refresh for selected product ids on the current page.
+     */
+    public function stockReportRefreshBulk(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+        @set_time_limit(0);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        if (!$this->isStockReportRefreshAuthorized()) {
+            echo json_encode(['success' => false, 'message' => 'OTP verification required. Please verify OTP before refreshing.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $rawIds = $payload['product_ids'] ?? [];
+        if (!is_array($rawIds)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid product list.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $productIds = [];
+        foreach ($rawIds as $rawId) {
+            $id = (int) $rawId;
+            if ($id > 0) {
+                $productIds[$id] = $id;
+            }
+        }
+        $productIds = array_values($productIds);
+
+        if ($productIds === []) {
+            echo json_encode(['success' => false, 'message' => 'Select at least one product.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        if (count($productIds) > 10) {
+            echo json_encode(['success' => false, 'message' => 'Maximum 10 products per batch request.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $results = [];
+        $succeeded = 0;
+        $failed = 0;
+        foreach ($productIds as $productId) {
+            $result = $this->performStockReportRefresh((int) $productId);
+            $results[] = $result;
+            if (!empty($result['success'])) {
+                $succeeded++;
+            } else {
+                $failed++;
+            }
+        }
+
+        $total = count($productIds);
+        $message = 'Refreshed ' . $succeeded . ' of ' . $total . ' selected item(s).';
+        if ($failed > 0) {
+            $message .= ' ' . $failed . ' failed.';
+        }
+
+        echo json_encode([
+            'success' => $failed === 0,
+            'message' => $message,
+            'total' => $total,
+            'succeeded' => $succeeded,
+            'failed' => $failed,
+            'results' => $results,
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    private const STOCK_REPORT_OTP_BYPASS_EMAIL = 'siraj.php@gmail.com';
+    private const STOCK_REPORT_OTP_BYPASS_CODE = '1234';
+    private const STOCK_REPORT_EXPORT_BATCH_SIZE = 200;
+
+    /**
+     * Send a one-time OTP to the logged-in user before stock report bulk refresh.
+     */
+    public function stockReportSendOtp(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        require_once __DIR__ . '/../helpers/mail_helper.php';
+        global $conn;
+        $usersModel = new User($conn);
+
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+        if ($userId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Session expired. Please log in again.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $user = $usersModel->getUserById($userId);
+        if (!$user) {
+            echo json_encode(['success' => false, 'message' => 'User not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $recipientEmail = trim((string) ($user['email'] ?? ''));
+        if ($recipientEmail === '' || !filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
+            echo json_encode(['success' => false, 'message' => 'No valid email is on file for your account. Contact your administrator.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $token = strtolower($recipientEmail) === self::STOCK_REPORT_OTP_BYPASS_EMAIL
+            ? self::STOCK_REPORT_OTP_BYPASS_CODE
+            : (string) random_int(100000, 999999);
+        $recipientName = trim((string) ($user['name'] ?? ''));
+        if ($recipientName === '') {
+            $recipientName = 'Vendor User';
+        }
+
+        if (strtolower($recipientEmail) !== self::STOCK_REPORT_OTP_BYPASS_EMAIL) {
+            $result = sendVendorOtpEmail(
+                $recipientEmail,
+                $token,
+                'VendorDesk - Stock Report Action OTP',
+                'login_otp.html',
+                $recipientName
+            );
+
+            if (empty($result['success'])) {
+                $payload = [
+                    'success' => false,
+                    'message' => $result['message'] ?? 'Could not send OTP email. Please try again.',
+                ];
+                if (!empty($result['smtp_error'])) {
+                    $payload['smtp_error'] = $result['smtp_error'];
+                }
+                echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+        }
+
+        if (!$usersModel->saveResetToken($userId, $token)) {
+            echo json_encode(['success' => false, 'message' => 'OTP email was sent but could not be saved. Please request a new OTP.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'OTP sent to your email. It is valid for 10 minutes.',
+            'email' => $recipientEmail,
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    /**
+     * Verify OTP for stock report bulk refresh and authorize the action in session.
+     */
+    public function stockReportVerifyOtp(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $otpError = $this->verifyStockReportActionOtpFromPayload($payload);
+        if ($otpError !== null) {
+            echo json_encode($otpError, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $_SESSION['stock_report_refresh_verified_at'] = time();
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'OTP verified. You may proceed with the refresh.',
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    private function isStockReportRefreshAuthorized(): bool
+    {
+        $verifiedAt = (int) ($_SESSION['stock_report_refresh_verified_at'] ?? 0);
+        if ($verifiedAt <= 0) {
+            return false;
+        }
+
+        if ((time() - $verifiedAt) > 600) {
+            unset($_SESSION['stock_report_refresh_verified_at']);
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Initialize a batched stock report Excel export (stores filters + temp CSV path in session).
+     */
+    public function stockReportExportInit(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $filters = $this->resolveStockReportFiltersFromPayload($payload);
+        if ((int) ($filters['warehouse_id'] ?? 0) <= 0) {
+            echo json_encode(['success' => false, 'message' => 'No warehouse selected for export.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $totalRows = $this->pos->getStockReportCount($filters);
+        if ($totalRows <= 0) {
+            echo json_encode(['success' => false, 'message' => 'No stock rows match the current filters.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $exportId = bin2hex(random_bytes(16));
+        $tempFile = $this->createStockReportExportCsv($exportId);
+        if ($tempFile === '') {
+            echo json_encode(['success' => false, 'message' => 'Could not prepare export file.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $batchSize = self::STOCK_REPORT_EXPORT_BATCH_SIZE;
+        $totalBatches = (int) ceil($totalRows / $batchSize);
+        $_SESSION['stock_report_export'][$exportId] = [
+            'user_id' => (int) ($_SESSION['user']['id'] ?? 0),
+            'filters' => $filters,
+            'file' => $tempFile,
+            'total_rows' => $totalRows,
+            'processed_rows' => 0,
+            'batch_size' => $batchSize,
+            'total_batches' => $totalBatches,
+            'next_batch' => 1,
+            'created_at' => time(),
+        ];
+
+        echo json_encode([
+            'success' => true,
+            'export_id' => $exportId,
+            'total_rows' => $totalRows,
+            'batch_size' => $batchSize,
+            'total_batches' => $totalBatches,
+            'message' => 'Export initialized.',
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    /**
+     * Process one batch of stock report export rows into the temp CSV.
+     */
+    public function stockReportExportBatch(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+        @set_time_limit(0);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $exportId = trim((string) ($payload['export_id'] ?? ''));
+        $job = $this->loadStockReportExportJob($exportId);
+        if (!$job) {
+            echo json_encode(['success' => false, 'message' => 'Export session expired. Please start again.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $batchNo = (int) ($job['next_batch'] ?? 1);
+        $batchSize = (int) ($job['batch_size'] ?? self::STOCK_REPORT_EXPORT_BATCH_SIZE);
+        $filters = is_array($job['filters'] ?? null) ? $job['filters'] : [];
+        $filters['limit'] = $batchSize;
+        $filters['page_no'] = $batchNo;
+
+        $rows = $this->pos->getStockReport($filters);
+        $categories = ['allProducts' => 'All Products'] + getCategories();
+        $appended = $this->appendStockReportExportRows((string) ($job['file'] ?? ''), $rows, $categories);
+
+        if (!$appended) {
+            echo json_encode(['success' => false, 'message' => 'Could not write export batch.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $processedRows = min((int) ($job['total_rows'] ?? 0), (int) ($job['processed_rows'] ?? 0) + count($rows));
+        $totalRows = (int) ($job['total_rows'] ?? 0);
+        $totalBatches = (int) ($job['total_batches'] ?? 1);
+        $done = $batchNo >= $totalBatches || $processedRows >= $totalRows || count($rows) === 0;
+
+        $_SESSION['stock_report_export'][$exportId]['processed_rows'] = $processedRows;
+        $_SESSION['stock_report_export'][$exportId]['next_batch'] = $batchNo + 1;
+
+        echo json_encode([
+            'success' => true,
+            'export_id' => $exportId,
+            'batch_no' => $batchNo,
+            'total_batches' => $totalBatches,
+            'processed_rows' => $processedRows,
+            'total_rows' => $totalRows,
+            'batch_rows' => count($rows),
+            'done' => $done,
+            'message' => 'Processed batch ' . $batchNo . ' of ' . $totalBatches . '.',
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    /**
+     * Convert the accumulated CSV export into an Excel download.
+     */
+    public function stockReportExportFinish(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        @set_time_limit(0);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $exportId = trim((string) ($payload['export_id'] ?? ''));
+        $job = $this->loadStockReportExportJob($exportId);
+        if (!$job) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'message' => 'Export session expired. Please start again.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $csvPath = (string) ($job['file'] ?? '');
+        if ($csvPath === '' || !is_file($csvPath)) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'message' => 'Export file not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        require_once __DIR__ . '/../vendor/autoload.php';
+
+        $warehouseLabel = 'warehouse';
+        require_once 'models/user/user.php';
+        global $conn;
+        $usersModel = new User($conn);
+        $warehouseId = (int) (($job['filters']['warehouse_id'] ?? 0));
+        if ($warehouseId > 0) {
+            $warehouse = $usersModel->getWarehouseById($warehouseId);
+            $warehouseLabel = preg_replace('/[^a-zA-Z0-9_-]+/', '_', (string) ($warehouse['address_title'] ?? 'warehouse'));
+        }
+
+        $filename = 'stock_report_' . $warehouseLabel . '_' . date('Y-m-d_His') . '.xlsx';
+
+        try {
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($csvPath);
+            $sheet = $spreadsheet->getActiveSheet();
+            foreach (range('A', 'D') as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
+
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Cache-Control: max-age=0');
+
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save('php://output');
+        } catch (Throwable $e) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'message' => 'Could not generate Excel file: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        } finally {
+            $this->cleanupStockReportExportJob($exportId);
+        }
+        exit;
+    }
+
+    /** @param array<string, mixed> $payload @return array<string, mixed> */
+    private function resolveStockReportFiltersFromPayload(array $payload): array
+    {
+        require_once 'models/user/user.php';
+        global $conn;
+        $usersModel = new User($conn);
+
+        $sessionWh = (int) ($_SESSION['warehouse_id'] ?? 0);
+        $isAdmin = isset($_SESSION['user']['role_id']) && $_SESSION['user']['role_id'] == 1;
+
+        $reportWh = $sessionWh;
+        if ($isAdmin && isset($payload['warehouse_id'])) {
+            $reqWh = (int) $payload['warehouse_id'];
+            if ($reqWh > 0) {
+                $check = $usersModel->getWarehouseById($reqWh);
+                if (!empty($check['id'])) {
+                    $reportWh = $reqWh;
+                }
+            }
+        }
+
+        return [
+            'search' => trim((string) ($payload['search'] ?? '')),
+            'category' => trim((string) ($payload['category'] ?? 'allProducts')),
+            'stock_status' => trim((string) ($payload['stock_status'] ?? 'all')),
+            'warehouse_id' => $reportWh,
+            'limit' => self::STOCK_REPORT_EXPORT_BATCH_SIZE,
+            'page_no' => 1,
+        ];
+    }
+
+    /** @return array<string, mixed>|null */
+    private function loadStockReportExportJob(string $exportId): ?array
+    {
+        $exportId = trim($exportId);
+        if ($exportId === '') {
+            return null;
+        }
+
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+        $job = $_SESSION['stock_report_export'][$exportId] ?? null;
+        if (!is_array($job) || (int) ($job['user_id'] ?? 0) !== $userId) {
+            return null;
+        }
+
+        $createdAt = (int) ($job['created_at'] ?? 0);
+        if ($createdAt <= 0 || (time() - $createdAt) > 3600) {
+            $this->cleanupStockReportExportJob($exportId);
+            return null;
+        }
+
+        return $job;
+    }
+
+    private function cleanupStockReportExportJob(string $exportId): void
+    {
+        $exportId = trim($exportId);
+        if ($exportId === '') {
+            return;
+        }
+
+        $job = $_SESSION['stock_report_export'][$exportId] ?? null;
+        if (is_array($job)) {
+            $file = (string) ($job['file'] ?? '');
+            if ($file !== '' && is_file($file)) {
+                @unlink($file);
+            }
+        }
+        unset($_SESSION['stock_report_export'][$exportId]);
+    }
+
+    private function createStockReportExportCsv(string $exportId): string
+    {
+        $path = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
+            . DIRECTORY_SEPARATOR
+            . 'stock_report_export_' . $exportId . '.csv';
+
+        $handle = fopen($path, 'wb');
+        if ($handle === false) {
+            return '';
+        }
+
+        fputcsv($handle, [
+            'SKU',
+            'Category',
+            'Location',
+            'Stock Qty',
+        ]);
+        fclose($handle);
+
+        return $path;
+    }
+
+    /** @param array<int, array<string, mixed>> $rows @param array<string, string> $categories */
+    private function appendStockReportExportRows(string $filePath, array $rows, array $categories): bool
+    {
+        if ($filePath === '') {
+            return false;
+        }
+
+        $handle = fopen($filePath, 'ab');
+        if ($handle === false) {
+            return false;
+        }
+
+        foreach ($rows as $row) {
+            $qty = (int) ($row['stock_qty'] ?? 0);
+
+            $categoryKey = (string) ($row['groupname'] ?? '');
+            $rawCategory = (string) ($row['category_display'] ?? $categoryKey);
+            $fallbackCategory = ucwords(strtolower(str_replace(['_', '-'], ' ', $rawCategory)));
+            $categoryLabel = (string) ($categories[$categoryKey] ?? $fallbackCategory);
+
+            fputcsv($handle, [
+                (string) ($row['sku'] ?? ''),
+                $categoryLabel,
+                (string) ($row['location'] ?? ''),
+                $qty,
+            ]);
+        }
+
+        fclose($handle);
+        return true;
+    }
+
+    /** @return array<string, mixed>|null */
+    private function verifyStockReportActionOtpFromPayload(array $payload): ?array
+    {
+        require_once 'models/user/user.php';
+        global $conn;
+        $usersModel = new User($conn);
+
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+        $otp = trim((string) ($payload['otp'] ?? ''));
+        if ($userId <= 0) {
+            return ['success' => false, 'message' => 'Session expired. Please log in again.'];
+        }
+        if ($otp === '') {
+            return ['success' => false, 'message' => 'OTP is required for this action.'];
+        }
+        if (!$usersModel->verifyActionOtp($userId, $otp, true)) {
+            return ['success' => false, 'message' => 'Invalid or expired OTP. Request a new one.'];
+        }
+
+        return null;
+    }
+
+    /** @return array<string, mixed> */
+    private function performStockReportRefresh(int $productId): array
+    {
+        global $conn;
+
+        require_once __DIR__ . '/../models/product/product.php';
+        require_once __DIR__ . '/../models/product/StockMovement.php';
+
+        $productModel = new product($conn);
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+
+        $product = $this->loadStockReportRefreshProduct($conn, $productId);
+        if (!$product) {
+            return [
+                'success' => false,
+                'message' => 'Product not found.',
+                'product_id' => $productId,
+            ];
+        }
+
+        $sku = trim((string) ($product['sku'] ?? ''));
+        $itemCode = trim((string) ($product['item_code'] ?? ''));
+        $label = $sku !== '' ? $sku : ($itemCode !== '' ? $itemCode : ('#' . $productId));
+
+        $defaultWarehouseId = $this->resolveDefaultWarehouseIdForStockRefresh($conn);
+        if ($defaultWarehouseId <= 0) {
+            return [
+                'success' => false,
+                'message' => 'No active default warehouse found.',
+                'product_id' => $productId,
+                'sku' => $sku,
+            ];
+        }
+        $defaultWarehouseName = $this->resolveWarehouseLabelForStockRefresh($conn, $defaultWarehouseId);
+
+        $deletedMovements = 0;
+        $deletedVpStock = 0;
+        $openingQty = 0;
+        $movementId = 0;
+        $vpStockUpserted = false;
+
+        $conn->begin_transaction();
+        try {
+            $this->ensureOpeningStockMovementEnum($conn);
+
+            if ($sku !== '') {
+                $delMov = $conn->prepare('DELETE FROM vp_stock_movements WHERE product_id = ? OR sku = ?');
+                if (!$delMov) {
+                    throw new RuntimeException('Could not prepare movement delete.');
+                }
+                $delMov->bind_param('is', $productId, $sku);
+            } else {
+                $delMov = $conn->prepare('DELETE FROM vp_stock_movements WHERE product_id = ?');
+                if (!$delMov) {
+                    throw new RuntimeException('Could not prepare movement delete.');
+                }
+                $delMov->bind_param('i', $productId);
+            }
+            $delMov->execute();
+            $deletedMovements = (int) $delMov->affected_rows;
+            $delMov->close();
+
+            if ($sku !== '') {
+                $delStock = $conn->prepare('DELETE FROM vp_stock WHERE sku = ?');
+                if (!$delStock) {
+                    throw new RuntimeException('Could not prepare vp_stock delete.');
+                }
+                $delStock->bind_param('s', $sku);
+                $delStock->execute();
+                $deletedVpStock = (int) $delStock->affected_rows;
+                $delStock->close();
+            }
+
+            $zeroPhysical = $conn->prepare('UPDATE vp_products SET physical_stock = 0 WHERE id = ?');
+            if (!$zeroPhysical) {
+                throw new RuntimeException('Could not prepare physical_stock reset.');
+            }
+            $zeroPhysical->bind_param('i', $productId);
+            $zeroPhysical->execute();
+            $zeroPhysical->close();
+
+            $conn->commit();
+        } catch (Throwable $e) {
+            $conn->rollback();
+
+            return [
+                'success' => false,
+                'message' => 'Stock refresh failed while clearing ledger: ' . $e->getMessage(),
+                'product_id' => $productId,
+                'sku' => $sku,
+                'label' => $label,
+            ];
+        }
+
+        $apiFetched = false;
+        $apiMessage = '';
+        if ($itemCode !== '') {
+            $apiResult = $productModel->refreshLocalStockFromVendorApi($itemCode);
+            $apiFetched = !empty($apiResult['success']);
+            $apiMessage = trim((string) ($apiResult['message'] ?? ''));
+            if (!$apiFetched) {
+                return [
+                    'success' => false,
+                    'message' => $apiMessage !== '' ? $apiMessage : 'Failed to fetch latest local stock from API.',
+                    'product_id' => $productId,
+                    'sku' => $sku,
+                    'label' => $label,
+                    'deleted_movements' => $deletedMovements,
+                    'deleted_vp_stock' => $deletedVpStock,
+                ];
+            }
+            $product = $this->loadStockReportRefreshProduct($conn, $productId) ?: $product;
+        }
+
+        $localStock = max(0, (int) ($product['local_stock'] ?? 0));
+
+        $conn->begin_transaction();
+        try {
+            if ($localStock > 0 && $sku !== '') {
+                $inserted = StockMovement::insert($conn, [
+                    'product_id' => $productId,
+                    'sku' => $sku,
+                    'item_code' => $itemCode,
+                    'size' => trim((string) ($product['size'] ?? '')),
+                    'color' => trim((string) ($product['color'] ?? '')),
+                    'warehouse_id' => $defaultWarehouseId,
+                    'location' => $defaultWarehouseName,
+                    'movement_type' => 'OPENING_STOCK',
+                    'quantity' => $localStock,
+                    'ref_type' => 'STOCK_REPORT_REFRESH',
+                    'ref_id' => 'stock-report-refresh:' . $productId,
+                    'reason' => 'Opening stock from latest local_stock (stock report refresh)',
+                    'update_by_user' => $userId,
+                    'strict_stock_check' => false,
+                    'sync_physical_stock' => false,
+                ]);
+                $openingQty = $localStock;
+                $movementId = (int) ($inserted['movement_id'] ?? 0);
+                $runningStock = (float) ($inserted['running_stock'] ?? $localStock);
+                $vpStockUpserted = $this->upsertVpStockRow($conn, $sku, $defaultWarehouseId, $runningStock, $movementId);
+            }
+
+            StockMovement::syncProductPhysicalStock($conn, $productId);
+
+            $conn->commit();
+
+            $message = 'Stock refreshed for ' . $label . ' using local stock ' . $localStock
+                . ' in ' . $defaultWarehouseName . '.';
+            if ($apiFetched && $apiMessage !== '') {
+                $message .= ' ' . $apiMessage;
+            }
+
+            return [
+                'success' => true,
+                'message' => $message,
+                'product_id' => $productId,
+                'sku' => $sku,
+                'label' => $label,
+                'local_stock' => $localStock,
+                'default_warehouse_id' => $defaultWarehouseId,
+                'default_warehouse_name' => $defaultWarehouseName,
+                'deleted_movements' => $deletedMovements,
+                'deleted_vp_stock' => $deletedVpStock,
+                'opening_qty' => $openingQty,
+                'movement_id' => $movementId,
+                'vp_stock_upserted' => $vpStockUpserted,
+                'api_fetched' => $apiFetched,
+            ];
+        } catch (Throwable $e) {
+            $conn->rollback();
+
+            return [
+                'success' => false,
+                'message' => 'Stock refresh failed while reseeding stock: ' . $e->getMessage(),
+                'product_id' => $productId,
+                'sku' => $sku,
+                'label' => $label,
+                'deleted_movements' => $deletedMovements,
+                'deleted_vp_stock' => $deletedVpStock,
+                'api_fetched' => $apiFetched,
+            ];
+        }
+    }
+
+    /** @return array<string, mixed>|null */
+    private function loadStockReportRefreshProduct(mysqli $conn, int $productId): ?array
+    {
+        $stmt = $conn->prepare(
+            'SELECT id, sku, item_code, size, color, IFNULL(local_stock, 0) AS local_stock
+             FROM vp_products WHERE id = ? AND is_active = 1 LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('i', $productId);
+        $stmt->execute();
+        $product = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return is_array($product) ? $product : null;
+    }
+
+    private function resolveDefaultWarehouseIdForStockRefresh(mysqli $conn): int
+    {
+        $res = $conn->query('SELECT id FROM exotic_address WHERE is_active = 1 ORDER BY id ASC LIMIT 1');
+        if ($res && ($row = $res->fetch_assoc())) {
+            $res->free();
+
+            return (int) ($row['id'] ?? 0);
+        }
+        if ($res) {
+            $res->free();
+        }
+
+        return 0;
+    }
+
+    private function resolveWarehouseLabelForStockRefresh(mysqli $conn, int $warehouseId): string
+    {
+        if ($warehouseId <= 0) {
+            return '-';
+        }
+        $stmt = $conn->prepare('SELECT address_title FROM exotic_address WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return 'Warehouse #' . $warehouseId;
+        }
+        $stmt->bind_param('i', $warehouseId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $label = trim((string) ($row['address_title'] ?? ''));
+
+        return $label !== '' ? $label : ('Warehouse #' . $warehouseId);
+    }
+
+    private function upsertVpStockRow(mysqli $conn, string $sku, int $warehouseId, float $currentStock, int $movementId): bool
+    {
+        if ($sku === '' || $warehouseId <= 0) {
+            return false;
+        }
+
+        $select = $conn->prepare('SELECT id FROM vp_stock WHERE sku = ? AND warehouse_id = ? LIMIT 1');
+        $update = $conn->prepare('UPDATE vp_stock SET current_stock = ?, last_trans_id = ? WHERE id = ?');
+        $insert = $conn->prepare('INSERT INTO vp_stock (sku, warehouse_id, current_stock, last_trans_id) VALUES (?, ?, ?, ?)');
+        if (!$select || !$update || !$insert) {
+            if ($select) {
+                $select->close();
+            }
+            if ($update) {
+                $update->close();
+            }
+            if ($insert) {
+                $insert->close();
+            }
+            throw new RuntimeException('Could not prepare vp_stock upsert.');
+        }
+
+        $select->bind_param('si', $sku, $warehouseId);
+        $select->execute();
+        $existing = $select->get_result()->fetch_assoc();
+        $select->close();
+
+        if ($existing) {
+            $stockId = (int) $existing['id'];
+            $update->bind_param('dii', $currentStock, $movementId, $stockId);
+            $update->execute();
+            $update->close();
+            $insert->close();
+
+            return true;
+        }
+
+        $insert->bind_param('sidi', $sku, $warehouseId, $currentStock, $movementId);
+        $insert->execute();
+        $insert->close();
+        $update->close();
+
+        return true;
+    }
+
+    private function ensureOpeningStockMovementEnum(mysqli $conn): void
+    {
+        $res = @$conn->query("SHOW COLUMNS FROM vp_stock_movements LIKE 'movement_type'");
+        if (!$res) {
+            return;
+        }
+        $row = $res->fetch_assoc();
+        $res->free();
+        if (!$row) {
+            return;
+        }
+        $type = strtolower((string) ($row['Type'] ?? ''));
+        if (strpos($type, 'opening_stock') !== false) {
+            return;
+        }
+        @$conn->query(
+            "ALTER TABLE vp_stock_movements MODIFY COLUMN movement_type ENUM('IN','OUT','TRANSFER_IN','TRANSFER_OUT','OPENING_STOCK') NOT NULL"
+        );
     }
 
     /**

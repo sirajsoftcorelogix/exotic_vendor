@@ -55,7 +55,7 @@
         <div id="accordion-content" class="accordion-content hidden">
             <!-- Responsive Grid container -->
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
-                <form method="GET" onsubmit="submitSearchForm()" class="contents">
+                <form method="GET" onsubmit="return submitSearchForm();" class="contents">
                 <!-- Orders From/Till -->
                 <div class="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-2 flex items-end gap-2">
                     <div class="w-1/2">

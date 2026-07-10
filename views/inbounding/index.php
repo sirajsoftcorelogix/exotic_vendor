@@ -2,6 +2,7 @@
 require_once 'settings/database/database.php';
 require_once 'models/vendor/vendor.php';
 require_once 'models/user/user.php';
+require_once 'models/inbounding/Inbounding.php';
 
 // Check if connection exists, if not create it
 if (!isset($conn)) {
@@ -184,6 +185,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
     .btn-edit { background-color: rgba(208, 103, 6, 1); color: #fff; }
     .btn-upload { background-color: #000000; color: #ffffff; }
     .btn-published { background-color: rgba(18, 136, 7, 1); color: #fff; }
+    .btn-published-local { background-color: rgba(37, 99, 235, 1); color: #fff; }
     .btn-base:hover { opacity: 0.9; }
     .custom-input::placeholder { font-size: 13px; }
     .date-field {
@@ -606,26 +608,36 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
             
             $hasEditedPhotos = false;
             $hasRawPhotos = false;
-            $hasPublished = false;
+            $statLogs = is_array($tc['stat_logs'] ?? null) ? $tc['stat_logs'] : [];
 
-            if (!empty($tc['stat_logs'])) {
-                foreach ($tc['stat_logs'] as $log) {
-                    if ($log['stat'] === 'Editing') {
+            if ($statLogs !== []) {
+                foreach ($statLogs as $log) {
+                    $logStat = (string) ($log['stat'] ?? '');
+                    if ($logStat === 'Editing') {
                         $hasEditedPhotos = true;
                     }
-                    if ($log['stat'] === 'Photoshoot') {
+                    if ($logStat === 'Photoshoot') {
                         $hasRawPhotos = true;
-                    }
-                    if ($log['stat'] === 'Published') {
-                        $hasPublished = true;
                     }
                 }
             }
 
+            $publishTier = Inbounding::resolveLatestPublishTierFromLogs($statLogs);
+
             // Define classes
             $editedBtnClass = $hasEditedPhotos ? 'bg-green-600 hover:bg-green-700' : 'bg-black hover:bg-gray-800';
             $rawBtnClass    = $hasRawPhotos    ? 'bg-green-600 hover:bg-green-700' : 'bg-black hover:bg-gray-800';
-            $tileBorderClass = $hasPublished ? 'border-4 border-green-500' : 'border border-[rgba(229,229,229,1)]';
+            $tileBorderClass = match ($publishTier) {
+                'live' => 'border-4 border-green-500',
+                'local' => 'border-4 border-blue-500',
+                default => 'border border-[rgba(229,229,229,1)]',
+            };
+            $publishedBtnClass = $publishTier === 'local' ? 'btn-published-local' : 'btn-published';
+            $publishedBtnLabel = match ($publishTier) {
+                'live' => 'Published (Live)',
+                'local' => 'Published (Local)',
+                default => 'Published',
+            };
             ?>
 
             <div class="accordion-item bg-white rounded-[16px] <?= $tileBorderClass ?> shadow-sm overflow-visible group transition-all duration-300 hover:shadow-md mb-4" data-open="false">
@@ -750,7 +762,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
 
                             <div class="flex flex-col gap-2 w-full sm:w-48 lg:w-40" onclick="event.stopPropagation()">
                                 <?php if($percentage >= 100): ?>
-                                    <button class="btn-base btn-published">Published</button>
+                                    <button class="btn-base <?= $publishedBtnClass ?>"><?= htmlspecialchars($publishedBtnLabel) ?></button>
                                 <?php else: ?>
                                     <a href="<?php echo base_url('?page=inbounding&action=desktopform&id=' . $tc['id']); ?>" class="btn-base btn-edit">Edit Information</a>
                                 <?php endif; ?>
@@ -773,14 +785,14 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                     <div class="accordion-inner px-6 pb-8 border-t border-dashed border-gray-200 mx-6">
                         <h3 class="text-sm font-bold text-slate-900 mb-6 mt-4 text-center lg:text-left">Product Completion Status:</h3>
 
-                        <div class="relative px-0 lg:px-4 lg:min-w-[700px] overflow-hidden lg:overflow-x-auto">
+                        <div class="relative px-0 lg:px-4 lg:min-w-[900px] overflow-hidden lg:overflow-x-auto">
                             
                             <?php 
-                                $stepKeys = ['inbound', 'Photoshoot', 'Editing', 'Data Entry', 'Published'];
+                                $stepKeys = ['inbound', 'Photoshoot', 'Editing', 'Data Entry', 'Published (Live)', 'Published (Local)'];
                                 $stepsData = [];
                                 
                                 foreach($stepKeys as $k) {
-                                    $stepsData[$k] = ['active' => false, 'date' => '-', 'user' => ''];
+                                    $stepsData[$k] = ['active' => false, 'date' => '-', 'user' => '', 'ts' => 0];
                                 }
 
                                 if (!empty($tc['gate_entry_date_time'])) {
@@ -789,18 +801,27 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                     $stepsData['inbound']['user']   = $tc['received_name'] ?? ''; 
                                 }
 
-                                if (!empty($tc['stat_logs']) && is_array($tc['stat_logs'])) {
-                                    foreach ($tc['stat_logs'] as $log) {
-                                        $statName = $log['stat'];
-                                        if (array_key_exists($statName, $stepsData)) {
+                                if ($statLogs !== []) {
+                                    foreach ($statLogs as $log) {
+                                        $statName = Inbounding::publishedLogStatToStepKey((string) ($log['stat'] ?? ''));
+                                        if (!array_key_exists($statName, $stepsData)) {
+                                            continue;
+                                        }
+
+                                        $logTs = strtotime((string) ($log['created_at'] ?? '')) ?: 0;
+
+                                        if (!$stepsData[$statName]['active'] || $logTs >= $stepsData[$statName]['ts']) {
                                             $stepsData[$statName]['active'] = true;
-                                            $stepsData[$statName]['date']   = date('d M, h:i A', strtotime($log['created_at']));
-                                            if(!empty($log['name'])) {
+                                            $stepsData[$statName]['ts']     = $logTs;
+                                            $stepsData[$statName]['date']   = date('d M, h:i A', $logTs);
+                                            if (!empty($log['name'])) {
                                                 $stepsData[$statName]['user'] = $log['name'];
                                             }
                                         }
                                     }
                                 }
+
+                                $stepsData = Inbounding::applyLiveImpliesLocalPublishSteps($stepsData);
 
                                 $lastActiveIndex = 0;
                                 foreach ($stepKeys as $index => $key) {
@@ -808,7 +829,10 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                         $lastActiveIndex = $index;
                                     }
                                 }
-                                $timelineWidth = min(100, $lastActiveIndex * 25); 
+                                $stepCount = count($stepKeys);
+                                $timelineWidth = ($stepCount > 1)
+                                    ? min(100, ($lastActiveIndex / ($stepCount - 1)) * 100)
+                                    : 0;
                             ?>
 
                             <div class="absolute left-[9px] top-[10px] bottom-[10px] w-[2px] bg-gray-200 block lg:hidden z-0"></div>
@@ -821,9 +845,18 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                                 <?php foreach ($stepKeys as $key): 
                                     $info = $stepsData[$key];
                                     $isActive = $info['active'];
-                                    
-                                    $dotBorder = $isActive ? 'border-[#22c55e]' : 'border-gray-300';
-                                    $dotBg     = $isActive ? 'bg-[#22c55e]' : 'bg-gray-300';
+
+                                    if ($key === 'Published (Live)') {
+                                        $dotBorder = $isActive ? 'border-[#22c55e]' : 'border-gray-300';
+                                        $dotBg     = $isActive ? 'bg-[#22c55e]' : 'bg-gray-300';
+                                    } elseif ($key === 'Published (Local)') {
+                                        $dotBorder = $isActive ? 'border-[#3b82f6]' : 'border-gray-300';
+                                        $dotBg     = $isActive ? 'bg-[#3b82f6]' : 'bg-gray-300';
+                                    } else {
+                                        $dotBorder = $isActive ? 'border-[#22c55e]' : 'border-gray-300';
+                                        $dotBg     = $isActive ? 'bg-[#22c55e]' : 'bg-gray-300';
+                                    }
+
                                     $textClass = $isActive ? 'text-black' : 'text-gray-400';
                                     $dateClass = $isActive ? 'text-slate-900 font-bold' : 'text-gray-400 font-semibold';
                                 ?>

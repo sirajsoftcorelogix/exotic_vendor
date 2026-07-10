@@ -452,6 +452,9 @@ switch ($page) {
             case 'save':
                 $controller->save();
                 break;
+            case 'post_save':
+                $controller->postSave();
+                break;
             case 'delete':
                 $controller->delete();
                 break;
@@ -876,6 +879,9 @@ switch ($page) {
                 break;
             case 'stock_transfer_delete_line':
                 $controller->stock_transfer_delete_line();
+                break;
+            case 'stock_transfer_replay_grn':
+                $controller->stock_transfer_replay_grn();
                 break;
             case 'stock_transfer_items':
                 $controller->stock_transfer_items();
@@ -1303,6 +1309,27 @@ switch ($page) {
                 break;
             case 'stock-report':
                 $controller->stockReport();
+                break;
+            case 'stock-report-refresh':
+                $controller->stockReportRefreshItem();
+                break;
+            case 'stock-report-refresh-bulk':
+                $controller->stockReportRefreshBulk();
+                break;
+            case 'stock-report-send-otp':
+                $controller->stockReportSendOtp();
+                break;
+            case 'stock-report-verify-otp':
+                $controller->stockReportVerifyOtp();
+                break;
+            case 'stock-report-export-init':
+                $controller->stockReportExportInit();
+                break;
+            case 'stock-report-export-batch':
+                $controller->stockReportExportBatch();
+                break;
+            case 'stock-report-export-finish':
+                $controller->stockReportExportFinish();
                 break;
 
             case 'add-customer':

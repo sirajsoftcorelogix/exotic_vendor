@@ -193,9 +193,9 @@ class InboundingController {
                     
                     $row['product_photo'] ?? '',            
                     $row['redirect'] ?? '',                                     
-                    $row['snippet_description'] ?? '',      
-                    '',                                     
-                    '',                                     
+                    $row['snippet_description'] ?? '',
+                    $row['long_description'] ?? '',
+                    '',
                     
                     '',                                     
                     $row['optionals'] ?? '',        
@@ -357,11 +357,10 @@ class InboundingController {
             'count' => count($data['book_languages'] ?? []),
         ]);
 
-        $publishState = $inboundingModel->getInboundPublishState($id);
-        $data['is_inbound_published'] = $publishState['has_any_publish'];
-        $data['is_inbound_live_published'] = $publishState['is_live'];
-        $data['inbound_publish_state'] = $publishState;
-        inbound_profiler_step($prof, 'getInboundPublishState', $publishState);
+        $data['is_inbound_live_published'] = $inboundingModel->isInboundLivePublished($id);
+        inbound_profiler_step($prof, 'isInboundLivePublished', [
+            'is_live' => $data['is_inbound_live_published'],
+        ]);
 
         renderTemplate('views/inbounding/desktopform.php', $data, 'desktopform inbounding');
         inbound_profiler_finish($prof, 'ok');
@@ -1601,6 +1600,7 @@ class InboundingController {
             'product_title'       => $_POST['product_title'] ?? '',
             'key_words'           => $_POST['key_words'] ?? '',
             'snippet_description' => $_POST['snippet_description'] ?? '',
+            'long_description' => $_POST['long_description'] ?? '',
             'vendor_code' => trim((string) ($_POST['vendor_code'] ?? '')) === '' ? null : $_POST['vendor_code'],
             'cp'                  => (float) ($_POST['cp'] ?? 0),
             'price_india_mrp'     => (float) ($_POST['price_india_mrp'] ?? 0),
@@ -2408,7 +2408,7 @@ class InboundingController {
         if (trim($raw_string ?? '', '|') !== '') {
             $API_data['search_category'] = ltrim($raw_string ?? '', '|');            
         }
-        $API_data['long_description'] = '';
+        $API_data['long_description'] = $d['long_description'] ?? '';
         $API_data['long_description_india'] = '';
         $API_data['aplus_content_ids'] = '';
         if (!empty($d['optionals'])) {

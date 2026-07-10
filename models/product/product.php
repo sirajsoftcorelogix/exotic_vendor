@@ -718,21 +718,12 @@ class product
         if ($search === '') {
             return [];
         }
-        $searchTerm = '%' . $search . '%';
         $limit = max(1, min(100, (int) $limit));
-        $sql = 'SELECT id, sku, item_code, title, color, size, cost_price, cp, price_india, gst, hsn, image, groupname, itemtype, category FROM vp_products
-            WHERE sku LIKE ?
-            LIMIT ?';
-        $stmt = $this->db->prepare($sql);
-        if ($stmt === false) {
-            return [];
-        }
-        $stmt->bind_param('si', $searchTerm, $limit);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $orderItems = [];
-        if ($result && $result->num_rows > 0) {
-            while ($row = $result->fetch_assoc()) {
+        $cols = 'id, sku, item_code, title, color, size, cost_price, cp, price_india, gst, hsn, image, groupname, itemtype, category';
+
+        $mapRows = function (array $rows) {
+            $orderItems = [];
+            foreach ($rows as $row) {
                 $isBook = self::isBookProduct($row);
                 $orderItems[] = [
                     'id' => $row['id'],
@@ -749,10 +740,37 @@ class product
                     'image' => $row['image'] ?? '',
                 ];
             }
+            return $orderItems;
+        };
+
+        // Prefix first (index-friendly), then contains fallback.
+        $prefix = $search . '%';
+        $sql = "SELECT {$cols} FROM vp_products WHERE sku LIKE ? LIMIT ?";
+        $stmt = $this->db->prepare($sql);
+        if ($stmt === false) {
+            return [];
         }
+        $stmt->bind_param('si', $prefix, $limit);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+        if ($rows !== []) {
+            return $mapRows($rows);
+        }
+
+        $contains = '%' . $search . '%';
+        $stmt = $this->db->prepare($sql);
+        if ($stmt === false) {
+            return [];
+        }
+        $stmt->bind_param('si', $contains, $limit);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
         $stmt->close();
 
-        return $orderItems;
+        return $mapRows($rows);
     }
 
     /**
@@ -1031,6 +1049,181 @@ class product
         }
 
         return false;
+    }
+
+    /** @return list<string> */
+    public static function bookDetailDbColumns(): array
+    {
+        return [
+            'edited_by',
+            'isbn',
+            'cover_type',
+            'edition',
+            'publication_date',
+            'language',
+            'pages',
+        ];
+    }
+
+    private function vpProductsHasAnyBookDetailColumn(): bool
+    {
+        foreach (self::bookDetailDbColumns() as $col) {
+            if ($this->vpProductsHasColumn($col)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Map vendor product/fetch row to vp_products book columns.
+     *
+     * @param array<string, mixed> $apiRow
+     * @return array<string, mixed>
+     */
+    public function extractVendorApiBookDbFields(array $apiRow): array
+    {
+        if (!self::isBookProduct($apiRow)) {
+            return [];
+        }
+
+        require_once __DIR__ . '/../inbounding/Inbounding.php';
+        $inboundingModel = new Inbounding($this->db);
+        $creatorParts = $inboundingModel->parseBookCreatorApiValue(
+            $this->apiFormString($apiRow['creator'] ?? '')
+        );
+
+        $pagesRaw = trim((string) ($apiRow['pages'] ?? ''));
+        $pages = null;
+        if ($pagesRaw !== '' && ctype_digit($pagesRaw)) {
+            $pages = (int) $pagesRaw;
+        }
+
+        $pubDate = $this->normalizeApiDateValue($apiRow['publication_date'] ?? '');
+
+        return [
+            'edited_by' => $creatorParts['edited_by'],
+            'isbn' => $this->apiFormString($apiRow['isbn'] ?? ''),
+            'cover_type' => $this->apiFormString($apiRow['cover_type'] ?? ''),
+            'edition' => $this->apiFormString($apiRow['edition'] ?? ''),
+            'publication_date' => $pubDate,
+            'language' => $this->apiFormString($apiRow['language'] ?? ''),
+            'pages' => $pages,
+        ];
+    }
+
+    /**
+     * Persist book metadata from vendor API onto vp_products (Refresh from API).
+     *
+     * @param array<string, mixed> $apiRow
+     */
+    public function syncBookFieldsFromVendorApiRow(string $itemCode, string $size, string $color, array $apiRow): void
+    {
+        if (!$this->vpProductsHasAnyBookDetailColumn() || !self::isBookProduct($apiRow)) {
+            return;
+        }
+
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return;
+        }
+
+        $fields = $this->extractVendorApiBookDbFields($apiRow);
+        $setParts = [];
+        $types = '';
+        $values = [];
+
+        foreach (self::bookDetailDbColumns() as $col) {
+            if (!$this->vpProductsHasColumn($col) || !array_key_exists($col, $fields)) {
+                continue;
+            }
+            $val = $fields[$col];
+            if ($col === 'pages') {
+                if ($val === null || $val === '' || (int) $val <= 0) {
+                    $setParts[] = "$col = NULL";
+                } else {
+                    $setParts[] = "$col = ?";
+                    $types .= 'i';
+                    $values[] = (int) $val;
+                }
+                continue;
+            }
+            if ($col === 'publication_date' && ($val === null || $val === '')) {
+                $setParts[] = "$col = NULL";
+                continue;
+            }
+            $setParts[] = "$col = ?";
+            $types .= 's';
+            $values[] = (string) $val;
+        }
+
+        if ($setParts === []) {
+            return;
+        }
+
+        $types .= 'sss';
+        $values[] = $itemCode;
+        $values[] = $size;
+        $values[] = $color;
+
+        $sql = 'UPDATE vp_products SET ' . implode(', ', $setParts)
+            . " WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')"
+            . " AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return;
+        }
+
+        $stmt->bind_param($types, ...$values);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    /**
+     * Book details for product detail UI — reads vp_products columns (fields 1–7).
+     *
+     * @param array<string, mixed> $productRow
+     */
+    public function buildBookDetailsDisplayFromProduct(array $productRow, $inboundingModel = null): array
+    {
+        $resolveEditedByNames = static function ($stored) use ($inboundingModel): array {
+            if ($inboundingModel instanceof Inbounding) {
+                return $inboundingModel->resolveInboundAuthorNameList($stored);
+            }
+            $names = [];
+            foreach (preg_split('/\s*[,|]\s*/', trim((string) $stored)) ?: [] as $part) {
+                $part = trim((string) $part);
+                if ($part !== '' && !ctype_digit($part)) {
+                    $names[] = $part;
+                }
+            }
+
+            return array_values(array_unique($names));
+        };
+
+        $pubDate = trim((string) ($productRow['publication_date'] ?? ''));
+        if ($pubDate !== '' && $pubDate !== '0000-00-00') {
+            $ts = strtotime($pubDate);
+            $pubDateDisplay = $ts !== false ? date('d M Y', $ts) : $pubDate;
+        } else {
+            $pubDateDisplay = '';
+        }
+
+        $pages = (int) ($productRow['pages'] ?? 0);
+
+        return [
+            'authors' => [],
+            'edited_by_names' => $resolveEditedByNames($productRow['edited_by'] ?? ''),
+            'publisher' => trim((string) ($productRow['publisher'] ?? '')),
+            'isbn' => trim((string) ($productRow['isbn'] ?? '')),
+            'cover_type' => trim((string) ($productRow['cover_type'] ?? '')),
+            'edition' => trim((string) ($productRow['edition'] ?? '')),
+            'publication_date' => $pubDateDisplay,
+            'language' => trim((string) ($productRow['language'] ?? '')),
+            'pages' => $pages > 0 ? (string) $pages : '',
+        ];
     }
 
     /**
@@ -1338,6 +1531,12 @@ class product
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
                     if ($this->executeVpProductsStmt($stmt)) {
                         $updatedCount++;
+                        $this->syncBookFieldsFromVendorApiRow(
+                            (string) $product['itemcode'],
+                            (string) $size,
+                            (string) $color,
+                            $product
+                        );
                         $this->syncPriceIndiaSuggestedFromApiRow(
                             (string) $product['itemcode'],
                             (string) $size,
@@ -1443,6 +1642,12 @@ class product
                             ]);
                             if ($insertId) {
                                 $updatedCount++;
+                                $this->syncBookFieldsFromVendorApiRow(
+                                    (string) $product['itemcode'],
+                                    (string) $size,
+                                    (string) $color,
+                                    $product
+                                );
                                 $this->syncPriceIndiaSuggestedFromApiRow(
                                     (string) $product['itemcode'],
                                     (string) $size,
@@ -1608,6 +1813,12 @@ class product
                             );
                             if ($this->executeVpProductsStmt($stmt)) {
                                 $updatedCount++;
+                                $this->syncBookFieldsFromVendorApiRow(
+                                    (string) $product['itemcode'],
+                                    (string) $size,
+                                    (string) $color,
+                                    $product
+                                );
                                 $this->syncPriceIndiaSuggestedFromApiRow(
                                     (string) $product['itemcode'],
                                     (string) $size,
@@ -1713,6 +1924,12 @@ class product
                                     ]);
                                     if ($insertId) {
                                         $updatedCount++;
+                                        $this->syncBookFieldsFromVendorApiRow(
+                                            (string) $product['itemcode'],
+                                            (string) $size,
+                                            (string) $color,
+                                            $product
+                                        );
                                         $this->syncPriceIndiaSuggestedFromApiRow(
                                             (string) $product['itemcode'],
                                             (string) $size,
@@ -2311,44 +2528,138 @@ class product
     }
 
     /**
-     * Autocomplete by SKU only (partial match).
+     * Drop parent catalogue rows from autocomplete results (keeps SQL index-friendly).
+     *
+     * @param list<array<string,mixed>> $rows
+     * @return list<array<string,mixed>>
+     */
+    private function filterOutParentProducts(array $rows, int $limit)
+    {
+        $out = [];
+        foreach ($rows as $row) {
+            $level = strtolower(trim((string)($row['item_level'] ?? '')));
+            if ($level === 'parent') {
+                continue;
+            }
+            unset($row['item_level']);
+            $out[] = $row;
+            if (count($out) >= $limit) {
+                break;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Autocomplete by SKU only.
+     * Prefers prefix match (uses sku index); falls back to contains for mid-string hits.
      *
      * @return list<array<string,mixed>>
      */
     public function searchProductsBySkuLike($query)
     {
-        $q = '%' . $query . '%';
-        $sql = "SELECT id, sku, item_code, title, size, color, image, local_stock
-                FROM vp_products WHERE sku LIKE ?
-                  AND LOWER(TRIM(IFNULL(item_level, ''))) <> 'parent'
-                ORDER BY sku ASC LIMIT 25";
+        $query = trim((string)$query);
+        if ($query === '') {
+            return [];
+        }
+        $limit = 25;
+        $fetchLimit = 40;
+        $cols = 'id, sku, item_code, title, size, color, image, local_stock, item_level';
+
+        // Prefix first — can use INDEX(sku); leading-wildcard LIKE cannot.
+        $prefix = $query . '%';
+        $sql = "SELECT {$cols}
+                FROM vp_products
+                WHERE sku LIKE ?
+                ORDER BY sku ASC
+                LIMIT ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
             return [];
         }
-        $stmt->bind_param('s', $q);
+        $stmt->bind_param('si', $prefix, $fetchLimit);
         $stmt->execute();
         $result = $stmt->get_result();
         $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+        $filtered = $this->filterOutParentProducts($rows, $limit);
+        if ($filtered !== []) {
+            return $filtered;
+        }
 
-        return $rows;
-    }
-
-    public function searchProductsBySkuOrItemCode($query)
-    {
-        $q = '%' . $query . '%';
-        $sql = "SELECT * FROM vp_products WHERE (sku LIKE ? OR item_code LIKE ?)
-                  AND LOWER(TRIM(IFNULL(item_level, ''))) <> 'parent'
-                ORDER BY item_code ASC LIMIT 20";
+        // Contains fallback (slower; only when prefix finds nothing).
+        $contains = '%' . $query . '%';
+        $sql = "SELECT {$cols}
+                FROM vp_products
+                WHERE sku LIKE ?
+                ORDER BY sku ASC
+                LIMIT ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
             return [];
         }
-        $stmt->bind_param('ss', $q, $q);
+        $stmt->bind_param('si', $contains, $fetchLimit);
         $stmt->execute();
         $result = $stmt->get_result();
-        $rows = $result->fetch_all(MYSQLI_ASSOC);
-        return $rows;
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        return $this->filterOutParentProducts($rows, $limit);
+    }
+
+    /**
+     * Autocomplete by SKU or item code (minimal columns).
+     * Prefers prefix match for index use; falls back to contains.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function searchProductsBySkuOrItemCode($query)
+    {
+        $query = trim((string)$query);
+        if ($query === '') {
+            return [];
+        }
+        $limit = 20;
+        $fetchLimit = 35;
+        $cols = 'id, sku, item_code, title, size, color, image, local_stock, item_level';
+
+        $prefix = $query . '%';
+        $sql = "SELECT {$cols}
+                FROM vp_products
+                WHERE sku LIKE ? OR item_code LIKE ?
+                ORDER BY item_code ASC
+                LIMIT ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('ssi', $prefix, $prefix, $fetchLimit);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+        $filtered = $this->filterOutParentProducts($rows, $limit);
+        if ($filtered !== []) {
+            return $filtered;
+        }
+
+        $contains = '%' . $query . '%';
+        $sql = "SELECT {$cols}
+                FROM vp_products
+                WHERE sku LIKE ? OR item_code LIKE ?
+                ORDER BY item_code ASC
+                LIMIT ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('ssi', $contains, $contains, $fetchLimit);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        return $this->filterOutParentProducts($rows, $limit);
     }
 
     public function createProduct($data)
@@ -4708,6 +5019,13 @@ class product
             'youtube_links' => 'youtube_links',
             'sketchfab_links' => 'sketchfab_links',
             'dimensions' => 'dimensions',
+            'edited_by' => 'edited_by',
+            'isbn' => 'isbn',
+            'cover_type' => 'cover_type',
+            'edition' => 'edition',
+            'publication_date' => 'publication_date',
+            'language' => 'language',
+            'pages' => 'pages',
             'product_weight' => 'product_weight',
             'product_weight_unit' => 'product_weight_unit',
             'prod_height' => 'prod_height',
@@ -4722,13 +5040,23 @@ class product
         if (!$this->vpProductsHasColumn('price_india_suggested')) {
             unset($columnMap['price_india_suggested']);
         }
+        foreach (self::bookDetailDbColumns() as $bookCol) {
+            if (!$this->vpProductsHasColumn($bookCol)) {
+                unset($columnMap[$bookCol]);
+            }
+        }
 
         foreach ($columnMap as $dataKey => $dbColumn) {
-            if (isset($data[$dataKey])) {
-                $setClauses[] = "{$dbColumn} = ?";
-                $paramTypes .= 's'; // All are treated as strings for binding
-                $params[] = $data[$dataKey];
+            if (!array_key_exists($dataKey, $data)) {
+                continue;
             }
+            if ($data[$dataKey] === null) {
+                $setClauses[] = "{$dbColumn} = NULL";
+                continue;
+            }
+            $setClauses[] = "{$dbColumn} = ?";
+            $paramTypes .= 's';
+            $params[] = $data[$dataKey];
         }
 
         if (empty($setClauses)) {

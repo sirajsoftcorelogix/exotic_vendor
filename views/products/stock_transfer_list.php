@@ -232,8 +232,11 @@ $formatStatusLabel = static function (string $status): string {
                         <?php foreach ($transfers as $transfer): ?>
                             <?php
                                 $rawStatus = trim((string)($transfer['status'] ?? ''));
+                                $statusNorm = strtolower(str_replace('_', ' ', $rawStatus));
                                 $statusLabel = $rawStatus !== '' ? $formatStatusLabel($rawStatus) : '—';
                                 $statusRing = $statusClass($rawStatus);
+                                $canReplayGrn = in_array($statusNorm, ['received', 'completed', 'complete'], true)
+                                    && (int)($transfer['grn_count'] ?? 0) > 0;
                             ?>
                             <tr class="hover:bg-amber-50/40 transition-colors">
                                 <td class="px-5 py-4 align-top text-sm text-gray-700 whitespace-nowrap">
@@ -346,6 +349,17 @@ $formatStatusLabel = static function (string $status): string {
                                             aria-label="View GRNs">
                                             <i class="fas fa-clipboard-list text-xs" aria-hidden="true"></i>
                                         </a>
+                                        <?php if ($canReplayGrn): ?>
+                                            <button type="button"
+                                                class="st-transfer-replay-grn-btn inline-flex h-7 w-7 items-center justify-center rounded border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none"
+                                                title="Replay transfer stock (source OUT + destination GRN IN)"
+                                                aria-label="Replay transfer stock (source OUT and destination GRN IN)"
+                                                data-transfer-id="<?php echo (int)$transfer['id']; ?>"
+                                                data-order-no="<?php echo htmlspecialchars((string)($transfer['transfer_order_no'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                                data-grn-count="<?php echo (int)($transfer['grn_count'] ?? 0); ?>">
+                                                <i class="fas fa-redo text-xs" aria-hidden="true"></i>
+                                            </button>
+                                        <?php endif; ?>
                                         <a href="?page=products&action=stock_transfer_print&transfer_id=<?php echo urlencode($transfer['id']); ?>"
                                             target="_blank" rel="noopener noreferrer"
                                             class="inline-flex h-7 w-7 items-center justify-center rounded border border-gray-200 bg-white text-gray-800 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
@@ -384,6 +398,37 @@ $formatStatusLabel = static function (string $status): string {
             </nav>
         </div>
     <?php endif; ?>
+</div>
+
+<div
+  id="stTransferReplayProgressModal"
+  class="fixed inset-0 hidden z-[210] items-center justify-center bg-black/50 p-4"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="stTransferReplayProgressTitle">
+  <div class="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl">
+    <div class="flex items-start gap-3">
+      <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700">
+        <i id="stTransferReplayProgressIcon" class="fas fa-redo fa-spin text-sm" aria-hidden="true"></i>
+      </span>
+      <div class="min-w-0 flex-1">
+        <h3 id="stTransferReplayProgressTitle" class="text-base font-semibold text-gray-900">Replaying transfer stock</h3>
+        <p id="stTransferReplayProgressText" class="mt-1 text-sm text-gray-600">Preparing…</p>
+      </div>
+    </div>
+    <div class="mt-5">
+      <div class="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+        <div id="stTransferReplayProgressBar" class="h-full rounded-full bg-violet-500 transition-all duration-300" style="width: 0%"></div>
+      </div>
+      <div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+        <span id="stTransferReplayProgressBatch">Batch 0 of 0</span>
+        <span id="stTransferReplayProgressStats">Replayed: 0 · Failed: 0</span>
+      </div>
+      <p id="stTransferReplayProgressHint" class="mt-3 text-xs text-gray-500">
+        Rebuilding TRANSFER_IN movements and vp_stock in small batches. Please keep this page open.
+      </p>
+    </div>
+  </div>
 </div>
 
 <form id="stTransferDeleteForm" method="post" action="?page=products&action=stock_transfer_delete" class="hidden" aria-hidden="true">
@@ -489,5 +534,233 @@ $formatStatusLabel = static function (string $status): string {
             }
         });
     }
+})();
+
+(function () {
+    var BATCH_SIZE = 5;
+    var modal = document.getElementById('stTransferReplayProgressModal');
+    var textEl = document.getElementById('stTransferReplayProgressText');
+    var barEl = document.getElementById('stTransferReplayProgressBar');
+    var batchEl = document.getElementById('stTransferReplayProgressBatch');
+    var statsEl = document.getElementById('stTransferReplayProgressStats');
+    var hintEl = document.getElementById('stTransferReplayProgressHint');
+    var iconEl = document.getElementById('stTransferReplayProgressIcon');
+
+    function showReplayModal() {
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function hideReplayModal() {
+        if (!modal) return;
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        document.body.style.overflow = '';
+    }
+
+    function updateReplayProgress(state) {
+        var total = Math.max(0, Number(state.total || 0));
+        var processed = Math.max(0, Number(state.processed || 0));
+        var replayed = Math.max(0, Number(state.replayed || 0));
+        var failed = Math.max(0, Number(state.failed || 0));
+        var batchNo = Math.max(0, Number(state.batchNo || 0));
+        var batchTotal = Math.max(0, Number(state.batchTotal || 0));
+        var percent = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+        var done = !!state.done;
+
+        if (textEl) {
+            textEl.textContent = 'Processed ' + processed + ' of ' + total + ' GRN line(s)';
+        }
+        if (barEl) barEl.style.width = percent + '%';
+        if (batchEl) {
+            batchEl.textContent = batchTotal > 0
+                ? ('Batch ' + batchNo + ' of ' + batchTotal + ' · ' + BATCH_SIZE + ' lines per batch')
+                : 'Preparing batches…';
+        }
+        if (statsEl) {
+            var stats = 'Replayed: ' + replayed + ' · Failed: ' + failed;
+            if (state.transferOutReplayed > 0) {
+                stats = 'Source OUT: ' + state.transferOutReplayed + ' · ' + stats;
+            }
+            statsEl.textContent = stats;
+        }
+        if (hintEl && state.hint) hintEl.textContent = state.hint;
+        if (iconEl) {
+            iconEl.classList.toggle('fa-spin', !done);
+            iconEl.classList.toggle('fa-redo', !done);
+            iconEl.classList.toggle('fa-check', done);
+        }
+    }
+
+    async function fetchReplayBatch(transferId, offset, phase) {
+        var res = await fetch('index.php?page=products&action=stock_transfer_replay_grn', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                transfer_id: transferId,
+                phase: phase || 'grn',
+                offset: offset,
+                batch_size: BATCH_SIZE,
+            }),
+        });
+        var rawText = await res.text();
+        var data = null;
+        try {
+            data = rawText ? JSON.parse(rawText) : null;
+        } catch (e) {
+            data = null;
+        }
+        if (!res.ok) {
+            throw new Error((data && data.message) ? data.message : ('Replay failed with HTTP ' + res.status));
+        }
+        if (!data) {
+            throw new Error('Invalid replay response.');
+        }
+        return data;
+    }
+
+    async function runTransferGrnReplay(btn) {
+        var transferId = parseInt(btn.getAttribute('data-transfer-id') || '0', 10);
+        var orderNo = btn.getAttribute('data-order-no') || ('#' + transferId);
+        var grnCount = parseInt(btn.getAttribute('data-grn-count') || '0', 10);
+        if (transferId <= 0 || grnCount <= 0) return;
+
+        var confirmed = window.confirm(
+            'Replay stock for transfer ' + orderNo + '?\n\n'
+            + 'Step 1: TRANSFER_OUT — deduct stock from the source warehouse.\n'
+            + 'Step 2: GRN — add stock at the destination from the existing '
+            + grnCount + ' GRN line(s).\n\n'
+            + 'GRN records themselves are not deleted.'
+        );
+        if (!confirmed) return;
+
+        btn.disabled = true;
+        showReplayModal();
+
+        var offset = 0;
+        var totalGrns = grnCount;
+        var totalReplayed = 0;
+        var totalFailed = 0;
+        var transferOutReplayed = 0;
+        var batchTotal = Math.max(1, Math.ceil(totalGrns / BATCH_SIZE));
+        var batchNo = 0;
+        var lastMessage = '';
+
+        updateReplayProgress({
+            total: totalGrns,
+            processed: 0,
+            replayed: 0,
+            failed: 0,
+            batchNo: 0,
+            batchTotal: batchTotal,
+            done: false,
+            hint: 'Step 1: Replaying TRANSFER_OUT at source for ' + orderNo + '…',
+        });
+
+        try {
+            updateReplayProgress({
+                total: totalGrns,
+                processed: 0,
+                replayed: 0,
+                failed: 0,
+                batchNo: 0,
+                batchTotal: batchTotal,
+                done: false,
+                hint: 'Step 1: Deducting stock from source warehouse…',
+            });
+
+            var outData = await fetchReplayBatch(transferId, 0, 'transfer_out');
+            if (!outData || !outData.success) {
+                throw new Error((outData && outData.message) ? outData.message : 'TRANSFER_OUT replay failed.');
+            }
+            transferOutReplayed = parseInt(outData.transfer_out_replayed || 0, 10);
+            if (typeof outData.total_grns === 'number' && outData.total_grns > 0) {
+                totalGrns = outData.total_grns;
+                batchTotal = Math.max(1, Math.ceil(totalGrns / BATCH_SIZE));
+            }
+            lastMessage = outData.message || lastMessage;
+
+            updateReplayProgress({
+                total: totalGrns,
+                processed: 0,
+                replayed: 0,
+                failed: 0,
+                transferOutReplayed: transferOutReplayed,
+                batchNo: 0,
+                batchTotal: batchTotal,
+                done: false,
+                hint: 'Step 1 complete. Step 2: Replaying GRN at destination…',
+            });
+
+            while (offset < totalGrns) {
+                batchNo++;
+                updateReplayProgress({
+                    total: totalGrns,
+                    processed: offset,
+                    replayed: totalReplayed,
+                    failed: totalFailed,
+                    transferOutReplayed: transferOutReplayed,
+                    batchNo: batchNo,
+                    batchTotal: batchTotal,
+                    done: false,
+                    hint: 'Step 2: GRN batch ' + batchNo + ' of ' + batchTotal + '…',
+                });
+
+                var data = await fetchReplayBatch(transferId, offset, 'grn');
+                if (typeof data.total_grns === 'number' && data.total_grns > 0) {
+                    totalGrns = data.total_grns;
+                    batchTotal = Math.max(1, Math.ceil(totalGrns / BATCH_SIZE));
+                }
+
+                totalReplayed += parseInt(data.replayed || 0, 10);
+                totalFailed += parseInt(data.failed || 0, 10);
+                lastMessage = data.message || lastMessage;
+
+                var processed = parseInt(data.processed_grns || offset, 10);
+                if (data.next_offset === null || data.is_complete || processed >= totalGrns) {
+                    processed = totalGrns;
+                }
+                offset = processed;
+
+                updateReplayProgress({
+                    total: totalGrns,
+                    processed: processed,
+                    replayed: totalReplayed,
+                    failed: totalFailed,
+                    transferOutReplayed: transferOutReplayed,
+                    batchNo: batchNo,
+                    batchTotal: batchTotal,
+                    done: !!data.is_complete,
+                    hint: data.is_complete ? 'Replay complete. Reloading…' : ('Batch ' + batchNo + ' complete. Continuing…'),
+                });
+
+                if (data.is_complete || data.next_offset === null || processed >= totalGrns) {
+                    break;
+                }
+                if (!data.success && totalFailed > 0) {
+                    throw new Error(data.message || 'Transfer stock replay failed in batch ' + batchNo + '.');
+                }
+            }
+
+            if (totalFailed > 0) {
+                window.alert((lastMessage || 'Transfer stock replay completed with errors.') + '\nFailed lines: ' + totalFailed);
+            }
+
+            window.setTimeout(function () { window.location.reload(); }, totalFailed > 0 ? 1200 : 600);
+        } catch (err) {
+            hideReplayModal();
+            window.alert(err && err.message ? err.message : 'Transfer stock replay failed.');
+            btn.disabled = false;
+        }
+    }
+
+    document.querySelectorAll('.st-transfer-replay-grn-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            runTransferGrnReplay(btn);
+        });
+    });
 })();
 </script>

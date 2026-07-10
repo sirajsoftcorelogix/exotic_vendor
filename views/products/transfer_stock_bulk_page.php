@@ -744,9 +744,27 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         return visible;
     }
 
+    function parseInsufficientStockFromMessage(message) {
+        if (!message) return [];
+        const text = String(message);
+        const match = text.match(/Insufficient stock(?: for SKU ([^:]+))?: available ([0-9.]+), requested ([0-9.]+)/i);
+        if (!match) return [];
+        let sku = (match[1] || '').trim();
+        if (!sku) sku = 'Unknown';
+        return [{
+            sku: sku,
+            item_code: '',
+            requested_qty: parseInt(match[3], 10) || 0,
+            available_qty: parseInt(match[2], 10) || 0,
+        }];
+    }
+
     function showBulkTransferValidationError(preview) {
-        const notFoundItems = Array.isArray(preview && preview.not_found_items) ? preview.not_found_items : [];
-        const insufficientItems = Array.isArray(preview && preview.insufficient_items) ? preview.insufficient_items : [];
+        let notFoundItems = Array.isArray(preview && preview.not_found_items) ? preview.not_found_items : [];
+        let insufficientItems = Array.isArray(preview && preview.insufficient_items) ? preview.insufficient_items : [];
+        if (insufficientItems.length === 0 && preview && preview.message) {
+            insufficientItems = parseInsufficientStockFromMessage(preview.message);
+        }
         const isProductNotFound = String((preview && preview.error_type) || '') === 'product_not_found' || notFoundItems.length > 0;
         const isInsufficientStock = insufficientItems.length > 0 && !isProductNotFound;
         const isEmptyResponse = String((preview && preview.error_type) || '') === 'empty_response';

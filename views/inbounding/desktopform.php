@@ -192,9 +192,7 @@
 </style>
 <?php
 $record_id = $_GET['id'] ?? '';
-$is_inbound_published = !empty($data['is_inbound_published']);
 $is_inbound_live_published = !empty($data['is_inbound_live_published']);
-$inbound_publish_state = is_array($data['inbound_publish_state'] ?? null) ? $data['inbound_publish_state'] : [];
 $sizeOptions = [
     'XS'   => 'Extra Small (XS)(34)',
     'S'    => 'Small (S)(36)',
@@ -1699,6 +1697,17 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         class="w-full min-h-[80px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] focus:outline-none focus:border-[#999] resize-y" 
                         name="snippet_description"><?= htmlspecialchars($data['form2']['snippet_description'] ?? '') ?></textarea>
                 </div>
+                <div class="mb-[15px]">
+                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Long Description:</label>
+                    <textarea
+                        id="long_description_input"
+                        name="long_description"
+                        class="w-full min-h-[120px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] focus:outline-none focus:border-[#999] resize-y"
+                    ><?php
+                        $saved_long_description = (string) ($data['form2']['long_description'] ?? '');
+                        echo str_replace('</textarea', '&lt;/textarea', $saved_long_description);
+                    ?></textarea>
+                </div>
                 <div class="mb-4">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Select Optionals:</label>
                     <div class="border border-[#ccc] rounded-[4px] bg-white h-[200px] flex flex-col">
@@ -2672,6 +2681,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const desktopInboundForm = document.getElementById('product_form');
         window.syncInboundDesktopFormBeforeSave = function () {
+            if (window.CKEDITOR && CKEDITOR.instances.long_description) {
+                CKEDITOR.instances.long_description.updateElement();
+            }
             if (authorTomSelect) syncAuthorPipeValue(authorTomSelect);
             if (editedByTomSelect) syncEditedByPipeValue(editedByTomSelect);
             bookLanguageFieldKeys.forEach(function (fieldKey) {
@@ -2690,6 +2702,19 @@ document.addEventListener('DOMContentLoaded', function() {
         if (desktopInboundForm) {
             desktopInboundForm.addEventListener('submit', function () {
                 window.syncInboundDesktopFormBeforeSave();
+            });
+        }
+
+        if (window.CKEDITOR && document.getElementById('long_description_input')) {
+            CKEDITOR.replace('long_description_input', {
+                toolbar: [
+                    { name: 'basicstyles', items: ['Bold', 'Italic', 'Underline'] },
+                    { name: 'paragraph', items: ['NumberedList', 'BulletedList'] },
+                    { name: 'clipboard', items: ['Undo', 'Redo'] }
+                ],
+                removePlugins: 'image,uploadimage,uploadfile,filebrowser,flash,iframe,forms',
+                versionCheck: false,
+                height: 200
             });
         }
 
@@ -3448,20 +3473,27 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
     const printJsonPreviewUrl = <?php echo json_encode(base_url('?page=inbounding&action=inbound_product_preview_json')); ?>;
 
-    function resetPublishPopup() {
-        const idle = document.getElementById('publishConfirmIdle');
-        const busy = document.getElementById('publishConfirmBusy');
-        const liveBtn = document.getElementById('publishLiveBtn');
-        const localBtn = document.getElementById('publishLocalBtn');
-        const cancelBtn = document.getElementById('publishCancelBtn');
-        if (idle) idle.classList.remove('hidden');
-        if (busy) {
-            busy.classList.add('hidden');
-            busy.classList.remove('flex');
+    function setInboundModalPhase(idleId, busyId, buttonIds, busy) {
+        const idle = document.getElementById(idleId);
+        const busyEl = document.getElementById(busyId);
+        if (idle) idle.classList.toggle('hidden', busy);
+        if (busyEl) {
+            busyEl.classList.toggle('hidden', !busy);
+            busyEl.classList.toggle('flex', busy);
         }
-        if (liveBtn) liveBtn.disabled = false;
-        if (localBtn) localBtn.disabled = false;
-        if (cancelBtn) cancelBtn.disabled = false;
+        buttonIds.forEach(function (btnId) {
+            const btn = document.getElementById(btnId);
+            if (btn) btn.disabled = busy;
+        });
+    }
+
+    function resetPublishPopup() {
+        setInboundModalPhase(
+            'publishConfirmIdle',
+            'publishConfirmBusy',
+            ['publishLiveBtn', 'publishLocalBtn', 'publishCancelBtn'],
+            false
+        );
     }
     function openPublishPopup() {
         resetPublishPopup();
@@ -3500,17 +3532,12 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     function resetSectionUpdatePopup() {
-        const idle = document.getElementById('sectionUpdateConfirmIdle');
-        const busy = document.getElementById('sectionUpdateConfirmBusy');
-        const confirmBtn = document.getElementById('sectionUpdateConfirmBtn');
-        const cancelBtn = document.getElementById('sectionUpdateCancelBtn');
-        if (idle) idle.classList.remove('hidden');
-        if (busy) {
-            busy.classList.add('hidden');
-            busy.classList.remove('flex');
-        }
-        if (confirmBtn) confirmBtn.disabled = false;
-        if (cancelBtn) cancelBtn.disabled = false;
+        setInboundModalPhase(
+            'sectionUpdateConfirmIdle',
+            'sectionUpdateConfirmBusy',
+            ['sectionUpdateConfirmBtn', 'sectionUpdateCancelBtn'],
+            false
+        );
     }
 
     function openSectionUpdatePopup() {
@@ -3579,17 +3606,12 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.set('save_action', 'draft');
         const recordId = new URLSearchParams(window.location.search).get('id');
 
-        const idle = document.getElementById('sectionUpdateConfirmIdle');
-        const busy = document.getElementById('sectionUpdateConfirmBusy');
-        const confirmBtn = document.getElementById('sectionUpdateConfirmBtn');
-        const cancelBtn = document.getElementById('sectionUpdateCancelBtn');
-        if (idle) idle.classList.add('hidden');
-        if (busy) {
-            busy.classList.remove('hidden');
-            busy.classList.add('flex');
-        }
-        if (confirmBtn) confirmBtn.disabled = true;
-        if (cancelBtn) cancelBtn.disabled = true;
+        setInboundModalPhase(
+            'sectionUpdateConfirmIdle',
+            'sectionUpdateConfirmBusy',
+            ['sectionUpdateConfirmBtn', 'sectionUpdateCancelBtn'],
+            true
+        );
 
         fetch(form.action, {
             method: 'POST',
@@ -4099,19 +4121,12 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.set('save_action', 'generate');
         const recordId = new URLSearchParams(window.location.search).get('id');
 
-        const idle = document.getElementById('publishConfirmIdle');
-        const busy = document.getElementById('publishConfirmBusy');
-        const liveBtn = document.getElementById('publishLiveBtn');
-        const localBtn = document.getElementById('publishLocalBtn');
-        const cancelBtn = document.getElementById('publishCancelBtn');
-        if (idle) idle.classList.add('hidden');
-        if (busy) {
-            busy.classList.remove('hidden');
-            busy.classList.add('flex');
-        }
-        if (liveBtn) liveBtn.disabled = true;
-        if (localBtn) localBtn.disabled = true;
-        if (cancelBtn) cancelBtn.disabled = true;
+        setInboundModalPhase(
+            'publishConfirmIdle',
+            'publishConfirmBusy',
+            ['publishLiveBtn', 'publishLocalBtn', 'publishCancelBtn'],
+            true
+        );
 
         // First: Save the current form data so changes aren't lost
         fetch(form.action, {
@@ -5405,6 +5420,9 @@ document.addEventListener('DOMContentLoaded', function() {
 function validateAndSubmit(actionType) {
     let errors = [];
     const form = document.getElementById('product_form');
+    if (typeof window.syncInboundDesktopFormBeforeSave === 'function') {
+        window.syncInboundDesktopFormBeforeSave();
+    }
     syncFormTomSelectValues(form);
     
     // Helper to get value cleanly

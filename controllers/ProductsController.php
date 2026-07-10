@@ -406,6 +406,46 @@ class ProductsController
         exit;
     }
 
+    public function stock_transfer_replay_grn(): void
+    {
+        is_login();
+        global $conn;
+
+        header('Content-Type: application/json; charset=utf-8');
+        @set_time_limit(120);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $transferId = (int) ($payload['transfer_id'] ?? 0);
+        $offset = max(0, (int) ($payload['offset'] ?? 0));
+        $batchSize = max(1, min(10, (int) ($payload['batch_size'] ?? 5)));
+        $phase = strtolower(trim((string) ($payload['phase'] ?? 'grn')));
+
+        if ($transferId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid transfer id.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        require_once 'models/product/StockTransfer.php';
+        $stockTransferModel = new StockTransfer($conn);
+        if ($phase === 'transfer_out') {
+            $result = $stockTransferModel->replayTransferOutPhase($transferId);
+        } else {
+            $result = $stockTransferModel->replayTransferGrnStockBatch($transferId, $offset, $batchSize);
+        }
+
+        echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
     /**
      * Paginated line items for one transfer (Option A — list uses aggregates only).
      */
@@ -4686,24 +4726,30 @@ class ProductsController
                 $order['book_detail_edited_by_ids'] = [];
                 $order['book_detail_selected_publisher_id'] = '';
                 $order['book_detail_selected_publisher_name'] = '';
-                $order['book_details'] = $inboundingModel->getBookDetailsForProductDisplay(
+                $order['book_details'] = $productModel->buildBookDetailsDisplayFromProduct($order, $inboundingModel);
+
+                $inboundBookDetails = $inboundingModel->getBookDetailsForProductDisplay(
                     $itemCode,
                     (string) ($order['size'] ?? ''),
                     (string) ($order['color'] ?? '')
                 );
-                if ($order['book_details'] === []) {
-                    $order['book_details'] = [
-                        'authors' => [],
-                        'edited_by_names' => [],
-                        'publisher' => trim((string) ($order['publisher'] ?? '')),
-                        'isbn' => '',
-                        'cover_type' => '',
-                        'edition' => '',
-                        'publication_date' => '',
-                        'language' => '',
-                        'pages' => '',
-                    ];
+                if ($inboundBookDetails !== []) {
+                    if (empty($order['book_details']['authors']) && !empty($inboundBookDetails['authors'])) {
+                        $order['book_details']['authors'] = $inboundBookDetails['authors'];
+                    }
+                    if (empty($order['book_details']['edited_by_names']) && !empty($inboundBookDetails['edited_by_names'])) {
+                        $order['book_details']['edited_by_names'] = $inboundBookDetails['edited_by_names'];
+                    }
+                    if (($order['book_details']['publisher'] ?? '') === '' && ($inboundBookDetails['publisher'] ?? '') !== '') {
+                        $order['book_details']['publisher'] = $inboundBookDetails['publisher'];
+                    }
+                    foreach (['isbn', 'cover_type', 'edition', 'publication_date', 'language', 'pages'] as $bookField) {
+                        if (($order['book_details'][$bookField] ?? '') === '' && ($inboundBookDetails[$bookField] ?? '') !== '') {
+                            $order['book_details'][$bookField] = $inboundBookDetails[$bookField];
+                        }
+                    }
                 }
+
                 $splitBookNames = static function (string $raw): array {
                     $raw = trim($raw);
                     if ($raw === '') {
@@ -4726,7 +4772,7 @@ class ProductsController
                 if (empty($order['book_details']['edited_by_names'])) {
                     $order['book_details']['edited_by_names'] = [];
                 }
-                if ($order['book_details']['publisher'] === '') {
+                if (($order['book_details']['publisher'] ?? '') === '') {
                     $order['book_details']['publisher'] = trim((string) ($order['publisher'] ?? ''));
                 }
 
@@ -4746,17 +4792,23 @@ class ProductsController
                     $order['book_detail_author_ids'] = array_map(static function ($row) {
                         return (string) ($row['id'] ?? '');
                     }, $order['book_detail_selected_author_options']);
+                }
 
-                    foreach ($inboundingModel->parseInboundAuthorIds((string) ($latestInboundBookRow['edited_by'] ?? '')) as $editorId) {
-                        $editorRow = $inboundingModel->getAuthorById($editorId);
-                        if (!empty($editorRow['id'])) {
-                            $order['book_detail_selected_edited_by_options'][] = $editorRow;
-                        }
+                $editedByStored = trim((string) ($order['edited_by'] ?? ''));
+                if ($editedByStored === '' && is_array($latestInboundBookRow)) {
+                    $editedByStored = trim((string) ($latestInboundBookRow['edited_by'] ?? ''));
+                }
+                foreach ($inboundingModel->parseInboundAuthorIds($editedByStored) as $editorId) {
+                    $editorRow = $inboundingModel->getAuthorById($editorId);
+                    if (!empty($editorRow['id'])) {
+                        $order['book_detail_selected_edited_by_options'][] = $editorRow;
                     }
-                    $order['book_detail_edited_by_ids'] = array_map(static function ($row) {
-                        return (string) ($row['id'] ?? '');
-                    }, $order['book_detail_selected_edited_by_options']);
+                }
+                $order['book_detail_edited_by_ids'] = array_map(static function ($row) {
+                    return (string) ($row['id'] ?? '');
+                }, $order['book_detail_selected_edited_by_options']);
 
+                if (is_array($latestInboundBookRow)) {
                     $publisherId = (int) ($latestInboundBookRow['publisher'] ?? 0);
                     if ($publisherId > 0) {
                         $publisherRow = $inboundingModel->getPublisherById($publisherId);
@@ -4889,6 +4941,19 @@ class ProductsController
             $product = $productModel->getProduct($data['product_id']);
             if (!$product) throw new Exception('Product not found');
 
+            $movementType = strtoupper(trim((string)($data['type'] ?? 'OUT')));
+            $quantity = (int)($data['quantity'] ?? 0);
+            $warehouseId = (int)($data['warehouse_id'] ?? 0);
+            if ($quantity <= 0) {
+                throw new Exception('Please enter a valid quantity.');
+            }
+            if ($warehouseId <= 0) {
+                throw new Exception('Please select a warehouse.');
+            }
+
+            // Decrease must not exceed available running stock at the selected warehouse.
+            $strictStockCheck = ($movementType === 'OUT');
+
             // Merge submitted data with product details
             $insertData = [
                 'product_id'    => (int)$product['id'],
@@ -4896,13 +4961,13 @@ class ProductsController
                 'item_code'     => $product['item_code'],
                 'size'          => $product['size'],
                 'color'         => $product['color'],
-                'quantity'      => (int)$data['quantity'],
+                'quantity'      => $quantity,
                 'reason'        => $data['reason'],
                 'update_by_user' => $sessionUserId,
-                'movement_type' => $data['type'],
-                'warehouse_id'  => $data['warehouse_id'],
+                'movement_type' => $movementType,
+                'warehouse_id'  => $warehouseId,
                 'location'      => $data['location'],
-                'strict_stock_check' => false,
+                'strict_stock_check' => $strictStockCheck,
             ];
 
             $result = $productModel->insertStockMovement($insertData);
@@ -5457,6 +5522,55 @@ class ProductsController
         return is_array($data) ? $data : [];
     }
 
+    /** @param callable(): array<string, mixed> $action */
+    private function runProductDetailJsonAction(callable $action): void
+    {
+        $this->prepareProductDetailJsonResponse();
+        try {
+            echo json_encode($action());
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    /**
+     * @param array<string, mixed> $dbFields
+     * @param array<string, mixed> $vendorFields
+     * @param array<string, mixed> $extra
+     * @return array<string, mixed>
+     */
+    private function persistProductFieldUpdate(int $productId, array $dbFields, array $vendorFields, string $message, array $extra = []): array
+    {
+        global $productModel;
+
+        if ($productId <= 0) {
+            throw new Exception('Invalid product id');
+        }
+
+        $product = $productModel->getProduct($productId);
+        if (!$product) {
+            throw new Exception('Product not found');
+        }
+
+        $dbFields['updated_at'] = date('Y-m-d H:i:s');
+        $result = $productModel->modifyProduct($productId, $dbFields);
+        if (empty($result['success'])) {
+            throw new Exception((string) ($result['message'] ?? 'Update failed.'));
+        }
+
+        $vendorSync = $this->syncProductFieldsToVendorFrontend($product, $vendorFields);
+        if (empty($vendorSync['success']) && !empty($vendorSync['message'])) {
+            $message .= ' ' . $vendorSync['message'];
+        }
+
+        return array_merge([
+            'success' => true,
+            'message' => $message,
+            'vendor_sync' => $vendorSync,
+        ], $extra);
+    }
+
     /**
      * @param array<string, mixed> $product
      * @param array<string, mixed> $postFields
@@ -5481,6 +5595,9 @@ class ProductsController
         $normalizedFields = [];
         foreach ($postFields as $key => $value) {
             if ($value === null) {
+                continue;
+            }
+            if (is_string($value) && trim($value) === '') {
                 continue;
             }
             $normalizedFields[$key] = is_string($value) ? trim($value) : $value;
@@ -5665,57 +5782,44 @@ class ProductsController
     public function updateProductTitle()
     {
         is_login();
-        global $productModel;
-        $this->prepareProductDetailJsonResponse();
-
-        try {
+        $this->runProductDetailJsonAction(function () {
             $data = $this->readJsonRequestBody();
-            $productId = (int) ($data['product_id'] ?? 0);
             $title = trim((string) ($data['title'] ?? ''));
-
-            if ($productId <= 0) {
-                throw new Exception('Invalid product id');
-            }
             if ($title === '') {
                 throw new Exception('Product title is required.');
             }
 
-            $product = $productModel->getProduct($productId);
-            if (!$product) {
-                throw new Exception('Product not found');
+            return $this->persistProductFieldUpdate(
+                (int) ($data['product_id'] ?? 0),
+                ['title' => $title],
+                ['title' => $title],
+                'Product title updated.',
+                ['title' => $title]
+            );
+        });
+    }
+
+    public function updateProductAddedOnDate()
+    {
+        is_login();
+        $this->runProductDetailJsonAction(function () {
+            if ((int) ($_SESSION['user']['role_id'] ?? 0) !== 1) {
+                throw new Exception('Only administrators can change the added on date.');
+            }
+            $data = $this->readJsonRequestBody();
+            $date = $this->normalizeProfileDateInput((string) ($data['date_first_added'] ?? ''), 'Added on date');
+            if ($date === '') {
+                throw new Exception('Added on date is required.');
             }
 
-            if ($title === trim((string) ($product['title'] ?? ''))) {
-                echo json_encode(['success' => true, 'message' => 'No change.', 'title' => $title]);
-                exit;
-            }
-
-            $result = $productModel->modifyProduct($productId, [
-                'title' => $title,
-                'updated_at' => date('Y-m-d H:i:s'),
-            ]);
-            if (empty($result['success'])) {
-                throw new Exception((string) ($result['message'] ?? 'Could not update title.'));
-            }
-
-            $vendorSync = $this->syncProductFieldsToVendorFrontend($product, [
-                'title' => $title,
-            ]);
-            $message = 'Product title updated.';
-            if (empty($vendorSync['success']) && !empty($vendorSync['message'])) {
-                $message .= ' ' . $vendorSync['message'];
-            }
-
-            echo json_encode([
-                'success' => true,
-                'message' => $message,
-                'title' => $title,
-                'vendor_sync' => $vendorSync,
-            ]);
-        } catch (Exception $e) {
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
-        }
-        exit;
+            return $this->persistProductFieldUpdate(
+                (int) ($data['product_id'] ?? 0),
+                ['date_first_added' => $date],
+                ['date_first_added' => $date],
+                'Added on date updated.',
+                ['date_first_added' => $date, 'added_on_display' => date('d M Y', strtotime($date))]
+            );
+        });
     }
 
     public function updateProductPriceSection()
@@ -5946,6 +6050,7 @@ class ProductsController
             }
 
             require_once dirname(__DIR__) . '/models/inbounding/Inbounding.php';
+            require_once dirname(__DIR__) . '/helpers/inbound_api_sections.php';
             $inboundingModel = new Inbounding($conn);
             $inboundRow = $this->getLatestInboundBookRowByVariant(
                 $conn,
@@ -5953,9 +6058,6 @@ class ProductsController
                 (string) ($product['size'] ?? ''),
                 (string) ($product['color'] ?? '')
             );
-            if (!$inboundRow || empty($inboundRow['id'])) {
-                throw new Exception('No matching inbound row was found for this book product.');
-            }
 
             $authorCsv = $this->resolveExactInboundAuthorIdsCsv($conn, (string) ($data['authors'] ?? ''), 'Author');
             $editedByCsv = $this->resolveExactInboundAuthorIdsCsv($conn, (string) ($data['edited_by'] ?? ''), 'Edited By');
@@ -5965,12 +6067,12 @@ class ProductsController
             if ($pagesRaw !== '' && (!ctype_digit($pagesRaw) || (int) $pagesRaw < 0)) {
                 throw new Exception('Pages must be a non-negative whole number.');
             }
-            $pages = $pagesRaw === '' ? 0 : (int) $pagesRaw;
+            $pages = $pagesRaw === '' ? null : (int) $pagesRaw;
 
             $updateData = [
                 'author' => $authorCsv,
                 'edited_by' => $editedByCsv,
-                'publisher' => $publisherId,
+                'publisher' => $publisherId > 0 ? $publisherId : null,
                 'isbn' => trim((string) ($data['isbn'] ?? '')),
                 'cover_type' => trim((string) ($data['cover_type'] ?? '')),
                 'edition' => trim((string) ($data['edition'] ?? '')),
@@ -5979,23 +6081,48 @@ class ProductsController
                 'pages' => $pages,
             ];
 
-            $result = $inboundingModel->updatedesktopform((int) $inboundRow['id'], $updateData);
-            if (empty($result['success'])) {
-                throw new Exception((string) ($result['message'] ?? 'Could not update book details.'));
+            if ($inboundRow && !empty($inboundRow['id'])) {
+                $result = $inboundingModel->updatedesktopform((int) $inboundRow['id'], $updateData);
+                if (empty($result['success'])) {
+                    throw new Exception((string) ($result['message'] ?? 'Could not update book details.'));
+                }
             }
 
-            $vendorFields = [
-                'creator' => $inboundingModel->buildBookCreatorApiValue($authorCsv, $editedByCsv),
-                'publisher_vendor_id' => $publisherId > 0 ? $publisherId : '',
+            $productBookUpdate = [
+                'edited_by' => $editedByCsv,
                 'isbn' => $updateData['isbn'],
                 'cover_type' => $updateData['cover_type'],
                 'edition' => $updateData['edition'],
-                'publication_date' => $publicationDate,
+                'publication_date' => $publicationDate === '' ? null : $publicationDate,
                 'language' => $updateData['language'],
-                'pages' => $pagesRaw === '' ? '' : $pages,
+                'pages' => $pagesRaw === '' ? null : (string) $pages,
+                'updated_at' => date('Y-m-d H:i:s'),
             ];
+            $productSave = $productModel->modifyProduct($productId, $productBookUpdate);
+            if (empty($productSave['success'])) {
+                throw new Exception((string) ($productSave['message'] ?? 'Could not save book details on product.'));
+            }
+
+            if ($inboundRow && !empty($inboundRow['id'])) {
+                $publishRow = $inboundingModel->getpublishdata((int) $inboundRow['id']);
+                $bookSource = is_array($publishRow['data'] ?? null) ? $publishRow['data'] : [];
+            } else {
+                $bookSource = array_merge(['groupname' => $product['groupname'] ?? 'book'], $updateData);
+            }
+
+            $vendorFields = inbound_api_build_book_details_modify_fields($bookSource, $inboundingModel);
+            if ($vendorFields === []) {
+                throw new Exception('No book fields to send to the website. Check author, publisher, or other book details.');
+            }
 
             $vendorSync = $this->syncProductFieldsToVendorFrontend($product, $vendorFields);
+            if (!empty($vendorSync['success'])) {
+                $itemCode = trim((string) ($product['item_code'] ?? ''));
+                if ($itemCode !== '') {
+                    $this->importApiCall([$itemCode], ['sync_physical_stock' => false]);
+                }
+            }
+
             $message = 'Book details updated.';
             if (empty($vendorSync['success']) && !empty($vendorSync['message'])) {
                 $message .= ' ' . $vendorSync['message'];
@@ -6755,6 +6882,7 @@ class ProductsController
 
         $insufficient = [];
         $requestedQtyBySku = [];
+        $productIdBySku = [];
         $alreadyFlaggedSku = [];
         foreach ($normalizedItems as $idx => $item) {
             $transfer_qty = (int)($item['transfer_qty'] ?? 0);
@@ -6767,6 +6895,7 @@ class ProductsController
             }
             if (!isset($requestedQtyBySku[$sku])) {
                 $requestedQtyBySku[$sku] = 0;
+                $productIdBySku[$sku] = (int)($item['product_id'] ?? 0);
             }
             $requestedQtyBySku[$sku] += $transfer_qty;
 
@@ -6775,7 +6904,13 @@ class ProductsController
                 continue;
             }
             $existingQty = $existingQtyBySku[$sku] ?? 0;
-            $validation = $stockTransferModel->validateItemStock($sku, $from_warehouse, $requestedQtyBySku[$sku], $existingQty);
+            $validation = $stockTransferModel->validateItemStock(
+                $sku,
+                $from_warehouse,
+                $requestedQtyBySku[$sku],
+                $existingQty,
+                (int)($productIdBySku[$sku] ?? 0)
+            );
             if (!$validation['valid']) {
                 $alreadyFlaggedSku[$sku] = true;
                 $insufficient[] = [
@@ -7276,7 +7411,20 @@ class ProductsController
     {
         $count = count($insufficient);
         if ($count === 1) {
-            return '1 product does not have enough stock at the source warehouse.';
+            $row = $insufficient[0];
+            $sku = trim((string)($row['sku'] ?? ''));
+            $itemCode = trim((string)($row['item_code'] ?? ''));
+            $label = $sku !== '' ? $sku : 'Unknown SKU';
+            if ($itemCode !== '') {
+                $label .= ' (' . $itemCode . ')';
+            }
+            $requested = (int)($row['requested_qty'] ?? 0);
+            $available = (int)($row['available_qty'] ?? 0);
+            if ($available <= 0 && $requested > 0) {
+                return 'SKU ' . $label . ' has 0 available stock at the source warehouse (requested ' . $requested . ').';
+            }
+
+            return 'SKU ' . $label . ' does not have enough stock (requested ' . $requested . ', available ' . $available . ').';
         }
         if ($count > 1) {
             return $count . ' products do not have enough stock at the source warehouse.';
@@ -7428,6 +7576,7 @@ class ProductsController
 
         $requestedQtyBySku = [];
         $firstItemCodeBySku = [];
+        $productIdBySku = [];
         $unresolvedItems = [];
         foreach ($items as $item) {
             $qty = (int)($item['transfer_qty'] ?? 0);
@@ -7454,6 +7603,7 @@ class ProductsController
             if (!isset($requestedQtyBySku[$sku])) {
                 $requestedQtyBySku[$sku] = 0;
                 $firstItemCodeBySku[$sku] = trim((string)($item['item_code'] ?? ''));
+                $productIdBySku[$sku] = (int)($item['product_id'] ?? 0);
             }
             $requestedQtyBySku[$sku] += $qty;
         }
@@ -7487,7 +7637,13 @@ class ProductsController
         $insufficient = [];
         foreach ($requestedQtyBySku as $sku => $requestedQty) {
             $existingQty = (int)($existingQtyBySku[$sku] ?? 0);
-            $validation = $stockTransferModel->validateItemStock($sku, $fromWarehouse, (int)$requestedQty, $existingQty);
+            $validation = $stockTransferModel->validateItemStock(
+                $sku,
+                $fromWarehouse,
+                (int)$requestedQty,
+                $existingQty,
+                (int)($productIdBySku[$sku] ?? 0)
+            );
             if (!($validation['valid'] ?? false)) {
                 $insufficient[] = [
                     'sku' => $sku,
@@ -8207,6 +8363,9 @@ class ProductsController
                 switch ($scope) {
                     case 'title':
                         $this->updateProductTitle();
+                        return;
+                    case 'added_on_section':
+                        $this->updateProductAddedOnDate();
                         return;
                     case 'price_section':
                         $this->updateProductPriceSection();

@@ -57,6 +57,37 @@ final class StockMovement
     }
 
     /**
+     * Latest running_stock for one product at one warehouse (same basis as POS / product detail).
+     */
+    public static function getLastRunningStockByProductId(\mysqli $conn, int $productId, int $warehouseId): float
+    {
+        if ($productId <= 0 || $warehouseId <= 0) {
+            return 0.0;
+        }
+        $sql = '
+            SELECT sm.running_stock
+            FROM vp_stock_movements sm
+            INNER JOIN (
+                SELECT product_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE warehouse_id = ?
+                GROUP BY product_id
+            ) latest ON latest.product_id = sm.product_id AND latest.max_id = sm.id
+            WHERE sm.warehouse_id = ? AND sm.product_id = ?
+            LIMIT 1';
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return 0.0;
+        }
+        $stmt->bind_param('iii', $warehouseId, $warehouseId, $productId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return (float) ($row['running_stock'] ?? 0);
+    }
+
+    /**
      * Sum of latest running_stock per warehouse for a product.
      */
     public static function getPhysicalStockTotalFromMovements(\mysqli $conn, int $productId): int
@@ -185,16 +216,21 @@ final class StockMovement
         $isInbound = self::isInbound($movementType);
         $lastRunning = 0.0;
 
-        if ($warehouseId > 0 && trim($sku) !== '') {
-            $lastRunning = self::getLastRunningStock($conn, $sku, $warehouseId);
+        if ($warehouseId > 0) {
+            if (!empty($options['product_id'])) {
+                $lastRunning = self::getLastRunningStockByProductId($conn, (int) $options['product_id'], $warehouseId);
+            } elseif (trim($sku) !== '') {
+                $lastRunning = self::getLastRunningStock($conn, $sku, $warehouseId);
+            }
         } elseif (!$isInbound && !empty($options['product_id'])) {
             $lastRunning = (float) self::getPhysicalStockTotalFromMovements($conn, (int) $options['product_id']);
         }
 
         $strict = !array_key_exists('strict_stock_check', $options) || !empty($options['strict_stock_check']);
         if (!$isInbound && $strict && $qty > $lastRunning + 1e-9) {
+            $skuLabel = trim($sku) !== '' ? trim($sku) : 'unknown SKU';
             throw new \RuntimeException(
-                'Insufficient stock: available ' . $lastRunning . ', requested ' . $qty
+                'Insufficient stock for SKU ' . $skuLabel . ': available ' . $lastRunning . ', requested ' . $qty
             );
         }
 
@@ -237,6 +273,10 @@ final class StockMovement
         $userId = isset($data['update_by_user'])
             ? (int) $data['update_by_user']
             : (isset($data['user_id']) ? (int) $data['user_id'] : 0);
+        $createdAt = trim((string) ($data['created_at'] ?? ''));
+        if ($createdAt !== '' && strtotime($createdAt) === false) {
+            $createdAt = '';
+        }
 
         $refTypeUpper = strtoupper(trim($refType));
         $movementTypeUpper = strtoupper(trim($movementType));
@@ -269,26 +309,48 @@ final class StockMovement
 
         $fullSql = "INSERT INTO vp_stock_movements
             (product_id, sku, {$safeItemCol}, size, color, warehouse_id, location, movement_type, quantity, running_stock, ref_type, ref_id, reason, update_by_user, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " . ($createdAt !== '' ? '?' : 'NOW()') . ", " . ($createdAt !== '' ? '?' : 'NOW()') . ")";
         $stmt = $conn->prepare($fullSql);
         if ($stmt) {
-            $stmt->bind_param(
-                'issssisssdsssi',
-                $pidBind,
-                $sku,
-                $itemCode,
-                $size,
-                $color,
-                $warehouseId,
-                $location,
-                $movementType,
-                $qtyBind,
-                $runningBind,
-                $refType,
-                $refId,
-                $reason,
-                $userId
-            );
+            if ($createdAt !== '') {
+                $stmt->bind_param(
+                    'issssisssdsssss',
+                    $pidBind,
+                    $sku,
+                    $itemCode,
+                    $size,
+                    $color,
+                    $warehouseId,
+                    $location,
+                    $movementType,
+                    $qtyBind,
+                    $runningBind,
+                    $refType,
+                    $refId,
+                    $reason,
+                    $userId,
+                    $createdAt,
+                    $createdAt
+                );
+            } else {
+                $stmt->bind_param(
+                    'issssisssdsssi',
+                    $pidBind,
+                    $sku,
+                    $itemCode,
+                    $size,
+                    $color,
+                    $warehouseId,
+                    $location,
+                    $movementType,
+                    $qtyBind,
+                    $runningBind,
+                    $refType,
+                    $refId,
+                    $reason,
+                    $userId
+                );
+            }
             if ($stmt->execute()) {
                 $movementId = (int) $conn->insert_id;
                 $stmt->close();

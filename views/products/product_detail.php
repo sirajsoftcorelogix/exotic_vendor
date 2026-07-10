@@ -86,6 +86,7 @@
     var errText = document.getElementById('productDetailSkuErrorText');
     var debounceTimer = null;
     var activeFetch = 0;
+    var suggestAbort = null;
 
     function hideError() {
       errWrap.classList.add('hidden');
@@ -152,8 +153,16 @@
         return;
       }
       var myId = ++activeFetch;
-      var url = searchBase + (searchBase.indexOf('?') >= 0 ? '&' : '?') + 'q=' + encodeURIComponent(q);
-      fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      if (suggestAbort) {
+        try { suggestAbort.abort(); } catch (e) {}
+      }
+      suggestAbort = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      // by=sku uses the lightweight SKU-only query (not SELECT * on sku+item_code).
+      var url = searchBase + (searchBase.indexOf('?') >= 0 ? '&' : '?') +
+        'q=' + encodeURIComponent(q) + '&by=sku';
+      var opts = { credentials: 'same-origin', headers: { 'Accept': 'application/json' } };
+      if (suggestAbort) opts.signal = suggestAbort.signal;
+      fetch(url, opts)
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (myId !== activeFetch) return;
@@ -163,7 +172,8 @@
             closeSuggestions();
           }
         })
-        .catch(function () {
+        .catch(function (err) {
+          if (err && err.name === 'AbortError') return;
           if (myId !== activeFetch) return;
           closeSuggestions();
         });
@@ -174,10 +184,13 @@
       var q = (input.value || '').trim();
       clearTimeout(debounceTimer);
       if (q.length < 2) {
+        if (suggestAbort) {
+          try { suggestAbort.abort(); } catch (e) {}
+        }
         closeSuggestions();
         return;
       }
-      debounceTimer = setTimeout(function () { fetchSuggestions(q); }, 280);
+      debounceTimer = setTimeout(function () { fetchSuggestions(q); }, 200);
     });
 
     input.addEventListener('keydown', function (e) {
@@ -229,16 +242,12 @@
     $publishedVal = (int)($products['published'] ?? 0);
     $publishedText = $publishedVal === 1 ? 'Published' : 'Unpublished';
     $addedOnRaw = trim((string)($products['date_first_added'] ?? ''));
-    if ($addedOnRaw === '' || $addedOnRaw === '0000-00-00') {
+    if ($addedOnRaw === '' || strpos($addedOnRaw, '0000-00-00') === 0) {
         $addedOnRaw = trim((string)($products['created_on'] ?? ''));
     }
-    $addedOnDisplay = '';
-    if ($addedOnRaw !== '' && $addedOnRaw !== '0000-00-00 00:00:00') {
-        $addedOnTs = strtotime($addedOnRaw);
-        if ($addedOnTs !== false) {
-            $addedOnDisplay = date('d M Y', $addedOnTs);
-        }
-    }
+    $addedOnTs = ($addedOnRaw !== '' && strpos($addedOnRaw, '0000-00-00') !== 0) ? strtotime($addedOnRaw) : false;
+    $addedOnDisplay = $addedOnTs ? date('d M Y', $addedOnTs) : '';
+    $addedOnInput = $addedOnTs ? date('Y-m-d', $addedOnTs) : '';
     $permanentlyAvailableVal = (int)($products['permanently_available'] ?? 0);
     $permanentlyAvailableText = $permanentlyAvailableVal === 1 ? 'Yes' : 'No';
     $priceIndiaBase = (float)($products['price_india'] ?? 0);
@@ -347,9 +356,19 @@
                 onclick="openPublishedStatusModal()">
                 <span id="publishedStatusDisplay"><?php echo htmlspecialchars($publishedText, ENT_QUOTES, 'UTF-8'); ?></span>
               </button>
-              <?php if ($addedOnDisplay !== ''): ?>
-                <span class="text-[11px] text-gray-500 whitespace-nowrap">Added On: <?php echo htmlspecialchars($addedOnDisplay, ENT_QUOTES, 'UTF-8'); ?></span>
-              <?php endif; ?>
+              <div class="shrink-0 flex items-center gap-1.5">
+                <span id="productAddedOnDisplay" class="text-xs font-semibold px-3 py-1 rounded-md border border-sky-300 bg-sky-50 text-sky-800 whitespace-nowrap">
+                  Added On: <?php echo htmlspecialchars($addedOnDisplay !== '' ? $addedOnDisplay : '—', ENT_QUOTES, 'UTF-8'); ?>
+                </span>
+                <button
+                  type="button"
+                  class="inline-flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-emerald-700 hover:border-emerald-300"
+                  onclick="toggleProductDetailModal('addedOnModal', true)"
+                  title="Edit added on date"
+                  aria-label="Edit added on date">
+                  <i class="fas fa-pencil-alt text-[10px]"></i>
+                </button>
+              </div>
             </div>
           <?php else: ?>
             <div class="shrink-0 flex items-center gap-2">
@@ -357,7 +376,9 @@
                 <?php echo htmlspecialchars($publishedText, ENT_QUOTES, 'UTF-8'); ?>
               </span>
               <?php if ($addedOnDisplay !== ''): ?>
-                <span class="text-[11px] text-gray-500 whitespace-nowrap">Added On: <?php echo htmlspecialchars($addedOnDisplay, ENT_QUOTES, 'UTF-8'); ?></span>
+                <span class="text-xs font-semibold px-3 py-1 rounded-md border border-sky-300 bg-sky-50 text-sky-800 whitespace-nowrap">
+                  Added On: <?php echo htmlspecialchars($addedOnDisplay, ENT_QUOTES, 'UTF-8'); ?>
+                </span>
               <?php endif; ?>
             </div>
           <?php endif; ?>
@@ -862,9 +883,26 @@
   </div>
   <!-- STOCK TRANSACTIONS -->
   <div class="bg-white rounded-lg p-4 overflow-x-auto">
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center justify-between mb-4 gap-3">
           <h3 class="font-semibold">Stock Transactions</h3>
-          <a target="_blank" href="<?php echo base_url('?page=products&action=inventory_ledger&sku=' . htmlspecialchars($products['sku'] ?? '')); ?>"><i title="View stock movement history for this product" class="fas fa-exchange-alt text-orange-500"></i></a>
+          <div class="flex items-center gap-2 shrink-0">
+            <?php if ($isAdminUser): ?>
+              <button
+                type="button"
+                id="refreshProductStockBtn"
+                data-product-id="<?php echo (int)($products['id'] ?? 0); ?>"
+                data-sku-label="<?php echo htmlspecialchars((string)($products['sku'] ?? $products['item_code'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-orange-200 bg-orange-50 text-orange-800 text-xs font-semibold hover:bg-orange-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none"
+                title="Clear ledger, reset physical stock, fetch local stock, and reseed default warehouse"
+                onclick="refreshProductStockLedger(this)">
+                <i class="fas fa-warehouse text-[11px]" aria-hidden="true"></i>
+                Refresh stock
+              </button>
+            <?php endif; ?>
+            <a target="_blank" rel="noopener noreferrer" href="<?php echo base_url('?page=products&action=inventory_ledger&sku=' . htmlspecialchars($products['sku'] ?? '')); ?>" class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100" title="View stock movement history for this product" aria-label="View stock movement history for this product">
+              <i class="fas fa-exchange-alt text-sm"></i>
+            </a>
+          </div>
         </div>
     
     
@@ -1006,6 +1044,18 @@
         <div class="flex justify-end gap-3 mt-6">
             <button type="button" onclick="closeProductTitleModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
             <button type="button" onclick="submitProductTitleUpdate()" class="px-4 py-2 text-sm bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700">Save</button>
+        </div>
+    </div>
+</div>
+<div id="addedOnModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
+        <button type="button" onclick="toggleProductDetailModal('addedOnModal', false)" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Edit Added On Date</h2>
+        <label for="input_product_added_on" class="block text-sm font-medium text-gray-600 mb-1">Added On</label>
+        <input type="date" id="input_product_added_on" value="<?php echo htmlspecialchars($addedOnInput, ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+        <div class="flex justify-end gap-3 mt-6">
+            <button type="button" onclick="toggleProductDetailModal('addedOnModal', false)" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button type="button" onclick="submitAddedOnUpdate()" class="px-4 py-2 text-sm bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700">Save</button>
         </div>
     </div>
 </div>
@@ -1374,12 +1424,25 @@
           Warehouse
         </label>
         <select id="adj_warehouse" class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
-          <?php foreach ($products['warehouses'] as $value): 
-            $selected = ($value['id'] == ($products['stock_movements']['warehouse_id'] ?? '')) ? 'selected' : '';
-          ?> 
-            <option value="<?php echo $value['id']; ?>" <?php echo $selected; ?>><?php echo htmlspecialchars($value['name']); ?></option>
+          <?php
+            $whStockMap = [];
+            if (!empty($products['warehouse_location_stock']) && is_array($products['warehouse_location_stock'])) {
+                foreach ($products['warehouse_location_stock'] as $wsRow) {
+                    $wid = (int)($wsRow['warehouse_id'] ?? 0);
+                    if ($wid > 0) {
+                        $whStockMap[$wid] = (float)($wsRow['running_stock'] ?? 0);
+                    }
+                }
+            }
+            foreach ($products['warehouses'] as $value):
+              $wid = (int)($value['id'] ?? 0);
+              $avail = isset($whStockMap[$wid]) ? $whStockMap[$wid] : 0;
+              $selected = ($wid == ($products['stock_movements']['warehouse_id'] ?? '')) ? 'selected' : '';
+          ?>
+            <option value="<?php echo $wid; ?>" data-available="<?php echo htmlspecialchars((string)$avail, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $selected; ?>><?php echo htmlspecialchars($value['name']); ?></option>
           <?php endforeach; ?>
         </select>
+        <p id="adj_warehouse_available" class="mt-1 text-xs text-gray-500"></p>
       </div>
 
       <div>
@@ -1396,7 +1459,7 @@
           Quantity
         </label>
         <input type="number" id="adj_quantity" 
-               value="1"
+               value="1" min="1" step="1"
                class="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
       </div>
     </div>
@@ -1751,6 +1814,52 @@
     });
   }
 
+  async function refreshProductStockLedger(btn) {
+    var productId = parseInt((btn && btn.dataset && btn.dataset.productId) ? btn.dataset.productId : '0', 10);
+    var skuLabel = (btn && btn.dataset && btn.dataset.skuLabel) ? String(btn.dataset.skuLabel).trim() : ('#' + productId);
+    if (productId <= 0) {
+      showProfileStatusModal('Product id is missing.', 'error', false);
+      return;
+    }
+
+    var confirmed = window.confirm(
+      'Refresh stock for ' + skuLabel + '?\n\n'
+      + 'This will delete vp_stock_movements and vp_stock rows, reset physical_stock to 0, '
+      + 'fetch the latest local stock from the API, then reseed opening stock in the default warehouse.'
+    );
+    if (!confirmed) return;
+
+    var oldHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.classList.add('opacity-70', 'cursor-not-allowed');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin text-[11px]" aria-hidden="true"></i> Refreshing...';
+
+    try {
+      var res = await fetch('index.php?page=pos_register&action=stock-report-refresh', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ product_id: productId }),
+      });
+      var rawText = await res.text();
+      var data = null;
+      try {
+        data = rawText ? JSON.parse(rawText) : null;
+      } catch (parseErr) {
+        data = null;
+      }
+      if (!data || !data.success) {
+        throw new Error((data && data.message) ? data.message : 'Stock refresh failed.');
+      }
+      showProfileStatusModal(data.message || 'Stock refreshed successfully.', 'success', true);
+    } catch (e) {
+      showProfileStatusModal((e && e.message) ? e.message : 'Stock refresh failed.', 'error', false);
+      btn.disabled = false;
+      btn.classList.remove('opacity-70', 'cursor-not-allowed');
+      btn.innerHTML = oldHtml;
+    }
+  }
+
   async function updateProductProfileFromApi(btn) {
     var itemCode = (btn && btn.dataset && btn.dataset.itemCode) ? String(btn.dataset.itemCode).trim() : '';
     if (!itemCode) {
@@ -1827,12 +1936,47 @@
     }
   }
 
+  function getAdjWarehouseAvailableQty() {
+    var sel = document.getElementById('adj_warehouse');
+    if (!sel || !sel.options || sel.selectedIndex < 0) return 0;
+    var opt = sel.options[sel.selectedIndex];
+    var raw = opt ? opt.getAttribute('data-available') : null;
+    var n = parseFloat(raw);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function updateAdjWarehouseAvailableHint() {
+    var hint = document.getElementById('adj_warehouse_available');
+    var typeEl = document.getElementById('adj_type');
+    var whEl = document.getElementById('adj_warehouse');
+    if (!hint || !typeEl || !whEl) return;
+    var avail = getAdjWarehouseAvailableQty();
+    var whName = (whEl.options[whEl.selectedIndex] && whEl.options[whEl.selectedIndex].text) || 'selected warehouse';
+    if (typeEl.value === 'OUT') {
+      hint.textContent = 'Available at ' + whName + ': ' + avail;
+      hint.className = avail > 0
+        ? 'mt-1 text-xs text-gray-500'
+        : 'mt-1 text-xs text-red-600 font-medium';
+    } else {
+      hint.textContent = 'Available at ' + whName + ': ' + avail;
+      hint.className = 'mt-1 text-xs text-gray-500';
+    }
+  }
+
   function openStockModal() {
     document.getElementById('stockModal').classList.remove('hidden');
+    updateAdjWarehouseAvailableHint();
   }
   function closeStockModal() {
     document.getElementById('stockModal').classList.add('hidden');
   }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var adjType = document.getElementById('adj_type');
+    var adjWh = document.getElementById('adj_warehouse');
+    if (adjType) adjType.addEventListener('change', updateAdjWarehouseAvailableHint);
+    if (adjWh) adjWh.addEventListener('change', updateAdjWarehouseAvailableHint);
+  });
   function openStockLocationModal(btn) {
     if (!btn) return;
     const movementId = btn.getAttribute('data-movement-id') || '';
@@ -2022,21 +2166,43 @@ function closeImagePopup() {
 <script>
   function submitStockAdjustment() {
     // 1. Collect Data
+    const qty = parseFloat(document.getElementById('adj_quantity').value);
+    const adjType = document.getElementById('adj_type').value;
+    const warehouseId = document.getElementById('adj_warehouse').value;
+    const warehouseSel = document.getElementById('adj_warehouse');
+    const warehouseName = (warehouseSel.options[warehouseSel.selectedIndex] && warehouseSel.options[warehouseSel.selectedIndex].text) || 'selected warehouse';
     const adjustmentData = {
         product_id: <?php echo json_encode($products['id'] ?? 0); ?>,
         user_id: document.getElementById('current_user').value,
         sku: <?php echo json_encode($products['sku'] ?? ''); ?>,
-        type: document.getElementById('adj_type').value,
-        warehouse_id: document.getElementById('adj_warehouse').value,
+        type: adjType,
+        warehouse_id: warehouseId,
         location: document.getElementById('adj_location').value,
-        quantity: document.getElementById('adj_quantity').value,
+        quantity: qty,
         reason: document.getElementById('adj_reason').value
     };
 
-    // 2. Simple Validation
-    if (!adjustmentData.quantity || adjustmentData.quantity <= 0) {
-        alert("Please enter a valid quantity.");
+    // 2. Validation
+    if (!warehouseId) {
+        alert('Please select a warehouse.');
         return;
+    }
+    if (!qty || qty <= 0 || !Number.isFinite(qty)) {
+        alert('Please enter a valid quantity.');
+        return;
+    }
+    // Decrease: selected warehouse must have enough running stock
+    if (adjType === 'OUT') {
+        const available = getAdjWarehouseAvailableQty();
+        if (qty > available) {
+            alert(
+                'Insufficient stock at ' + warehouseName + '.\n' +
+                'Available: ' + available + '\n' +
+                'Requested decrease: ' + qty
+            );
+            updateAdjWarehouseAvailableHint();
+            return;
+        }
     }
 
     // 3. Send to Server
@@ -2258,6 +2424,36 @@ function submitProductTitleUpdate() {
         }
     }).catch(function () {
         showProfileStatusModal('An error occurred while updating the product title.', 'error', false);
+    });
+}
+
+function toggleProductDetailModal(id, show) {
+    var modal = document.getElementById(id);
+    if (modal) modal.classList.toggle('hidden', !show);
+}
+
+function submitAddedOnUpdate() {
+    var dateValue = String((document.getElementById('input_product_added_on') || {}).value || '').trim();
+    if (!dateValue) {
+        showProfileStatusModal('Please select an added on date.', 'error', false);
+        return;
+    }
+    postProductDetailSection('added_on_section', {
+        product_id: <?php echo json_encode((int)($products['id'] ?? 0)); ?>,
+        date_first_added: dateValue
+    }).then(function (res) {
+        if (!res || !res.success) {
+            showProfileStatusModal((res && res.message) || 'Could not update added on date.', 'error', false);
+            return;
+        }
+        toggleProductDetailModal('addedOnModal', false);
+        var displayEl = document.getElementById('productAddedOnDisplay');
+        if (displayEl && res.added_on_display) {
+            displayEl.textContent = 'Added On: ' + res.added_on_display;
+        }
+        showProfileStatusModal(res.message || 'Added on date updated.', 'success', false);
+    }).catch(function () {
+        showProfileStatusModal('An error occurred while updating the added on date.', 'error', false);
     });
 }
 
