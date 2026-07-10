@@ -310,16 +310,19 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                                                 value="<?= htmlspecialchars($it['sku'] ?? '') ?>" <?= $dpLineReadonly ?>>
                                             <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
                                         </div>
+                                        <div class="dp-sku-actions">
                                         <a href="<?= $dpProductId > 0 ? ('?page=products&amp;action=detail&amp;id=' . $dpProductId) : '#' ?>"
                                             class="dp-product-profile-link dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-amber-800 hover:bg-amber-50 hover:border-amber-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 <?= $dpProductId > 0 ? '' : 'hidden' ?>"
                                             target="_blank" rel="noopener noreferrer"
                                             title="View product profile" aria-label="View product profile">
                                             <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
                                         </a>
-                                        <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed <?= trim((string) ($it['sku'] ?? '')) === '' ? 'hidden' : '' ?>"
-                                            title="Find open purchase orders for this SKU" aria-label="Find open purchase orders for this SKU" <?= $dpLineLocked ? 'disabled' : '' ?>>
+                                        <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title="Find open purchase orders for this SKU" aria-label="Find open purchase orders for this SKU"
+                                            <?= (trim((string) ($it['sku'] ?? '')) === '' || $dpLineLocked) ? 'disabled' : '' ?>>
                                             <i class="fas fa-search text-xs" aria-hidden="true"></i>
                                         </button>
+                                        </div>
                                     </div>
                                 </td>
                                 <td class="px-1 py-2 align-top dp-col-cost dp-col-numeric">
@@ -704,7 +707,8 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
     white-space: nowrap;
 }
 #line-items-table td.dp-col-cost,
-#line-items-table td.dp-col-qty {
+#line-items-table td.dp-col-qty,
+#line-items-table td.dp-col-sku {
     overflow: visible;
 }
 #line-items-table .dp-inp-cell {
@@ -761,6 +765,12 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
     min-width: 0;
     flex: 1 1 0;
 }
+#line-items-table .dp-col-sku .dp-sku-actions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: flex-start;
+    gap: 0.125rem;
+}
 #line-items-table .dp-line-mini-btn,
 #line-items-table .dp-line-action-btn {
     width: 1.5rem;
@@ -805,16 +815,18 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                             class="dp-sku dp-inp-cell w-full min-w-0 <?= $inpSm ?>" value="">
                         <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
                     </div>
+                    <div class="dp-sku-actions">
                     <a href="#"
                         class="dp-product-profile-link dp-line-action-btn shrink-0 hidden inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-amber-800 hover:bg-amber-50 hover:border-amber-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                         target="_blank" rel="noopener noreferrer"
                         title="View product profile" aria-label="View product profile">
                         <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
                     </a>
-                    <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 hidden inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Find open purchase orders for this SKU" aria-label="Find open purchase orders for this SKU">
+                    <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Find open purchase orders for this SKU" aria-label="Find open purchase orders for this SKU" disabled>
                         <i class="fas fa-search text-xs" aria-hidden="true"></i>
                     </button>
+                    </div>
                 </div>
             </td>
             <td class="px-1 py-2 align-top dp-col-cost dp-col-numeric">
@@ -914,11 +926,9 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
         if (!tr) return;
         var btn = tr.querySelector('.dp-fetch-pending-orders');
         if (!btn) return;
-        if (dpRowHasSku(tr)) {
-            btn.classList.remove('hidden');
-        } else {
-            btn.classList.add('hidden');
-        }
+        var lineLocked = tr.getAttribute('data-dp-line-locked') === '1';
+        btn.classList.remove('hidden');
+        btn.disabled = lineLocked || !dpRowHasSku(tr);
     }
 
     function dpUpdateSkuActions(tr) {
