@@ -602,16 +602,24 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
     border-radius: 0.625rem;
     font-size: 0.8125rem;
     font-weight: 600;
-    color: #4b5563;
-    transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    color: #6b7280;
+    transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 .dp-purchase-type-option input:checked + .dp-purchase-type-label {
-    background: #fff;
-    color: #92400e;
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    background: linear-gradient(to bottom, #d9822b, #c57526);
+    border: 1px solid #b86a22;
+    color: #fff;
+    box-shadow: 0 1px 4px rgba(180, 90, 20, 0.35);
+}
+.dp-purchase-type-option input:checked + .dp-purchase-type-label i {
+    opacity: 1;
+    color: #fff;
 }
 .dp-purchase-type-option:not(.is-disabled):hover .dp-purchase-type-label {
-    color: #1f2937;
+    color: #374151;
+}
+.dp-purchase-type-option:not(.is-disabled):hover input:not(:checked) + .dp-purchase-type-label {
+    background: #e5e7eb;
 }
 .dp-file-input {
     border: 1px dashed #d1d5db;
