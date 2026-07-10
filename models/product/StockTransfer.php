@@ -912,12 +912,18 @@ class StockTransfer
      * @param int $transfer_qty Transfer quantity requested
      * @return array ['valid' => bool, 'available' => int, 'message' => string]
      */
-    public function validateItemStock($sku, $warehouse_id, $transfer_qty, $existingTransferQty = 0)
+    public function validateItemStock($sku, $warehouse_id, $transfer_qty, $existingTransferQty = 0, $productId = 0)
     {
         require_once __DIR__ . '/StockMovement.php';
 
         // Match TRANSFER_OUT ledger checks: warehouse running stock only (no local_stock fallback).
-        $availableStock = (int) StockMovement::getLastRunningStock($this->db, (string) $sku, (int) $warehouse_id);
+        // Prefer product_id (same basis as POS / product detail) when legacy movement rows have stale SKU values.
+        $productId = (int) $productId;
+        if ($productId > 0) {
+            $availableStock = (int) StockMovement::getLastRunningStockByProductId($this->db, $productId, (int) $warehouse_id);
+        } else {
+            $availableStock = (int) StockMovement::getLastRunningStock($this->db, (string) $sku, (int) $warehouse_id);
+        }
 
         // When editing an existing transfer, the current transfer qty may already be deducted from stock.
         // Add it back when validating the updated requested quantity.
