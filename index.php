@@ -470,6 +470,9 @@ switch ($page) {
             case 'fetch_pending_orders':
                 $controller->fetchPendingOrdersForSku();
                 break;
+            case 'fetch_pending_po':
+                $controller->fetchPendingPoForSku();
+                break;
             case 'import_order':
                 $controller->importOrderForDirectPurchase();
                 break;

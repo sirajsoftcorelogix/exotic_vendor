@@ -297,8 +297,8 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                                     </button>
                                 </td>
                                 <td class="px-1 py-2 align-top dp-col-sku">
-                                    <div class="flex items-start gap-0.5">
-                                        <div class="relative dp-sku-cell flex-1 min-w-0">
+                                    <div class="dp-sku-wrap">
+                                        <div class="relative dp-sku-cell min-w-0">
                                             <input type="hidden" name="dp_line_id[]" class="dp-h-line-id" value="<?= $dpLineItemId ?>">
                                             <input type="hidden" name="item_code[]" class="dp-h-item-code" value="<?= htmlspecialchars($it['item_code'] ?? '') ?>">
                                             <input type="hidden" name="color[]" class="dp-h-color" value="<?= htmlspecialchars($it['color'] ?? '') ?>">
@@ -311,17 +311,22 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                                             <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
                                         </div>
                                         <div class="dp-sku-actions">
-                                        <a href="<?= $dpProductId > 0 ? ('?page=products&amp;action=detail&amp;id=' . $dpProductId) : '#' ?>"
-                                            class="dp-product-profile-link dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-amber-800 hover:bg-amber-50 hover:border-amber-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 <?= $dpProductId > 0 ? '' : 'hidden' ?>"
-                                            target="_blank" rel="noopener noreferrer"
-                                            title="View product profile" aria-label="View product profile">
-                                            <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
-                                        </a>
-                                        <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            title="Find open purchase orders for this SKU" aria-label="Find open purchase orders for this SKU"
-                                            <?= (trim((string) ($it['sku'] ?? '')) === '' || $dpLineLocked) ? 'disabled' : '' ?>>
-                                            <i class="fas fa-search text-xs" aria-hidden="true"></i>
-                                        </button>
+                                            <a href="<?= $dpProductId > 0 ? ('?page=products&amp;action=detail&amp;id=' . $dpProductId) : '#' ?>"
+                                                class="dp-product-profile-link dp-line-action-btn inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-amber-800 hover:bg-amber-50 hover:border-amber-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 <?= $dpProductId > 0 ? '' : 'hidden' ?>"
+                                                target="_blank" rel="noopener noreferrer"
+                                                title="View product profile" aria-label="View product profile">
+                                                <i class="fas fa-external-link-alt" aria-hidden="true"></i>
+                                            </a>
+                                            <button type="button" class="dp-fetch-customer-orders dp-line-action-btn inline-flex items-center justify-center rounded-lg border border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                title="List customer orders for this SKU" aria-label="List customer orders for this SKU"
+                                                <?= (trim((string) ($it['sku'] ?? '')) === '' || $dpLineLocked) ? 'disabled' : '' ?>>
+                                                <i class="fas fa-clipboard-list" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" class="dp-fetch-pending-po dp-line-action-btn inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                title="List open purchase orders for this SKU" aria-label="List open purchase orders for this SKU"
+                                                <?= (trim((string) ($it['sku'] ?? '')) === '' || $dpLineLocked) ? 'disabled' : '' ?>>
+                                                <i class="fas fa-file-invoice" aria-hidden="true"></i>
+                                            </button>
                                         </div>
                                     </div>
                                 </td>
@@ -385,7 +390,7 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                 </button>
             </div>
             <p class="mt-3 text-xs text-gray-500 leading-relaxed">
-                Type at least 2 characters to search products by SKU only. After selecting a SKU, use the <i class="fas fa-search text-[10px]" aria-hidden="true"></i> icon beside it to find open <strong>purchase orders</strong> (vendor POs) for that SKU. Fields marked <span class="text-red-600">*</span> are required (HSN is optional). For <strong>books</strong>, Cost / item uses Price India (without GST); for other products it uses CP. Use the <i class="fas fa-arrow-down text-[10px]" aria-hidden="true"></i> button beside cost to pull the latest value from the product API.
+                Type at least 2 characters to search products by SKU only. After selecting a SKU, use <i class="fas fa-clipboard-list text-[10px]" aria-hidden="true"></i> for <strong>customer orders</strong> or <i class="fas fa-file-invoice text-[10px]" aria-hidden="true"></i> for <strong>purchase orders</strong> beside the SKU field. Fields marked <span class="text-red-600">*</span> are required (HSN is optional). For <strong>books</strong>, Cost / item uses Price India (without GST); for other products it uses CP. Use the <i class="fas fa-arrow-down text-[10px]" aria-hidden="true"></i> button beside cost to pull the latest value from the product API.
             </p>
 
             <div class="mt-6 pt-5 border-t border-gray-200">
@@ -541,6 +546,38 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
     </div>
 </div>
 
+<div id="dp-customer-orders-modal" class="fixed inset-0 z-[220] hidden items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="dp-customer-orders-title">
+    <button type="button" id="dp-customer-orders-backdrop" class="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]" aria-label="Close dialog"></button>
+    <div class="relative flex w-full max-w-lg max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-violet-200/40 bg-white shadow-2xl shadow-violet-900/10 ring-1 ring-black/5 animate-[dpModalIn_0.22s_ease-out]">
+        <div class="border-b border-gray-100 bg-gradient-to-r from-violet-50/80 to-white px-6 py-4">
+            <h3 id="dp-customer-orders-title" class="text-lg font-bold tracking-tight text-gray-900">Customer orders for SKU</h3>
+            <p id="dp-customer-orders-subtitle" class="mt-1 text-sm text-gray-600"></p>
+        </div>
+        <div class="flex-1 overflow-auto px-6 py-4">
+            <div id="dp-customer-orders-loading" class="hidden py-10 text-center text-sm text-gray-500">
+                <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Loading customer orders…
+            </div>
+            <div id="dp-customer-orders-empty" class="hidden py-10 text-center text-sm text-gray-500">No pending customer orders found for this SKU in the last 90 days.</div>
+            <table id="dp-customer-orders-table" class="hidden w-full text-sm">
+                <thead>
+                    <tr class="border-b border-gray-200 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        <th class="pb-2 pr-3">Order #</th>
+                        <th class="pb-2 pr-3">SKU</th>
+                        <th class="pb-2 text-right">Qty</th>
+                    </tr>
+                </thead>
+                <tbody id="dp-customer-orders-tbody" class="divide-y divide-gray-100"></tbody>
+            </table>
+        </div>
+        <div class="border-t border-gray-100 bg-gray-50/80 px-6 py-4 flex justify-end gap-2">
+            <button type="button" id="dp-customer-orders-close"
+                class="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 transition">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
 <div id="dp-pending-orders-modal" class="fixed inset-0 z-[220] hidden items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="dp-pending-orders-title">
     <button type="button" id="dp-pending-orders-backdrop" class="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]" aria-label="Close dialog"></button>
     <div class="relative flex w-full max-w-lg max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-sky-200/40 bg-white shadow-2xl shadow-sky-900/10 ring-1 ring-black/5 animate-[dpModalIn_0.22s_ease-out]">
@@ -687,7 +724,7 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
     vertical-align: top;
 }
 #line-items-table col.dp-col-img { width: 60px; }
-#line-items-table col.dp-col-sku { width: 24%; }
+#line-items-table col.dp-col-sku { width: 28%; min-width: 11rem; }
 #line-items-table col.dp-col-cost { width: 12.96%; }
 #line-items-table col.dp-col-qty { width: 14%; }
 #line-items-table col.dp-col-hsn { width: 10%; }
@@ -761,28 +798,43 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
 #line-items-table tr[data-dp-is-book="1"] .dp-cost-hint {
     display: block;
 }
+#line-items-table .dp-col-sku .dp-sku-wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.25rem;
+    align-items: start;
+    min-width: 0;
+}
 #line-items-table .dp-col-sku .dp-sku-cell {
     min-width: 0;
-    flex: 1 1 0;
 }
 #line-items-table .dp-col-sku .dp-sku-actions {
     display: flex;
+    flex-direction: column;
     flex-shrink: 0;
-    align-items: flex-start;
+    align-items: center;
     gap: 0.125rem;
+    width: 1.75rem;
+    min-width: 1.75rem;
 }
 #line-items-table .dp-line-mini-btn,
 #line-items-table .dp-line-action-btn {
-    width: 1.5rem;
-    height: 1.5rem;
-    min-width: 1.5rem;
+    box-sizing: border-box;
+    width: 1.75rem;
+    height: 1.75rem;
+    min-width: 1.75rem;
     flex-shrink: 0;
     padding: 0;
     line-height: 1;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
 }
 #line-items-table .dp-line-mini-btn i,
 #line-items-table .dp-line-action-btn i {
-    font-size: 0.625rem;
+    font-size: 0.7rem;
+    line-height: 1;
+    pointer-events: none;
 }
 #line-items-table .dp-cost-actions {
     display: flex;
@@ -803,8 +855,8 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                 </button>
             </td>
             <td class="px-1 py-2 align-top dp-col-sku">
-                <div class="flex items-start gap-0.5">
-                    <div class="relative dp-sku-cell flex-1 min-w-0">
+                <div class="dp-sku-wrap">
+                    <div class="relative dp-sku-cell min-w-0">
                         <input type="hidden" name="dp_line_id[]" class="dp-h-line-id" value="0">
                         <input type="hidden" name="item_code[]" class="dp-h-item-code" value="">
                         <input type="hidden" name="color[]" class="dp-h-color" value="">
@@ -816,16 +868,20 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                         <div class="dp-sku-suggestions max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg hidden text-left"></div>
                     </div>
                     <div class="dp-sku-actions">
-                    <a href="#"
-                        class="dp-product-profile-link dp-line-action-btn shrink-0 hidden inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-amber-800 hover:bg-amber-50 hover:border-amber-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-                        target="_blank" rel="noopener noreferrer"
-                        title="View product profile" aria-label="View product profile">
-                        <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
-                    </a>
-                    <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Find open purchase orders for this SKU" aria-label="Find open purchase orders for this SKU" disabled>
-                        <i class="fas fa-search text-xs" aria-hidden="true"></i>
-                    </button>
+                        <a href="#"
+                            class="dp-product-profile-link dp-line-action-btn hidden inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-amber-800 hover:bg-amber-50 hover:border-amber-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                            target="_blank" rel="noopener noreferrer"
+                            title="View product profile" aria-label="View product profile">
+                            <i class="fas fa-external-link-alt" aria-hidden="true"></i>
+                        </a>
+                        <button type="button" class="dp-fetch-customer-orders dp-line-action-btn inline-flex items-center justify-center rounded-lg border border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="List customer orders for this SKU" aria-label="List customer orders for this SKU" disabled>
+                            <i class="fas fa-clipboard-list" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="dp-fetch-pending-po dp-line-action-btn inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="List open purchase orders for this SKU" aria-label="List open purchase orders for this SKU" disabled>
+                            <i class="fas fa-file-invoice" aria-hidden="true"></i>
+                        </button>
                     </div>
                 </div>
             </td>
@@ -922,18 +978,21 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
         return !!(skuEl && String(skuEl.value || '').trim());
     }
 
-    function dpUpdatePendingPoButton(tr) {
+    function dpUpdateSkuListButtons(tr) {
         if (!tr) return;
-        var btn = tr.querySelector('.dp-fetch-pending-orders');
-        if (!btn) return;
         var lineLocked = tr.getAttribute('data-dp-line-locked') === '1';
-        btn.classList.remove('hidden');
-        btn.disabled = lineLocked || !dpRowHasSku(tr);
+        var hasSku = dpRowHasSku(tr);
+        ['.dp-fetch-customer-orders', '.dp-fetch-pending-po'].forEach(function (sel) {
+            var btn = tr.querySelector(sel);
+            if (!btn) return;
+            btn.classList.remove('hidden');
+            btn.disabled = lineLocked || !hasSku;
+        });
     }
 
     function dpUpdateSkuActions(tr) {
         dpUpdateProductProfileLink(tr);
-        dpUpdatePendingPoButton(tr);
+        dpUpdateSkuListButtons(tr);
     }
 
     function fetchLinePriceUrl(itemCode, sku, color, size) {
@@ -1090,10 +1149,21 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
             });
     }
 
-    function fetchPendingOrdersUrl(itemCode, sku, color, size) {
+    function fetchCustomerOrdersUrl(itemCode, sku, color, size) {
         var u = new URL(window.location.href);
         u.searchParams.set('page', 'direct_purchase');
         u.searchParams.set('action', 'fetch_pending_orders');
+        u.searchParams.set('item_code', itemCode || '');
+        u.searchParams.set('sku', sku || '');
+        u.searchParams.set('color', color || '');
+        u.searchParams.set('size', size || '');
+        return u.toString();
+    }
+
+    function fetchPendingPoUrl(itemCode, sku, color, size) {
+        var u = new URL(window.location.href);
+        u.searchParams.set('page', 'direct_purchase');
+        u.searchParams.set('action', 'fetch_pending_po');
         u.searchParams.set('item_code', itemCode || '');
         u.searchParams.set('sku', sku || '');
         u.searchParams.set('color', color || '');
@@ -1387,6 +1457,152 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
             });
     }
 
+    function dpCloseCustomerOrdersModal() {
+        var modal = document.getElementById('dp-customer-orders-modal');
+        if (!modal) return;
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        document.body.style.overflow = '';
+    }
+
+    function dpCopyOrderNumber(orderNumber, btn) {
+        dpCopyText(orderNumber, btn, 'Copy order number', 'Could not copy order number to clipboard.');
+    }
+
+    function dpRenderCustomerOrdersTable(orders, defaultSku) {
+        var tbody = document.getElementById('dp-customer-orders-tbody');
+        var table = document.getElementById('dp-customer-orders-table');
+        var empty = document.getElementById('dp-customer-orders-empty');
+        if (!tbody || !table || !empty) return;
+
+        tbody.innerHTML = '';
+        if (!orders || !orders.length) {
+            table.classList.add('hidden');
+            empty.classList.remove('hidden');
+            return;
+        }
+
+        empty.classList.add('hidden');
+        table.classList.remove('hidden');
+
+        orders.forEach(function (row) {
+            var tr = document.createElement('tr');
+            var orderNo = row.order_number || '';
+            var lineSku = row.sku || defaultSku || '';
+            var qtyText = row.qty != null && row.qty !== '' ? row.qty : '—';
+
+            tr.innerHTML =
+                '<td class="py-2.5 pr-3">' +
+                    '<div class="flex items-center gap-2">' +
+                        '<span class="font-medium text-gray-900 tabular-nums">' + dpEscHtml(orderNo) + '</span>' +
+                        (orderNo ? (
+                            '<button type="button" class="dp-co-copy-order inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" title="Copy order number" aria-label="Copy order number ' + dpEscHtml(orderNo) + '" data-order-number="' + dpEscHtml(orderNo) + '">' +
+                                '<i class="fas fa-copy text-xs" aria-hidden="true"></i>' +
+                            '</button>'
+                        ) : '') +
+                    '</div>' +
+                '</td>' +
+                '<td class="py-2.5 pr-3 tabular-nums text-gray-900">' + dpEscHtml(lineSku) + '</td>' +
+                '<td class="py-2.5 text-right tabular-nums text-gray-900">' + dpEscHtml(qtyText) + '</td>';
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    function initDpCustomerOrdersModal() {
+        var modal = document.getElementById('dp-customer-orders-modal');
+        if (!modal) return;
+        var backdrop = document.getElementById('dp-customer-orders-backdrop');
+        var closeBtn = document.getElementById('dp-customer-orders-close');
+        var tbody = document.getElementById('dp-customer-orders-tbody');
+        if (backdrop) backdrop.addEventListener('click', dpCloseCustomerOrdersModal);
+        if (closeBtn) closeBtn.addEventListener('click', dpCloseCustomerOrdersModal);
+        if (tbody) {
+            tbody.addEventListener('click', function (e) {
+                var orderBtn = e.target.closest('.dp-co-copy-order');
+                if (orderBtn) {
+                    e.preventDefault();
+                    dpCopyOrderNumber(orderBtn.getAttribute('data-order-number') || '', orderBtn);
+                }
+            });
+        }
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+                dpCloseCustomerOrdersModal();
+            }
+        });
+    }
+
+    function dpFetchCustomerOrders(tr, btn) {
+        if (!tr || !btn || btn.disabled) return;
+
+        var cell = tr.querySelector('.dp-sku-cell');
+        var itemCode = cell && cell.querySelector('.dp-h-item-code') ? String(cell.querySelector('.dp-h-item-code').value || '').trim() : '';
+        var sku = cell && cell.querySelector('.dp-sku') ? String(cell.querySelector('.dp-sku').value || '').trim() : '';
+        var color = cell && cell.querySelector('.dp-h-color') ? String(cell.querySelector('.dp-h-color').value || '').trim() : '';
+        var size = cell && cell.querySelector('.dp-h-size') ? String(cell.querySelector('.dp-h-size').value || '').trim() : '';
+        if (!sku) {
+            dpShowStatusModal('Select a product from SKU search or enter a SKU before listing customer orders.', 'warning');
+            return;
+        }
+
+        var modal = document.getElementById('dp-customer-orders-modal');
+        var loading = document.getElementById('dp-customer-orders-loading');
+        var table = document.getElementById('dp-customer-orders-table');
+        var empty = document.getElementById('dp-customer-orders-empty');
+        var subtitle = document.getElementById('dp-customer-orders-subtitle');
+        var title = document.getElementById('dp-customer-orders-title');
+
+        if (modal) {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        }
+        if (loading) loading.classList.remove('hidden');
+        if (table) table.classList.add('hidden');
+        if (empty) empty.classList.add('hidden');
+        if (title) title.textContent = sku ? ('Customer orders — ' + sku) : 'Customer orders for SKU';
+        if (subtitle) subtitle.textContent = 'Pending customer orders from vendor API (last 90 days)';
+
+        var icon = btn.querySelector('i');
+        var prevIconClass = icon ? icon.className : 'fas fa-clipboard-list';
+        btn.disabled = true;
+        if (icon) icon.className = 'fas fa-spinner fa-spin';
+
+        fetch(fetchCustomerOrdersUrl(itemCode, sku, color, size), {
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (loading) loading.classList.add('hidden');
+                if (!data || !data.success) {
+                    dpCloseCustomerOrdersModal();
+                    dpShowStatusModal((data && data.message) ? data.message : 'Could not load customer orders.', 'error');
+                    return;
+                }
+                if (subtitle) {
+                    var parts = [];
+                    if (data.item_code) parts.push('Item ' + data.item_code);
+                    if (data.total != null) parts.push(data.total + ' order(s)');
+                    subtitle.textContent = parts.length ? parts.join(' · ') : 'Pending customer orders';
+                }
+                dpRenderCustomerOrdersTable(data.orders || [], data.sku || sku);
+            })
+            .catch(function () {
+                if (loading) loading.classList.add('hidden');
+                dpCloseCustomerOrdersModal();
+                dpShowStatusModal('The customer order lookup failed. Check your connection and try again.', 'error', 'Request failed');
+            })
+            .finally(function () {
+                dpUpdateSkuListButtons(tr);
+                if (icon) icon.className = prevIconClass;
+            });
+    }
+
     function dpClosePendingOrdersModal() {
         var modal = document.getElementById('dp-pending-orders-modal');
         if (!modal) return;
@@ -1541,7 +1757,7 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
         });
     }
 
-    function dpFetchPendingOrders(tr, btn) {
+    function dpFetchPendingPo(tr, btn) {
         if (!tr || !btn || btn.disabled) return;
 
         var cell = tr.querySelector('.dp-sku-cell');
@@ -1549,8 +1765,8 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
         var sku = cell && cell.querySelector('.dp-sku') ? String(cell.querySelector('.dp-sku').value || '').trim() : '';
         var color = cell && cell.querySelector('.dp-h-color') ? String(cell.querySelector('.dp-h-color').value || '').trim() : '';
         var size = cell && cell.querySelector('.dp-h-size') ? String(cell.querySelector('.dp-h-size').value || '').trim() : '';
-        if (!itemCode && !sku) {
-            dpShowStatusModal('Select a product from SKU search or enter a SKU before looking up purchase orders.', 'warning');
+        if (!sku) {
+            dpShowStatusModal('Select a product from SKU search or enter a SKU before listing purchase orders.', 'warning');
             return;
         }
 
@@ -1577,11 +1793,11 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
         }
 
         var icon = btn.querySelector('i');
-        var prevIconClass = icon ? icon.className : 'fas fa-search text-xs';
+        var prevIconClass = icon ? icon.className : 'fas fa-file-invoice';
         btn.disabled = true;
-        if (icon) icon.className = 'fas fa-spinner fa-spin text-xs';
+        if (icon) icon.className = 'fas fa-spinner fa-spin';
 
-        fetch(fetchPendingOrdersUrl(itemCode, sku, color, size), {
+        fetch(fetchPendingPoUrl(itemCode, sku, color, size), {
             credentials: 'same-origin',
             headers: {
                 'Accept': 'application/json',
@@ -1610,7 +1826,7 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                 dpShowStatusModal('The purchase order lookup failed. Check your connection and try again.', 'error', 'Request failed');
             })
             .finally(function () {
-                btn.disabled = false;
+                dpUpdateSkuListButtons(tr);
                 if (icon) icon.className = prevIconClass;
             });
     }
@@ -1782,7 +1998,7 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                 fetchAbort.abort();
             }
             var q = skuInput.value.trim();
-            dpUpdatePendingPoButton(tr);
+            dpUpdateSkuListButtons(tr);
             if (q.length < 2) {
                 if (fetchAbort) {
                     fetchAbort.abort();
@@ -1875,10 +2091,16 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                 dpFetchLatestPrice(tr, fetchBtn);
             });
         }
-        var pendingBtn = tr.querySelector('.dp-fetch-pending-orders');
-        if (pendingBtn && !lineLocked) {
-            pendingBtn.addEventListener('click', function () {
-                dpFetchPendingOrders(tr, pendingBtn);
+        var customerOrdersBtn = tr.querySelector('.dp-fetch-customer-orders');
+        if (customerOrdersBtn && !lineLocked) {
+            customerOrdersBtn.addEventListener('click', function () {
+                dpFetchCustomerOrders(tr, customerOrdersBtn);
+            });
+        }
+        var pendingPoBtn = tr.querySelector('.dp-fetch-pending-po');
+        if (pendingPoBtn && !lineLocked) {
+            pendingPoBtn.addEventListener('click', function () {
+                dpFetchPendingPo(tr, pendingPoBtn);
             });
         }
         var qtySyncBtn = tr.querySelector('.dp-sync-vendor-qty');
@@ -1939,6 +2161,7 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
 
     document.querySelectorAll('#line-items-body .dp-line').forEach(bindRow);
     initDpStatusModal();
+    initDpCustomerOrdersModal();
     initDpPendingOrdersModal();
     initDpVerifyVendorModal();
     initDpImageLightbox();
