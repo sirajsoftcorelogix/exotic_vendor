@@ -540,20 +540,30 @@ class DirectPurchaseController
         return $out;
     }
 
+    public function supplierSearch()
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+        global $conn;
+
+        $q = isset($_GET['q']) ? trim((string) $_GET['q']) : '';
+        $purchaseType = strtolower(trim((string) ($_GET['purchase_type'] ?? 'non_book')));
+        $includePublishers = $purchaseType === 'book';
+
+        echo json_encode(dp_supplier_search($conn, $q, $includePublishers), JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     public function add()
     {
         is_login();
         global $conn;
-        global $directPurchaseVendorModel;
-        $vendors = $directPurchaseVendorModel->getActiveVendorsWithExoticVendorId();
-        $publishers = dp_supplier_active_publishers($conn);
         $commanModel = new Tables($conn);
         $warehouses = $commanModel->get_exotic_address();
         renderTemplate('views/direct_purchase/form.php', [
             'purchase' => null,
             'items' => [],
-            'vendors' => $vendors,
-            'publishers' => $publishers,
+            'selected_supplier' => null,
             'warehouses' => $warehouses,
             'is_edit' => false,
             'purchase_locked' => false,
@@ -597,16 +607,17 @@ class DirectPurchaseController
             );
         }
         unset($it);
-        $vendors = $directPurchaseVendorModel->getAllVendors();
-        $publishers = dp_supplier_active_publishers($conn);
+        $supplierState = dp_supplier_form_state($purchase);
+        $selectedSupplier = $supplierState['selected'] !== ''
+            ? dp_supplier_resolve_option($conn, $supplierState['selected'])
+            : null;
         $commanModel = new Tables($conn);
         $warehouses = $commanModel->get_exotic_address();
 
         renderTemplate('views/direct_purchase/form.php', [
             'purchase' => $purchase,
             'items' => $items,
-            'vendors' => $vendors,
-            'publishers' => $publishers,
+            'selected_supplier' => $selectedSupplier,
             'warehouses' => $warehouses,
             'is_edit' => true,
         ], 'Edit direct purchase');

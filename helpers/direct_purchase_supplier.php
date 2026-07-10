@@ -14,14 +14,6 @@ function dp_supplier_select(string $alias = 'p'): string
         CASE WHEN COALESCE({$alias}.vendor_type, 'vendor') = 'publisher' THEN CAST(pub.publishers_id AS CHAR) ELSE v.vendor_id END AS exotic_vendor_id";
 }
 
-/** @return array<int, array<string, mixed>> */
-function dp_supplier_active_publishers(mysqli $conn): array
-{
-    $res = $conn->query('SELECT id, publishers_id, publishers FROM vp_publishers WHERE is_active = 1 ORDER BY publishers ASC');
-
-    return $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
-}
-
 /** @return array{is_book:bool, selected:string} */
 function dp_supplier_form_state(?array $purchase): array
 {
@@ -38,37 +30,139 @@ function dp_supplier_form_state(?array $purchase): array
 }
 
 /**
- * @return list<array{key:string, label:string, publisher:bool}>
+ * @return array{key:string, label:string}|null
  */
-function dp_supplier_options(array $vendors, array $publishers): array
+function dp_supplier_resolve_option(mysqli $conn, string $supplierKey): ?array
 {
-    $options = [];
-    foreach ($vendors as $v) {
-        $id = (int) ($v['id'] ?? 0);
-        if ($id <= 0) {
-            continue;
-        }
-        $exoticId = trim((string) ($v['vendor_id'] ?? ''));
-        $name = trim((string) ($v['vendor_name'] ?? ''));
-        if ($exoticId !== '' && $name !== '') {
-            $label = $exoticId . '-' . $name;
-        } elseif ($exoticId !== '') {
-            $label = $exoticId;
-        } else {
-            $label = $name !== '' ? $name : ('Vendor #' . $id);
-        }
-        $options[] = ['key' => 'vendor:' . $id, 'label' => $label, 'publisher' => false];
-    }
-    foreach ($publishers as $pub) {
-        $id = (int) ($pub['id'] ?? 0);
-        $name = trim((string) ($pub['publishers'] ?? ''));
-        if ($id <= 0 || $name === '') {
-            continue;
-        }
-        $options[] = ['key' => 'publisher:' . $id, 'label' => $name . ' (publisher)', 'publisher' => true];
+    if (!preg_match('/^(vendor|publisher):(\d+)$/', trim($supplierKey), $m)) {
+        return null;
     }
 
-    return $options;
+    $type = $m[1];
+    $id = (int) $m[2];
+    if ($id <= 0) {
+        return null;
+    }
+
+    if ($type === 'publisher') {
+        $stmt = $conn->prepare('SELECT id, publishers FROM vp_publishers WHERE id = ? AND is_active = 1 LIMIT 1');
+    } else {
+        $stmt = $conn->prepare(
+            "SELECT id, vendor_id, vendor_name FROM vp_vendors
+             WHERE id = ? AND (is_active = 'active' OR is_active = 1) LIMIT 1"
+        );
+    }
+    if (!$stmt) {
+        return null;
+    }
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$row) {
+        return null;
+    }
+
+    if ($type === 'publisher') {
+        $name = trim((string) ($row['publishers'] ?? ''));
+
+        return $name !== '' ? ['key' => 'publisher:' . $id, 'label' => $name . ' (publisher)'] : null;
+    }
+
+    $exoticId = trim((string) ($row['vendor_id'] ?? ''));
+    $name = trim((string) ($row['vendor_name'] ?? ''));
+    if ($exoticId !== '' && $name !== '') {
+        $label = $exoticId . '-' . $name;
+    } elseif ($exoticId !== '') {
+        $label = $exoticId;
+    } else {
+        $label = $name !== '' ? $name : ('Vendor #' . $id);
+    }
+
+    return ['key' => 'vendor:' . $id, 'label' => $label];
+}
+
+/**
+ * @return list<array{id:string,text:string}>
+ */
+function dp_supplier_search(mysqli $conn, string $query, bool $includePublishers, int $limit = 40): array
+{
+    $query = trim($query);
+    if (function_exists('mb_strlen')) {
+        if (mb_strlen($query) < 2) {
+            return [];
+        }
+    } elseif (strlen($query) < 2) {
+        return [];
+    }
+
+    $limit = max(1, min(50, $limit));
+    $like = '%' . $query . '%';
+    $results = [];
+
+    $stmt = $conn->prepare(
+        "SELECT id, vendor_id, vendor_name FROM vp_vendors
+         WHERE (is_active = 'active' OR is_active = 1)
+           AND vendor_id IS NOT NULL AND TRIM(vendor_id) <> ''
+           AND (vendor_name LIKE ? OR vendor_id LIKE ? OR contact_name LIKE ? OR vendor_code LIKE ?)
+         ORDER BY vendor_name ASC
+         LIMIT ?"
+    );
+    if ($stmt) {
+        $stmt->bind_param('ssssi', $like, $like, $like, $like, $limit);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $id = (int) ($row['id'] ?? 0);
+                if ($id <= 0) {
+                    continue;
+                }
+                $exoticId = trim((string) ($row['vendor_id'] ?? ''));
+                $name = trim((string) ($row['vendor_name'] ?? ''));
+                if ($exoticId !== '' && $name !== '') {
+                    $label = $exoticId . '-' . $name;
+                } elseif ($exoticId !== '') {
+                    $label = $exoticId;
+                } else {
+                    $label = $name !== '' ? $name : ('Vendor #' . $id);
+                }
+                $results[] = ['id' => 'vendor:' . $id, 'text' => $label];
+            }
+        }
+        $stmt->close();
+    }
+
+    if (!$includePublishers) {
+        return $results;
+    }
+
+    $pubLimit = max(1, $limit - count($results));
+    $stmt = $conn->prepare(
+        'SELECT id, publishers_id, publishers FROM vp_publishers
+         WHERE is_active = 1
+           AND (publishers LIKE ? OR CAST(publishers_id AS CHAR) LIKE ? OR CAST(id AS CHAR) LIKE ?)
+         ORDER BY publishers ASC
+         LIMIT ?'
+    );
+    if ($stmt) {
+        $stmt->bind_param('sssi', $like, $like, $like, $pubLimit);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $id = (int) ($row['id'] ?? 0);
+                $name = trim((string) ($row['publishers'] ?? ''));
+                if ($id <= 0 || $name === '') {
+                    continue;
+                }
+                $results[] = ['id' => 'publisher:' . $id, 'text' => $name . ' (publisher)'];
+            }
+        }
+        $stmt->close();
+    }
+
+    return $results;
 }
 
 /**

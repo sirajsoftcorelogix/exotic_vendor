@@ -461,6 +461,9 @@ switch ($page) {
             case 'product_search':
                 $controller->productSearch();
                 break;
+            case 'supplier_search':
+                $controller->supplierSearch();
+                break;
             case 'fetch_line_price':
                 $controller->fetchLinePrice();
                 break;

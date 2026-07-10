@@ -7,7 +7,7 @@ $pData = $purchase ?? [];
 $items = $data['items'] ?? [];
 $isEdit = !empty($data['is_edit']);
 $dpSupplier = dp_supplier_form_state($purchase);
-$dpSupplierOptions = dp_supplier_options($data['vendors'] ?? [], $data['publishers'] ?? []);
+$dpSelectedSupplier = $data['selected_supplier'] ?? null;
 if (empty($items)) {
     $items = [[
         'item_code' => '', 'sku' => '', 'color' => '', 'size' => '',
@@ -135,16 +135,14 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                 <div class="lg:col-span-2">
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Vendor <span class="text-red-500">*</span></label>
                     <select name="supplier" id="dp_supplier_select" required class="<?= $inp ?> bg-white">
-                        <option value="">Select vendor</option>
-                        <?php foreach ($dpSupplierOptions as $opt): ?>
-                            <option value="<?= htmlspecialchars($opt['key']) ?>"
-                                class="<?= !empty($opt['publisher']) ? 'dp-publisher-option' : '' ?>"
-                                <?= !empty($opt['publisher']) && !$dpSupplier['is_book'] ? 'disabled' : '' ?>
-                                <?= $dpSupplier['selected'] === $opt['key'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($opt['label']) ?>
+                        <option value=""></option>
+                        <?php if (is_array($dpSelectedSupplier) && !empty($dpSelectedSupplier['key'])): ?>
+                            <option value="<?= htmlspecialchars($dpSelectedSupplier['key']) ?>" selected>
+                                <?= htmlspecialchars($dpSelectedSupplier['label']) ?>
                             </option>
-                        <?php endforeach; ?>
+                        <?php endif; ?>
                     </select>
+                    <p class="mt-1 text-xs text-gray-500">Type at least 2 characters to search. Publishers appear when Book Purchase is selected.</p>
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Warehouse (stock) <span class="text-red-500">*</span></label>
@@ -1927,19 +1925,47 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
     }
     if (window.jQuery && jQuery.fn.select2) {
         var $dpSupplier = jQuery('#dp_supplier_select');
-        $dpSupplier.select2({ width: '100%', placeholder: 'Select vendor' });
-        function dpTogglePublisherOptions() {
-            var isBook = document.querySelector('input[name="purchase_type"]:checked')?.value === 'book';
-            $dpSupplier.find('.dp-publisher-option').prop('disabled', !isBook);
-            if (!isBook && $dpSupplier.find('option:selected').hasClass('dp-publisher-option')) {
-                $dpSupplier.val('').trigger('change');
+        var dpIsEdit = <?= $isEdit ? 'true' : 'false' ?>;
+        var dpSupplierIsBook = <?= $dpSupplier['is_book'] ? 'true' : 'false' ?>;
+
+        function dpCurrentPurchaseType() {
+            if (dpIsEdit) {
+                return dpSupplierIsBook ? 'book' : 'non_book';
             }
-            $dpSupplier.trigger('change.select2');
+            var checked = document.querySelector('input[name="purchase_type"]:checked');
+            return checked ? checked.value : 'non_book';
         }
-        document.querySelectorAll('input[name="purchase_type"]').forEach(function (radio) {
-            radio.addEventListener('change', dpTogglePublisherOptions);
+
+        $dpSupplier.select2({
+            width: '100%',
+            placeholder: 'Type at least 2 characters to search…',
+            allowClear: !dpIsEdit,
+            minimumInputLength: 2,
+            ajax: {
+                url: 'index.php?page=direct_purchase&action=supplier_search',
+                type: 'GET',
+                dataType: 'json',
+                delay: 300,
+                data: function (params) {
+                    return {
+                        q: params.term || '',
+                        purchase_type: dpCurrentPurchaseType()
+                    };
+                },
+                processResults: function (data) {
+                    return { results: Array.isArray(data) ? data : [] };
+                },
+                cache: true
+            }
         });
-        dpTogglePublisherOptions();
+
+        document.querySelectorAll('input[name="purchase_type"]').forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                if (!dpIsEdit) {
+                    $dpSupplier.val(null).trigger('change');
+                }
+            });
+        });
 
         jQuery('#dp_currency').select2({ width: '100%', minimumResultsForSearch: 6 });
         jQuery('#dp_currency').on('select2:select change', syncSummaryCurrencySymbols);
