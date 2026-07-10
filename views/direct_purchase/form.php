@@ -109,90 +109,132 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
             <input type="hidden" name="id" value="<?= (int) $purchase['id'] ?>">
         <?php endif; ?>
 
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-            <div class="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-3 mb-4">Vendor &amp; invoice</div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div class="lg:col-span-3">
-                    <span class="block text-sm font-semibold text-gray-700 mb-2">Purchase type</span>
-                    <div class="flex flex-wrap gap-4" role="radiogroup" aria-label="Purchase type">
-                        <label class="inline-flex items-center gap-2 text-sm text-gray-800 <?= $isEdit ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer' ?>">
-                            <input type="radio" name="purchase_type" value="non_book" class="text-amber-600 focus:ring-amber-500"
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-amber-50/80 via-white to-white">
+                <div class="flex items-start gap-3">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-200/70 bg-white text-amber-700 shadow-sm" aria-hidden="true">
+                        <i class="fas fa-file-invoice text-sm"></i>
+                    </span>
+                    <div class="min-w-0">
+                        <h2 class="text-lg font-semibold text-gray-900">Vendor &amp; invoice</h2>
+                        <p class="mt-0.5 text-sm text-gray-600">Choose supplier and warehouse, then enter invoice details if available.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 space-y-6">
+                <div>
+                    <span class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Purchase type</span>
+                    <div class="dp-purchase-type-segment inline-flex flex-wrap rounded-xl border border-gray-200 bg-gray-50 p-1 shadow-inner" role="radiogroup" aria-label="Purchase type">
+                        <label class="dp-purchase-type-option <?= $isEdit ? 'is-disabled' : '' ?>">
+                            <input type="radio" name="purchase_type" value="non_book" class="sr-only"
                                 <?= !$dpSupplier['is_book'] ? 'checked' : '' ?>
                                 <?= $isEdit ? 'disabled' : '' ?>>
-                            <span>Non Book Purchase</span>
+                            <span class="dp-purchase-type-label">
+                                <i class="fas fa-box-open text-[11px] opacity-80" aria-hidden="true"></i>
+                                Non Book
+                            </span>
                         </label>
-                        <label class="inline-flex items-center gap-2 text-sm text-gray-800 <?= $isEdit ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer' ?>">
-                            <input type="radio" name="purchase_type" value="book" class="text-amber-600 focus:ring-amber-500"
+                        <label class="dp-purchase-type-option <?= $isEdit ? 'is-disabled' : '' ?>">
+                            <input type="radio" name="purchase_type" value="book" class="sr-only"
                                 <?= $dpSupplier['is_book'] ? 'checked' : '' ?>
                                 <?= $isEdit ? 'disabled' : '' ?>>
-                            <span>Book Purchase</span>
+                            <span class="dp-purchase-type-label">
+                                <i class="fas fa-book text-[11px] opacity-80" aria-hidden="true"></i>
+                                Book
+                            </span>
                         </label>
                     </div>
                     <?php if ($isEdit): ?>
-                        <p class="mt-1 text-xs text-gray-500">Purchase type is inferred from supplier and cannot be changed.</p>
+                        <p class="mt-2 text-xs text-gray-500">Purchase type is inferred from the saved supplier and cannot be changed.</p>
                     <?php endif; ?>
                 </div>
-                <div class="lg:col-span-2">
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Vendor <span class="text-red-500">*</span></label>
-                    <select name="supplier" id="dp_supplier_select" required class="<?= $inp ?> bg-white">
-                        <option value=""></option>
-                        <?php if (is_array($dpSelectedSupplier) && !empty($dpSelectedSupplier['key'])): ?>
-                            <option value="<?= htmlspecialchars($dpSelectedSupplier['key']) ?>" selected>
-                                <?= htmlspecialchars($dpSelectedSupplier['label']) ?>
-                            </option>
-                        <?php endif; ?>
-                    </select>
-                    <p class="mt-1 text-xs text-gray-500">Type at least 2 characters to search. Publishers appear when Book Purchase is selected.</p>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                    <div class="lg:col-span-8">
+                        <label for="dp_supplier_select" class="dp-field-label">
+                            <i class="fas fa-truck-loading text-amber-700/80" aria-hidden="true"></i>
+                            Vendor / supplier
+                        </label>
+                        <select name="supplier" id="dp_supplier_select" class="<?= $inp ?> bg-white">
+                            <option value=""></option>
+                            <?php if (is_array($dpSelectedSupplier) && !empty($dpSelectedSupplier['key'])): ?>
+                                <option value="<?= htmlspecialchars($dpSelectedSupplier['key']) ?>" selected>
+                                    <?= htmlspecialchars($dpSelectedSupplier['label']) ?>
+                                </option>
+                            <?php endif; ?>
+                        </select>
+                        <p class="dp-field-hint">Type at least 2 characters to search. Publishers appear when Book is selected.</p>
+                    </div>
+                    <div class="lg:col-span-4">
+                        <label for="warehouse_id" class="dp-field-label">
+                            <i class="fas fa-warehouse text-amber-700/80" aria-hidden="true"></i>
+                            Warehouse <span class="text-red-500">*</span>
+                        </label>
+                        <select name="warehouse_id" id="warehouse_id" class="<?= $inp ?> bg-white" required>
+                            <option value="">Select warehouse</option>
+                            <?php foreach ($warehouses as $wh): ?>
+                                <?php
+                                $whId = (int) ($wh['id'] ?? 0);
+                                $isWhSelected = $isEdit
+                                    ? ((int) ($pData['warehouse_id'] ?? 0) === $whId)
+                                    : !empty($wh['is_default']);
+                                ?>
+                                <option value="<?= $whId ?>"
+                                    <?= $isWhSelected ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($wh['address_title'] ?? ('#' . (int) ($wh['id'] ?? 0))) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <p class="dp-field-hint">Stock is posted to this warehouse on save.</p>
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Warehouse (stock) <span class="text-red-500">*</span></label>
-                    <select name="warehouse_id" id="warehouse_id" class="<?= $inp ?> bg-white" required>
-                        <option value="">Select warehouse</option>
-                        <?php foreach ($warehouses as $wh): ?>
-                            <?php
-                            $whId = (int) ($wh['id'] ?? 0);
-                            $isWhSelected = $isEdit
-                                ? ((int) ($pData['warehouse_id'] ?? 0) === $whId)
-                                : !empty($wh['is_default']);
-                            ?>
-                            <option value="<?= $whId ?>"
-                                <?= $isWhSelected ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($wh['address_title'] ?? ('#' . (int) ($wh['id'] ?? 0))) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <p class="mt-1 text-xs text-gray-500">Goods receipt stock is posted to this warehouse (same pattern as GRN).</p>
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Invoice file</label>
-                    <input type="file" name="invoice_file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,application/pdf,image/*"
-                        class="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-amber-50 file:text-amber-900 file:font-medium">
-                    <p class="mt-1 text-xs text-gray-500">PDF or image only. Maximum file size 2 MB.</p>
+
+                <div class="rounded-xl border border-amber-200/50 bg-amber-50/25 p-5">
+                    <div class="flex items-center gap-2 mb-4">
+                        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-white border border-amber-200/60 text-amber-800 text-xs" aria-hidden="true">
+                            <i class="fas fa-receipt"></i>
+                        </span>
+                        <div>
+                            <h3 class="text-sm font-semibold text-gray-900">Invoice details</h3>
+                            <p class="text-xs text-gray-500">Optional — number, date, currency, and attachment.</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                        <div class="sm:col-span-1">
+                            <label for="dp_invoice_number" class="dp-field-label">Invoice number</label>
+                            <input type="text" name="invoice_number" id="dp_invoice_number" class="<?= $inp ?>"
+                                placeholder="e.g. INV-2026-0042"
+                                value="<?= htmlspecialchars($pData['invoice_number'] ?? '') ?>">
+                        </div>
+                        <div class="sm:col-span-1">
+                            <label for="dp_invoice_date" class="dp-field-label">Invoice date</label>
+                            <input type="date" name="invoice_date" id="dp_invoice_date" class="<?= $inp ?>" max="<?= htmlspecialchars($dpDateMax) ?>"
+                                value="<?= htmlspecialchars($pData['invoice_date'] ?? '') ?>">
+                        </div>
+                        <div class="sm:col-span-1">
+                            <label for="dp_currency" class="dp-field-label">Currency</label>
+                            <select name="currency" id="dp_currency" class="<?= $inp ?> bg-white">
+                                <?php foreach ($dpCurrencies as $code => $label): ?>
+                                    <option value="<?= htmlspecialchars($code) ?>" <?= $dpCurrencyVal === $code ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="sm:col-span-2 xl:col-span-1">
+                            <label for="dp_invoice_file" class="dp-field-label">Invoice file</label>
+                            <input type="file" name="invoice_file" id="dp_invoice_file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,application/pdf,image/*"
+                                class="dp-file-input w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-white file:text-amber-900 file:font-medium file:shadow-sm">
+                        </div>
+                    </div>
+                    <p class="mt-3 text-xs text-gray-500">PDF or image, max 2 MB.</p>
                     <?php if ($purchase && !empty($purchase['invoice_file'])): ?>
-                        <p class="mt-2 text-sm text-gray-600">Current:
+                        <p class="mt-2 text-sm text-gray-600">
+                            Current attachment:
                             <a href="<?= htmlspecialchars($purchase['invoice_file']) ?>" target="_blank" rel="noopener noreferrer"
-                                class="font-medium text-amber-800/90 hover:text-amber-950 hover:underline underline-offset-2 decoration-amber-800/30">View attachment</a>
+                                class="font-medium text-amber-800 hover:text-amber-950 hover:underline underline-offset-2">View file</a>
                             <span class="text-gray-400">(leave empty to keep)</span>
                         </p>
                     <?php endif; ?>
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Invoice number <span class="text-red-500">*</span></label>
-                    <input type="text" name="invoice_number" required class="<?= $inp ?>"
-                        value="<?= htmlspecialchars($pData['invoice_number'] ?? '') ?>">
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Invoice date <span class="text-red-500">*</span></label>
-                    <input type="date" name="invoice_date" required class="<?= $inp ?>" max="<?= htmlspecialchars($dpDateMax) ?>"
-                        value="<?= htmlspecialchars($pData['invoice_date'] ?? '') ?>">
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Currency</label>
-                    <select name="currency" id="dp_currency" class="<?= $inp ?> bg-white">
-                        <?php foreach ($dpCurrencies as $code => $label): ?>
-                            <option value="<?= htmlspecialchars($code) ?>" <?= $dpCurrencyVal === $code ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
-                        <?php endforeach; ?>
-                    </select>
                 </div>
             </div>
         </div>
@@ -530,6 +572,57 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
 </div>
 
 <style>
+.dp-field-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #374151;
+}
+.dp-field-hint {
+    margin-top: 0.375rem;
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: #6b7280;
+}
+.dp-purchase-type-segment .dp-purchase-type-option {
+    cursor: pointer;
+}
+.dp-purchase-type-segment .dp-purchase-type-option.is-disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+.dp-purchase-type-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.625rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #4b5563;
+    transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.dp-purchase-type-option input:checked + .dp-purchase-type-label {
+    background: #fff;
+    color: #92400e;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+.dp-purchase-type-option:not(.is-disabled):hover .dp-purchase-type-label {
+    color: #1f2937;
+}
+.dp-file-input {
+    border: 1px dashed #d1d5db;
+    border-radius: 0.5rem;
+    padding: 0.45rem 0.5rem;
+    background: #fff;
+}
+.dp-file-input:hover {
+    border-color: #f59e0b;
+    background: #fffbeb;
+}
 @keyframes dpModalIn {
     from { opacity: 0; transform: translateY(8px) scale(0.98); }
     to { opacity: 1; transform: translateY(0) scale(1); }

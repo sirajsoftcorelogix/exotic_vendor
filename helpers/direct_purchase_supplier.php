@@ -166,7 +166,7 @@ function dp_supplier_search(mysqli $conn, string $query, bool $includePublishers
 }
 
 /**
- * @return array{vendor_id:int,vendor_type:string,error?:string}
+ * @return array{vendor_id:int,vendor_type:string}
  */
 function dp_supplier_parse_post(array $post, ?array $existing, bool $isEdit, mysqli $conn): array
 {
@@ -177,38 +177,15 @@ function dp_supplier_parse_post(array $post, ?array $existing, bool $isEdit, mys
     }
 
     $supplierKey = trim((string) ($post['supplier'] ?? ''));
-    if (!preg_match('/^(vendor|publisher):(\d+)$/', $supplierKey, $m)) {
-        return ['vendor_id' => 0, 'vendor_type' => 'vendor', 'error' => 'Vendor is required.'];
+    if ($supplierKey === '' || !preg_match('/^(vendor|publisher):(\d+)$/', $supplierKey, $m)) {
+        return ['vendor_id' => 0, 'vendor_type' => 'vendor'];
     }
 
     if (!$isBook && $m[1] !== 'vendor') {
-        return ['vendor_id' => 0, 'vendor_type' => 'vendor', 'error' => 'Invalid supplier for non-book purchase.'];
+        return ['vendor_id' => 0, 'vendor_type' => 'vendor'];
     }
 
-    $vendorType = $m[1];
-    $vendorId = (int) $m[2];
-    if ($vendorId <= 0) {
-        return ['vendor_id' => 0, 'vendor_type' => $vendorType, 'error' => 'Vendor is required.'];
-    }
-
-    if ($vendorType === 'publisher') {
-        $stmt = $conn->prepare('SELECT id FROM vp_publishers WHERE id = ? AND is_active = 1 LIMIT 1');
-    } else {
-        $stmt = $conn->prepare("SELECT id FROM vp_vendors WHERE id = ? AND (is_active = 'active' OR is_active = 1) LIMIT 1");
-    }
-    if (!$stmt) {
-        return ['vendor_id' => $vendorId, 'vendor_type' => $vendorType, 'error' => 'Could not validate supplier.'];
-    }
-    $stmt->bind_param('i', $vendorId);
-    $stmt->execute();
-    $ok = (bool) $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    if (!$ok) {
-        return ['vendor_id' => $vendorId, 'vendor_type' => $vendorType, 'error' => 'Selected supplier is invalid or inactive.'];
-    }
-
-    return ['vendor_id' => $vendorId, 'vendor_type' => $vendorType];
+    return ['vendor_id' => (int) $m[2], 'vendor_type' => $m[1]];
 }
 
 function dp_supplier_list_label(array $row): string

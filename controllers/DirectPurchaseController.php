@@ -647,32 +647,14 @@ class DirectPurchaseController
         }
 
         $supplier = dp_supplier_parse_post($_POST, $existingPurchase, $isEdit, $conn);
-        if (!empty($supplier['error'])) {
-            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => $supplier['error']];
-            $redir = $isEdit ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
-            header('Location: ' . $redir);
-            exit;
-        }
 
         $vendorId = (int) ($supplier['vendor_id'] ?? 0);
         $vendorType = (string) ($supplier['vendor_type'] ?? 'vendor');
         $warehouseId = isset($_POST['warehouse_id']) ? (int) $_POST['warehouse_id'] : 0;
         $invoiceNumber = trim((string) ($_POST['invoice_number'] ?? ''));
         $invoiceDate = trim((string) ($_POST['invoice_date'] ?? ''));
-
-        if ($invoiceNumber === '' || $invoiceDate === '') {
-            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => 'Invoice number and invoice date are required.'];
-            $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
-            header('Location: ' . $redir);
-            exit;
-        }
-
-        $dateErr = $this->validateDirectPurchaseDateNotFuture($invoiceDate, 'Invoice date');
-        if ($dateErr !== null) {
-            $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => $dateErr];
-            $redir = $id > 0 ? '?page=direct_purchase&action=edit&id=' . $id : '?page=direct_purchase&action=add';
-            header('Location: ' . $redir);
-            exit;
+        if ($invoiceDate === '') {
+            $invoiceDate = null;
         }
 
         global $conn;
