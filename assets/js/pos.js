@@ -1095,7 +1095,7 @@ data-code="${lookupCode}">
     clearTimeout(suggestTimeout);
     suggestTimeout = setTimeout(function () {
       const reqId = ++activeSuggestRequest;
-      fetch(skuSearchBase + '&q=' + encodeURIComponent(t), {
+      fetch(skuSearchBase + '&q=' + encodeURIComponent(t) + '&by=sku', {
         credentials: 'same-origin',
         headers: { 'Accept': 'application/json' }
       })

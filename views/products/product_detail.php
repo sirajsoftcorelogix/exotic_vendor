@@ -86,6 +86,7 @@
     var errText = document.getElementById('productDetailSkuErrorText');
     var debounceTimer = null;
     var activeFetch = 0;
+    var suggestAbort = null;
 
     function hideError() {
       errWrap.classList.add('hidden');
@@ -152,8 +153,16 @@
         return;
       }
       var myId = ++activeFetch;
-      var url = searchBase + (searchBase.indexOf('?') >= 0 ? '&' : '?') + 'q=' + encodeURIComponent(q);
-      fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      if (suggestAbort) {
+        try { suggestAbort.abort(); } catch (e) {}
+      }
+      suggestAbort = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      // by=sku uses the lightweight SKU-only query (not SELECT * on sku+item_code).
+      var url = searchBase + (searchBase.indexOf('?') >= 0 ? '&' : '?') +
+        'q=' + encodeURIComponent(q) + '&by=sku';
+      var opts = { credentials: 'same-origin', headers: { 'Accept': 'application/json' } };
+      if (suggestAbort) opts.signal = suggestAbort.signal;
+      fetch(url, opts)
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (myId !== activeFetch) return;
@@ -163,7 +172,8 @@
             closeSuggestions();
           }
         })
-        .catch(function () {
+        .catch(function (err) {
+          if (err && err.name === 'AbortError') return;
           if (myId !== activeFetch) return;
           closeSuggestions();
         });
@@ -174,10 +184,13 @@
       var q = (input.value || '').trim();
       clearTimeout(debounceTimer);
       if (q.length < 2) {
+        if (suggestAbort) {
+          try { suggestAbort.abort(); } catch (e) {}
+        }
         closeSuggestions();
         return;
       }
-      debounceTimer = setTimeout(function () { fetchSuggestions(q); }, 280);
+      debounceTimer = setTimeout(function () { fetchSuggestions(q); }, 200);
     });
 
     input.addEventListener('keydown', function (e) {
