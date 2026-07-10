@@ -1,5 +1,6 @@
 <?php
 require_once dirname(dirname(__DIR__)) . '/helpers/direct_purchase_currency.php';
+require_once dirname(dirname(__DIR__)) . '/helpers/direct_purchase_supplier.php';
 
 /** @var array $data */
 $filters = $data['filters'] ?? [];
@@ -234,18 +235,7 @@ $dpFilterDateMax = (new DateTimeImmutable('now', new DateTimeZone('Asia/Kolkata'
                                     <?= !empty($p['invoice_date']) ? htmlspecialchars(date('j M Y', strtotime($p['invoice_date']))) : '—'; ?>
                                 </td>
                                 <td class="px-5 py-4 align-top text-sm text-gray-800">
-                                    <?php
-                                    $exoticVendorId = trim((string) ($p['exotic_vendor_id'] ?? ''));
-                                    $vendorName = trim((string) ($p['vendor_name'] ?? ''));
-                                    if ($exoticVendorId !== '' && $vendorName !== '') {
-                                        $vendorListLabel = $exoticVendorId . '-' . $vendorName;
-                                    } elseif ($exoticVendorId !== '') {
-                                        $vendorListLabel = $exoticVendorId;
-                                    } else {
-                                        $vendorListLabel = $vendorName;
-                                    }
-                                    echo htmlspecialchars($vendorListLabel);
-                                    ?>
+                                    <?php echo htmlspecialchars(dp_supplier_list_label($p)); ?>
                                 </td>
                                 <td class="px-5 py-4 align-top text-sm text-gray-700 whitespace-nowrap">
                                     <?= !empty($p['created_at']) ? htmlspecialchars(date('j M Y', strtotime((string) $p['created_at']))) : '—'; ?>

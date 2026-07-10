@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/DirectPurchaseStock.php';
 require_once __DIR__ . '/DirectPurchaseSchema.php';
+require_once __DIR__ . '/../../helpers/direct_purchase_supplier.php';
 
 class DirectPurchase
 {
@@ -32,9 +33,10 @@ class DirectPurchase
         $params = [];
 
         if (!empty($filters['search_text'])) {
-            $where[] = '(p.invoice_number LIKE ? OR v.vendor_name LIKE ? OR v.contact_name LIKE ? OR i.item_code LIKE ? OR i.sku LIKE ?)';
+            $where[] = '(p.invoice_number LIKE ? OR v.vendor_name LIKE ? OR v.contact_name LIKE ? OR pub.publishers LIKE ? OR i.item_code LIKE ? OR i.sku LIKE ?)';
             $like = '%' . $filters['search_text'] . '%';
-            $types .= 'sssss';
+            $types .= 'ssssss';
+            $params[] = $like;
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
@@ -79,8 +81,10 @@ class DirectPurchase
 
         $whereSql = implode(' AND ', $where);
 
+        $supplierJoin = dp_supplier_join('p');
+
         $countSql = "SELECT COUNT(DISTINCT p.id) AS c FROM vp_direct_purchases p
-            JOIN vp_vendors v ON v.id = p.vendor_id
+            {$supplierJoin}
             $joinItems
             WHERE $whereSql";
 
@@ -92,11 +96,12 @@ class DirectPurchase
         $total = (int) ($stmt->get_result()->fetch_assoc()['c'] ?? 0);
         $stmt->close();
 
-        $listSql = "SELECT DISTINCT p.*, v.vendor_name, v.contact_name, v.vendor_id AS exotic_vendor_id,
+        $supplierSelect = dp_supplier_select('p');
+        $listSql = "SELECT DISTINCT p.*, {$supplierSelect},
                 cu.name AS created_by_name,
                 (SELECT COUNT(*) FROM vp_direct_purchase_returns dr WHERE dr.direct_purchase_id = p.id) AS return_count
             FROM vp_direct_purchases p
-            JOIN vp_vendors v ON v.id = p.vendor_id
+            {$supplierJoin}
             LEFT JOIN vp_users cu ON cu.id = p.created_by AND cu.is_deleted = 0
             $joinItems
             WHERE $whereSql
@@ -124,11 +129,13 @@ class DirectPurchase
 
     public function getById(int $id): ?array
     {
-        $sql = 'SELECT p.*, v.vendor_name, v.contact_name, pu.name AS purchase_created_by_name
+        $supplierJoin = dp_supplier_join('p');
+        $supplierSelect = dp_supplier_select('p');
+        $sql = "SELECT p.*, {$supplierSelect}, pu.name AS purchase_created_by_name
             FROM vp_direct_purchases p
-            JOIN vp_vendors v ON v.id = p.vendor_id
+            {$supplierJoin}
             LEFT JOIN vp_users pu ON pu.id = p.created_by AND pu.is_deleted = 0
-            WHERE p.id = ?';
+            WHERE p.id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('i', $id);
         $stmt->execute();
@@ -324,15 +331,16 @@ class DirectPurchase
         $this->conn->begin_transaction();
         try {
             $sql = 'INSERT INTO vp_direct_purchases (
-                vendor_id, warehouse_id, invoice_number, invoice_date, invoice_file, currency,
+                vendor_id, vendor_type, warehouse_id, invoice_number, invoice_date, invoice_file, currency,
                 subtotal, discount, igst_total, sgst_total, cgst_total, round_off, grand_total,
                 created_by
             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
             $stmt = $this->conn->prepare($sql);
-            $bindTypes = 'ii' . 'ssss' . str_repeat('d', 7) . 'i';
+            $bindTypes = 'i' . 's' . 'i' . 'ssss' . str_repeat('d', 7) . 'i';
             $stmt->bind_param(
                 $bindTypes,
                 $header['vendor_id'],
+                $header['vendor_type'],
                 $header['warehouse_id'],
                 $header['invoice_number'],
                 $header['invoice_date'],
@@ -406,14 +414,15 @@ class DirectPurchase
             DirectPurchaseStock::reverseMovementsForRef($this->conn, DirectPurchaseStock::REF_PURCHASE, $id);
 
             $sql = 'UPDATE vp_direct_purchases SET
-                vendor_id = ?, warehouse_id = ?, invoice_number = ?, invoice_date = ?, invoice_file = ?, currency = ?,
+                vendor_id = ?, vendor_type = ?, warehouse_id = ?, invoice_number = ?, invoice_date = ?, invoice_file = ?, currency = ?,
                 subtotal = ?, discount = ?, igst_total = ?, sgst_total = ?, cgst_total = ?, round_off = ?, grand_total = ?
                 WHERE id = ?';
             $stmt = $this->conn->prepare($sql);
-            $bindTypes = 'ii' . 'ssss' . str_repeat('d', 7) . 'i';
+            $bindTypes = 'i' . 's' . 'i' . 'ssss' . str_repeat('d', 7) . 'i';
             $stmt->bind_param(
                 $bindTypes,
                 $header['vendor_id'],
+                $header['vendor_type'],
                 $header['warehouse_id'],
                 $header['invoice_number'],
                 $header['invoice_date'],

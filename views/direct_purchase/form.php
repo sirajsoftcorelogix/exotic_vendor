@@ -1,11 +1,13 @@
 <?php
 require_once dirname(dirname(__DIR__)) . '/helpers/direct_purchase_currency.php';
+require_once dirname(dirname(__DIR__)) . '/helpers/direct_purchase_supplier.php';
 
 $purchase = $data['purchase'] ?? null;
 $pData = $purchase ?? [];
 $items = $data['items'] ?? [];
-$vendors = $data['vendors'] ?? [];
 $isEdit = !empty($data['is_edit']);
+$dpSupplier = dp_supplier_form_state($purchase);
+$dpSupplierOptions = dp_supplier_options($data['vendors'] ?? [], $data['publishers'] ?? []);
 if (empty($items)) {
     $items = [[
         'item_code' => '', 'sku' => '', 'color' => '', 'size' => '',
@@ -110,23 +112,36 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <div class="text-lg font-semibold text-gray-800 border-b border-gray-200 pb-3 mb-4">Vendor &amp; invoice</div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-3">
+                    <span class="block text-sm font-semibold text-gray-700 mb-2">Purchase type</span>
+                    <div class="flex flex-wrap gap-4" role="radiogroup" aria-label="Purchase type">
+                        <label class="inline-flex items-center gap-2 text-sm text-gray-800 <?= $isEdit ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer' ?>">
+                            <input type="radio" name="purchase_type" value="non_book" class="text-amber-600 focus:ring-amber-500"
+                                <?= !$dpSupplier['is_book'] ? 'checked' : '' ?>
+                                <?= $isEdit ? 'disabled' : '' ?>>
+                            <span>Non Book Purchase</span>
+                        </label>
+                        <label class="inline-flex items-center gap-2 text-sm text-gray-800 <?= $isEdit ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer' ?>">
+                            <input type="radio" name="purchase_type" value="book" class="text-amber-600 focus:ring-amber-500"
+                                <?= $dpSupplier['is_book'] ? 'checked' : '' ?>
+                                <?= $isEdit ? 'disabled' : '' ?>>
+                            <span>Book Purchase</span>
+                        </label>
+                    </div>
+                    <?php if ($isEdit): ?>
+                        <p class="mt-1 text-xs text-gray-500">Purchase type is inferred from supplier and cannot be changed.</p>
+                    <?php endif; ?>
+                </div>
                 <div class="lg:col-span-2">
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Vendor <span class="text-red-500">*</span></label>
-                    <select name="vendor_id" id="vendor_id" required class="<?= $inp ?> bg-white">
+                    <select name="supplier" id="dp_supplier_select" required class="<?= $inp ?> bg-white">
                         <option value="">Select vendor</option>
-                        <?php foreach ($vendors as $v): ?>
-                            <?php
-                            $exoticVendorId = trim((string) ($v['vendor_id'] ?? ''));
-                            $vendorLabel = trim((string) ($v['vendor_name'] ?? ''));
-                            if ($exoticVendorId !== '' && $vendorLabel !== '') {
-                                $vendorLabel = $exoticVendorId . '-' . $vendorLabel;
-                            } elseif ($exoticVendorId !== '') {
-                                $vendorLabel = $exoticVendorId;
-                            }
-                            ?>
-                            <option value="<?= (int) $v['id'] ?>"
-                                <?= ($purchase && (int) ($purchase['vendor_id'] ?? 0) === (int) $v['id']) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($vendorLabel) ?>
+                        <?php foreach ($dpSupplierOptions as $opt): ?>
+                            <option value="<?= htmlspecialchars($opt['key']) ?>"
+                                class="<?= !empty($opt['publisher']) ? 'dp-publisher-option' : '' ?>"
+                                <?= !empty($opt['publisher']) && !$dpSupplier['is_book'] ? 'disabled' : '' ?>
+                                <?= $dpSupplier['selected'] === $opt['key'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($opt['label']) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -1911,7 +1926,21 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
         dpCurSel.addEventListener('change', syncSummaryCurrencySymbols);
     }
     if (window.jQuery && jQuery.fn.select2) {
-        jQuery('#vendor_id').select2({ width: '100%', placeholder: 'Select vendor' });
+        var $dpSupplier = jQuery('#dp_supplier_select');
+        $dpSupplier.select2({ width: '100%', placeholder: 'Select vendor' });
+        function dpTogglePublisherOptions() {
+            var isBook = document.querySelector('input[name="purchase_type"]:checked')?.value === 'book';
+            $dpSupplier.find('.dp-publisher-option').prop('disabled', !isBook);
+            if (!isBook && $dpSupplier.find('option:selected').hasClass('dp-publisher-option')) {
+                $dpSupplier.val('').trigger('change');
+            }
+            $dpSupplier.trigger('change.select2');
+        }
+        document.querySelectorAll('input[name="purchase_type"]').forEach(function (radio) {
+            radio.addEventListener('change', dpTogglePublisherOptions);
+        });
+        dpTogglePublisherOptions();
+
         jQuery('#dp_currency').select2({ width: '100%', minimumResultsForSearch: 6 });
         jQuery('#dp_currency').on('select2:select change', syncSummaryCurrencySymbols);
     }

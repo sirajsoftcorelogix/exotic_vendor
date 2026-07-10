@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/DirectPurchaseStock.php';
 require_once __DIR__ . '/DirectPurchaseSchema.php';
+require_once __DIR__ . '/../../helpers/direct_purchase_supplier.php';
 
 class DirectPurchaseReturn
 {
@@ -176,9 +177,10 @@ class DirectPurchaseReturn
         $params = [];
 
         if (!empty($filters['search_text'])) {
-            $where[] = '(p.invoice_number LIKE ? OR v.vendor_name LIKE ? OR v.contact_name LIKE ?)';
+            $where[] = '(p.invoice_number LIKE ? OR v.vendor_name LIKE ? OR v.contact_name LIKE ? OR pub.publishers LIKE ?)';
             $like = '%' . $filters['search_text'] . '%';
-            $types .= 'sss';
+            $types .= 'ssss';
+            $params[] = $like;
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
@@ -201,10 +203,12 @@ class DirectPurchaseReturn
 
         $whereSql = implode(' AND ', $where);
 
+        $supplierJoin = dp_supplier_join('p');
+
         $countSql = "SELECT COUNT(*) AS c
             FROM vp_direct_purchase_returns r
             JOIN vp_direct_purchases p ON p.id = r.direct_purchase_id
-            JOIN vp_vendors v ON v.id = p.vendor_id
+            {$supplierJoin}
             WHERE $whereSql";
 
         $stmt = $this->conn->prepare($countSql);
@@ -215,12 +219,13 @@ class DirectPurchaseReturn
         $total = (int) ($stmt->get_result()->fetch_assoc()['c'] ?? 0);
         $stmt->close();
 
-        $listSql = "SELECT r.*, p.invoice_number, p.invoice_date, p.created_at AS purchase_created_at,
+        $supplierSelect = dp_supplier_select('p');
+        $listSql = "SELECT r.*, p.invoice_number, p.invoice_date, p.vendor_type, p.created_at AS purchase_created_at,
                 p.created_by AS purchase_created_by, pu.name AS purchase_created_by_name,
-                v.vendor_name, v.vendor_id AS exotic_vendor_id
+                {$supplierSelect}
             FROM vp_direct_purchase_returns r
             JOIN vp_direct_purchases p ON p.id = r.direct_purchase_id
-            JOIN vp_vendors v ON v.id = p.vendor_id
+            {$supplierJoin}
             LEFT JOIN vp_users pu ON pu.id = p.created_by AND pu.is_deleted = 0
             WHERE $whereSql
             ORDER BY r.return_date DESC, r.id DESC

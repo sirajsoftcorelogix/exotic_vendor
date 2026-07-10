@@ -1,5 +1,6 @@
 <?php
 require_once dirname(dirname(__DIR__)) . '/helpers/direct_purchase_currency.php';
+require_once dirname(dirname(__DIR__)) . '/helpers/direct_purchase_supplier.php';
 
 /** @var array $data */
 $filters = $data['filters'] ?? [];
@@ -215,18 +216,7 @@ $dpPurchaseAddedBy = static function (array $row): string {
                                     </a>
                                 </td>
                                 <td class="px-5 py-4 align-top text-sm text-gray-800">
-                                    <?php
-                                    $exoticVendorId = trim((string) ($r['exotic_vendor_id'] ?? ''));
-                                    $vendorName = trim((string) ($r['vendor_name'] ?? ''));
-                                    if ($exoticVendorId !== '' && $vendorName !== '') {
-                                        $vendorListLabel = $exoticVendorId . '-' . $vendorName;
-                                    } elseif ($exoticVendorId !== '') {
-                                        $vendorListLabel = $exoticVendorId;
-                                    } else {
-                                        $vendorListLabel = $vendorName;
-                                    }
-                                    echo htmlspecialchars($vendorListLabel);
-                                    ?>
+                                    <?php echo htmlspecialchars(dp_supplier_list_label($r)); ?>
                                 </td>
                                 <td class="px-5 py-4 align-top text-sm text-gray-700 whitespace-nowrap">
                                     <?= htmlspecialchars($dpFormatDate($r['invoice_date'] ?? '')) ?>
