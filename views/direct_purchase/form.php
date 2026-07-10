@@ -316,9 +316,9 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                                             title="View product profile" aria-label="View product profile">
                                             <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
                                         </a>
-                                        <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            title="Fetch pending orders for this SKU" aria-label="Fetch pending orders for this SKU" <?= $dpLineLocked ? 'disabled' : '' ?>>
-                                            <i class="fas fa-clipboard-list text-xs" aria-hidden="true"></i>
+                                        <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed <?= trim((string) ($it['sku'] ?? '')) === '' ? 'hidden' : '' ?>"
+                                            title="Find pending PO for this SKU" aria-label="Find pending PO for this SKU" <?= $dpLineLocked ? 'disabled' : '' ?>>
+                                            <i class="fas fa-search text-xs" aria-hidden="true"></i>
                                         </button>
                                     </div>
                                 </td>
@@ -382,7 +382,7 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                 </button>
             </div>
             <p class="mt-3 text-xs text-gray-500 leading-relaxed">
-                Type at least 2 characters to search products by SKU only. Fields marked <span class="text-red-600">*</span> are required (HSN is optional). For <strong>books</strong>, Cost / item uses Price India (without GST); for other products it uses CP. Use the <i class="fas fa-arrow-down text-[10px]" aria-hidden="true"></i> button beside cost to pull the latest value from the product API.
+                Type at least 2 characters to search products by SKU only. After selecting a SKU, use the <i class="fas fa-search text-[10px]" aria-hidden="true"></i> icon beside it to find and list pending POs. Fields marked <span class="text-red-600">*</span> are required (HSN is optional). For <strong>books</strong>, Cost / item uses Price India (without GST); for other products it uses CP. Use the <i class="fas fa-arrow-down text-[10px]" aria-hidden="true"></i> button beside cost to pull the latest value from the product API.
             </p>
 
             <div class="mt-6 pt-5 border-t border-gray-200">
@@ -542,19 +542,19 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
     <button type="button" id="dp-pending-orders-backdrop" class="absolute inset-0 bg-slate-900/45 backdrop-blur-[2px]" aria-label="Close dialog"></button>
     <div class="relative flex w-full max-w-lg max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-sky-200/40 bg-white shadow-2xl shadow-sky-900/10 ring-1 ring-black/5 animate-[dpModalIn_0.22s_ease-out]">
         <div class="border-b border-gray-100 bg-gradient-to-r from-sky-50/80 to-white px-6 py-4">
-            <h3 id="dp-pending-orders-title" class="text-lg font-bold tracking-tight text-gray-900">Pending orders for SKU</h3>
+            <h3 id="dp-pending-orders-title" class="text-lg font-bold tracking-tight text-gray-900">Pending PO for SKU</h3>
             <p id="dp-pending-orders-subtitle" class="mt-1 text-sm text-gray-600"></p>
             <p id="dp-pending-orders-import-status" class="mt-2 text-xs font-medium text-sky-700 hidden"></p>
         </div>
         <div class="flex-1 overflow-auto px-6 py-4">
             <div id="dp-pending-orders-loading" class="hidden py-10 text-center text-sm text-gray-500">
-                <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Fetching orders…
+                <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Fetching pending POs…
             </div>
-            <div id="dp-pending-orders-empty" class="hidden py-10 text-center text-sm text-gray-500">No pending orders found for this item in the selected date range.</div>
+            <div id="dp-pending-orders-empty" class="hidden py-10 text-center text-sm text-gray-500">No pending PO found for this SKU in the last 90 days.</div>
             <table id="dp-pending-orders-table" class="hidden w-full text-sm">
                 <thead>
                     <tr class="border-b border-gray-200 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        <th class="pb-2 pr-3">Order #</th>
+                        <th class="pb-2 pr-3">PO #</th>
                         <th class="pb-2 pr-3">SKU</th>
                         <th class="pb-2 text-right">Qty</th>
                     </tr>
@@ -811,9 +811,9 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                         title="View product profile" aria-label="View product profile">
                         <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
                     </a>
-                    <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Fetch pending orders for this SKU" aria-label="Fetch pending orders for this SKU">
-                        <i class="fas fa-clipboard-list text-xs" aria-hidden="true"></i>
+                    <button type="button" class="dp-fetch-pending-orders dp-line-action-btn shrink-0 hidden inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Find pending PO for this SKU" aria-label="Find pending PO for this SKU">
+                        <i class="fas fa-search text-xs" aria-hidden="true"></i>
                     </button>
                 </div>
             </td>
@@ -902,6 +902,28 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
             link.href = '#';
             link.classList.add('hidden');
         }
+    }
+
+    function dpRowHasSku(tr) {
+        if (!tr) return false;
+        var skuEl = tr.querySelector('.dp-sku');
+        return !!(skuEl && String(skuEl.value || '').trim());
+    }
+
+    function dpUpdatePendingPoButton(tr) {
+        if (!tr) return;
+        var btn = tr.querySelector('.dp-fetch-pending-orders');
+        if (!btn) return;
+        if (dpRowHasSku(tr)) {
+            btn.classList.remove('hidden');
+        } else {
+            btn.classList.add('hidden');
+        }
+    }
+
+    function dpUpdateSkuActions(tr) {
+        dpUpdateProductProfileLink(tr);
+        dpUpdatePendingPoButton(tr);
     }
 
     function fetchLinePriceUrl(itemCode, sku, color, size) {
@@ -1629,7 +1651,7 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
             statusEl.classList.add('hidden');
         }
         if (title) {
-            title.textContent = sku ? ('Pending orders — ' + sku) : 'Pending orders for SKU';
+            title.textContent = sku ? ('Pending PO — ' + sku) : 'Pending PO for SKU';
         }
         if (subtitle) {
             subtitle.textContent = 'Loading…';
@@ -1799,6 +1821,7 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
         if (rate && item.gst != null && item.gst !== '') rate.value = item.gst;
         setLineThumb(tr, item.image != null && item.image !== '' ? item.image : '');
         recalcRow(tr);
+        dpUpdateSkuActions(tr);
     }
 
     function initSkuSearch(skuInput) {
@@ -1843,6 +1866,7 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
                 fetchAbort.abort();
             }
             var q = skuInput.value.trim();
+            dpUpdatePendingPoButton(tr);
             if (q.length < 2) {
                 if (fetchAbort) {
                     fetchAbort.abort();
@@ -1954,7 +1978,7 @@ $dpReadonlyInp = 'bg-gray-50 text-gray-700 cursor-not-allowed';
             });
         }
         dpUpdateVendorQtySyncButton(tr);
-        dpUpdateProductProfileLink(tr);
+        dpUpdateSkuActions(tr);
     }
 
     function dpUpdateProductProfileLink(tr) {
