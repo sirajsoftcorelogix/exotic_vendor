@@ -31,6 +31,7 @@ final class DirectPurchaseSchema
             'vendor_type',
             'ALTER TABLE `vp_direct_purchases` ADD COLUMN `vendor_type` VARCHAR(20) NOT NULL DEFAULT \'vendor\' AFTER `vendor_id`'
         );
+        self::ensureInvoiceDateNullable($conn);
 
         self::ensureColumn(
             $conn,
@@ -96,6 +97,25 @@ final class DirectPurchaseSchema
                 ON DELETE RESTRICT
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
         );
+    }
+
+    private static function ensureInvoiceDateNullable(\mysqli $conn): void
+    {
+        if (!self::tableExists($conn, 'vp_direct_purchases') || !self::columnExists($conn, 'vp_direct_purchases', 'invoice_date')) {
+            return;
+        }
+
+        $res = @$conn->query("SHOW COLUMNS FROM `vp_direct_purchases` LIKE 'invoice_date'");
+        if (!$res || !($row = $res->fetch_assoc())) {
+            return;
+        }
+        $res->free();
+
+        if (strtoupper((string) ($row['Null'] ?? '')) === 'YES') {
+            return;
+        }
+
+        @$conn->query('ALTER TABLE `vp_direct_purchases` MODIFY `invoice_date` DATE NULL DEFAULT NULL');
     }
 
     private static function ensureColumn(\mysqli $conn, string $table, string $column, string $alterSql): void
