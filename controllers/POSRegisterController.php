@@ -243,12 +243,22 @@ class POSRegisterController
         }
 
         $errors = [];
-        if ($isHighValue && $gstin === '' && $residency === 'FOREIGN_NATIONAL') {
-            if ($passport === '') {
-                $errors[] = 'Passport Number is required for foreign national high value transactions.';
-            }
-            if ($countryOfResidence === '') {
-                $errors[] = 'Country of Residence is required for foreign national high value transactions.';
+        if ($isHighValue && $gstin === '') {
+            if ($residency === 'INDIAN_RESIDENT') {
+                if ($pan === '') {
+                    $errors[] = 'PAN is required for Indian resident high value transactions.';
+                }
+            } elseif ($residency === 'NRI') {
+                if ($pan === '' && ($passport === '' || $countryOfResidence === '')) {
+                    $errors[] = 'For NRI customers, enter PAN or Passport Number with Country of Residence.';
+                }
+            } else {
+                if ($passport === '') {
+                    $errors[] = 'Passport Number is required for foreign national high value transactions.';
+                }
+                if ($countryOfResidence === '') {
+                    $errors[] = 'Country of Residence is required for foreign national high value transactions.';
+                }
             }
         }
 
@@ -4336,6 +4346,15 @@ class POSRegisterController
         }
 
         $compliance = $this->evaluateHighValueCompliance($payload, $orderTotal, $paymentAmount, $paymentMode, $conn);
+        if (!$compliance['ok']) {
+            echo json_encode([
+                'success' => false,
+                'requires_compliance' => true,
+                'message' => implode(' ', $compliance['errors']),
+                'errors' => $compliance['errors'],
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
 
         $ctx = $this->exoticCartDiscountContext();
         $retrieve = $this->exotic_api_call(
