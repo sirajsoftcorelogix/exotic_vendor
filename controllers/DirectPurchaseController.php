@@ -4,6 +4,7 @@ require_once 'models/direct_purchase/directPurchase.php';
 require_once 'models/direct_purchase/directPurchaseReturn.php';
 require_once 'models/vendor/vendor.php';
 require_once 'models/product/product.php';
+require_once 'models/order/purchaseOrder.php';
 require_once 'models/comman/tables.php';
 require_once 'helpers/exotic_india_api.php';
 require_once 'helpers/direct_purchase_supplier.php';
@@ -139,8 +140,16 @@ class DirectPurchaseController
         $color = trim((string) ($_GET['color'] ?? $_POST['color'] ?? ''));
         $size = trim((string) ($_GET['size'] ?? $_POST['size'] ?? ''));
 
+        if ($sku === '') {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Enter or select a SKU first.',
+            ]);
+            exit;
+        }
+
         $productModel = new product($conn);
-        if ($itemCode === '' && $sku !== '') {
+        if ($itemCode === '') {
             $bySku = $productModel->getProductByskuExact($sku);
             if (is_array($bySku)) {
                 $itemCode = trim((string) ($bySku['item_code'] ?? ''));
@@ -153,60 +162,8 @@ class DirectPurchaseController
             }
         }
 
-        if ($itemCode === '') {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Select a product or enter a SKU with a linked item code first.',
-            ]);
-            exit;
-        }
-
-        $toDate = isset($_GET['to_date']) ? (int) $_GET['to_date'] : time();
-        $fromDate = isset($_GET['from_date']) ? (int) $_GET['from_date'] : strtotime('-90 days');
-        if ($fromDate <= 0) {
-            $fromDate = strtotime('-90 days');
-        }
-        if ($toDate <= 0) {
-            $toDate = time();
-        }
-        if ($fromDate > $toDate) {
-            $tmp = $fromDate;
-            $fromDate = $toDate;
-            $toDate = $tmp;
-        }
-
-        $postFields = [
-            'itemcode' => $itemCode,
-            'from_date' => $fromDate,
-            'to_date' => $toDate,
-        ];
-        if ($size !== '') {
-            $postFields['size'] = $size;
-        }
-        if ($color !== '') {
-            $postFields['color'] = $color;
-        }
-
-        $api = exotic_india_api_post(
-            'order/itemfetch',
-            http_build_query($postFields),
-            ['Content-Type: application/x-www-form-urlencoded']
-        );
-
-        if (!$api['success']) {
-            echo json_encode([
-                'success' => false,
-                'message' => $api['message'] ?? 'Could not fetch pending orders from vendor API.',
-            ]);
-            exit;
-        }
-
-        $apiOrders = $this->normalizeItemFetchOrders($api['data'] ?? [], $api['raw'] ?? '');
-        $apiOrders = $this->enrichItemFetchOrdersWithQty($itemCode, $size, $color, $apiOrders, $sku);
-        $orders = $this->compareItemFetchOrdersWithLocal($conn, $itemCode, $size, $color, $apiOrders, $sku);
-        $needsImport = array_values(array_filter($orders, static function (array $row): bool {
-            return !empty($row['needs_import']);
-        }));
+        $purchaseOrderModel = new PurchaseOrder($conn);
+        $orders = $purchaseOrderModel->getOpenPurchaseOrdersForSku($sku, $itemCode, $size, $color);
 
         echo json_encode([
             'success' => true,
@@ -214,10 +171,7 @@ class DirectPurchaseController
             'sku' => $sku,
             'size' => $size,
             'color' => $color,
-            'from_date' => $fromDate,
-            'to_date' => $toDate,
             'orders' => $orders,
-            'needs_import_count' => count($needsImport),
             'total' => count($orders),
         ], JSON_UNESCAPED_UNICODE);
         exit;
