@@ -192,6 +192,36 @@ class POSRegisterController
     }
 
     /**
+     * Exotic product API returns addon prices like "12,995"; normalize for POS UI/cart.
+     *
+     * @param array<string, mixed> $addonOptions
+     * @return array<string, mixed>
+     */
+    private function normalizePosAddonOptions(array $addonOptions): array
+    {
+        if (empty($addonOptions['default_options']) || !is_array($addonOptions['default_options'])) {
+            return $addonOptions;
+        }
+
+        foreach ($addonOptions['default_options'] as $idx => $opt) {
+            if (!is_array($opt)) {
+                continue;
+            }
+            $raw = trim((string)($opt['price'] ?? ''));
+            if ($raw === '') {
+                continue;
+            }
+            $numeric = (float)str_replace([',', ' '], '', $raw);
+            if ($numeric > 0) {
+                $addonOptions['default_options'][$idx]['price'] = number_format($numeric, 2, '.', '');
+                $addonOptions['default_options'][$idx]['price_display'] = $raw;
+            }
+        }
+
+        return $addonOptions;
+    }
+
+    /**
      * @return array{ok:bool,is_high_value:bool,limit:float,errors:list<string>,cash_warning_required:bool,residency_status:string,pan:string,aadhaar:string,passport:string,country_of_residence:string,gstin:string,derived_pan_from_gstin:string}
      */
     private function evaluateHighValueCompliance(array $payload, float $invoiceAmount, float $cashAmount, string $paymentMode, mysqli $conn): array
@@ -3069,7 +3099,7 @@ class POSRegisterController
             'length_unit' => $dbLu,
             'express_shipping_cost' => $data['express_shipping_cost'] ?? 0,
             'express_shipping_option' => $data['express_shipping_option'] ?? null,
-            'addon_options' => $data['addon_options'] ?? [],
+            'addon_options' => $this->normalizePosAddonOptions(is_array($data['addon_options'] ?? null) ? $data['addon_options'] : []),
             'sibling_skus' => $siblingSkus,
             'item_level' => trim((string)($dbRow['item_level'] ?? '')),
             'is_parent_level' => $this->isParentItemLevel($dbRow['item_level'] ?? ''),

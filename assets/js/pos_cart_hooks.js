@@ -874,6 +874,79 @@
     return sku ? String(sku) : '';
   }
 
+  /** Selected add-on extras per unit (frame, express, etc.) from Exotic cart line. */
+  function lineAddonExtraRupee(row) {
+    if (!row || typeof row !== 'object') {
+      return 0;
+    }
+    var extra = 0;
+    var frame = parseMoneyValue(pickFirst(row, ['framevalue', 'frame_value', 'frame_price']));
+    if (frame != null && frame > 0) {
+      extra += frame;
+    } else {
+      var addons = row.addons_selected;
+      if (Array.isArray(addons)) {
+        addons.forEach(function (addon) {
+          if (!addon || typeof addon !== 'object') {
+            return;
+          }
+          var v = parseMoneyValue(addon.value != null ? addon.value : addon.price);
+          if (v != null && v > 0) {
+            extra += v;
+          }
+        });
+      }
+    }
+    var expressChosen = pickFirst(row, ['express_shipping_chosen', 'express_shipping_selected']);
+    var expressOn =
+      expressChosen === true ||
+      expressChosen === 1 ||
+      expressChosen === '1' ||
+      String(expressChosen || '').toLowerCase() === 'true';
+    if (expressOn) {
+      var expressCost = parseMoneyValue(row.express_shipping_cost);
+      if (expressCost != null && expressCost > 0) {
+        extra += expressCost;
+      }
+    }
+    return round2(extra);
+  }
+
+  function lineAddonLabels(row) {
+    if (!row || typeof row !== 'object') {
+      return [];
+    }
+    var labels = [];
+    var addons = row.addons_selected;
+    if (Array.isArray(addons)) {
+      addons.forEach(function (addon) {
+        if (!addon || typeof addon !== 'object') {
+          return;
+        }
+        var name = String(addon.name || addon.title || '').trim();
+        if (name) {
+          labels.push(name);
+        }
+      });
+    }
+    if (!labels.length) {
+      var frame = parseMoneyValue(pickFirst(row, ['framevalue', 'frame_value', 'frame_price']));
+      if (frame != null && frame > 0) {
+        labels.push('Add-on');
+      }
+    }
+    if (
+      labels.indexOf('Express Shipping') === -1 &&
+      (row.express_shipping_chosen === true ||
+        row.express_shipping_chosen === 1 ||
+        row.express_shipping_chosen === '1' ||
+        String(row.express_shipping_chosen || '').toLowerCase() === 'true')
+    ) {
+      labels.push('Express Shipping');
+    }
+    return labels;
+  }
+
   /** Cart line thumbnail URL (Exotic: full https, path from site root, or CDN-relative). */
   function lineImageUrl(row) {
     var raw = pickFirst(row, [
@@ -918,7 +991,7 @@
   function lineListUnitNumber(row, qty) {
     var u = parseMoneyValue(lineUnitPriceStr(row));
     if (u != null && u >= 0) {
-      return u;
+      return round2(u + lineAddonExtraRupee(row));
     }
     var lt = parseMoneyValue(lineLineTotalStr(row, qty));
     if (lt != null && qty >= 1 && lt >= 0) {
@@ -1450,6 +1523,7 @@
 
   /** Line amount from API or unit price × qty when Exotic omits an explicit line total. */
   function lineLineTotalStr(row, qty) {
+    var addonExtra = lineAddonExtraRupee(row);
     var explicit = pickFirst(row, [
       'line_total',
       'linetotal',
@@ -1467,7 +1541,7 @@
       pickFirst(row, ['unit_price', 'item_price', 'original_price', 'price', 'selling_price'])
     );
     if (unit != null && qty >= 1) {
-      var t = unit * qty;
+      var t = (unit + addonExtra) * qty;
       return Math.abs(t - Math.round(t)) < 1e-9 ? String(Math.round(t)) : t.toFixed(2);
     }
     return '';
@@ -2133,6 +2207,13 @@
           '<div class="text-[13px] font-bold text-slate-900 leading-snug mt-0.5 pr-1 line-clamp-3">' +
           escapeHtml(title) +
           '</div>';
+        var addonLabels = lineAddonLabels(row);
+        if (addonLabels.length) {
+          html +=
+            '<div class="mt-1 text-[10px] font-medium text-emerald-800 leading-snug">' +
+            escapeHtml('+ ' + addonLabels.join(', ')) +
+            '</div>';
+        }
         html += '</div></div>';
         html +=
           '<div class="text-[13px] tabular-nums text-slate-800 mt-0.5 leading-relaxed">' +
