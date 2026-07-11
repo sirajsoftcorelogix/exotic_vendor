@@ -1281,7 +1281,8 @@ WHERE i.pos_flag = 1";
         float $amount,
         string $note = '',
         bool $isGrand = false,
-        int $colCount = 13
+        int $colCount = 13,
+        bool $largeFont = false
     ): string {
         $colCount = max(3, $colCount);
         $labelSpan = $colCount - 2;
@@ -1289,7 +1290,7 @@ WHERE i.pos_flag = 1";
             ? '<br><span style="font-size:11px;font-weight:normal;color:#555;">' . htmlspecialchars($note) . '</span>'
             : '';
         $bg = $isGrand ? '#f0f0f0' : '#f9f9f9';
-        $weight = $isGrand ? 'font-weight:bold;font-size:14px;' : 'font-weight:bold;';
+        $weight = $largeFont ? 'font-weight:bold;font-size:14px;' : 'font-weight:bold;';
         $borderTop = $isGrand ? 'border-top:2px solid #000;' : '';
 
         return '
@@ -1368,13 +1369,47 @@ WHERE i.pos_flag = 1";
                 $subInclGst = $grandTotal;
             }
 
-            $rows .= $this->posInvoiceSummaryLabelRow('Sub total (incl. GST)', $subInclGst, '', false, $colCount);
+            $totalDiscount = round($coupon + $cash + $gift + $line, 2);
+
+            $rows .= $this->posInvoiceSummaryLabelRow(
+                'Sub total (incl. GST)',
+                $subInclGst,
+                '',
+                false,
+                $colCount,
+                true
+            );
+            if ($totalDiscount > 0.001) {
+                $rows .= $this->posInvoiceSummaryLabelRow(
+                    'Total Discount',
+                    $totalDiscount,
+                    $absorbedNote,
+                    false,
+                    $colCount
+                );
+            }
+            if ($gst > 0.001) {
+                $rows .= $this->posInvoiceSummaryLabelRow(
+                    'Total GST',
+                    $gst,
+                    $absorbedNote,
+                    false,
+                    $colCount
+                );
+            }
             $rows .= $this->posInvoiceSummaryLabelRow('GRAND Total', $grandTotal, '', true, $colCount);
 
             return $rows;
         }
 
-        $rows .= $this->posInvoiceSummaryLabelRow('Sub total (incl. GST)', $subInclGst, '', false, $colCount);
+        $rows .= $this->posInvoiceSummaryLabelRow(
+            'Sub total (incl. GST)',
+            $subInclGst,
+            '',
+            false,
+            $colCount,
+            true
+        );
         if ($line > 0.001) {
             $rows .= $this->posInvoiceSummaryLabelRow('Line Discount', $line, '', false, $colCount);
         }
@@ -1403,7 +1438,7 @@ WHERE i.pos_flag = 1";
             $rows .= $this->posInvoiceSummaryLabelRow('Gift Voucher', $gift, $absorbedNote, false, $colCount);
         }
 
-        $rows .= $this->posInvoiceSummaryLabelRow('GST Total', $gst, '', false, $colCount);
+        $rows .= $this->posInvoiceSummaryLabelRow('Total GST', $gst, '', false, $colCount);
         $rows .= $this->posInvoiceSummaryLabelRow('GRAND Total', $grandTotal, '', true, $colCount);
 
         return $rows;
