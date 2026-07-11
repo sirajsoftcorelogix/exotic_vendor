@@ -189,6 +189,12 @@
     .courier-calc-details-wrap.is-hidden {
         display: none;
     }
+    .cke_maximized .inbound-ck-field-label {
+        font-size: 15px !important;
+        padding: 8px 16px !important;
+        color: #111 !important;
+        border-right: 1px solid #bbb !important;
+    }
 </style>
 <?php
 $record_id = $_GET['id'] ?? '';
@@ -2748,6 +2754,42 @@ document.addEventListener('DOMContentLoaded', function() {
             height: 200
         };
 
+        function initInboundLongDescriptionEditor(editorId, fieldLabel) {
+            if (!window.CKEDITOR || !document.getElementById(editorId)) return;
+
+            CKEDITOR.replace(editorId, {
+                toolbar: longDescriptionCkConfig.toolbar,
+                removePlugins: longDescriptionCkConfig.removePlugins,
+                versionCheck: longDescriptionCkConfig.versionCheck,
+                height: longDescriptionCkConfig.height,
+                title: fieldLabel,
+                on: {
+                    instanceReady: function (evt) {
+                        const toolbar = evt.editor.container.findOne('.cke_top .cke_toolbox');
+                        if (!toolbar) return;
+
+                        const labelEl = new CKEDITOR.dom.element('span');
+                        labelEl.addClass('inbound-ck-field-label');
+                        labelEl.setAttribute('title', fieldLabel);
+                        labelEl.setStyles({
+                            display: 'inline-block',
+                            fontWeight: 'bold',
+                            fontSize: '13px',
+                            color: '#222',
+                            padding: '6px 12px',
+                            lineHeight: '26px',
+                            whiteSpace: 'nowrap',
+                            verticalAlign: 'middle',
+                            borderRight: '1px solid #ccc',
+                            marginRight: '8px'
+                        });
+                        labelEl.setText(fieldLabel);
+                        toolbar.append(labelEl, true);
+                    }
+                }
+            });
+        }
+
         function toggleInboundCkeditorFullscreen(editorId) {
             const editor = CKEDITOR?.instances?.[editorId];
             if (editor) {
@@ -2755,12 +2797,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        if (window.CKEDITOR && document.getElementById('long_description_input')) {
-            CKEDITOR.replace('long_description_input', longDescriptionCkConfig);
-        }
-        if (window.CKEDITOR && document.getElementById('long_description_india_input')) {
-            CKEDITOR.replace('long_description_india_input', longDescriptionCkConfig);
-        }
+        initInboundLongDescriptionEditor('long_description_input', 'Long Description');
+        initInboundLongDescriptionEditor('long_description_india_input', 'Long Description (India)');
 
         document.querySelectorAll('[data-ckeditor-expand]').forEach(function (btn) {
             btn.addEventListener('click', function (e) {
