@@ -1704,14 +1704,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         name="snippet_description"><?= htmlspecialchars($data['form2']['snippet_description'] ?? '') ?></textarea>
                 </div>
                 <div class="mb-[15px]">
-                    <div class="flex items-center justify-between mb-[5px]">
-                        <label class="block text-xs font-bold text-[#222]">Long Description:</label>
-                        <button
-                            type="button"
-                            data-ckeditor-expand="long_description_input"
-                            class="text-[11px] font-bold text-[#17a2b8] hover:text-[#138496] underline cursor-pointer bg-transparent border-none p-0"
-                        >Fullscreen</button>
-                    </div>
+                    <label class="block text-xs font-bold text-[#222] mb-[5px]">Long Description:</label>
                     <textarea
                         id="long_description_input"
                         name="long_description"
@@ -1724,18 +1717,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 <div class="mb-[15px]">
                     <div class="flex items-center justify-between mb-[5px]">
                         <label class="block text-xs font-bold text-[#222]">Long Description (India):</label>
-                        <div class="flex items-center gap-3">
-                            <button
-                                type="button"
-                                id="copy_long_description_to_india_btn"
-                                class="text-[11px] font-bold text-[#17a2b8] hover:text-[#138496] underline cursor-pointer bg-transparent border-none p-0"
-                            >Copy from Long Description</button>
-                            <button
-                                type="button"
-                                data-ckeditor-expand="long_description_india_input"
-                                class="text-[11px] font-bold text-[#17a2b8] hover:text-[#138496] underline cursor-pointer bg-transparent border-none p-0"
-                            >Fullscreen</button>
-                        </div>
+                        <button
+                            type="button"
+                            id="copy_long_description_to_india_btn"
+                            class="text-[11px] font-bold text-[#17a2b8] hover:text-[#138496] underline cursor-pointer bg-transparent border-none p-0"
+                        >Copy from Long Description</button>
                     </div>
                     <textarea
                         id="long_description_india_input"
@@ -2790,22 +2776,8 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        function toggleInboundCkeditorFullscreen(editorId) {
-            const editor = CKEDITOR?.instances?.[editorId];
-            if (editor) {
-                editor.execCommand('maximize');
-            }
-        }
-
         initInboundLongDescriptionEditor('long_description_input', 'Long Description');
         initInboundLongDescriptionEditor('long_description_india_input', 'Long Description (India)');
-
-        document.querySelectorAll('[data-ckeditor-expand]').forEach(function (btn) {
-            btn.addEventListener('click', function (e) {
-                e.preventDefault();
-                toggleInboundCkeditorFullscreen(btn.getAttribute('data-ckeditor-expand'));
-            });
-        });
 
         document.getElementById('copy_long_description_to_india_btn')?.addEventListener('click', function (e) {
             e.preventDefault();
