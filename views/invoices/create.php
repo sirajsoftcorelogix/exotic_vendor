@@ -1277,10 +1277,14 @@
                                 link.click();
                                 document.body.removeChild(link);
                                 window.URL.revokeObjectURL(url);
+                                if (data.is_international) {
+                                    window.location.href = '<?php echo base_url('?page=dispatch&action=create&invoice_id='); ?>' + invoiceId;
+                                    return;
+                                }
 
                                 // Redirect to orders list
                                 setTimeout(() => {
-                                    window.location.href = '<?php echo base_url('?page=orders&action=list'); ?>';
+                                    window.location.href = '<?php echo base_url('?page=orders&action=list'); ?>';                                    
                                 }, 1000);
                             })
                             .catch(err => {

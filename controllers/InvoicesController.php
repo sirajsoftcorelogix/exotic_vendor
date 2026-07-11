@@ -407,6 +407,7 @@ class InvoicesController
 
         $internationalFields = ['pre_carriage_by', 'port_of_loading', 'port_of_discharge', 'country_of_origin', 'country_of_final_destination', 'final_destination', 'usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_bill_number', 'shipping_bill_date', 'shipping_port', 'shipping_ref_clm', 'shipping_currency', 'shipping_country_code', 'shipping_exp_duty'];
         $internationalData = [];
+        $isInternational = true;
         foreach ($internationalFields as $field) {
             if (isset($input[$field])) {
                 $value = $input[$field];
@@ -426,11 +427,11 @@ class InvoicesController
         $irn = $this->generateAlankitIrnForInvoice($invoiceId);
 
         if ($irn) {
-            echo json_encode(['success' => true, 'message' => 'IRN generated successfully']);
+            echo json_encode(['success' => true, 'message' => 'IRN generated successfully','is_international' => $isInternational]);
         } else {
             $internationalRecord = $invoiceModel->getInternationalInvoiceByInvoiceId($invoiceId);
             $errorMessage = $internationalRecord['irn_error_message'] ?? 'Failed to generate IRN';
-            echo json_encode(['success' => false, 'message' => $errorMessage,'irn'=>$irn]);
+            echo json_encode(['success' => false, 'message' => $errorMessage]);
         }
         exit;
     }
@@ -922,10 +923,26 @@ class InvoicesController
 
                 error_log("Alankit IRN generated successfully for invoice #$invoiceId: " . ($irnResponse['irn'] ?? 'No IRN'));
                 return true;
-            } else {
+            } else if($irnResponse && isset($irnResponse['InfoDtls'])) {
+                // Handle specific error code for duplicate IRN
+                $updateData = [
+                    'irn_status' => 'duplicate',
+                    'irn' => $irnResponse['InfoDtls'][0]['Desc']['Irn'] ?? null,
+                    'ack_number' => $irnResponse['InfoDtls'][0]['Desc']['AckNo'] ?? null,
+                    'ack_date' => isset($irnResponse['InfoDtls'][0]['Desc']['AckDt']) ? date('Y-m-d H:i:s', strtotime($irnResponse['InfoDtls'][0]['Desc']['AckDt'])) : null,
+                    'request_payload' => json_encode($payload),
+                    'response_payload' => json_encode($irnResponse),
+                    'irn_error_message' => json_encode($irnResponse['InfoDtls'][0]['InfMsg'] ?? 'Duplicate IRN error')
+                ];
+
+                $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
+                error_log("Alankit IRN generation duplicate for invoice #$invoiceId: " . ($irnResponse['InfoDtls']['InfMsg'] ?? 'Duplicate IRN error'));
+                return true;
+                
+            }else {
                 // Store request and error response for debugging
                 $updateData = [
-                    'irn_status' => 'failed',
+                    'irn_status' => 'failed.',
                     'request_payload' => json_encode($payload),
                     'response_payload' => json_encode($irnResponse ?? ['error' => 'No response received']),
                     'irn_error_message' => json_encode($irnResponse['ErrorDetails'] ?? 'Unknown error')
