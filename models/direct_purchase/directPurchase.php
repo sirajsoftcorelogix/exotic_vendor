@@ -334,7 +334,7 @@ class DirectPurchase
                 vendor_id, vendor_type, warehouse_id, invoice_number, invoice_date, invoice_file, currency,
                 subtotal, discount, igst_total, sgst_total, cgst_total, round_off, grand_total,
                 created_by
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
             $stmt = $this->conn->prepare($sql);
             $bindTypes = 'i' . 's' . 'i' . 'ssss' . str_repeat('d', 7) . 'i';
             $stmt->bind_param(
