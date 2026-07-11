@@ -922,7 +922,7 @@ class InvoicesController
 
                 error_log("Alankit IRN generated successfully for invoice #$invoiceId: " . ($irnResponse['irn'] ?? 'No IRN'));
                 return true;
-            } else if($irnResponse && isset($irnResponse['InfoDtls']['InfCd']) && $irnResponse['InfoDtls']['InfCd'] === 'DUPIRN') {
+            } else if($irnResponse && isset($irnResponse['InfoDtls']['Desc'])) {
                 // Handle specific error code for duplicate IRN
                 $updateData = [
                     'irn_status' => 'duplicate',
