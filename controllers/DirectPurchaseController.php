@@ -679,6 +679,7 @@ class DirectPurchaseController
     public function save()
     {
         is_login();
+        global $conn;
         global $directPurchaseModel;
         global $directPurchaseReturnModel;
 
@@ -710,7 +711,6 @@ class DirectPurchaseController
             $invoiceDate = null;
         }
 
-        global $conn;
         $lineFieldsError = $this->validateDirectPurchaseLinesFromPost($conn);
         if ($lineFieldsError !== null) {
             $_SESSION['direct_purchase_flash'] = ['type' => 'error', 'text' => $lineFieldsError];
