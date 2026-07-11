@@ -941,7 +941,7 @@ class InvoicesController
             }else {
                 // Store request and error response for debugging
                 $updateData = [
-                    'irn_status' => 'failed',
+                    'irn_status' => 'failed.',
                     'request_payload' => json_encode($payload),
                     'response_payload' => json_encode($irnResponse ?? ['error' => 'No response received']),
                     'irn_error_message' => json_encode($irnResponse['ErrorDetails'] ?? 'Unknown error')
