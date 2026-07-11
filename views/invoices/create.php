@@ -1280,7 +1280,8 @@
 
                                 // Redirect to orders list
                                 setTimeout(() => {
-                                    window.location.href = '<?php echo base_url('?page=orders&action=list'); ?>';
+                                    //window.location.href = '<?php echo base_url('?page=orders&action=list'); ?>';
+                                    window.location.href = '<?php echo base_url('?page=dispatch&action=create&invoice_id='); ?>' + invoiceId;
                                 }, 1000);
                             })
                             .catch(err => {
