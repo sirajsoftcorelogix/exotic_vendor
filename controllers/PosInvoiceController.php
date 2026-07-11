@@ -884,6 +884,8 @@ WHERE i.pos_flag = 1";
                 'color' => $row['color'],
                 'list_unit_pretax' => $toPretax((float)$row['list_incl_unit'], (float)$row['gst_rate']),
                 'discounted_unit_pretax' => $toPretax((float)$row['disc_incl_unit'], (float)$row['gst_rate']),
+                'list_unit_incl' => round((float)$row['list_incl_unit'], 2),
+                'discounted_unit_incl' => round((float)$row['disc_incl_unit'], 2),
             ];
         }
 
@@ -941,6 +943,75 @@ WHERE i.pos_flag = 1";
         return $listUnitPretax - $discUnitPretax > 0.001;
     }
 
+    private function posInvoiceFormatQty($quantity): int
+    {
+        return max(1, (int) round((float) $quantity));
+    }
+
+    private function posInvoiceUnitIncl(float $unitPretax, float $taxRate): float
+    {
+        if ($taxRate > 0) {
+            return round($unitPretax * (1 + ($taxRate / 100)), 2);
+        }
+
+        return round($unitPretax, 2);
+    }
+
+    /**
+     * GST-inclusive unit prices for PDF List / Disc columns.
+     *
+     * @return array{list: float, disc: float}
+     */
+    private function posInvoiceResolveLineDisplayPrices(
+        array $item,
+        int $index,
+        array $lineItemsMeta,
+        array $posDiscountMeta = []
+    ): array {
+        $meta = $this->posInvoiceLineMetaForItem($item, $index, $lineItemsMeta);
+        $taxRate = (float)($item['tax_rate'] ?? 0);
+        $qtyInt = $this->posInvoiceFormatQty($item['quantity'] ?? 1);
+
+        $discIncl = 0.0;
+        $listIncl = 0.0;
+        if (is_array($meta)) {
+            $discIncl = (float)($meta['discounted_unit_incl'] ?? 0);
+            $listIncl = (float)($meta['list_unit_incl'] ?? 0);
+        }
+
+        if ($discIncl <= 0) {
+            $lineTotal = round((float)($item['line_total'] ?? 0), 2);
+            $discIncl = $qtyInt > 0 ? round($lineTotal / $qtyInt, 2) : $lineTotal;
+        }
+        if ($discIncl <= 0) {
+            $pretax = $this->posInvoiceResolveLineUnitPretax($item, $index, $lineItemsMeta);
+            $discIncl = $this->posInvoiceUnitIncl($pretax['disc'], $taxRate);
+        }
+
+        if ($listIncl <= 0) {
+            $pretax = $this->posInvoiceResolveLineUnitPretax($item, $index, $lineItemsMeta);
+            $listIncl = $this->posInvoiceUnitIncl($pretax['list'], $taxRate);
+        }
+
+        if ($listIncl <= $discIncl + 0.02) {
+            $totalDiscount = round(
+                (float)($posDiscountMeta['coupon_discount'] ?? 0)
+                + (float)($posDiscountMeta['cash_discount'] ?? 0)
+                + (float)($posDiscountMeta['gift_discount'] ?? 0)
+                + (float)($posDiscountMeta['line_discount'] ?? 0),
+                2
+            );
+            if ($totalDiscount > 0.001) {
+                $listIncl = round($discIncl + ($totalDiscount / $qtyInt), 2);
+            }
+        }
+
+        return [
+            'list' => round($listIncl, 2),
+            'disc' => round($discIncl, 2),
+        ];
+    }
+
     /**
      * When stored line meta has list = discounted, rebuild list pretax from summary discounts.
      *
@@ -994,6 +1065,10 @@ WHERE i.pos_flag = 1";
 
             if (is_array($meta)) {
                 $lineItemsMeta[$index]['list_unit_pretax'] = $listPretax;
+                $lineItemsMeta[$index]['list_unit_incl'] = round($listInclUnit, 2);
+                if ((float)($meta['discounted_unit_incl'] ?? 0) <= 0) {
+                    $lineItemsMeta[$index]['discounted_unit_incl'] = round($discInclUnit, 2);
+                }
             } else {
                 $lineItemsMeta[$index] = [
                     'item_code' => (string)($item['item_code'] ?? ''),
@@ -1001,6 +1076,8 @@ WHERE i.pos_flag = 1";
                     'color' => '',
                     'list_unit_pretax' => $listPretax,
                     'discounted_unit_pretax' => $discPretax,
+                    'list_unit_incl' => round($listInclUnit, 2),
+                    'discounted_unit_incl' => round($discInclUnit, 2),
                 ];
             }
         }
@@ -1283,6 +1360,20 @@ WHERE i.pos_flag = 1";
                         </td>
                     </tr>';
 
+        if ($absorbed) {
+            if ($grandTotal <= 0) {
+                $grandTotal = $subInclGst;
+            }
+            if ($subInclGst <= 0) {
+                $subInclGst = $grandTotal;
+            }
+
+            $rows .= $this->posInvoiceSummaryLabelRow('Sub total (incl. GST)', $subInclGst, '', false, $colCount);
+            $rows .= $this->posInvoiceSummaryLabelRow('GRAND Total', $grandTotal, '', true, $colCount);
+
+            return $rows;
+        }
+
         $rows .= $this->posInvoiceSummaryLabelRow('Sub total (incl. GST)', $subInclGst, '', false, $colCount);
         if ($line > 0.001) {
             $rows .= $this->posInvoiceSummaryLabelRow('Line Discount', $line, '', false, $colCount);
@@ -1332,6 +1423,7 @@ WHERE i.pos_flag = 1";
         $totalSgstAmt = 0;
         $totalCgstAmt = 0;
         $totalIgstAmt = 0;
+        $sumLineTotals = 0.0;
         $lineItemsMeta = $this->parsePosInvoiceLineItemsMeta($invoice['notes'] ?? null);
         $posDiscountMeta = $this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null);
         if (!empty($posDiscountMeta)) {
@@ -1342,8 +1434,13 @@ WHERE i.pos_flag = 1";
         $posTableColCount = 13;
         if ($usePosItemLayout && (($invoice['status'] ?? '') !== 'proforma')) {
             foreach ($items as $scanIdx => $scanItem) {
-                $unitPrices = $this->posInvoiceResolveLineUnitPretax($scanItem, $scanIdx, $lineItemsMeta);
-                if ($this->posInvoiceLineHasUnitDiscount($unitPrices['list'], $unitPrices['disc'])) {
+                $displayPrices = $this->posInvoiceResolveLineDisplayPrices(
+                    $scanItem,
+                    $scanIdx,
+                    $lineItemsMeta,
+                    $posDiscountMeta
+                );
+                if ($this->posInvoiceLineHasUnitDiscount($displayPrices['list'], $displayPrices['disc'])) {
                     $showDiscPriceColumn = true;
                     break;
                 }
@@ -1363,7 +1460,6 @@ WHERE i.pos_flag = 1";
             // $totalSubtotal += $amount;
             // $totalTax += $taxAmount;
             // $totalAmount += $lineTotal;
-            $totalQuantity += $item['quantity'];
             $totalGstAmount += $item['tax_amount'];
 
             // // Determine tax type (simplified - assuming SGST/CGST for domestic, IGST for other)
@@ -1377,22 +1473,31 @@ WHERE i.pos_flag = 1";
             // $totalSgstAmt += $sgstAmt;
             // $totalCgstAmt += $cgstAmt;
             // $totalIgstAmt += $igstAmt;
+            $qtyInt = $this->posInvoiceFormatQty($item['quantity'] ?? 1);
+            $totalQuantity += $qtyInt;
             $totalSgstAmt += $item['sgst'];
             $totalCgstAmt += $item['cgst'];
             $totalIgstAmt += $item['igst'];
 
             $unitPrices = $this->posInvoiceResolveLineUnitPretax($item, $idx, $lineItemsMeta);
             $discUnitPretax = $unitPrices['disc'];
-            $listUnitPretax = $unitPrices['list'];
+            $displayPrices = $this->posInvoiceResolveLineDisplayPrices($item, $idx, $lineItemsMeta, $posDiscountMeta);
+            $listUnitDisplay = $showDiscPriceColumn ? $displayPrices['list'] : $unitPrices['list'];
+            $discUnitDisplay = $showDiscPriceColumn ? $displayPrices['disc'] : $discUnitPretax;
+            $taxRate = (float)($item['tax_rate'] ?? 0);
             $rateBase = $discUnitPretax > 0 ? $discUnitPretax : (float)($item['unit_price'] ?? 0);
+            $lineTotalDisplay = $showDiscPriceColumn
+                ? round($discUnitDisplay * $qtyInt, 2)
+                : round((float)($item['line_total'] ?? 0), 2);
+            $sumLineTotals += $lineTotalDisplay;
 
             if ($item['igst'] > 0) {
-                $igstRate = $rateBase > 0 ? ($item['igst'] / $item['quantity']) / ($rateBase / 100) : 0;
+                $igstRate = $rateBase > 0 ? ($item['igst'] / $qtyInt) / ($rateBase / 100) : 0;
                 $sgstRate = 0;
                 $cgstRate = 0;
             } else {
-                $sgstRate = $rateBase > 0 ? ($item['sgst'] / $item['quantity']) / ($rateBase / 100) : 0;
-                $cgstRate = $rateBase > 0 ? ($item['cgst'] / $item['quantity']) / ($rateBase / 100) : 0;
+                $sgstRate = $rateBase > 0 ? ($item['sgst'] / $qtyInt) / ($rateBase / 100) : 0;
+                $cgstRate = $rateBase > 0 ? ($item['cgst'] / $qtyInt) / ($rateBase / 100) : 0;
                 $igstRate = 0;
             }
 
@@ -1404,9 +1509,9 @@ WHERE i.pos_flag = 1";
                     $descHtml .= '<br><span style="font-size:12px;color:#444;">HSN: '
                         . htmlspecialchars($hsnCode) . '</span>';
                 }
-                $listPriceCell = '<td class="right">' . number_format($listUnitPretax, 2) . '</td>';
+                $listPriceCell = '<td class="right">' . number_format($listUnitDisplay, 2) . '</td>';
                 $discPriceCell = $showDiscPriceColumn
-                    ? '<td class="right">' . number_format($discUnitPretax, 2) . '</td>'
+                    ? '<td class="right">' . number_format($discUnitDisplay, 2) . '</td>'
                     : '';
                 $itemsrows .= '
                     <tr>
@@ -1414,14 +1519,14 @@ WHERE i.pos_flag = 1";
                         <td>' . htmlspecialchars($item['box_no'] ?? '') . '</td>
                         <td class="desc">' . $descHtml . '</td>
                         ' . $listPriceCell . $discPriceCell . '
-                        <td>' . $item['quantity'] . '</td>
+                        <td>' . $qtyInt . '</td>
                         <td class="right">' . number_format($sgstRate, 2) . '</td>
                         <td class="right">' . number_format($item['sgst'], 2) . '</td>
                         <td class="right">' . number_format($cgstRate, 2) . '</td>
                         <td class="right">' . number_format($item['cgst'], 2) . '</td>
                         <td class="right">' . number_format($igstRate, 2) . '</td>
                         <td class="right">' . number_format($item['igst'], 2) . '</td>
-                        <td class="right bold">' . number_format($item['line_total'], 2) . '</td>
+                        <td class="right bold">' . number_format($lineTotalDisplay, 2) . '</td>
                     </tr>
             ';
             } else {
@@ -1431,7 +1536,7 @@ WHERE i.pos_flag = 1";
                         <td>' . htmlspecialchars($item['box_no'] ?? '') . '</td>
                         <td class="desc">' . htmlspecialchars($item['item_name'] ?? '') . '</td>
                         <td>' . htmlspecialchars($item['hsn'] ?? '') . '</td>
-                        <td>' . $item['quantity'] . '</td>
+                        <td>' . $qtyInt . '</td>
                         <td class="right">' . number_format($item['unit_price'], 2) . '</td>
                         <td class="right">' . number_format($sgstRate, 2) . '</td>
                         <td class="right">' . number_format($item['sgst'], 2) . '</td>
@@ -1439,7 +1544,7 @@ WHERE i.pos_flag = 1";
                         <td class="right">' . number_format($item['cgst'], 2) . '</td>
                         <td class="right">' . number_format($igstRate, 2) . '</td>
                         <td class="right">' . number_format($item['igst'], 2) . '</td>
-                        <td class="right bold">' . number_format($item['line_total'], 2) . '</td>
+                        <td class="right bold">' . number_format($lineTotalDisplay, 2) . '</td>
                     </tr>
             ';
             }
@@ -1482,11 +1587,18 @@ WHERE i.pos_flag = 1";
                 'discounts_absorbed' => true,
             ];
         }
+        if ($usePosItemLayout && $showDiscPriceColumn && $sumLineTotals > 0.001) {
+            $posDiscountMeta['subtotal_goods'] = round($sumLineTotals, 2);
+            $posDiscountMeta['grand_total'] = round($sumLineTotals, 2);
+        }
         $summaryGrandTotal = round((float)($posDiscountMeta['grand_total'] ?? 0), 2);
         if ($summaryGrandTotal <= 0) {
             $summaryGrandTotal = round((float)$totalAmount, 2);
         }
         $summaryTaxAmount = round((float)($invoice['tax_amount'] ?? 0), 2);
+        $tableLineTotal = ($usePosItemLayout && $showDiscPriceColumn && $sumLineTotals > 0.001)
+            ? round($sumLineTotals, 2)
+            : round((float)$totalAmount, 2);
 
         // Add row for tax amount totals (below each SGST/CGST/IGST column)
         $posTotalDiscEmpty = ($usePosItemLayout && $showDiscPriceColumn)
@@ -1503,7 +1615,7 @@ WHERE i.pos_flag = 1";
                         <td class="right bold">' . number_format($totalCgstAmt, 2) . '</td>
                         <td class="right bold"></td>
                         <td class="right bold">' . number_format($totalIgstAmt, 2) . '</td>
-                        <td class="right bold">' . number_format($totalAmount, 2) . '</td>
+                        <td class="right bold">' . number_format($tableLineTotal, 2) . '</td>
                     </tr>
         ';
 
@@ -1776,7 +1888,9 @@ WHERE i.pos_flag = 1";
         if (!empty($result['success']) && !empty($result['invoice_id']) && $useSnapshot && is_array($posDiscountMeta)) {
             $posDiscountMeta['gst_total'] = round((float)($_POST['tax_amount'] ?? 0), 2);
             $posDiscountMeta['grand_total'] = round((float)($_POST['total_amount'] ?? 0), 2);
-            if (empty($posDiscountMeta['subtotal_goods']) && $posDiscountMeta['grand_total'] > 0) {
+            if (!empty($posDiscountMeta['discounts_absorbed'])) {
+                $posDiscountMeta['subtotal_goods'] = $posDiscountMeta['grand_total'];
+            } elseif (empty($posDiscountMeta['subtotal_goods']) && $posDiscountMeta['grand_total'] > 0) {
                 $posDiscountMeta['subtotal_goods'] = $posDiscountMeta['grand_total'];
             }
             if (!isset($posDiscountMeta['discounts_absorbed']) || $posDiscountMeta['discounts_absorbed'] === '') {
