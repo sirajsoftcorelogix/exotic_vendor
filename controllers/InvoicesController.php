@@ -407,6 +407,7 @@ class InvoicesController
 
         $internationalFields = ['pre_carriage_by', 'port_of_loading', 'port_of_discharge', 'country_of_origin', 'country_of_final_destination', 'final_destination', 'usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_bill_number', 'shipping_bill_date', 'shipping_port', 'shipping_ref_clm', 'shipping_currency', 'shipping_country_code', 'shipping_exp_duty'];
         $internationalData = [];
+        $isInternational = true;
         foreach ($internationalFields as $field) {
             if (isset($input[$field])) {
                 $value = $input[$field];
@@ -426,7 +427,7 @@ class InvoicesController
         $irn = $this->generateAlankitIrnForInvoice($invoiceId);
 
         if ($irn) {
-            echo json_encode(['success' => true, 'message' => 'IRN generated successfully']);
+            echo json_encode(['success' => true, 'message' => 'IRN generated successfully','is_international' => $isInternational]);
         } else {
             $internationalRecord = $invoiceModel->getInternationalInvoiceByInvoiceId($invoiceId);
             $errorMessage = $internationalRecord['irn_error_message'] ?? 'Failed to generate IRN';
