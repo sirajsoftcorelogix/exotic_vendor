@@ -756,7 +756,7 @@ class InvoicesController
                 'seller_country' => 'IN',
                 'buyer_name' => $customer['first_name'] . ' ' . $customer['last_name'] ?? '',
                 'buyer_address' => trim($buyerAddress) ? $buyerAddress : $shippingAddress,
-                'buyer_city' => trim($customer['city']) ?? $customer['city'] ?? $customer['shipping_city'],
+                'buyer_city' => trim($customer['city']) ? $customer['city'] : $customer['shipping_city'],
                 'buyer_state' => trim($customer['state']) ?? $customer['state'] ?? '',
                 'buyer_country' => trim($customer['country']) ?? $customer['country'] ?? 'IN',
                 'buyer_pincode' => $buyerPincode,
