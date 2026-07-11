@@ -430,7 +430,7 @@ class InvoicesController
         } else {
             $internationalRecord = $invoiceModel->getInternationalInvoiceByInvoiceId($invoiceId);
             $errorMessage = $internationalRecord['irn_error_message'] ?? 'Failed to generate IRN';
-            echo json_encode(['success' => false, 'message' => $errorMessage]);
+            echo json_encode(['success' => false, 'message' => $errorMessage,'irn'=>'Test']);
         }
         exit;
     }
