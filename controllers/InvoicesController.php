@@ -925,7 +925,7 @@ class InvoicesController
             } else if($irnResponse && isset($irnResponse['InfoDtls']['InfCd']) && $irnResponse['InfoDtls']['InfCd'] === 'DUPIRN') {
                 // Handle specific error code for duplicate IRN
                 $updateData = [
-                    'irn_status' => 'true',
+                    'irn_status' => 'duplicate',
                     'irn' => $irnResponse['InfoDtls']['Desc']['Irn'] ?? null,
                     'ack_number' => $irnResponse['InfoDtls']['Desc']['AckNo'] ?? null,
                     'ack_date' => isset($irnResponse['InfoDtls']['Desc']['AckDt']) ? date('Y-m-d H:i:s', strtotime($irnResponse['InfoDtls']['Desc']['AckDt'])) : null,
