@@ -359,7 +359,7 @@ return base64_encode($encryptedData);
                 'Addr1' => $invoice['seller_address'] ?? '',
                 'Loc' => $invoice['seller_city'] ?? '',
                 'Pin' => (int)($invoice['seller_pincode'] ?? 0),
-                'Stcd' => $invoice['seller_state_code'] ?? '',
+                'Stcd' => (string)($invoice['seller_state_code'] ?? ''),
                 'Ph' => $invoice['seller_phone'] ?? '',
                 'Em' => $invoice['seller_email'] ?? ''
             ],
@@ -416,14 +416,14 @@ return base64_encode($encryptedData);
                 'ExpDuty' => (float)($invoice['shipping_exp_duty'] ?? 0)
             ],
             "EwbDtls" => [
-                'TransId' => "12AWGPV7107B1Z1",
-                'TransName' => "XYZ EXPORTS",
-                'Distance' => 100,
-                'TransDocNo' => "DOC01",
-                'TransDocDt' => "18/08/2020",
-                'VehNo' => "ka123456",
-                'VehType' => "R",
-                'TransMode' => "1"
+                // 'TransId' => "12AWGPV7107B1Z1",
+                // 'TransName' => "XYZ EXPORTS",
+                // 'Distance' => 100,
+                // 'TransDocNo' => "DOC01",
+                // 'TransDocDt' => "18/08/2020",
+                // 'VehNo' => "ka123456",
+                // 'VehType' => "R",
+                // 'TransMode' => "1"
             ],
         ];
     }
