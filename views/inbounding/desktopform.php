@@ -2699,12 +2699,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const desktopInboundForm = document.getElementById('product_form');
         window.syncInboundDesktopFormBeforeSave = function () {
-            if (window.CKEDITOR && CKEDITOR.instances.long_description) {
-                CKEDITOR.instances.long_description.updateElement();
-            }
-            if (window.CKEDITOR && CKEDITOR.instances.long_description_india) {
-                CKEDITOR.instances.long_description_india.updateElement();
-            }
+            CKEDITOR?.instances?.long_description_input?.updateElement();
+            CKEDITOR?.instances?.long_description_india_input?.updateElement();
             if (authorTomSelect) syncAuthorPipeValue(authorTomSelect);
             if (editedByTomSelect) syncEditedByPipeValue(editedByTomSelect);
             bookLanguageFieldKeys.forEach(function (fieldKey) {
@@ -2744,27 +2740,11 @@ document.addEventListener('DOMContentLoaded', function() {
             CKEDITOR.replace('long_description_india_input', longDescriptionCkConfig);
         }
 
-        const copyLongDescriptionToIndiaBtn = document.getElementById('copy_long_description_to_india_btn');
-        if (copyLongDescriptionToIndiaBtn) {
-            copyLongDescriptionToIndiaBtn.addEventListener('click', function () {
-                let sourceText = '';
-                if (window.CKEDITOR && CKEDITOR.instances.long_description) {
-                    sourceText = CKEDITOR.instances.long_description.getData();
-                } else {
-                    const sourceEl = document.getElementById('long_description_input');
-                    sourceText = sourceEl ? sourceEl.value : '';
-                }
-
-                if (window.CKEDITOR && CKEDITOR.instances.long_description_india) {
-                    CKEDITOR.instances.long_description_india.setData(sourceText);
-                } else {
-                    const targetEl = document.getElementById('long_description_india_input');
-                    if (targetEl) {
-                        targetEl.value = sourceText;
-                    }
-                }
-            });
-        }
+        document.getElementById('copy_long_description_to_india_btn')?.addEventListener('click', function (e) {
+            e.preventDefault();
+            const html = CKEDITOR?.instances?.long_description_input?.getData() || '';
+            CKEDITOR?.instances?.long_description_india_input?.setData(html);
+        });
 
         const publisherEl = document.getElementById('publisher_select');
         if (publisherEl && typeof window.safeTomSelect === 'function') {
