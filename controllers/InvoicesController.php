@@ -936,7 +936,7 @@ class InvoicesController
 
                 $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
                 error_log("Alankit IRN generation duplicate for invoice #$invoiceId: " . ($irnResponse['InfoDtls']['InfMsg'] ?? 'Duplicate IRN error'));
-                return false;
+                return true;
                 
             }else {
                 // Store request and error response for debugging
