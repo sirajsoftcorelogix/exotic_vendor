@@ -430,7 +430,7 @@ class InvoicesController
         } else {
             $internationalRecord = $invoiceModel->getInternationalInvoiceByInvoiceId($invoiceId);
             $errorMessage = $internationalRecord['irn_error_message'] ?? 'Failed to generate IRN';
-            echo json_encode(['success' => false, 'message' => $errorMessage,'irn'=>$irn]);
+            echo json_encode(['success' => false, 'message' => $errorMessage]);
         }
         exit;
     }
@@ -756,7 +756,7 @@ class InvoicesController
                 'seller_country' => 'IN',
                 'buyer_name' => $customer['first_name'] . ' ' . $customer['last_name'] ?? '',
                 'buyer_address' => trim($buyerAddress) ? $buyerAddress : $shippingAddress,
-                'buyer_city' => trim($customer['city']) ? $customer['city'] : $customer['shipping_city'],
+                'buyer_city' => trim($customer['city']) ?? $customer['city'] ?? $customer['shipping_city'],
                 'buyer_state' => trim($customer['state']) ?? $customer['state'] ?? '',
                 'buyer_country' => trim($customer['country']) ?? $customer['country'] ?? 'IN',
                 'buyer_pincode' => $buyerPincode,
