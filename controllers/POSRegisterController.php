@@ -3585,10 +3585,6 @@ class POSRegisterController
         if ($giftStr !== '') {
             $query['giftvoucherdetails'] = $giftStr;
         }
-        $customReduce = trim((string)($_SESSION['pos_exotic_cart_custom_reduce'] ?? ''));
-        if ($customReduce !== '' && (float)$customReduce > 0) {
-            $query['custom_reduce'] = $customReduce;
-        }
         $extraHeaders = [];
         if ($discountStr !== '') {
             $extraHeaders[] = 'x-api-discountcoupondetails:' . $discountStr;
@@ -4450,6 +4446,21 @@ class POSRegisterController
             exit;
         }
 
+        $cashDiscount = round((float)($payload['receipt_cash_discount'] ?? 0), 2);
+        $sessionCustom = round((float)($_SESSION['pos_exotic_cart_custom_reduce'] ?? 0), 2);
+        if ($cashDiscount <= 0 && $sessionCustom > 0) {
+            $cashDiscount = $sessionCustom;
+        }
+        if ($cashDiscount > 0.001) {
+            $this->exotic_api_call('/cart/addcustomdiscount', 'GET', [
+                'custom_reduce' => number_format($cashDiscount, 2, '.', ''),
+            ]);
+            $_SESSION['pos_exotic_cart_custom_reduce'] = number_format($cashDiscount, 2, '.', '');
+        } elseif ($sessionCustom > 0.001) {
+            $this->exotic_api_call('/cart/addcustomdiscount', 'GET', ['custom_reduce' => '0']);
+            unset($_SESSION['pos_exotic_cart_custom_reduce']);
+        }
+
         $ctx = $this->exoticCartDiscountContext();
         $retrieve = $this->exotic_api_call(
             '/cart/retrieve',
@@ -4536,28 +4547,26 @@ class POSRegisterController
             exit;
         }
 
-        $posLinePrices = $payload['pos_line_prices'] ?? null;
-        $receiptCouponDiscount = round((float)($payload['receipt_coupon_discount'] ?? 0), 2);
-        $receiptCashDiscount = round((float)($payload['receipt_cash_discount'] ?? 0), 2);
-        $receiptGiftDiscount = round((float)($payload['receipt_gift_discount'] ?? 0), 2);
-        if ((!is_array($posLinePrices) || count($posLinePrices) === 0)) {
-            $discountPool = $receiptCouponDiscount + $receiptCashDiscount + $receiptGiftDiscount;
-            if ($discountPool > 0.001) {
-                $posLinePrices = $this->buildPosLinePricesFromCartDiscountPool($cartData, $discountPool);
-            }
+        $editLinePrices = $payload['list_line_prices'] ?? null;
+        if (!is_array($editLinePrices) || count($editLinePrices) === 0) {
+            $editLinePrices = $this->buildPosListLinePricesFromCart($cartData);
         }
-        if (is_array($posLinePrices) && count($posLinePrices) > 0) {
-            if (count($posLinePrices) !== count($items)) {
+        $invoiceLinePrices = $payload['pos_line_prices'] ?? [];
+        if (!is_array($invoiceLinePrices)) {
+            $invoiceLinePrices = [];
+        }
+        if (is_array($editLinePrices) && count($editLinePrices) > 0) {
+            if (count($editLinePrices) !== count($items)) {
                 echo json_encode([
                     'success' => false,
-                    'message' => 'Line price payload does not match the current cart (' . count($posLinePrices) . ' rows vs '
+                    'message' => 'Line price payload does not match the current cart (' . count($editLinePrices) . ' rows vs '
                         . count($items) . ' items). Refresh the cart and try again.',
                     'order_number' => $orderNumber,
                     'order_create_debug' => $_SESSION['pos_order_create_api_debug'] ?? null,
                 ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
                 exit;
             }
-            foreach ($posLinePrices as $ln) {
+            foreach ($editLinePrices as $ln) {
                 if (!is_array($ln)) {
                     echo json_encode([
                         'success' => false,
@@ -4575,7 +4584,7 @@ class POSRegisterController
                     exit;
                 }
             }
-            $editRes = $this->exoticPosEditOrderPrices($orderNumber, $posLinePrices);
+            $editRes = $this->exoticPosEditOrderPrices($orderNumber, $editLinePrices);
             if (!$this->isExoticCartSuccess($editRes)) {
                 $em = $this->extractExoticCartUserMessage($editRes);
                 if ($em === '') {
@@ -4654,12 +4663,14 @@ class POSRegisterController
             'subtotal_goods' => round((float)($payload['receipt_subtotal_goods'] ?? $orderTotal), 2),
             'gst_total' => round((float)($payload['receipt_gst_total'] ?? 0), 2),
             'coupon_discount' => round((float)($payload['receipt_coupon_discount'] ?? 0), 2),
-            'cash_discount' => round((float)($payload['receipt_cash_discount'] ?? 0), 2),
+            'cash_discount' => $cashDiscount,
             'gift_discount' => round((float)($payload['receipt_gift_discount'] ?? 0), 2),
             'line_discount' => round((float)($payload['receipt_line_discount'] ?? 0), 2),
             'grand_total' => $orderTotal,
-            'line_prices' => is_array($posLinePrices) ? $posLinePrices : [],
-            'list_line_prices' => is_array($payload['list_line_prices'] ?? null) ? $payload['list_line_prices'] : [],
+            'line_prices' => $invoiceLinePrices,
+            'list_line_prices' => is_array($payload['list_line_prices'] ?? null)
+                ? $payload['list_line_prices']
+                : (is_array($editLinePrices) ? $editLinePrices : []),
             'discounts_absorbed' => !empty($payload['receipt_discounts_absorbed']),
             'custom_discount_mode' => trim((string)($payload['custom_discount_mode'] ?? '')),
             'custom_discount_value' => round((float)($payload['custom_discount_value'] ?? 0), 2),
@@ -4690,7 +4701,7 @@ class POSRegisterController
         }
         $receiptGstTotal = round((float)($payload['receipt_gst_total'] ?? 0), 2);
         $receiptCouponDiscount = round((float)($payload['receipt_coupon_discount'] ?? 0), 2);
-        $receiptCashDiscount = round((float)($payload['receipt_cash_discount'] ?? 0), 2);
+        $receiptCashDiscount = $cashDiscount;
         $receiptGiftDiscount = round((float)($payload['receipt_gift_discount'] ?? 0), 2);
         $receiptLineDiscount = round((float)($payload['receipt_line_discount'] ?? 0), 2);
 
@@ -5208,103 +5219,42 @@ class POSRegisterController
     }
 
     /**
-     * POST /api/order/pos_editorderprices — POS item-level unit prices after order/create.
-     *
-     * @param list<array{itemcode?: string, size?: string, color?: string, price?: string}> $lines
-     *
-     * @return array{data: mixed, code: int, raw: string}
-     */
-    /**
-     * Spread cart-level coupon/custom discount across lines for pos_editorderprices when the client did not send overrides.
+     * GST-inclusive list unit (`itemprice`) for pos_editorderprices; order-level discounts apply separately.
      *
      * @return list<array{itemcode: string, size: string, color: string, price: string}>
      */
-    private function buildPosLinePricesFromCartDiscountPool(array $cartData, float $pool): array
+    private function buildPosListLinePricesFromCart(array $cartData): array
     {
-        $pool = round(max(0, $pool), 2);
-        if ($pool <= 0.001) {
-            return [];
-        }
-
         $items = $cartData['cartitems'] ?? $cartData['cart_items'] ?? $cartData['items'] ?? $cartData['lines'] ?? [];
         if (!is_array($items) || count($items) === 0) {
             return [];
         }
 
-        $rows = [];
-        $weights = [];
+        $out = [];
         foreach ($items as $row) {
             if (!is_array($row)) {
                 continue;
             }
-            $qty = (float)($row['quantity'] ?? $row['qty'] ?? $row['prqt'] ?? 1);
-            if ($qty <= 0) {
-                $qty = 1;
-            }
-            $unit = null;
-            foreach (['unit_price', 'item_price', 'single_price', 'original_price', 'price', 'selling_price'] as $k) {
-                if (isset($row[$k]) && $row[$k] !== '' && is_numeric($row[$k])) {
-                    $unit = (float)$row[$k];
-                    break;
-                }
-            }
-            if ($unit === null) {
-                foreach (['line_total', 'linetotal', 'lineamount', 'amount'] as $k) {
-                    if (isset($row[$k]) && $row[$k] !== '' && is_numeric($row[$k])) {
-                        $unit = (float)$row[$k] / $qty;
-                        break;
-                    }
-                }
-            }
-            if ($unit === null || $unit < 0) {
-                $unit = 0.0;
-            }
-            $ext = round($unit * $qty, 2);
-            $rows[] = [
-                'itemcode' => trim((string)($row['code'] ?? $row['item_code'] ?? $row['sku'] ?? '')),
-                'size' => trim((string)($row['size'] ?? '')),
-                'color' => trim((string)($row['color'] ?? '')),
-                'qty' => $qty,
-                'extended' => $ext,
-            ];
-            $weights[] = $ext;
-        }
-
-        if (count($rows) === 0) {
-            return [];
-        }
-
-        $sumW = array_sum($weights);
-        $remaining = $pool;
-        $cuts = [];
-        $n = count($rows);
-        for ($i = 0; $i < $n; $i++) {
-            if ($i === $n - 1) {
-                $cuts[$i] = round($remaining, 2);
-            } elseif ($sumW > 0.001) {
-                $share = round(($pool * $weights[$i]) / $sumW, 2);
-                $cuts[$i] = $share;
-                $remaining = round($remaining - $share, 2);
-            } else {
-                $share = round($pool / $n, 2);
-                $cuts[$i] = $share;
-                $remaining = round($remaining - $share, 2);
-            }
-        }
-
-        $out = [];
-        foreach ($rows as $i => $row) {
-            if ($row['itemcode'] === '') {
+            $itemcode = trim((string)($row['code'] ?? $row['item_code'] ?? $row['itemcode'] ?? ''));
+            if ($itemcode === '') {
                 continue;
             }
-            $cut = min($row['extended'], max(0, $cuts[$i] ?? 0));
-            $effExt = max(0, round($row['extended'] - $cut, 2));
-            $unitAfter = $row['qty'] >= 1 ? round($effExt / $row['qty'], 2) : $effExt;
+            $unit = (float)($row['itemprice'] ?? $row['item_price'] ?? $row['unit_price'] ?? $row['price'] ?? 0);
+            if ($unit <= 0) {
+                $qty = max(1, (int)($row['qty'] ?? $row['quantity'] ?? 1));
+                $lineTotal = (float)($row['linetotal'] ?? $row['line_total'] ?? $row['finalprice'] ?? 0);
+                if ($lineTotal > 0) {
+                    $unit = $lineTotal / $qty;
+                }
+            }
+            if ($unit <= 0) {
+                continue;
+            }
             $out[] = [
-                'itemcode' => $row['itemcode'],
-                'size' => $row['size'],
-                'color' => $row['color'],
-                'price' => number_format($unitAfter, 2, '.', ''),
+                'itemcode' => $itemcode,
+                'size' => trim((string)($row['size'] ?? '')),
+                'color' => trim((string)($row['color'] ?? '')),
+                'price' => number_format($unit, 2, '.', ''),
             ];
         }
 
