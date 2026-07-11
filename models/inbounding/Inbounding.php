@@ -893,6 +893,7 @@ class Inbounding {
         $this->ensureInboundAccountsGroupColumn();
         $this->ensureInboundBookLanguageColumns();
         $this->ensureInboundLongDescriptionColumn();
+        $this->ensureInboundLongDescriptionIndiaColumn();
 
         // 1. Get Main Inbound Data
         // $sql = "SELECT vi.*, vv.vendor_name FROM vp_inbound AS vi LEFT JOIN vp_vendors AS vv ON vi.vendor_code = vv.id WHERE vi.id = $id";
@@ -1076,6 +1077,7 @@ class Inbounding {
         $this->ensureInboundAccountsGroupColumn();
         $this->ensureInboundBookLanguageColumns();
         $this->ensureInboundLongDescriptionColumn();
+        $this->ensureInboundLongDescriptionIndiaColumn();
 
         // Prevent ID from being in the update list
         if (isset($data['id'])) unset($data['id']);
@@ -1151,6 +1153,14 @@ class Inbounding {
         $res = $this->conn->query("SHOW COLUMNS FROM vp_inbound LIKE 'long_description'");
         if ($res && $res->num_rows === 0) {
             @$this->conn->query("ALTER TABLE vp_inbound ADD COLUMN long_description TEXT NULL DEFAULT NULL AFTER snippet_description");
+        }
+    }
+
+    private function ensureInboundLongDescriptionIndiaColumn(): void
+    {
+        $res = $this->conn->query("SHOW COLUMNS FROM vp_inbound LIKE 'long_description_india'");
+        if ($res && $res->num_rows === 0) {
+            @$this->conn->query("ALTER TABLE vp_inbound ADD COLUMN long_description_india TEXT NULL DEFAULT NULL AFTER long_description");
         }
     }
 

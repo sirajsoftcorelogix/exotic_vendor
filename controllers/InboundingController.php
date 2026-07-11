@@ -195,7 +195,7 @@ class InboundingController {
                     $row['redirect'] ?? '',                                     
                     $row['snippet_description'] ?? '',
                     $row['long_description'] ?? '',
-                    '',
+                    $row['long_description_india'] ?? '',
                     
                     '',                                     
                     $row['optionals'] ?? '',        
@@ -1601,6 +1601,7 @@ class InboundingController {
             'key_words'           => $_POST['key_words'] ?? '',
             'snippet_description' => $_POST['snippet_description'] ?? '',
             'long_description' => $_POST['long_description'] ?? '',
+            'long_description_india' => $_POST['long_description_india'] ?? '',
             'vendor_code' => trim((string) ($_POST['vendor_code'] ?? '')) === '' ? null : $_POST['vendor_code'],
             'cp'                  => (float) ($_POST['cp'] ?? 0),
             'price_india_mrp'     => (float) ($_POST['price_india_mrp'] ?? 0),
@@ -2409,7 +2410,7 @@ class InboundingController {
             $API_data['search_category'] = ltrim($raw_string ?? '', '|');            
         }
         $API_data['long_description'] = $d['long_description'] ?? '';
-        $API_data['long_description_india'] = '';
+        $API_data['long_description_india'] = $d['long_description_india'] ?? '';
         $API_data['aplus_content_ids'] = '';
         if (!empty($d['optionals'])) {
             $API_data['optionals'] = str_replace(',', '|', $d['optionals']);

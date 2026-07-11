@@ -314,6 +314,7 @@ function inbound_api_build_item_identification_modify_fields(array $d): array
     $append('keywords', $d['key_words'] ?? '');
     $append('snippet_description', $d['snippet_description'] ?? '');
     $append('long_description', $d['long_description'] ?? '');
+    $append('long_description_india', $d['long_description_india'] ?? '');
     if (!empty($d['optionals'])) {
         $fields['optionals'] = str_replace(',', '|', (string) $d['optionals']);
     }

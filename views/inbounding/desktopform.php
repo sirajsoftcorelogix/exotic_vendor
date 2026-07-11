@@ -1708,6 +1708,24 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         echo str_replace('</textarea', '&lt;/textarea', $saved_long_description);
                     ?></textarea>
                 </div>
+                <div class="mb-[15px]">
+                    <div class="flex items-center justify-between mb-[5px]">
+                        <label class="block text-xs font-bold text-[#222]">Long Description (India):</label>
+                        <button
+                            type="button"
+                            id="copy_long_description_to_india_btn"
+                            class="text-[11px] font-bold text-[#17a2b8] hover:text-[#138496] underline cursor-pointer bg-transparent border-none p-0"
+                        >Copy from Long Description</button>
+                    </div>
+                    <textarea
+                        id="long_description_india_input"
+                        name="long_description_india"
+                        class="w-full min-h-[120px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] focus:outline-none focus:border-[#999] resize-y"
+                    ><?php
+                        $saved_long_description_india = (string) ($data['form2']['long_description_india'] ?? '');
+                        echo str_replace('</textarea', '&lt;/textarea', $saved_long_description_india);
+                    ?></textarea>
+                </div>
                 <div class="mb-4">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Select Optionals:</label>
                     <div class="border border-[#ccc] rounded-[4px] bg-white h-[200px] flex flex-col">
@@ -2684,6 +2702,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (window.CKEDITOR && CKEDITOR.instances.long_description) {
                 CKEDITOR.instances.long_description.updateElement();
             }
+            if (window.CKEDITOR && CKEDITOR.instances.long_description_india) {
+                CKEDITOR.instances.long_description_india.updateElement();
+            }
             if (authorTomSelect) syncAuthorPipeValue(authorTomSelect);
             if (editedByTomSelect) syncEditedByPipeValue(editedByTomSelect);
             bookLanguageFieldKeys.forEach(function (fieldKey) {
@@ -2705,16 +2726,43 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
+        const longDescriptionCkConfig = {
+            toolbar: [
+                { name: 'basicstyles', items: ['Bold', 'Italic', 'Underline'] },
+                { name: 'paragraph', items: ['NumberedList', 'BulletedList'] },
+                { name: 'clipboard', items: ['Undo', 'Redo'] }
+            ],
+            removePlugins: 'image,uploadimage,uploadfile,filebrowser,flash,iframe,forms',
+            versionCheck: false,
+            height: 200
+        };
+
         if (window.CKEDITOR && document.getElementById('long_description_input')) {
-            CKEDITOR.replace('long_description_input', {
-                toolbar: [
-                    { name: 'basicstyles', items: ['Bold', 'Italic', 'Underline'] },
-                    { name: 'paragraph', items: ['NumberedList', 'BulletedList'] },
-                    { name: 'clipboard', items: ['Undo', 'Redo'] }
-                ],
-                removePlugins: 'image,uploadimage,uploadfile,filebrowser,flash,iframe,forms',
-                versionCheck: false,
-                height: 200
+            CKEDITOR.replace('long_description_input', longDescriptionCkConfig);
+        }
+        if (window.CKEDITOR && document.getElementById('long_description_india_input')) {
+            CKEDITOR.replace('long_description_india_input', longDescriptionCkConfig);
+        }
+
+        const copyLongDescriptionToIndiaBtn = document.getElementById('copy_long_description_to_india_btn');
+        if (copyLongDescriptionToIndiaBtn) {
+            copyLongDescriptionToIndiaBtn.addEventListener('click', function () {
+                let sourceText = '';
+                if (window.CKEDITOR && CKEDITOR.instances.long_description) {
+                    sourceText = CKEDITOR.instances.long_description.getData();
+                } else {
+                    const sourceEl = document.getElementById('long_description_input');
+                    sourceText = sourceEl ? sourceEl.value : '';
+                }
+
+                if (window.CKEDITOR && CKEDITOR.instances.long_description_india) {
+                    CKEDITOR.instances.long_description_india.setData(sourceText);
+                } else {
+                    const targetEl = document.getElementById('long_description_india_input');
+                    if (targetEl) {
+                        targetEl.value = sourceText;
+                    }
+                }
             });
         }
 
