@@ -397,7 +397,7 @@ class InvoicesController
             echo json_encode(['success' => false, 'message' => 'Invalid invoice ID']);
             exit;
         }
-
+        
         // Check if invoice exists and is international
         $invoice = $invoiceModel->getInvoiceById($invoiceId);
         if (!$invoice || $invoice['currency'] === 'INR') {
@@ -755,8 +755,8 @@ class InvoicesController
                 'seller_state_code' => $firm['state_code'] ?? '',
                 'seller_country' => 'IN',
                 'buyer_name' => $customer['first_name'] . ' ' . $customer['last_name'] ?? '',
-                'buyer_address' => $buyerAddress,
-                'buyer_city' => trim($customer['city']) ?? $customer['city'] ?? '',
+                'buyer_address' => trim($buyerAddress) ? $buyerAddress : $shippingAddress,
+                'buyer_city' => trim($customer['city']) ? $customer['city'] : $customer['shipping_city'],
                 'buyer_state' => trim($customer['state']) ?? $customer['state'] ?? '',
                 'buyer_country' => trim($customer['country']) ?? $customer['country'] ?? 'IN',
                 'buyer_pincode' => $buyerPincode,
