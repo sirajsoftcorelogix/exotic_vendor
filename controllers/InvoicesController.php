@@ -922,7 +922,23 @@ class InvoicesController
 
                 error_log("Alankit IRN generated successfully for invoice #$invoiceId: " . ($irnResponse['irn'] ?? 'No IRN'));
                 return true;
-            } else {
+            } else if($irnResponse && isset($irnResponse['InfoDtls']['InfCd']) && $irnResponse['InfoDtls']['InfCd'] === 'DUPIRN') {
+                // Handle specific error code for duplicate IRN
+                $updateData = [
+                    'irn_status' => 'true',
+                    'irn' => $irnResponse['InfoDtls']['Desc']['Irn'] ?? null,
+                    'ack_number' => $irnResponse['InfoDtls']['Desc']['AckNo'] ?? null,
+                    'ack_date' => isset($irnResponse['InfoDtls']['Desc']['AckDt']) ? date('Y-m-d H:i:s', strtotime($irnResponse['InfoDtls']['Desc']['AckDt'])) : null,
+                    'request_payload' => json_encode($payload),
+                    'response_payload' => json_encode($irnResponse),
+                    'irn_error_message' => json_encode($irnResponse['InfoDtls']['InfMsg'] ?? 'Duplicate IRN error')
+                ];
+
+                $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
+                error_log("Alankit IRN generation duplicate for invoice #$invoiceId: " . ($irnResponse['InfoDtls']['InfMsg'] ?? 'Duplicate IRN error'));
+                return false;
+                
+            }else {
                 // Store request and error response for debugging
                 $updateData = [
                     'irn_status' => 'failed',
