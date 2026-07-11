@@ -359,7 +359,7 @@ return base64_encode($encryptedData);
                 'Addr1' => $invoice['seller_address'] ?? '',
                 'Loc' => $invoice['seller_city'] ?? '',
                 'Pin' => (int)($invoice['seller_pincode'] ?? 0),
-                'Stcd' => $invoice['seller_state_code'] ?? '',
+                'Stcd' => (string)($invoice['seller_state_code'] ?? ''),
                 'Ph' => $invoice['seller_phone'] ?? '',
                 'Em' => $invoice['seller_email'] ?? ''
             ],

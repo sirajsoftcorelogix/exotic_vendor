@@ -397,7 +397,7 @@ class InvoicesController
             echo json_encode(['success' => false, 'message' => 'Invalid invoice ID']);
             exit;
         }
-
+        
         // Check if invoice exists and is international
         $invoice = $invoiceModel->getInvoiceById($invoiceId);
         if (!$invoice || $invoice['currency'] === 'INR') {
