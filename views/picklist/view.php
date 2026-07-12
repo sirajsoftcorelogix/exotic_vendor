@@ -28,11 +28,19 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
             </p>
         </div>
         <div class="flex flex-wrap gap-2">
-            <a href="?page=picklist&action=tablet&id=<?= $plId ?>" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700">
-                <i class="fas fa-tablet-alt mr-1"></i> Tablet mode
+            <a href="?page=picklist&action=tablet&id=<?= $plId ?>" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 shadow-sm">
+                <i class="fas fa-tablet-alt" aria-hidden="true"></i> Tablet mode
             </a>
-            <a href="?page=picklist&action=view&id=<?= $plId ?>&print=1" target="_blank" class="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm font-semibold hover:bg-gray-800">
-                <i class="fas fa-print mr-1"></i> Print
+            <a href="?page=picklist&action=view&id=<?= $plId ?>&print=1" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 text-white text-sm font-semibold hover:bg-gray-800 shadow-sm">
+                <i class="fas fa-print" aria-hidden="true"></i> Print
+            </a>
+            <?php
+            $deleteConfirm = 'Delete picklist ' . (string) ($picklist['picklist_number'] ?? '') . '? Orders on this list will be set back to Item Received where applicable.';
+            ?>
+            <a href="?page=picklist&action=delete&id=<?= $plId ?>"
+               onclick="return confirm(<?= json_encode($deleteConfirm, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>);"
+               class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm font-semibold hover:bg-red-100 shadow-sm">
+                <i class="fas fa-trash-alt" aria-hidden="true"></i> Delete
             </a>
         </div>
     </div>
@@ -53,6 +61,7 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
                         <th class="px-4 py-3">Cover Type</th>
                     <?php endif; ?>
                     <th class="px-4 py-3">Status</th>
+                    <th class="px-4 py-3 text-right">Actions</th>
                 </tr>
             </thead>
             <tbody class="divide-y">
@@ -92,10 +101,21 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
                                 <span class="text-amber-700 font-medium">Pending</span>
                             <?php endif; ?>
                         </td>
+                        <td class="px-4 py-3 text-right whitespace-nowrap">
+                            <?php
+                            $removeConfirm = 'Remove this item from the picklist? The order will be set back to Item Received if applicable.';
+                            ?>
+                            <a href="?page=picklist&action=delete_item&item_id=<?= (int) ($item['id'] ?? 0) ?>"
+                               onclick="return confirm(<?= json_encode($removeConfirm, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>);"
+                               class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-red-200 bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100"
+                               title="Remove from picklist">
+                                <i class="fas fa-times" aria-hidden="true"></i> Remove
+                            </a>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
                 <?php if ($items === []): ?>
-                    <?php $colspan = $showBookColumns ? 10 : 8; ?>
+                    <?php $colspan = $showBookColumns ? 11 : 9; ?>
                     <tr><td colspan="<?= $colspan ?>" class="px-4 py-8 text-center text-gray-500">No items on this picklist.</td></tr>
                 <?php endif; ?>
             </tbody>

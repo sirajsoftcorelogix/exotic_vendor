@@ -1787,6 +1787,12 @@ switch ($page) {
             case 'get_pickers':
                 $controller->getPickers();
                 break;
+            case 'delete':
+                $controller->delete();
+                break;
+            case 'delete_item':
+                $controller->deleteItem();
+                break;
             default:
                 $controller->index();
                 break;

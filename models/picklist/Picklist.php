@@ -701,4 +701,168 @@ class Picklist
         $stmt->close();
         return ['success' => true, 'message' => 'Picker assigned.'];
     }
+
+    /**
+     * @return array{success: bool, message?: string, order_ids?: int[], picklist_number?: string}
+     */
+    public function deletePicklist(int $id): array
+    {
+        if ($id <= 0) {
+            return ['success' => false, 'message' => 'Invalid picklist.'];
+        }
+
+        $picklist = $this->getPicklistById($id);
+        if (!$picklist) {
+            return ['success' => false, 'message' => 'Picklist not found.'];
+        }
+
+        $orderIds = [];
+        $stmt = $this->db->prepare('SELECT DISTINCT order_id FROM vp_picklist_items WHERE picklist_id = ?');
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        while ($res && ($row = $res->fetch_assoc())) {
+            $oid = (int) ($row['order_id'] ?? 0);
+            if ($oid > 0) {
+                $orderIds[] = $oid;
+            }
+        }
+        $stmt->close();
+        $orderIds = array_values(array_unique($orderIds));
+
+        $del = $this->db->prepare('DELETE FROM vp_picklists WHERE id = ? LIMIT 1');
+        if (!$del) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
+        }
+        $del->bind_param('i', $id);
+        if (!$del->execute() || $del->affected_rows === 0) {
+            $del->close();
+            return ['success' => false, 'message' => 'Failed to delete picklist.'];
+        }
+        $del->close();
+
+        return [
+            'success' => true,
+            'message' => 'Picklist deleted.',
+            'order_ids' => $orderIds,
+            'picklist_number' => (string) ($picklist['picklist_number'] ?? ''),
+        ];
+    }
+
+    /**
+     * @return array{success: bool, message?: string, order_id?: int, picklist_id?: int, picklist_number?: string, picklist_deleted?: bool}
+     */
+    public function deletePicklistItem(int $itemId): array
+    {
+        if ($itemId <= 0) {
+            return ['success' => false, 'message' => 'Invalid item.'];
+        }
+
+        $sql = "SELECT pli.*, pl.picklist_number, pl.status AS picklist_status
+                FROM vp_picklist_items pli
+                INNER JOIN vp_picklists pl ON pl.id = pli.picklist_id
+                WHERE pli.id = ? LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $itemId);
+        $stmt->execute();
+        $item = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        if (!$item) {
+            return ['success' => false, 'message' => 'Picklist item not found.'];
+        }
+
+        $picklistId = (int) ($item['picklist_id'] ?? 0);
+        $orderId = (int) ($item['order_id'] ?? 0);
+        $picklistNumber = (string) ($item['picklist_number'] ?? '');
+
+        $this->db->begin_transaction();
+        try {
+            $del = $this->db->prepare('DELETE FROM vp_picklist_items WHERE id = ? LIMIT 1');
+            $del->bind_param('i', $itemId);
+            if (!$del->execute() || $del->affected_rows === 0) {
+                throw new RuntimeException('Failed to remove item.');
+            }
+            $del->close();
+
+            $remaining = $this->countPicklistItems($picklistId);
+            $picklistDeleted = false;
+            if ($remaining === 0) {
+                $plDel = $this->db->prepare('DELETE FROM vp_picklists WHERE id = ? LIMIT 1');
+                $plDel->bind_param('i', $picklistId);
+                $plDel->execute();
+                $plDel->close();
+                $picklistDeleted = true;
+            } else {
+                $this->recalculatePicklistStatus($picklistId);
+            }
+
+            $this->db->commit();
+
+            return [
+                'success' => true,
+                'message' => 'Item removed from picklist.',
+                'order_id' => $orderId,
+                'picklist_id' => $picklistId,
+                'picklist_number' => $picklistNumber,
+                'picklist_deleted' => $picklistDeleted,
+            ];
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    private function countPicklistItems(int $picklistId): int
+    {
+        if ($picklistId <= 0) {
+            return 0;
+        }
+        $stmt = $this->db->prepare('SELECT COUNT(*) AS cnt FROM vp_picklist_items WHERE picklist_id = ?');
+        $stmt->bind_param('i', $picklistId);
+        $stmt->execute();
+        $cnt = (int) ($stmt->get_result()->fetch_assoc()['cnt'] ?? 0);
+        $stmt->close();
+        return $cnt;
+    }
+
+    private function recalculatePicklistStatus(int $picklistId): void
+    {
+        if ($picklistId <= 0) {
+            return;
+        }
+
+        $stmt = $this->db->prepare(
+            "SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending
+             FROM vp_picklist_items WHERE picklist_id = ?"
+        );
+        $stmt->bind_param('i', $picklistId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        $total = (int) ($row['total'] ?? 0);
+        $pending = (int) ($row['pending'] ?? 0);
+        if ($total === 0) {
+            return;
+        }
+
+        if ($pending === 0) {
+            $status = 'completed';
+        } elseif ($pending === $total) {
+            $status = 'pending';
+        } else {
+            $status = 'in_progress';
+        }
+
+        $upd = $this->db->prepare('UPDATE vp_picklists SET status = ? WHERE id = ?');
+        $upd->bind_param('si', $status, $picklistId);
+        $upd->execute();
+        $upd->close();
+    }
 }

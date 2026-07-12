@@ -195,6 +195,162 @@ class PicklistController
         exit;
     }
 
+    public function delete()
+    {
+        is_login();
+        global $picklistModel;
+        global $ordersModel;
+        global $commanModel;
+
+        $id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+        if ($id <= 0) {
+            $_SESSION['picklist_flash'] = ['type' => 'error', 'text' => 'Invalid picklist.'];
+            header('Location: index.php?page=picklist&action=list');
+            exit;
+        }
+
+        $picklist = $picklistModel->getPicklistById($id);
+        if (!$picklist) {
+            $_SESSION['picklist_flash'] = ['type' => 'error', 'text' => 'Picklist not found.'];
+            header('Location: index.php?page=picklist&action=list');
+            exit;
+        }
+
+        $result = $picklistModel->deletePicklist($id);
+        if (empty($result['success'])) {
+            $_SESSION['picklist_flash'] = [
+                'type' => 'error',
+                'text' => (string) ($result['message'] ?? 'Could not delete picklist.'),
+            ];
+            header('Location: index.php?page=picklist&action=list');
+            exit;
+        }
+
+        $picklistNumber = (string) ($result['picklist_number'] ?? $picklist['picklist_number'] ?? '');
+        $orderIds = $result['order_ids'] ?? [];
+        foreach ($orderIds as $oid) {
+            $this->revertOrderAfterPicklistRemoval((int) $oid, $picklistNumber, $ordersModel, $commanModel, false);
+        }
+
+        $_SESSION['picklist_flash'] = [
+            'type' => 'success',
+            'text' => 'Picklist ' . $picklistNumber . ' deleted.',
+        ];
+        header('Location: index.php?page=picklist&action=list');
+        exit;
+    }
+
+    public function deleteItem()
+    {
+        is_login();
+        global $picklistModel;
+        global $ordersModel;
+        global $commanModel;
+
+        $itemId = (int) ($_POST['item_id'] ?? $_GET['item_id'] ?? 0);
+        $wantsJson = ($_SERVER['REQUEST_METHOD'] === 'POST')
+            || (isset($_GET['format']) && (string) $_GET['format'] === 'json');
+
+        if ($itemId <= 0) {
+            if ($wantsJson) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Invalid item.']);
+                exit;
+            }
+            $_SESSION['picklist_flash'] = ['type' => 'error', 'text' => 'Invalid picklist item.'];
+            header('Location: index.php?page=picklist&action=list');
+            exit;
+        }
+
+        $result = $picklistModel->deletePicklistItem($itemId);
+        if (empty($result['success'])) {
+            if ($wantsJson) {
+                header('Content-Type: application/json');
+                echo json_encode($result);
+                exit;
+            }
+            $_SESSION['picklist_flash'] = [
+                'type' => 'error',
+                'text' => (string) ($result['message'] ?? 'Could not remove item.'),
+            ];
+            $picklistId = (int) ($_GET['picklist_id'] ?? 0);
+            header('Location: index.php?page=picklist&action=' . ($picklistId > 0 ? 'view&id=' . $picklistId : 'list'));
+            exit;
+        }
+
+        $orderId = (int) ($result['order_id'] ?? 0);
+        $picklistNumber = (string) ($result['picklist_number'] ?? '');
+        $picklistId = (int) ($result['picklist_id'] ?? 0);
+        $picklistDeleted = !empty($result['picklist_deleted']);
+
+        if ($orderId > 0) {
+            $this->revertOrderAfterPicklistRemoval($orderId, $picklistNumber, $ordersModel, $commanModel, true);
+        }
+
+        if ($wantsJson) {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => true,
+                'message' => (string) ($result['message'] ?? 'Item removed.'),
+                'picklist_id' => $picklistId,
+                'picklist_deleted' => $picklistDeleted,
+                'redirect' => $picklistDeleted
+                    ? 'index.php?page=picklist&action=list'
+                    : 'index.php?page=picklist&action=view&id=' . $picklistId,
+            ]);
+            exit;
+        }
+
+        if ($picklistDeleted) {
+            $_SESSION['picklist_flash'] = [
+                'type' => 'success',
+                'text' => 'Last item removed — picklist ' . $picklistNumber . ' deleted.',
+            ];
+            header('Location: index.php?page=picklist&action=list');
+            exit;
+        }
+
+        $_SESSION['picklist_flash'] = [
+            'type' => 'success',
+            'text' => 'Item removed from picklist ' . $picklistNumber . '.',
+        ];
+        header('Location: index.php?page=picklist&action=view&id=' . $picklistId);
+        exit;
+    }
+
+    private function revertOrderAfterPicklistRemoval(
+        int $orderId,
+        string $picklistNumber,
+        $ordersModel,
+        $commanModel,
+        bool $singleItemLog = false
+    ): void {
+        if ($orderId <= 0) {
+            return;
+        }
+
+        $order = $ordersModel->getOrderById($orderId);
+        if (!$order) {
+            return;
+        }
+
+        $status = (string) ($order['status'] ?? '');
+        if ($status === 'added_to_picklist' || $status === 'item_picked') {
+            $this->syncOrderStatus($orderId, 'item_received', $ordersModel, $commanModel);
+        }
+
+        $logText = $singleItemLog
+            ? 'Removed from picklist: ' . $picklistNumber
+            : 'Picklist deleted: ' . $picklistNumber;
+        $commanModel->add_order_status_log([
+            'order_id' => $orderId,
+            'status' => $logText,
+            'changed_by' => (int) ($_SESSION['user']['id'] ?? 0),
+            'api_response' => null,
+            'change_date' => date('Y-m-d H:i:s'),
+        ]);
+    }
+
     /**
      * @param int[] $orderIds
      */
