@@ -711,6 +711,7 @@
                     <a href="#" id="action-update-status" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Status</a>
                     <a href="#" id="action-assign-to" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Assign To</a>
                     <a href="javascript:void(0)" id="action-add-to-purchase-list" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to purchase list</a>
+                    <a href="javascript:void(0)" id="action-add-to-picklist" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Picklist</a>
                     <a href="javascript:void(0)" id="action-add-to-invoice" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Invoice</a>
                 </div>
             </div>
@@ -1756,6 +1757,38 @@
             <div class="flex justify-end space-x-2">
                 <button type="button" onclick="closeBulkAssignPopup()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded">Cancel</button>
                 <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded">Assign</button>
+            </div>
+        </form>
+    </div>
+</div>
+<!--bulk add to Picklist-->
+<div id="bulkAddToPicklistPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeBulkAddToPicklistPopup(event)">
+    <div class="bg-white p-4 rounded-md max-w-2xl w-full relative" onclick="event.stopPropagation();">
+        <button onclick="closeBulkAddToPicklistPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <h2 class="text-xl font-bold mb-4">Add to Picklist</h2>
+        <form id="bulkAddToPicklistForm" method="post" action="">
+            <div class="mb-4 flex gap-4 w-full items-end">
+                <div class="w-1/2">
+                    <label class="block text-sm font-bold mb-2">Assign Picker (optional)</label>
+                    <select id="bulkAddToPicklistPicker" name="picker_id" class="border rounded px-3 py-2 w-full">
+                        <option value="0">-- Unassigned --</option>
+                        <?php foreach ($staff_list as $id => $name): ?>
+                            <option value="<?= $id ?>"><?= htmlspecialchars($name) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="w-1/2">
+                    <label class="block text-sm font-bold mb-2">Notes (optional)</label>
+                    <input type="text" id="bulkAddToPicklistNotes" name="notes" class="border rounded px-3 py-2 w-full" placeholder="Internal notes">
+                </div>
+            </div>
+            <div class="mb-4">
+                <div id="bulkAddToPicklistSelectedItems" class="flex flex-wrap gap-2 max-h-48 overflow-y-auto border p-2"></div>
+            </div>
+            <div id="bulkAddToPicklistError" class="text-red-500 text-sm hidden mb-2"></div>
+            <div class="flex justify-end space-x-2">
+                <button type="button" onclick="closeBulkAddToPicklistPopup()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded">Cancel</button>
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded">Create Picklist</button>
             </div>
         </form>
     </div>
@@ -2890,6 +2923,87 @@
     function closeBulkAddToPurchasePopup(e) {
         document.getElementById('bulkAddToPurchasePopup').classList.add('hidden');
     }
+
+    // Bulk add to picklist handlers
+    document.getElementById('action-add-to-picklist').addEventListener('click', function(e) {
+        e.preventDefault();
+        const oids = getSelectedOrderIds();
+        if (oids.length === 0) {
+            showAlert('Please select at least one order to add to picklist.', 'warning');
+            return;
+        }
+        const form = document.getElementById('bulkAddToPicklistForm');
+        form.querySelectorAll('input.poitem_hidden').forEach(el => el.remove());
+        oids.forEach(orderId => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'order_ids[]';
+            input.value = orderId;
+            input.className = 'poitem_hidden';
+            form.appendChild(input);
+        });
+        const selectedItemsContainer = document.getElementById('bulkAddToPicklistSelectedItems');
+        selectedItemsContainer.innerHTML = '';
+        oids.forEach(orderId => {
+            const element = document.querySelector('#order-id-' + orderId);
+            if (!element) return;
+            const orderData = JSON.parse(element.getAttribute('data-order'));
+            const image = orderData.image || 'default-image.png';
+            const skuOrCode = orderData.sku || orderData.item_code || ('ID ' + orderId);
+            const div = document.createElement('div');
+            div.className = 'border rounded-lg p-2 bg-gray-50 flex flex-col items-center gap-2 w-32';
+            const img = document.createElement('img');
+            img.src = image;
+            img.className = 'w-full h-20 object-contain';
+            div.appendChild(img);
+            const label = document.createElement('div');
+            label.className = 'text-xs text-gray-700 text-center break-words leading-snug';
+            label.textContent = skuOrCode;
+            div.appendChild(label);
+            selectedItemsContainer.appendChild(div);
+        });
+        document.getElementById('bulkAddToPicklistError').classList.add('hidden');
+        document.getElementById('bulkAddToPicklistPopup').classList.remove('hidden');
+    });
+
+    function closeBulkAddToPicklistPopup(e) {
+        document.getElementById('bulkAddToPicklistPopup').classList.add('hidden');
+    }
+
+    document.getElementById('bulkAddToPicklistForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        document.getElementById('bulkAddToPicklistError').textContent = 'Processing...';
+        document.getElementById('bulkAddToPicklistError').classList.remove('hidden', 'text-green-500');
+        document.getElementById('bulkAddToPicklistError').classList.add('text-red-500');
+        const formData = new FormData(this);
+        fetch('index.php?page=picklist&action=bulk_add_from_orders', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            const msgEl = document.getElementById('bulkAddToPicklistError');
+            if (data.success) {
+                msgEl.classList.remove('text-red-500');
+                msgEl.classList.add('text-green-500');
+                msgEl.textContent = data.message || 'Picklist created.';
+                localStorage.removeItem('selected_po_orders');
+                setTimeout(function() {
+                    closeBulkAddToPicklistPopup();
+                    if (data.redirect) {
+                        window.location.href = data.redirect;
+                    } else {
+                        location.reload();
+                    }
+                }, 800);
+            } else {
+                msgEl.textContent = data.message || 'Failed to create picklist.';
+            }
+        })
+        .catch(function() {
+            document.getElementById('bulkAddToPicklistError').textContent = 'Network error.';
+        });
+    });
 
 //bulk AddToPurchase submit
 document.getElementById('bulkAddToPurchaseForm').addEventListener('submit', function(e){

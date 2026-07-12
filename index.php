@@ -1761,4 +1761,32 @@ switch ($page) {
                 break;
         }
         break;
+
+    case 'picklist':
+        require_once 'controllers/PicklistController.php';
+        $controller = new PicklistController();
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'view':
+                $controller->view();
+                break;
+            case 'tablet':
+                $controller->tablet();
+                break;
+            case 'bulk_add_from_orders':
+                $controller->bulkAddFromOrders();
+                break;
+            case 'pick_item':
+                $controller->pickItem();
+                break;
+            case 'assign_picker':
+                $controller->assignPicker();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
 }
