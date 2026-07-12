@@ -100,7 +100,7 @@ $plId = static function (array $pl): int {
                         <th class="px-5 py-3.5 whitespace-nowrap">Status</th>
                         <th class="px-5 py-3.5 whitespace-nowrap min-w-[8rem]">Progress</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Created</th>
-                        <th class="px-5 py-3.5 whitespace-nowrap text-center min-w-[14rem]">Actions</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap text-center min-w-[18rem]">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
@@ -132,6 +132,8 @@ $plId = static function (array $pl): int {
                             $viewUrl = '?page=picklist&action=view&id=' . $id;
                             $tabletUrl = '?page=picklist&action=tablet&id=' . $id;
                             $printUrl = $viewUrl . '&print=1';
+                            $deleteUrl = '?page=picklist&action=delete&id=' . $id;
+                            $deleteConfirm = 'Delete picklist ' . (string) ($pl['picklist_number'] ?? '') . '? Orders on this list will be set back to Item Received where applicable.';
                             ?>
                             <tr class="hover:bg-amber-50/40 transition-colors">
                                 <td class="px-5 py-4 align-middle">
@@ -181,6 +183,13 @@ $plId = static function (array $pl): int {
                                            title="Print picklist">
                                             <i class="fas fa-print text-[11px] opacity-90" aria-hidden="true"></i>
                                             <span>Print</span>
+                                        </a>
+                                        <a href="<?= htmlspecialchars($deleteUrl) ?>"
+                                           onclick="return confirm(<?= json_encode($deleteConfirm, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>);"
+                                           class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-semibold shadow-sm hover:bg-red-100 hover:border-red-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1 transition"
+                                           title="Delete picklist">
+                                            <i class="fas fa-trash-alt text-[11px] opacity-90" aria-hidden="true"></i>
+                                            <span>Delete</span>
                                         </a>
                                     </div>
                                 </td>

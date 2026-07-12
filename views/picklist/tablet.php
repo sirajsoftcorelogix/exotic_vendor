@@ -67,12 +67,18 @@ $total = count($items);
                             </div>
                         <?php endif; ?>
                     </div>
-                    <div class="flex-shrink-0 self-center">
+                    <div class="flex-shrink-0 self-center flex flex-col items-center gap-2">
                         <?php if ($isPicked): ?>
                             <span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-600 text-white"><i class="fas fa-check"></i></span>
                         <?php else: ?>
                             <span class="inline-flex items-center justify-center w-10 h-10 rounded-full border-2 border-amber-500 text-amber-600 text-xs font-bold">PICK</span>
                         <?php endif; ?>
+                        <button type="button"
+                                class="remove-item-btn text-xs px-2 py-1 rounded border border-red-200 text-red-700 bg-red-50 hover:bg-red-100"
+                                data-item-id="<?= $itemId ?>"
+                                title="Remove from picklist">
+                            <i class="fas fa-times" aria-hidden="true"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -88,7 +94,8 @@ $total = count($items);
     const picklistId = <?= (int) $plId ?>;
 
     document.querySelectorAll('.pick-item[data-picked="0"]').forEach(function(el) {
-        el.addEventListener('click', function() {
+        el.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-item-btn')) return;
             const itemId = el.getAttribute('data-item-id');
             if (!itemId || el.getAttribute('data-picked') === '1') return;
             if (!confirm('Mark this item as picked?')) return;
@@ -120,6 +127,46 @@ $total = count($items);
                 .catch(function() {
                     showAlert('Network error.', 'error');
                     el.style.pointerEvents = '';
+                });
+        });
+    });
+
+    document.querySelectorAll('.remove-item-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const itemId = btn.getAttribute('data-item-id');
+            if (!itemId) return;
+            if (!confirm('Remove this item from the picklist? The order will be set back to Item Received if applicable.')) return;
+
+            btn.disabled = true;
+            const fd = new FormData();
+            fd.append('item_id', itemId);
+
+            fetch('index.php?page=picklist&action=delete_item', { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const card = btn.closest('.pick-item');
+                        if (card) card.remove();
+                        if (data.picklist_deleted) {
+                            showAlert('Last item removed — picklist deleted.', 'success');
+                            setTimeout(function() {
+                                window.location.href = data.redirect || 'index.php?page=picklist&action=list';
+                            }, 800);
+                        } else if (!document.querySelector('.pick-item')) {
+                            showAlert('No items left on this picklist.', 'success');
+                            setTimeout(function() { location.reload(); }, 800);
+                        } else {
+                            showAlert(data.message || 'Item removed.', 'success');
+                        }
+                    } else {
+                        showAlert(data.message || 'Failed to remove item.', 'error');
+                        btn.disabled = false;
+                    }
+                })
+                .catch(function() {
+                    showAlert('Network error.', 'error');
+                    btn.disabled = false;
                 });
         });
     });
