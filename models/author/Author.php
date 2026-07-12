@@ -242,24 +242,98 @@ class Author
      */
     public function importFromCreators(array $creators): array
     {
+        $imported = 0;
+        $skipped = 0;
+        $batch = [];
+        $batchSize = 500;
+
+        foreach ($creators as $id => $name) {
+            $authorId = (int) $id;
+            $author = trim((string) $name);
+            if ($authorId <= 0 || $author === '') {
+                ++$skipped;
+                continue;
+            }
+
+            $batch[] = [$authorId, $author];
+            if (count($batch) >= $batchSize) {
+                $result = $this->importCreatorBatch($batch);
+                $imported += $result['imported'];
+                $skipped += $result['skipped'];
+                $batch = [];
+            }
+        }
+
+        if ($batch !== []) {
+            $result = $this->importCreatorBatch($batch);
+            $imported += $result['imported'];
+            $skipped += $result['skipped'];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Author sync completed.',
+            'imported' => $imported,
+            'skipped' => $skipped,
+        ];
+    }
+
+    /**
+     * @param list<array{0:int,1:string}> $rows
+     * @return array{imported:int,skipped:int}
+     */
+    private function importCreatorBatch(array $rows): array
+    {
+        if ($rows === []) {
+            return ['imported' => 0, 'skipped' => 0];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($rows), '(?, ?, 1)'));
+        $sql = 'INSERT INTO vp_author (author_id, author, is_active) VALUES ' . $placeholders
+            . ' ON DUPLICATE KEY UPDATE author = VALUES(author), is_active = 1, updated_at = CURRENT_TIMESTAMP';
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return $this->importCreatorRowsIndividually($rows);
+        }
+
+        $types = str_repeat('is', count($rows));
+        $params = [];
+        foreach ($rows as [$authorId, $author]) {
+            $params[] = $authorId;
+            $params[] = $author;
+        }
+        $stmt->bind_param($types, ...$params);
+
+        if ($stmt->execute()) {
+            $imported = count($rows);
+            $stmt->close();
+
+            return ['imported' => $imported, 'skipped' => 0];
+        }
+
+        $stmt->close();
+
+        return $this->importCreatorRowsIndividually($rows);
+    }
+
+    /**
+     * @param list<array{0:int,1:string}> $rows
+     * @return array{imported:int,skipped:int}
+     */
+    private function importCreatorRowsIndividually(array $rows): array
+    {
         $stmt = $this->conn->prepare(
             'INSERT INTO vp_author (author_id, author, is_active)
              VALUES (?, ?, 1)
              ON DUPLICATE KEY UPDATE author = VALUES(author), is_active = 1, updated_at = CURRENT_TIMESTAMP'
         );
         if (!$stmt) {
-            return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+            return ['imported' => 0, 'skipped' => count($rows)];
         }
 
         $imported = 0;
         $skipped = 0;
-        foreach ($creators as $id => $name) {
-            $authorId = (int)$id;
-            $author = trim((string)$name);
-            if ($authorId <= 0 || $author === '') {
-                ++$skipped;
-                continue;
-            }
+        foreach ($rows as [$authorId, $author]) {
             $stmt->bind_param('is', $authorId, $author);
             if ($stmt->execute()) {
                 ++$imported;
@@ -269,11 +343,6 @@ class Author
         }
         $stmt->close();
 
-        return [
-            'success' => true,
-            'message' => 'Author sync completed.',
-            'imported' => $imported,
-            'skipped' => $skipped,
-        ];
+        return ['imported' => $imported, 'skipped' => $skipped];
     }
 }
