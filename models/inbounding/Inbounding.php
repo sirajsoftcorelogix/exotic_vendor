@@ -1402,7 +1402,7 @@ class Inbounding {
             $pubDate = '';
         }
 
-        $pages = (int) ($row['pages'] ?? 0);
+        $pages = trim((string) ($row['pages'] ?? ''));
 
         return [
             'authors' => $this->resolveInboundAuthorNameList($row['author'] ?? ''),
@@ -1413,7 +1413,7 @@ class Inbounding {
             'edition' => trim((string) ($row['edition'] ?? '')),
             'publication_date' => $pubDate,
             'language' => trim((string) ($row['language'] ?? '')),
-            'pages' => $pages > 0 ? (string) $pages : '',
+            'pages' => $pages,
         ];
     }
 
@@ -1704,7 +1704,7 @@ class Inbounding {
         $publisher = (int) ($data['publisher'] ?? 0);
         $isbn = trim($data['isbn'] ?? '');
         $language = trim($data['language'] ?? '');
-        $pages = (int) ($data['pages'] ?? 0);
+        $pages = trim((string) ($data['pages'] ?? ''));
         $cover_type = trim($data['cover_type'] ?? '');
         $edition = trim($data['edition'] ?? '');
         $publication_date = trim($data['publication_date'] ?? '');
@@ -1730,7 +1730,7 @@ class Inbounding {
           return ['success' => false, 'message' => $this->conn->error];
         }
 
-        $types = "sisssssisddddssdiissddsssisssssii";
+        $types = "sisssssisddddssdiissddsssisssssssi";
 
         $stmt->bind_param(
             $types,

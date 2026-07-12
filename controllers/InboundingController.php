@@ -1646,12 +1646,14 @@ class InboundingController {
             'edited_by' => $inboundingModel->normalizeInboundAuthorValue($_POST['edited_by'] ?? ''),
             'publisher'=> trim((string)($_POST['publisher'] ?? '')) === '' ? null : (int) $_POST['publisher'],
             'isbn'     => $_POST['isbn'] ?? '',
-            'pages'    => trim((string)($_POST['pages'] ?? '')) === '' ? null : (int) $_POST['pages'],
+            'pages'    => trim((string)($_POST['pages'] ?? '')) === '' ? null : trim((string)($_POST['pages'] ?? '')),
             'cover_type' => trim((string)($_POST['cover_type'] ?? '')),
             'edition' => trim((string)($_POST['edition'] ?? '')),
             'publication_date' => trim((string)($_POST['publication_date'] ?? '')) ?: null,
             'sourcingfee' => trim((string) ($_POST['sourcingfee'] ?? '')) === '' ? null : round((float) $_POST['sourcingfee'], 2),
-            'shippingfee' => round(Inbounding::calculateBookShippingFee((float) ($_POST['weight'] ?? 0)), 2),
+            'shippingfee' => trim((string) ($_POST['shippingfee'] ?? '')) !== ''
+                ? round((float) $_POST['shippingfee'], 2)
+                : round(Inbounding::calculateBookShippingFee((float) ($_POST['weight'] ?? 0)), 2),
         ];
 
         require_once __DIR__ . '/../models/languages/Language.php';

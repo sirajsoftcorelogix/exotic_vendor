@@ -435,7 +435,7 @@ $form3ListUrl = base_url('?page=inbounding&action=list');
                     </div>
                     <div>
                         <label class="block text-gray-800 font-bold text-xs mb-1">Pages</label>
-                        <input type="number" min="0" name="pages" value="<?php echo htmlspecialchars($form2['pages'] ?? ''); ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                        <input type="text" name="pages" value="<?php echo htmlspecialchars($form2['pages'] ?? ''); ?>" placeholder="e.g. 10 pages color" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
                     </div>
                     <div>
                         <label class="block text-gray-800 font-bold text-xs mb-1">ISBN</label>

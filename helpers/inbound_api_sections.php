@@ -191,7 +191,7 @@ function inbound_api_build_book_details_modify_fields(array $d, Inbounding $mode
     }
 
     if (isset($d['pages']) && $d['pages'] !== '' && $d['pages'] !== null) {
-        $fields['pages'] = (int) $d['pages'];
+        $fields['pages'] = trim((string) $d['pages']);
     }
 
     $sourcingFee = trim((string) ($d['sourcingfee'] ?? ''));
