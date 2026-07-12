@@ -250,6 +250,32 @@ class Tables {
         }
         return $data;
     }
+
+    /** Active users with role name "picker" (id => name). */
+    public function get_picker_list(): array
+    {
+        $sql = "SELECT u.id, u.name
+                FROM vp_users u
+                INNER JOIN vp_roles r ON r.id = u.role_id
+                WHERE u.is_active = 1 AND u.is_deleted = 0
+                  AND r.is_active = 1
+                  AND LOWER(TRIM(r.role_name)) = 'picker'
+                ORDER BY u.name ASC";
+        $stmt = $this->ci->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $data = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $data[(int) $row['id']] = $row['name'];
+            }
+        }
+        $stmt->close();
+        return $data;
+    }
     public function getUserNameById($user_id) {
         $sql = "SELECT name FROM vp_users WHERE id = ? AND is_deleted = 0 LIMIT 1";
         $stmt = $this->ci->prepare($sql);

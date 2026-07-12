@@ -175,6 +175,7 @@ class OrdersController
             'country_list' => $countryList,
             'payment_types' => $ordersModel->getPaymentTypes(),
             'staff_list' => $commanModel->get_staff_list(),
+            'picker_list' => $commanModel->get_picker_list(),
             'filters' => $filters,
             'saved_searches' => $saved_searches
         ], 'Manage Orders');

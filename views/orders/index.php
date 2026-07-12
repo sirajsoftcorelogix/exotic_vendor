@@ -1772,7 +1772,7 @@
                     <label class="block text-sm font-bold mb-2">Assign Picker (optional)</label>
                     <select id="bulkAddToPicklistPicker" name="picker_id" class="border rounded px-3 py-2 w-full">
                         <option value="0">-- Unassigned --</option>
-                        <?php foreach ($staff_list as $id => $name): ?>
+                        <?php foreach (($picker_list ?? []) as $id => $name): ?>
                             <option value="<?= $id ?>"><?= htmlspecialchars($name) ?></option>
                         <?php endforeach; ?>
                     </select>
