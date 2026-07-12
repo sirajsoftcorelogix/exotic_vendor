@@ -185,8 +185,8 @@ $plId = static function (array $pl): int {
                                             <span>Print</span>
                                         </a>
                                         <a href="<?= htmlspecialchars($deleteUrl) ?>"
-                                           onclick="return confirm(<?= json_encode($deleteConfirm, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>);"
-                                           class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-semibold shadow-sm hover:bg-red-100 hover:border-red-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1 transition"
+                                           class="js-picklist-confirm-action inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-semibold shadow-sm hover:bg-red-100 hover:border-red-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1 transition"
+                                           data-confirm="<?= htmlspecialchars($deleteConfirm, ENT_QUOTES, 'UTF-8') ?>"
                                            title="Delete picklist">
                                             <i class="fas fa-trash-alt text-[11px] opacity-90" aria-hidden="true"></i>
                                             <span>Delete</span>
@@ -224,3 +224,4 @@ $plId = static function (array $pl): int {
         </div>
     <?php endif; ?>
 </div>
+<?php require_once __DIR__ . '/partials/confirm_delete_script.php'; ?>

@@ -98,7 +98,7 @@ $total = count($items);
             if (e.target.closest('.remove-item-btn')) return;
             const itemId = el.getAttribute('data-item-id');
             if (!itemId || el.getAttribute('data-picked') === '1') return;
-            if (!confirm('Mark this item as picked?')) return;
+            if (!window.confirm('Mark this item as picked?')) return;
 
             el.style.pointerEvents = 'none';
             const fd = new FormData();
@@ -136,7 +136,7 @@ $total = count($items);
             e.stopPropagation();
             const itemId = btn.getAttribute('data-item-id');
             if (!itemId) return;
-            if (!confirm('Remove this item from the picklist? The order will be set back to Item Received if applicable.')) return;
+            if (!window.confirm('Remove this item from the picklist? The order will be set back to Item Received if applicable.')) return;
 
             btn.disabled = true;
             const fd = new FormData();
