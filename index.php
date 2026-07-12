@@ -1036,6 +1036,33 @@ switch ($page) {
                 break;
         }
         break;
+    case 'order_status':
+        require_once 'controllers/OrderStatusController.php';
+        $controller = new OrderStatusController();
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'addRecord':
+                $controller->addRecord();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'permanentDelete':
+                $controller->permanentDelete();
+                break;
+            case 'checkUsage':
+                $controller->checkUsage();
+                break;
+            case 'getDetails':
+                $controller->getDetails();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
     case 'courier_partners':
         require_once 'controllers/CourierPartnersController.php';
         $controller = new CourierPartnersController();
