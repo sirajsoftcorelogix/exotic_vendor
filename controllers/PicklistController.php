@@ -181,6 +181,20 @@ class PicklistController
         exit;
     }
 
+    public function getPickers()
+    {
+        is_login();
+        global $commanModel;
+
+        header('Content-Type: application/json');
+        $pickers = [];
+        foreach ($commanModel->get_picker_list() as $id => $name) {
+            $pickers[] = ['id' => (int) $id, 'name' => (string) $name];
+        }
+        echo json_encode(['success' => true, 'pickers' => $pickers]);
+        exit;
+    }
+
     /**
      * @param int[] $orderIds
      */

@@ -254,27 +254,59 @@ class Tables {
     /** Active users with role name "picker" (id => name). */
     public function get_picker_list(): array
     {
+        $roleIds = $this->getPickerRoleIds();
+        if ($roleIds === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($roleIds), '?'));
+        $types = str_repeat('i', count($roleIds));
         $sql = "SELECT u.id, u.name
                 FROM vp_users u
-                INNER JOIN vp_roles r ON r.id = u.role_id
-                WHERE u.is_active = 1 AND u.is_deleted = 0
-                  AND r.is_active = 1
-                  AND LOWER(TRIM(r.role_name)) = 'picker'
+                WHERE u.is_deleted = 0
+                  AND (u.is_active = 1 OR u.is_active = '1')
+                  AND u.role_id IN ({$placeholders})
                 ORDER BY u.name ASC";
         $stmt = $this->ci->prepare($sql);
         if (!$stmt) {
             return [];
         }
+        $stmt->bind_param($types, ...$roleIds);
         $stmt->execute();
         $result = $stmt->get_result();
         $data = [];
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
-                $data[(int) $row['id']] = $row['name'];
+                $data[(int) $row['id']] = (string) $row['name'];
             }
         }
         $stmt->close();
         return $data;
+    }
+
+    /**
+     * Role IDs whose name matches picker (case-insensitive, e.g. "Picker", "Warehouse Picker").
+     *
+     * @return list<int>
+     */
+    private function getPickerRoleIds(): array
+    {
+        $sql = "SELECT id, role_name FROM vp_roles
+                WHERE LOWER(TRIM(role_name)) = 'picker'
+                   OR LOWER(TRIM(role_name)) LIKE '%picker%'";
+        $result = $this->ci->query($sql);
+        if (!$result) {
+            return [];
+        }
+        $ids = [];
+        while ($row = $result->fetch_assoc()) {
+            $name = strtolower(trim((string) ($row['role_name'] ?? '')));
+            // Avoid accidental matches like unrelated role names
+            if ($name === 'picker' || str_contains($name, 'picker')) {
+                $ids[] = (int) $row['id'];
+            }
+        }
+        return array_values(array_unique(array_filter($ids)));
     }
     public function getUserNameById($user_id) {
         $sql = "SELECT name FROM vp_users WHERE id = ? AND is_deleted = 0 LIMIT 1";
