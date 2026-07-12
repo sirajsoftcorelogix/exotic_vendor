@@ -1,0 +1,127 @@
+<?php
+/** @var array $data */
+$picklist = $data['picklist'] ?? [];
+$items = $data['items'] ?? [];
+$plId = (int) ($picklist['id'] ?? 0);
+$staffList = $data['staff_list'] ?? [];
+
+$picked = 0;
+foreach ($items as $it) {
+    if (($it['status'] ?? '') === 'picked') {
+        $picked++;
+    }
+}
+$total = count($items);
+?>
+<div class="max-w-3xl mx-auto px-3 sm:px-4 py-4 pb-24">
+    <div class="sticky top-0 z-10 bg-white/95 backdrop-blur border-b pb-3 mb-4 -mx-3 px-3 sm:-mx-4 sm:px-4">
+        <a href="?page=picklist&action=view&id=<?= $plId ?>" class="text-sm text-blue-600">&larr; Detail view</a>
+        <h1 class="text-xl font-bold mt-1"><?= htmlspecialchars((string) ($picklist['picklist_number'] ?? '')) ?></h1>
+        <p class="text-sm text-gray-600"><?= $picked ?> of <?= $total ?> picked · Tap an item when collected</p>
+        <?php if (($picklist['status'] ?? '') !== 'completed'): ?>
+            <div class="mt-2 flex gap-2 items-center">
+                <label class="text-xs text-gray-600">Assign picker:</label>
+                <select id="tablet-picker-select" class="border rounded px-2 py-1 text-sm flex-1">
+                    <option value="0">Unassigned</option>
+                    <?php foreach ($staffList as $sid => $sname): ?>
+                        <option value="<?= (int) $sid ?>" <?= (int) ($picklist['picker_id'] ?? 0) === (int) $sid ? 'selected' : '' ?>><?= htmlspecialchars((string) $sname) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="button" id="tablet-assign-btn" class="text-sm px-3 py-1 bg-gray-200 rounded">Save</button>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <div id="tablet-items" class="space-y-3">
+        <?php foreach ($items as $item): ?>
+            <?php
+            $itemId = (int) ($item['id'] ?? 0);
+            $isPicked = ($item['status'] ?? '') === 'picked';
+            ?>
+            <div class="pick-item border rounded-xl p-4 shadow-sm <?= $isPicked ? 'bg-green-50 border-green-300 opacity-75' : 'bg-white cursor-pointer active:scale-[0.99]' ?>"
+                 data-item-id="<?= $itemId ?>"
+                 data-picked="<?= $isPicked ? '1' : '0' ?>">
+                <div class="flex gap-3">
+                    <?php if (!empty($item['image'])): ?>
+                        <img src="<?= htmlspecialchars((string) $item['image']) ?>" alt="" class="w-20 h-20 object-contain border rounded flex-shrink-0">
+                    <?php endif; ?>
+                    <div class="min-w-0 flex-1">
+                        <div class="text-lg font-bold text-amber-800"><?= htmlspecialchars((string) ($item['warehouse_location'] ?: 'No location')) ?></div>
+                        <div class="text-sm font-semibold text-gray-900 mt-1"><?= htmlspecialchars((string) ($item['order_number'] ?? '')) ?></div>
+                        <div class="text-sm text-gray-700 line-clamp-2"><?= htmlspecialchars((string) ($item['title'] ?? '')) ?></div>
+                        <div class="text-xs text-gray-500 mt-1">
+                            <?= htmlspecialchars((string) ($item['sku'] ?: $item['item_code'] ?: '')) ?>
+                            · Qty <?= (int) ($item['quantity'] ?? 1) ?>
+                        </div>
+                    </div>
+                    <div class="flex-shrink-0 self-center">
+                        <?php if ($isPicked): ?>
+                            <span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-600 text-white"><i class="fas fa-check"></i></span>
+                        <?php else: ?>
+                            <span class="inline-flex items-center justify-center w-10 h-10 rounded-full border-2 border-amber-500 text-amber-600 text-xs font-bold">PICK</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+        <?php if ($items === []): ?>
+            <p class="text-center text-gray-500 py-8">No items on this picklist.</p>
+        <?php endif; ?>
+    </div>
+</div>
+
+<script>
+(function() {
+    const picklistId = <?= (int) $plId ?>;
+
+    document.querySelectorAll('.pick-item[data-picked="0"]').forEach(function(el) {
+        el.addEventListener('click', function() {
+            const itemId = el.getAttribute('data-item-id');
+            if (!itemId || el.getAttribute('data-picked') === '1') return;
+            if (!confirm('Mark this item as picked?')) return;
+
+            el.style.pointerEvents = 'none';
+            const fd = new FormData();
+            fd.append('item_id', itemId);
+
+            fetch('index.php?page=picklist&action=pick_item', { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        el.setAttribute('data-picked', '1');
+                        el.classList.add('bg-green-50', 'border-green-300', 'opacity-75');
+                        el.classList.remove('cursor-pointer', 'bg-white');
+                        const badge = el.querySelector('.flex-shrink-0 span');
+                        if (badge) {
+                            badge.className = 'inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-600 text-white';
+                            badge.innerHTML = '<i class="fas fa-check"></i>';
+                        }
+                        if (data.picklist_completed) {
+                            showAlert('All items picked — picklist complete!', 'success');
+                        }
+                    } else {
+                        showAlert(data.message || 'Failed to pick item.', 'error');
+                        el.style.pointerEvents = '';
+                    }
+                })
+                .catch(function() {
+                    showAlert('Network error.', 'error');
+                    el.style.pointerEvents = '';
+                });
+        });
+    });
+
+    const assignBtn = document.getElementById('tablet-assign-btn');
+    if (assignBtn) {
+        assignBtn.addEventListener('click', function() {
+            const pickerId = document.getElementById('tablet-picker-select').value;
+            const fd = new FormData();
+            fd.append('picklist_id', picklistId);
+            fd.append('picker_id', pickerId);
+            fetch('index.php?page=picklist&action=assign_picker', { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(data => showAlert(data.message || (data.success ? 'Saved' : 'Failed'), data.success ? 'success' : 'error'));
+        });
+    }
+})();
+</script>
