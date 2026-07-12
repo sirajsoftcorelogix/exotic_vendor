@@ -5,6 +5,8 @@ require_once 'models/order/order.php';
 require_once 'models/comman/tables.php';
 
 $picklistModel = new Picklist($conn);
+$ordersModel = new Order($conn);
+$commanModel = new Tables($conn);
 
 class PicklistController
 {
