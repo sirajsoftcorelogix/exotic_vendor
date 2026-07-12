@@ -133,6 +133,12 @@ class Picklist
             ];
         }
 
+        $mixError = $this->validateNoMixedBookPicklist($itemsToAdd);
+        if ($mixError !== null) {
+            $mixError['skipped'] = $skipped;
+            return $mixError;
+        }
+
         usort($itemsToAdd, [$this, 'comparePicklistItemLocations']);
 
         $this->db->begin_transaction();
@@ -463,6 +469,35 @@ class Picklist
             }
         }
         return false;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     * @return array{success: false, message: string}|null
+     */
+    private function validateNoMixedBookPicklist(array $items): ?array
+    {
+        if (count($items) < 2) {
+            return null;
+        }
+
+        $hasBook = false;
+        $hasNonBook = false;
+        foreach ($items as $item) {
+            if (!empty($item['is_book'])) {
+                $hasBook = true;
+            } else {
+                $hasNonBook = true;
+            }
+            if ($hasBook && $hasNonBook) {
+                return [
+                    'success' => false,
+                    'message' => 'Cannot mix book and non-book items in one picklist. Create separate picklists for books and other items.',
+                ];
+            }
+        }
+
+        return null;
     }
 
     private function picklistItemHasDetailColumns(): bool

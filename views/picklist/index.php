@@ -29,6 +29,15 @@ $statusLabels = [
     'completed' => 'Completed',
     'cancelled' => 'Cancelled',
 ];
+$statusStyles = [
+    'pending' => 'bg-amber-50 text-amber-800 border-amber-200',
+    'in_progress' => 'bg-sky-50 text-sky-800 border-sky-200',
+    'completed' => 'bg-emerald-50 text-emerald-800 border-emerald-200',
+    'cancelled' => 'bg-gray-100 text-gray-600 border-gray-200',
+];
+$plId = static function (array $pl): int {
+    return (int) ($pl['id'] ?? 0);
+};
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
     <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04] mb-6">
@@ -76,48 +85,103 @@ $statusLabels = [
         </div>
     </form>
 
-    <div class="bg-white border rounded-xl shadow-sm overflow-hidden">
-        <div class="px-4 py-3 border-b text-sm text-gray-600"><?= (int) $totalRecords ?> picklist(s)</div>
+    <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
+        <div class="px-5 py-3.5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
+            <p class="text-sm text-gray-600">
+                <span class="font-semibold text-gray-900 tabular-nums"><?= (int) $totalRecords ?></span> picklist<?= (int) $totalRecords === 1 ? '' : 's' ?>
+            </p>
+        </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full text-sm">
-                <thead class="bg-gray-50 text-left text-gray-600">
-                    <tr>
-                        <th class="px-4 py-3 font-semibold">Picklist #</th>
-                        <th class="px-4 py-3 font-semibold">Picker</th>
-                        <th class="px-4 py-3 font-semibold">Status</th>
-                        <th class="px-4 py-3 font-semibold">Progress</th>
-                        <th class="px-4 py-3 font-semibold">Created</th>
-                        <th class="px-4 py-3 font-semibold">Actions</th>
+            <table class="min-w-full text-left">
+                <thead>
+                    <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
+                        <th class="px-5 py-3.5 whitespace-nowrap">Picklist #</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Picker</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Status</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap min-w-[8rem]">Progress</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Created</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap text-center min-w-[14rem]">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y">
+                <tbody class="divide-y divide-gray-100">
                     <?php if ($picklists === []): ?>
-                        <tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">No picklists found.</td></tr>
+                        <tr>
+                            <td colspan="6" class="px-5 py-16 text-center">
+                                <div class="mx-auto flex max-w-sm flex-col items-center">
+                                    <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
+                                        <i class="fas fa-clipboard-list" aria-hidden="true"></i>
+                                    </span>
+                                    <p class="text-base font-medium text-gray-900">No picklists found</p>
+                                    <p class="mt-1 text-sm text-gray-500">Create one from the orders list using Add to Picklist.</p>
+                                    <a href="?page=orders&action=list" class="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-amber-700 hover:text-amber-800">
+                                        <i class="fas fa-shopping-cart" aria-hidden="true"></i>
+                                        Go to orders
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
                     <?php else: ?>
                         <?php foreach ($picklists as $pl): ?>
                             <?php
+                            $id = $plId($pl);
                             $picked = (int) ($pl['picked_count'] ?? 0);
                             $total = (int) ($pl['item_count'] ?? 0);
                             $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
                             $st = (string) ($pl['status'] ?? 'pending');
+                            $statusClass = $statusStyles[$st] ?? 'bg-gray-100 text-gray-700 border-gray-200';
+                            $viewUrl = '?page=picklist&action=view&id=' . $id;
+                            $tabletUrl = '?page=picklist&action=tablet&id=' . $id;
+                            $printUrl = $viewUrl . '&print=1';
                             ?>
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-4 py-3 font-medium">
-                                    <a href="?page=picklist&action=view&id=<?= (int) $pl['id'] ?>" class="text-blue-600 hover:underline">
+                            <tr class="hover:bg-amber-50/40 transition-colors">
+                                <td class="px-5 py-4 align-middle">
+                                    <a href="<?= htmlspecialchars($viewUrl) ?>"
+                                       class="font-mono text-sm font-semibold text-amber-800 hover:text-amber-950 hover:underline underline-offset-2">
                                         <?= htmlspecialchars((string) ($pl['picklist_number'] ?? '')) ?>
                                     </a>
                                 </td>
-                                <td class="px-4 py-3"><?= htmlspecialchars((string) ($pl['picker_name'] ?? '—')) ?></td>
-                                <td class="px-4 py-3">
-                                    <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100"><?= htmlspecialchars($statusLabels[$st] ?? $st) ?></span>
+                                <td class="px-5 py-4 align-middle text-sm text-gray-800">
+                                    <?= htmlspecialchars((string) ($pl['picker_name'] ?? '—')) ?>
                                 </td>
-                                <td class="px-4 py-3"><?= $picked ?> / <?= $total ?> (<?= $pct ?>%)</td>
-                                <td class="px-4 py-3"><?= !empty($pl['created_at']) ? date('d M Y H:i', strtotime($pl['created_at'])) : '—' ?></td>
-                                <td class="px-4 py-3">
-                                    <div class="flex flex-wrap gap-2">
-                                        <a href="?page=picklist&action=view&id=<?= (int) $pl['id'] ?>" class="text-blue-600 hover:underline">View</a>
-                                        <a href="?page=picklist&action=tablet&id=<?= (int) $pl['id'] ?>" class="text-green-600 hover:underline">Tablet</a>
-                                        <a href="?page=picklist&action=view&id=<?= (int) $pl['id'] ?>&print=1" target="_blank" class="text-gray-600 hover:underline">Print</a>
+                                <td class="px-5 py-4 align-middle">
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border <?= $statusClass ?>">
+                                        <?= htmlspecialchars($statusLabels[$st] ?? $st) ?>
+                                    </span>
+                                </td>
+                                <td class="px-5 py-4 align-middle">
+                                    <div class="flex flex-col gap-1 min-w-[7rem]">
+                                        <div class="flex items-center justify-between text-xs text-gray-600 tabular-nums">
+                                            <span><?= $picked ?> / <?= $total ?></span>
+                                            <span class="font-medium text-gray-800"><?= $pct ?>%</span>
+                                        </div>
+                                        <div class="h-1.5 w-full rounded-full bg-gray-200 overflow-hidden">
+                                            <div class="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-600 transition-all" style="width: <?= min(100, max(0, $pct)) ?>%"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-5 py-4 align-middle text-sm text-gray-700 whitespace-nowrap">
+                                    <?= !empty($pl['created_at']) ? date('d M Y, H:i', strtotime($pl['created_at'])) : '—' ?>
+                                </td>
+                                <td class="px-5 py-4 align-middle">
+                                    <div class="flex flex-wrap items-center justify-center gap-2">
+                                        <a href="<?= htmlspecialchars($viewUrl) ?>"
+                                           class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-800 text-xs font-semibold shadow-sm hover:bg-blue-100 hover:border-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 transition"
+                                           title="View picklist details">
+                                            <i class="fas fa-eye text-[11px] opacity-90" aria-hidden="true"></i>
+                                            <span>View</span>
+                                        </a>
+                                        <a href="<?= htmlspecialchars($tabletUrl) ?>"
+                                           class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold shadow-sm hover:bg-emerald-100 hover:border-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-1 transition"
+                                           title="Open tablet picking mode">
+                                            <i class="fas fa-tablet-alt text-[11px] opacity-90" aria-hidden="true"></i>
+                                            <span>Tablet</span>
+                                        </a>
+                                        <a href="<?= htmlspecialchars($printUrl) ?>" target="_blank" rel="noopener noreferrer"
+                                           class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-800 text-xs font-semibold shadow-sm hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-1 transition"
+                                           title="Print picklist">
+                                            <i class="fas fa-print text-[11px] opacity-90" aria-hidden="true"></i>
+                                            <span>Print</span>
+                                        </a>
                                     </div>
                                 </td>
                             </tr>
@@ -129,14 +193,23 @@ $statusLabels = [
     </div>
 
     <?php if ($totalPages > 1): ?>
-        <div class="mt-4 flex items-center justify-between text-sm">
-            <span>Page <?= $pageNo ?> of <?= $totalPages ?></span>
+        <div class="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-xl border border-gray-200 bg-white px-4 py-4 shadow-sm">
+            <p class="text-sm text-gray-600">
+                Page <span class="font-medium text-gray-900 tabular-nums"><?= $pageNo ?></span>
+                of <span class="font-medium text-gray-900 tabular-nums"><?= $totalPages ?></span>
+            </p>
             <div class="flex gap-2">
                 <?php if ($pageNo > 1): ?>
-                    <a href="<?= $pgBase ?>&page_no=<?= $pageNo - 1 ?>" class="px-3 py-1 border rounded">Prev</a>
+                    <a href="<?= htmlspecialchars($pgBase . '&page_no=' . ($pageNo - 1)) ?>"
+                       class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                        <i class="fas fa-chevron-left text-xs" aria-hidden="true"></i> Prev
+                    </a>
                 <?php endif; ?>
                 <?php if ($pageNo < $totalPages): ?>
-                    <a href="<?= $pgBase ?>&page_no=<?= $pageNo + 1 ?>" class="px-3 py-1 border rounded">Next</a>
+                    <a href="<?= htmlspecialchars($pgBase . '&page_no=' . ($pageNo + 1)) ?>"
+                       class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                        Next <i class="fas fa-chevron-right text-xs" aria-hidden="true"></i>
+                    </a>
                 <?php endif; ?>
             </div>
         </div>

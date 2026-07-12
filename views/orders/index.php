@@ -2956,12 +2956,50 @@
             });
     }
 
+    function picklistOrderIsBook(orderData) {
+        const author = String(orderData.author || '').trim();
+        const publisher = String(orderData.publisher || '').trim();
+        if (author !== '' || publisher !== '') {
+            return true;
+        }
+        for (const field of ['itemtype', 'groupname']) {
+            const val = String(orderData[field] || '').toLowerCase();
+            if (val !== '' && val.indexOf('book') !== -1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function validatePicklistSelectionMix(orderIds) {
+        let hasBook = false;
+        let hasNonBook = false;
+        for (const orderId of orderIds) {
+            const element = document.querySelector('#order-id-' + orderId);
+            if (!element) continue;
+            const orderData = JSON.parse(element.getAttribute('data-order'));
+            if (picklistOrderIsBook(orderData)) {
+                hasBook = true;
+            } else {
+                hasNonBook = true;
+            }
+            if (hasBook && hasNonBook) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // Bulk add to picklist handlers
     document.getElementById('action-add-to-picklist').addEventListener('click', function(e) {
         e.preventDefault();
         const oids = getSelectedOrderIds();
         if (oids.length === 0) {
             showAlert('Please select at least one order to add to picklist.', 'warning');
+            return;
+        }
+        if (!validatePicklistSelectionMix(oids)) {
+            showAlert('Cannot mix book and non-book items in one picklist. Select only books or only non-book items.', 'error');
             return;
         }
         const form = document.getElementById('bulkAddToPicklistForm');
@@ -3006,6 +3044,16 @@
 
     document.getElementById('bulkAddToPicklistForm').addEventListener('submit', function(e) {
         e.preventDefault();
+        const orderIds = [];
+        this.querySelectorAll('input[name="order_ids[]"]').forEach(function(input) {
+            orderIds.push(input.value);
+        });
+        if (!validatePicklistSelectionMix(orderIds)) {
+            document.getElementById('bulkAddToPicklistError').textContent = 'Cannot mix book and non-book items in one picklist. Create separate picklists for books and other items.';
+            document.getElementById('bulkAddToPicklistError').classList.remove('hidden', 'text-green-500');
+            document.getElementById('bulkAddToPicklistError').classList.add('text-red-500');
+            return;
+        }
         document.getElementById('bulkAddToPicklistError').textContent = 'Processing...';
         document.getElementById('bulkAddToPicklistError').classList.remove('hidden', 'text-green-500');
         document.getElementById('bulkAddToPicklistError').classList.add('text-red-500');
