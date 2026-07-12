@@ -266,7 +266,7 @@ $parent_groups = $parent_groups ?? [];
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Slug</label>
                                 <input type="text" class="form-input w-full mt-1 font-mono" name="addSlug" id="addSlug" placeholder="e.g. pending" />
-                                <p class="text-xs text-gray-500 mt-1">Stored on orders as <code>vp_orders.status</code>; auto-generated from title if blank.</p>
+                                <p class="text-xs text-gray-500 mt-1">Stored on orders as <code>vp_orders.status</code>; auto-generated from title if blank. Renaming updates matching orders to the new slug.</p>
                             </div>
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Parent group</label>
@@ -329,6 +329,7 @@ $parent_groups = $parent_groups ?? [];
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Slug</label>
                                 <input type="text" class="form-input w-full mt-1 font-mono" name="editSlug" id="editSlug" />
+                                <p class="text-xs text-gray-500 mt-1">Matched against <code>vp_orders.status</code> by slug. Renaming updates matching orders automatically.</p>
                             </div>
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Parent group</label>
@@ -522,6 +523,32 @@ $parent_groups = $parent_groups ?? [];
             .then(res => res.json());
     }
 
+    function formatVpOrdersUsageMessage(name, usage, actionLabel) {
+        if (usage.used_in_vp_orders) {
+            if (usage.order_count > 0) {
+                const noun = usage.order_count === 1 ? 'order' : 'orders';
+                return 'Cannot ' + actionLabel + ' "' + name + '": its slug is used on ' + usage.order_count + ' ' + noun + ' in vp_orders.status.';
+            }
+            if (Array.isArray(usage.children_in_vp_orders) && usage.children_in_vp_orders.length > 0) {
+                const parts = usage.children_in_vp_orders.map(function(child) {
+                    const noun = child.order_count === 1 ? 'order' : 'orders';
+                    const label = child.title || child.slug;
+                    return label + ' (' + child.slug + ') on ' + child.order_count + ' ' + noun;
+                });
+                return 'Cannot ' + actionLabel + ' "' + name + '": child status slug(s) are used in vp_orders.status: ' + parts.join('; ') + '.';
+            }
+            if (usage.child_order_count > 0) {
+                const noun = usage.child_order_count === 1 ? 'order' : 'orders';
+                return 'Cannot ' + actionLabel + ' "' + name + '": child status slug(s) are used on ' + usage.child_order_count + ' ' + noun + ' in vp_orders.status.';
+            }
+        }
+        if (usage.child_count > 0) {
+            const noun = usage.child_count === 1 ? 'child status' : 'child statuses';
+            return 'Cannot ' + actionLabel + ' "' + name + '": it still has ' + usage.child_count + ' ' + noun + '. Delete or reassign child statuses first.';
+        }
+        return 'Cannot ' + actionLabel + ' "' + name + '".';
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.deactivate-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
@@ -531,13 +558,10 @@ $parent_groups = $parent_groups ?? [];
                 window.closeAllMenus();
 
                 const usage = await checkOrderStatusUsage(id);
-                if (usage.in_use) {
-                    let detail = [];
-                    if (usage.order_count > 0) detail.push(usage.order_count + ' order(s)');
-                    if (usage.child_count > 0) detail.push(usage.child_count + ' child status(es)');
+                if (!usage.can_deactivate) {
                     showOrderStatusActionResult({
                         success: false,
-                        message: 'Cannot deactivate "' + name + '": linked to ' + detail.join(' and ') + '.'
+                        message: formatVpOrdersUsageMessage(name, usage, 'deactivate')
                     });
                     return;
                 }
@@ -562,13 +586,10 @@ $parent_groups = $parent_groups ?? [];
                 window.closeAllMenus();
 
                 const usage = await checkOrderStatusUsage(id);
-                if (usage.in_use) {
-                    let detail = [];
-                    if (usage.order_count > 0) detail.push(usage.order_count + ' order(s)');
-                    if (usage.child_count > 0) detail.push(usage.child_count + ' child status(es)');
+                if (!usage.can_delete) {
                     showOrderStatusActionResult({
                         success: false,
-                        message: 'Cannot delete "' + name + '": linked to ' + detail.join(' and ') + '.'
+                        message: formatVpOrdersUsageMessage(name, usage, 'delete')
                     });
                     return;
                 }
