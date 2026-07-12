@@ -149,6 +149,7 @@
     $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page, default 50
     $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50; // Only allow specific values
     $total_orders = isset($data['total_orders']) ? (int)$data['total_orders'] : 0;
+    $picker_list = isset($data['picker_list']) && is_array($data['picker_list']) ? $data['picker_list'] : [];
     $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
 
     // Prepare query string for pagination links
@@ -1772,10 +1773,13 @@
                     <label class="block text-sm font-bold mb-2">Assign Picker (optional)</label>
                     <select id="bulkAddToPicklistPicker" name="picker_id" class="border rounded px-3 py-2 w-full">
                         <option value="0">-- Unassigned --</option>
-                        <?php foreach (($picker_list ?? []) as $id => $name): ?>
-                            <option value="<?= $id ?>"><?= htmlspecialchars($name) ?></option>
+                        <?php foreach ($picker_list as $id => $name): ?>
+                            <option value="<?= (int) $id ?>"><?= htmlspecialchars((string) $name) ?></option>
                         <?php endforeach; ?>
                     </select>
+                    <p id="bulkAddToPicklistPickerHint" class="text-xs text-amber-700 mt-1 <?= $picker_list === [] ? '' : 'hidden' ?>">
+                        No users with the Picker role found. Assign the Picker role in Admin → Users, or leave unassigned.
+                    </p>
                 </div>
                 <div class="w-1/2">
                     <label class="block text-sm font-bold mb-2">Notes (optional)</label>
@@ -2924,6 +2928,34 @@
         document.getElementById('bulkAddToPurchasePopup').classList.add('hidden');
     }
 
+    function loadPicklistPickers() {
+        const sel = document.getElementById('bulkAddToPicklistPicker');
+        const hint = document.getElementById('bulkAddToPicklistPickerHint');
+        if (!sel) return Promise.resolve();
+        return fetch('index.php?page=picklist&action=get_pickers')
+            .then(r => r.json())
+            .then(data => {
+                const current = sel.value;
+                sel.innerHTML = '<option value="0">-- Unassigned --</option>';
+                const pickers = (data && data.pickers) ? data.pickers : [];
+                pickers.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = String(p.id);
+                    opt.textContent = p.name;
+                    sel.appendChild(opt);
+                });
+                if (current && sel.querySelector('option[value="' + current + '"]')) {
+                    sel.value = current;
+                }
+                if (hint) {
+                    hint.classList.toggle('hidden', pickers.length > 0);
+                }
+            })
+            .catch(function() {
+                if (hint) hint.classList.remove('hidden');
+            });
+    }
+
     // Bulk add to picklist handlers
     document.getElementById('action-add-to-picklist').addEventListener('click', function(e) {
         e.preventDefault();
@@ -2963,7 +2995,9 @@
             selectedItemsContainer.appendChild(div);
         });
         document.getElementById('bulkAddToPicklistError').classList.add('hidden');
-        document.getElementById('bulkAddToPicklistPopup').classList.remove('hidden');
+        loadPicklistPickers().finally(function() {
+            document.getElementById('bulkAddToPicklistPopup').classList.remove('hidden');
+        });
     });
 
     function closeBulkAddToPicklistPopup(e) {

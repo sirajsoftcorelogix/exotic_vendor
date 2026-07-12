@@ -1784,6 +1784,9 @@ switch ($page) {
             case 'assign_picker':
                 $controller->assignPicker();
                 break;
+            case 'get_pickers':
+                $controller->getPickers();
+                break;
             default:
                 $controller->index();
                 break;
