@@ -187,6 +187,8 @@ class AuthorsController
     {
         is_login();
         header('Content-Type: application/json; charset=utf-8');
+        @set_time_limit(0);
+        @ini_set('max_execution_time', '0');
 
         if (!isset($_SESSION['user']['role_id']) || (int)$_SESSION['user']['role_id'] !== 1) {
             echo json_encode(['success' => false, 'message' => 'Only admin users can sync authors from Admin.']);
