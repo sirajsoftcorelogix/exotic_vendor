@@ -112,24 +112,17 @@ class Picklist
             if ($product && !empty($product['location'])) {
                 $location = trim((string) $product['location']);
             }
+            if ($location === '' && !empty($order['location'])) {
+                $location = trim((string) $order['location']);
+            }
 
             $qty = (int) ($order['quantity'] ?? 1);
             if ($qty < 1) {
                 $qty = 1;
             }
 
-            $itemsToAdd[] = [
-                'order_id' => $orderId,
-                'order_number' => (string) ($order['order_number'] ?? ''),
-                'item_code' => $itemCode,
-                'sku' => $sku,
-                'size' => trim((string) ($order['size'] ?? '')),
-                'color' => trim((string) ($order['color'] ?? '')),
-                'title' => trim((string) ($order['title'] ?? '')),
-                'image' => trim((string) ($order['image'] ?? '')),
-                'warehouse_location' => $location,
-                'quantity' => $qty,
-            ];
+            $snapshot = $this->buildPicklistItemSnapshot($order, $product, $location, $qty);
+            $itemsToAdd[] = $snapshot;
         }
 
         if ($itemsToAdd === []) {
@@ -140,9 +133,7 @@ class Picklist
             ];
         }
 
-        usort($itemsToAdd, static function ($a, $b) {
-            return strcasecmp((string) $a['warehouse_location'], (string) $b['warehouse_location']);
-        });
+        usort($itemsToAdd, [$this, 'comparePicklistItemLocations']);
 
         $this->db->begin_transaction();
         try {
@@ -167,10 +158,16 @@ class Picklist
             $picklistId = (int) $this->db->insert_id;
             $stmt->close();
 
-            $itemSql = "INSERT INTO vp_picklist_items
-                (picklist_id, order_id, order_number, item_code, sku, size, color, title, image,
-                 warehouse_location, quantity, status, sort_order)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)";
+            $itemSql = $this->picklistItemHasDetailColumns()
+                ? "INSERT INTO vp_picklist_items
+                    (picklist_id, order_id, order_number, item_code, sku, size, color, title, image,
+                     publisher, cover_type, physical_qty, is_book,
+                     warehouse_location, quantity, status, sort_order)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)"
+                : "INSERT INTO vp_picklist_items
+                    (picklist_id, order_id, order_number, item_code, sku, size, color, title, image,
+                     warehouse_location, quantity, status, sort_order)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)";
             $itemStmt = $this->db->prepare($itemSql);
             if (!$itemStmt) {
                 throw new RuntimeException('Prepare items failed: ' . $this->db->error);
@@ -179,21 +176,45 @@ class Picklist
             $sortOrder = 0;
             foreach ($itemsToAdd as $item) {
                 $sortOrder++;
-                $itemStmt->bind_param(
-                    'iissssssssii',
-                    $picklistId,
-                    $item['order_id'],
-                    $item['order_number'],
-                    $item['item_code'],
-                    $item['sku'],
-                    $item['size'],
-                    $item['color'],
-                    $item['title'],
-                    $item['image'],
-                    $item['warehouse_location'],
-                    $item['quantity'],
-                    $sortOrder
-                );
+                if ($this->picklistItemHasDetailColumns()) {
+                    $isBook = (int) ($item['is_book'] ?? 0);
+                    $physicalQty = (int) ($item['physical_qty'] ?? 0);
+                    $itemStmt->bind_param(
+                        'iissssssssssiisii',
+                        $picklistId,
+                        $item['order_id'],
+                        $item['order_number'],
+                        $item['item_code'],
+                        $item['sku'],
+                        $item['size'],
+                        $item['color'],
+                        $item['title'],
+                        $item['image'],
+                        $item['publisher'],
+                        $item['cover_type'],
+                        $physicalQty,
+                        $isBook,
+                        $item['warehouse_location'],
+                        $item['quantity'],
+                        $sortOrder
+                    );
+                } else {
+                    $itemStmt->bind_param(
+                        'iissssssssii',
+                        $picklistId,
+                        $item['order_id'],
+                        $item['order_number'],
+                        $item['item_code'],
+                        $item['sku'],
+                        $item['size'],
+                        $item['color'],
+                        $item['title'],
+                        $item['image'],
+                        $item['warehouse_location'],
+                        $item['quantity'],
+                        $sortOrder
+                    );
+                }
                 if (!$itemStmt->execute()) {
                     throw new RuntimeException('Insert item failed: ' . $itemStmt->error);
                 }
@@ -315,17 +336,236 @@ class Picklist
                 FROM vp_picklist_items pli
                 LEFT JOIN vp_users pu ON pu.id = pli.picked_by
                 WHERE pli.picklist_id = ?
-                ORDER BY pli.sort_order ASC, pli.warehouse_location ASC, pli.id ASC";
+                ORDER BY pli.id ASC";
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('i', $picklistId);
         $stmt->execute();
         $rows = [];
         $res = $stmt->get_result();
         while ($res && ($row = $res->fetch_assoc())) {
-            $rows[] = $row;
+            $rows[] = $this->normalizePicklistItemRow($row);
         }
         $stmt->close();
-        return $rows;
+        return $this->sortPicklistItemsByLocation($rows);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     * @return array<int, array<string, mixed>>
+     */
+    private function sortPicklistItemsByLocation(array $items): array
+    {
+        usort($items, [$this, 'comparePicklistItemLocations']);
+        return $items;
+    }
+
+    /**
+     * @param array<string, mixed> $a
+     * @param array<string, mixed> $b
+     */
+    public function comparePicklistItemLocations(array $a, array $b): int
+    {
+        $locA = trim((string) ($a['warehouse_location'] ?? ''));
+        $locB = trim((string) ($b['warehouse_location'] ?? ''));
+
+        if ($locA === '' && $locB === '') {
+            return strnatcasecmp(
+                (string) ($a['order_number'] ?? ''),
+                (string) ($b['order_number'] ?? '')
+            );
+        }
+        if ($locA === '') {
+            return 1;
+        }
+        if ($locB === '') {
+            return -1;
+        }
+
+        $cmp = strnatcasecmp($locA, $locB);
+        if ($cmp !== 0) {
+            return $cmp;
+        }
+
+        return strnatcasecmp(
+            (string) ($a['order_number'] ?? ''),
+            (string) ($b['order_number'] ?? '')
+        );
+    }
+
+    /**
+     * @param array<string, mixed>|null $product
+     * @return array<string, mixed>
+     */
+    private function buildPicklistItemSnapshot(array $order, ?array $product, string $location, int $qty): array
+    {
+        $itemCode = trim((string) ($order['item_code'] ?? ''));
+        $sku = trim((string) ($order['sku'] ?? ''));
+        $title = trim((string) ($order['title'] ?? ''));
+        $image = trim((string) ($order['image'] ?? ''));
+        if ($image === '' && is_array($product) && !empty($product['image'])) {
+            $image = trim((string) $product['image']);
+        }
+
+        $publisher = trim((string) ($order['publisher'] ?? ''));
+        if ($publisher === '' && is_array($product) && !empty($product['publisher'])) {
+            $publisher = trim((string) $product['publisher']);
+        }
+
+        $coverType = is_array($product) ? trim((string) ($product['cover_type'] ?? '')) : '';
+        $physicalQty = is_array($product) ? (int) ($product['physical_stock'] ?? 0) : 0;
+        $author = trim((string) ($order['author'] ?? ''));
+        if ($author === '' && is_array($product) && !empty($product['author'])) {
+            $author = trim((string) $product['author']);
+        }
+
+        $itemtype = trim((string) ($order['itemtype'] ?? ''));
+        if ($itemtype === '' && is_array($product) && !empty($product['itemtype'])) {
+            $itemtype = trim((string) $product['itemtype']);
+        }
+
+        $groupname = trim((string) ($order['groupname'] ?? ''));
+        if ($groupname === '' && is_array($product) && !empty($product['groupname'])) {
+            $groupname = trim((string) $product['groupname']);
+        }
+
+        $isBook = $this->detectBookItem($author, $publisher, $itemtype, $groupname);
+
+        return [
+            'order_id' => (int) ($order['id'] ?? 0),
+            'order_number' => (string) ($order['order_number'] ?? ''),
+            'item_code' => $itemCode,
+            'sku' => $sku,
+            'size' => trim((string) ($order['size'] ?? '')),
+            'color' => trim((string) ($order['color'] ?? '')),
+            'title' => $title,
+            'image' => $image,
+            'warehouse_location' => $location,
+            'quantity' => $qty,
+            'publisher' => $publisher,
+            'cover_type' => $coverType,
+            'physical_qty' => $physicalQty,
+            'is_book' => $isBook ? 1 : 0,
+            'author' => $author,
+            'itemtype' => $itemtype,
+            'groupname' => $groupname,
+        ];
+    }
+
+    private function detectBookItem(string $author, string $publisher, string $itemtype, string $groupname): bool
+    {
+        if ($author !== '' || $publisher !== '') {
+            return true;
+        }
+        foreach ([$itemtype, $groupname] as $val) {
+            $norm = strtolower(trim($val));
+            if ($norm !== '' && str_contains($norm, 'book')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function picklistItemHasDetailColumns(): bool
+    {
+        static $has = null;
+        if ($has !== null) {
+            return $has;
+        }
+        $res = $this->db->query("SHOW COLUMNS FROM vp_picklist_items LIKE 'physical_qty'");
+        $has = $res && $res->num_rows > 0;
+        return $has;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function normalizePicklistItemRow(array $row): array
+    {
+        $publisher = trim((string) ($row['publisher'] ?? ''));
+        $coverType = trim((string) ($row['cover_type'] ?? ''));
+        $physicalQty = (int) ($row['physical_qty'] ?? 0);
+        $author = trim((string) ($row['author'] ?? ''));
+        $itemtype = trim((string) ($row['itemtype'] ?? ''));
+        $groupname = trim((string) ($row['groupname'] ?? ''));
+        $isBook = !empty($row['is_book']);
+
+        if ($publisher === '' || $coverType === '' || $physicalQty === 0 || !$isBook) {
+            require_once __DIR__ . '/../order/order.php';
+            require_once __DIR__ . '/../product/product.php';
+            $orderModel = new Order($this->db);
+            $productModel = new product($this->db);
+
+            $order = !empty($row['order_id']) ? $orderModel->getOrderById((int) $row['order_id']) : null;
+            $product = null;
+            $sku = trim((string) ($row['sku'] ?? ''));
+            $itemCode = trim((string) ($row['item_code'] ?? ''));
+            if ($sku !== '') {
+                $product = $productModel->getProductByskuExact($sku);
+            }
+            if (!$product && $itemCode !== '') {
+                $product = $productModel->getProductByItemCode($itemCode);
+            }
+
+            if (is_array($order)) {
+                if ($author === '') {
+                    $author = trim((string) ($order['author'] ?? ''));
+                }
+                if ($publisher === '') {
+                    $publisher = trim((string) ($order['publisher'] ?? ''));
+                }
+                if ($itemtype === '') {
+                    $itemtype = trim((string) ($order['itemtype'] ?? ''));
+                }
+                if ($groupname === '') {
+                    $groupname = trim((string) ($order['groupname'] ?? ''));
+                }
+                if (trim((string) ($row['image'] ?? '')) === '' && !empty($order['image'])) {
+                    $row['image'] = trim((string) $order['image']);
+                }
+            }
+
+            if (is_array($product)) {
+                if ($publisher === '' && !empty($product['publisher'])) {
+                    $publisher = trim((string) $product['publisher']);
+                }
+                if ($coverType === '' && !empty($product['cover_type'])) {
+                    $coverType = trim((string) $product['cover_type']);
+                }
+                if ($physicalQty === 0) {
+                    $physicalQty = (int) ($product['physical_stock'] ?? 0);
+                }
+                if ($author === '' && !empty($product['author'])) {
+                    $author = trim((string) $product['author']);
+                }
+                if ($itemtype === '' && !empty($product['itemtype'])) {
+                    $itemtype = trim((string) $product['itemtype']);
+                }
+                if ($groupname === '' && !empty($product['groupname'])) {
+                    $groupname = trim((string) $product['groupname']);
+                }
+                if (trim((string) ($row['image'] ?? '')) === '' && !empty($product['image'])) {
+                    $row['image'] = trim((string) $product['image']);
+                }
+                if (trim((string) ($row['warehouse_location'] ?? '')) === '' && !empty($product['location'])) {
+                    $row['warehouse_location'] = trim((string) $product['location']);
+                }
+            }
+        }
+
+        if (!$isBook) {
+            $isBook = $this->detectBookItem($author, $publisher, $itemtype, $groupname);
+        }
+
+        $row['publisher'] = $publisher;
+        $row['cover_type'] = $coverType;
+        $row['physical_qty'] = $physicalQty;
+        $row['author'] = $author;
+        $row['itemtype'] = $itemtype;
+        $row['groupname'] = $groupname;
+        $row['is_book'] = $isBook ? 1 : 0;
+
+        return $row;
     }
 
     /**

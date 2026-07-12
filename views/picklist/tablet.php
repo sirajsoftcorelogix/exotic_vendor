@@ -1,5 +1,7 @@
 <?php
 /** @var array $data */
+require_once __DIR__ . '/partials/item_helpers.php';
+
 $picklist = $data['picklist'] ?? [];
 $items = $data['items'] ?? [];
 $plId = (int) ($picklist['id'] ?? 0);
@@ -37,22 +39,33 @@ $total = count($items);
             <?php
             $itemId = (int) ($item['id'] ?? 0);
             $isPicked = ($item['status'] ?? '') === 'picked';
+            $isBook = picklist_item_is_book($item);
+            $imageUrl = picklist_item_image_url($item);
             ?>
             <div class="pick-item border rounded-xl p-4 shadow-sm <?= $isPicked ? 'bg-green-50 border-green-300 opacity-75' : 'bg-white cursor-pointer active:scale-[0.99]' ?>"
                  data-item-id="<?= $itemId ?>"
                  data-picked="<?= $isPicked ? '1' : '0' ?>">
                 <div class="flex gap-3">
-                    <?php if (!empty($item['image'])): ?>
-                        <img src="<?= htmlspecialchars((string) $item['image']) ?>" alt="" class="w-20 h-20 object-contain border rounded flex-shrink-0">
+                    <?php if ($imageUrl !== ''): ?>
+                        <img src="<?= htmlspecialchars($imageUrl) ?>" alt="" class="w-24 h-24 object-contain border rounded flex-shrink-0 bg-white">
+                    <?php else: ?>
+                        <div class="w-24 h-24 border rounded flex-shrink-0 bg-gray-50 flex items-center justify-center text-xs text-gray-400">No image</div>
                     <?php endif; ?>
                     <div class="min-w-0 flex-1">
                         <div class="text-lg font-bold text-amber-800"><?= htmlspecialchars((string) ($item['warehouse_location'] ?: 'No location')) ?></div>
-                        <div class="text-sm font-semibold text-gray-900 mt-1"><?= htmlspecialchars((string) ($item['order_number'] ?? '')) ?></div>
-                        <div class="text-sm text-gray-700 line-clamp-2"><?= htmlspecialchars((string) ($item['title'] ?? '')) ?></div>
-                        <div class="text-xs text-gray-500 mt-1">
-                            <?= htmlspecialchars((string) ($item['sku'] ?: $item['item_code'] ?: '')) ?>
-                            · Qty <?= (int) ($item['quantity'] ?? 1) ?>
+                        <div class="text-sm font-semibold text-gray-900 mt-1">Order: <?= htmlspecialchars((string) ($item['order_number'] ?? '')) ?></div>
+                        <div class="text-xs text-gray-600 mt-0.5">SKU: <?= htmlspecialchars(picklist_item_sku($item) ?: '—') ?></div>
+                        <div class="text-sm text-gray-800 mt-1 line-clamp-3"><?= htmlspecialchars((string) ($item['title'] ?? '')) ?></div>
+                        <div class="text-xs text-gray-600 mt-2">
+                            Physical Qty: <span class="font-semibold"><?= (int) ($item['physical_qty'] ?? 0) ?></span>
+                            · Order Qty: <?= (int) ($item['quantity'] ?? 1) ?>
                         </div>
+                        <?php if ($isBook): ?>
+                            <div class="text-xs text-gray-600 mt-1">
+                                Publisher: <?= htmlspecialchars((string) ($item['publisher'] ?? '—')) ?>
+                                · Cover: <?= htmlspecialchars((string) ($item['cover_type'] ?? '—')) ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                     <div class="flex-shrink-0 self-center">
                         <?php if ($isPicked): ?>
