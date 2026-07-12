@@ -36,7 +36,7 @@ class PicklistController
             'total_pages' => max(1, $totalPages),
             'limit' => $limit,
             'filters' => $filters,
-            'staff_list' => $commanModel->get_staff_list(),
+            'picker_list' => $commanModel->get_picker_list(),
         ], 'Picklists');
     }
 
@@ -81,7 +81,7 @@ class PicklistController
         renderTemplate('views/picklist/tablet.php', [
             'picklist' => $picklist,
             'items' => $picklistModel->getPicklistItems($id),
-            'staff_list' => $commanModel->get_staff_list(),
+            'picker_list' => $commanModel->get_picker_list(),
         ], 'Pick — ' . ($picklist['picklist_number'] ?? ''));
     }
 

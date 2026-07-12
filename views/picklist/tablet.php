@@ -3,7 +3,7 @@
 $picklist = $data['picklist'] ?? [];
 $items = $data['items'] ?? [];
 $plId = (int) ($picklist['id'] ?? 0);
-$staffList = $data['staff_list'] ?? [];
+$staffList = $data['picker_list'] ?? [];
 
 $picked = 0;
 foreach ($items as $it) {

@@ -6,7 +6,7 @@ $totalPages = (int) ($data['total_pages'] ?? 1);
 $limit = (int) ($data['limit'] ?? 20);
 $totalRecords = (int) ($data['total_records'] ?? 0);
 $picklists = $data['picklists'] ?? [];
-$staffList = $data['staff_list'] ?? [];
+$staffList = $data['picker_list'] ?? [];
 
 $flash = $_SESSION['picklist_flash'] ?? null;
 if ($flash) {
