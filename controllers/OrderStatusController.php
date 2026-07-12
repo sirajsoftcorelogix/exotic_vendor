@@ -112,8 +112,11 @@ class OrderStatusController
             'in_use' => $usage['in_use'],
             'order_count' => $usage['order_count'],
             'child_count' => $usage['child_count'],
-            'can_delete' => !$usage['in_use'],
-            'can_deactivate' => !$usage['in_use'],
+            'child_order_count' => $usage['child_order_count'],
+            'used_in_vp_orders' => $usage['used_in_vp_orders'],
+            'children_in_vp_orders' => $usage['children_in_vp_orders'],
+            'can_delete' => !$usage['used_in_vp_orders'] && $usage['child_count'] === 0,
+            'can_deactivate' => !$usage['used_in_vp_orders'],
         ]);
         exit;
     }

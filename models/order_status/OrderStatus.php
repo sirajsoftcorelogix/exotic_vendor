@@ -212,66 +212,226 @@ class OrderStatus
         return null;
     }
 
+    public function countOrdersUsingStatusSlug(string $slug): int
+    {
+        $slug = trim($slug);
+        if ($slug === '') {
+            return 0;
+        }
+
+        $sql = 'SELECT COUNT(*) AS c
+                FROM vp_orders
+                WHERE LOWER(TRIM(status)) = LOWER(TRIM(?))';
+
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+
+        $stmt->bind_param('s', $slug);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return (int) ($row['c'] ?? 0);
+    }
+
     /**
-     * @return array{order_count:int,child_count:int,in_use:bool}
+     * When a status slug is renamed, keep vp_orders.status in sync (matched by slug, not id).
+     */
+    public function syncVpOrdersStatusSlug(string $oldSlug, string $newSlug): int
+    {
+        $oldSlug = trim($oldSlug);
+        $newSlug = trim($newSlug);
+
+        if ($oldSlug === '' || $newSlug === '' || strcasecmp($oldSlug, $newSlug) === 0) {
+            return 0;
+        }
+
+        $sql = 'UPDATE vp_orders SET status = ? WHERE LOWER(TRIM(status)) = LOWER(TRIM(?))';
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+
+        $stmt->bind_param('ss', $newSlug, $oldSlug);
+        $stmt->execute();
+        $affected = $stmt->affected_rows;
+        $stmt->close();
+
+        return max(0, (int) $affected);
+    }
+
+    public function countOrdersUsingChildStatusSlugs(int $parentId): int
+    {
+        if ($parentId <= 0) {
+            return 0;
+        }
+
+        $sql = 'SELECT COUNT(*) AS c
+                FROM vp_orders o
+                INNER JOIN vp_order_status s ON LOWER(TRIM(o.status)) = LOWER(TRIM(s.slug))
+                WHERE s.parent_id = ?';
+
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+
+        $stmt->bind_param('i', $parentId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return (int) ($row['c'] ?? 0);
+    }
+
+    /**
+     * @return array<int, array{slug:string,title:string,order_count:int}>
+     */
+    public function getChildrenUsedInVpOrders(int $parentId): array
+    {
+        if ($parentId <= 0) {
+            return [];
+        }
+
+        $sql = 'SELECT s.slug, s.title, COUNT(o.id) AS order_count
+                FROM vp_order_status s
+                INNER JOIN vp_orders o ON LOWER(TRIM(o.status)) = LOWER(TRIM(s.slug))
+                WHERE s.parent_id = ?
+                GROUP BY s.id, s.slug, s.title
+                ORDER BY s.title ASC, s.slug ASC';
+
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+
+        $stmt->bind_param('i', $parentId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $rows = [];
+        while ($row = $result->fetch_assoc()) {
+            $rows[] = [
+                'slug' => (string) ($row['slug'] ?? ''),
+                'title' => (string) ($row['title'] ?? ''),
+                'order_count' => (int) ($row['order_count'] ?? 0),
+            ];
+        }
+        $stmt->close();
+
+        return $rows;
+    }
+
+    public function countChildStatuses(int $id): int
+    {
+        $stmt = $this->conn->prepare('SELECT COUNT(*) AS c FROM vp_order_status WHERE parent_id = ?');
+        if (!$stmt) {
+            return 0;
+        }
+
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return (int) ($row['c'] ?? 0);
+    }
+
+    /**
+     * @return array{
+     *   order_count:int,
+     *   child_count:int,
+     *   child_order_count:int,
+     *   in_use:bool,
+     *   used_in_vp_orders:bool,
+     *   children_in_vp_orders:array<int, array{slug:string,title:string,order_count:int}>
+     * }
      */
     public function getUsage(int $id): array
     {
         $record = $this->getRecord($id);
         if (!$record) {
-            return ['order_count' => 0, 'child_count' => 0, 'in_use' => false];
+            return [
+                'order_count' => 0,
+                'child_count' => 0,
+                'child_order_count' => 0,
+                'in_use' => false,
+                'used_in_vp_orders' => false,
+                'children_in_vp_orders' => [],
+            ];
         }
 
-        $orderCount = 0;
-        $childCount = 0;
-
-        $stmtOrders = $this->conn->prepare('SELECT COUNT(*) AS c FROM vp_orders WHERE status = ?');
-        if ($stmtOrders) {
-            $slug = (string) $record['slug'];
-            $stmtOrders->bind_param('s', $slug);
-            $stmtOrders->execute();
-            $row = $stmtOrders->get_result()->fetch_assoc();
-            $stmtOrders->close();
-            $orderCount = (int) ($row['c'] ?? 0);
-        }
-
-        $stmtChildren = $this->conn->prepare('SELECT COUNT(*) AS c FROM vp_order_status WHERE parent_id = ?');
-        if ($stmtChildren) {
-            $stmtChildren->bind_param('i', $id);
-            $stmtChildren->execute();
-            $row = $stmtChildren->get_result()->fetch_assoc();
-            $stmtChildren->close();
-            $childCount = (int) ($row['c'] ?? 0);
-        }
+        $orderCount = $this->countOrdersUsingStatusSlug((string) ($record['slug'] ?? ''));
+        $childCount = $this->countChildStatuses($id);
+        $childrenInVpOrders = $this->getChildrenUsedInVpOrders($id);
+        $childOrderCount = $this->countOrdersUsingChildStatusSlugs($id);
+        $usedInVpOrders = $orderCount > 0 || $childOrderCount > 0;
 
         return [
             'order_count' => $orderCount,
             'child_count' => $childCount,
-            'in_use' => $orderCount > 0 || $childCount > 0,
+            'child_order_count' => $childOrderCount,
+            'in_use' => $usedInVpOrders || $childCount > 0,
+            'used_in_vp_orders' => $usedInVpOrders,
+            'children_in_vp_orders' => $childrenInVpOrders,
         ];
     }
 
-    private function getUsageBlockReason(int $id, string $actionLabel = 'modify'): ?string
+    private function getVpOrdersBlockReason(int $id, string $actionLabel = 'delete'): ?string
     {
-        $usage = $this->getUsage($id);
-        if (!$usage['in_use']) {
+        $record = $this->getRecord($id);
+        if (!$record) {
             return null;
         }
 
-        $parts = [];
-        if ($usage['order_count'] > 0) {
-            $noun = $usage['order_count'] === 1 ? 'order' : 'orders';
-            $parts[] = $usage['order_count'] . ' ' . $noun;
-        }
-        if ($usage['child_count'] > 0) {
-            $noun = $usage['child_count'] === 1 ? 'child status' : 'child statuses';
-            $parts[] = $usage['child_count'] . ' ' . $noun;
+        $slug = (string) ($record['slug'] ?? '');
+        $orderCount = $this->countOrdersUsingStatusSlug($slug);
+        if ($orderCount > 0) {
+            $noun = $orderCount === 1 ? 'order' : 'orders';
+            return sprintf(
+                'Cannot %s: status slug "%s" is used on %d %s in vp_orders.status.',
+                $actionLabel,
+                $slug,
+                $orderCount,
+                $noun
+            );
         }
 
+        $childrenInUse = $this->getChildrenUsedInVpOrders($id);
+        if (!empty($childrenInUse)) {
+            $parts = [];
+            foreach ($childrenInUse as $child) {
+                $noun = $child['order_count'] === 1 ? 'order' : 'orders';
+                $label = $child['title'] !== '' ? $child['title'] : $child['slug'];
+                $parts[] = sprintf('"%s" (%s) on %d %s', $label, $child['slug'], $child['order_count'], $noun);
+            }
+
+            return sprintf(
+                'Cannot %s: child status slug(s) under this group are used in vp_orders.status: %s.',
+                $actionLabel,
+                implode('; ', $parts)
+            );
+        }
+
+        return null;
+    }
+
+    private function getChildStatusBlockReason(int $id, string $actionLabel = 'delete'): ?string
+    {
+        $childCount = $this->countChildStatuses($id);
+        if ($childCount <= 0) {
+            return null;
+        }
+
+        $noun = $childCount === 1 ? 'child status' : 'child statuses';
+
         return sprintf(
-            'Cannot %s: this record is linked to %s.',
+            'Cannot %s: this group still has %d %s. Delete or reassign child statuses first.',
             $actionLabel,
-            implode(' and ', $parts)
+            $childCount,
+            $noun
         );
     }
 
@@ -387,34 +547,52 @@ class OrderStatus
             return ['success' => false, 'message' => 'Cannot move a group under another group while it has child statuses.'];
         }
 
-        if ($slug !== (string) $existing['slug'] && $usage['order_count'] > 0) {
-            return ['success' => false, 'message' => 'Cannot change slug while orders still use the current slug.'];
-        }
-
         if ($isActive === 0) {
-            $block = $this->getUsageBlockReason($id, 'deactivate');
-            if ($block !== null) {
-                return ['success' => false, 'message' => $block, 'usage' => $usage];
+            $ordersBlock = $this->getVpOrdersBlockReason($id, 'deactivate');
+            if ($ordersBlock !== null) {
+                return ['success' => false, 'message' => $ordersBlock, 'usage' => $this->getUsage($id)];
             }
         }
 
         $isActive = $isActive ? 1 : 0;
+        $oldSlug = (string) ($existing['slug'] ?? '');
+        $slugChanged = strcasecmp($oldSlug, $slug) !== 0;
+        $syncedOrders = 0;
 
-        $sql = 'UPDATE vp_order_status SET title = ?, slug = ?, parent_id = ?, admin_id = ?, is_active = ? WHERE id = ?';
-        $stmt = $this->conn->prepare($sql);
-        if (!$stmt) {
-            return ['success' => false, 'message' => 'Database error: ' . $this->conn->error];
-        }
+        $this->conn->begin_transaction();
 
-        $stmt->bind_param('ssiiii', $title, $slug, $parentId, $adminId, $isActive, $id);
-        if ($stmt->execute()) {
+        try {
+            if ($slugChanged) {
+                $syncedOrders = $this->syncVpOrdersStatusSlug($oldSlug, $slug);
+            }
+
+            $sql = 'UPDATE vp_order_status SET title = ?, slug = ?, parent_id = ?, admin_id = ?, is_active = ? WHERE id = ?';
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) {
+                throw new RuntimeException('Database error: ' . $this->conn->error);
+            }
+
+            $stmt->bind_param('ssiiii', $title, $slug, $parentId, $adminId, $isActive, $id);
+            if (!$stmt->execute()) {
+                $err = $stmt->error;
+                $stmt->close();
+                throw new RuntimeException('Could not update: ' . $err);
+            }
             $stmt->close();
-            return ['success' => true, 'message' => 'Order status updated successfully.'];
-        }
 
-        $err = $stmt->error;
-        $stmt->close();
-        return ['success' => false, 'message' => 'Could not update: ' . $err];
+            $this->conn->commit();
+
+            $message = 'Order status updated successfully.';
+            if ($slugChanged && $syncedOrders > 0) {
+                $noun = $syncedOrders === 1 ? 'order' : 'orders';
+                $message .= ' ' . $syncedOrders . ' ' . $noun . ' in vp_orders.status were updated to the new slug.';
+            }
+
+            return ['success' => true, 'message' => $message, 'synced_orders' => $syncedOrders];
+        } catch (Throwable $e) {
+            $this->conn->rollback();
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
     }
 
     public function deleteRecord(int $id): array
@@ -428,9 +606,9 @@ class OrderStatus
             return ['success' => false, 'message' => 'Record not found.'];
         }
 
-        $block = $this->getUsageBlockReason($id, 'deactivate');
-        if ($block !== null) {
-            return ['success' => false, 'message' => $block, 'usage' => $this->getUsage($id)];
+        $ordersBlock = $this->getVpOrdersBlockReason($id, 'deactivate');
+        if ($ordersBlock !== null) {
+            return ['success' => false, 'message' => $ordersBlock, 'usage' => $this->getUsage($id)];
         }
 
         $sql = 'UPDATE vp_order_status SET is_active = 0 WHERE id = ?';
@@ -458,9 +636,15 @@ class OrderStatus
         }
 
         $usage = $this->getUsage($id);
-        if ($usage['in_use']) {
-            $block = $this->getUsageBlockReason($id, 'delete');
-            return ['success' => false, 'message' => $block, 'usage' => $usage];
+
+        $ordersBlock = $this->getVpOrdersBlockReason($id, 'delete');
+        if ($ordersBlock !== null) {
+            return ['success' => false, 'message' => $ordersBlock, 'usage' => $usage];
+        }
+
+        $childBlock = $this->getChildStatusBlockReason($id, 'delete');
+        if ($childBlock !== null) {
+            return ['success' => false, 'message' => $childBlock, 'usage' => $usage];
         }
 
         $sql = 'DELETE FROM vp_order_status WHERE id = ?';
