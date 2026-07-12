@@ -38,8 +38,8 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
             $deleteConfirm = 'Delete picklist ' . (string) ($picklist['picklist_number'] ?? '') . '? Orders on this list will be set back to Item Received where applicable.';
             ?>
             <a href="?page=picklist&action=delete&id=<?= $plId ?>"
-               onclick="return confirm(<?= json_encode($deleteConfirm, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>);"
-               class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm font-semibold hover:bg-red-100 shadow-sm">
+               class="js-picklist-confirm-action inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm font-semibold hover:bg-red-100 shadow-sm"
+               data-confirm="<?= htmlspecialchars($deleteConfirm, ENT_QUOTES, 'UTF-8') ?>">
                 <i class="fas fa-trash-alt" aria-hidden="true"></i> Delete
             </a>
         </div>
@@ -105,9 +105,10 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
                             <?php
                             $removeConfirm = 'Remove this item from the picklist? The order will be set back to Item Received if applicable.';
                             ?>
-                            <a href="?page=picklist&action=delete_item&item_id=<?= (int) ($item['id'] ?? 0) ?>"
-                               onclick="return confirm(<?= json_encode($removeConfirm, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>);"
-                               class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-red-200 bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100"
+                            <a href="#"
+                               class="js-picklist-confirm-action inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-red-200 bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100"
+                               data-confirm="<?= htmlspecialchars($removeConfirm, ENT_QUOTES, 'UTF-8') ?>"
+                               data-item-id="<?= (int) ($item['id'] ?? 0) ?>"
                                title="Remove from picklist">
                                 <i class="fas fa-times" aria-hidden="true"></i> Remove
                             </a>
@@ -122,3 +123,4 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
         </table>
     </div>
 </div>
+<?php require_once __DIR__ . '/partials/confirm_delete_script.php'; ?>
