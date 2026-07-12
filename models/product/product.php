@@ -1095,10 +1095,7 @@ class product
         );
 
         $pagesRaw = trim((string) ($apiRow['pages'] ?? ''));
-        $pages = null;
-        if ($pagesRaw !== '' && ctype_digit($pagesRaw)) {
-            $pages = (int) $pagesRaw;
-        }
+        $pages = $pagesRaw === '' ? null : $pagesRaw;
 
         $pubDate = $this->normalizeApiDateValue($apiRow['publication_date'] ?? '');
 
@@ -1140,12 +1137,12 @@ class product
             }
             $val = $fields[$col];
             if ($col === 'pages') {
-                if ($val === null || $val === '' || (int) $val <= 0) {
+                if ($val === null || trim((string) $val) === '') {
                     $setParts[] = "$col = NULL";
                 } else {
                     $setParts[] = "$col = ?";
-                    $types .= 'i';
-                    $values[] = (int) $val;
+                    $types .= 's';
+                    $values[] = (string) $val;
                 }
                 continue;
             }
@@ -1211,7 +1208,7 @@ class product
             $pubDateDisplay = '';
         }
 
-        $pages = (int) ($productRow['pages'] ?? 0);
+        $pages = trim((string) ($productRow['pages'] ?? ''));
 
         return [
             'authors' => [],
@@ -1222,7 +1219,7 @@ class product
             'edition' => trim((string) ($productRow['edition'] ?? '')),
             'publication_date' => $pubDateDisplay,
             'language' => trim((string) ($productRow['language'] ?? '')),
-            'pages' => $pages > 0 ? (string) $pages : '',
+            'pages' => $pages,
         ];
     }
 

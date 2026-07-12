@@ -6064,10 +6064,7 @@ class ProductsController
             $publisherId = $this->resolveExactInboundPublisherId($conn, (string) ($data['publisher'] ?? ''));
             $publicationDate = $this->normalizeProfileDateInput((string) ($data['publication_date'] ?? ''), 'Publication date');
             $pagesRaw = trim((string) ($data['pages'] ?? ''));
-            if ($pagesRaw !== '' && (!ctype_digit($pagesRaw) || (int) $pagesRaw < 0)) {
-                throw new Exception('Pages must be a non-negative whole number.');
-            }
-            $pages = $pagesRaw === '' ? null : (int) $pagesRaw;
+            $pages = $pagesRaw === '' ? null : $pagesRaw;
 
             $updateData = [
                 'author' => $authorCsv,
@@ -6095,7 +6092,7 @@ class ProductsController
                 'edition' => $updateData['edition'],
                 'publication_date' => $publicationDate === '' ? null : $publicationDate,
                 'language' => $updateData['language'],
-                'pages' => $pagesRaw === '' ? null : (string) $pages,
+                'pages' => $pagesRaw === '' ? null : $pagesRaw,
                 'updated_at' => date('Y-m-d H:i:s'),
             ];
             $productSave = $productModel->modifyProduct($productId, $productBookUpdate);

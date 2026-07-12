@@ -1240,7 +1240,7 @@
             </div>
             <div>
                 <label for="input_book_pages" class="block text-sm font-medium text-gray-600 mb-1">Pages</label>
-                <input type="number" id="input_book_pages" min="0" step="1" value="<?php echo htmlspecialchars((string)($bookDetails['pages'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+                <input type="text" id="input_book_pages" value="<?php echo htmlspecialchars((string)($bookDetails['pages'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" placeholder="e.g. 10 pages color" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none">
             </div>
         </div>
         <div class="flex justify-end gap-3 mt-6">
