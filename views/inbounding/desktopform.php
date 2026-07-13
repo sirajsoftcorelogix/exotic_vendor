@@ -3863,7 +3863,11 @@ document.addEventListener('DOMContentLoaded', function() {
     function triggerPrintJsonPreview(apiStatus) {
         const publishStatus = (Number(apiStatus) === 0) ? 0 : 1;
         const form = document.getElementById('product_form');
-        syncFormTomSelectValues(form);
+        if (typeof window.syncInboundDesktopFormBeforeSave === 'function') {
+            window.syncInboundDesktopFormBeforeSave();
+        } else {
+            syncFormTomSelectValues(form);
+        }
         const formData = new FormData(form);
         formData.set('save_action', 'preview_json');
         const recordId = new URLSearchParams(window.location.search).get('id');
@@ -4195,7 +4199,11 @@ document.addEventListener('DOMContentLoaded', function() {
     function triggerPublishController(apiStatus) {
         const publishStatus = (Number(apiStatus) === 0) ? 0 : 1;
         const form = document.getElementById('product_form');
-        syncFormTomSelectValues(form);
+        if (typeof window.syncInboundDesktopFormBeforeSave === 'function') {
+            window.syncInboundDesktopFormBeforeSave();
+        } else {
+            syncFormTomSelectValues(form);
+        }
         const formData = new FormData(form);
         formData.set('save_action', 'generate');
         const recordId = new URLSearchParams(window.location.search).get('id');
