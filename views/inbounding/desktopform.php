@@ -1044,7 +1044,16 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                 <input type="text" inputmode="decimal" name="sourcingfee" id="book_sourcingfee" value="<?php echo htmlspecialchars($saved_sourcingfee, ENT_QUOTES, 'UTF-8'); ?>" placeholder="0.00" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-[#555] mb-1">Shipping Fee (INR)</label>
+                                <div class="flex items-center gap-1.5 mb-1">
+                                    <label class="text-xs font-bold text-[#555]">Shipping Fee (INR)</label>
+                                    <?php
+                                    $btnId = 'book-shipping-fee-recalc-btn';
+                                    $title = 'Recalculate shipping fee from weight';
+                                    $srLabel = 'Recalculate shipping fee';
+                                    $iconType = 'refresh';
+                                    require __DIR__ . '/partials/catalog_refresh_btn.php';
+                                    ?>
+                                </div>
                                 <input type="text" inputmode="decimal" name="shippingfee" id="book_shippingfee" value="<?php echo htmlspecialchars(number_format($book_shipping_fee_initial, 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" placeholder="0.00" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
                             </div>
                             <div id="book-meta-color-size-slot" class="contents"></div>
@@ -3419,6 +3428,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if (shippingFeeInput) {
         shippingFeeInput.addEventListener('input', function () {
             window.bookShippingFeeManual = true;
+        });
+    }
+
+    const shippingFeeRecalcBtn = document.getElementById('book-shipping-fee-recalc-btn');
+    if (shippingFeeRecalcBtn) {
+        shippingFeeRecalcBtn.addEventListener('click', function () {
+            window.bookShippingFeeManual = false;
+            if (typeof window.updateBookShippingFeeFromWeight === 'function') {
+                window.updateBookShippingFeeFromWeight(true);
+            }
         });
     }
 });
