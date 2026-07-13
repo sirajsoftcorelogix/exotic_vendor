@@ -1730,7 +1730,7 @@ class Inbounding {
           return ['success' => false, 'message' => $this->conn->error];
         }
 
-        $types = "sisssssisddddssdiissddsssisssssssi";
+        $types = "sisssssisddddssdiissddsssissssssi";
 
         $stmt->bind_param(
             $types,
