@@ -373,43 +373,6 @@ function inbound_api_build_item_linking_modify_fields(array $d): array
     return $fields;
 }
 
-/** @return array{itemcode:string,size:string,color:string} */
-function inbound_api_resolve_modify_target(mysqli $conn, array $d): array
-{
-    $itemcode = trim((string) ($d['Item_code'] ?? ''));
-    $size = trim((string) ($d['size'] ?? ''));
-    $color = trim((string) ($d['color'] ?? ''));
-
-    if ($itemcode === '') {
-        return ['itemcode' => '', 'size' => $size, 'color' => $color];
-    }
-
-    foreach ([[$size, $color], ['', '']] as [$trySize, $tryColor]) {
-        $stmt = $conn->prepare(
-            'SELECT item_code, COALESCE(size, \'\') AS size, COALESCE(color, \'\') AS color
-             FROM vp_products
-             WHERE item_code = ? AND COALESCE(size, \'\') = ? AND COALESCE(color, \'\') = ?
-             LIMIT 1'
-        );
-        if (!$stmt) {
-            break;
-        }
-        $stmt->bind_param('sss', $itemcode, $trySize, $tryColor);
-        $stmt->execute();
-        $row = $stmt->get_result()?->fetch_assoc();
-        $stmt->close();
-        if (is_array($row)) {
-            return [
-                'itemcode' => trim((string) ($row['item_code'] ?? $itemcode)),
-                'size' => trim((string) ($row['size'] ?? '')),
-                'color' => trim((string) ($row['color'] ?? '')),
-            ];
-        }
-    }
-
-    return ['itemcode' => $itemcode, 'size' => $size, 'color' => $color];
-}
-
 /**
  * @return array{itemcode:string,size:string,color:string,fields:array<string,mixed>,section:string}|null
  */
@@ -448,19 +411,10 @@ function inbound_api_build_section_modify_payload(Inbounding $model, int $inboun
         $fields = inbound_api_build_item_linking_modify_fields($d);
     }
 
-    global $conn;
-    $target = ($conn instanceof mysqli)
-        ? inbound_api_resolve_modify_target($conn, $d)
-        : [
-            'itemcode' => trim((string) $d['Item_code']),
-            'size' => trim((string) ($d['size'] ?? '')),
-            'color' => trim((string) ($d['color'] ?? '')),
-        ];
-
     return [
-        'itemcode' => $target['itemcode'],
-        'size' => $target['size'],
-        'color' => $target['color'],
+        'itemcode' => trim((string) $d['Item_code']),
+        'size' => trim((string) ($d['size'] ?? '')),
+        'color' => trim((string) ($d['color'] ?? '')),
         'fields' => $fields,
         'section' => $section,
     ];

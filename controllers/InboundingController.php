@@ -2875,7 +2875,7 @@ class InboundingController {
     {
         is_login();
         header('Content-Type: application/json; charset=utf-8');
-        global $inboundingModel;
+        global $inboundingModel, $productModel;
 
         $id = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
         $section = trim((string) ($_GET['section'] ?? $_POST['section'] ?? ''));
@@ -2893,7 +2893,6 @@ class InboundingController {
         }
 
         require_once __DIR__ . '/../helpers/inbound_api_sections.php';
-        require_once __DIR__ . '/../helpers/exotic_india_api.php';
 
         $payload = inbound_api_build_section_modify_payload($inboundingModel, $id, $section);
         if ($payload === null) {
@@ -2912,44 +2911,39 @@ class InboundingController {
             exit;
         }
 
-        $endpoint = 'product/modify'
-            . '?itemcode=' . rawurlencode($payload['itemcode'])
-            . '&size=' . rawurlencode($payload['size'])
-            . '&color=' . rawurlencode($payload['color']);
-
-        $api = exotic_india_api_post(
-            $endpoint,
-            http_build_query($payload['fields']),
-            ['Content-Type: application/x-www-form-urlencoded']
-        );
-
-        if (!$api['success']) {
-            echo json_encode([
-                'status' => 'error',
-                'message' => trim((string) ($api['message'] ?? '')) !== ''
-                    ? (string) $api['message']
-                    : 'Vendor API modify failed.',
-                'http_code' => (int) ($api['http_code'] ?? 0),
-            ]);
+        if (!isset($productModel)) {
+            echo json_encode(['status' => 'error', 'message' => 'Product catalog is unavailable.']);
             exit;
         }
 
-        $apiBody = is_array($api['data'] ?? null) ? $api['data'] : [];
-        $apiSuccess = !isset($apiBody['success']) || (bool) $apiBody['success'];
-        if (!$apiSuccess) {
+        $product = $productModel->findByItemCodeSizeColor(
+            $payload['itemcode'],
+            $payload['size'],
+            $payload['color']
+        );
+        if (!$product) {
             echo json_encode([
                 'status' => 'error',
-                'message' => trim((string) ($apiBody['message'] ?? '')) !== ''
-                    ? (string) $apiBody['message']
-                    : 'Vendor API modify rejected the update.',
-                'http_code' => (int) ($api['http_code'] ?? 0),
+                'message' => 'Published product row not found for item code ' . $payload['itemcode'] . '.',
             ]);
             exit;
         }
 
         $ProductsController = new ProductsController();
+        $vendorSync = $ProductsController->syncProductFieldsToVendor($product, $payload['fields']);
+        if (empty($vendorSync['success'])) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => trim((string) ($vendorSync['message'] ?? '')) !== ''
+                    ? (string) $vendorSync['message']
+                    : 'Vendor API modify failed.',
+                'http_code' => (int) ($vendorSync['http_code'] ?? 0),
+            ]);
+            exit;
+        }
+
         $importResponse = $ProductsController->importApiCall(
-            [$payload['itemcode']],
+            [trim((string) ($product['item_code'] ?? $payload['itemcode']))],
             ['sync_physical_stock' => false]
         );
 
