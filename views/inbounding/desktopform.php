@@ -4214,6 +4214,129 @@ document.addEventListener('DOMContentLoaded', function() {
         return true;
     }
 
+    function buildInboundPublishUrl(recordId, publishStatus, confirmedItemCode) {
+        let url = 'index.php?page=inbounding&action=inbound_product_publish'
+            + '&id=' + encodeURIComponent(recordId)
+            + '&publish_status=' + encodeURIComponent(publishStatus);
+        if (confirmedItemCode) {
+            url += '&confirmed_item_code=' + encodeURIComponent(confirmedItemCode);
+        }
+        return url;
+    }
+
+    function fetchInboundPublishApi(recordId, publishStatus, confirmedItemCode) {
+        return fetch(buildInboundPublishUrl(recordId, publishStatus, confirmedItemCode), {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+        }).then(function (response) {
+            return response.json();
+        });
+    }
+
+    function showPublishSuccessDialog(data) {
+        let html = '<div style="text-align: center;">';
+        html += '<p>' + (data.message || 'Form saved and product uploaded successfully.') + '</p>';
+        if (data.log_file) {
+            html += '<div style="margin-top: 15px;">';
+            html += '<a href="javascript:downloadPublishLog(\'' + data.log_file + '\')" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; cursor: pointer;">';
+            html += '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
+            html += 'Download Log File';
+            html += '</a>';
+            html += '</div>';
+        }
+        html += '</div>';
+
+        return Swal.fire({
+            title: 'Uploaded!',
+            html: html,
+            icon: 'success'
+        }).then(function () {
+            window.location.reload();
+        });
+    }
+
+    function showPublishErrorDialog(data) {
+        let errorMsg = data.message || 'An error occurred during publishing. Please check the logs.';
+
+        if (data.debug) {
+            try {
+                const debugData = JSON.parse(data.debug);
+                if (debugData.error) {
+                    errorMsg = debugData.error;
+                }
+            } catch (e) {
+                errorMsg = data.debug;
+            }
+        }
+
+        let html = '<div style="text-align: center;">';
+        html += '<p style="margin-bottom: 15px; color: #d33;">' + errorMsg + '</p>';
+        if (data.log_file) {
+            html += '<div>';
+            html += '<a href="javascript:downloadPublishLog(\'' + data.log_file + '\')" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: #dc3545; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; cursor: pointer;">';
+            html += '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
+            html += 'Download Error Log';
+            html += '</a>';
+            html += '</div>';
+        }
+        html += '</div>';
+
+        return Swal.fire({
+            title: 'Publish Failed!',
+            html: html,
+            icon: 'error'
+        });
+    }
+
+    function handleInboundPublishApiResponse(data, recordId, publishStatus) {
+        if (data && data.status === 'itemcode_conflict') {
+            const currentCode = data.current_item_code || '';
+            const suggestedCode = data.suggested_item_code || '';
+            const conflictHtml = '<div style="text-align:left;">'
+                + '<p>Item code <strong>' + currentCode + '</strong> is already taken on the website.</p>'
+                + (suggestedCode
+                    ? '<p>The next available code in this series is <strong>' + suggestedCode + '</strong> (checked against local records and the website, same rules as new-item assignment).</p>'
+                    : '<p>No available item code could be found in this series.</p>')
+                + (suggestedCode
+                    ? '<p class="text-sm text-gray-600" style="margin-top:8px;">Gallery images and the inbound record will be updated before retrying publish.</p>'
+                    : '')
+                + '</div>';
+
+            if (!suggestedCode) {
+                return Swal.fire({
+                    title: 'Item Code Already Exists',
+                    html: conflictHtml,
+                    icon: 'error'
+                });
+            }
+
+            return Swal.fire({
+                title: 'Item Code Already Exists',
+                html: conflictHtml,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Use ' + suggestedCode,
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#d97824'
+            }).then(function (result) {
+                if (!result.isConfirmed) {
+                    return null;
+                }
+                return fetchInboundPublishApi(recordId, publishStatus, suggestedCode)
+                    .then(function (retryData) {
+                        return handleInboundPublishApiResponse(retryData, recordId, publishStatus);
+                    });
+            });
+        }
+
+        const isSuccess = data && (data.status === 'success' || data.success === true) && !data.error;
+        if (isSuccess) {
+            return showPublishSuccessDialog(data);
+        }
+
+        return showPublishErrorDialog(data || { message: 'An error occurred during publishing.' });
+    }
+
     // 3. Update Publish Controller to Save Form + Publish (apiStatus: 1 = live, 0 = local → $API_data['status'])
     function triggerPublishController(apiStatus) {
         const publishStatus = (Number(apiStatus) === 0) ? 0 : 1;
@@ -4248,78 +4371,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error('Form save failed (HTTP ' + saveResponse.status + ').');
             }
         })
-        .then(() => {
-            // Second: Call the Publish API after save is successful
-            return fetch(`index.php?page=inbounding&action=inbound_product_publish&id=${recordId}&publish_status=${publishStatus}`);
+        .then(function () {
+            return fetchInboundPublishApi(recordId, publishStatus);
         })
-        .then(response => response.json())
-        .then(data => {
+        .then(function (data) {
             closePublishPopup();
-            
-            // CHECK RESPONSE STATUS BEFORE SHOWING SUCCESS
-            // Support both "status": "success" and "success": true formats
-            const isSuccess = (data.status === 'success' || data.success === true) && !data.error;
-            
-            if (isSuccess) {
-                // Show success with download button
-                let html = '<div style="text-align: center;">';
-                html += '<p>Form saved and product uploaded successfully.</p>';
-                if (data.log_file) {
-                    html += '<div style="margin-top: 15px;">';
-                    html += '<a href="javascript:downloadPublishLog(\'' + data.log_file + '\')" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; cursor: pointer;">';
-                    html += '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
-                    html += 'Download Log File';
-                    html += '</a>';
-                    html += '</div>';
-                }
-                html += '</div>';
-                
-                Swal.fire({
-                    title: 'Uploaded!',
-                    html: html,
-                    icon: 'success'
-                }).then(() => window.location.reload());
-            } else {
-                // Extract actual error from debug field if available
-                let errorMsg = data.message || 'An error occurred during publishing. Please check the logs.';
-                
-                if (data.debug) {
-                    try {
-                        const debugData = JSON.parse(data.debug);
-                        if (debugData.error) {
-                            errorMsg = debugData.error;
-                        }
-                    } catch (e) {
-                        // If debug is not JSON, use it as is
-                        errorMsg = data.debug;
-                    }
-                }
-                
-                // Show error with download button
-                let html = '<div style="text-align: center;">';
-                html += '<p style="margin-bottom: 15px; color: #d33;">' + errorMsg + '</p>';
-                if (data.log_file) {
-                    html += '<div>';
-                    html += '<a href="javascript:downloadPublishLog(\'' + data.log_file + '\')" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: #dc3545; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; cursor: pointer;">';
-                    html += '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
-                    html += 'Download Error Log';
-                    html += '</a>';
-                    html += '</div>';
-                }
-                html += '</div>';
-                
-                Swal.fire({
-                    title: 'Publish Failed!',
-                    html: html,
-                    icon: 'error'
-                });
-            }
+            return handleInboundPublishApiResponse(data, recordId, publishStatus);
         })
-        .catch(error => {
+        .catch(function (error) {
             closePublishPopup();
             Swal.fire({ icon: 'error', title: 'Error', text: 'Publishing failed: ' + error.message });
         })
-        .finally(() => {
+        .finally(function () {
             resetPublishPopup();
         });
     }
