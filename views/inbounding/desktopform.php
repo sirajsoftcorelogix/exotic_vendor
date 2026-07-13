@@ -3705,16 +3705,19 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(function (saveResponse) {
             return saveResponse.text().then(function (saveText) {
                 if (saveResponse.type === 'opaqueredirect' || (saveResponse.status >= 300 && saveResponse.status < 400)) {
-                    return;
+                    throw new Error('Form save redirected; changes were not saved before the website update.');
                 }
                 if (!saveResponse.ok) {
                     throw new Error('Form save failed (HTTP ' + saveResponse.status + ').');
                 }
-                if (saveText && saveText.trim().charAt(0) === '{') {
-                    const saveData = JSON.parse(saveText.trim());
+                const trimmed = (saveText || '').trim();
+                if (trimmed.charAt(0) === '{') {
+                    const saveData = JSON.parse(trimmed);
                     if (saveData && saveData.status && saveData.status !== 'success') {
                         throw new Error(saveData.message || 'Form save failed.');
                     }
+                } else if (trimmed !== '') {
+                    throw new Error('Form save did not succeed.');
                 }
             });
         })
