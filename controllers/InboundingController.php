@@ -1823,6 +1823,21 @@ class InboundingController {
             exit;
         } else {
             inbound_profiler_finish($prof, 'failed', ['message' => $result['message'] ?? '']);
+            $wantsJson = (
+                (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string) $_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
+                || (isset($_SERVER['HTTP_ACCEPT']) && stripos((string) $_SERVER['HTTP_ACCEPT'], 'application/json') !== false)
+            );
+            if ($wantsJson) {
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'status' => 'error',
+                    'message' => (string) ($result['message'] ?? 'Update failed.'),
+                ]);
+                exit;
+            }
             echo "Update failed: " . $result['message'];
         }
     }
