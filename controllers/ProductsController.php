@@ -5636,6 +5636,11 @@ class ProductsController
         ];
     }
 
+    public function syncProductFieldsToVendor(array $product, array $postFields): array
+    {
+        return $this->syncProductFieldsToVendorFrontend($product, $postFields);
+    }
+
     private function normalizeProfileDateInput(string $raw, string $label = 'Date'): string
     {
         $raw = trim($raw);

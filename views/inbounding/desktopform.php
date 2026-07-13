@@ -3673,9 +3673,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const form = document.getElementById('product_form');
-        if (sectionKey === 'book_details' && typeof window.updateBookShippingFeeFromWeight === 'function') {
-            window.updateBookShippingFeeFromWeight();
-        }
         if (typeof window.syncInboundDesktopFormBeforeSave === 'function') {
             window.syncInboundDesktopFormBeforeSave();
         } else {
