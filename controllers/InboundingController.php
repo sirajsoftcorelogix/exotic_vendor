@@ -1844,23 +1844,11 @@ class InboundingController {
 
     private function generateItemcode($group_real_name) {
         global $inboundingModel;
-        $prefix = strtoupper(substr((string)$group_real_name, 0, 1));
-        $last_code = $inboundingModel->getLastItemCode($prefix);
-
-        if (!$last_code) {
-            return $prefix . "A0001"; 
+        $code = $inboundingModel->generateItemCodeAfterGroupName((string) $group_real_name);
+        if ($code === null || $code === '') {
+            die('Error: Could not generate item code.');
         }
-        $alphaPart = substr($last_code, 1, 1); // Get 'A'
-        $numPart   = (int)substr($last_code, 2); // Get 1
-        $numPart++;
-        if ($numPart > 9999) {
-            $numPart = 1;
-            $alphaPart++; // PHP increments 'A' to 'B' automatically            
-            if (strlen($alphaPart) > 1) {
-                die("Error: Maximum item code limit reached for prefix $prefix");
-            }
-        }
-        return $prefix . $alphaPart . str_pad((string)$numPart, 4, '0', STR_PAD_LEFT);
+        return $code;
     }
     public function submitStep3() {
         global $inboundingModel;
@@ -2234,6 +2222,33 @@ class InboundingController {
             $publish_status_req = 1;
         }
         $API_data = array();
+
+        if ($id <= 0) {
+            if (ob_get_length()) { ob_clean(); }
+            header('Content-Type: application/json');
+            echo json_encode(['status' => 'error', 'message' => 'Invalid inbound id.']);
+            inbound_profiler_finish($prof, 'error_invalid_id');
+            exit;
+        }
+
+        $confirmedItemCode = strtoupper(trim((string) ($_GET['confirmed_item_code'] ?? '')));
+        if ($confirmedItemCode !== '') {
+            $updateResult = $inboundingModel->updateInboundItemCode($id, $confirmedItemCode);
+            if (!$updateResult['success']) {
+                if (ob_get_length()) { ob_clean(); }
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'status' => 'error',
+                    'message' => $updateResult['message'] ?? 'Could not update item code.',
+                ]);
+                inbound_profiler_finish($prof, 'error_item_code_update');
+                exit;
+            }
+            inbound_profiler_step($prof, 'updateInboundItemCode', [
+                'previous_item_code' => $updateResult['previous_item_code'] ?? '',
+                'item_code' => $updateResult['item_code'] ?? '',
+            ]);
+        }
 
         // Convert PHP warnings/notices into JSON errors and persist to publish logs.
         $self = $this;
@@ -2742,6 +2757,24 @@ class InboundingController {
         curl_close($ch);
 
         if ($httpCode != 200 && $httpCode != 201) {
+            $apiErrorMsg = $this->extractVendorApiErrorMessage($response);
+            if ($this->shouldOfferItemcodeConflictRetry($data, $id, $apiErrorMsg, $response)) {
+                $this->respondItemcodeConflictJson(
+                    $id,
+                    (string) ($data['data']['Item_code'] ?? ''),
+                    $API_data,
+                    $response,
+                    $prof,
+                    $httpCode,
+                    $apiErrorMsg,
+                    $data
+                );
+            }
+
+            $errorMessage = $apiErrorMsg !== ''
+                ? $apiErrorMsg
+                : ('API Error HTTP ' . $httpCode . '.');
+
             // === LOG HTTP ERROR ===
             $logFileData = $this->logPublishProcess([
                 'item_code' => $data['data']['Item_code'] ?? '',
@@ -2749,7 +2782,7 @@ class InboundingController {
                 'status' => 'failed',
                 'error_type' => 'http_error',
                 'http_code' => $httpCode,
-                'error_message' => "API Error HTTP found.",
+                'error_message' => $errorMessage,
                 'api_response' => $response,
                 'request_data' => $API_data,
                 'user_id' => $_SESSION['user']['id'] ?? 'unknown'
@@ -2757,7 +2790,12 @@ class InboundingController {
             
             if (ob_get_length()) { ob_clean(); }
             header('Content-Type: application/json');
-            echo json_encode(['status' => 'error', 'message' => "API Error HTTP found.", 'debug' => $response, 'log_file' => $logFileData['filename']]);
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Publish failed. ' . $errorMessage,
+                'debug' => $response,
+                'log_file' => $logFileData['filename']
+            ]);
             inbound_profiler_finish($prof, 'http_error', ['http_code' => $httpCode]);
             exit;
         }
@@ -2814,6 +2852,19 @@ class InboundingController {
         } else {
             // === LOG API FAILURE (non-success response or has error) ===
             $errorMsg = isset($result->error) ? $result->error : 'API returned non-success status';
+            if ($this->shouldOfferItemcodeConflictRetry($data, $id, (string) $errorMsg, $response)) {
+                $this->respondItemcodeConflictJson(
+                    $id,
+                    (string) ($data['data']['Item_code'] ?? ''),
+                    $API_data,
+                    $response,
+                    $prof,
+                    $httpCode,
+                    (string) $errorMsg,
+                    $data
+                );
+            }
+
             $logFileData = $this->logPublishProcess([
                 'item_code' => $data['data']['Item_code'] ?? '',
                 'inbound_id' => $id,
@@ -2971,6 +3022,205 @@ class InboundingController {
      * Handles both successful and failed publish attempts
      * Returns the log filename
      */
+    private function extractVendorApiErrorMessage($response): string
+    {
+        if (!is_string($response) || trim($response) === '') {
+            return '';
+        }
+
+        $decoded = json_decode($response, true);
+        if (is_array($decoded)) {
+            foreach (['error', 'message', 'msg'] as $key) {
+                if (!empty($decoded[$key]) && is_string($decoded[$key])) {
+                    return trim($decoded[$key]);
+                }
+            }
+        }
+
+        $trimmed = trim($response);
+        return strlen($trimmed) <= 500 ? $trimmed : '';
+    }
+
+    private function isItemcodeAlreadyExistsApiError(?string $apiErrorMsg, $response = null): bool
+    {
+        $msg = $apiErrorMsg ?? '';
+        if ($msg === '' && $response !== null) {
+            $msg = $this->extractVendorApiErrorMessage($response);
+        }
+
+        return $msg !== '' && (bool) preg_match('/item\s*code\s*already\s*exists/i', $msg);
+    }
+
+    private function shouldOfferItemcodeConflictRetry(array $data, int $inboundId, ?string $apiErrorMsg, $response = null): bool
+    {
+        if (!$this->isItemcodeAlreadyExistsApiError($apiErrorMsg, $response)) {
+            return false;
+        }
+
+        $isVariant = strtoupper(trim((string) ($data['data']['is_variant'] ?? 'N'))) === 'Y';
+        if ($isVariant) {
+            return false;
+        }
+
+        return $this->resolveSuggestedItemCodeForPublishConflict($data, $inboundId) !== null;
+    }
+
+    private function resolveSuggestedItemCodeForPublishConflict(array $data, int $inboundId): ?string
+    {
+        global $inboundingModel;
+
+        $groupDisplayName = trim((string) ($data['data']['category'] ?? ''));
+        $currentCode = strtoupper(trim((string) ($data['data']['Item_code'] ?? '')));
+        if ($groupDisplayName === '' || $currentCode === '') {
+            return null;
+        }
+
+        $prefix = strtoupper(substr($groupDisplayName, 0, 1));
+        $lastLocal = $inboundingModel->getLastItemCode($prefix);
+        $baseCode = Inbounding::maxItemCodeInSeries($lastLocal, $currentCode);
+        $candidate = ($baseCode !== null && $baseCode !== '')
+            ? Inbounding::getNextItemCodeInSeries($baseCode)
+            : ($prefix . 'A0001');
+
+        $candidates = [];
+        $maxAttempts = 100;
+        for ($i = 0; $i < $maxAttempts && $candidate !== null; $i++) {
+            if (!$inboundingModel->isItemCodeUsedByOtherInbound($candidate, $inboundId)) {
+                $candidates[] = $candidate;
+            }
+            $candidate = Inbounding::getNextItemCodeInSeries($candidate);
+        }
+
+        if ($candidates === []) {
+            return null;
+        }
+
+        $takenOnWebsite = [];
+        foreach (array_chunk($candidates, 50) as $chunk) {
+            $takenOnWebsite = array_merge(
+                $takenOnWebsite,
+                $this->fetchExistingVendorWebsiteItemCodes($chunk)
+            );
+        }
+        $takenSet = array_fill_keys(array_map('strtoupper', $takenOnWebsite), true);
+
+        foreach ($candidates as $code) {
+            if (!isset($takenSet[strtoupper($code)])) {
+                return $code;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<string> Item codes that already exist on the vendor website.
+     */
+    private function fetchExistingVendorWebsiteItemCodes(array $codes): array
+    {
+        require_once __DIR__ . '/../models/product/product.php';
+
+        $normalized = [];
+        foreach ($codes as $code) {
+            $code = strtoupper(trim((string) $code));
+            if ($code !== '') {
+                $normalized[$code] = $code;
+            }
+        }
+        $normalized = array_values($normalized);
+        if ($normalized === []) {
+            return [];
+        }
+
+        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode(implode(',', $normalized));
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Accept: application/json',
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_SSL_VERIFYPEER => false,
+        ]);
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        if (!is_string($response) || trim($response) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $items = product::normalizeVendorProductFetchItems($decoded);
+        $existing = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $code = strtoupper(trim((string) ($item['itemcode'] ?? $item['item_code'] ?? '')));
+            if ($code !== '') {
+                $existing[] = $code;
+            }
+        }
+
+        return array_values(array_unique($existing));
+    }
+
+    private function respondItemcodeConflictJson(
+        int $id,
+        string $currentItemCode,
+        array $API_data,
+        $apiResponse,
+        $prof,
+        int $httpCode = 0,
+        string $apiErrorMsg = '',
+        ?array $publishData = null
+    ): void {
+        $currentItemCode = strtoupper(trim($currentItemCode));
+        $publishData = is_array($publishData) ? $publishData : ['data' => ['id' => $id, 'Item_code' => $currentItemCode]];
+        $suggestedItemCode = $this->resolveSuggestedItemCodeForPublishConflict($publishData, $id) ?? '';
+
+        $logFileData = $this->logPublishProcess([
+            'item_code' => $currentItemCode,
+            'inbound_id' => $id,
+            'status' => 'itemcode_conflict',
+            'error_type' => 'itemcode_conflict',
+            'http_code' => $httpCode,
+            'error_message' => $apiErrorMsg !== '' ? $apiErrorMsg : 'Itemcode already exists',
+            'api_response' => $apiResponse,
+            'request_data' => $API_data,
+            'user_id' => $_SESSION['user']['id'] ?? 'unknown',
+            'suggested_item_code' => $suggestedItemCode,
+        ]);
+
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json');
+        echo json_encode([
+            'status' => 'itemcode_conflict',
+            'message' => $suggestedItemCode !== ''
+                ? ('Item code ' . $currentItemCode . ' is already taken. Next available code is ' . $suggestedItemCode . '.')
+                : ('Item code ' . $currentItemCode . ' already exists on the website.'),
+            'current_item_code' => $currentItemCode,
+            'suggested_item_code' => $suggestedItemCode,
+            'log_file' => $logFileData['filename'] ?? null,
+        ]);
+        inbound_profiler_finish($prof, 'itemcode_conflict', [
+            'current_item_code' => $currentItemCode,
+            'suggested_item_code' => $suggestedItemCode,
+        ]);
+        exit;
+    }
+
     private function logPublishProcess($data) {
         // Try primary log directory first
         $logDir = dirname(__DIR__) . '/log/publish_logs/';

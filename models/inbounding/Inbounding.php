@@ -1276,10 +1276,10 @@ class Inbounding {
 
     public function getLastItemCode($prefix) {
         // REGEXP '^[A-Z]{2}[0-9]{4}$' matches: 2 letters, 4 digits
-        $sql = "SELECT item_code FROM vp_inbound 
-                WHERE item_code LIKE ? 
-                AND item_code REGEXP '^[A-Z]{2}[0-9]{4}$'
-                ORDER BY item_code DESC LIMIT 1";
+        $sql = "SELECT Item_code FROM vp_inbound 
+                WHERE Item_code LIKE ? 
+                AND Item_code REGEXP '^[A-Z]{2}[0-9]{4}$'
+                ORDER BY Item_code DESC LIMIT 1";
                 
         $stmt = $this->conn->prepare($sql); 
         
@@ -1293,14 +1293,144 @@ class Inbounding {
         $stmt->execute();
         $result = $stmt->get_result();
         $row = $result->fetch_assoc();
+        $stmt->close();
         
-        return $row ? $row['item_code'] : null;
+        return $row ? strtoupper(trim((string) ($row['Item_code'] ?? $row['item_code'] ?? ''))) : null;
     }
     
     public function checkItemCodeExists($code) {
         $sql = "SELECT id FROM vp_inbound WHERE Item_code = '" . $this->conn->real_escape_string($code) . "'";
         $result = $this->conn->query($sql);
         return ($result->num_rows > 0);
+    }
+
+    public function isItemCodeUsedByOtherInbound(string $code, int $excludeInboundId = 0): bool
+    {
+        $code = strtoupper(trim($code));
+        $excludeInboundId = (int) $excludeInboundId;
+        if ($code === '') {
+            return false;
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT id FROM vp_inbound WHERE UPPER(TRIM(Item_code)) = ? AND id != ? LIMIT 1'
+        );
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('si', $code, $excludeInboundId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return !empty($row);
+    }
+
+    /**
+     * Increment a standard inbound item code in its series (e.g. BA0019 → BA0020).
+     */
+    public static function getNextItemCodeInSeries(string $code): ?string
+    {
+        $code = strtoupper(trim($code));
+        if (!preg_match('/^[A-Z]{2}\d{4}$/', $code)) {
+            return null;
+        }
+
+        $prefixLetter = $code[0];
+        $alphaPart = substr($code, 1, 1);
+        $numPart = (int) substr($code, 2);
+        $numPart++;
+        if ($numPart > 9999) {
+            $numPart = 1;
+            $alphaPart++;
+            if (strlen($alphaPart) > 1) {
+                return null;
+            }
+        }
+
+        return $prefixLetter . $alphaPart . str_pad((string) $numPart, 4, '0', STR_PAD_LEFT);
+    }
+
+    public static function maxItemCodeInSeries(?string $a, ?string $b): ?string
+    {
+        $a = $a !== null ? strtoupper(trim($a)) : '';
+        $b = $b !== null ? strtoupper(trim($b)) : '';
+        if ($a === '') {
+            return $b !== '' ? $b : null;
+        }
+        if ($b === '') {
+            return $a;
+        }
+
+        return strcmp($a, $b) >= 0 ? $a : $b;
+    }
+
+    /**
+     * Next item code after the latest local code for a group prefix (same rules as new-item assignment).
+     */
+    public function generateItemCodeAfterGroupName(string $groupDisplayName, ?string $lastCode = null): ?string
+    {
+        $groupDisplayName = trim($groupDisplayName);
+        if ($groupDisplayName === '') {
+            return null;
+        }
+
+        $prefix = strtoupper(substr($groupDisplayName, 0, 1));
+        if ($lastCode === null) {
+            $lastCode = $this->getLastItemCode($prefix);
+        }
+        $lastCode = $lastCode !== null ? strtoupper(trim($lastCode)) : '';
+
+        if ($lastCode === '') {
+            return $prefix . 'A0001';
+        }
+
+        return self::getNextItemCodeInSeries($lastCode);
+    }
+
+    /**
+     * Update Item_code and derived SKU on the main inbound row before a publish retry.
+     */
+    public function updateInboundItemCode(int $id, string $newCode): array
+    {
+        $id = (int) $id;
+        $newCode = strtoupper(trim($newCode));
+        if ($id <= 0 || !preg_match('/^[A-Z]{2}\d{4}$/', $newCode)) {
+            return ['success' => false, 'message' => 'Invalid item code format.'];
+        }
+
+        $row = $this->getById($id);
+        if (!$row) {
+            return ['success' => false, 'message' => 'Inbound record not found.'];
+        }
+
+        if (strtoupper(trim((string) ($row['is_variant'] ?? 'N'))) === 'Y') {
+            return ['success' => false, 'message' => 'Item code reassignment is not supported for variant items.'];
+        }
+
+        $sku = $newCode;
+
+        $stmt = $this->conn->prepare(
+            'UPDATE vp_inbound SET Item_code = ?, sku = ?, modified_at = NOW() WHERE id = ?'
+        );
+        if (!$stmt) {
+            return ['success' => false, 'message' => $this->conn->error];
+        }
+        $stmt->bind_param('ssi', $newCode, $sku, $id);
+        $ok = $stmt->execute();
+        $error = $stmt->error;
+        $stmt->close();
+
+        if (!$ok) {
+            return ['success' => false, 'message' => $error !== '' ? $error : 'Failed to update item code.'];
+        }
+
+        return [
+            'success' => true,
+            'previous_item_code' => strtoupper(trim((string) ($row['Item_code'] ?? $row['item_code'] ?? ''))),
+            'item_code' => $newCode,
+            'sku' => $sku,
+        ];
     }
    
     // --- Add this to your Inbounding.php Model ---
