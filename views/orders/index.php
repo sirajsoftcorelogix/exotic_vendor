@@ -1065,6 +1065,8 @@
                                                         <hr class="my-1 mx-2"></hr>
                                                         <a href="#" onclick="addOrderToInvoice(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Invoice</a>
                                                         <?php endif; ?>
+                                                        <hr class="my-1 mx-2"></hr>
+                                                        <a href="#" onclick="openAddToPicklistPopup(<?= $order['order_id'] ?>); return false;" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Pick List</a>
                                                     </div>
                                                 </span>
                                             </div>
@@ -2990,10 +2992,7 @@
         return true;
     }
 
-    // Bulk add to picklist handlers
-    document.getElementById('action-add-to-picklist').addEventListener('click', function(e) {
-        e.preventDefault();
-        const oids = getSelectedOrderIds();
+    function openBulkAddToPicklistPopup(oids) {
         if (oids.length === 0) {
             showAlert('Please select at least one order to add to picklist.', 'warning');
             return;
@@ -3036,6 +3035,20 @@
         loadPicklistPickers().finally(function() {
             document.getElementById('bulkAddToPicklistPopup').classList.remove('hidden');
         });
+    }
+
+    function openAddToPicklistPopup(orderId) {
+        const menu = document.getElementById('menu-' + orderId);
+        if (menu) {
+            menu.style.display = 'none';
+        }
+        openBulkAddToPicklistPopup([String(orderId)]);
+    }
+
+    // Bulk add to picklist handlers
+    document.getElementById('action-add-to-picklist').addEventListener('click', function(e) {
+        e.preventDefault();
+        openBulkAddToPicklistPopup(getSelectedOrderIds());
     });
 
     function closeBulkAddToPicklistPopup(e) {
