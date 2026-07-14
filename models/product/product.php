@@ -2050,23 +2050,9 @@ class product
 
     private function resolveDefaultWarehouseIdForStock(): int
     {
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            @session_start();
-        }
-        $wid = (int) ($_SESSION['warehouse_id'] ?? 0);
-        if ($wid <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
-            $wid = (int) $_SESSION['user']['warehouse_id'];
-        }
-        if ($wid > 0) {
-            $chk = $this->db->prepare('SELECT id FROM exotic_address WHERE id = ? AND is_active = 1 LIMIT 1');
-            if ($chk) {
-                $chk->bind_param('i', $wid);
-                if ($chk->execute() && $chk->get_result()->fetch_assoc()) {
-                    $chk->close();
-                    return $wid;
-                }
-                $chk->close();
-            }
+        $r = $this->db->query('SELECT id FROM exotic_address WHERE is_active = 1 AND is_default = 1 ORDER BY id ASC LIMIT 1');
+        if ($r && ($row = $r->fetch_assoc())) {
+            return (int) $row['id'];
         }
         $r = $this->db->query('SELECT id FROM exotic_address WHERE is_active = 1 ORDER BY id ASC LIMIT 1');
         if ($r && ($row = $r->fetch_assoc())) {
