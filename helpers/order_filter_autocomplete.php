@@ -33,21 +33,8 @@ function appendOrderAuthorNameFilterSql(string &$sql, array &$params, string $au
         return;
     }
 
-    $like = orderFilterLikeTerm($author);
-    $sql .= " AND (
-        IFNULL(vp_orders.author, '') LIKE ?
-        OR EXISTS (
-            SELECT 1
-            FROM vp_author AS author_lookup
-            WHERE author_lookup.author LIKE ?
-            AND (
-                vp_orders.author = author_lookup.author
-                OR vp_orders.author = CAST(author_lookup.author_id AS CHAR)
-            )
-        )
-    )";
-    $params[] = $like;
-    $params[] = $like;
+    $sql .= " AND IFNULL(vp_orders.author, '') LIKE ?";
+    $params[] = orderFilterLikeTerm($author);
 }
 
 function appendOrderPublisherNameFilterSql(string &$sql, array &$params, string $publisher): void
@@ -57,21 +44,8 @@ function appendOrderPublisherNameFilterSql(string &$sql, array &$params, string 
         return;
     }
 
-    $like = orderFilterLikeTerm($publisher);
-    $sql .= " AND (
-        IFNULL(vp_orders.publisher, '') LIKE ?
-        OR EXISTS (
-            SELECT 1
-            FROM vp_publishers AS publisher_lookup
-            WHERE publisher_lookup.publishers LIKE ?
-            AND (
-                vp_orders.publisher = publisher_lookup.publishers
-                OR vp_orders.publisher = CAST(publisher_lookup.publishers_id AS CHAR)
-            )
-        )
-    )";
-    $params[] = $like;
-    $params[] = $like;
+    $sql .= " AND IFNULL(vp_orders.publisher, '') LIKE ?";
+    $params[] = orderFilterLikeTerm($publisher);
 }
 
 /**
