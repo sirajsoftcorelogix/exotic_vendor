@@ -19,7 +19,30 @@ $total = count($items);
     <div class="sticky top-0 z-10 bg-white/95 backdrop-blur border-b pb-3 mb-4 -mx-3 px-3 sm:-mx-4 sm:px-4">
         <a href="?page=picklist&action=view&id=<?= $plId ?>" class="text-sm text-blue-600">&larr; Detail view</a>
         <h1 class="text-xl font-bold mt-1"><?= htmlspecialchars((string) ($picklist['picklist_number'] ?? '')) ?></h1>
-        <p class="text-sm text-gray-600"><?= $picked ?> of <?= $total ?> picked · Tap an item when collected</p>
+        <p class="text-sm text-gray-600"><?= $picked ?> of <?= $total ?> picked · Tap an item to pick, or use bulk selection below</p>
+        <?php if ($items !== []): ?>
+            <div class="mt-3 pt-3 border-t border-gray-200 space-y-2">
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="picklist-select-all" class="w-5 h-5 rounded border-gray-300" aria-label="Select all items">
+                    <label for="picklist-select-all" class="text-sm text-gray-700">Select all</label>
+                    <span id="picklist-selected-count" class="ml-auto text-xs font-medium text-gray-600 tabular-nums">0 selected</span>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button"
+                            id="picklist-bulk-pick-btn"
+                            disabled
+                            class="inline-flex flex-1 min-w-[8rem] items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold shadow-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fas fa-check" aria-hidden="true"></i> Mark picked
+                    </button>
+                    <button type="button"
+                            id="picklist-bulk-unpick-btn"
+                            disabled
+                            class="inline-flex flex-1 min-w-[8rem] items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-xs font-semibold shadow-sm hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fas fa-undo" aria-hidden="true"></i> Revert picks
+                    </button>
+                </div>
+            </div>
+        <?php endif; ?>
         <?php if (($picklist['status'] ?? '') !== 'completed'): ?>
             <div class="mt-2 flex gap-2 items-center">
                 <label class="text-xs text-gray-600">Assign picker:</label>
@@ -46,6 +69,13 @@ $total = count($items);
                  data-item-id="<?= $itemId ?>"
                  data-picked="<?= $isPicked ? '1' : '0' ?>">
                 <div class="flex gap-3">
+                    <label class="flex-shrink-0 self-start pt-1 cursor-pointer" onclick="event.stopPropagation();">
+                        <input type="checkbox"
+                               class="picklist-item-cb w-5 h-5 rounded border-gray-300"
+                               value="<?= $itemId ?>"
+                               data-status="<?= $isPicked ? 'picked' : 'pending' ?>"
+                               aria-label="Select item">
+                    </label>
                     <?php if ($imageUrl !== ''): ?>
                         <button type="button"
                                 class="js-picklist-expand-image flex-shrink-0 p-0 border-0 bg-transparent cursor-zoom-in rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
@@ -103,6 +133,7 @@ $total = count($items);
 
 <?php require_once __DIR__ . '/partials/confirm_modal.php'; ?>
 <?php require_once __DIR__ . '/partials/unpick_script.php'; ?>
+<?php require_once __DIR__ . '/partials/bulk_actions_script.php'; ?>
 
 <script>
 (function() {
@@ -113,6 +144,8 @@ $total = count($items);
             if (e.target.closest('.remove-item-btn')) return;
             if (e.target.closest('.js-picklist-unpick-item')) return;
             if (e.target.closest('.js-picklist-expand-image')) return;
+            if (e.target.closest('.picklist-item-cb')) return;
+            if (e.target.closest('label')) return;
             const itemId = el.getAttribute('data-item-id');
             if (!itemId || el.getAttribute('data-picked') === '1') return;
 
