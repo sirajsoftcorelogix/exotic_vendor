@@ -96,10 +96,10 @@ include __DIR__ . '/partials/detail_hero.php';
                     $imageUrl = picklist_item_image_url($item);
                     $itemStatusClass = $itemStatusStyles[$isPicked ? 'picked' : 'pending'];
                     ?>
-                    <tr class="hover:bg-amber-50/40 transition-colors <?= $isPicked ? 'bg-emerald-50/25' : '' ?>">
+                    <tr class="picklist-select-row cursor-pointer hover:bg-amber-50/40 transition-colors <?= $isPicked ? 'bg-emerald-50/25' : '' ?>">
                         <td class="px-3 py-3 align-middle">
                             <input type="checkbox"
-                                   class="picklist-item-cb rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                                   class="picklist-item-cb w-5 h-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500 pointer-events-none"
                                    value="<?= (int) ($item['id'] ?? 0) ?>"
                                    data-status="<?= $isPicked ? 'picked' : 'pending' ?>"
                                    aria-label="Select item">
@@ -138,7 +138,7 @@ include __DIR__ . '/partials/detail_hero.php';
                                 <div class="text-[11px] text-gray-500 mt-1 tabular-nums"><?= date('d M, H:i', strtotime($item['picked_at'])) ?></div>
                             <?php endif; ?>
                         </td>
-                        <td class="px-3 py-3 align-middle">
+                        <td class="picklist-row-actions px-3 py-3 align-middle">
                             <div class="flex flex-wrap items-center justify-center gap-1.5">
                                 <?php if ($isPicked): ?>
                                     <button type="button"
