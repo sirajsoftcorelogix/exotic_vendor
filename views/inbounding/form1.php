@@ -174,8 +174,18 @@ $pdfPreviewPanelClass  = ($showPreview && $isPdf) ? ' form1-preview-panel--pdf' 
 
             <div class="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5 sm:py-5 md:px-6 md:py-6 bg-gray-50/80">
 
+                <?php
+                $form1Flash = $_SESSION['form1_flash'] ?? null;
+                unset($_SESSION['form1_flash']);
+                if (is_array($form1Flash) && !empty($form1Flash['text'])):
+                ?>
+                <div class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">
+                    <?php echo htmlspecialchars((string) $form1Flash['text'], ENT_QUOTES, 'UTF-8'); ?>
+                </div>
+                <?php endif; ?>
+
                 <p class="text-sm text-gray-600 mb-4 leading-relaxed md:hidden">
-                    Add an invoice photo or PDF. Vendor is optional — tap <strong class="text-gray-800">Skip</strong> or <strong class="text-gray-800">Next</strong> when ready.
+                    Add an invoice photo or PDF. <strong class="text-gray-800">Vendor</strong> and <strong class="text-gray-800">invoice number</strong> are required before continuing.
                 </p>
 
                 <div class="flex flex-col gap-4 lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start">
@@ -223,7 +233,7 @@ $pdfPreviewPanelClass  = ($showPreview && $isPdf) ? ' form1-preview-panel--pdf' 
                             <div class="flex items-start justify-between gap-2 mb-3">
                                 <h2 id="form1-vendor-heading" class="text-sm font-bold text-gray-800 flex items-center gap-2">
                                     <span class="w-7 h-7 rounded-lg bg-orange-100 text-[#d9822b] flex items-center justify-center text-xs">2</span>
-                                    Vendor <span class="font-normal text-gray-500 text-xs">(optional)</span>
+                                    Vendor <span class="text-red-500" aria-hidden="true">*</span>
                                 </h2>
                                 <?php
                                 $btnId = 'vendor-cache-sync-btn';
@@ -234,7 +244,7 @@ $pdfPreviewPanelClass  = ($showPreview && $isPdf) ? ' form1-preview-panel--pdf' 
                                 require __DIR__ . '/partials/catalog_refresh_btn.php';
                                 ?>
                             </div>
-                            <select id="vendor_code" name="vendor_code" placeholder="Search vendor..." autocomplete="off" class="w-full">
+                            <select id="vendor_code" name="vendor_code" placeholder="Search vendor..." autocomplete="off" class="w-full" required aria-required="true">
                                 <option value="">Select vendor</option>
                                 <?php if (!empty($vendorsList)): ?>
                                     <?php foreach ($vendorsList as $v): ?>
@@ -258,7 +268,7 @@ $pdfPreviewPanelClass  = ($showPreview && $isPdf) ? ' form1-preview-panel--pdf' 
                         <section class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-5" aria-labelledby="form1-invoice-no-heading">
                             <h2 id="form1-invoice-no-heading" class="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
                                 <span class="w-7 h-7 rounded-lg bg-orange-100 text-[#d9822b] flex items-center justify-center text-xs">3</span>
-                                Invoice number
+                                Invoice number <span class="text-red-500" aria-hidden="true">*</span>
                             </h2>
                             <input type="text"
                                    name="invoice_no"
@@ -266,6 +276,8 @@ $pdfPreviewPanelClass  = ($showPreview && $isPdf) ? ' form1-preview-panel--pdf' 
                                    value="<?php echo htmlspecialchars($invoice_no, ENT_QUOTES, 'UTF-8'); ?>"
                                    autocomplete="off"
                                    inputmode="text"
+                                   required
+                                   aria-required="true"
                                    class="form1-input w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-[#d9822b] focus:border-[#d9822b] outline-none font-medium text-gray-800">
                             <p id="invoice-no-error" class="text-red-600 text-xs mt-1.5 font-semibold hidden"></p>
                         </section>
@@ -275,12 +287,12 @@ $pdfPreviewPanelClass  = ($showPreview && $isPdf) ? ' form1-preview-panel--pdf' 
                                 Tips
                                 <span class="text-orange-600 group-open:rotate-180 transition-transform">▼</span>
                             </summary>
-                            <p class="px-4 pb-4 text-orange-800/90 leading-relaxed">Search vendors in the list above. Use refresh to sync from Exotic India if a vendor is missing.</p>
+                            <p class="px-4 pb-4 text-orange-800/90 leading-relaxed">Vendor and invoice number are required. Use refresh to sync vendors from Exotic India if one is missing.</p>
                         </details>
 
                         <div class="hidden lg:block p-4 bg-orange-50 border border-orange-100 rounded-2xl text-sm text-orange-800">
                             <p class="font-bold mb-1">Tips</p>
-                            <p class="opacity-90 leading-relaxed">Vendor is optional. Sync the vendor list with the refresh button if needed.</p>
+                            <p class="opacity-90 leading-relaxed">Vendor and invoice number are required. Sync the vendor list with the refresh button if needed.</p>
                         </div>
                     </div>
 
@@ -529,5 +541,72 @@ $pdfPreviewPanelClass  = ($showPreview && $isPdf) ? ' form1-preview-panel--pdf' 
     function closeImagePopup(event) {
         document.getElementById('imagePopup').classList.add('hidden');
         document.getElementById('popupImage').src = '';
-    } 
+    }
+
+    const invoiceForm = document.getElementById('invoiceForm');
+    const vendorErrorEl = document.getElementById('vendor-error');
+    const invoiceNoErrorEl = document.getElementById('invoice-no-error');
+    const invoiceNoInput = document.querySelector('[name="invoice_no"]');
+
+    function getForm1VendorValue() {
+        const vendorEl = document.getElementById('vendor_code');
+        if (!vendorEl) {
+            return '';
+        }
+        if (vendorEl.tomselect) {
+            const val = vendorEl.tomselect.getValue();
+            return Array.isArray(val) ? (val[0] || '') : (val || '');
+        }
+        return vendorEl.value || '';
+    }
+
+    function validateForm1RequiredFields() {
+        let valid = true;
+
+        if (vendorErrorEl) {
+            vendorErrorEl.textContent = '';
+            vendorErrorEl.classList.add('hidden');
+        }
+        if (invoiceNoErrorEl) {
+            invoiceNoErrorEl.textContent = '';
+            invoiceNoErrorEl.classList.add('hidden');
+        }
+
+        const vendorVal = String(getForm1VendorValue()).trim();
+        if (!vendorVal) {
+            if (vendorErrorEl) {
+                vendorErrorEl.textContent = 'Vendor is required.';
+                vendorErrorEl.classList.remove('hidden');
+            }
+            valid = false;
+        }
+
+        const invoiceNoVal = invoiceNoInput ? String(invoiceNoInput.value || '').trim() : '';
+        if (!invoiceNoVal) {
+            if (invoiceNoErrorEl) {
+                invoiceNoErrorEl.textContent = 'Invoice number is required.';
+                invoiceNoErrorEl.classList.remove('hidden');
+            }
+            valid = false;
+        }
+
+        if (!valid) {
+            const firstInvalid = !vendorVal
+                ? document.getElementById('vendor_code')
+                : invoiceNoInput;
+            if (firstInvalid && typeof firstInvalid.focus === 'function') {
+                firstInvalid.focus();
+            }
+        }
+
+        return valid;
+    }
+
+    if (invoiceForm) {
+        invoiceForm.addEventListener('submit', function (e) {
+            if (!validateForm1RequiredFields()) {
+                e.preventDefault();
+            }
+        });
+    }
 </script>

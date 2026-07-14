@@ -18,6 +18,26 @@ class InboundingController {
         return true;
     }
 
+    private function validateForm1RequiredFields(string $vendorId, string $invoiceNo): ?string
+    {
+        if (trim($vendorId) === '') {
+            return 'Vendor is required.';
+        }
+        if (trim($invoiceNo) === '') {
+            return 'Invoice number is required.';
+        }
+
+        return null;
+    }
+
+    private function redirectForm1WithError(string $message, int $id = 0): void
+    {
+        $_SESSION['form1_flash'] = ['type' => 'error', 'text' => $message];
+        $url = base_url('?page=inbounding&action=form1' . ($id > 0 ? '&id=' . $id : ''));
+        header('Location: ' . $url);
+        exit;
+    }
+
     public function index() {
         is_login();
         global $inboundingModel;
@@ -512,7 +532,12 @@ class InboundingController {
         
         $vendor_id  = trim((string)($_POST['vendor_code'] ?? $_POST['vendor_id'] ?? ''));
         $record_id  = $_POST['record_id'] ?? '';
-        $invoice_no = $_POST['invoice_no'] ?? '';
+        $invoice_no = trim((string)($_POST['invoice_no'] ?? ''));
+
+        $validationError = $this->validateForm1RequiredFields($vendor_id, $invoice_no);
+        if ($validationError !== null) {
+            $this->redirectForm1WithError($validationError, (int) $record_id);
+        }
         
         // Default invoice path is empty
         $invoicePath = ''; 
@@ -568,20 +593,20 @@ class InboundingController {
     public function updateform1() {
         global $inboundingModel;
 
-        $id         = $_GET['id'] ?? 0;
+        $id         = (int)($_GET['id'] ?? 0);
         $vendor_id  = trim((string)($_POST['vendor_code'] ?? $_POST['vendor_id'] ?? ''));
-        $invoice_no = $_POST['invoice_no'] ?? '';
+        $invoice_no = trim((string)($_POST['invoice_no'] ?? ''));
+
+        $validationError = $this->validateForm1RequiredFields($vendor_id, $invoice_no);
+        if ($validationError !== null) {
+            $this->redirectForm1WithError($validationError, $id);
+        }
 
         $oldData = $inboundingModel->getform1data($id);
 
         if (!$oldData) {
             echo "Record not found.";
             exit;
-        }
-
-        // Vendor is optional on form1; keep stored vendor when the select is left empty on update.
-        if ($vendor_id === '' && !empty($oldData['form1']['vendor_code'])) {
-            $vendor_id = (string) $oldData['form1']['vendor_code'];
         }
 
         // Keep old image by default
@@ -1465,6 +1490,15 @@ class InboundingController {
         inbound_profiler_step($prof, 'getform1data');
 
         if (!$oldData) { echo "Record not found."; inbound_profiler_finish($prof, 'not_found'); exit; }
+
+        $vendor_id = trim((string) ($_POST['vendor_code'] ?? ''));
+        $invoice_no = trim((string) ($_POST['invoice_no'] ?? ''));
+        $validationError = $this->validateForm1RequiredFields($vendor_id, $invoice_no);
+        if ($validationError !== null) {
+            $_SESSION['desktopform_flash'] = ['type' => 'error', 'text' => $validationError];
+            header('Location: ' . base_url('?page=inbounding&action=desktopform&id=' . $id));
+            exit;
+        }
 
         // Gallery deletions first (single CSV field avoids PHP max_input_vars dropping many delete_gallery_image_ids[] fields on large forms)
         $delCsv = trim((string) ($_POST['delete_gallery_image_ids_csv'] ?? ''));

@@ -577,6 +577,15 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
 ?>
 <div class="w-full max-w-[1200px] mx-auto p-2 md:p-5 font-['Segoe_UI',Tahoma,Geneva,Verdana,sans-serif] text-[#333]">
     <form id="product_form" action="<?php echo base_url('?page=inbounding&action=updatedesktopform&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
+    <?php
+    $desktopformFlash = $_SESSION['desktopform_flash'] ?? null;
+    unset($_SESSION['desktopform_flash']);
+    if (is_array($desktopformFlash) && !empty($desktopformFlash['text'])):
+    ?>
+    <div class="mb-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">
+        <?php echo htmlspecialchars((string) $desktopformFlash['text'], ENT_QUOTES, 'UTF-8'); ?>
+    </div>
+    <?php endif; ?>
     <input type="hidden" name="save_action" id="hidden_save_action" value="">
         <input type="hidden" name="userid_log" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
         <input type="hidden" name="delete_gallery_image_ids_csv" id="delete_gallery_image_ids_csv" value="">
@@ -1886,13 +1895,16 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     </div>
                     <div class="flex-1 flex flex-col gap-4 justify-start">
                         <div class="w-full">
-                            <label class="block text-xs font-bold text-[#222] mb-[5px]">Invoice Number:</label>
-                            <input type="text" class="w-full h-[36px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="invoice_no" 
-                                   value="<?php echo !empty($data['form2']['invoice_no']) ? $data['form2']['invoice_no'] : ''; ?>">
+                            <label class="block text-xs font-bold text-[#222] mb-[5px]">Invoice Number:<?php echo $desktopform_req_star; ?></label>
+                            <input type="text" class="w-full h-[36px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" name="invoice_no"
+                                   value="<?php echo !empty($data['form2']['invoice_no']) ? htmlspecialchars((string) $data['form2']['invoice_no'], ENT_QUOTES, 'UTF-8') : ''; ?>"
+                                   required
+                                   aria-required="true">
+                            <p id="desktop-invoice-no-error" class="text-red-600 text-xs mt-1 font-semibold hidden"></p>
                         </div>
                         <div class="w-full">
                             <div class="flex items-center gap-1.5 mb-[5px]">
-                                <label class="text-xs font-bold text-[#222]" for="vendor_code">Vendor:<span class="vendor-req-star text-red-500<?= $is_book_initial ? ' hidden' : '' ?>" aria-hidden="true">*</span></label>
+                                <label class="text-xs font-bold text-[#222]" for="vendor_code">Vendor:<?php echo $desktopform_req_star; ?></label>
                                 <?php
                                 $btnId = 'vendor-cache-sync-btn';
                                 $title = 'Refresh vendors from catalog';
@@ -1901,7 +1913,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                 require __DIR__ . '/partials/catalog_refresh_btn.php';
                                 ?>
                             </div>
-                            <select name="vendor_code" id="vendor_code" class="w-full h-[36px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" placeholder="Select Vendor...">
+                            <select name="vendor_code" id="vendor_code" class="w-full h-[36px] border border-[#ccc] rounded-[4px] px-2.5 text-[13px] text-[#333] focus:outline-none focus:border-[#999]" placeholder="Select Vendor..." required aria-required="true">
                                 <option value="">Select Vendor</option>
                                 <?php foreach ($data['vendors'] as $key4 => $value4) {
                                     $vendorExternalCode = trim((string) ($value4['vendor_id'] ?? ''));
@@ -1913,6 +1925,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                     </option>
                                 <?php } ?>
                             </select>
+                            <p id="desktop-vendor-error" class="text-red-600 text-xs mt-1 font-semibold hidden"></p>
                         </div>
                     </div>
                 </div>
@@ -4202,6 +4215,37 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // 2. Helper to run validation without submitting
+    function pushDesktopInvoiceDetailErrors(getVal, errors) {
+        if (!getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
+        if (!getVal('invoice_no')) errors.push("Field 'Invoice Number' is required.");
+    }
+
+    function showDesktopInvoiceDetailFieldErrors(getVal) {
+        const vendorErrorEl = document.getElementById('desktop-vendor-error');
+        const invoiceNoErrorEl = document.getElementById('desktop-invoice-no-error');
+        const vendorVal = getVal('vendor_code');
+        const invoiceNoVal = getVal('invoice_no');
+
+        if (vendorErrorEl) {
+            if (!vendorVal) {
+                vendorErrorEl.textContent = 'Vendor is required.';
+                vendorErrorEl.classList.remove('hidden');
+            } else {
+                vendorErrorEl.textContent = '';
+                vendorErrorEl.classList.add('hidden');
+            }
+        }
+        if (invoiceNoErrorEl) {
+            if (!invoiceNoVal) {
+                invoiceNoErrorEl.textContent = 'Invoice number is required.';
+                invoiceNoErrorEl.classList.remove('hidden');
+            } else {
+                invoiceNoErrorEl.textContent = '';
+                invoiceNoErrorEl.classList.add('hidden');
+            }
+        }
+    }
+
     function performValidationOnly() {
         let errors = [];
         const form = document.getElementById('product_form');
@@ -4219,10 +4263,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // --- 1. GENERAL FIELDS ---
         const isBookGroup = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
+        pushDesktopInvoiceDetailErrors(getVal, errors);
+        showDesktopInvoiceDetailFieldErrors(getVal);
         if (!getVal('added_date')) errors.push("Field 'Added On' is required.");
         if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
         if (!getVal('updated_by_user_id')) errors.push("Field 'Feeded By' is required.");
-        if (!isBookGroup && !getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
         if (!isBookGroup && !getVal('material_code')) errors.push("Field 'Material' is required.");
         if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
         if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
@@ -5017,9 +5062,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.non-book-cp-mrp-field').forEach(function (el) {
             el.classList.toggle('hidden', isBook);
         });
-        document.querySelectorAll('.vendor-req-star').forEach(function (el) {
-            el.classList.toggle('hidden', isBook);
-        });
         relocateBookColorSizeFields(isBook);
         if (materialField) {
             materialField.classList.toggle('hidden', isBook);
@@ -5704,10 +5746,11 @@ function validateAndSubmit(actionType) {
 
     // --- 1. GENERAL FIELDS VALIDATION ---
     const isBookGroupSave = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
+    pushDesktopInvoiceDetailErrors(getVal, errors);
+    showDesktopInvoiceDetailFieldErrors(getVal);
     if (!getVal('added_date')) errors.push("Field 'Added On' is required.");
     if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
     if (!getVal('updated_by_user_id')) errors.push("Field 'Feeded By' is required.");
-    if (!isBookGroupSave && !getVal('vendor_code')) errors.push("Field 'Vendor' is required.");
     if (!isBookGroupSave && !getVal('material_code')) errors.push("Field 'Material' is required.");
     if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
     if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
@@ -5795,7 +5838,22 @@ function validateAndSubmit(actionType) {
     });
     
     if (actionType === 'draft') {
-        // Skip validation, directly submit
+        const draftInvoiceErrors = [];
+        pushDesktopInvoiceDetailErrors(getVal, draftInvoiceErrors);
+        showDesktopInvoiceDetailFieldErrors(getVal);
+        if (draftInvoiceErrors.length > 0) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Validation Failed',
+                html: '<div style="text-align:left;"><ul style="list-style-type:disc;padding-left:20px;">'
+                    + draftInvoiceErrors.map(function (err) {
+                        return '<li style="margin-bottom:5px;color:#d33;">' + err + '</li>';
+                    }).join('')
+                    + '</ul></div>',
+                confirmButtonColor: '#d97824'
+            });
+            return;
+        }
         document.getElementById('hidden_save_action').value = actionType;
         form.submit();
         return; // stop further execution
