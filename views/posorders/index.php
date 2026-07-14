@@ -352,18 +352,16 @@
                         </select>
                     </div>
                     <?php if ($showOrderVendorName): ?>
-                    <div class="relative">
-                        <label for="vendor_autocomplete" class="block text-sm font-medium text-gray-600 mb-1">Vendor</label>
-                        <input
-                            type="text"
-                            id="vendor_autocomplete"
-                            class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                            placeholder="Search vendor by name..."
-                            autocomplete="off"
-                            value="<?php echo isset($_GET['vendor_name']) ? htmlspecialchars($_GET['vendor_name']) : ''; ?>">
-                        <input type="hidden" name="vendor_id" id="vendor_id" value="<?php echo isset($_GET['vendor_id']) ? htmlspecialchars($_GET['vendor_id']) : ''; ?>">
-                        <div id="vendor_suggestions" class="absolute left-0 right-0 mt-1 z-50 bg-white border rounded-md shadow-lg max-h-48 overflow-auto " style="display:none; top:100%;"></div>
-                    </div>
+                    <?php renderPartial('views/shared/partials/order_filter_autocomplete_field.php', [
+                        'field_id' => 'vendor_autocomplete',
+                        'field_label' => 'Vendor',
+                        'field_placeholder' => 'Search vendor by name...',
+                        'field_value' => $_GET['vendor_name'] ?? '',
+                        'hidden_id' => 'vendor_id',
+                        'hidden_name' => 'vendor_id',
+                        'hidden_value' => $_GET['vendor_id'] ?? '',
+                        'search_url' => base_url('?page=orders&action=search_filter_vendors&q='),
+                    ]); ?>
                     <?php endif; ?>
                     <!-- Min/Max Amount -->
                     <!-- <div class="col-span-1 sm:col-span-2 md:col-span-1 lg:col-span-2 flex items-end gap-2">
@@ -402,16 +400,22 @@
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <!-- Author filter -->
-                    <div>
-                        <label for="author" class="block text-sm font-medium text-gray-600 mb-1">Author</label>
-                        <input type="text" value="<?= htmlspecialchars($_GET['author'] ?? '') ?>" name="author" id="author" placeholder="Author Name" class="w-full px-2 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-xs">
-                    </div>
-                    <!-- Publisher filter -->
-                    <div>
-                        <label for="publisher" class="block text-sm font-medium text-gray-600 mb-1">Publisher</label>
-                        <input type="text" value="<?= htmlspecialchars($_GET['publisher'] ?? '') ?>" name="publisher" id="publisher" placeholder="Publisher Name" class="w-full px-2 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-xs">
-                    </div>
+                    <?php renderPartial('views/shared/partials/order_filter_autocomplete_field.php', [
+                        'field_id' => 'author',
+                        'field_name' => 'author',
+                        'field_label' => 'Author',
+                        'field_placeholder' => 'Search author by name...',
+                        'field_value' => $_GET['author'] ?? '',
+                        'search_url' => base_url('?page=orders&action=search_filter_authors&q='),
+                    ]); ?>
+                    <?php renderPartial('views/shared/partials/order_filter_autocomplete_field.php', [
+                        'field_id' => 'publisher',
+                        'field_name' => 'publisher',
+                        'field_label' => 'Publisher',
+                        'field_placeholder' => 'Search publisher by name...',
+                        'field_value' => $_GET['publisher'] ?? '',
+                        'search_url' => base_url('?page=orders&action=search_filter_publishers&q='),
+                    ]); ?>
 
                     <!-- Buttons -->
                     <div class="col-span-1 sm:col-span-1 md:col-span-1 flex items-center gap-2">
@@ -2263,52 +2267,7 @@
         //open import popup to display import status and call ajax to import
         document.getElementById('importedPopup').classList.remove('hidden');
     }
-    <?php if ($showOrderVendorName): ?>
-    //vendor auto complete
-    document.getElementById('vendor_autocomplete').addEventListener('input', function() {
-        const query = this.value;
-        const suggestionsBox = document.getElementById('vendor_suggestions');
-        const vendorIdInput = document.getElementById('vendor_id');
-        // close suggestions if clicked outside
-        document.addEventListener('click', function(event) {
-            if (!suggestionsBox.contains(event.target) && event.target !== document.getElementById('vendor_autocomplete')) {
-                suggestionsBox.style.display = 'none';
-            }
-            if (event.target === document.getElementById('vendor_autocomplete')) {
-                if (suggestionsBox.children.length > 0) {
-                    suggestionsBox.style.display = 'block';
-                }
-            }
-        });
-
-        if (query.length < 2) {
-            suggestionsBox.style.display = 'none';
-            return;
-        }
-
-        fetch('<?php echo base_url("?page=purchase_orders&action=vendor_search&query="); ?>' + encodeURIComponent(query))
-            .then(response => response.json())
-            .then(data => {
-                suggestionsBox.innerHTML = '';
-                if (Array.isArray(data.data) && data.data.length > 0) {
-                    data.data.forEach(vendor => {
-                        const div = document.createElement('div');
-                        div.className = 'p-2 hover:bg-gray-200 cursor-pointer';
-                        div.textContent = vendor.vendor_name;
-                        div.addEventListener('click', function() {
-                            document.getElementById('vendor_autocomplete').value = vendor.vendor_name;
-                            vendorIdInput.value = vendor.id;
-                            suggestionsBox.style.display = 'none';
-                        });
-                        suggestionsBox.appendChild(div);
-                    });
-                    suggestionsBox.style.display = 'block';
-                } else {
-                    suggestionsBox.style.display = 'none';
-                }
-            });
-    });
-    <?php endif; ?>
+    <?php renderPartial('views/shared/partials/order_filter_autocomplete_script.php'); ?>
     //advanced multiselect Initialize Select2 for status 
     document.addEventListener('DOMContentLoaded', function() {
         const statusSelect = document.querySelector('.advanced-multiselect');
