@@ -230,39 +230,57 @@ class Picklist
      */
     public function getOpenPicklistsForSelect(): array
     {
+        $hasIsBook = false;
+        if ($this->picklistItemHasDetailColumns()) {
+            $colRes = $this->db->query("SHOW COLUMNS FROM vp_picklist_items LIKE 'is_book'");
+            $hasIsBook = $colRes && $colRes->num_rows > 0;
+        }
+
+        $bookSelect = $hasIsBook
+            ? ", (SELECT MAX(i.is_book) FROM vp_picklist_items i WHERE i.picklist_id = pl.id) AS has_book,
+                   (SELECT MIN(i.is_book) FROM vp_picklist_items i WHERE i.picklist_id = pl.id) AS has_non_book"
+            : ", NULL AS has_book, NULL AS has_non_book";
+
         $sql = "SELECT pl.id, pl.picklist_number, pl.status, pl.picker_id,
                        pu.name AS picker_name,
                        (SELECT COUNT(*) FROM vp_picklist_items i WHERE i.picklist_id = pl.id) AS item_count,
-                       (SELECT COUNT(*) FROM vp_picklist_items i WHERE i.picklist_id = pl.id AND i.status = 'picked') AS picked_count,
-                       (SELECT MAX(i.is_book) FROM vp_picklist_items i WHERE i.picklist_id = pl.id) AS has_book,
-                       (SELECT MIN(i.is_book) FROM vp_picklist_items i WHERE i.picklist_id = pl.id) AS has_non_book
+                       (SELECT COUNT(*) FROM vp_picklist_items i WHERE i.picklist_id = pl.id AND i.status = 'picked') AS picked_count
+                       {$bookSelect}
                 FROM vp_picklists pl
                 LEFT JOIN vp_users pu ON pu.id = pl.picker_id
                 WHERE pl.status IN ('pending', 'in_progress')
                 ORDER BY pl.created_at DESC
                 LIMIT 200";
+
         $res = $this->db->query($sql);
         $rows = [];
-        if ($res) {
-            while ($row = $res->fetch_assoc()) {
-                $itemCount = (int) ($row['item_count'] ?? 0);
-                $contentType = 'empty';
-                if ($itemCount > 0) {
-                    $hasBook = (int) ($row['has_book'] ?? 0) === 1;
-                    $hasNonBook = (int) ($row['has_non_book'] ?? 0) === 0;
-                    $contentType = ($hasBook && !$hasNonBook) ? 'book' : 'non_book';
-                }
-                $rows[] = [
-                    'id' => (int) ($row['id'] ?? 0),
-                    'picklist_number' => (string) ($row['picklist_number'] ?? ''),
-                    'status' => (string) ($row['status'] ?? ''),
-                    'picker_name' => (string) ($row['picker_name'] ?? ''),
-                    'item_count' => $itemCount,
-                    'picked_count' => (int) ($row['picked_count'] ?? 0),
-                    'content_type' => $contentType,
-                ];
-            }
+        if (!$res) {
+            return $rows;
         }
+
+        while ($row = $res->fetch_assoc()) {
+            $itemCount = (int) ($row['item_count'] ?? 0);
+            $picklistNumber = trim((string) ($row['picklist_number'] ?? ''));
+            if ($picklistNumber === '') {
+                $picklistNumber = 'Picklist #' . (int) ($row['id'] ?? 0);
+            }
+            $contentType = 'empty';
+            if ($itemCount > 0 && $hasIsBook) {
+                $hasBook = (int) ($row['has_book'] ?? 0) === 1;
+                $hasNonBook = (int) ($row['has_non_book'] ?? 1) === 0;
+                $contentType = ($hasBook && !$hasNonBook) ? 'book' : 'non_book';
+            }
+            $rows[] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'picklist_number' => $picklistNumber,
+                'status' => (string) ($row['status'] ?? ''),
+                'picker_name' => (string) ($row['picker_name'] ?? ''),
+                'item_count' => $itemCount,
+                'picked_count' => (int) ($row['picked_count'] ?? 0),
+                'content_type' => $contentType,
+            ];
+        }
+
         return $rows;
     }
 
