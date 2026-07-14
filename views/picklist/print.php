@@ -31,8 +31,6 @@ $showBookColumns = picklist_any_book_items($items);
         th { background: #f3f4f6; }
         .loc { font-weight: bold; }
         .item-img { width: 56px; height: 56px; object-fit: contain; }
-        .status-partial { color: #b45309; font-weight: bold; }
-        .status-none { color: #b91c1c; font-weight: bold; }
         .section-count { font-weight: normal; color: #666; font-size: 12px; }
         @media print {
             body { margin: 12px; }
