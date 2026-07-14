@@ -141,13 +141,6 @@ include __DIR__ . '/partials/detail_hero.php';
                         </td>
                         <td class="picklist-row-actions px-3 py-3 align-middle">
                             <div class="flex flex-wrap items-center justify-center gap-1.5">
-                                <a href="?page=picklist&action=print_item_label&amp;item_id=<?= (int) ($item['id'] ?? 0) ?>"
-                                   target="_blank"
-                                   rel="noopener noreferrer"
-                                   class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 text-xs font-semibold shadow-sm hover:bg-slate-100 transition"
-                                   title="Print order label">
-                                    <i class="fas fa-barcode text-[10px]" aria-hidden="true"></i> Label
-                                </a>
                                 <?php if ($isPicked): ?>
                                     <button type="button"
                                             class="js-picklist-unpick-item inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-xs font-semibold shadow-sm hover:bg-amber-100 transition"

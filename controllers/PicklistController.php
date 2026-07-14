@@ -64,36 +64,37 @@ class PicklistController
         ], $title);
     }
 
-    public function printItemLabel()
+    public function printLabels()
     {
         is_login();
         global $picklistModel;
 
-        $itemId = isset($_GET['item_id']) ? (int) $_GET['item_id'] : 0;
-        if ($itemId <= 0) {
-            echo '<p>Invalid picklist item.</p>';
+        $id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+        if ($id <= 0) {
+            echo '<p>Invalid picklist.</p>';
             exit;
         }
 
-        $item = $picklistModel->getPicklistItemById($itemId);
-        if (!$item) {
-            echo '<p>Picklist item not found.</p>';
+        $picklist = $picklistModel->getPicklistById($id);
+        if (!$picklist) {
+            echo '<p>Picklist not found.</p>';
             exit;
         }
 
-        $orderId = (int) ($item['order_id'] ?? 0);
-        if ($orderId <= 0) {
-            echo '<p>Order not linked to this picklist item.</p>';
-            exit;
-        }
-
+        $items = $picklistModel->getPicklistItems($id);
         require_once dirname(__DIR__) . '/helpers/label/PicklistOrderLabel.php';
+
+        $labelRows = [];
+        foreach ($items as $item) {
+            $labelRows[] = PicklistOrderLabel::fromPicklistItemRow($item);
+        }
+
         if (!headers_sent()) {
             header('Content-Type: text/html; charset=utf-8');
         }
 
-        $labelData = PicklistOrderLabel::fromPicklistItemRow($item);
-        echo PicklistOrderLabel::renderPrintDocument($labelData);
+        $plNumber = (string) ($picklist['picklist_number'] ?? '');
+        echo PicklistOrderLabel::renderPrintSheetDocument($labelRows, null, $plNumber);
         exit;
     }
 

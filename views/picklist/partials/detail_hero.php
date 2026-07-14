@@ -64,6 +64,14 @@ $isTablet = ($mode ?? 'desktop') === 'tablet';
                         <i class="fas fa-print text-[11px] opacity-90" aria-hidden="true"></i>
                         <span>Print</span>
                     </a>
+                    <?php if ((int) $total > 0): ?>
+                    <a href="?page=picklist&action=print_labels&amp;id=<?= (int) $plId ?>" target="_blank" rel="noopener noreferrer"
+                       class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-slate-800 text-xs font-semibold shadow-sm hover:bg-slate-100 hover:border-slate-400 transition"
+                       title="Print order labels (Lotus A4 ST-65 sheet)">
+                        <i class="fas fa-barcode text-[11px] opacity-90" aria-hidden="true"></i>
+                        <span>Print labels</span>
+                    </a>
+                    <?php endif; ?>
                 <?php else: ?>
                     <a href="?page=picklist&action=tablet&id=<?= (int) $plId ?>"
                        class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold shadow-sm hover:bg-emerald-100 hover:border-emerald-300 transition"
@@ -77,6 +85,14 @@ $isTablet = ($mode ?? 'desktop') === 'tablet';
                         <i class="fas fa-print text-[11px] opacity-90" aria-hidden="true"></i>
                         <span>Print</span>
                     </a>
+                    <?php if ((int) $total > 0): ?>
+                    <a href="?page=picklist&action=print_labels&amp;id=<?= (int) $plId ?>" target="_blank" rel="noopener noreferrer"
+                       class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-slate-800 text-xs font-semibold shadow-sm hover:bg-slate-100 hover:border-slate-400 transition"
+                       title="Print order labels (Lotus A4 ST-65 sheet)">
+                        <i class="fas fa-barcode text-[11px] opacity-90" aria-hidden="true"></i>
+                        <span>Print labels</span>
+                    </a>
+                    <?php endif; ?>
                 <?php endif; ?>
             </div>
         </div>
