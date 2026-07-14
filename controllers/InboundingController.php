@@ -541,6 +541,20 @@ class InboundingController {
         exit;
     }
 
+    /** Resolve publisher by Exotic vendor/publisher id (for book inbound vendor → publisher sync). */
+    public function publisherByVendor() {
+        global $inboundingModel;
+        $vendorCode = trim((string) ($_GET['vendor_code'] ?? $_GET['q'] ?? ''));
+        header('Content-Type: application/json');
+        if ($vendorCode === '' || !ctype_digit($vendorCode)) {
+            echo json_encode([]);
+            exit;
+        }
+        $row = $inboundingModel->getPublisherById((int) $vendorCode);
+        echo json_encode(!empty($row['id']) ? $row : []);
+        exit;
+    }
+
     public function saveform1() {
         global $inboundingModel;
         

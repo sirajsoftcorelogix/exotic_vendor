@@ -927,6 +927,13 @@ class Inbounding {
         // vp_inbound.vendor_code stores Exotic vendor_id (from vendorlist API), not vp_vendors.id
         $r = $this->conn->query("SELECT id, vendor_id, vendor_name FROM `vp_vendors` WHERE vendor_id IS NOT NULL AND TRIM(vendor_id) <> '' ORDER BY vendor_name ASC");
         $vendors = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
+
+        $r = $this->conn->query(
+            "SELECT publishers_id, publishers FROM vp_publishers
+             WHERE is_active = 1 AND publishers_id IS NOT NULL AND TRIM(publishers) <> ''
+             ORDER BY publishers ASC"
+        );
+        $publishers = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
         
         $r = $this->conn->query("SELECT id, material_name FROM `material` ORDER BY material_name ASC");
         $material = $r ? $r->fetch_all(MYSQLI_ASSOC) : [];
@@ -953,6 +960,7 @@ class Inbounding {
             'form2'      => $inbounding,
             'user'       => $user,
             'vendors'    => $vendors,
+            'publishers' => $publishers,
             'material'   => $material,
             'category'   => $category,
             'address'    => $address,

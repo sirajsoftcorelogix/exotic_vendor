@@ -212,6 +212,17 @@ $form3ListUrl = base_url('?page=inbounding&action=list');
 $selectedVendorCode = trim((string) ($form2['vendor_code'] ?? ''));
 $invoice_no_value = trim((string) ($form2['invoice_no'] ?? ''));
 $vendorsList = $data['vendors'] ?? [];
+$form3PublishersForVendor = [];
+foreach ($data['publishers'] ?? [] as $publisherRow) {
+    $publisherExoticId = (int) ($publisherRow['publishers_id'] ?? 0);
+    $publisherName = trim((string) ($publisherRow['publishers'] ?? ''));
+    if ($publisherExoticId > 0 && $publisherName !== '') {
+        $form3PublishersForVendor[] = [
+            'id' => $publisherExoticId,
+            'name' => $publisherName,
+        ];
+    }
+}
 ?>
 
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.default.min.css" rel="stylesheet">
@@ -613,6 +624,8 @@ $vendorsList = $data['vendors'] ?? [];
 
         const searchAuthorsUrl = '<?php echo base_url('?page=inbounding&action=searchAuthors&q='); ?>';
         const searchPublishersUrl = '<?php echo base_url('?page=inbounding&action=searchPublishers&q='); ?>';
+        const publisherByVendorUrl = '<?php echo base_url('?page=inbounding&action=publisherByVendor&vendor_code='); ?>';
+        const form3PublishersForVendor = <?php echo json_encode($form3PublishersForVendor, JSON_UNESCAPED_UNICODE); ?>;
 
         const authorPipeInput = document.getElementById('author_pipe_value');
         const authorSelectEl = document.getElementById('author_select');
@@ -774,11 +787,112 @@ $vendorsList = $data['vendors'] ?? [];
         });
 
         const form3VendorSelectEl = document.getElementById('form3_vendor_code');
+        let form3VendorTomSelect = null;
+        const form3PublisherVendorOptionIds = new Set();
+
         if (form3VendorSelectEl && !form3VendorSelectEl.tomselect) {
-            new TomSelect('#form3_vendor_code', {
+            form3VendorTomSelect = new TomSelect('#form3_vendor_code', {
                 create: false,
                 sortField: { field: 'text', direction: 'asc' }
             });
+            form3VendorTomSelect.on('change', function () {
+                syncPublisherFromForm3Vendor();
+            });
+        } else if (form3VendorSelectEl && form3VendorSelectEl.tomselect) {
+            form3VendorTomSelect = form3VendorSelectEl.tomselect;
+            form3VendorTomSelect.on('change', function () {
+                syncPublisherFromForm3Vendor();
+            });
+        }
+
+        function refreshForm3VendorPublisherOptions() {
+            if (!form3VendorTomSelect) {
+                return;
+            }
+
+            form3PublisherVendorOptionIds.forEach(function (optionId) {
+                if (form3VendorTomSelect.options[optionId]) {
+                    form3VendorTomSelect.removeOption(optionId);
+                }
+            });
+            form3PublisherVendorOptionIds.clear();
+
+            const { isBook } = getCategoryType();
+            if (!isBook) {
+                return;
+            }
+
+            const existingVendorValues = new Set(
+                Object.keys(form3VendorTomSelect.options || {}).map(function (key) {
+                    return String(key);
+                })
+            );
+
+            (form3PublishersForVendor || []).forEach(function (publisher) {
+                const publisherId = String(publisher.id || '');
+                const publisherName = String(publisher.name || '').trim();
+                if (!publisherId || publisherId === '0' || !publisherName) {
+                    return;
+                }
+                if (existingVendorValues.has(publisherId)) {
+                    return;
+                }
+                form3VendorTomSelect.addOption({
+                    value: publisherId,
+                    text: publisherId + ' - ' + publisherName + ' (publisher)',
+                    isPublisherOption: true
+                });
+                form3PublisherVendorOptionIds.add(publisherId);
+            });
+        }
+
+        function setForm3PublisherValue(publisher) {
+            if (!publisherSelect || !publisher || !publisher.id) {
+                return;
+            }
+            const publisherId = String(publisher.id);
+            const publisherName = String(publisher.name || '').trim();
+            if (!publisherId || !publisherName) {
+                return;
+            }
+            publisherSelect.addOption({ id: publisherId, name: publisherName });
+            publisherSelect.setValue(publisherId, true);
+        }
+
+        function syncPublisherFromForm3Vendor() {
+            const { isBook } = getCategoryType();
+            if (!isBook) {
+                return;
+            }
+
+            const vendorVal = String(getForm3VendorValue()).trim();
+            if (!vendorVal) {
+                return;
+            }
+
+            const localPublisher = (form3PublishersForVendor || []).find(function (publisher) {
+                return String(publisher.id) === vendorVal;
+            });
+            if (localPublisher) {
+                setForm3PublisherValue(localPublisher);
+                return;
+            }
+
+            fetch(publisherByVendorUrl + encodeURIComponent(vendorVal))
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error('Publisher lookup failed: ' + response.status);
+                    }
+                    return response.json();
+                })
+                .then(function (publisher) {
+                    if (publisher && publisher.id) {
+                        setForm3PublisherValue(publisher);
+                    }
+                })
+                .catch(function (err) {
+                    console.error('Publisher sync from vendor error:', err);
+                });
         }
 
         function getForm3VendorValue() {
@@ -1140,6 +1254,7 @@ $vendorsList = $data['vendors'] ?? [];
             toggleBookFields();
             toggleBookCategoryFields();
             toggleVariationControls();
+            refreshForm3VendorPublisherOptions();
             initAllVariationDimensions();
         }
 
@@ -1450,6 +1565,9 @@ $vendorsList = $data['vendors'] ?? [];
 
         // Initial Run
         updateAllFields();
+        if (getCategoryType().isBook && getForm3VendorValue() && publisherSelect && !String(publisherSelect.getValue() || '').trim()) {
+            syncPublisherFromForm3Vendor();
+        }
     });
 
     // Navigation & Popups (form3 is the first inbound step)
