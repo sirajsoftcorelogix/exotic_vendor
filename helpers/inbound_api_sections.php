@@ -167,7 +167,12 @@ function inbound_api_build_book_details_modify_fields(array $d, Inbounding $mode
         $fields[$key] = $value;
     };
 
-    $creator = $model->buildBookCreatorApiValue($d['author'] ?? '', $d['edited_by'] ?? '');
+    $creator = $model->buildBookCreatorApiValue($d['author'] ?? '', [
+        'edited_by' => $d['edited_by'] ?? '',
+        'compiled_by' => $d['compiled_by'] ?? '',
+        'translated_by' => $d['translated_by'] ?? '',
+        'commentary_by' => $d['commentary_by'] ?? '',
+    ]);
     $append('creator', $creator);
 
     $publisherId = (int) ($d['publisher'] ?? 0);

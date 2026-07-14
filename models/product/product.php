@@ -1101,6 +1101,9 @@ class product
 
         return [
             'edited_by' => $creatorParts['edited_by'],
+            'compiled_by' => $creatorParts['compiled_by'],
+            'translated_by' => $creatorParts['translated_by'],
+            'commentary_by' => $creatorParts['commentary_by'],
             'isbn' => $this->apiFormString($apiRow['isbn'] ?? ''),
             'cover_type' => $this->apiFormString($apiRow['cover_type'] ?? ''),
             'edition' => $this->apiFormString($apiRow['edition'] ?? ''),
