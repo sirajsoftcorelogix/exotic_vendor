@@ -396,8 +396,11 @@ class PicklistController
 
         $picklistNumber = (string) ($result['picklist_number'] ?? $picklist['picklist_number'] ?? '');
         $orderIds = $result['order_ids'] ?? [];
+        $orderStatuses = $result['order_statuses'] ?? [];
         foreach ($orderIds as $oid) {
-            $this->revertOrderAfterPicklistRemoval((int) $oid, $picklistNumber, $ordersModel, $commanModel, false);
+            $oid = (int) $oid;
+            $storedStatus = isset($orderStatuses[$oid]) ? (string) $orderStatuses[$oid] : null;
+            $this->revertOrderAfterPicklistRemoval($oid, $picklistNumber, $ordersModel, $commanModel, false, $storedStatus);
         }
 
         $_SESSION['picklist_flash'] = [
@@ -452,7 +455,15 @@ class PicklistController
         $picklistDeleted = !empty($result['picklist_deleted']);
 
         if ($orderId > 0) {
-            $this->revertOrderAfterPicklistRemoval($orderId, $picklistNumber, $ordersModel, $commanModel, true);
+            $storedStatus = trim((string) ($result['previous_order_status'] ?? ''));
+            $this->revertOrderAfterPicklistRemoval(
+                $orderId,
+                $picklistNumber,
+                $ordersModel,
+                $commanModel,
+                true,
+                $storedStatus !== '' ? $storedStatus : null
+            );
         }
 
         if ($wantsJson) {
@@ -519,7 +530,15 @@ class PicklistController
         }
 
         $picklistNumber = (string) ($result['picklist_number'] ?? ($plItem['picklist_number'] ?? ''));
-        $this->revertOrderAfterPicklistRemoval($orderId, $picklistNumber, $ordersModel, $commanModel, true);
+        $storedStatus = trim((string) ($result['previous_order_status'] ?? ''));
+        $this->revertOrderAfterPicklistRemoval(
+            $orderId,
+            $picklistNumber,
+            $ordersModel,
+            $commanModel,
+            true,
+            $storedStatus !== '' ? $storedStatus : null
+        );
 
         echo json_encode([
             'success' => true,
@@ -536,7 +555,8 @@ class PicklistController
         string $picklistNumber,
         $ordersModel,
         $commanModel,
-        bool $singleItemLog = false
+        bool $singleItemLog = false,
+        ?string $storedPreviousStatus = null
     ): void {
         if ($orderId <= 0) {
             return;
@@ -547,10 +567,17 @@ class PicklistController
             return;
         }
 
+        $picklistSlugs = ['added_to_picklist', 'item_picked'];
         $status = (string) ($order['status'] ?? '');
         if ($status === 'added_to_picklist' || $status === 'item_picked') {
             $previousStatus = $this->resolveStatusBeforePicklist($orderId, $commanModel);
-            if ($previousStatus === null || $previousStatus === '') {
+            if ($previousStatus === null || $previousStatus === '' || in_array($previousStatus, $picklistSlugs, true)) {
+                $stored = trim((string) ($storedPreviousStatus ?? ''));
+                if ($stored !== '' && !in_array($stored, $picklistSlugs, true)) {
+                    $previousStatus = $stored;
+                }
+            }
+            if ($previousStatus === null || $previousStatus === '' || in_array($previousStatus, $picklistSlugs, true)) {
                 $previousStatus = 'item_received';
             }
             $this->syncOrderStatus($orderId, $previousStatus, $ordersModel, $commanModel);
@@ -569,7 +596,9 @@ class PicklistController
     }
 
     /**
-     * Find the last order status before the picklist workflow (added_to_picklist / item_picked).
+     * Resolve pre-picklist status from vp_order_status_log.
+     * Anchors on the most recent added_to_picklist / item_picked entry, then walks
+     * backward to the last real Status: slug before that picklist workflow began.
      */
     private function resolveStatusBeforePicklist(int $orderId, $commanModel): ?string
     {
@@ -577,34 +606,82 @@ class PicklistController
             return null;
         }
 
-        $logs = $commanModel->get_order_status_log($orderId);
-        if (!is_array($logs) || $logs === []) {
-            $logs = $this->fetchOrderStatusLogsRaw($orderId);
+        $logs = $this->fetchOrderStatusLogsRaw($orderId);
+        if ($logs === []) {
+            $logs = $commanModel->get_order_status_log($orderId);
+            if (!is_array($logs)) {
+                $logs = [];
+            }
         }
         if ($logs === []) {
             return null;
         }
 
         $picklistSlugs = ['added_to_picklist', 'item_picked'];
-        $reversed = array_reverse($logs);
-        $passedPicklistChain = false;
+        $lastPicklistIdx = -1;
 
-        foreach ($reversed as $log) {
-            $text = trim((string) ($log['status'] ?? ''));
-            if (!preg_match('/^Status:\s*(.+)$/i', $text, $matches)) {
-                continue;
-            }
-            $slug = trim((string) $matches[1]);
-            if (in_array($slug, $picklistSlugs, true)) {
-                $passedPicklistChain = true;
-                continue;
-            }
-            if ($passedPicklistChain) {
-                return $slug;
+        foreach ($logs as $i => $log) {
+            $slug = $this->extractStatusSlugFromLog((string) ($log['status'] ?? ''));
+            if ($slug !== null && in_array($slug, $picklistSlugs, true)) {
+                $lastPicklistIdx = $i;
             }
         }
 
+        if ($lastPicklistIdx >= 0) {
+            for ($j = $lastPicklistIdx - 1; $j >= 0; $j--) {
+                $slug = $this->extractStatusSlugFromLog((string) ($logs[$j]['status'] ?? ''));
+                if ($slug === null || in_array($slug, $picklistSlugs, true)) {
+                    continue;
+                }
+                if ($this->isPicklistRemovalStatusArtifact($logs, $j, $lastPicklistIdx)) {
+                    continue;
+                }
+
+                return $slug;
+            }
+
+            return null;
+        }
+
+        $reversed = array_reverse($logs);
+        foreach ($reversed as $log) {
+            $slug = $this->extractStatusSlugFromLog((string) ($log['status'] ?? ''));
+            if ($slug === null || in_array($slug, $picklistSlugs, true)) {
+                continue;
+            }
+
+            return $slug;
+        }
+
         return null;
+    }
+
+    private function extractStatusSlugFromLog(string $text): ?string
+    {
+        $text = trim($text);
+        if (!preg_match('/^Status:\s*(.+)$/i', $text, $matches)) {
+            return null;
+        }
+
+        $slug = trim((string) $matches[1]);
+        return $slug !== '' ? $slug : null;
+    }
+
+    /**
+     * Skip Status: entries written during a prior picklist removal (wrong restore).
+     *
+     * @param array<int, array<string, mixed>> $logs
+     */
+    private function isPicklistRemovalStatusArtifact(array $logs, int $statusIdx, int $lastPicklistIdx): bool
+    {
+        for ($k = $statusIdx + 1; $k <= $lastPicklistIdx; $k++) {
+            $text = trim((string) ($logs[$k]['status'] ?? ''));
+            if (stripos($text, 'Removed from picklist') !== false || stripos($text, 'Picklist deleted') !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
