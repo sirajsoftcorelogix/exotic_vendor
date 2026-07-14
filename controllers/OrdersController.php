@@ -171,6 +171,21 @@ class OrdersController
         foreach ($orders as $key => $order) {
             $oid = (int) ($order['order_id'] ?? 0);
             $plItem = $picklistItemsByOrder[$oid] ?? null;
+            if (!$plItem && in_array((string) ($order['status'] ?? ''), ['added_to_picklist', 'item_picked'], true)) {
+                $existing = $picklistModel->findItemOnAnyPicklist(
+                    (string) ($order['order_number'] ?? ''),
+                    (string) ($order['sku'] ?? ''),
+                    (string) ($order['item_code'] ?? '')
+                );
+                if (!empty($existing['on_picklist'])) {
+                    $plItem = [
+                        'item_id' => (int) ($existing['item_id'] ?? 0),
+                        'picklist_id' => (int) ($existing['picklist_id'] ?? 0),
+                        'picklist_number' => (string) ($existing['picklist_number'] ?? ''),
+                        'status' => (string) ($existing['status'] ?? ''),
+                    ];
+                }
+            }
             $orders[$key]['picklist_item_id'] = $plItem ? (int) ($plItem['item_id'] ?? 0) : 0;
             $orders[$key]['picklist_id'] = $plItem ? (int) ($plItem['picklist_id'] ?? 0) : 0;
             $orders[$key]['picklist_number'] = $plItem ? (string) ($plItem['picklist_number'] ?? '') : '';

@@ -46,7 +46,7 @@ class Picklist
             return ['on_picklist' => false];
         }
 
-        $sql = "SELECT pli.picklist_id, pl.picklist_number, pl.status, pli.sku, pli.order_number, pli.item_code
+        $sql = "SELECT pli.id AS item_id, pli.picklist_id, pl.picklist_number, pl.status, pli.sku, pli.order_number, pli.item_code
                 FROM vp_picklist_items pli
                 INNER JOIN vp_picklists pl ON pl.id = pli.picklist_id
                 WHERE pl.status != 'cancelled'
@@ -65,6 +65,7 @@ class Picklist
             $stmt->close();
             return [
                 'on_picklist' => true,
+                'item_id' => (int) ($row['item_id'] ?? 0),
                 'picklist_id' => (int) ($row['picklist_id'] ?? 0),
                 'picklist_number' => (string) ($row['picklist_number'] ?? ''),
                 'status' => (string) ($row['status'] ?? ''),
@@ -127,7 +128,32 @@ class Picklist
             return null;
         }
         $map = $this->getPicklistItemsByOrderIds([$orderId]);
-        return $map[$orderId] ?? null;
+        if (isset($map[$orderId])) {
+            return $map[$orderId];
+        }
+
+        require_once __DIR__ . '/../order/order.php';
+        $orderModel = new Order($this->db);
+        $order = $orderModel->getOrderById($orderId);
+        if (!$order) {
+            return null;
+        }
+
+        $existing = $this->findItemOnAnyPicklist(
+            (string) ($order['order_number'] ?? ''),
+            (string) ($order['sku'] ?? ''),
+            (string) ($order['item_code'] ?? '')
+        );
+        if (empty($existing['on_picklist']) || (int) ($existing['item_id'] ?? 0) <= 0) {
+            return null;
+        }
+
+        return [
+            'item_id' => (int) $existing['item_id'],
+            'picklist_id' => (int) ($existing['picklist_id'] ?? 0),
+            'picklist_number' => (string) ($existing['picklist_number'] ?? ''),
+            'status' => (string) ($existing['status'] ?? ''),
+        ];
     }
 
     /**

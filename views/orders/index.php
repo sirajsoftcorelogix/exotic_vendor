@@ -1069,15 +1069,16 @@
                                                         <?php endif; ?>
                                                         <hr class="my-1 mx-2"></hr>
                                                         <?php
-                                                        $onPicklist = !empty($order['on_picklist']) && (int) ($order['picklist_item_id'] ?? 0) > 0;
+                                                        $picklistStatuses = ['added_to_picklist', 'item_picked'];
+                                                        $onPicklist = (int) ($order['picklist_item_id'] ?? 0) > 0
+                                                            || in_array((string) ($order['status'] ?? ''), $picklistStatuses, true);
                                                         ?>
                                                         <?php if ($onPicklist): ?>
                                                         <?php $menuPicklistNumber = trim((string) ($order['picklist_number'] ?? '')); ?>
-                                                        <a href="#"
+                                                        <a href="javascript:void(0)"
                                                            role="button"
-                                                           class="js-remove-from-picklist block px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50"
-                                                           data-order-id="<?= (int) $order['order_id'] ?>"
-                                                           data-picklist-number="<?= htmlspecialchars($menuPicklistNumber, ENT_QUOTES, 'UTF-8') ?>">
+                                                           class="block px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50"
+                                                           onclick="removeOrderFromPicklist(<?= (int) $order['order_id'] ?>, <?= json_encode($menuPicklistNumber, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>); return false;">
                                                             <span class="flex items-start gap-2">
                                                                 <i class="fas fa-check-square mt-0.5 text-emerald-600"></i>
                                                                 <span>
@@ -2190,21 +2191,9 @@
         });
     });
 
-    document.addEventListener('click', function(event) {
-        const removeLink = event.target.closest('.js-remove-from-picklist');
-        if (!removeLink) {
-            return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        const orderId = removeLink.getAttribute('data-order-id');
-        const picklistNumber = removeLink.getAttribute('data-picklist-number') || '';
-        removeOrderFromPicklist(orderId, picklistNumber);
-    });
-
     function removeOrderFromPicklist(orderId, picklistNumber) {
         if (!orderId) {
-            return;
+            return false;
         }
         const menu = document.getElementById('menu-' + orderId);
         if (menu) {
@@ -2212,11 +2201,11 @@
         }
         const label = picklistNumber ? ('picklist ' + picklistNumber) : 'the picklist';
         if (!window.confirm('Remove this order from ' + label + '?')) {
-            return;
+            return false;
         }
         const fd = new FormData();
         fd.append('order_id', String(orderId));
-        fetch('index.php?page=picklist&action=remove_order_from_picklist', {
+        fetch('<?= base_url('?page=picklist&action=remove_order_from_picklist') ?>', {
             method: 'POST',
             body: fd
         })
@@ -2254,6 +2243,7 @@
                 window.alert(msg);
             }
         });
+        return false;
     }
 
     function openStatusPopup(orderId) {
