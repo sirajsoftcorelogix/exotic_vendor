@@ -1227,6 +1227,9 @@ switch ($page) {
             case 'searchPublishers':
                 $controller->searchPublishers();
                 break;
+            case 'publisherByVendor':
+                $controller->publisherByVendor();
+                break;
             case 'search_book_attr':
                 $controller->searchBookAttributes();
                 break;

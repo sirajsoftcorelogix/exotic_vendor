@@ -78,6 +78,7 @@ $hasInvoicePreview = ($invoiceUrl ?? '') !== '';
                     <?php endforeach; ?>
                 <?php endif; ?>
             </select>
+            <p class="text-xs text-gray-500 mt-1">For books, publishers also appear in this list (like Direct Purchase).</p>
             <p id="form3-vendor-error" class="text-red-600 text-xs mt-1 font-semibold hidden"></p>
         </div>
     </div>
