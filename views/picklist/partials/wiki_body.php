@@ -101,7 +101,7 @@
             <li>Two sections are printed:
                 <ul class="mt-2 space-y-1">
                     <li><strong>A) Full quantity available</strong> — physical stock meets order qty; pick the full order quantity.</li>
-                    <li><strong>B) Partially available &amp; not available</strong> — stock is short; shows shortfall and Partial / Not available status.</li>
+                    <li><strong>B) Partially available &amp; not available</strong> — stock is short; shows shortfall for follow-up.</li>
                 </ul>
             </li>
             <li>The print dialog opens automatically. Use your browser’s print settings as usual.</li>
