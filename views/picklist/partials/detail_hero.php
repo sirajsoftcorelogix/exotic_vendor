@@ -16,7 +16,7 @@ $createdAt = !empty($picklist['created_at']) ? date('d M Y, H:i', strtotime($pic
 $isTablet = ($mode ?? 'desktop') === 'tablet';
 ?>
 <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04] mb-6">
-    <div class="relative px-5 py-6 sm:px-8 sm:py-7">
+    <div class="relative px-4 py-5 sm:px-5 sm:py-6">
         <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">
             <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-2 mb-3">
