@@ -3,7 +3,7 @@
 const PAYMENT_TYPE_GROUP_PREFIX = 'group:';
 
 /**
- * Ordered keyword rules. First match wins, so broader groups (e.g. Payment Gateway) come first.
+ * Ordered keyword rules. First match wins — specific groups (PayPal, Razorpay, Stripe) before Payment Gateway.
  *
  * @return array<string, string[]>
  */
@@ -16,12 +16,15 @@ function paymentTypeGroupRules(): array
     }
 
     $rules = [
+        'PayPal' => ['paypal'],
+        'Razorpay' => ['razorpay'],
+        'Stripe' => ['stripe'],
         'Payment Gateway' => [
-            'razorpay', 'payu', 'paypal', 'stripe', 'phonepe', 'phone_pe', 'gpay', 'googlepay', 'google_pay',
+            'payu', 'phonepe', 'phone_pe', 'gpay', 'googlepay', 'google_pay',
             'paytm', 'ccavenue', 'cc_avenue', 'instamojo', 'billdesk', 'mobikwik', 'freecharge', 'amazonpay',
             'amazon_pay', 'bhim', 'cashfree', 'easebuzz', 'pinelabs', 'worldline', 'payone', 'netbanking',
             'net_banking', 'debitcard', 'debit_card', 'creditcard', 'credit_card', 'payment_gateway',
-            'online_payment', 'upi',
+            'online_payment',
         ],
         'Amazon' => ['amazon', 'fba'],
         'Myntra' => ['myntra'],
@@ -33,8 +36,15 @@ function paymentTypeGroupRules(): array
         'Etsy' => ['etsy'],
         'Nykaa' => ['nykaa'],
         'Ajio' => ['ajio'],
-        'COD' => ['cod', 'cash_on_delivery', 'cash on delivery'],
-        'Offline' => ['offline', 'counter'],
+        'POS & Offline' => [
+            'pos_machine', 'pos machine', 'posmachine',
+            'cash',
+            'card',
+            'bank_transfer', 'bank-transfer', 'bank transfer', 'banktransfer',
+            'offline', 'counter',
+            'cod', 'cash_on_delivery', 'cash on delivery',
+            'upi',
+        ],
     ];
 
     return $rules;
