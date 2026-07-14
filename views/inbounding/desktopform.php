@@ -331,6 +331,18 @@ if (!empty($selected_publisher_id) && isset($inboundingModel) && method_exists($
     $selected_publisher_name = $publisherRow['publishers'] ?? $publisherRow['publisher_name'] ?? $publisherRow['name'] ?? '';
 }
 
+$desktopPublishersForVendor = [];
+foreach ($data['publishers'] ?? [] as $publisherRow) {
+    $publisherExoticId = (int) ($publisherRow['publishers_id'] ?? 0);
+    $publisherName = trim((string) ($publisherRow['publishers'] ?? ''));
+    if ($publisherExoticId > 0 && $publisherName !== '') {
+        $desktopPublishersForVendor[] = [
+            'id' => $publisherExoticId,
+            'name' => $publisherName,
+        ];
+    }
+}
+
 require_once __DIR__ . '/partials/book_cover_types.php';
 $saved_cover_type = trim((string) ($data['form2']['cover_type'] ?? ''));
 $saved_edition = trim((string) ($data['form2']['edition'] ?? ''));
@@ -1925,6 +1937,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                     </option>
                                 <?php } ?>
                             </select>
+                            <p class="text-xs text-gray-500 mt-1">For books, publishers also appear in this list (like Direct Purchase).</p>
                             <p id="desktop-vendor-error" class="text-red-600 text-xs mt-1 font-semibold hidden"></p>
                         </div>
                     </div>
@@ -5084,6 +5097,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 variantSelect.disabled = false;
             }
         }
+        if (typeof window.refreshDesktopVendorPublisherOptions === 'function') {
+            window.refreshDesktopVendorPublisherOptions();
+        }
     }
 
     function updateQuantityRequiredStar() {
@@ -6102,6 +6118,105 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 document.addEventListener('DOMContentLoaded', function() {
+    const publisherByVendorUrl = <?php echo json_encode(base_url('?page=inbounding&action=publisherByVendor&vendor_code=')); ?>;
+    const desktopPublishersForVendor = <?php echo json_encode($desktopPublishersForVendor, JSON_UNESCAPED_UNICODE); ?>;
+    const desktopPublisherVendorOptionIds = new Set();
+
+    function desktopIsBookGroup() {
+        return typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
+    }
+
+    function getDesktopVendorValue() {
+        const vendorEl = document.getElementById('vendor_code');
+        if (!vendorEl) return '';
+        if (vendorEl.tomselect) {
+            const val = vendorEl.tomselect.getValue();
+            return Array.isArray(val) ? (val[0] || '') : (val || '');
+        }
+        return vendorEl.value || '';
+    }
+
+    function setDesktopPublisherValue(publisher) {
+        const publisherEl = document.getElementById('publisher_select');
+        const ts = publisherEl && publisherEl.tomselect ? publisherEl.tomselect : null;
+        if (!ts || !publisher || !publisher.id) return;
+        const publisherId = String(publisher.id);
+        const publisherName = String(publisher.name || '').trim();
+        if (!publisherId || !publisherName) return;
+        ts.addOption({ id: publisherId, name: publisherName });
+        ts.setValue(publisherId, true);
+    }
+
+    function removeDesktopPublisherVendorOptions(vendorSelect) {
+        if (!vendorSelect || !vendorSelect.tomselect) return;
+        desktopPublisherVendorOptionIds.forEach(function (optionId) {
+            if (vendorSelect.tomselect.options[optionId]) {
+                vendorSelect.tomselect.removeOption(optionId);
+            }
+        });
+        desktopPublisherVendorOptionIds.clear();
+    }
+
+    function appendDesktopPublisherVendorOptions(vendorSelect) {
+        if (!vendorSelect || !vendorSelect.tomselect) return;
+        removeDesktopPublisherVendorOptions(vendorSelect);
+        if (!desktopIsBookGroup()) return;
+
+        const existingValues = new Set(
+            Object.keys(vendorSelect.tomselect.options || {}).map(function (key) {
+                return String(key);
+            })
+        );
+
+        (desktopPublishersForVendor || []).forEach(function (publisher) {
+            const publisherId = String(publisher.id || '');
+            const publisherName = String(publisher.name || '').trim();
+            if (!publisherId || publisherId === '0' || !publisherName) return;
+            if (existingValues.has(publisherId)) return;
+            vendorSelect.tomselect.addOption({
+                value: publisherId,
+                text: publisherId + ' - ' + publisherName + ' (publisher)',
+                isPublisherOption: true
+            });
+            desktopPublisherVendorOptionIds.add(publisherId);
+        });
+    }
+
+    window.refreshDesktopVendorPublisherOptions = function () {
+        appendDesktopPublisherVendorOptions(document.getElementById('vendor_code'));
+    };
+
+    function syncPublisherFromDesktopVendor() {
+        if (!desktopIsBookGroup()) return;
+        const vendorVal = String(getDesktopVendorValue()).trim();
+        if (!vendorVal) return;
+
+        const localPublisher = (desktopPublishersForVendor || []).find(function (publisher) {
+            return String(publisher.id) === vendorVal;
+        });
+        if (localPublisher) {
+            setDesktopPublisherValue(localPublisher);
+            return;
+        }
+
+        fetch(publisherByVendorUrl + encodeURIComponent(vendorVal), { credentials: 'include' })
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error('Publisher lookup failed: ' + response.status);
+                }
+                return response.json();
+            })
+            .then(function (publisher) {
+                if (publisher && publisher.id) {
+                    setDesktopPublisherValue(publisher);
+                }
+            })
+            .catch(function (err) {
+                console.error('Publisher sync from vendor error:', err);
+            });
+    }
+    window.syncPublisherFromDesktopVendor = syncPublisherFromDesktopVendor;
+
     function formatVendorDropdownLabel(vendor) {
         const code = String(vendor.vendor_id ?? '').trim();
         const name = String(vendor.vendor_name ?? '').trim();
@@ -6196,6 +6311,8 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 vendorSelect.innerHTML = '<option value="">No vendors available</option>';
             }
+
+            appendDesktopPublisherVendorOptions(vendorSelect);
         })
         .catch(error => {
             console.error('Error fetching vendors:', error);
@@ -6259,6 +6376,19 @@ document.addEventListener('DOMContentLoaded', function() {
     var groupSelect = document.getElementById('group_select');
     if (groupSelect) {
         groupSelect.addEventListener('change', updateVendorListBasedOnGroup);
+    }
+
+    const vendorSelectForSync = document.getElementById('vendor_code');
+    if (vendorSelectForSync && vendorSelectForSync.tomselect) {
+        vendorSelectForSync.tomselect.on('change', syncPublisherFromDesktopVendor);
+    }
+
+    window.refreshDesktopVendorPublisherOptions();
+    const publisherTs = document.getElementById('publisher_select') && document.getElementById('publisher_select').tomselect
+        ? document.getElementById('publisher_select').tomselect
+        : null;
+    if (desktopIsBookGroup() && getDesktopVendorValue() && publisherTs && !String(publisherTs.getValue() || '').trim()) {
+        syncPublisherFromDesktopVendor();
     }
 });
 
