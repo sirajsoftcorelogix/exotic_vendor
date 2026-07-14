@@ -74,26 +74,24 @@ include __DIR__ . '/partials/detail_hero.php';
 
 <?php if ($items !== []): ?>
     <div class="mb-3 px-1">
-        <div class="flex flex-col items-start gap-2.5">
-            <label class="inline-flex items-center gap-2.5 cursor-pointer select-none text-sm font-semibold text-gray-800">
+        <div class="flex flex-nowrap items-center gap-2 overflow-x-auto pb-0.5">
+            <label class="inline-flex items-center gap-2 cursor-pointer select-none text-sm font-semibold text-gray-800 shrink-0">
                 <input type="checkbox" id="picklist-select-all" class="w-5 h-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500" aria-label="Select all items">
-                <span>Select all</span>
+                <span class="whitespace-nowrap">Select all</span>
             </label>
-            <div class="flex flex-wrap items-center gap-2">
-                <button type="button"
-                        id="picklist-bulk-pick-btn"
-                        disabled
-                        class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold shadow-sm hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed transition">
-                    <i class="fas fa-check text-[11px]" aria-hidden="true"></i> Mark picked
-                </button>
-                <button type="button"
-                        id="picklist-bulk-unpick-btn"
-                        disabled
-                        class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-xs font-semibold shadow-sm hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed transition">
-                    <i class="fas fa-undo text-[11px]" aria-hidden="true"></i> Revert picks
-                </button>
-                <span id="picklist-selected-count" class="text-xs font-medium text-gray-600 tabular-nums ml-1">0 selected</span>
-            </div>
+            <button type="button"
+                    id="picklist-bulk-pick-btn"
+                    disabled
+                    class="inline-flex shrink-0 items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold shadow-sm hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed transition whitespace-nowrap">
+                <i class="fas fa-check text-[11px]" aria-hidden="true"></i> Mark picked
+            </button>
+            <button type="button"
+                    id="picklist-bulk-unpick-btn"
+                    disabled
+                    class="inline-flex shrink-0 items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-xs font-semibold shadow-sm hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed transition whitespace-nowrap">
+                <i class="fas fa-undo text-[11px]" aria-hidden="true"></i> Revert picks
+            </button>
+            <span id="picklist-selected-count" class="text-xs font-medium text-gray-600 tabular-nums whitespace-nowrap shrink-0">0 selected</span>
         </div>
     </div>
 <?php endif; ?>
