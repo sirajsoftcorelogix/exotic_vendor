@@ -17,9 +17,17 @@ $total = count($items);
 ?>
 <div class="max-w-3xl mx-auto px-3 sm:px-4 py-4 pb-24">
     <div class="sticky top-0 z-10 bg-white/95 backdrop-blur border-b pb-3 mb-4 -mx-3 px-3 sm:-mx-4 sm:px-4">
-        <a href="?page=picklist&action=view&id=<?= $plId ?>" class="text-sm text-blue-600">&larr; Detail view</a>
-        <h1 class="text-xl font-bold mt-1"><?= htmlspecialchars((string) ($picklist['picklist_number'] ?? '')) ?></h1>
-        <p class="text-sm text-gray-600"><?= $picked ?> of <?= $total ?> picked · Tap an item to pick, or use bulk selection below</p>
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+                <a href="?page=picklist&action=list" class="text-sm text-blue-600 hover:underline">&larr; Back to picklists</a>
+                <h1 class="text-xl font-bold mt-1"><?= htmlspecialchars((string) ($picklist['picklist_number'] ?? '')) ?></h1>
+                <p class="text-sm text-gray-600"><?= $picked ?> of <?= $total ?> picked · Tap an item to pick, or use bulk selection below</p>
+            </div>
+            <a href="?page=picklist&action=view&id=<?= $plId ?>"
+               class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow-sm shrink-0">
+                <i class="fas fa-desktop" aria-hidden="true"></i> Desktop mode
+            </a>
+        </div>
         <?php if ($items !== []): ?>
             <div class="mt-3 pt-3 border-t border-gray-200 space-y-2">
                 <div class="flex items-center gap-2">
