@@ -39,9 +39,9 @@ $plId = static function (array $pl): int {
     return (int) ($pl['id'] ?? 0);
 };
 ?>
-<div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-    <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04] mb-6">
-        <div class="relative px-5 py-7 sm:px-8 sm:py-9 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+<div class="w-full px-2 py-4 sm:px-3">
+    <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04] mb-4">
+        <div class="relative px-4 py-5 sm:px-5 sm:py-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
             <div>
                 <div class="inline-flex items-center gap-2 rounded-full border border-amber-200/60 bg-white/70 px-3 py-1 text-xs font-semibold text-amber-900/90 mb-3">
                     <i class="fas fa-clipboard-list text-amber-700"></i>
@@ -63,7 +63,7 @@ $plId = static function (array $pl): int {
         </div>
     <?php endif; ?>
 
-    <form method="get" class="mb-6 bg-white border rounded-xl p-4 shadow-sm">
+    <form method="get" class="mb-4 bg-white border rounded-xl p-3 shadow-sm">
         <input type="hidden" name="page" value="picklist">
         <input type="hidden" name="action" value="list">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -86,7 +86,7 @@ $plId = static function (array $pl): int {
     </form>
 
     <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
-        <div class="px-5 py-3.5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
+        <div class="px-3 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
             <p class="text-sm text-gray-600">
                 <span class="font-semibold text-gray-900 tabular-nums"><?= (int) $totalRecords ?></span> picklist<?= (int) $totalRecords === 1 ? '' : 's' ?>
             </p>
@@ -95,18 +95,18 @@ $plId = static function (array $pl): int {
             <table class="min-w-full text-left">
                 <thead>
                     <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
-                        <th class="px-5 py-3.5 whitespace-nowrap">Picklist #</th>
-                        <th class="px-5 py-3.5 whitespace-nowrap">Picker</th>
-                        <th class="px-5 py-3.5 whitespace-nowrap">Status</th>
-                        <th class="px-5 py-3.5 whitespace-nowrap min-w-[8rem]">Progress</th>
-                        <th class="px-5 py-3.5 whitespace-nowrap">Created</th>
-                        <th class="px-5 py-3.5 whitespace-nowrap text-center min-w-[18rem]">Actions</th>
+                        <th class="px-3 py-3 whitespace-nowrap">Picklist #</th>
+                        <th class="px-3 py-3 whitespace-nowrap">Picker</th>
+                        <th class="px-3 py-3 whitespace-nowrap">Status</th>
+                        <th class="px-3 py-3 whitespace-nowrap min-w-[8rem]">Progress</th>
+                        <th class="px-3 py-3 whitespace-nowrap">Created</th>
+                        <th class="px-3 py-3 whitespace-nowrap text-center min-w-[18rem]">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     <?php if ($picklists === []): ?>
                         <tr>
-                            <td colspan="6" class="px-5 py-16 text-center">
+                            <td colspan="6" class="px-3 py-16 text-center">
                                 <div class="mx-auto flex max-w-sm flex-col items-center">
                                     <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
                                         <i class="fas fa-clipboard-list" aria-hidden="true"></i>
@@ -136,21 +136,21 @@ $plId = static function (array $pl): int {
                             $deleteConfirm = 'Delete picklist ' . (string) ($pl['picklist_number'] ?? '') . '? Orders on this list will be set back to Item Received where applicable.';
                             ?>
                             <tr class="hover:bg-amber-50/40 transition-colors">
-                                <td class="px-5 py-4 align-middle">
+                                <td class="px-3 py-3 align-middle">
                                     <a href="<?= htmlspecialchars($viewUrl) ?>"
                                        class="font-mono text-sm font-semibold text-amber-800 hover:text-amber-950 hover:underline underline-offset-2">
                                         <?= htmlspecialchars((string) ($pl['picklist_number'] ?? '')) ?>
                                     </a>
                                 </td>
-                                <td class="px-5 py-4 align-middle text-sm text-gray-800">
+                                <td class="px-3 py-3 align-middle text-sm text-gray-800">
                                     <?= htmlspecialchars((string) ($pl['picker_name'] ?? '—')) ?>
                                 </td>
-                                <td class="px-5 py-4 align-middle">
+                                <td class="px-3 py-3 align-middle">
                                     <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border <?= $statusClass ?>">
                                         <?= htmlspecialchars($statusLabels[$st] ?? $st) ?>
                                     </span>
                                 </td>
-                                <td class="px-5 py-4 align-middle">
+                                <td class="px-3 py-3 align-middle">
                                     <div class="flex flex-col gap-1 min-w-[7rem]">
                                         <div class="flex items-center justify-between text-xs text-gray-600 tabular-nums">
                                             <span><?= $picked ?> / <?= $total ?></span>
@@ -161,10 +161,10 @@ $plId = static function (array $pl): int {
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-5 py-4 align-middle text-sm text-gray-700 whitespace-nowrap">
+                                <td class="px-3 py-3 align-middle text-sm text-gray-700 whitespace-nowrap">
                                     <?= !empty($pl['created_at']) ? date('d M Y, H:i', strtotime($pl['created_at'])) : '—' ?>
                                 </td>
-                                <td class="px-5 py-4 align-middle">
+                                <td class="px-3 py-3 align-middle">
                                     <div class="flex flex-wrap items-center justify-center gap-2">
                                         <a href="<?= htmlspecialchars($viewUrl) ?>"
                                            class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-800 text-xs font-semibold shadow-sm hover:bg-blue-100 hover:border-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 transition"
@@ -202,7 +202,7 @@ $plId = static function (array $pl): int {
     </div>
 
     <?php if ($totalPages > 1): ?>
-        <div class="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-xl border border-gray-200 bg-white px-4 py-4 shadow-sm">
+        <div class="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-xl border border-gray-200 bg-white px-3 py-3 shadow-sm">
             <p class="text-sm text-gray-600">
                 Page <span class="font-medium text-gray-900 tabular-nums"><?= $pageNo ?></span>
                 of <span class="font-medium text-gray-900 tabular-nums"><?= $totalPages ?></span>
