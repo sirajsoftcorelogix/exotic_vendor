@@ -486,6 +486,51 @@ class PicklistController
         exit;
     }
 
+    public function removeOrderFromPicklistByOrderId()
+    {
+        is_login();
+        global $picklistModel;
+        global $ordersModel;
+        global $commanModel;
+
+        header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit;
+        }
+
+        $orderId = (int) ($_POST['order_id'] ?? 0);
+        if ($orderId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid order.']);
+            exit;
+        }
+
+        $plItem = $picklistModel->getPicklistItemByOrderId($orderId);
+        if (!$plItem || (int) ($plItem['item_id'] ?? 0) <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Order is not on a picklist.']);
+            exit;
+        }
+
+        $result = $picklistModel->deletePicklistItem((int) $plItem['item_id']);
+        if (empty($result['success'])) {
+            echo json_encode($result);
+            exit;
+        }
+
+        $picklistNumber = (string) ($result['picklist_number'] ?? ($plItem['picklist_number'] ?? ''));
+        $this->revertOrderAfterPicklistRemoval($orderId, $picklistNumber, $ordersModel, $commanModel, true);
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Removed from picklist ' . $picklistNumber . '.',
+            'picklist_id' => (int) ($result['picklist_id'] ?? 0),
+            'picklist_deleted' => !empty($result['picklist_deleted']),
+            'order_id' => $orderId,
+        ]);
+        exit;
+    }
+
     private function revertOrderAfterPicklistRemoval(
         int $orderId,
         string $picklistNumber,

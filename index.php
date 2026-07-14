@@ -1808,6 +1808,9 @@ switch ($page) {
             case 'delete_item':
                 $controller->deleteItem();
                 break;
+            case 'remove_order_from_picklist':
+                $controller->removeOrderFromPicklistByOrderId();
+                break;
             default:
                 $controller->index();
                 break;
