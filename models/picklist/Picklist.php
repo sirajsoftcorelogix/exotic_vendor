@@ -34,34 +34,113 @@ class Picklist
     }
 
     /**
-     * @return array{in_picklist: bool, picklist_id?: int, picklist_number?: string, status?: string}
+     * @return array{on_picklist: bool, picklist_id?: int, picklist_number?: string, status?: string, sku?: string, order_number?: string}
      */
-    public function getActivePicklistForOrder(int $orderId): array
+    public function findItemOnAnyPicklist(string $orderNumber, string $sku, string $itemCode = ''): array
     {
-        if ($orderId <= 0) {
-            return ['in_picklist' => false];
+        $orderNumber = trim($orderNumber);
+        $sku = trim($sku);
+        $itemCode = trim($itemCode);
+
+        if ($orderNumber === '') {
+            return ['on_picklist' => false];
         }
-        $sql = "SELECT pli.picklist_id, pl.picklist_number, pl.status
+
+        $sql = "SELECT pli.picklist_id, pl.picklist_number, pl.status, pli.sku, pli.order_number, pli.item_code
                 FROM vp_picklist_items pli
                 INNER JOIN vp_picklists pl ON pl.id = pli.picklist_id
-                WHERE pli.order_id = ?
-                  AND pl.status IN ('pending', 'in_progress')
+                WHERE pl.status != 'cancelled'
+                  AND TRIM(COALESCE(pli.order_number, '')) = ?
+                  AND (
+                        (? != '' AND TRIM(COALESCE(pli.sku, '')) = ?)
+                     OR (? != '' AND TRIM(COALESCE(pli.item_code, '')) = ?)
+                     OR (? = '' AND ? = '' AND TRIM(COALESCE(pli.sku, '')) = '' AND TRIM(COALESCE(pli.item_code, '')) = '')
+                  )
                 LIMIT 1";
         $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('i', $orderId);
+        $stmt->bind_param('sssssss', $orderNumber, $sku, $sku, $itemCode, $itemCode, $sku, $itemCode);
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result && $row = $result->fetch_assoc()) {
             $stmt->close();
             return [
-                'in_picklist' => true,
-                'picklist_id' => (int) $row['picklist_id'],
-                'picklist_number' => (string) $row['picklist_number'],
-                'status' => (string) $row['status'],
+                'on_picklist' => true,
+                'picklist_id' => (int) ($row['picklist_id'] ?? 0),
+                'picklist_number' => (string) ($row['picklist_number'] ?? ''),
+                'status' => (string) ($row['status'] ?? ''),
+                'sku' => (string) ($row['sku'] ?? ''),
+                'order_number' => (string) ($row['order_number'] ?? ''),
             ];
         }
         $stmt->close();
-        return ['in_picklist' => false];
+        return ['on_picklist' => false];
+    }
+
+    /**
+     * @param int[] $orderIds
+     * @return array{blocked: array<int, array<string, mixed>>, allowed_order_ids: int[]}
+     */
+    public function checkOrdersForPicklist(array $orderIds): array
+    {
+        require_once __DIR__ . '/../order/order.php';
+        $orderModel = new Order($this->db);
+
+        $blocked = [];
+        $allowed = [];
+
+        foreach (array_values(array_unique(array_filter(array_map('intval', $orderIds)))) as $orderId) {
+            $order = $orderModel->getOrderById($orderId);
+            if (!$order) {
+                $blocked[] = [
+                    'order_id' => $orderId,
+                    'order_number' => '',
+                    'sku' => '',
+                    'message' => 'Order not found.',
+                    'reason' => 'not_found',
+                ];
+                continue;
+            }
+
+            $orderNumber = trim((string) ($order['order_number'] ?? ''));
+            $sku = trim((string) ($order['sku'] ?? ''));
+            $itemCode = trim((string) ($order['item_code'] ?? ''));
+            $existing = $this->findItemOnAnyPicklist($orderNumber, $sku, $itemCode);
+            if ($existing['on_picklist']) {
+                $displaySku = $sku !== '' ? $sku : ($itemCode !== '' ? $itemCode : 'N/A');
+                $blocked[] = [
+                    'order_id' => $orderId,
+                    'order_number' => $orderNumber,
+                    'sku' => $displaySku,
+                    'picklist_id' => (int) ($existing['picklist_id'] ?? 0),
+                    'picklist_number' => (string) ($existing['picklist_number'] ?? ''),
+                    'message' => 'SKU ' . $displaySku . ' / Order ' . $orderNumber . ' is already on picklist ' . ($existing['picklist_number'] ?? ''),
+                    'reason' => 'duplicate_picklist',
+                ];
+                continue;
+            }
+
+            $allowed[] = $orderId;
+        }
+
+        return ['blocked' => $blocked, 'allowed_order_ids' => $allowed];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $blocked
+     */
+    public function formatDuplicatePicklistMessage(array $blocked): string
+    {
+        $lines = [];
+        foreach ($blocked as $row) {
+            if (($row['reason'] ?? '') !== 'duplicate_picklist') {
+                continue;
+            }
+            $lines[] = (string) ($row['message'] ?? 'Item already on a picklist.');
+        }
+        if ($lines === []) {
+            return 'One or more items are already on a picklist.';
+        }
+        return implode(' ', $lines);
     }
 
     /**
@@ -78,6 +157,18 @@ class Picklist
         $prepared = $this->prepareOrdersForPicklist($orderIds);
         $itemsToAdd = $prepared['items'];
         $skipped = $prepared['skipped'];
+
+        $duplicateBlocked = array_values(array_filter($skipped, static function (array $row): bool {
+            return ($row['reason'] ?? '') === 'duplicate_picklist';
+        }));
+        if ($duplicateBlocked !== []) {
+            return [
+                'success' => false,
+                'message' => $this->formatDuplicatePicklistMessage($duplicateBlocked),
+                'blocked' => $duplicateBlocked,
+                'skipped' => $skipped,
+            ];
+        }
 
         if ($itemsToAdd === []) {
             return [
@@ -172,6 +263,18 @@ class Picklist
         $prepared = $this->prepareOrdersForPicklist($orderIds);
         $itemsToAdd = $prepared['items'];
         $skipped = $prepared['skipped'];
+
+        $duplicateBlocked = array_values(array_filter($skipped, static function (array $row): bool {
+            return ($row['reason'] ?? '') === 'duplicate_picklist';
+        }));
+        if ($duplicateBlocked !== []) {
+            return [
+                'success' => false,
+                'message' => $this->formatDuplicatePicklistMessage($duplicateBlocked),
+                'blocked' => $duplicateBlocked,
+                'skipped' => $skipped,
+            ];
+        }
 
         if ($itemsToAdd === []) {
             return [
@@ -337,23 +440,29 @@ class Picklist
         $skipped = [];
 
         foreach ($orderIds as $orderId) {
-            $active = $this->getActivePicklistForOrder($orderId);
-            if ($active['in_picklist']) {
+            $order = $orderModel->getOrderById($orderId);
+            if (!$order) {
+                $skipped[] = ['order_id' => $orderId, 'message' => 'Order not found', 'reason' => 'not_found'];
+                continue;
+            }
+
+            $orderNumber = trim((string) ($order['order_number'] ?? ''));
+            $sku = trim((string) ($order['sku'] ?? ''));
+            $itemCode = trim((string) ($order['item_code'] ?? ''));
+            $existing = $this->findItemOnAnyPicklist($orderNumber, $sku, $itemCode);
+            if ($existing['on_picklist']) {
+                $displaySku = $sku !== '' ? $sku : ($itemCode !== '' ? $itemCode : 'N/A');
                 $skipped[] = [
                     'order_id' => $orderId,
-                    'message' => 'Already on picklist ' . ($active['picklist_number'] ?? ''),
+                    'order_number' => $orderNumber,
+                    'sku' => $displaySku,
+                    'picklist_number' => (string) ($existing['picklist_number'] ?? ''),
+                    'message' => 'SKU ' . $displaySku . ' / Order ' . $orderNumber . ' is already on picklist ' . ($existing['picklist_number'] ?? ''),
+                    'reason' => 'duplicate_picklist',
                 ];
                 continue;
             }
 
-            $order = $orderModel->getOrderById($orderId);
-            if (!$order) {
-                $skipped[] = ['order_id' => $orderId, 'message' => 'Order not found'];
-                continue;
-            }
-
-            $sku = trim((string) ($order['sku'] ?? ''));
-            $itemCode = trim((string) ($order['item_code'] ?? ''));
             $location = '';
             $product = null;
             if ($sku !== '') {

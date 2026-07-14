@@ -334,6 +334,35 @@ class PicklistController
         exit;
     }
 
+    public function checkOrdersOnPicklist()
+    {
+        is_login();
+        global $picklistModel;
+
+        header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit;
+        }
+
+        $orderIds = isset($_POST['order_ids']) && is_array($_POST['order_ids']) ? $_POST['order_ids'] : [];
+        $result = $picklistModel->checkOrdersForPicklist($orderIds);
+        $duplicateBlocked = array_values(array_filter($result['blocked'], static function (array $row): bool {
+            return ($row['reason'] ?? '') === 'duplicate_picklist';
+        }));
+
+        echo json_encode([
+            'success' => true,
+            'blocked' => $duplicateBlocked,
+            'allowed_order_ids' => $result['allowed_order_ids'],
+            'message' => $duplicateBlocked !== []
+                ? $picklistModel->formatDuplicatePicklistMessage($duplicateBlocked)
+                : '',
+        ]);
+        exit;
+    }
+
     public function delete()
     {
         is_login();
@@ -475,7 +504,11 @@ class PicklistController
 
         $status = (string) ($order['status'] ?? '');
         if ($status === 'added_to_picklist' || $status === 'item_picked') {
-            $this->syncOrderStatus($orderId, 'item_received', $ordersModel, $commanModel);
+            $previousStatus = $this->resolveStatusBeforePicklist($orderId, $commanModel);
+            if ($previousStatus === null || $previousStatus === '') {
+                $previousStatus = 'item_received';
+            }
+            $this->syncOrderStatus($orderId, $previousStatus, $ordersModel, $commanModel);
         }
 
         $logText = $singleItemLog
@@ -488,6 +521,74 @@ class PicklistController
             'api_response' => null,
             'change_date' => date('Y-m-d H:i:s'),
         ]);
+    }
+
+    /**
+     * Find the last order status before the picklist workflow (added_to_picklist / item_picked).
+     */
+    private function resolveStatusBeforePicklist(int $orderId, $commanModel): ?string
+    {
+        if ($orderId <= 0) {
+            return null;
+        }
+
+        $logs = $commanModel->get_order_status_log($orderId);
+        if (!is_array($logs) || $logs === []) {
+            $logs = $this->fetchOrderStatusLogsRaw($orderId);
+        }
+        if ($logs === []) {
+            return null;
+        }
+
+        $picklistSlugs = ['added_to_picklist', 'item_picked'];
+        $reversed = array_reverse($logs);
+        $passedPicklistChain = false;
+
+        foreach ($reversed as $log) {
+            $text = trim((string) ($log['status'] ?? ''));
+            if (!preg_match('/^Status:\s*(.+)$/i', $text, $matches)) {
+                continue;
+            }
+            $slug = trim((string) $matches[1]);
+            if (in_array($slug, $picklistSlugs, true)) {
+                $passedPicklistChain = true;
+                continue;
+            }
+            if ($passedPicklistChain) {
+                return $slug;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function fetchOrderStatusLogsRaw(int $orderId): array
+    {
+        global $conn;
+        if (!isset($conn) || !($conn instanceof mysqli)) {
+            return [];
+        }
+
+        $sql = 'SELECT id, order_id, status, changed_by, api_response, change_date
+                FROM vp_order_status_log
+                WHERE order_id = ?
+                ORDER BY id ASC';
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $orderId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = [];
+        while ($result && ($row = $result->fetch_assoc())) {
+            $rows[] = $row;
+        }
+        $stmt->close();
+        return $rows;
     }
 
     /**
