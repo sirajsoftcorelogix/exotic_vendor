@@ -98,7 +98,12 @@
         <h2 class="text-xl font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4">Printing the picklist</h2>
         <ol class="pl-5 space-y-2">
             <li>On the picklist detail (or tablet) page, click <strong>Print</strong>.</li>
-            <li>A new tab opens with a table: location, order number, SKU, title, image, quantities, and a column to mark picked on paper.</li>
+            <li>Two sections are printed:
+                <ul class="mt-2 space-y-1">
+                    <li><strong>A) Full quantity available</strong> — physical stock meets order qty; pick the full order quantity.</li>
+                    <li><strong>B) Partially available &amp; not available</strong> — stock is short; shows shortfall and Partial / Not available status.</li>
+                </ul>
+            </li>
             <li>The print dialog opens automatically. Use your browser’s print settings as usual.</li>
         </ol>
     </section>
