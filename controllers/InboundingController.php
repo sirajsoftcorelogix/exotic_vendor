@@ -30,12 +30,17 @@ class InboundingController {
         return null;
     }
 
-    private function redirectForm1WithError(string $message, int $id = 0): void
+    private function redirectForm3WithError(string $message, int $id = 0): void
     {
-        $_SESSION['form1_flash'] = ['type' => 'error', 'text' => $message];
-        $url = base_url('?page=inbounding&action=form1' . ($id > 0 ? '&id=' . $id : ''));
+        $_SESSION['form3_flash'] = ['type' => 'error', 'text' => $message];
+        $url = base_url('?page=inbounding&action=form3' . ($id > 0 ? '&id=' . $id : ''));
         header('Location: ' . $url);
         exit;
+    }
+
+    private function redirectForm1WithError(string $message, int $id = 0): void
+    {
+        $this->redirectForm3WithError($message, $id);
     }
 
     public function index() {
@@ -311,11 +316,10 @@ class InboundingController {
     }
     public function getform1() {
         is_login();
-        global $inboundingModel;
-        $id = $_GET['id'] ?? 0;
-        $data = array();
-        $data = $inboundingModel->getform1data($id);
-        renderTemplateClean('views/inbounding/form1.php', $data, 'form1 inbounding');
+        $id = (int) ($_GET['id'] ?? 0);
+        $url = base_url('?page=inbounding&action=form3' . ($id > 0 ? '&id=' . $id : ''));
+        header('Location: ' . $url);
+        exit;
     }
     public function getdesktopform() {
         is_login();
@@ -501,14 +505,24 @@ class InboundingController {
     public function getform3() {
         is_login();
         global $inboundingModel;
-        $id = $_GET['id'] ?? 0;
-        if (isset($id) && $id != 0) {
-            $data = $inboundingModel->getform2data($id);
-            $data['form2']['gecolormaps'] = $this->gecolormaps();
-            renderTemplateClean('views/inbounding/form3.php', $data, 'form3 inbounding');
-        }else{
-            header("location: " . base_url('?page=inbounding&action=list'));
+        $id = (int) ($_GET['id'] ?? 0);
+        if ($id <= 0) {
+            $insertId = $inboundingModel->saveform1(0, [
+                'vendor_id' => '',
+                'invoice' => '',
+                'invoice_no' => '',
+            ]);
+            if (!$insertId) {
+                header('Location: ' . base_url('?page=inbounding&action=list'));
+                exit;
+            }
+            header('Location: ' . base_url('?page=inbounding&action=form3&id=' . $insertId));
+            exit;
         }
+
+        $data = $inboundingModel->getform2data($id);
+        $data['form2']['gecolormaps'] = $this->gecolormaps();
+        renderTemplateClean('views/inbounding/form3.php', $data, 'form3 inbounding');
     }
 
     public function searchAuthors() {
@@ -1890,8 +1904,49 @@ class InboundingController {
     public function submitStep3() {
         global $inboundingModel;
         // 1. Basic Setup
-        $record_id = $_POST['record_id'] ?? '';
-        if (empty($record_id)) { echo "Record ID missing"; exit; }
+        $record_id = (int) ($_POST['record_id'] ?? 0);
+        if ($record_id <= 0) { echo "Record ID missing"; exit; }
+
+        $vendor_id = trim((string) ($_POST['vendor_code'] ?? ''));
+        $invoice_no = trim((string) ($_POST['invoice_no'] ?? ''));
+        $validationError = $this->validateForm1RequiredFields($vendor_id, $invoice_no);
+        if ($validationError !== null) {
+            $this->redirectForm3WithError($validationError, $record_id);
+        }
+
+        $oldInvoiceData = $inboundingModel->getform1data($record_id);
+        $invoicePath = $oldInvoiceData['form1']['invoice_image'] ?? '';
+        if (isset($_FILES['invoice']) && $_FILES['invoice']['error'] === UPLOAD_ERR_OK) {
+            $uploadDir = __DIR__ . '/../uploads/invoice/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+
+            $fileTmp = $_FILES['invoice']['tmp_name'];
+            $fileName = $_FILES['invoice']['name'];
+            $fileExt = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+            $allowed = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
+
+            if (!in_array($fileExt, $allowed, true)) {
+                $this->redirectForm3WithError('Only JPG, PNG, WEBP, and PDF invoice files are allowed.', $record_id);
+            }
+
+            $newFile = 'IMG_' . time() . '.' . $fileExt;
+            $dest = $uploadDir . $newFile;
+            if (move_uploaded_file($fileTmp, $dest)) {
+                $invoicePath = 'uploads/invoice/' . $newFile;
+            }
+        }
+
+        $invoiceUpdated = $inboundingModel->updateform1([
+            'id' => $record_id,
+            'vendor_id' => $vendor_id,
+            'invoice' => $invoicePath,
+            'invoice_no' => $invoice_no,
+        ]);
+        if (!$invoiceUpdated) {
+            $this->redirectForm3WithError('Could not save invoice details.', $record_id);
+        }
 
         // Use existing code if it's a variant, otherwise generate a new one
         if ($_POST['is_variant']== 'Y') {

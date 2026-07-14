@@ -207,10 +207,11 @@ $saved_publication_date = ($publication_date_raw !== '' && $publication_date_raw
     : '';
 
 $formAction = base_url('?page=inbounding&action=submitStep3');
-$form3BackUrl = ($record_id !== '' && $record_id !== '0')
-    ? base_url('?page=inbounding&action=form1&id=' . $record_id)
-    : base_url('?page=inbounding&action=list');
+$form3BackUrl = base_url('?page=inbounding&action=list');
 $form3ListUrl = base_url('?page=inbounding&action=list');
+$selectedVendorCode = trim((string) ($form2['vendor_code'] ?? ''));
+$invoice_no_value = trim((string) ($form2['invoice_no'] ?? ''));
+$vendorsList = $data['vendors'] ?? [];
 ?>
 
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.default.min.css" rel="stylesheet">
@@ -248,43 +249,27 @@ $form3ListUrl = base_url('?page=inbounding&action=list');
         
         <div class="bg-[#ea8c1e] px-4 py-3 flex items-center justify-between text-white relative">
             <button type="button" id="back-btn" class="p-1 hover:bg-white/20 rounded-full transition"><i class="fa-solid fa-arrow-left text-xl"></i></button>
-            <h1 class="font-bold text-lg md:text-xl tracking-wide mx-auto">Item Details - Step 3/4</h1>
+            <h1 class="font-bold text-lg md:text-xl tracking-wide mx-auto">Item Details - Step 1</h1>
             <button type="button" id="cancel-btn" class="p-1 hover:bg-white/20 rounded-full transition"><i class="fa-solid fa-xmark text-xl"></i></button> 
         </div>
 
         <form action="<?php echo $formAction; ?>" method="POST" enctype="multipart/form-data" id="mainForm" class="p-4 space-y-6">
+            <?php
+            $form3Flash = $_SESSION['form3_flash'] ?? null;
+            unset($_SESSION['form3_flash']);
+            if (is_array($form3Flash) && !empty($form3Flash['text'])):
+            ?>
+            <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">
+                <?php echo htmlspecialchars((string) $form3Flash['text'], ENT_QUOTES, 'UTF-8'); ?>
+            </div>
+            <?php endif; ?>
             <input type="hidden" name="record_id" value="<?php echo $record_id; ?>">
             <input type="hidden" name="userid_log" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
             
             <div class="flex flex-col lg:flex-row gap-6 items-start">
-                <div class="flex flex-row bg-gray-100 border border-gray-300 rounded p-2 gap-3 min-w-[350px] lg:w-1/3">
-                    <div id="invoiceThumb"
-                         class="relative w-24 h-28 bg-white border border-gray-300 flex-shrink-0 cursor-zoom-in overflow-hidden group"
-                         <?php if ($invoiceUrl !== ''): ?>
-                         data-invoice-url="<?php echo htmlspecialchars($invoiceUrl, ENT_QUOTES, 'UTF-8'); ?>"
-                         data-invoice-pdf="<?php echo $isInvoicePdf ? '1' : '0'; ?>"
-                         title="Click to view invoice"
-                         <?php endif; ?>>
-                        <?php if ($invoiceUrl !== ''): ?>
-                            <?php if ($isInvoicePdf): ?>
-                                <iframe src="<?php echo htmlspecialchars($invoiceUrl, ENT_QUOTES, 'UTF-8'); ?>#toolbar=0&navpanes=0" class="w-full h-full border-0 pointer-events-none" title="Invoice PDF preview"></iframe>
-                                <span class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] font-semibold text-center py-0.5">PDF</span>
-                            <?php else: ?>
-                                <img src="<?php echo htmlspecialchars($invoiceUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Invoice preview" class="w-full h-full object-cover group-hover:opacity-90 transition-opacity pointer-events-none">
-                            <?php endif; ?>
-                            <span class="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/25 transition-colors pointer-events-none">
-                                <span class="opacity-0 group-hover:opacity-100 bg-white/90 text-gray-800 text-[10px] font-bold px-2 py-1 rounded shadow">View</span>
-                            </span>
-                        <?php else: ?>
-                            <div class="w-full h-full flex items-center justify-center text-gray-400 text-xs text-center">No Inv</div>
-                        <?php endif; ?>
-                    </div>
-                    
-                    <div class="flex flex-col justify-center text-sm text-black space-y-1.5 w-full">
-                        <div class="font-bold">Vendor: <span class="font-normal"><?php echo htmlspecialchars($vendor_name); ?></span></div>
-                        <div class="font-bold">Invoice Date: <span class="font-normal">11 Dec 2025</span></div> <div class="font-bold">Entry: <span class="font-normal"><?php echo date('d M Y', strtotime($gate_entry_date_time ?: 'now')); ?></span></div>
-                        <div class="font-bold">Received By: <span class="font-normal"><?php echo htmlspecialchars($currentuserDetails['name']); ?></span></div>
-                    </div>
+                <div class="flex flex-col justify-center text-sm text-black space-y-1.5 min-w-[220px]">
+                    <div class="font-bold">Entry: <span class="font-normal"><?php echo date('d M Y', strtotime($gate_entry_date_time ?: 'now')); ?></span></div>
+                    <div class="font-bold">Received By: <span class="font-normal"><?php echo htmlspecialchars($currentuserDetails['name']); ?></span></div>
                 </div>
 
                 <div class="flex-1 flex flex-wrap gap-2">
@@ -568,6 +553,8 @@ $form3ListUrl = base_url('?page=inbounding&action=list');
                 <?php endforeach; ?>
             </div>
 
+            <?php require __DIR__ . '/partials/form3_invoice_details.php'; ?>
+
             <div class="flex justify-end gap-3 pt-4">
                  <button type="button" id="add-variation-btn" class="bg-[#ea8c1e] hover:bg-orange-600 text-white font-bold py-2 px-6 rounded shadow text-xs uppercase">
                     Add Variant
@@ -785,6 +772,136 @@ $form3ListUrl = base_url('?page=inbounding&action=list');
                     .catch(err => { console.error('Publisher load error:', err); callback(); });
             }
         });
+
+        const form3VendorSelectEl = document.getElementById('form3_vendor_code');
+        if (form3VendorSelectEl && !form3VendorSelectEl.tomselect) {
+            new TomSelect('#form3_vendor_code', {
+                create: false,
+                sortField: { field: 'text', direction: 'asc' }
+            });
+        }
+
+        function getForm3VendorValue() {
+            const vendorEl = document.getElementById('form3_vendor_code');
+            if (!vendorEl) return '';
+            if (vendorEl.tomselect) {
+                const val = vendorEl.tomselect.getValue();
+                return Array.isArray(val) ? (val[0] || '') : (val || '');
+            }
+            return vendorEl.value || '';
+        }
+
+        function validateForm3InvoiceDetails() {
+            let valid = true;
+            const vendorErrorEl = document.getElementById('form3-vendor-error');
+            const invoiceNoErrorEl = document.getElementById('form3-invoice-no-error');
+            const invoiceNoInput = document.getElementById('form3_invoice_no');
+
+            if (vendorErrorEl) {
+                vendorErrorEl.textContent = '';
+                vendorErrorEl.classList.add('hidden');
+            }
+            if (invoiceNoErrorEl) {
+                invoiceNoErrorEl.textContent = '';
+                invoiceNoErrorEl.classList.add('hidden');
+            }
+
+            const vendorVal = String(getForm3VendorValue()).trim();
+            if (!vendorVal) {
+                if (vendorErrorEl) {
+                    vendorErrorEl.textContent = 'Vendor is required.';
+                    vendorErrorEl.classList.remove('hidden');
+                }
+                valid = false;
+            }
+
+            const invoiceNoVal = invoiceNoInput ? String(invoiceNoInput.value || '').trim() : '';
+            if (!invoiceNoVal) {
+                if (invoiceNoErrorEl) {
+                    invoiceNoErrorEl.textContent = 'Invoice number is required.';
+                    invoiceNoErrorEl.classList.remove('hidden');
+                }
+                valid = false;
+            }
+
+            if (!valid) {
+                const section = document.getElementById('form3-invoice-details-section');
+                if (section) {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+
+            return valid;
+        }
+
+        const form3InvoiceInput = document.getElementById('form3_invoice_input');
+        const form3InvoicePreviewWrap = document.getElementById('form3-invoice-preview-wrap');
+        const form3InvoicePreviewBox = document.getElementById('form3-invoice-preview-box');
+        const form3InvoiceRemoveBtn = document.getElementById('form3-invoice-remove-btn');
+
+        function form3ShowInvoicePreview(dataUrl, isPdf) {
+            if (!form3InvoicePreviewWrap || !form3InvoicePreviewBox) return;
+            const img = document.getElementById('form3-invoice-img-preview');
+            const pdf = document.getElementById('form3-invoice-pdf-preview');
+
+            form3InvoicePreviewBox.dataset.invoiceUrl = dataUrl;
+            form3InvoicePreviewBox.dataset.invoicePdf = isPdf ? '1' : '0';
+
+            if (isPdf) {
+                if (img) img.classList.add('hidden');
+                if (pdf) {
+                    pdf.src = dataUrl;
+                    pdf.classList.remove('hidden');
+                }
+            } else {
+                if (pdf) {
+                    pdf.classList.add('hidden');
+                    pdf.src = '';
+                }
+                if (img) {
+                    img.src = dataUrl;
+                    img.classList.remove('hidden');
+                }
+            }
+
+            form3InvoicePreviewWrap.classList.remove('hidden');
+            if (form3InvoiceRemoveBtn) form3InvoiceRemoveBtn.classList.remove('hidden');
+        }
+
+        if (form3InvoiceInput) {
+            form3InvoiceInput.addEventListener('change', function (event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+                    form3ShowInvoicePreview(e.target.result, isPdf);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        if (form3InvoicePreviewBox) {
+            form3InvoicePreviewBox.addEventListener('click', function () {
+                const fileUrl = form3InvoicePreviewBox.dataset.invoiceUrl || '';
+                const isPdf = form3InvoicePreviewBox.dataset.invoicePdf === '1';
+                if (fileUrl && typeof openInvoicePreview === 'function') {
+                    openInvoicePreview(fileUrl, isPdf);
+                }
+            });
+        }
+
+        if (form3InvoiceRemoveBtn) {
+            form3InvoiceRemoveBtn.addEventListener('click', function () {
+                if (form3InvoiceInput) form3InvoiceInput.value = '';
+                if (form3InvoicePreviewWrap) form3InvoicePreviewWrap.classList.add('hidden');
+                form3InvoiceRemoveBtn.classList.add('hidden');
+                if (form3InvoicePreviewBox) {
+                    form3InvoicePreviewBox.dataset.invoiceUrl = '';
+                    form3InvoicePreviewBox.dataset.invoicePdf = '0';
+                }
+            });
+        }
 
         function toggleVariantFields(val) {
             if (val === 'Y') {
@@ -1259,6 +1376,11 @@ $form3ListUrl = base_url('?page=inbounding&action=list');
         });
         // 7. VALIDATION
         mainForm.addEventListener('submit', function(e) {
+            if (!validateForm3InvoiceDetails()) {
+                e.preventDefault();
+                return;
+            }
+
             let isValid = true;
             let firstErrorElement = null;
 
@@ -1330,7 +1452,7 @@ $form3ListUrl = base_url('?page=inbounding&action=list');
         updateAllFields();
     });
 
-    // Navigation & Popups (step 3 follows form1 invoice upload; form2 route is not registered)
+    // Navigation & Popups (form3 is the first inbound step)
     const form3BackUrl = <?php echo json_encode($form3BackUrl); ?>;
     const form3ListUrl = <?php echo json_encode($form3ListUrl); ?>;
     document.getElementById("back-btn").addEventListener("click", function () {
@@ -1387,16 +1509,6 @@ $form3ListUrl = base_url('?page=inbounding&action=list');
         document.body.classList.remove('overflow-hidden');
     }
 
-    const invoiceThumb = document.getElementById('invoiceThumb');
-    if (invoiceThumb && invoiceThumb.dataset.invoiceUrl) {
-        invoiceThumb.addEventListener('click', function () {
-            openInvoicePreview(
-                invoiceThumb.dataset.invoiceUrl,
-                invoiceThumb.dataset.invoicePdf === '1'
-            );
-        });
-    }
-
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
             const popup = document.getElementById('imagePopup');
@@ -1447,6 +1559,22 @@ document.addEventListener('DOMContentLoaded', function () {
             var msg = 'Imported/updated: ' + (d.imported || 0) + ', Skipped: ' + (d.skipped || 0);
             if (d.api_count != null) msg += ', API: ' + d.api_count;
             return msg + '. Search again to pick newly synced publishers.';
+        },
+    });
+
+    bindInboundCatalogSync('form3-vendor-cache-sync-btn', {
+        method: 'GET',
+        url: <?php echo json_encode(base_url('index.php?page=vendors&action=fetchAllVendors')); ?>,
+        confirmTitle: 'Refresh vendor list?',
+        confirmHtml: 'Syncs vendors from Exotic India (same as <strong>Vendors → Sync from API</strong>).',
+        htmlMessage: true,
+        isOk: function (p, d) { return p.ok && d.success === true && d.status !== 'error'; },
+        successTitle: 'Vendors refreshed',
+        failTitle: 'Vendor refresh failed',
+        afterSync: function () { window.location.reload(); },
+        message: function (ok, d) {
+            if (!ok) return d.message || 'Could not sync vendors from the catalog API.';
+            return 'Inserted: ' + (d.inserted || 0) + ', Updated: ' + (d.updated || 0) + ', Total: ' + (d.total || 0) + '.';
         },
     });
 });

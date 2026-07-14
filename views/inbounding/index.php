@@ -233,7 +233,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                     <button type="button" onclick="clearAllFilters()" class="bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2 rounded-full text-xs font-bold transition border border-red-200">
                         Clear
                     </button>
-                    <a href="<?php echo base_url('?page=inbounding&action=form1'); ?>" class="bg-black text-white px-4 py-2 rounded-full text-xs font-bold hover:bg-gray-800 transition flex items-center gap-1">
+                    <a href="<?php echo base_url('?page=inbounding&action=form3'); ?>" class="bg-black text-white px-4 py-2 rounded-full text-xs font-bold hover:bg-gray-800 transition flex items-center gap-1">
                         <i data-lucide="plus" class="w-3 h-3"></i> Add
                     </a>
                 </div>
