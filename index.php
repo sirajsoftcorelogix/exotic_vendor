@@ -1790,6 +1790,9 @@ switch ($page) {
             case 'unpick_item':
                 $controller->unpickItem();
                 break;
+            case 'set_item_availability':
+                $controller->setItemAvailability();
+                break;
             case 'bulk_pick_items':
                 $controller->bulkPickItems();
                 break;

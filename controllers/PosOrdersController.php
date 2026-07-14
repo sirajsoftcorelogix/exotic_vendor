@@ -4,6 +4,7 @@ require_once 'models/comman/tables.php';
 require_once 'models/searches/saved_search.php';
 require_once 'models/posorder/po_invoice.php';
 require_once 'models/product/product.php';
+require_once 'helpers/payment_type_groups.php';
 $ordersModel = new POSOrder($conn);
 $commanModel = new Tables($conn);
 $savedSearchModel = new SavedSearch($conn);
@@ -150,20 +151,24 @@ class PosOrdersController
         }
 
         // Render the orders view
-        renderTemplate('views/posorders/index.php', [
-            'orders' => $orders,
-            'total_orders' => $total_orders,
-            'total_pages' => $total_pages,
-            'current_page' => $page,
-            'pending_orders_count' => $pending_orders_count,
-            'order_status_list' => $order_status_row,
-            'status_list' => $statusList,
-            'country_list' => $countryList,
-            'payment_types' => $ordersModel->getPaymentTypes(),
-            'staff_list' => $commanModel->get_staff_list(),
-            'filters' => $filters,
-            'saved_searches' => $saved_searches
-        ], 'Manage Orders');
+        $paymentTypes = $ordersModel->getPaymentTypes();
+
+        renderTemplate('views/posorders/index.php', array_merge(
+            [
+                'orders' => $orders,
+                'total_orders' => $total_orders,
+                'total_pages' => $total_pages,
+                'current_page' => $page,
+                'pending_orders_count' => $pending_orders_count,
+                'order_status_list' => $order_status_row,
+                'status_list' => $statusList,
+                'country_list' => $countryList,
+                'staff_list' => $commanModel->get_staff_list(),
+                'filters' => $filters,
+                'saved_searches' => $saved_searches,
+            ],
+            preparePaymentTypeFilterData($paymentTypes, $_GET['payment_type'] ?? null)
+        ), 'Manage Orders');
     }
 
     public function viewOrder()

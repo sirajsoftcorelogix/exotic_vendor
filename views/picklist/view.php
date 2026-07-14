@@ -9,13 +9,24 @@ $plId = (int) ($picklist['id'] ?? 0);
 $showBookColumns = picklist_any_book_items($items);
 
 $picked = 0;
+$pending = 0;
+$notAvailable = 0;
+$partiallyAvailable = 0;
 foreach ($items as $it) {
-    if (($it['status'] ?? '') === 'picked') {
+    $itemStatus = (string) ($it['status'] ?? 'pending');
+    if ($itemStatus === 'picked') {
         $picked++;
+    } elseif ($itemStatus === 'not_available') {
+        $notAvailable++;
+    } elseif ($itemStatus === 'partially_available') {
+        $partiallyAvailable++;
+    } else {
+        $pending++;
     }
 }
 $total = count($items);
-$pct = $total > 0 ? round(($picked / $total) * 100) : 0;
+$resolved = $total - $pending;
+$pct = $total > 0 ? round(($resolved / $total) * 100) : 0;
 
 $flash = $_SESSION['picklist_flash'] ?? null;
 if ($flash) {
@@ -57,7 +68,7 @@ include __DIR__ . '/partials/detail_hero.php';
                         id="picklist-bulk-unpick-btn"
                         disabled
                         class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-xs font-semibold shadow-sm hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed transition whitespace-nowrap">
-                    <i class="fas fa-undo text-[11px]" aria-hidden="true"></i> Revert picks
+                    <i class="fas fa-undo text-[11px]" aria-hidden="true"></i> Revert status
                 </button>
                 <span id="picklist-selected-count" class="text-xs font-medium text-gray-600 tabular-nums whitespace-nowrap">0 selected</span>
             </div>
@@ -92,17 +103,26 @@ include __DIR__ . '/partials/detail_hero.php';
             <tbody class="divide-y divide-gray-100">
                 <?php foreach ($items as $idx => $item): ?>
                     <?php
-                    $isPicked = ($item['status'] ?? '') === 'picked';
+                    $itemStatus = (string) ($item['status'] ?? 'pending');
+                    $isPicked = $itemStatus === 'picked';
+                    $isPending = $itemStatus === 'pending';
+                    $isNotAvailable = $itemStatus === 'not_available';
+                    $isPartiallyAvailable = $itemStatus === 'partially_available';
+                    $canRevert = in_array($itemStatus, ['picked', 'not_available', 'partially_available'], true);
                     $isBook = picklist_item_is_book($item);
                     $imageUrl = picklist_item_image_url($item);
-                    $itemStatusClass = $itemStatusStyles[$isPicked ? 'picked' : 'pending'];
+                    $itemStatusClass = $itemStatusStyles[$itemStatus] ?? $itemStatusStyles['pending'];
+                    $itemStatusLabel = $itemStatusLabels[$itemStatus] ?? ucfirst(str_replace('_', ' ', $itemStatus));
+                    $rowToneClass = $isPicked
+                        ? 'bg-emerald-50/25'
+                        : ($isNotAvailable ? 'bg-red-50/20' : ($isPartiallyAvailable ? 'bg-orange-50/20' : ''));
                     ?>
-                    <tr class="picklist-select-row cursor-pointer hover:bg-amber-50/40 transition-colors <?= $isPicked ? 'bg-emerald-50/25' : '' ?>">
+                    <tr class="picklist-select-row cursor-pointer hover:bg-amber-50/40 transition-colors <?= $rowToneClass ?>">
                         <td class="px-3 py-3 align-middle">
                             <input type="checkbox"
                                    class="picklist-item-cb w-5 h-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500 pointer-events-none"
                                    value="<?= (int) ($item['id'] ?? 0) ?>"
-                                   data-status="<?= $isPicked ? 'picked' : 'pending' ?>"
+                                   data-status="<?= htmlspecialchars($itemStatus, ENT_QUOTES, 'UTF-8') ?>"
                                    aria-label="Select item">
                         </td>
                         <td class="px-3 py-3 align-middle tabular-nums text-gray-500"><?= $idx + 1 ?></td>
@@ -167,7 +187,7 @@ include __DIR__ . '/partials/detail_hero.php';
                         <?php endif; ?>
                         <td class="px-3 py-3 align-middle whitespace-nowrap">
                             <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border <?= $itemStatusClass ?>">
-                                <?= $isPicked ? 'Picked' : 'Pending' ?>
+                                <?= htmlspecialchars($itemStatusLabel) ?>
                             </span>
                             <?php if ($isPicked && !empty($item['picked_at'])): ?>
                                 <div class="text-[11px] text-gray-500 mt-1 tabular-nums"><?= date('d M, H:i', strtotime($item['picked_at'])) ?></div>
@@ -175,11 +195,27 @@ include __DIR__ . '/partials/detail_hero.php';
                         </td>
                         <td class="picklist-row-actions px-3 py-3 align-middle">
                             <div class="flex flex-wrap items-center justify-center gap-1.5">
-                                <?php if ($isPicked): ?>
+                                <?php if ($isPending): ?>
+                                    <button type="button"
+                                            class="js-picklist-set-availability inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-orange-200 bg-orange-50 text-orange-800 text-xs font-semibold shadow-sm hover:bg-orange-100 transition"
+                                            data-item-id="<?= (int) ($item['id'] ?? 0) ?>"
+                                            data-status="partially_available"
+                                            title="Mark partially available">
+                                        <i class="fas fa-adjust text-[10px]" aria-hidden="true"></i> Partial
+                                    </button>
+                                    <button type="button"
+                                            class="js-picklist-set-availability inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-800 text-xs font-semibold shadow-sm hover:bg-red-100 transition"
+                                            data-item-id="<?= (int) ($item['id'] ?? 0) ?>"
+                                            data-status="not_available"
+                                            title="Mark not available">
+                                        <i class="fas fa-ban text-[10px]" aria-hidden="true"></i> N/A
+                                    </button>
+                                <?php endif; ?>
+                                <?php if ($canRevert): ?>
                                     <button type="button"
                                             class="js-picklist-unpick-item inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-xs font-semibold shadow-sm hover:bg-amber-100 transition"
                                             data-item-id="<?= (int) ($item['id'] ?? 0) ?>"
-                                            title="Revert pick">
+                                            title="Revert to pending">
                                         <i class="fas fa-undo text-[10px]" aria-hidden="true"></i> Revert
                                     </button>
                                 <?php endif; ?>
@@ -223,3 +259,4 @@ include __DIR__ . '/partials/detail_hero.php';
 <?php require_once __DIR__ . '/partials/bulk_actions_script.php'; ?>
 <?php require_once __DIR__ . '/partials/image_lightbox.php'; ?>
 <?php require_once __DIR__ . '/partials/copy_sku_script.php'; ?>
+<?php require_once __DIR__ . '/partials/availability_script.php'; ?>

@@ -252,20 +252,65 @@ class PicklistController
 
         $orderId = (int) ($result['order_id'] ?? 0);
         $picklistNumber = (string) ($result['picklist_number'] ?? '');
-        if ($orderId > 0) {
+        $wasPicked = !empty($result['was_picked']);
+        if ($orderId > 0 && $wasPicked) {
             $order = $ordersModel->getOrderById($orderId);
             if ($order && (string) ($order['status'] ?? '') === 'item_picked') {
                 $this->syncOrderStatus($orderId, 'added_to_picklist', $ordersModel, $commanModel);
             }
-            if ($picklistNumber !== '') {
-                $commanModel->add_order_status_log([
-                    'order_id' => $orderId,
-                    'status' => 'Pick reverted on picklist: ' . $picklistNumber,
-                    'changed_by' => (int) ($_SESSION['user']['id'] ?? 0),
-                    'api_response' => null,
-                    'change_date' => date('Y-m-d H:i:s'),
-                ]);
-            }
+        }
+        if ($orderId > 0 && $picklistNumber !== '') {
+            $prev = (string) ($result['previous_status'] ?? 'picked');
+            $logText = $prev === 'picked'
+                ? 'Pick reverted on picklist: ' . $picklistNumber
+                : 'Availability status reverted on picklist: ' . $picklistNumber;
+            $commanModel->add_order_status_log([
+                'order_id' => $orderId,
+                'status' => $logText,
+                'changed_by' => (int) ($_SESSION['user']['id'] ?? 0),
+                'api_response' => null,
+                'change_date' => date('Y-m-d H:i:s'),
+            ]);
+        }
+
+        echo json_encode($result);
+        exit;
+    }
+
+    public function setItemAvailability()
+    {
+        is_login();
+        global $picklistModel;
+        global $commanModel;
+
+        header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit;
+        }
+
+        $itemId = (int) ($_POST['item_id'] ?? 0);
+        $status = trim((string) ($_POST['status'] ?? ''));
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+
+        $result = $picklistModel->markItemAvailabilityStatus($itemId, $userId, $status);
+        if (empty($result['success'])) {
+            echo json_encode($result);
+            exit;
+        }
+
+        $orderId = (int) ($result['order_id'] ?? 0);
+        $picklistNumber = (string) ($result['picklist_number'] ?? '');
+        $label = (string) ($result['availability_label'] ?? 'Availability updated');
+        if ($orderId > 0 && $picklistNumber !== '' && !empty($result['availability_status'])) {
+            $commanModel->add_order_status_log([
+                'order_id' => $orderId,
+                'status' => $label . ' on picklist: ' . $picklistNumber,
+                'changed_by' => $userId,
+                'api_response' => null,
+                'change_date' => date('Y-m-d H:i:s'),
+            ]);
         }
 
         echo json_encode($result);
@@ -325,7 +370,8 @@ class PicklistController
         }
 
         $picklistNumber = (string) ($result['picklist_number'] ?? '');
-        foreach ($result['order_ids'] ?? [] as $oid) {
+        $pickedOrderIds = $result['picked_order_ids'] ?? [];
+        foreach ($pickedOrderIds as $oid) {
             $order = $ordersModel->getOrderById((int) $oid);
             if ($order && (string) ($order['status'] ?? '') === 'item_picked') {
                 $this->syncOrderStatus((int) $oid, 'added_to_picklist', $ordersModel, $commanModel);
@@ -334,6 +380,21 @@ class PicklistController
                 $commanModel->add_order_status_log([
                     'order_id' => (int) $oid,
                     'status' => 'Pick reverted on picklist: ' . $picklistNumber,
+                    'changed_by' => (int) ($_SESSION['user']['id'] ?? 0),
+                    'api_response' => null,
+                    'change_date' => date('Y-m-d H:i:s'),
+                ]);
+            }
+        }
+
+        foreach ($result['order_ids'] ?? [] as $oid) {
+            if (in_array((int) $oid, array_map('intval', $pickedOrderIds), true)) {
+                continue;
+            }
+            if ($picklistNumber !== '') {
+                $commanModel->add_order_status_log([
+                    'order_id' => (int) $oid,
+                    'status' => 'Availability status reverted on picklist: ' . $picklistNumber,
                     'changed_by' => (int) ($_SESSION['user']['id'] ?? 0),
                     'api_response' => null,
                     'change_date' => date('Y-m-d H:i:s'),

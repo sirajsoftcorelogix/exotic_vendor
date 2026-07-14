@@ -1,8 +1,9 @@
 <?php
 /** @var array $picklist */
-/** @var int $picked */
-/** @var int $total */
-/** @var int $pct */
+/** @var int $resolved */
+/** @var int $pending */
+/** @var int $notAvailable */
+/** @var int $partiallyAvailable */
 /** @var int $plId */
 /** @var string $mode desktop|tablet */
 require_once __DIR__ . '/ui_constants.php';
@@ -42,9 +43,16 @@ $isTablet = ($mode ?? 'desktop') === 'tablet';
                 </div>
                 <div class="mt-4 max-w-md">
                     <div class="flex items-center justify-between text-xs text-gray-600 tabular-nums mb-1.5">
-                        <span class="font-medium text-gray-800"><?= (int) $picked ?> / <?= (int) $total ?> picked</span>
+                        <span class="font-medium text-gray-800"><?= (int) $resolved ?> / <?= (int) $total ?> handled · <?= (int) $picked ?> picked</span>
                         <span class="font-semibold text-gray-900"><?= (int) $pct ?>%</span>
                     </div>
+                    <?php if (($notAvailable ?? 0) > 0 || ($partiallyAvailable ?? 0) > 0): ?>
+                        <div class="text-[11px] text-gray-500 mb-1.5 tabular-nums">
+                            <?php if (($notAvailable ?? 0) > 0): ?><span class="text-red-700"><?= (int) $notAvailable ?> not available</span><?php endif; ?>
+                            <?php if (($notAvailable ?? 0) > 0 && ($partiallyAvailable ?? 0) > 0): ?> · <?php endif; ?>
+                            <?php if (($partiallyAvailable ?? 0) > 0): ?><span class="text-orange-700"><?= (int) $partiallyAvailable ?> partial</span><?php endif; ?>
+                        </div>
+                    <?php endif; ?>
                     <div class="h-2 w-full rounded-full bg-gray-200 overflow-hidden">
                         <div class="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-600 transition-all" style="width: <?= min(100, max(0, (int) $pct)) ?>%"></div>
                     </div>
