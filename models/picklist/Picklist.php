@@ -119,6 +119,18 @@ class Picklist
     }
 
     /**
+     * @return array{item_id: int, picklist_id: int, picklist_number: string, status: string}|null
+     */
+    public function getPicklistItemByOrderId(int $orderId): ?array
+    {
+        if ($orderId <= 0) {
+            return null;
+        }
+        $map = $this->getPicklistItemsByOrderIds([$orderId]);
+        return $map[$orderId] ?? null;
+    }
+
+    /**
      * @param int[] $orderIds
      * @return array{blocked: array<int, array<string, mixed>>, allowed_order_ids: int[]}
      */

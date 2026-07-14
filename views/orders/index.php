@@ -1072,10 +1072,21 @@
                                                         $onPicklist = !empty($order['on_picklist']) && (int) ($order['picklist_item_id'] ?? 0) > 0;
                                                         ?>
                                                         <?php if ($onPicklist): ?>
-                                                        <a href="#" id="picklist-menu-<?= (int) $order['order_id'] ?>"
-                                                           onclick="removeOrderFromPicklist(<?= (int) $order['order_id'] ?>, <?= (int) $order['picklist_item_id'] ?>, <?= json_encode((string) ($order['picklist_number'] ?? ''), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>); return false;"
-                                                           class="block px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50 font-medium">
-                                                            <i class="fas fa-check-square mr-2 text-emerald-600"></i>Added to pickup list
+                                                        <?php $menuPicklistNumber = trim((string) ($order['picklist_number'] ?? '')); ?>
+                                                        <a href="#"
+                                                           role="button"
+                                                           class="js-remove-from-picklist block px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50"
+                                                           data-order-id="<?= (int) $order['order_id'] ?>"
+                                                           data-picklist-number="<?= htmlspecialchars($menuPicklistNumber, ENT_QUOTES, 'UTF-8') ?>">
+                                                            <span class="flex items-start gap-2">
+                                                                <i class="fas fa-check-square mt-0.5 text-emerald-600"></i>
+                                                                <span>
+                                                                    <span class="block font-medium">Added to pickup list</span>
+                                                                    <?php if ($menuPicklistNumber !== ''): ?>
+                                                                    <span class="block text-xs text-emerald-600/90 font-normal mt-0.5"><?= htmlspecialchars($menuPicklistNumber) ?></span>
+                                                                    <?php endif; ?>
+                                                                </span>
+                                                            </span>
                                                         </a>
                                                         <?php else: ?>
                                                         <a href="#" id="picklist-menu-<?= (int) $order['order_id'] ?>"
@@ -2178,6 +2189,72 @@
             menu.style.display = 'none';
         });
     });
+
+    document.addEventListener('click', function(event) {
+        const removeLink = event.target.closest('.js-remove-from-picklist');
+        if (!removeLink) {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        const orderId = removeLink.getAttribute('data-order-id');
+        const picklistNumber = removeLink.getAttribute('data-picklist-number') || '';
+        removeOrderFromPicklist(orderId, picklistNumber);
+    });
+
+    function removeOrderFromPicklist(orderId, picklistNumber) {
+        if (!orderId) {
+            return;
+        }
+        const menu = document.getElementById('menu-' + orderId);
+        if (menu) {
+            menu.style.display = 'none';
+        }
+        const label = picklistNumber ? ('picklist ' + picklistNumber) : 'the picklist';
+        if (!window.confirm('Remove this order from ' + label + '?')) {
+            return;
+        }
+        const fd = new FormData();
+        fd.append('order_id', String(orderId));
+        fetch('index.php?page=picklist&action=remove_order_from_picklist', {
+            method: 'POST',
+            body: fd
+        })
+        .then(function(response) {
+            return response.text().then(function(text) {
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    throw new Error('Invalid server response.');
+                }
+            });
+        })
+        .then(function(data) {
+            if (data && data.success) {
+                if (typeof showAlert === 'function') {
+                    showAlert(data.message || 'Removed from picklist.', 'success');
+                }
+                setTimeout(function() {
+                    window.location.reload();
+                }, 600);
+                return;
+            }
+            const msg = (data && data.message) ? data.message : 'Could not remove from picklist.';
+            if (typeof showAlert === 'function') {
+                showAlert(msg, 'error');
+            } else {
+                window.alert(msg);
+            }
+        })
+        .catch(function() {
+            const msg = 'Network error while removing from picklist.';
+            if (typeof showAlert === 'function') {
+                showAlert(msg, 'error');
+            } else {
+                window.alert(msg);
+            }
+        });
+    }
 
     function openStatusPopup(orderId) {
         document.getElementById('status_order_id').value = orderId;
@@ -3285,45 +3362,6 @@
             menu.style.display = 'none';
         }
         openBulkAddToPicklistPopup([String(orderId)]);
-    }
-
-    function removeOrderFromPicklist(orderId, itemId, picklistNumber) {
-        const menu = document.getElementById('menu-' + orderId);
-        if (menu) {
-            menu.style.display = 'none';
-        }
-        const label = picklistNumber ? ('picklist ' + picklistNumber) : 'the picklist';
-        if (!window.confirm('Remove this order from ' + label + '?')) {
-            return;
-        }
-        const fd = new FormData();
-        fd.append('item_id', String(itemId));
-        fetch('index.php?page=picklist&action=delete_item', {
-            method: 'POST',
-            body: fd
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data && data.success) {
-                if (typeof showAlert === 'function') {
-                    showAlert(data.message || 'Removed from picklist.', 'success');
-                }
-                setTimeout(function() {
-                    window.location.reload();
-                }, 600);
-            } else if (typeof showAlert === 'function') {
-                showAlert((data && data.message) ? data.message : 'Could not remove from picklist.', 'error');
-            } else {
-                alert((data && data.message) ? data.message : 'Could not remove from picklist.');
-            }
-        })
-        .catch(function() {
-            if (typeof showAlert === 'function') {
-                showAlert('Network error while removing from picklist.', 'error');
-            } else {
-                alert('Network error while removing from picklist.');
-            }
-        });
     }
 
     // Bulk add to picklist handlers
