@@ -1068,7 +1068,20 @@
                                                         <a href="#" onclick="addOrderToInvoice(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Invoice</a>
                                                         <?php endif; ?>
                                                         <hr class="my-1 mx-2"></hr>
-                                                        <a href="#" onclick="openAddToPicklistPopup(<?= $order['order_id'] ?>); return false;" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Pick List</a>
+                                                        <?php
+                                                        $onPicklist = !empty($order['on_picklist']) && (int) ($order['picklist_item_id'] ?? 0) > 0;
+                                                        ?>
+                                                        <?php if ($onPicklist): ?>
+                                                        <a href="#" id="picklist-menu-<?= (int) $order['order_id'] ?>"
+                                                           onclick="removeOrderFromPicklist(<?= (int) $order['order_id'] ?>, <?= (int) $order['picklist_item_id'] ?>, <?= json_encode((string) ($order['picklist_number'] ?? ''), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>); return false;"
+                                                           class="block px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50 font-medium">
+                                                            <i class="fas fa-check-square mr-2 text-emerald-600"></i>Added to pickup list
+                                                        </a>
+                                                        <?php else: ?>
+                                                        <a href="#" id="picklist-menu-<?= (int) $order['order_id'] ?>"
+                                                           onclick="openAddToPicklistPopup(<?= (int) $order['order_id'] ?>); return false;"
+                                                           class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Pick List</a>
+                                                        <?php endif; ?>
                                                     </div>
                                                 </span>
                                             </div>
@@ -3272,6 +3285,45 @@
             menu.style.display = 'none';
         }
         openBulkAddToPicklistPopup([String(orderId)]);
+    }
+
+    function removeOrderFromPicklist(orderId, itemId, picklistNumber) {
+        const menu = document.getElementById('menu-' + orderId);
+        if (menu) {
+            menu.style.display = 'none';
+        }
+        const label = picklistNumber ? ('picklist ' + picklistNumber) : 'the picklist';
+        if (!window.confirm('Remove this order from ' + label + '?')) {
+            return;
+        }
+        const fd = new FormData();
+        fd.append('item_id', String(itemId));
+        fetch('index.php?page=picklist&action=delete_item', {
+            method: 'POST',
+            body: fd
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data && data.success) {
+                if (typeof showAlert === 'function') {
+                    showAlert(data.message || 'Removed from picklist.', 'success');
+                }
+                setTimeout(function() {
+                    window.location.reload();
+                }, 600);
+            } else if (typeof showAlert === 'function') {
+                showAlert((data && data.message) ? data.message : 'Could not remove from picklist.', 'error');
+            } else {
+                alert((data && data.message) ? data.message : 'Could not remove from picklist.');
+            }
+        })
+        .catch(function() {
+            if (typeof showAlert === 'function') {
+                showAlert('Network error while removing from picklist.', 'error');
+            } else {
+                alert('Network error while removing from picklist.');
+            }
+        });
     }
 
     // Bulk add to picklist handlers

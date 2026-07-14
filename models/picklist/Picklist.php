@@ -78,6 +78,48 @@ class Picklist
 
     /**
      * @param int[] $orderIds
+     * @return array<int, array{item_id: int, picklist_id: int, picklist_number: string, status: string}>
+     */
+    public function getPicklistItemsByOrderIds(array $orderIds): array
+    {
+        $orderIds = array_values(array_unique(array_filter(array_map('intval', $orderIds))));
+        if ($orderIds === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($orderIds), '?'));
+        $sql = "SELECT pli.id AS item_id, pli.order_id, pli.picklist_id, pl.picklist_number, pl.status
+                FROM vp_picklist_items pli
+                INNER JOIN vp_picklists pl ON pl.id = pli.picklist_id
+                WHERE pl.status != 'cancelled'
+                  AND pli.order_id IN ({$placeholders})";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $types = str_repeat('i', count($orderIds));
+        $stmt->bind_param($types, ...$orderIds);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $map = [];
+        while ($result && ($row = $result->fetch_assoc())) {
+            $orderId = (int) ($row['order_id'] ?? 0);
+            if ($orderId <= 0) {
+                continue;
+            }
+            $map[$orderId] = [
+                'item_id' => (int) ($row['item_id'] ?? 0),
+                'picklist_id' => (int) ($row['picklist_id'] ?? 0),
+                'picklist_number' => (string) ($row['picklist_number'] ?? ''),
+                'status' => (string) ($row['status'] ?? ''),
+            ];
+        }
+        $stmt->close();
+        return $map;
+    }
+
+    /**
+     * @param int[] $orderIds
      * @return array{blocked: array<int, array<string, mixed>>, allowed_order_ids: int[]}
      */
     public function checkOrdersForPicklist(array $orderIds): array

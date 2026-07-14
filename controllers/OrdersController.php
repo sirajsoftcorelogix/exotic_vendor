@@ -167,6 +167,15 @@ class OrdersController
         }
 
         $picklistModel = new Picklist($conn);
+        $picklistItemsByOrder = $picklistModel->getPicklistItemsByOrderIds(array_map('intval', array_column($orders, 'order_id')));
+        foreach ($orders as $key => $order) {
+            $oid = (int) ($order['order_id'] ?? 0);
+            $plItem = $picklistItemsByOrder[$oid] ?? null;
+            $orders[$key]['picklist_item_id'] = $plItem ? (int) ($plItem['item_id'] ?? 0) : 0;
+            $orders[$key]['picklist_id'] = $plItem ? (int) ($plItem['picklist_id'] ?? 0) : 0;
+            $orders[$key]['picklist_number'] = $plItem ? (string) ($plItem['picklist_number'] ?? '') : '';
+            $orders[$key]['on_picklist'] = $plItem !== null && (int) ($plItem['item_id'] ?? 0) > 0;
+        }
 
         // Render the orders view
         renderTemplate('views/orders/index.php', [
