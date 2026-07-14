@@ -578,68 +578,77 @@ class Picklist
             return;
         }
 
-        $itemSql = $this->picklistItemHasDetailColumns()
-            ? "INSERT INTO vp_picklist_items
-                (picklist_id, order_id, order_number, item_code, sku, size, color, title, image,
-                 publisher, cover_type, physical_qty, is_book,
-                 warehouse_location, quantity, status, sort_order)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)"
-            : "INSERT INTO vp_picklist_items
-                (picklist_id, order_id, order_number, item_code, sku, size, color, title, image,
-                 warehouse_location, quantity, status, sort_order)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)";
-        $itemStmt = $this->db->prepare($itemSql);
-        if (!$itemStmt) {
-            throw new RuntimeException('Prepare items failed: ' . $this->db->error);
-        }
-
+        $hasDetail = $this->picklistItemHasDetailColumns();
+        $hasPrev = $this->picklistItemHasPreviousStatusColumn();
         $sortOrder = $startSortOrder;
+
         foreach ($itemsToAdd as $item) {
             $sortOrder++;
-            if ($this->picklistItemHasDetailColumns()) {
-                $isBook = (int) ($item['is_book'] ?? 0);
-                $physicalQty = (int) ($item['physical_qty'] ?? 0);
-                $itemStmt->bind_param(
-                    'iissssssssssiisii',
-                    $picklistId,
-                    $item['order_id'],
-                    $item['order_number'],
-                    $item['item_code'],
-                    $item['sku'],
-                    $item['size'],
-                    $item['color'],
-                    $item['title'],
-                    $item['image'],
-                    $item['publisher'],
-                    $item['cover_type'],
-                    $physicalQty,
-                    $isBook,
-                    $item['warehouse_location'],
-                    $item['quantity'],
-                    $sortOrder
-                );
-            } else {
-                $itemStmt->bind_param(
-                    'iissssssssii',
-                    $picklistId,
-                    $item['order_id'],
-                    $item['order_number'],
-                    $item['item_code'],
-                    $item['sku'],
-                    $item['size'],
-                    $item['color'],
-                    $item['title'],
-                    $item['image'],
-                    $item['warehouse_location'],
-                    $item['quantity'],
-                    $sortOrder
-                );
+            $fields = ['picklist_id', 'order_id'];
+            $placeholders = ['?', '?'];
+            $values = [$picklistId, (int) ($item['order_id'] ?? 0)];
+            $types = 'ii';
+
+            if ($hasPrev) {
+                $fields[] = 'previous_order_status';
+                $placeholders[] = '?';
+                $values[] = (string) ($item['previous_order_status'] ?? 'item_received');
+                $types .= 's';
             }
+
+            foreach (['order_number', 'item_code', 'sku', 'size', 'color', 'title', 'image'] as $field) {
+                $fields[] = $field;
+                $placeholders[] = '?';
+                $values[] = (string) ($item[$field] ?? '');
+                $types .= 's';
+            }
+
+            if ($hasDetail) {
+                foreach (['publisher', 'cover_type'] as $field) {
+                    $fields[] = $field;
+                    $placeholders[] = '?';
+                    $values[] = (string) ($item[$field] ?? '');
+                    $types .= 's';
+                }
+                $fields[] = 'physical_qty';
+                $fields[] = 'is_book';
+                $placeholders[] = '?';
+                $placeholders[] = '?';
+                $values[] = (int) ($item['physical_qty'] ?? 0);
+                $values[] = (int) ($item['is_book'] ?? 0);
+                $types .= 'ii';
+            }
+
+            foreach (['warehouse_location', 'quantity'] as $field) {
+                $fields[] = $field;
+                $placeholders[] = '?';
+                if ($field === 'quantity') {
+                    $values[] = (int) ($item['quantity'] ?? 1);
+                    $types .= 'i';
+                } else {
+                    $values[] = (string) ($item[$field] ?? '');
+                    $types .= 's';
+                }
+            }
+
+            $fields[] = 'status';
+            $fields[] = 'sort_order';
+            $placeholders[] = "'pending'";
+            $placeholders[] = '?';
+            $values[] = $sortOrder;
+            $types .= 'i';
+
+            $sql = 'INSERT INTO vp_picklist_items (' . implode(', ', $fields) . ') VALUES (' . implode(', ', $placeholders) . ')';
+            $itemStmt = $this->db->prepare($sql);
+            if (!$itemStmt) {
+                throw new RuntimeException('Prepare items failed: ' . $this->db->error);
+            }
+            $itemStmt->bind_param($types, ...$values);
             if (!$itemStmt->execute()) {
                 throw new RuntimeException('Insert item failed: ' . $itemStmt->error);
             }
+            $itemStmt->close();
         }
-        $itemStmt->close();
     }
 
     /**
@@ -850,6 +859,7 @@ class Picklist
 
         return [
             'order_id' => (int) ($order['id'] ?? 0),
+            'previous_order_status' => $this->resolvePreviousOrderStatusForPicklist($order),
             'order_number' => (string) ($order['order_number'] ?? ''),
             'item_code' => $itemCode,
             'sku' => $sku,
@@ -921,6 +931,31 @@ class Picklist
         $res = $this->db->query("SHOW COLUMNS FROM vp_picklist_items LIKE 'physical_qty'");
         $has = $res && $res->num_rows > 0;
         return $has;
+    }
+
+    private function picklistItemHasPreviousStatusColumn(): bool
+    {
+        static $has = null;
+        if ($has !== null) {
+            return $has;
+        }
+        $res = $this->db->query("SHOW COLUMNS FROM vp_picklist_items LIKE 'previous_order_status'");
+        $has = $res && $res->num_rows > 0;
+        return $has;
+    }
+
+    /**
+     * @param array<string, mixed> $order
+     */
+    private function resolvePreviousOrderStatusForPicklist(array $order): string
+    {
+        $status = trim((string) ($order['status'] ?? ''));
+        $picklistSlugs = ['added_to_picklist', 'item_picked'];
+        if ($status !== '' && !in_array($status, $picklistSlugs, true)) {
+            return $status;
+        }
+
+        return 'item_received';
     }
 
     /**
@@ -1391,7 +1426,12 @@ class Picklist
         }
 
         $orderIds = [];
-        $stmt = $this->db->prepare('SELECT DISTINCT order_id FROM vp_picklist_items WHERE picklist_id = ?');
+        $orderStatuses = [];
+        $hasPrev = $this->picklistItemHasPreviousStatusColumn();
+        $itemSql = $hasPrev
+            ? 'SELECT order_id, previous_order_status FROM vp_picklist_items WHERE picklist_id = ?'
+            : 'SELECT DISTINCT order_id FROM vp_picklist_items WHERE picklist_id = ?';
+        $stmt = $this->db->prepare($itemSql);
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
         }
@@ -1402,6 +1442,12 @@ class Picklist
             $oid = (int) ($row['order_id'] ?? 0);
             if ($oid > 0) {
                 $orderIds[] = $oid;
+                if ($hasPrev) {
+                    $prev = trim((string) ($row['previous_order_status'] ?? ''));
+                    if ($prev !== '') {
+                        $orderStatuses[$oid] = $prev;
+                    }
+                }
             }
         }
         $stmt->close();
@@ -1422,12 +1468,13 @@ class Picklist
             'success' => true,
             'message' => 'Picklist deleted.',
             'order_ids' => $orderIds,
+            'order_statuses' => $orderStatuses,
             'picklist_number' => (string) ($picklist['picklist_number'] ?? ''),
         ];
     }
 
     /**
-     * @return array{success: bool, message?: string, order_id?: int, picklist_id?: int, picklist_number?: string, picklist_deleted?: bool}
+     * @return array{success: bool, message?: string, order_id?: int, picklist_id?: int, picklist_number?: string, picklist_deleted?: bool, previous_order_status?: string}
      */
     public function deletePicklistItem(int $itemId): array
     {
@@ -1452,6 +1499,10 @@ class Picklist
         $picklistId = (int) ($item['picklist_id'] ?? 0);
         $orderId = (int) ($item['order_id'] ?? 0);
         $picklistNumber = (string) ($item['picklist_number'] ?? '');
+        $previousOrderStatus = '';
+        if ($this->picklistItemHasPreviousStatusColumn()) {
+            $previousOrderStatus = trim((string) ($item['previous_order_status'] ?? ''));
+        }
 
         $this->db->begin_transaction();
         try {
@@ -1483,6 +1534,7 @@ class Picklist
                 'picklist_id' => $picklistId,
                 'picklist_number' => $picklistNumber,
                 'picklist_deleted' => $picklistDeleted,
+                'previous_order_status' => $previousOrderStatus,
             ];
         } catch (Throwable $e) {
             $this->db->rollback();
