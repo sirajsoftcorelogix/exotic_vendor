@@ -3,7 +3,7 @@
 const PAYMENT_TYPE_GROUP_PREFIX = 'group:';
 
 /**
- * Ordered keyword rules. First match wins — specific groups (PayPal, Razorpay, Stripe) before Payment Gateway.
+ * Ordered keyword rules. First match wins, so broader groups (e.g. Payment Gateway) come first.
  *
  * @return array<string, string[]>
  */
@@ -16,9 +16,7 @@ function paymentTypeGroupRules(): array
     }
 
     $rules = [
-        'PayPal' => ['paypal'],
-        'Razorpay' => ['razorpay'],
-        'Stripe' => ['stripe'],
+        'PayPal, Razorpay & Stripe' => ['paypal', 'razorpay', 'stripe'],
         'Payment Gateway' => [
             'payu', 'phonepe', 'phone_pe', 'gpay', 'googlepay', 'google_pay',
             'paytm', 'ccavenue', 'cc_avenue', 'instamojo', 'billdesk', 'mobikwik', 'freecharge', 'amazonpay',
