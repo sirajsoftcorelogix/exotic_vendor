@@ -56,6 +56,7 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
                     <th class="px-4 py-3">Item Title</th>
                     <th class="px-4 py-3">Item Image</th>
                     <th class="px-4 py-3">Physical Qty</th>
+                    <th class="px-4 py-3">Order Qty</th>
                     <?php if ($showBookColumns): ?>
                         <th class="px-4 py-3">Publisher</th>
                         <th class="px-4 py-3">Cover Type</th>
@@ -87,6 +88,7 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
                             <?php endif; ?>
                         </td>
                         <td class="px-4 py-3 font-semibold"><?= (int) ($item['physical_qty'] ?? 0) ?></td>
+                        <td class="px-4 py-3 font-semibold"><?= (int) ($item['quantity'] ?? 1) ?></td>
                         <?php if ($showBookColumns): ?>
                             <td class="px-4 py-3"><?= $isBook ? htmlspecialchars((string) ($item['publisher'] ?? '—')) : '—' ?></td>
                             <td class="px-4 py-3"><?= $isBook ? htmlspecialchars((string) ($item['cover_type'] ?? '—')) : '—' ?></td>
@@ -116,7 +118,7 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
                     </tr>
                 <?php endforeach; ?>
                 <?php if ($items === []): ?>
-                    <?php $colspan = $showBookColumns ? 11 : 9; ?>
+                    <?php $colspan = $showBookColumns ? 12 : 10; ?>
                     <tr><td colspan="<?= $colspan ?>" class="px-4 py-8 text-center text-gray-500">No items on this picklist.</td></tr>
                 <?php endif; ?>
             </tbody>

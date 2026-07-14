@@ -48,6 +48,7 @@ $showBookColumns = picklist_any_book_items($items);
                 <th>Item Title</th>
                 <th>Item Image</th>
                 <th>Physical Qty</th>
+                <th>Order Qty</th>
                 <?php if ($showBookColumns): ?>
                     <th>Publisher</th>
                     <th>Cover Type</th>
@@ -75,6 +76,7 @@ $showBookColumns = picklist_any_book_items($items);
                         <?php endif; ?>
                     </td>
                     <td><?= (int) ($item['physical_qty'] ?? 0) ?></td>
+                    <td><?= (int) ($item['quantity'] ?? 1) ?></td>
                     <?php if ($showBookColumns): ?>
                         <td><?= $isBook ? htmlspecialchars((string) ($item['publisher'] ?? '—')) : '—' ?></td>
                         <td><?= $isBook ? htmlspecialchars((string) ($item['cover_type'] ?? '—')) : '—' ?></td>
