@@ -64,6 +64,12 @@ class PicklistController
         ], $title);
     }
 
+    public function wiki()
+    {
+        is_login();
+        renderTemplate('views/picklist/wiki.php', [], 'Picklist — User Guide');
+    }
+
     public function printLabels()
     {
         is_login();

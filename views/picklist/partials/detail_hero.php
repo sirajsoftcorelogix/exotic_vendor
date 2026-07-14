@@ -51,6 +51,12 @@ $isTablet = ($mode ?? 'desktop') === 'tablet';
                 </div>
             </div>
             <div class="flex flex-wrap items-center gap-2 shrink-0">
+                <a href="?page=picklist&action=wiki"
+                   class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-slate-800 text-xs font-semibold shadow-sm hover:bg-slate-100 hover:border-slate-400 transition"
+                   title="Picklist user guide">
+                    <i class="fas fa-book-open text-[11px] opacity-90" aria-hidden="true"></i>
+                    <span>Guide</span>
+                </a>
                 <?php if ($isTablet): ?>
                     <a href="?page=picklist&action=view&id=<?= (int) $plId ?>"
                        class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-800 text-xs font-semibold shadow-sm hover:bg-blue-100 hover:border-blue-300 transition"
