@@ -1,5 +1,20 @@
 <script>
 (function () {
+    function copyLabel(btn) {
+        return btn.getAttribute('data-copy-label') || 'Text';
+    }
+
+    function copyTitle(btn) {
+        var label = copyLabel(btn);
+        return 'Copy ' + label.toLowerCase();
+    }
+
+    function copyAriaLabel(btn) {
+        var label = copyLabel(btn);
+        var text = btn.getAttribute('data-copy-text') || '';
+        return text ? 'Copy ' + label.toLowerCase() + ' ' + text : 'Copy ' + label.toLowerCase();
+    }
+
     function flashCopied(btn) {
         if (!btn) return;
         var icon = btn.querySelector('i');
@@ -10,9 +25,8 @@
         btn.setAttribute('aria-label', 'Copied');
         setTimeout(function () {
             icon.className = prev;
-            btn.setAttribute('title', 'Copy SKU');
-            var sku = btn.getAttribute('data-copy-text') || '';
-            btn.setAttribute('aria-label', sku ? 'Copy SKU ' + sku : 'Copy SKU');
+            btn.setAttribute('title', copyTitle(btn));
+            btn.setAttribute('aria-label', copyAriaLabel(btn));
         }, 1200);
     }
 
@@ -48,7 +62,7 @@
         }
     }
 
-    document.querySelectorAll('.js-picklist-copy-sku').forEach(function (btn) {
+    document.querySelectorAll('.js-picklist-copy-text').forEach(function (btn) {
         btn.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();

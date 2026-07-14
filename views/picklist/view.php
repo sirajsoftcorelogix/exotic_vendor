@@ -107,15 +107,33 @@ include __DIR__ . '/partials/detail_hero.php';
                         </td>
                         <td class="px-3 py-3 align-middle tabular-nums text-gray-500"><?= $idx + 1 ?></td>
                         <td class="px-3 py-3 align-middle font-semibold text-amber-800 whitespace-nowrap"><?= htmlspecialchars((string) ($item['warehouse_location'] ?: '—')) ?></td>
-                        <td class="px-3 py-3 align-middle whitespace-nowrap font-mono text-xs text-gray-800"><?= htmlspecialchars((string) ($item['order_number'] ?? '')) ?></td>
+                        <td class="px-3 py-3 align-middle whitespace-nowrap font-mono text-xs text-gray-800">
+                            <?php $orderNumber = trim((string) ($item['order_number'] ?? '')); ?>
+                            <?php if ($orderNumber !== ''): ?>
+                                <span class="inline-flex items-center gap-1.5">
+                                    <span><?= htmlspecialchars($orderNumber) ?></span>
+                                    <button type="button"
+                                            class="js-picklist-copy-text shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md border border-gray-200 bg-white text-gray-500 hover:text-amber-700 hover:border-amber-300 hover:bg-amber-50/50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                                            data-copy-text="<?= htmlspecialchars($orderNumber, ENT_QUOTES, 'UTF-8') ?>"
+                                            data-copy-label="Order number"
+                                            title="Copy order number"
+                                            aria-label="Copy order number <?= htmlspecialchars($orderNumber, ENT_QUOTES, 'UTF-8') ?>">
+                                        <i class="fas fa-copy text-[10px]" aria-hidden="true"></i>
+                                    </button>
+                                </span>
+                            <?php else: ?>
+                                —
+                            <?php endif; ?>
+                        </td>
                         <td class="px-3 py-3 align-middle whitespace-nowrap text-gray-700">
                             <?php $skuText = picklist_item_sku($item); ?>
                             <?php if ($skuText !== ''): ?>
                                 <span class="inline-flex items-center gap-1.5 max-w-[12rem]">
                                     <span class="truncate font-medium"><?= htmlspecialchars($skuText) ?></span>
                                     <button type="button"
-                                            class="js-picklist-copy-sku shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md border border-gray-200 bg-white text-gray-500 hover:text-amber-700 hover:border-amber-300 hover:bg-amber-50/50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                                            class="js-picklist-copy-text shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md border border-gray-200 bg-white text-gray-500 hover:text-amber-700 hover:border-amber-300 hover:bg-amber-50/50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                                             data-copy-text="<?= htmlspecialchars($skuText, ENT_QUOTES, 'UTF-8') ?>"
+                                            data-copy-label="SKU"
                                             title="Copy SKU"
                                             aria-label="Copy SKU <?= htmlspecialchars($skuText, ENT_QUOTES, 'UTF-8') ?>">
                                         <i class="fas fa-copy text-[10px]" aria-hidden="true"></i>
