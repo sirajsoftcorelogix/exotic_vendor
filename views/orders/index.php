@@ -1078,7 +1078,8 @@
                                                         <a href="javascript:void(0)"
                                                            role="button"
                                                            class="block px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50"
-                                                           onclick="removeOrderFromPicklist(<?= (int) $order['order_id'] ?>, <?= json_encode($menuPicklistNumber, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>); return false;">
+                                                           data-picklist-number="<?= htmlspecialchars($menuPicklistNumber, ENT_QUOTES, 'UTF-8') ?>"
+                                                           onclick="return removeOrderFromPicklist(<?= (int) $order['order_id'] ?>, this.getAttribute('data-picklist-number'));">
                                                             <span class="flex items-start gap-2">
                                                                 <i class="fas fa-check-square mt-0.5 text-emerald-600"></i>
                                                                 <span>
@@ -2191,6 +2192,8 @@
         });
     });
 
+    const picklistRemoveOrderUrl = <?= json_encode(base_url('?page=picklist&action=remove_order_from_picklist'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
     function removeOrderFromPicklist(orderId, picklistNumber) {
         if (!orderId) {
             return false;
@@ -2205,7 +2208,7 @@
         }
         const fd = new FormData();
         fd.append('order_id', String(orderId));
-        fetch('<?= base_url('?page=picklist&action=remove_order_from_picklist') ?>', {
+        fetch(picklistRemoveOrderUrl, {
             method: 'POST',
             body: fd
         })
