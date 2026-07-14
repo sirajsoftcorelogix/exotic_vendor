@@ -82,7 +82,13 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
                         </td>
                         <td class="px-4 py-3">
                             <?php if ($imageUrl !== ''): ?>
-                                <img src="<?= htmlspecialchars($imageUrl) ?>" alt="" class="w-16 h-16 object-contain border rounded bg-white">
+                                <button type="button"
+                                        class="js-picklist-expand-image block p-0 border-0 bg-transparent cursor-zoom-in rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                                        data-full-src="<?= htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-image-alt="<?= htmlspecialchars((string) ($item['title'] ?? 'Product image'), ENT_QUOTES, 'UTF-8') ?>"
+                                        title="Click to enlarge">
+                                    <img src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars((string) ($item['title'] ?? '')) ?>" class="w-16 h-16 object-contain border rounded bg-white pointer-events-none">
+                                </button>
                             <?php else: ?>
                                 <span class="text-gray-400">—</span>
                             <?php endif; ?>
@@ -126,3 +132,4 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
     </div>
 </div>
 <?php require_once __DIR__ . '/partials/confirm_delete_script.php'; ?>
+<?php require_once __DIR__ . '/partials/image_lightbox.php'; ?>
