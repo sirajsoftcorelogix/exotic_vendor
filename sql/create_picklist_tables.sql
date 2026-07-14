@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS `vp_picklist_items` (
   `is_book` TINYINT(1) NOT NULL DEFAULT 0,
   `warehouse_location` VARCHAR(255) DEFAULT NULL,
   `quantity` INT UNSIGNED NOT NULL DEFAULT 1,
-  `status` ENUM('pending', 'picked') NOT NULL DEFAULT 'pending',
+  `status` ENUM('pending', 'picked', 'not_available', 'partially_available') NOT NULL DEFAULT 'pending',
   `picked_by` INT UNSIGNED DEFAULT NULL,
   `picked_at` DATETIME DEFAULT NULL,
   `sort_order` INT UNSIGNED NOT NULL DEFAULT 0,

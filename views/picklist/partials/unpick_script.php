@@ -10,15 +10,15 @@
         var confirmFn = window.openPicklistConfirmModal;
         var confirmPromise = confirmFn
             ? confirmFn({
-                title: 'Revert pick?',
-                message: 'Mark this item as not picked? The order status will be set back to Added to Picklist.',
-                confirmText: 'Yes, revert pick',
+                title: 'Revert to pending?',
+                message: 'Reset this item to pending? Picked orders will be set back to Added to Picklist.',
+                confirmText: 'Yes, revert',
                 cancelText: 'Cancel',
                 iconWrapClass: revertIconWrapClass,
                 iconHtml: revertIconHtml,
                 okClass: revertOkClass
             })
-            : Promise.resolve(window.confirm('Mark this item as not picked?'));
+            : Promise.resolve(window.confirm('Reset this item to pending?'));
 
         return confirmPromise.then(function(confirmed) {
             if (!confirmed) return false;

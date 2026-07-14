@@ -88,6 +88,9 @@
             <li>The <strong>Order Qty</strong> column is how many units to pick in one go for that line.</li>
             <li>Use row checkboxes + <strong>Mark picked</strong> for bulk pick, or pick individually on tablet.</li>
             <li><strong>Revert picks</strong> undoes a pick (order status returns to Added to picklist).</li>
+            <li><strong>Partial</strong> — stock is short; mark as <strong>Partially Available</strong>.</li>
+            <li><strong>N/A</strong> — no stock; mark as <strong>Not Available</strong>.</li>
+            <li><strong>Revert</strong> — reset picked, partial, or not-available items back to <strong>Pending</strong>.</li>
             <li><strong>Remove</strong> deletes the line from the picklist and restores the order’s previous status.</li>
         </ul>
         <h3 class="text-lg font-semibold text-gray-800 mt-6 mb-2">Tablet mode</h3>

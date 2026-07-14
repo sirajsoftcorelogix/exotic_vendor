@@ -35,14 +35,21 @@
         });
     }
 
+    function countRevertableSelected() {
+        return selectedCheckboxes().filter(function(cb) {
+            var status = cb.getAttribute('data-status');
+            return status === 'picked' || status === 'not_available' || status === 'partially_available';
+        }).length;
+    }
+
     function updateBulkBar() {
         var selected = selectedCheckboxes().length;
         var pendingCount = countByStatus('pending');
-        var pickedCount = countByStatus('picked');
+        var revertableCount = countRevertableSelected();
 
         countEl.textContent = selected + ' selected';
         bulkPickBtn.disabled = pendingCount === 0;
-        bulkUnpickBtn.disabled = pickedCount === 0;
+        bulkUnpickBtn.disabled = revertableCount === 0;
 
         if (selectAll) {
             selectAll.checked = selected > 0 && selected === checkboxes.length;
@@ -140,11 +147,14 @@
     });
 
     bulkUnpickBtn.addEventListener('click', function() {
-        var pickedIds = selectedCheckboxes()
-            .filter(function(cb) { return cb.getAttribute('data-status') === 'picked'; })
+        var revertableIds = selectedCheckboxes()
+            .filter(function(cb) {
+                var status = cb.getAttribute('data-status');
+                return status === 'picked' || status === 'not_available' || status === 'partially_available';
+            })
             .map(function(cb) { return cb.value; });
-        if (!pickedIds.length) {
-            showAlert('Select at least one picked item to revert.', 'warning');
+        if (!revertableIds.length) {
+            showAlert('Select at least one item with a revertable status.', 'warning');
             return;
         }
 
@@ -153,9 +163,9 @@
         };
 
         confirmFn({
-            title: 'Revert selected picks?',
-            message: 'Revert ' + pickedIds.length + ' selected item(s) to pending? Order status will be set back to Added to Picklist where applicable.',
-            confirmText: 'Yes, revert picks',
+            title: 'Revert selected items?',
+            message: 'Revert ' + revertableIds.length + ' selected item(s) to pending? Picked orders will be set back to Added to Picklist where applicable.',
+            confirmText: 'Yes, revert',
             cancelText: 'Cancel',
             iconWrapClass: 'mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-amber-600 shadow-sm',
             iconHtml: '<i class="fas fa-undo text-2xl" aria-hidden="true"></i>',
@@ -164,10 +174,10 @@
             if (!confirmed) return;
             bulkPickBtn.disabled = true;
             bulkUnpickBtn.disabled = true;
-            postBulk('bulk_unpick_items', pickedIds)
+            postBulk('bulk_unpick_items', revertableIds)
                 .then(function(data) {
                     if (data.success) {
-                        showAlert(data.message || 'Picks reverted.', 'success');
+                        showAlert(data.message || 'Items reverted to pending.', 'success');
                         setTimeout(function() { window.location.reload(); }, 600);
                     } else {
                         showAlert(data.message || 'Bulk revert failed.', 'error');

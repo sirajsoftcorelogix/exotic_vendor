@@ -1188,6 +1188,94 @@ class Picklist
     }
 
     /**
+     * @return array{success: bool, message?: string, order_id?: int, picklist_id?: int, picklist_number?: string, picklist_completed?: bool}
+     */
+    public function markItemAvailabilityStatus(int $itemId, int $userId, string $status): array
+    {
+        if ($itemId <= 0) {
+            return ['success' => false, 'message' => 'Invalid item.'];
+        }
+        if (!in_array($status, ['not_available', 'partially_available'], true)) {
+            return ['success' => false, 'message' => 'Invalid availability status.'];
+        }
+
+        $sql = "SELECT pli.*, pl.status AS picklist_status, pl.picklist_number
+                FROM vp_picklist_items pli
+                INNER JOIN vp_picklists pl ON pl.id = pli.picklist_id
+                WHERE pli.id = ? LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $itemId);
+        $stmt->execute();
+        $item = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        if (!$item) {
+            return ['success' => false, 'message' => 'Picklist item not found.'];
+        }
+        if (($item['status'] ?? '') === $status) {
+            return [
+                'success' => true,
+                'message' => 'Status already set.',
+                'order_id' => (int) $item['order_id'],
+                'picklist_id' => (int) $item['picklist_id'],
+                'picklist_number' => (string) ($item['picklist_number'] ?? ''),
+            ];
+        }
+        if (($item['status'] ?? '') !== 'pending') {
+            return ['success' => false, 'message' => 'Only pending items can be marked as not available or partially available.'];
+        }
+        if (($item['picklist_status'] ?? '') === 'cancelled') {
+            return ['success' => false, 'message' => 'Picklist is cancelled.'];
+        }
+
+        $picklistId = (int) $item['picklist_id'];
+        $picklistNumber = (string) ($item['picklist_number'] ?? '');
+
+        $this->db->begin_transaction();
+        try {
+            $upd = $this->db->prepare(
+                "UPDATE vp_picklist_items
+                 SET status = ?, picked_by = NULL, picked_at = NULL
+                 WHERE id = ? AND status = 'pending'"
+            );
+            $upd->bind_param('si', $status, $itemId);
+            if (!$upd->execute() || $upd->affected_rows === 0) {
+                throw new RuntimeException('Failed to update item status.');
+            }
+            $upd->close();
+
+            if (($item['picklist_status'] ?? '') === 'pending') {
+                $plUpd = $this->db->prepare("UPDATE vp_picklists SET status = 'in_progress' WHERE id = ? AND status = 'pending'");
+                $plUpd->bind_param('i', $picklistId);
+                $plUpd->execute();
+                $plUpd->close();
+            }
+
+            $pendingBefore = $this->countPicklistItemsByStatus($picklistId, 'pending');
+            $this->recalculatePicklistStatus($picklistId);
+            $picklistCompleted = $pendingBefore === 1;
+
+            $this->db->commit();
+
+            $label = $status === 'not_available' ? 'Not available' : 'Partially available';
+
+            return [
+                'success' => true,
+                'message' => 'Item marked as ' . strtolower($label) . '.',
+                'order_id' => (int) $item['order_id'],
+                'picklist_id' => $picklistId,
+                'picklist_number' => $picklistNumber,
+                'picklist_completed' => $picklistCompleted,
+                'availability_status' => $status,
+                'availability_label' => $label,
+            ];
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
      * @return array{success: bool, message?: string, order_id?: int, picklist_id?: int, picklist_number?: string}
      */
     public function revertItemPick(int $itemId): array
@@ -1209,8 +1297,12 @@ class Picklist
         if (!$item) {
             return ['success' => false, 'message' => 'Picklist item not found.'];
         }
-        if (($item['status'] ?? '') !== 'picked') {
-            return ['success' => true, 'message' => 'Item is not marked as picked.', 'order_id' => (int) $item['order_id']];
+        $currentStatus = (string) ($item['status'] ?? '');
+        if ($currentStatus === 'pending') {
+            return ['success' => true, 'message' => 'Item is already pending.', 'order_id' => (int) $item['order_id']];
+        }
+        if (!in_array($currentStatus, ['picked', 'not_available', 'partially_available'], true)) {
+            return ['success' => false, 'message' => 'Item status cannot be reverted.'];
         }
         if (($item['picklist_status'] ?? '') === 'cancelled') {
             return ['success' => false, 'message' => 'Picklist is cancelled.'];
@@ -1218,17 +1310,18 @@ class Picklist
 
         $picklistId = (int) ($item['picklist_id'] ?? 0);
         $picklistNumber = (string) ($item['picklist_number'] ?? '');
+        $wasPicked = $currentStatus === 'picked';
 
         $this->db->begin_transaction();
         try {
             $upd = $this->db->prepare(
                 "UPDATE vp_picklist_items
                  SET status = 'pending', picked_by = NULL, picked_at = NULL
-                 WHERE id = ? AND status = 'picked'"
+                 WHERE id = ? AND status IN ('picked', 'not_available', 'partially_available')"
             );
             $upd->bind_param('i', $itemId);
             if (!$upd->execute() || $upd->affected_rows === 0) {
-                throw new RuntimeException('Failed to revert pick.');
+                throw new RuntimeException('Failed to revert item status.');
             }
             $upd->close();
 
@@ -1238,10 +1331,12 @@ class Picklist
 
             return [
                 'success' => true,
-                'message' => 'Pick reverted.',
+                'message' => 'Item reverted to pending.',
                 'order_id' => (int) ($item['order_id'] ?? 0),
                 'picklist_id' => $picklistId,
                 'picklist_number' => $picklistNumber,
+                'was_picked' => $wasPicked,
+                'previous_status' => $currentStatus,
             ];
         } catch (Throwable $e) {
             $this->db->rollback();
@@ -1381,30 +1476,31 @@ class Picklist
             }
         }
 
-        $pickedIds = [];
+        $revertableIds = [];
         foreach ($items as $item) {
-            if (($item['status'] ?? '') === 'picked') {
-                $pickedIds[] = (int) $item['id'];
+            if (in_array(($item['status'] ?? ''), ['picked', 'not_available', 'partially_available'], true)) {
+                $revertableIds[] = (int) $item['id'];
             }
         }
-        if ($pickedIds === []) {
-            return ['success' => false, 'message' => 'No picked items in selection.'];
+        if ($revertableIds === []) {
+            return ['success' => false, 'message' => 'No items with a revertable status in selection.'];
         }
 
         $picklistIds = [];
         $orderIds = [];
+        $pickedOrderIds = [];
 
         $this->db->begin_transaction();
         try {
-            $placeholders = $this->buildInPlaceholders(count($pickedIds));
-            $types = str_repeat('i', count($pickedIds));
+            $placeholders = $this->buildInPlaceholders(count($revertableIds));
+            $types = str_repeat('i', count($revertableIds));
             $sql = "UPDATE vp_picklist_items
                     SET status = 'pending', picked_by = NULL, picked_at = NULL
-                    WHERE id IN ($placeholders) AND status = 'picked'";
+                    WHERE id IN ($placeholders) AND status IN ('picked', 'not_available', 'partially_available')";
             $stmt = $this->db->prepare($sql);
             $bind = [$types];
-            foreach ($pickedIds as $i => $val) {
-                $bind[] = &$pickedIds[$i];
+            foreach ($revertableIds as $i => $val) {
+                $bind[] = &$revertableIds[$i];
             }
             call_user_func_array([$stmt, 'bind_param'], $bind);
             if (!$stmt->execute()) {
@@ -1414,7 +1510,7 @@ class Picklist
             $stmt->close();
 
             foreach ($items as $item) {
-                if (($item['status'] ?? '') !== 'picked') {
+                if (!in_array(($item['status'] ?? ''), ['picked', 'not_available', 'partially_available'], true)) {
                     continue;
                 }
                 $plId = (int) ($item['picklist_id'] ?? 0);
@@ -1424,6 +1520,9 @@ class Picklist
                 $oid = (int) ($item['order_id'] ?? 0);
                 if ($oid > 0) {
                     $orderIds[$oid] = true;
+                    if (($item['status'] ?? '') === 'picked') {
+                        $pickedOrderIds[$oid] = true;
+                    }
                 }
             }
 
@@ -1440,6 +1539,7 @@ class Picklist
                 'processed' => $processed,
                 'skipped' => count($itemIds) - $processed,
                 'order_ids' => array_keys($orderIds),
+                'picked_order_ids' => array_keys($pickedOrderIds),
                 'picklist_id' => (int) ($first['picklist_id'] ?? 0),
                 'picklist_number' => (string) ($first['picklist_number'] ?? ''),
             ];
@@ -1605,6 +1705,19 @@ class Picklist
         }
         $stmt = $this->db->prepare('SELECT COUNT(*) AS cnt FROM vp_picklist_items WHERE picklist_id = ?');
         $stmt->bind_param('i', $picklistId);
+        $stmt->execute();
+        $cnt = (int) ($stmt->get_result()->fetch_assoc()['cnt'] ?? 0);
+        $stmt->close();
+        return $cnt;
+    }
+
+    private function countPicklistItemsByStatus(int $picklistId, string $status): int
+    {
+        if ($picklistId <= 0) {
+            return 0;
+        }
+        $stmt = $this->db->prepare('SELECT COUNT(*) AS cnt FROM vp_picklist_items WHERE picklist_id = ? AND status = ?');
+        $stmt->bind_param('is', $picklistId, $status);
         $stmt->execute();
         $cnt = (int) ($stmt->get_result()->fetch_assoc()['cnt'] ?? 0);
         $stmt->close();

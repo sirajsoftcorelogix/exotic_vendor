@@ -284,16 +284,7 @@
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div>
-                        <label for="payment_type" class="block text-sm font-medium text-gray-600 mb-1">Payment Type</label>
-                        <select id="payment_type" name="payment_type[]" multiple="multiple" class="advanced-multiselect max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
-
-                            <!-- <option value="all" disabled >Select</option> -->
-                            <?php foreach ($payment_types as $key => $value): ?>
-                                <option value="<?php echo $key; ?>" <?php echo (isset($_GET['payment_type']) && $_GET['payment_type'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
+                    <?php renderPartial('views/shared/partials/payment_type_filter_select.php'); ?>
                     <div class="">
                         <label for="category" class="block text-sm font-medium text-gray-600 mb-1">Category</label>
                         <select id="category" name="category[]" multiple="multiple" class="advanced-multiselect px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
@@ -2333,25 +2324,7 @@
         }
 
     });
-    //payment_type multiselect Initialize Select2 for payment_type 
-    document.addEventListener('DOMContentLoaded', function() {
-        const paymentTypeSelect = document.querySelector('#payment_type');
-        if (paymentTypeSelect) {
-            // Initialize Select2
-            $(paymentTypeSelect).select2({
-                placeholder: "Select Payment Type",
-                allowClear: true,
-                width: '100%'
-            });
-
-            // Preselect values if any
-            const preselectedPaymentTypes = <?php echo json_encode(isset($_GET['payment_type']) ? (is_array($_GET['payment_type']) ? $_GET['payment_type'] : [$_GET['payment_type']]) : []); ?>;
-            if (preselectedPaymentTypes.length > 0) {
-                $(paymentTypeSelect).val(preselectedPaymentTypes).trigger('change');
-            }
-        }
-
-    });
+    <?php renderPartial('views/shared/partials/payment_type_filter_script.php'); ?>
     //category multiselect Initialize Select2 for category 
     document.addEventListener('DOMContentLoaded', function() {
         const categorySelect = document.querySelector('#category');
