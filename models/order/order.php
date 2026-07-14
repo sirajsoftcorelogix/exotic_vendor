@@ -291,13 +291,14 @@ class Order
     }
     public function getOrdersCount($filters = [])
     {
-        //$sql = "SELECT COUNT(*) as count FROM vp_orders WHERE 1=1";
-        $sql = "SELECT COUNT(*) as count 
-		FROM vp_orders 
-		LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id 
-		LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id 
-		LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id AND vp_users.is_deleted = 0
-		WHERE 1=1";
+        $needsStaffJoin = !empty($filters['staff_name']) && $filters['staff_name'] !== 'all';
+
+        $sql = 'SELECT COUNT(DISTINCT vp_orders.id) AS count FROM vp_orders';
+        if ($needsStaffJoin) {
+            $sql .= ' LEFT JOIN purchase_orders ON vp_orders.po_id = purchase_orders.id'
+                . ' LEFT JOIN vp_users ON purchase_orders.user_id = vp_users.id AND vp_users.is_deleted = 0';
+        }
+        $sql .= ' WHERE 1=1';
         $params = [];
         if (!empty($filters['order_number'])) {
             // Support comma-separated order numbers
@@ -448,15 +449,24 @@ class Order
         }
 
         $stmt = $this->db->prepare($sql);
-        if ($params) {
-            $stmt->bind_param(str_repeat('s', count($params)), ...$params);
+        if (!$stmt) {
+            return 0;
         }
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if ($result && $result->num_rows > 0) {
-            $row = $result->fetch_assoc();
-            return (int)$row['count'];
+
+        try {
+            if ($params) {
+                $stmt->bind_param(str_repeat('s', count($params)), ...$params);
+            }
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($result && $result->num_rows > 0) {
+                $row = $result->fetch_assoc();
+                return (int) $row['count'];
+            }
+        } catch (\mysqli_sql_exception $e) {
+            error_log('Order::getOrdersCount failed: ' . $e->getMessage());
         }
+
         return 0;
     }
     public function getOrderById($id)
@@ -1316,8 +1326,20 @@ class Order
     }
     public function getPaymentTypes()
     {
-        $sql = "SELECT DISTINCT payment_type FROM `vp_orders` WHERE 1;";
+        static $cached = null;
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        $sql = "SELECT DISTINCT payment_type
+                FROM vp_orders
+                WHERE payment_type IS NOT NULL AND payment_type != ''
+                ORDER BY payment_type";
         $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+
         $stmt->execute();
         $result = $stmt->get_result();
         $paymentTypes = [];
@@ -1328,6 +1350,8 @@ class Order
                 }
             }
         }
+
+        $cached = $paymentTypes;
         return $paymentTypes;
     }
     public function addVendorIfNotExists($vendor_name)
