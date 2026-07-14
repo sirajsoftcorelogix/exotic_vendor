@@ -742,11 +742,16 @@ function sanitizeGet(array $input): array
 		// Trim leading/trailing whitespace
 		$value = trim($value);
 
-		// Remove all spaces inside the string
-		$value = str_replace(' ', '', $value);
+		$preserveTextSearch = in_array($key, ['author', 'publisher', 'vendor', 'vendor_name', 'item_name', 'title'], true);
+		if (!$preserveTextSearch) {
+			// Remove all spaces inside the string
+			$value = str_replace(' ', '', $value);
+		}
 
-		// Sanitize special characters (prevent XSS)
-		$value = htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+		if (!$preserveTextSearch) {
+			// Sanitize special characters (prevent XSS)
+			$value = htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+		}
 
 		// Optionally, strip tags if you don’t want HTML at all
 		$value = strip_tags($value);

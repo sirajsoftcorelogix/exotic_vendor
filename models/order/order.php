@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/../../helpers/order_filter_autocomplete.php';
+
 class Order
 {
     private $db;
@@ -213,9 +215,8 @@ class Order
             $sql .= " AND vp_orders.priority = ?";
             $params[] = $filters['priority'];
         }
-        if (!empty($filters['vendor_id'])) {
-            $sql .= " AND vp_vendors.id = ?";
-            $params[] = $filters['vendor_id'];
+        if (!empty($filters['vendor'])) {
+            appendOrderVendorNameFilterSql($sql, $params, (string) $filters['vendor']);
         }
         if (!empty($filters['agent'])) {
             if (is_array($filters['agent'])) {
@@ -230,12 +231,10 @@ class Order
             }
         }
         if (!empty($filters['publisher'])) {
-            $sql .= " AND vp_orders.publisher LIKE ?";
-            $params[] = '%' . $filters['publisher'] . '%';
+            appendOrderPublisherNameFilterSql($sql, $params, (string) $filters['publisher']);
         }
         if (!empty($filters['author'])) {
-            $sql .= " AND vp_orders.author LIKE ?";
-            $params[] = '%' . $filters['author'] . '%';
+            appendOrderAuthorNameFilterSql($sql, $params, (string) $filters['author']);
         }
         if (!empty($filters['unshipped'])) {
             $sql .= " AND vp_orders.status != 'shipped' AND vp_orders.status != 'cancelled' AND vp_orders.status NOT LIKE 'return%'";
@@ -409,9 +408,8 @@ class Order
             $sql .= " AND priority = ?";
             $params[] = $filters['priority'];
         }
-        if (!empty($filters['vendor_id'])) {
-            $sql .= " AND vp_vendors.id = ?";
-            $params[] = $filters['vendor_id'];
+        if (!empty($filters['vendor'])) {
+            appendOrderVendorNameFilterSql($sql, $params, (string) $filters['vendor']);
         }
         if (!empty($filters['agent'])) {
             if (is_array($filters['agent'])) {
@@ -426,12 +424,10 @@ class Order
             }
         }
         if (!empty($filters['publisher'])) {
-            $sql .= " AND vp_orders.publisher LIKE ?";
-            $params[] = '%' . $filters['publisher'] . '%';
+            appendOrderPublisherNameFilterSql($sql, $params, (string) $filters['publisher']);
         }
         if (!empty($filters['author'])) {
-            $sql .= " AND vp_orders.author LIKE ?";
-            $params[] = '%' . $filters['author'] . '%';
+            appendOrderAuthorNameFilterSql($sql, $params, (string) $filters['author']);
         }
         if (!empty($filters['unshipped'])) {
             $sql .= " AND vp_orders.status != 'shipped' AND vp_orders.status != 'cancelled' AND vp_orders.status NOT LIKE 'return%'";

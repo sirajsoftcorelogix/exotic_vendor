@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     event.preventDefault();
                     input.value = name;
                     if (hiddenInput) {
-                        hiddenInput.value = item.id != null ? String(item.id) : '';
+                        hiddenInput.value = '';
                     }
                     hideSuggestions();
                 });
