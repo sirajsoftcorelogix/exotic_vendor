@@ -425,7 +425,11 @@
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <?php renderPartial('views/shared/partials/payment_type_filter_select.php'); ?>
+                    <?php renderPartial('views/shared/partials/payment_type_filter_select.php', [
+                        'payment_type_groups' => $payment_type_groups ?? [],
+                        'payment_types' => $payment_types ?? [],
+                        'selected_payment_types' => $selected_payment_types ?? [],
+                    ]); ?>
                     <div class="">
                         <label for="category" class="block text-sm font-medium text-gray-600 mb-1">Category</label>
                         <select id="category" name="category[]" multiple="multiple" class="advanced-multiselect px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
