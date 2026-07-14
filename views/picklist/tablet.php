@@ -76,6 +76,12 @@ $total = count($items);
                     <div class="flex-shrink-0 self-center flex flex-col items-center gap-2">
                         <?php if ($isPicked): ?>
                             <span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-600 text-white"><i class="fas fa-check"></i></span>
+                            <button type="button"
+                                    class="js-picklist-unpick-item text-xs px-2 py-1 rounded border border-amber-200 text-amber-800 bg-amber-50 hover:bg-amber-100"
+                                    data-item-id="<?= $itemId ?>"
+                                    title="Revert pick">
+                                <i class="fas fa-undo" aria-hidden="true"></i>
+                            </button>
                         <?php else: ?>
                             <span class="inline-flex items-center justify-center w-10 h-10 rounded-full border-2 border-amber-500 text-amber-600 text-xs font-bold">PICK</span>
                         <?php endif; ?>
@@ -96,6 +102,7 @@ $total = count($items);
 </div>
 
 <?php require_once __DIR__ . '/partials/confirm_modal.php'; ?>
+<?php require_once __DIR__ . '/partials/unpick_script.php'; ?>
 
 <script>
 (function() {
@@ -104,6 +111,7 @@ $total = count($items);
     document.querySelectorAll('.pick-item[data-picked="0"]').forEach(function(el) {
         el.addEventListener('click', function(e) {
             if (e.target.closest('.remove-item-btn')) return;
+            if (e.target.closest('.js-picklist-unpick-item')) return;
             if (e.target.closest('.js-picklist-expand-image')) return;
             const itemId = el.getAttribute('data-item-id');
             if (!itemId || el.getAttribute('data-picked') === '1') return;
@@ -124,17 +132,7 @@ $total = count($items);
                     .then(r => r.json())
                     .then(data => {
                         if (data.success) {
-                            el.setAttribute('data-picked', '1');
-                            el.classList.add('bg-green-50', 'border-green-300', 'opacity-75');
-                            el.classList.remove('cursor-pointer', 'bg-white');
-                            const badge = el.querySelector('.flex-shrink-0 span');
-                            if (badge) {
-                                badge.className = 'inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-600 text-white';
-                                badge.innerHTML = '<i class="fas fa-check"></i>';
-                            }
-                            if (data.picklist_completed) {
-                                showAlert('All items picked — picklist complete!', 'success');
-                            }
+                            window.location.reload();
                         } else {
                             showAlert(data.message || 'Failed to pick item.', 'error');
                             el.style.pointerEvents = '';

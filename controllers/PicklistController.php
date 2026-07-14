@@ -162,6 +162,49 @@ class PicklistController
         exit;
     }
 
+    public function unpickItem()
+    {
+        is_login();
+        global $picklistModel;
+        global $ordersModel;
+        global $commanModel;
+
+        header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit;
+        }
+
+        $itemId = (int) ($_POST['item_id'] ?? 0);
+        $result = $picklistModel->revertItemPick($itemId);
+        if (empty($result['success'])) {
+            echo json_encode($result);
+            exit;
+        }
+
+        $orderId = (int) ($result['order_id'] ?? 0);
+        $picklistNumber = (string) ($result['picklist_number'] ?? '');
+        if ($orderId > 0) {
+            $order = $ordersModel->getOrderById($orderId);
+            if ($order && (string) ($order['status'] ?? '') === 'item_picked') {
+                $this->syncOrderStatus($orderId, 'added_to_picklist', $ordersModel, $commanModel);
+            }
+            if ($picklistNumber !== '') {
+                $commanModel->add_order_status_log([
+                    'order_id' => $orderId,
+                    'status' => 'Pick reverted on picklist: ' . $picklistNumber,
+                    'changed_by' => (int) ($_SESSION['user']['id'] ?? 0),
+                    'api_response' => null,
+                    'change_date' => date('Y-m-d H:i:s'),
+                ]);
+            }
+        }
+
+        echo json_encode($result);
+        exit;
+    }
+
     public function assignPicker()
     {
         is_login();

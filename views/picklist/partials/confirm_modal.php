@@ -10,8 +10,8 @@
             aria-label="Close dialog"></button>
     <div class="relative w-full max-w-md overflow-hidden rounded-2xl border border-amber-200/40 bg-white shadow-2xl shadow-amber-900/10 ring-1 ring-black/5">
         <div class="px-6 pt-7 pb-5 text-center">
-            <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600 shadow-sm">
-                <i class="fas fa-box-open text-2xl" aria-hidden="true"></i>
+            <div id="picklist-confirm-modal-icon-wrap" class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600 shadow-sm">
+                <span id="picklist-confirm-modal-icon"><i class="fas fa-box-open text-2xl" aria-hidden="true"></i></span>
             </div>
             <h3 id="picklist-confirm-modal-title" class="text-lg font-bold tracking-tight text-gray-900 mb-2">Confirm</h3>
             <p id="picklist-confirm-modal-message" class="text-sm text-gray-600 leading-relaxed">Are you sure?</p>
@@ -38,7 +38,12 @@
     var messageEl = document.getElementById('picklist-confirm-modal-message');
     var cancelBtn = document.getElementById('picklist-confirm-modal-cancel');
     var okBtn = document.getElementById('picklist-confirm-modal-ok');
+    var iconWrap = document.getElementById('picklist-confirm-modal-icon-wrap');
+    var iconEl = document.getElementById('picklist-confirm-modal-icon');
     if (!modal || !titleEl || !messageEl || !cancelBtn || !okBtn) return;
+
+    var defaultIconWrapClass = iconWrap ? iconWrap.className : '';
+    var defaultIconHtml = iconEl ? iconEl.innerHTML : '';
 
     var resolver = null;
 
@@ -60,6 +65,15 @@
             messageEl.textContent = options.message || 'Are you sure?';
             okBtn.textContent = options.confirmText || 'Confirm';
             cancelBtn.textContent = options.cancelText || 'Cancel';
+            if (iconWrap && iconEl) {
+                iconWrap.className = options.iconWrapClass || defaultIconWrapClass;
+                iconEl.innerHTML = options.iconHtml || defaultIconHtml;
+            }
+            if (options.okClass) {
+                okBtn.className = options.okClass;
+            } else {
+                okBtn.className = 'inline-flex min-w-[6rem] items-center justify-center rounded-xl bg-gradient-to-b from-emerald-600 to-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-900/15 hover:from-emerald-700 hover:to-emerald-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 transition';
+            }
             modal.classList.remove('hidden');
             modal.classList.add('flex');
             document.body.style.overflow = 'hidden';

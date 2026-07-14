@@ -1781,6 +1781,9 @@ switch ($page) {
             case 'pick_item':
                 $controller->pickItem();
                 break;
+            case 'unpick_item':
+                $controller->unpickItem();
+                break;
             case 'assign_picker':
                 $controller->assignPicker();
                 break;

@@ -110,6 +110,15 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
                             <?php endif; ?>
                         </td>
                         <td class="px-4 py-3 text-right whitespace-nowrap">
+                            <div class="inline-flex flex-wrap items-center justify-end gap-1.5">
+                            <?php if ($isPicked): ?>
+                                <button type="button"
+                                        class="js-picklist-unpick-item inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-xs font-semibold hover:bg-amber-100"
+                                        data-item-id="<?= (int) ($item['id'] ?? 0) ?>"
+                                        title="Revert pick">
+                                    <i class="fas fa-undo" aria-hidden="true"></i> Revert
+                                </button>
+                            <?php endif; ?>
                             <?php
                             $removeConfirm = 'Remove this item from the picklist? The order will be set back to Item Received if applicable.';
                             ?>
@@ -120,6 +129,7 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
                                title="Remove from picklist">
                                 <i class="fas fa-times" aria-hidden="true"></i> Remove
                             </a>
+                            </div>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -131,5 +141,7 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
         </table>
     </div>
 </div>
+<?php require_once __DIR__ . '/partials/confirm_modal.php'; ?>
 <?php require_once __DIR__ . '/partials/confirm_delete_script.php'; ?>
+<?php require_once __DIR__ . '/partials/unpick_script.php'; ?>
 <?php require_once __DIR__ . '/partials/image_lightbox.php'; ?>

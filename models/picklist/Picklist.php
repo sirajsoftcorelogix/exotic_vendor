@@ -684,6 +684,68 @@ class Picklist
         }
     }
 
+    /**
+     * @return array{success: bool, message?: string, order_id?: int, picklist_id?: int, picklist_number?: string}
+     */
+    public function revertItemPick(int $itemId): array
+    {
+        if ($itemId <= 0) {
+            return ['success' => false, 'message' => 'Invalid item.'];
+        }
+
+        $sql = "SELECT pli.*, pl.status AS picklist_status, pl.picklist_number
+                FROM vp_picklist_items pli
+                INNER JOIN vp_picklists pl ON pl.id = pli.picklist_id
+                WHERE pli.id = ? LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bind_param('i', $itemId);
+        $stmt->execute();
+        $item = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        if (!$item) {
+            return ['success' => false, 'message' => 'Picklist item not found.'];
+        }
+        if (($item['status'] ?? '') !== 'picked') {
+            return ['success' => true, 'message' => 'Item is not marked as picked.', 'order_id' => (int) $item['order_id']];
+        }
+        if (($item['picklist_status'] ?? '') === 'cancelled') {
+            return ['success' => false, 'message' => 'Picklist is cancelled.'];
+        }
+
+        $picklistId = (int) ($item['picklist_id'] ?? 0);
+        $picklistNumber = (string) ($item['picklist_number'] ?? '');
+
+        $this->db->begin_transaction();
+        try {
+            $upd = $this->db->prepare(
+                "UPDATE vp_picklist_items
+                 SET status = 'pending', picked_by = NULL, picked_at = NULL
+                 WHERE id = ? AND status = 'picked'"
+            );
+            $upd->bind_param('i', $itemId);
+            if (!$upd->execute() || $upd->affected_rows === 0) {
+                throw new RuntimeException('Failed to revert pick.');
+            }
+            $upd->close();
+
+            $this->recalculatePicklistStatus($picklistId);
+
+            $this->db->commit();
+
+            return [
+                'success' => true,
+                'message' => 'Pick reverted.',
+                'order_id' => (int) ($item['order_id'] ?? 0),
+                'picklist_id' => $picklistId,
+                'picklist_number' => $picklistNumber,
+            ];
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
     public function assignPicker(int $picklistId, int $pickerId): array
     {
         if ($picklistId <= 0) {
