@@ -1769,6 +1769,9 @@ switch ($page) {
             case 'list':
                 $controller->index();
                 break;
+            case 'wiki':
+                $controller->wiki();
+                break;
             case 'view':
                 $controller->view();
                 break;

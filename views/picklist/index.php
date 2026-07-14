@@ -50,9 +50,15 @@ $plId = static function (array $pl): int {
                 <h1 class="text-3xl font-bold text-gray-900">Picklists</h1>
                 <p class="mt-2 text-sm text-gray-600">Manage warehouse pick lists for order processing.</p>
             </div>
-            <a href="?page=orders&action=list" class="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50">
-                <i class="fas fa-shopping-cart"></i> Go to Orders
-            </a>
+            <div class="flex flex-wrap items-center gap-2 shrink-0">
+                <a href="?page=orders&action=list" class="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 shadow-sm">
+                    <i class="fas fa-shopping-cart"></i> Go to Orders
+                </a>
+                <a href="?page=picklist&action=wiki" class="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-slate-300 bg-slate-50 text-slate-800 text-sm font-semibold hover:bg-slate-100 shadow-sm"
+                   title="Picklist user guide">
+                    <i class="fas fa-book-open"></i> User guide
+                </a>
+            </div>
         </div>
     </div>
 
