@@ -90,10 +90,7 @@ class PicklistController
         $items = $picklistModel->getPicklistItems($id);
         require_once dirname(__DIR__) . '/helpers/label/PicklistOrderLabel.php';
 
-        $labelRows = [];
-        foreach ($items as $item) {
-            $labelRows[] = PicklistOrderLabel::fromPicklistItemRow($item);
-        }
+        $labelRows = PicklistOrderLabel::labelRowsFromPicklistItems($items);
 
         if (!headers_sent()) {
             header('Content-Type: text/html; charset=utf-8');

@@ -816,6 +816,21 @@ class Picklist
     }
 
     /**
+     * Sort key: item_code, else sku (for location + item ordering).
+     *
+     * @param array<string, mixed> $item
+     */
+    private function picklistItemCodeKey(array $item): string
+    {
+        $itemCode = trim((string) ($item['item_code'] ?? ''));
+        if ($itemCode !== '') {
+            return $itemCode;
+        }
+
+        return trim((string) ($item['sku'] ?? ''));
+    }
+
+    /**
      * @param array<string, mixed> $a
      * @param array<string, mixed> $b
      */
@@ -823,8 +838,15 @@ class Picklist
     {
         $locA = trim((string) ($a['warehouse_location'] ?? ''));
         $locB = trim((string) ($b['warehouse_location'] ?? ''));
+        $codeA = $this->picklistItemCodeKey($a);
+        $codeB = $this->picklistItemCodeKey($b);
 
         if ($locA === '' && $locB === '') {
+            $cmp = strnatcasecmp($codeA, $codeB);
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+
             return strnatcasecmp(
                 (string) ($a['order_number'] ?? ''),
                 (string) ($b['order_number'] ?? '')
@@ -838,6 +860,11 @@ class Picklist
         }
 
         $cmp = strnatcasecmp($locA, $locB);
+        if ($cmp !== 0) {
+            return $cmp;
+        }
+
+        $cmp = strnatcasecmp($codeA, $codeB);
         if ($cmp !== 0) {
             return $cmp;
         }

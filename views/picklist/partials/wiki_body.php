@@ -84,7 +84,8 @@
         <h2 class="text-xl font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4">Picking items</h2>
         <h3 class="text-lg font-semibold text-gray-800 mt-6 mb-2">Desktop detail view</h3>
         <ul>
-            <li>Items are sorted by <strong>location</strong> (then order number).</li>
+            <li>Items are sorted by <strong>location</strong>, then <strong>item code</strong> (so everything at location 567 appears together).</li>
+            <li>The <strong>Order Qty</strong> column is how many units to pick in one go for that line.</li>
             <li>Use row checkboxes + <strong>Mark picked</strong> for bulk pick, or pick individually on tablet.</li>
             <li><strong>Revert picks</strong> undoes a pick (order status returns to Added to picklist).</li>
             <li><strong>Remove</strong> deletes the line from the picklist and restores the order’s previous status.</li>
@@ -104,7 +105,7 @@
 
     <section id="print-labels" class="mb-10">
         <h2 class="text-xl font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4">Printing order labels</h2>
-        <p>Click <strong>Print labels</strong> next to <strong>Print</strong> on the picklist header. One label is generated for <strong>each item</strong> on the picklist, laid out for a standard adhesive sheet.</p>
+        <p>Click <strong>Print labels</strong> next to <strong>Print</strong> on the picklist header. Labels are printed <strong>one per order quantity unit</strong> (e.g. order qty 2 prints two labels for that line). Items are laid out in the same order as the picklist: <strong>location</strong>, then <strong>item code</strong>.</p>
 
         <div class="not-prose my-4 overflow-hidden rounded-xl border border-gray-200">
             <table class="min-w-full text-sm">

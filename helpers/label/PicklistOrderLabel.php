@@ -47,6 +47,31 @@ final class PicklistOrderLabel
         ];
     }
 
+    /**
+     * One label row per order quantity unit (e.g. qty 2 → 2 identical labels).
+     *
+     * @param array<int, array<string, mixed>> $items picklist item rows (already sorted)
+     * @return array<int, array{order_number: string, sku: string, order_id: int, copy_index?: int, copy_total?: int}>
+     */
+    public static function labelRowsFromPicklistItems(array $items): array
+    {
+        $rows = [];
+        foreach ($items as $item) {
+            $base = self::fromPicklistItemRow($item);
+            $qty = max(1, (int) ($item['quantity'] ?? 1));
+            for ($i = 0; $i < $qty; $i++) {
+                $row = $base;
+                if ($qty > 1) {
+                    $row['copy_index'] = $i + 1;
+                    $row['copy_total'] = $qty;
+                }
+                $rows[] = $row;
+            }
+        }
+
+        return $rows;
+    }
+
     public static function barcodePayloadFromData(array $data): string
     {
         $orderId = (int) ($data['order_id'] ?? 0);
@@ -80,8 +105,13 @@ final class PicklistOrderLabel
 
         $orderNumber = (string) ($data['order_number'] ?? '');
         $sku = (string) ($data['sku'] ?? '');
+        $copyIndex = (int) ($data['copy_index'] ?? 0);
+        $copyTotal = (int) ($data['copy_total'] ?? 0);
         $barcode = self::barcodePayloadFromData($data);
         $barCodeEsc = $e($barcode);
+        $copySuffix = ($copyTotal > 1 && $copyIndex > 0)
+            ? ' (' . $copyIndex . '/' . $copyTotal . ')'
+            : '';
 
         return '<div class="pol-sheet" style="'
             . 'box-sizing:border-box;width:100%;height:100%;max-width:100%;max-height:100%;'
@@ -90,7 +120,7 @@ final class PicklistOrderLabel
             . 'font-family:' . $e($ff) . ';font-size:' . $e((string) $fsOrder) . 'mm;line-height:' . $e((string) $lh) . ';'
             . 'color:#000;background:#fff;overflow:hidden;">'
             . '<div class="pol-row pol-row--order" style="width:100%;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:' . $e((string) $lh) . ';">'
-            . 'Ord ' . ($orderNumber !== '' ? $e($orderNumber) : '—')
+            . 'Ord ' . ($orderNumber !== '' ? $e($orderNumber . $copySuffix) : '—')
             . '</div>'
             . '<div class="pol-row pol-row--sku" style="width:100%;font-weight:600;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:' . $e((string) $fsSku) . 'mm;line-height:' . $e((string) $lh) . ';">'
             . 'SKU ' . ($sku !== '' ? $e($sku) : '—')
