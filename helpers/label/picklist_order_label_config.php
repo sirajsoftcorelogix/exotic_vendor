@@ -13,6 +13,9 @@ return [
     'sheet_columns' => 5,
     'sheet_rows' => 13,
     'sheet_orientation' => 'portrait',
+    /** Centre 5×13 grid on A4 (210×297 mm). */
+    'sheet_margin_top_mm' => 10.7,
+    'sheet_margin_left_mm' => 9.75,
 
     'padding_mm' => 0.6,
     'font_family' => 'Arial, Helvetica, sans-serif',

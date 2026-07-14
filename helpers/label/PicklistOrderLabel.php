@@ -126,6 +126,92 @@ final class PicklistOrderLabel
     }
 
     /**
+     * @param array<int, array{order_number?: string, sku?: string, order_id?: int}> $labels
+     * @param array<string, mixed>|null $config
+     */
+    public static function renderPrintSheetDocument(array $labels, ?array $config = null, ?string $sheetTitle = null): string
+    {
+        $cfg = self::config($config);
+        $w = (float) ($cfg['label_width_mm'] ?? 38.1);
+        $h = (float) ($cfg['label_height_mm'] ?? 21.2);
+        $sheetW = (float) ($cfg['sheet_width_mm'] ?? 210);
+        $sheetH = (float) ($cfg['sheet_height_mm'] ?? 297);
+        $cols = max(1, (int) ($cfg['sheet_columns'] ?? 5));
+        $rows = max(1, (int) ($cfg['sheet_rows'] ?? 13));
+        $marginTop = (float) ($cfg['sheet_margin_top_mm'] ?? 0);
+        $marginLeft = (float) ($cfg['sheet_margin_left_mm'] ?? 0);
+        $perPage = $cols * $rows;
+        $title = $sheetTitle !== null && $sheetTitle !== '' ? 'Picklist labels — ' . $sheetTitle : 'Picklist labels';
+
+        $pagesHtml = '';
+        if ($labels === []) {
+            $pagesHtml = self::renderA4SheetPage([], $cfg);
+        } else {
+            $chunks = array_chunk($labels, $perPage);
+            foreach ($chunks as $chunk) {
+                $pagesHtml .= self::renderA4SheetPage($chunk, $cfg);
+            }
+        }
+
+        return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+            . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            . '<title>' . htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</title>'
+            . '<style>'
+            . '@page { size: A4 portrait; margin: 0; }'
+            . 'html,body{margin:0;padding:0;}'
+            . 'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
+            . '.pol-a4-page{width:' . $sheetW . 'mm;height:' . $sheetH . 'mm;margin:0;box-sizing:border-box;'
+            . 'padding:' . $marginTop . 'mm ' . ($sheetW - ($cols * $w) - $marginLeft) . 'mm 0 ' . $marginLeft . 'mm;'
+            . 'page-break-after:always;page-break-inside:avoid;}'
+            . '.pol-a4-page:last-child{page-break-after:auto;}'
+            . '.pol-a4-grid{display:grid;grid-template-columns:repeat(' . $cols . ',' . $w . 'mm);'
+            . 'grid-template-rows:repeat(' . $rows . ',' . $h . 'mm);gap:0;width:' . ($cols * $w) . 'mm;height:' . ($rows * $h) . 'mm;}'
+            . '.pol-cell{width:' . $w . 'mm;height:' . $h . 'mm;overflow:hidden;box-sizing:border-box;}'
+            . '.pol-sheet,.pol-row{box-sizing:border-box;}'
+            . '.pol-row--barcode svg.pol-js-barcode{max-width:100%!important;height:auto!important;}'
+            . '@media screen{.pol-a4-page{margin:12px auto;outline:1px solid #ddd;}}'
+            . '.pol-no-print{margin:12px;text-align:center;font-family:Arial,sans-serif;font-size:13px;}'
+            . '.pol-no-print button{margin:0 4px;padding:8px 14px;cursor:pointer;}'
+            . '.pol-sheet-hint{color:#555;margin-top:6px;font-size:12px;}'
+            . '@media print{.pol-no-print{display:none!important;}}'
+            . '</style>'
+            . '<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>'
+            . '</head><body>'
+            . '<div class="pol-no-print no-print">'
+            . '<button type="button" onclick="window.print()">Print</button>'
+            . '<button type="button" onclick="window.close()">Close</button>'
+            . '<div class="pol-sheet-hint">Lotus A4 ST-65 · ' . $cols . '×' . $rows . ' · ' . $w . '×' . $h . ' mm per label · '
+            . count($labels) . ' label(s)</div>'
+            . '<div class="pol-sheet-hint">Print at 100% scale with no margins.</div>'
+            . '</div>'
+            . $pagesHtml
+            . self::printScriptBlock()
+            . '</body></html>';
+    }
+
+    /**
+     * @param array<int, array{order_number?: string, sku?: string, order_id?: int}> $labels
+     * @param array<string, mixed> $cfg
+     */
+    private static function renderA4SheetPage(array $labels, array $cfg): string
+    {
+        $cols = max(1, (int) ($cfg['sheet_columns'] ?? 5));
+        $rows = max(1, (int) ($cfg['sheet_rows'] ?? 13));
+        $perPage = $cols * $rows;
+        $cells = '';
+
+        for ($i = 0; $i < $perPage; $i++) {
+            $inner = '';
+            if (isset($labels[$i])) {
+                $inner = self::renderInnerHtml($labels[$i], $cfg);
+            }
+            $cells .= '<div class="pol-cell">' . $inner . '</div>';
+        }
+
+        return '<div class="pol-a4-page"><div class="pol-a4-grid">' . $cells . '</div></div>';
+    }
+
+    /**
      * @param array{order_number?: string, sku?: string, order_id?: int} $data
      * @param array<string, mixed>|null $config
      */
