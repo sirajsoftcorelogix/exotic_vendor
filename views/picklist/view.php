@@ -36,29 +36,32 @@ include __DIR__ . '/partials/detail_hero.php';
 
 <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
     <?php if ($items !== []): ?>
-        <div class="px-3 py-3 border-b border-gray-100 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
+        <div class="px-3 py-3 border-b border-gray-100">
             <p class="text-sm text-gray-600">
                 <span class="font-semibold text-gray-900 tabular-nums"><?= (int) $total ?></span> item<?= (int) $total === 1 ? '' : 's' ?>
-                <span class="text-gray-400 mx-1">·</span>
-                <span id="picklist-selected-count" class="tabular-nums">0 selected</span>
             </p>
-            <div class="flex flex-wrap items-center gap-2">
-                <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
-                    <input type="checkbox" id="picklist-select-all" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500" aria-label="Select all items">
-                    <span class="text-xs font-medium">Select all</span>
+        </div>
+        <div class="px-3 py-3 border-b border-gray-100 bg-gray-50/50">
+            <div class="flex flex-col items-start gap-2.5">
+                <label class="inline-flex items-center gap-2 cursor-pointer select-none text-sm font-semibold text-gray-800">
+                    <input type="checkbox" id="picklist-select-all" class="w-5 h-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500" aria-label="Select all items">
+                    <span>Select all</span>
                 </label>
-                <button type="button"
-                        id="picklist-bulk-pick-btn"
-                        disabled
-                        class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold shadow-sm hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed transition">
-                    <i class="fas fa-check text-[11px]" aria-hidden="true"></i> Mark picked
-                </button>
-                <button type="button"
-                        id="picklist-bulk-unpick-btn"
-                        disabled
-                        class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-xs font-semibold shadow-sm hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed transition">
-                    <i class="fas fa-undo text-[11px]" aria-hidden="true"></i> Revert picks
-                </button>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button type="button"
+                            id="picklist-bulk-pick-btn"
+                            disabled
+                            class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold shadow-sm hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed transition">
+                        <i class="fas fa-check text-[11px]" aria-hidden="true"></i> Mark picked
+                    </button>
+                    <button type="button"
+                            id="picklist-bulk-unpick-btn"
+                            disabled
+                            class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-xs font-semibold shadow-sm hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed transition">
+                        <i class="fas fa-undo text-[11px]" aria-hidden="true"></i> Revert picks
+                    </button>
+                    <span id="picklist-selected-count" class="text-xs font-medium text-gray-600 tabular-nums ml-1">0 selected</span>
+                </div>
             </div>
         </div>
     <?php else: ?>
