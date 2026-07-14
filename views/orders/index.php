@@ -495,12 +495,10 @@
                     <?php if ($showOrderVendorName): ?>
                     <?php renderPartial('views/shared/partials/order_filter_autocomplete_field.php', [
                         'field_id' => 'vendor_autocomplete',
+                        'field_name' => 'vendor',
                         'field_label' => 'Vendor',
                         'field_placeholder' => 'Search vendor by name...',
-                        'field_value' => $_GET['vendor_name'] ?? '',
-                        'hidden_id' => 'vendor_id',
-                        'hidden_name' => 'vendor_id',
-                        'hidden_value' => $_GET['vendor_id'] ?? '',
+                        'field_value' => $_GET['vendor'] ?? ($_GET['vendor_name'] ?? ''),
                         'search_url' => base_url('?page=orders&action=search_filter_vendors&q='),
                     ]); ?>
                     <?php endif; ?>

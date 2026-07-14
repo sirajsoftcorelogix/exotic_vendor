@@ -6,6 +6,7 @@ require_once 'models/order/po_invoice.php';
 require_once 'models/product/product.php';
 require_once 'models/picklist/Picklist.php';
 require_once 'helpers/payment_type_groups.php';
+require_once 'helpers/order_filter_autocomplete.php';
 $ordersModel = new Order($conn);
 $commanModel = new Tables($conn);
 $savedSearchModel = new SavedSearch($conn);
@@ -99,17 +100,20 @@ class OrdersController
         if (!empty($_GET['priority'])) {
             $filters['priority'] = $_GET['priority'];
         }
-        if (!empty($_GET['vendor_id'])) {
-            $filters['vendor_id'] = $_GET['vendor_id'];
+        $vendorFilter = resolveOrderListVendorFilter($_GET);
+        if ($vendorFilter !== '') {
+            $filters['vendor'] = $vendorFilter;
         }
         if (!empty($_GET['agent'])) {
             $filters['agent'] = $_GET['agent'];
         }
-        if (!empty($_GET['publisher'])) {
-            $filters['publisher'] = $_GET['publisher'];
+        $publisherFilter = resolveOrderListPublisherFilter($_GET);
+        if ($publisherFilter !== '') {
+            $filters['publisher'] = $publisherFilter;
         }
-        if (!empty($_GET['author'])) {
-            $filters['author'] = $_GET['author'];
+        $authorFilter = resolveOrderListAuthorFilter($_GET);
+        if ($authorFilter !== '') {
+            $filters['author'] = $authorFilter;
         }
         //unshipped
         if (!empty($_GET['options']) && $_GET['options'] == 'unshipped') {

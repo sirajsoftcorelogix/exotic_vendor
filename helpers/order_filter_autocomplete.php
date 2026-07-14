@@ -5,6 +5,75 @@ function orderFilterAutocompleteMinLength(): int
     return 2;
 }
 
+function normalizeOrderFilterSearchText($value): string
+{
+    return trim(strip_tags((string) $value));
+}
+
+function orderFilterLikeTerm(string $value): string
+{
+    return '%' . $value . '%';
+}
+
+function appendOrderVendorNameFilterSql(string &$sql, array &$params, string $vendor): void
+{
+    $vendor = normalizeOrderFilterSearchText($vendor);
+    if ($vendor === '') {
+        return;
+    }
+
+    $sql .= " AND IFNULL(vp_orders.vendor, '') LIKE ?";
+    $params[] = orderFilterLikeTerm($vendor);
+}
+
+function appendOrderAuthorNameFilterSql(string &$sql, array &$params, string $author): void
+{
+    $author = normalizeOrderFilterSearchText($author);
+    if ($author === '') {
+        return;
+    }
+
+    $like = orderFilterLikeTerm($author);
+    $sql .= " AND (
+        IFNULL(vp_orders.author, '') LIKE ?
+        OR EXISTS (
+            SELECT 1
+            FROM vp_author AS author_lookup
+            WHERE author_lookup.author LIKE ?
+            AND (
+                vp_orders.author = author_lookup.author
+                OR vp_orders.author = CAST(author_lookup.author_id AS CHAR)
+            )
+        )
+    )";
+    $params[] = $like;
+    $params[] = $like;
+}
+
+function appendOrderPublisherNameFilterSql(string &$sql, array &$params, string $publisher): void
+{
+    $publisher = normalizeOrderFilterSearchText($publisher);
+    if ($publisher === '') {
+        return;
+    }
+
+    $like = orderFilterLikeTerm($publisher);
+    $sql .= " AND (
+        IFNULL(vp_orders.publisher, '') LIKE ?
+        OR EXISTS (
+            SELECT 1
+            FROM vp_publishers AS publisher_lookup
+            WHERE publisher_lookup.publishers LIKE ?
+            AND (
+                vp_orders.publisher = publisher_lookup.publishers
+                OR vp_orders.publisher = CAST(publisher_lookup.publishers_id AS CHAR)
+            )
+        )
+    )";
+    $params[] = $like;
+    $params[] = $like;
+}
+
 /**
  * @return array<int, array{id:int|string, name:string}>
  */
@@ -127,4 +196,27 @@ function orderFilterAutocompleteJson(mysqli $conn, string $type, string $query):
     header('Content-Type: application/json; charset=UTF-8');
     echo json_encode(['success' => true, 'data' => $results], JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
+}
+
+function resolveOrderListVendorFilter(array $get): string
+{
+    if (!empty($get['vendor'])) {
+        return normalizeOrderFilterSearchText($get['vendor']);
+    }
+
+    if (!empty($get['vendor_name'])) {
+        return normalizeOrderFilterSearchText($get['vendor_name']);
+    }
+
+    return '';
+}
+
+function resolveOrderListAuthorFilter(array $get): string
+{
+    return !empty($get['author']) ? normalizeOrderFilterSearchText($get['author']) : '';
+}
+
+function resolveOrderListPublisherFilter(array $get): string
+{
+    return !empty($get['publisher']) ? normalizeOrderFilterSearchText($get['publisher']) : '';
 }
