@@ -4,6 +4,7 @@ require_once 'models/comman/tables.php';
 require_once 'models/searches/saved_search.php';
 require_once 'models/order/po_invoice.php';
 require_once 'models/product/product.php';
+require_once 'models/picklist/Picklist.php';
 $ordersModel = new Order($conn);
 $commanModel = new Tables($conn);
 $savedSearchModel = new SavedSearch($conn);
@@ -20,6 +21,7 @@ class OrdersController
         global $ordersModel;
         global $commanModel;
         global $savedSearchModel;
+        global $conn;
         //sanitize and validate input parameters
         $_GET = sanitizeGet($_GET);
         // Fetch all orders
@@ -164,6 +166,8 @@ class OrdersController
             $saved_searches = $savedSearchModel->getByUser($user_id, 'orders');
         }
 
+        $picklistModel = new Picklist($conn);
+
         // Render the orders view
         renderTemplate('views/orders/index.php', [
             'orders' => $orders,
@@ -176,6 +180,8 @@ class OrdersController
             'payment_types' => $ordersModel->getPaymentTypes(),
             'staff_list' => $commanModel->get_staff_list(),
             'picker_list' => $commanModel->get_picker_list(),
+            'open_picklists' => $picklistModel->getOpenPicklistsForSelect(),
+            'suggested_picklist_number' => $picklistModel->generatePicklistNumber(),
             'filters' => $filters,
             'saved_searches' => $saved_searches
         ], 'Manage Orders');

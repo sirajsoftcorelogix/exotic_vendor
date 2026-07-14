@@ -150,6 +150,8 @@
     $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50; // Only allow specific values
     $total_orders = isset($data['total_orders']) ? (int)$data['total_orders'] : 0;
     $picker_list = isset($data['picker_list']) && is_array($data['picker_list']) ? $data['picker_list'] : [];
+    $open_picklists = isset($data['open_picklists']) && is_array($data['open_picklists']) ? $data['open_picklists'] : [];
+    $suggested_picklist_number = isset($data['suggested_picklist_number']) ? (string) $data['suggested_picklist_number'] : '';
     $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
 
     // Prepare query string for pagination links
@@ -1787,20 +1789,35 @@
                     <label for="bulkAddToPicklistName" class="block text-sm font-semibold text-gray-700">Picklist name</label>
                     <input type="text" id="bulkAddToPicklistName" name="picklist_name" maxlength="50"
                            class="border rounded-lg px-4 py-2.5 w-full text-sm"
-                           placeholder="">
-                    <p id="bulkAddToPicklistNameHint" class="text-xs text-gray-500">Leave blank to auto-generate a number (e.g. PL-YYYYMMDD-0001), or enter a custom name.</p>
+                           value="<?= htmlspecialchars($suggested_picklist_number) ?>">
+                    <p id="bulkAddToPicklistNameHint" class="text-xs text-gray-500">Auto-generated name is pre-filled. Edit it if you want a custom picklist name.</p>
                 </div>
                 <div id="bulkAddToPicklistExistingFields" class="space-y-2 hidden">
                     <label for="bulkAddToPicklistExisting" class="block text-sm font-semibold text-gray-700">Open picklist</label>
                     <select id="bulkAddToPicklistExisting" name="existing_picklist_id" class="border rounded-lg px-4 py-2.5 w-full text-sm">
                         <option value="0">-- Select picklist --</option>
+                        <?php foreach ($open_picklists as $pl): ?>
+                            <?php
+                            $plStatus = (string) ($pl['status'] ?? '');
+                            $statusLabel = $plStatus === 'in_progress' ? 'In progress' : 'Pending';
+                            $plPicker = trim((string) ($pl['picker_name'] ?? ''));
+                            $plItems = (int) ($pl['item_count'] ?? 0);
+                            $plPicked = (int) ($pl['picked_count'] ?? 0);
+                            $plProgress = $plItems > 0 ? (' · ' . $plPicked . '/' . $plItems . ' picked') : '';
+                            $plPickerLabel = $plPicker !== '' ? (' · ' . $plPicker) : '';
+                            $plType = (string) ($pl['content_type'] ?? 'empty');
+                            $typeLabel = $plType === 'book' ? ' · Books' : ($plType === 'non_book' ? ' · Non-books' : '');
+                            $plLabel = htmlspecialchars((string) ($pl['picklist_number'] ?? '')) . ' (' . $statusLabel . $plProgress . htmlspecialchars($plPickerLabel) . $typeLabel . ')';
+                            ?>
+                            <option value="<?= (int) ($pl['id'] ?? 0) ?>" data-content-type="<?= htmlspecialchars($plType) ?>"><?= $plLabel ?></option>
+                        <?php endforeach; ?>
                     </select>
-                    <p id="bulkAddToPicklistExistingHint" class="text-xs text-gray-500 hidden">Only pending and in-progress picklists are shown.</p>
-                    <p id="bulkAddToPicklistExistingEmpty" class="text-xs text-amber-700 hidden">No open picklists found. Create a new picklist instead.</p>
+                    <p id="bulkAddToPicklistExistingHint" class="text-xs text-gray-500">Pending and in-progress picklists are listed here.</p>
+                    <p id="bulkAddToPicklistExistingEmpty" class="text-xs text-amber-700 <?= $open_picklists === [] ? '' : 'hidden' ?>">No open picklists found. Create a new picklist instead.</p>
                 </div>
             </div>
             <div class="mb-5 grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                <div>
+                <div id="bulkAddToPicklistPickerWrap">
                     <label class="block text-sm font-bold mb-2">Assign Picker (optional)</label>
                     <select id="bulkAddToPicklistPicker" name="picker_id" class="border rounded-lg px-4 py-2.5 w-full text-sm">
                         <option value="0">-- Unassigned --</option>
@@ -1814,11 +1831,14 @@
                 </div>
                 <div id="bulkAddToPicklistNotesWrap">
                     <label class="block text-sm font-bold mb-2">Notes (optional)</label>
-                    <input type="text" id="bulkAddToPicklistNotes" name="notes" class="border rounded-lg px-4 py-2.5 w-full text-sm" placeholder="Internal notes (new picklists only)">
+                    <input type="text" id="bulkAddToPicklistNotes" name="notes" class="border rounded-lg px-4 py-2.5 w-full text-sm" placeholder="Internal notes">
                 </div>
             </div>
             <div class="mb-5">
-                <label class="block text-sm font-bold mb-2">Selected orders</label>
+                <div class="flex items-center justify-between mb-2">
+                    <label class="block text-sm font-bold">Selected orders</label>
+                    <span id="bulkAddToPicklistSelectedCount" class="text-xs text-gray-500"></span>
+                </div>
                 <div id="bulkAddToPicklistSelectedItems" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-72 overflow-y-auto border rounded-xl p-4 bg-gray-50"></div>
             </div>
             <div id="bulkAddToPicklistError" class="text-red-500 text-sm hidden mb-3"></div>
@@ -2597,6 +2617,9 @@
 </script>
 
 <script>
+    const embeddedOpenPicklists = <?= json_encode($open_picklists, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    const defaultPicklistNumber = <?= json_encode($suggested_picklist_number, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
     // Helper to get selected order IDs (visible checked + persisted selections)
     function getSelectedOrderIds() {
         const visibleChecked = Array.from(document.querySelectorAll('input[name="poitem[]"]:checked')).map(cb => cb.value);
@@ -2988,43 +3011,135 @@
             });
     }
 
-    let bulkPicklistOpenLists = [];
+    let bulkPicklistOpenLists = Array.isArray(embeddedOpenPicklists) ? embeddedOpenPicklists.slice() : [];
+    let bulkPicklistSelectedOrderIds = [];
 
-    function loadOpenPicklists() {
+    function formatOpenPicklistOptionLabel(pl) {
+        const statusLabel = pl.status === 'in_progress' ? 'In progress' : 'Pending';
+        const picker = pl.picker_name ? (' · ' + pl.picker_name) : '';
+        const progress = pl.item_count > 0 ? (' · ' + pl.picked_count + '/' + pl.item_count + ' picked') : '';
+        const typeLabel = pl.content_type === 'book' ? ' · Books' : (pl.content_type === 'non_book' ? ' · Non-books' : '');
+        const name = pl.picklist_number || ('Picklist #' + pl.id);
+        return name + ' (' + statusLabel + progress + picker + typeLabel + ')';
+    }
+
+    function populateOpenPicklistsDropdown(picklists) {
         const sel = document.getElementById('bulkAddToPicklistExisting');
         const emptyHint = document.getElementById('bulkAddToPicklistExistingEmpty');
+        if (!sel) return;
+        bulkPicklistOpenLists = Array.isArray(picklists) ? picklists.slice() : [];
+        const current = sel.value;
+        sel.innerHTML = '<option value="0">-- Select picklist --</option>';
+        bulkPicklistOpenLists.forEach(function(pl) {
+            const opt = document.createElement('option');
+            opt.value = String(pl.id);
+            opt.textContent = formatOpenPicklistOptionLabel(pl);
+            opt.dataset.contentType = pl.content_type || 'empty';
+            sel.appendChild(opt);
+        });
+        if (current && sel.querySelector('option[value="' + current + '"]')) {
+            sel.value = current;
+        }
+        if (emptyHint) {
+            emptyHint.classList.toggle('hidden', bulkPicklistOpenLists.length > 0);
+        }
+    }
+
+    function loadOpenPicklists() {
         const nameInput = document.getElementById('bulkAddToPicklistName');
-        if (!sel) return Promise.resolve();
+        populateOpenPicklistsDropdown(embeddedOpenPicklists);
         return fetch('index.php?page=picklist&action=get_open_picklists')
-            .then(r => r.json())
-            .then(data => {
-                bulkPicklistOpenLists = (data && data.picklists) ? data.picklists : [];
-                const current = sel.value;
-                sel.innerHTML = '<option value="0">-- Select picklist --</option>';
-                bulkPicklistOpenLists.forEach(pl => {
-                    const opt = document.createElement('option');
-                    opt.value = String(pl.id);
-                    const statusLabel = pl.status === 'in_progress' ? 'In progress' : 'Pending';
-                    const picker = pl.picker_name ? (' · ' + pl.picker_name) : '';
-                    const progress = pl.item_count > 0 ? (' · ' + pl.picked_count + '/' + pl.item_count + ' picked') : '';
-                    const typeLabel = pl.content_type === 'book' ? ' · Books' : (pl.content_type === 'non_book' ? ' · Non-books' : '');
-                    opt.textContent = pl.picklist_number + ' (' + statusLabel + progress + picker + typeLabel + ')';
-                    opt.dataset.contentType = pl.content_type || 'empty';
-                    sel.appendChild(opt);
-                });
-                if (current && sel.querySelector('option[value="' + current + '"]')) {
-                    sel.value = current;
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data && data.success && Array.isArray(data.picklists)) {
+                    populateOpenPicklistsDropdown(data.picklists);
                 }
-                if (emptyHint) {
-                    emptyHint.classList.toggle('hidden', bulkPicklistOpenLists.length > 0);
-                }
-                if (nameInput && data && data.suggested_number) {
-                    nameInput.placeholder = 'Auto: ' + data.suggested_number;
+                if (nameInput && document.getElementById('bulkAddToPicklistModeNew').checked) {
+                    const suggested = (data && data.suggested_number) ? data.suggested_number : defaultPicklistNumber;
+                    if (suggested) {
+                        nameInput.value = suggested;
+                    }
                 }
             })
             .catch(function() {
-                bulkPicklistOpenLists = [];
+                populateOpenPicklistsDropdown(embeddedOpenPicklists);
             });
+    }
+
+    function renderBulkPicklistSelectedItems(oids) {
+        bulkPicklistSelectedOrderIds = oids.map(String);
+        const form = document.getElementById('bulkAddToPicklistForm');
+        form.querySelectorAll('input.poitem_hidden').forEach(function(el) { el.remove(); });
+        const container = document.getElementById('bulkAddToPicklistSelectedItems');
+        const countEl = document.getElementById('bulkAddToPicklistSelectedCount');
+        container.innerHTML = '';
+        if (countEl) {
+            countEl.textContent = bulkPicklistSelectedOrderIds.length + ' item(s)';
+        }
+        if (bulkPicklistSelectedOrderIds.length === 0) {
+            container.innerHTML = '<p class="col-span-full text-sm text-gray-500 text-center py-8">No orders selected. Close and pick orders from the list.</p>';
+            return;
+        }
+        bulkPicklistSelectedOrderIds.forEach(function(orderId) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'order_ids[]';
+            input.value = orderId;
+            input.className = 'poitem_hidden';
+            form.appendChild(input);
+
+            const element = document.querySelector('#order-id-' + orderId);
+            if (!element) return;
+            const orderData = JSON.parse(element.getAttribute('data-order'));
+            const image = orderData.image || 'default-image.png';
+            const skuOrCode = orderData.sku || orderData.item_code || ('ID ' + orderId);
+            const orderNum = orderData.order_number ? ('Order ' + orderData.order_number) : '';
+
+            const div = document.createElement('div');
+            div.className = 'relative border rounded-xl p-3 bg-white flex flex-col items-center gap-2 shadow-sm';
+            div.dataset.orderId = orderId;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white text-xs leading-none hover:bg-red-600';
+            removeBtn.title = 'Remove from selection';
+            removeBtn.innerHTML = '&times;';
+            removeBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                removeBulkPicklistOrder(orderId);
+            });
+            div.appendChild(removeBtn);
+
+            const img = document.createElement('img');
+            img.src = image;
+            img.className = 'w-full h-24 object-contain';
+            div.appendChild(img);
+
+            const label = document.createElement('div');
+            label.className = 'text-xs text-gray-700 text-center break-words leading-snug font-medium';
+            label.textContent = skuOrCode;
+            div.appendChild(label);
+
+            if (orderNum) {
+                const sub = document.createElement('div');
+                sub.className = 'text-[10px] text-gray-500 text-center';
+                sub.textContent = orderNum;
+                div.appendChild(sub);
+            }
+
+            container.appendChild(div);
+        });
+    }
+
+    function removeBulkPicklistOrder(orderId) {
+        const next = bulkPicklistSelectedOrderIds.filter(function(id) { return String(id) !== String(orderId); });
+        if (next.length === 0) {
+            closeBulkAddToPicklistPopup();
+            showAlert('All orders removed from selection.', 'info');
+            return;
+        }
+        renderBulkPicklistSelectedItems(next);
     }
 
     function getPicklistSelectionContentType(orderIds) {
@@ -3049,8 +3164,12 @@
         const isExisting = document.getElementById('bulkAddToPicklistModeExisting').checked;
         document.getElementById('bulkAddToPicklistNewFields').classList.toggle('hidden', isExisting);
         document.getElementById('bulkAddToPicklistExistingFields').classList.toggle('hidden', !isExisting);
+        document.getElementById('bulkAddToPicklistPickerWrap').classList.toggle('hidden', isExisting);
         document.getElementById('bulkAddToPicklistNotesWrap').classList.toggle('hidden', isExisting);
         document.getElementById('bulkAddToPicklistSubmitBtn').textContent = isExisting ? 'Add to Picklist' : 'Create Picklist';
+        if (isExisting) {
+            loadOpenPicklists();
+        }
     }
 
     document.getElementById('bulkAddToPicklistModeNew').addEventListener('change', updateBulkPicklistModeUi);
@@ -3099,40 +3218,12 @@
             showAlert('Cannot mix book and non-book items in one picklist. Select only books or only non-book items.', 'error');
             return;
         }
-        const form = document.getElementById('bulkAddToPicklistForm');
-        form.querySelectorAll('input.poitem_hidden').forEach(el => el.remove());
-        oids.forEach(orderId => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'order_ids[]';
-            input.value = orderId;
-            input.className = 'poitem_hidden';
-            form.appendChild(input);
-        });
-        const selectedItemsContainer = document.getElementById('bulkAddToPicklistSelectedItems');
-        selectedItemsContainer.innerHTML = '';
-        oids.forEach(orderId => {
-            const element = document.querySelector('#order-id-' + orderId);
-            if (!element) return;
-            const orderData = JSON.parse(element.getAttribute('data-order'));
-            const image = orderData.image || 'default-image.png';
-            const skuOrCode = orderData.sku || orderData.item_code || ('ID ' + orderId);
-            const div = document.createElement('div');
-            div.className = 'border rounded-xl p-3 bg-white flex flex-col items-center gap-2 shadow-sm';
-            const img = document.createElement('img');
-            img.src = image;
-            img.className = 'w-full h-24 object-contain';
-            div.appendChild(img);
-            const label = document.createElement('div');
-            label.className = 'text-xs text-gray-700 text-center break-words leading-snug font-medium';
-            label.textContent = skuOrCode;
-            div.appendChild(label);
-            selectedItemsContainer.appendChild(div);
-        });
+        renderBulkPicklistSelectedItems(oids);
         document.getElementById('bulkAddToPicklistError').classList.add('hidden');
         document.getElementById('bulkAddToPicklistModeNew').checked = true;
-        document.getElementById('bulkAddToPicklistName').value = '';
+        document.getElementById('bulkAddToPicklistName').value = defaultPicklistNumber || '';
         document.getElementById('bulkAddToPicklistExisting').value = '0';
+        document.getElementById('bulkAddToPicklistNotes').value = '';
         updateBulkPicklistModeUi();
         Promise.all([loadPicklistPickers(), loadOpenPicklists()]).finally(function() {
             document.getElementById('bulkAddToPicklistPopup').classList.remove('hidden');
@@ -3159,10 +3250,13 @@
 
     document.getElementById('bulkAddToPicklistForm').addEventListener('submit', function(e) {
         e.preventDefault();
-        const orderIds = [];
-        this.querySelectorAll('input[name="order_ids[]"]').forEach(function(input) {
-            orderIds.push(input.value);
-        });
+        const orderIds = bulkPicklistSelectedOrderIds.slice();
+        if (orderIds.length === 0) {
+            document.getElementById('bulkAddToPicklistError').textContent = 'Please select at least one order.';
+            document.getElementById('bulkAddToPicklistError').classList.remove('hidden', 'text-green-500');
+            document.getElementById('bulkAddToPicklistError').classList.add('text-red-500');
+            return;
+        }
         if (!validatePicklistSelectionMix(orderIds)) {
             document.getElementById('bulkAddToPicklistError').textContent = 'Cannot mix book and non-book items in one picklist. Create separate picklists for books and other items.';
             document.getElementById('bulkAddToPicklistError').classList.remove('hidden', 'text-green-500');
@@ -3198,11 +3292,16 @@
         document.getElementById('bulkAddToPicklistError').classList.remove('hidden', 'text-green-500');
         document.getElementById('bulkAddToPicklistError').classList.add('text-red-500');
         const formData = new FormData(this);
+        formData.delete('order_ids[]');
+        orderIds.forEach(function(orderId) {
+            formData.append('order_ids[]', orderId);
+        });
         if (!isExisting) {
             formData.delete('existing_picklist_id');
         } else {
             formData.delete('picklist_name');
             formData.delete('notes');
+            formData.delete('picker_id');
         }
         fetch('index.php?page=picklist&action=bulk_add_from_orders', {
             method: 'POST',
