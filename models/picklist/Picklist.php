@@ -592,7 +592,7 @@ class Picklist
             if ($hasPrev) {
                 $fields[] = 'previous_order_status';
                 $placeholders[] = '?';
-                $values[] = (string) ($item['previous_order_status'] ?? 'item_received');
+                $values[] = (string) ($item['previous_order_status'] ?? '');
                 $types .= 's';
             }
 
@@ -955,7 +955,7 @@ class Picklist
             return $status;
         }
 
-        return 'item_received';
+        return '';
     }
 
     /**
