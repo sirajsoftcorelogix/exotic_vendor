@@ -1772,6 +1772,9 @@ switch ($page) {
             case 'view':
                 $controller->view();
                 break;
+            case 'print_item_label':
+                $controller->printItemLabel();
+                break;
             case 'tablet':
                 $controller->tablet();
                 break;

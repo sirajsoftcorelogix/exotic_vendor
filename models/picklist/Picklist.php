@@ -120,6 +120,35 @@ class Picklist
     }
 
     /**
+     * @return array<string, mixed>|null
+     */
+    public function getPicklistItemById(int $itemId): ?array
+    {
+        if ($itemId <= 0) {
+            return null;
+        }
+
+        $sql = "SELECT pli.*, pl.picklist_number, pl.status AS picklist_status
+                FROM vp_picklist_items pli
+                INNER JOIN vp_picklists pl ON pl.id = pli.picklist_id
+                WHERE pli.id = ? LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('i', $itemId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        if (!$row) {
+            return null;
+        }
+
+        return $this->normalizePicklistItemRow($row);
+    }
+
+    /**
      * @return array{item_id: int, picklist_id: int, picklist_number: string, status: string}|null
      */
     public function getPicklistItemByOrderId(int $orderId): ?array

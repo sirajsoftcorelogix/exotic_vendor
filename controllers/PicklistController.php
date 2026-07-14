@@ -64,6 +64,39 @@ class PicklistController
         ], $title);
     }
 
+    public function printItemLabel()
+    {
+        is_login();
+        global $picklistModel;
+
+        $itemId = isset($_GET['item_id']) ? (int) $_GET['item_id'] : 0;
+        if ($itemId <= 0) {
+            echo '<p>Invalid picklist item.</p>';
+            exit;
+        }
+
+        $item = $picklistModel->getPicklistItemById($itemId);
+        if (!$item) {
+            echo '<p>Picklist item not found.</p>';
+            exit;
+        }
+
+        $orderId = (int) ($item['order_id'] ?? 0);
+        if ($orderId <= 0) {
+            echo '<p>Order not linked to this picklist item.</p>';
+            exit;
+        }
+
+        require_once dirname(__DIR__) . '/helpers/label/PicklistOrderLabel.php';
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=utf-8');
+        }
+
+        $labelData = PicklistOrderLabel::fromPicklistItemRow($item);
+        echo PicklistOrderLabel::renderPrintDocument($labelData);
+        exit;
+    }
+
     public function tablet()
     {
         is_login();
