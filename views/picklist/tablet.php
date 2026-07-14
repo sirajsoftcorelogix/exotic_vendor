@@ -95,6 +95,8 @@ $total = count($items);
     </div>
 </div>
 
+<?php require_once __DIR__ . '/partials/confirm_modal.php'; ?>
+
 <script>
 (function() {
     const picklistId = <?= (int) $plId ?>;
@@ -105,36 +107,44 @@ $total = count($items);
             if (e.target.closest('.js-picklist-expand-image')) return;
             const itemId = el.getAttribute('data-item-id');
             if (!itemId || el.getAttribute('data-picked') === '1') return;
-            if (!window.confirm('Mark this item as picked?')) return;
 
-            el.style.pointerEvents = 'none';
-            const fd = new FormData();
-            fd.append('item_id', itemId);
+            openPicklistConfirmModal({
+                title: 'Mark as picked?',
+                message: 'Mark this item as picked?',
+                confirmText: 'Yes, mark picked',
+                cancelText: 'Cancel'
+            }).then(function(confirmed) {
+                if (!confirmed) return;
 
-            fetch('index.php?page=picklist&action=pick_item', { method: 'POST', body: fd })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        el.setAttribute('data-picked', '1');
-                        el.classList.add('bg-green-50', 'border-green-300', 'opacity-75');
-                        el.classList.remove('cursor-pointer', 'bg-white');
-                        const badge = el.querySelector('.flex-shrink-0 span');
-                        if (badge) {
-                            badge.className = 'inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-600 text-white';
-                            badge.innerHTML = '<i class="fas fa-check"></i>';
+                el.style.pointerEvents = 'none';
+                const fd = new FormData();
+                fd.append('item_id', itemId);
+
+                fetch('index.php?page=picklist&action=pick_item', { method: 'POST', body: fd })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            el.setAttribute('data-picked', '1');
+                            el.classList.add('bg-green-50', 'border-green-300', 'opacity-75');
+                            el.classList.remove('cursor-pointer', 'bg-white');
+                            const badge = el.querySelector('.flex-shrink-0 span');
+                            if (badge) {
+                                badge.className = 'inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-600 text-white';
+                                badge.innerHTML = '<i class="fas fa-check"></i>';
+                            }
+                            if (data.picklist_completed) {
+                                showAlert('All items picked — picklist complete!', 'success');
+                            }
+                        } else {
+                            showAlert(data.message || 'Failed to pick item.', 'error');
+                            el.style.pointerEvents = '';
                         }
-                        if (data.picklist_completed) {
-                            showAlert('All items picked — picklist complete!', 'success');
-                        }
-                    } else {
-                        showAlert(data.message || 'Failed to pick item.', 'error');
+                    })
+                    .catch(function() {
+                        showAlert('Network error.', 'error');
                         el.style.pointerEvents = '';
-                    }
-                })
-                .catch(function() {
-                    showAlert('Network error.', 'error');
-                    el.style.pointerEvents = '';
-                });
+                    });
+            });
         });
     });
 
