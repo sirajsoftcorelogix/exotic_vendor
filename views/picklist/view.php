@@ -45,10 +45,33 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
         </div>
     </div>
 
+    <?php if ($items !== []): ?>
+        <div class="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+            <span id="picklist-selected-count" class="text-sm font-medium text-gray-700 tabular-nums">0 selected</span>
+            <button type="button"
+                    id="picklist-bulk-pick-btn"
+                    disabled
+                    class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold shadow-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fas fa-check" aria-hidden="true"></i> Mark selected as picked
+            </button>
+            <button type="button"
+                    id="picklist-bulk-unpick-btn"
+                    disabled
+                    class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-xs font-semibold shadow-sm hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fas fa-undo" aria-hidden="true"></i> Revert selected picks
+            </button>
+        </div>
+    <?php endif; ?>
+
     <div class="bg-white border rounded-xl shadow-sm overflow-x-auto">
         <table class="min-w-full text-sm">
             <thead class="bg-gray-50 text-left text-gray-600">
                 <tr>
+                    <th class="px-4 py-3 w-10">
+                        <?php if ($items !== []): ?>
+                            <input type="checkbox" id="picklist-select-all" class="rounded border-gray-300" aria-label="Select all items">
+                        <?php endif; ?>
+                    </th>
                     <th class="px-4 py-3">#</th>
                     <th class="px-4 py-3">Location</th>
                     <th class="px-4 py-3">Order Number</th>
@@ -73,6 +96,13 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
                     $imageUrl = picklist_item_image_url($item);
                     ?>
                     <tr class="<?= $isPicked ? 'bg-green-50' : '' ?>">
+                        <td class="px-4 py-3">
+                            <input type="checkbox"
+                                   class="picklist-item-cb rounded border-gray-300"
+                                   value="<?= (int) ($item['id'] ?? 0) ?>"
+                                   data-status="<?= $isPicked ? 'picked' : 'pending' ?>"
+                                   aria-label="Select item">
+                        </td>
                         <td class="px-4 py-3"><?= $idx + 1 ?></td>
                         <td class="px-4 py-3 font-semibold text-amber-800 whitespace-nowrap"><?= htmlspecialchars((string) ($item['warehouse_location'] ?: '—')) ?></td>
                         <td class="px-4 py-3 whitespace-nowrap"><?= htmlspecialchars((string) ($item['order_number'] ?? '')) ?></td>
@@ -134,7 +164,7 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
                     </tr>
                 <?php endforeach; ?>
                 <?php if ($items === []): ?>
-                    <?php $colspan = $showBookColumns ? 12 : 10; ?>
+                    <?php $colspan = $showBookColumns ? 13 : 11; ?>
                     <tr><td colspan="<?= $colspan ?>" class="px-4 py-8 text-center text-gray-500">No items on this picklist.</td></tr>
                 <?php endif; ?>
             </tbody>
@@ -144,4 +174,5 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
 <?php require_once __DIR__ . '/partials/confirm_modal.php'; ?>
 <?php require_once __DIR__ . '/partials/confirm_delete_script.php'; ?>
 <?php require_once __DIR__ . '/partials/unpick_script.php'; ?>
+<?php require_once __DIR__ . '/partials/bulk_actions_script.php'; ?>
 <?php require_once __DIR__ . '/partials/image_lightbox.php'; ?>

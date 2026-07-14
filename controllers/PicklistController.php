@@ -205,6 +205,79 @@ class PicklistController
         exit;
     }
 
+    public function bulkPickItems()
+    {
+        is_login();
+        global $picklistModel;
+        global $ordersModel;
+        global $commanModel;
+
+        header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit;
+        }
+
+        $itemIds = isset($_POST['item_ids']) && is_array($_POST['item_ids']) ? $_POST['item_ids'] : [];
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+
+        $result = $picklistModel->markItemsPickedBulk($itemIds, $userId);
+        if (empty($result['success'])) {
+            echo json_encode($result);
+            exit;
+        }
+
+        foreach ($result['order_ids'] ?? [] as $oid) {
+            $this->syncOrderStatus((int) $oid, 'item_picked', $ordersModel, $commanModel);
+        }
+
+        echo json_encode($result);
+        exit;
+    }
+
+    public function bulkUnpickItems()
+    {
+        is_login();
+        global $picklistModel;
+        global $ordersModel;
+        global $commanModel;
+
+        header('Content-Type: application/json');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit;
+        }
+
+        $itemIds = isset($_POST['item_ids']) && is_array($_POST['item_ids']) ? $_POST['item_ids'] : [];
+        $result = $picklistModel->revertItemsPickBulk($itemIds);
+        if (empty($result['success'])) {
+            echo json_encode($result);
+            exit;
+        }
+
+        $picklistNumber = (string) ($result['picklist_number'] ?? '');
+        foreach ($result['order_ids'] ?? [] as $oid) {
+            $order = $ordersModel->getOrderById((int) $oid);
+            if ($order && (string) ($order['status'] ?? '') === 'item_picked') {
+                $this->syncOrderStatus((int) $oid, 'added_to_picklist', $ordersModel, $commanModel);
+            }
+            if ($picklistNumber !== '') {
+                $commanModel->add_order_status_log([
+                    'order_id' => (int) $oid,
+                    'status' => 'Pick reverted on picklist: ' . $picklistNumber,
+                    'changed_by' => (int) ($_SESSION['user']['id'] ?? 0),
+                    'api_response' => null,
+                    'change_date' => date('Y-m-d H:i:s'),
+                ]);
+            }
+        }
+
+        echo json_encode($result);
+        exit;
+    }
+
     public function assignPicker()
     {
         is_login();

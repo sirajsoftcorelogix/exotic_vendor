@@ -1784,6 +1784,12 @@ switch ($page) {
             case 'unpick_item':
                 $controller->unpickItem();
                 break;
+            case 'bulk_pick_items':
+                $controller->bulkPickItems();
+                break;
+            case 'bulk_unpick_items':
+                $controller->bulkUnpickItems();
+                break;
             case 'assign_picker':
                 $controller->assignPicker();
                 break;
