@@ -15,7 +15,14 @@ $pickerName = (string) ($picklist['picker_name'] ?? 'Unassigned');
 $createdAt = !empty($picklist['created_at']) ? date('d M Y, H:i', strtotime($picklist['created_at'])) : '—';
 $isTablet = ($mode ?? 'desktop') === 'tablet';
 ?>
-<div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04] mb-6">
+<nav class="mb-3" aria-label="Picklist navigation">
+    <a href="?page=picklist&action=list"
+       class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-700 text-sm font-semibold shadow-sm hover:bg-gray-50 hover:border-gray-400 hover:text-amber-900 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">
+        <i class="fas fa-arrow-left text-xs" aria-hidden="true"></i>
+        Back to picklists
+    </a>
+</nav>
+<div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04] mb-4">
     <div class="relative px-4 py-5 sm:px-5 sm:py-6">
         <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">
             <div class="min-w-0 flex-1">
@@ -28,11 +35,7 @@ $isTablet = ($mode ?? 'desktop') === 'tablet';
                         <?= htmlspecialchars($statusLabel) ?>
                     </span>
                 </div>
-                <a href="?page=picklist&action=list" class="inline-flex items-center gap-1.5 text-sm font-medium text-amber-800 hover:text-amber-950 hover:underline underline-offset-2">
-                    <i class="fas fa-arrow-left text-xs" aria-hidden="true"></i>
-                    Back to picklists
-                </a>
-                <h1 class="mt-2 text-2xl sm:text-3xl font-bold text-gray-900 font-mono tracking-tight"><?= htmlspecialchars($plNumber) ?></h1>
+                <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 font-mono tracking-tight"><?= htmlspecialchars($plNumber) ?></h1>
                 <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
                     <span><i class="fas fa-user text-gray-400 mr-1" aria-hidden="true"></i> Picker: <span class="font-medium text-gray-800"><?= htmlspecialchars($pickerName) ?></span></span>
                     <span><i class="fas fa-clock text-gray-400 mr-1" aria-hidden="true"></i> Created: <?= htmlspecialchars($createdAt) ?></span>
