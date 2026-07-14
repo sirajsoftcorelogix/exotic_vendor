@@ -746,6 +746,206 @@ class Picklist
         }
     }
 
+    /**
+     * @param int[] $itemIds
+     * @return array{success: bool, message?: string, processed?: int, skipped?: int, order_ids?: int[], picklist_id?: int, picklist_number?: string, picklist_completed?: bool}
+     */
+    public function markItemsPickedBulk(array $itemIds, int $userId): array
+    {
+        $itemIds = $this->normalizeItemIds($itemIds);
+        if ($itemIds === []) {
+            return ['success' => false, 'message' => 'No items selected.'];
+        }
+
+        $items = $this->fetchItemsWithPicklistByIds($itemIds);
+        if ($items === []) {
+            return ['success' => false, 'message' => 'Selected items not found.'];
+        }
+
+        foreach ($items as $item) {
+            if (($item['picklist_status'] ?? '') === 'cancelled') {
+                return ['success' => false, 'message' => 'Picklist is cancelled.'];
+            }
+        }
+
+        $pendingIds = [];
+        foreach ($items as $item) {
+            if (($item['status'] ?? '') === 'pending') {
+                $pendingIds[] = (int) $item['id'];
+            }
+        }
+        if ($pendingIds === []) {
+            return ['success' => false, 'message' => 'No pending items in selection.'];
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $picklistIds = [];
+        $orderIds = [];
+
+        $this->db->begin_transaction();
+        try {
+            foreach ($items as $item) {
+                $plId = (int) ($item['picklist_id'] ?? 0);
+                if ($plId > 0) {
+                    $picklistIds[$plId] = true;
+                }
+            }
+
+            foreach (array_keys($picklistIds) as $picklistId) {
+                $plUpd = $this->db->prepare(
+                    "UPDATE vp_picklists SET status = 'in_progress' WHERE id = ? AND status = 'pending'"
+                );
+                $plUpd->bind_param('i', $picklistId);
+                $plUpd->execute();
+                $plUpd->close();
+            }
+
+            $placeholders = $this->buildInPlaceholders(count($pendingIds));
+            $types = 'is' . str_repeat('i', count($pendingIds));
+            $params = array_merge([$userId, $now], $pendingIds);
+            $sql = "UPDATE vp_picklist_items
+                    SET status = 'picked', picked_by = ?, picked_at = ?
+                    WHERE id IN ($placeholders) AND status = 'pending'";
+            $stmt = $this->db->prepare($sql);
+            $bind = [$types];
+            foreach ($params as $i => $val) {
+                $bind[] = &$params[$i];
+            }
+            call_user_func_array([$stmt, 'bind_param'], $bind);
+            if (!$stmt->execute()) {
+                throw new RuntimeException('Failed to update items.');
+            }
+            $processed = $stmt->affected_rows;
+            $stmt->close();
+
+            foreach ($items as $item) {
+                if (($item['status'] ?? '') !== 'pending') {
+                    continue;
+                }
+                $oid = (int) ($item['order_id'] ?? 0);
+                if ($oid > 0) {
+                    $orderIds[$oid] = true;
+                }
+            }
+
+            $picklistCompleted = false;
+            foreach (array_keys($picklistIds) as $picklistId) {
+                $this->recalculatePicklistStatus($picklistId);
+                $pl = $this->getPicklistById($picklistId);
+                if ($pl && ($pl['status'] ?? '') === 'completed') {
+                    $picklistCompleted = true;
+                }
+            }
+
+            $this->db->commit();
+
+            $first = $items[0];
+            return [
+                'success' => true,
+                'message' => $processed . ' item(s) marked as picked.',
+                'processed' => $processed,
+                'skipped' => count($itemIds) - $processed,
+                'order_ids' => array_keys($orderIds),
+                'picklist_id' => (int) ($first['picklist_id'] ?? 0),
+                'picklist_number' => (string) ($first['picklist_number'] ?? ''),
+                'picklist_completed' => $picklistCompleted,
+            ];
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * @param int[] $itemIds
+     * @return array{success: bool, message?: string, processed?: int, skipped?: int, order_ids?: int[], picklist_id?: int, picklist_number?: string}
+     */
+    public function revertItemsPickBulk(array $itemIds): array
+    {
+        $itemIds = $this->normalizeItemIds($itemIds);
+        if ($itemIds === []) {
+            return ['success' => false, 'message' => 'No items selected.'];
+        }
+
+        $items = $this->fetchItemsWithPicklistByIds($itemIds);
+        if ($items === []) {
+            return ['success' => false, 'message' => 'Selected items not found.'];
+        }
+
+        foreach ($items as $item) {
+            if (($item['picklist_status'] ?? '') === 'cancelled') {
+                return ['success' => false, 'message' => 'Picklist is cancelled.'];
+            }
+        }
+
+        $pickedIds = [];
+        foreach ($items as $item) {
+            if (($item['status'] ?? '') === 'picked') {
+                $pickedIds[] = (int) $item['id'];
+            }
+        }
+        if ($pickedIds === []) {
+            return ['success' => false, 'message' => 'No picked items in selection.'];
+        }
+
+        $picklistIds = [];
+        $orderIds = [];
+
+        $this->db->begin_transaction();
+        try {
+            $placeholders = $this->buildInPlaceholders(count($pickedIds));
+            $types = str_repeat('i', count($pickedIds));
+            $sql = "UPDATE vp_picklist_items
+                    SET status = 'pending', picked_by = NULL, picked_at = NULL
+                    WHERE id IN ($placeholders) AND status = 'picked'";
+            $stmt = $this->db->prepare($sql);
+            $bind = [$types];
+            foreach ($pickedIds as $i => $val) {
+                $bind[] = &$pickedIds[$i];
+            }
+            call_user_func_array([$stmt, 'bind_param'], $bind);
+            if (!$stmt->execute()) {
+                throw new RuntimeException('Failed to revert items.');
+            }
+            $processed = $stmt->affected_rows;
+            $stmt->close();
+
+            foreach ($items as $item) {
+                if (($item['status'] ?? '') !== 'picked') {
+                    continue;
+                }
+                $plId = (int) ($item['picklist_id'] ?? 0);
+                if ($plId > 0) {
+                    $picklistIds[$plId] = true;
+                }
+                $oid = (int) ($item['order_id'] ?? 0);
+                if ($oid > 0) {
+                    $orderIds[$oid] = true;
+                }
+            }
+
+            foreach (array_keys($picklistIds) as $picklistId) {
+                $this->recalculatePicklistStatus($picklistId);
+            }
+
+            $this->db->commit();
+
+            $first = $items[0];
+            return [
+                'success' => true,
+                'message' => $processed . ' item(s) reverted to pending.',
+                'processed' => $processed,
+                'skipped' => count($itemIds) - $processed,
+                'order_ids' => array_keys($orderIds),
+                'picklist_id' => (int) ($first['picklist_id'] ?? 0),
+                'picklist_number' => (string) ($first['picklist_number'] ?? ''),
+            ];
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
     public function assignPicker(int $picklistId, int $pickerId): array
     {
         if ($picklistId <= 0) {
@@ -926,5 +1126,60 @@ class Picklist
         $upd->bind_param('si', $status, $picklistId);
         $upd->execute();
         $upd->close();
+    }
+
+    /**
+     * @param int[] $itemIds
+     * @return int[]
+     */
+    private function normalizeItemIds(array $itemIds): array
+    {
+        $normalized = [];
+        foreach ($itemIds as $id) {
+            $id = (int) $id;
+            if ($id > 0) {
+                $normalized[$id] = $id;
+            }
+        }
+        return array_values($normalized);
+    }
+
+    private function buildInPlaceholders(int $count): string
+    {
+        if ($count <= 0) {
+            return '0';
+        }
+        return implode(',', array_fill(0, $count, '?'));
+    }
+
+    /**
+     * @param int[] $itemIds
+     * @return array<int, array<string, mixed>>
+     */
+    private function fetchItemsWithPicklistByIds(array $itemIds): array
+    {
+        if ($itemIds === []) {
+            return [];
+        }
+        $placeholders = $this->buildInPlaceholders(count($itemIds));
+        $types = str_repeat('i', count($itemIds));
+        $sql = "SELECT pli.*, pl.status AS picklist_status, pl.picklist_number
+                FROM vp_picklist_items pli
+                INNER JOIN vp_picklists pl ON pl.id = pli.picklist_id
+                WHERE pli.id IN ($placeholders)";
+        $stmt = $this->db->prepare($sql);
+        $bind = [$types];
+        foreach ($itemIds as $i => $val) {
+            $bind[] = &$itemIds[$i];
+        }
+        call_user_func_array([$stmt, 'bind_param'], $bind);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $rows = [];
+        while ($res && ($row = $res->fetch_assoc())) {
+            $rows[] = $row;
+        }
+        $stmt->close();
+        return $rows;
     }
 }
