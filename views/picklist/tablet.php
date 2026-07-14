@@ -22,7 +22,7 @@ if ($flash) {
     unset($_SESSION['picklist_flash']);
 }
 ?>
-<div class="max-w-3xl mx-auto px-4 sm:px-6 py-6 pb-24">
+<div class="w-full px-2 py-4 sm:px-3 pb-24">
 <?php
 $mode = 'tablet';
 include __DIR__ . '/partials/detail_hero.php';

@@ -22,7 +22,7 @@ if ($flash) {
     unset($_SESSION['picklist_flash']);
 }
 ?>
-<div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+<div class="w-full px-2 py-4 sm:px-3">
 <?php
 $mode = 'desktop';
 include __DIR__ . '/partials/detail_hero.php';
@@ -36,7 +36,7 @@ include __DIR__ . '/partials/detail_hero.php';
 
 <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
     <?php if ($items !== []): ?>
-        <div class="px-5 py-3.5 border-b border-gray-100 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
+        <div class="px-3 py-3 border-b border-gray-100 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
             <p class="text-sm text-gray-600">
                 <span class="font-semibold text-gray-900 tabular-nums"><?= (int) $total ?></span> item<?= (int) $total === 1 ? '' : 's' ?>
                 <span class="text-gray-400 mx-1">·</span>
@@ -62,7 +62,7 @@ include __DIR__ . '/partials/detail_hero.php';
             </div>
         </div>
     <?php else: ?>
-        <div class="px-5 py-3.5 border-b border-gray-100">
+        <div class="px-3 py-3 border-b border-gray-100">
             <p class="text-sm text-gray-600"><span class="font-semibold text-gray-900">0</span> items</p>
         </div>
     <?php endif; ?>
@@ -71,21 +71,21 @@ include __DIR__ . '/partials/detail_hero.php';
         <table class="min-w-full text-left text-sm">
             <thead>
                 <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
-                    <th class="px-5 py-3.5 w-10"></th>
-                    <th class="px-5 py-3.5 whitespace-nowrap">#</th>
-                    <th class="px-5 py-3.5 whitespace-nowrap">Location</th>
-                    <th class="px-5 py-3.5 whitespace-nowrap">Order #</th>
-                    <th class="px-5 py-3.5 whitespace-nowrap">SKU</th>
-                    <th class="px-5 py-3.5 min-w-[10rem]">Item Title</th>
-                    <th class="px-5 py-3.5 whitespace-nowrap">Image</th>
-                    <th class="px-5 py-3.5 whitespace-nowrap">Phys Qty</th>
-                    <th class="px-5 py-3.5 whitespace-nowrap">Order Qty</th>
+                    <th class="px-3 py-3 w-10"></th>
+                    <th class="px-3 py-3 whitespace-nowrap">#</th>
+                    <th class="px-3 py-3 whitespace-nowrap">Location</th>
+                    <th class="px-3 py-3 whitespace-nowrap">Order #</th>
+                    <th class="px-3 py-3 whitespace-nowrap">SKU</th>
+                    <th class="px-3 py-3 min-w-[12rem]">Item Title</th>
+                    <th class="px-3 py-3 whitespace-nowrap">Image</th>
+                    <th class="px-3 py-3 whitespace-nowrap">Phys Qty</th>
+                    <th class="px-3 py-3 whitespace-nowrap">Order Qty</th>
                     <?php if ($showBookColumns): ?>
-                        <th class="px-5 py-3.5 whitespace-nowrap">Publisher</th>
-                        <th class="px-5 py-3.5 whitespace-nowrap">Cover</th>
+                        <th class="px-3 py-3 whitespace-nowrap">Publisher</th>
+                        <th class="px-3 py-3 whitespace-nowrap">Cover</th>
                     <?php endif; ?>
-                    <th class="px-5 py-3.5 whitespace-nowrap">Status</th>
-                    <th class="px-5 py-3.5 whitespace-nowrap text-center min-w-[9rem]">Actions</th>
+                    <th class="px-3 py-3 whitespace-nowrap">Status</th>
+                    <th class="px-3 py-3 whitespace-nowrap text-center min-w-[9rem]">Actions</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
@@ -97,21 +97,21 @@ include __DIR__ . '/partials/detail_hero.php';
                     $itemStatusClass = $itemStatusStyles[$isPicked ? 'picked' : 'pending'];
                     ?>
                     <tr class="hover:bg-amber-50/40 transition-colors <?= $isPicked ? 'bg-emerald-50/25' : '' ?>">
-                        <td class="px-5 py-4 align-middle">
+                        <td class="px-3 py-3 align-middle">
                             <input type="checkbox"
                                    class="picklist-item-cb rounded border-gray-300 text-amber-600 focus:ring-amber-500"
                                    value="<?= (int) ($item['id'] ?? 0) ?>"
                                    data-status="<?= $isPicked ? 'picked' : 'pending' ?>"
                                    aria-label="Select item">
                         </td>
-                        <td class="px-5 py-4 align-middle tabular-nums text-gray-500"><?= $idx + 1 ?></td>
-                        <td class="px-5 py-4 align-middle font-semibold text-amber-800 whitespace-nowrap"><?= htmlspecialchars((string) ($item['warehouse_location'] ?: '—')) ?></td>
-                        <td class="px-5 py-4 align-middle whitespace-nowrap font-mono text-xs text-gray-800"><?= htmlspecialchars((string) ($item['order_number'] ?? '')) ?></td>
-                        <td class="px-5 py-4 align-middle whitespace-nowrap text-gray-700"><?= htmlspecialchars(picklist_item_sku($item) ?: '—') ?></td>
-                        <td class="px-5 py-4 align-middle max-w-xs">
+                        <td class="px-3 py-3 align-middle tabular-nums text-gray-500"><?= $idx + 1 ?></td>
+                        <td class="px-3 py-3 align-middle font-semibold text-amber-800 whitespace-nowrap"><?= htmlspecialchars((string) ($item['warehouse_location'] ?: '—')) ?></td>
+                        <td class="px-3 py-3 align-middle whitespace-nowrap font-mono text-xs text-gray-800"><?= htmlspecialchars((string) ($item['order_number'] ?? '')) ?></td>
+                        <td class="px-3 py-3 align-middle whitespace-nowrap text-gray-700"><?= htmlspecialchars(picklist_item_sku($item) ?: '—') ?></td>
+                        <td class="px-3 py-3 align-middle">
                             <span class="line-clamp-2 text-gray-900"><?= htmlspecialchars((string) ($item['title'] ?? '')) ?></span>
                         </td>
-                        <td class="px-5 py-4 align-middle">
+                        <td class="px-3 py-3 align-middle">
                             <?php if ($imageUrl !== ''): ?>
                                 <button type="button"
                                         class="js-picklist-expand-image block p-0 border-0 bg-transparent cursor-zoom-in rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
@@ -124,13 +124,13 @@ include __DIR__ . '/partials/detail_hero.php';
                                 <span class="inline-flex h-14 w-14 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-xs text-gray-400">—</span>
                             <?php endif; ?>
                         </td>
-                        <td class="px-5 py-4 align-middle font-semibold tabular-nums"><?= (int) ($item['physical_qty'] ?? 0) ?></td>
-                        <td class="px-5 py-4 align-middle font-semibold tabular-nums"><?= (int) ($item['quantity'] ?? 1) ?></td>
+                        <td class="px-3 py-3 align-middle font-semibold tabular-nums"><?= (int) ($item['physical_qty'] ?? 0) ?></td>
+                        <td class="px-3 py-3 align-middle font-semibold tabular-nums"><?= (int) ($item['quantity'] ?? 1) ?></td>
                         <?php if ($showBookColumns): ?>
-                            <td class="px-5 py-4 align-middle text-gray-700"><?= $isBook ? htmlspecialchars((string) ($item['publisher'] ?? '—')) : '—' ?></td>
-                            <td class="px-5 py-4 align-middle text-gray-700"><?= $isBook ? htmlspecialchars((string) ($item['cover_type'] ?? '—')) : '—' ?></td>
+                            <td class="px-3 py-3 align-middle text-gray-700"><?= $isBook ? htmlspecialchars((string) ($item['publisher'] ?? '—')) : '—' ?></td>
+                            <td class="px-3 py-3 align-middle text-gray-700"><?= $isBook ? htmlspecialchars((string) ($item['cover_type'] ?? '—')) : '—' ?></td>
                         <?php endif; ?>
-                        <td class="px-5 py-4 align-middle whitespace-nowrap">
+                        <td class="px-3 py-3 align-middle whitespace-nowrap">
                             <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border <?= $itemStatusClass ?>">
                                 <?= $isPicked ? 'Picked' : 'Pending' ?>
                             </span>
@@ -138,7 +138,7 @@ include __DIR__ . '/partials/detail_hero.php';
                                 <div class="text-[11px] text-gray-500 mt-1 tabular-nums"><?= date('d M, H:i', strtotime($item['picked_at'])) ?></div>
                             <?php endif; ?>
                         </td>
-                        <td class="px-5 py-4 align-middle">
+                        <td class="px-3 py-3 align-middle">
                             <div class="flex flex-wrap items-center justify-center gap-1.5">
                                 <?php if ($isPicked): ?>
                                     <button type="button"
@@ -162,7 +162,7 @@ include __DIR__ . '/partials/detail_hero.php';
                 <?php endforeach; ?>
                 <?php if ($items === []): ?>
                     <tr>
-                        <td colspan="<?= $showBookColumns ? 13 : 11 ?>" class="px-5 py-16 text-center">
+                        <td colspan="<?= $showBookColumns ? 13 : 11 ?>" class="px-3 py-16 text-center">
                             <div class="mx-auto flex max-w-sm flex-col items-center">
                                 <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
                                     <i class="fas fa-box-open" aria-hidden="true"></i>
