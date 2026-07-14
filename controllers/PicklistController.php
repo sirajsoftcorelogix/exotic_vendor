@@ -103,8 +103,16 @@ class PicklistController
         $pickerId = (int) ($_POST['picker_id'] ?? 0);
         $notes = trim((string) ($_POST['notes'] ?? ''));
         $createdBy = (int) ($_SESSION['user']['id'] ?? 0);
+        $picklistMode = trim((string) ($_POST['picklist_mode'] ?? 'new'));
+        $existingPicklistId = (int) ($_POST['existing_picklist_id'] ?? 0);
+        $picklistName = trim((string) ($_POST['picklist_name'] ?? ''));
 
-        $result = $picklistModel->createFromOrders($orderIds, $pickerId, $createdBy, $notes);
+        if ($picklistMode === 'existing') {
+            $result = $picklistModel->addOrdersToExistingPicklist($existingPicklistId, $orderIds, $pickerId > 0 ? $pickerId : null);
+        } else {
+            $result = $picklistModel->createFromOrders($orderIds, $pickerId, $createdBy, $notes, $picklistName !== '' ? $picklistName : null);
+        }
+
         if (empty($result['success'])) {
             echo json_encode($result);
             exit;
@@ -115,7 +123,8 @@ class PicklistController
             $this->syncOrderStatusBulk($addedOrderIds, 'added_to_picklist', $ordersModel, $commanModel);
         }
 
-        $msg = 'Picklist ' . ($result['picklist_number'] ?? '') . ' created with ' . (int) ($result['added'] ?? 0) . ' item(s).';
+        $actionLabel = $picklistMode === 'existing' ? 'added to' : 'created with';
+        $msg = 'Picklist ' . ($result['picklist_number'] ?? '') . ' ' . $actionLabel . ' ' . (int) ($result['added'] ?? 0) . ' item(s).';
         if (!empty($result['skipped'])) {
             $msg .= ' ' . count($result['skipped']) . ' order(s) skipped.';
         }
@@ -308,6 +317,20 @@ class PicklistController
             $pickers[] = ['id' => (int) $id, 'name' => (string) $name];
         }
         echo json_encode(['success' => true, 'pickers' => $pickers]);
+        exit;
+    }
+
+    public function getOpenPicklists()
+    {
+        is_login();
+        global $picklistModel;
+
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => true,
+            'picklists' => $picklistModel->getOpenPicklistsForSelect(),
+            'suggested_number' => $picklistModel->generatePicklistNumber(),
+        ]);
         exit;
     }
 

@@ -66,15 +66,250 @@ class Picklist
 
     /**
      * @param int[] $orderIds
-     * @return array{success: bool, message?: string, picklist_id?: int, picklist_number?: string, added?: int, skipped?: array}
+     * @return array{success: bool, message?: string, picklist_id?: int, picklist_number?: string, added?: int, skipped?: array, order_ids?: int[]}
      */
-    public function createFromOrders(array $orderIds, int $pickerId, int $createdBy, string $notes = ''): array
+    public function createFromOrders(array $orderIds, int $pickerId, int $createdBy, string $notes = '', ?string $picklistName = null): array
     {
         $orderIds = array_values(array_unique(array_filter(array_map('intval', $orderIds))));
         if ($orderIds === []) {
             return ['success' => false, 'message' => 'No orders selected.'];
         }
 
+        $prepared = $this->prepareOrdersForPicklist($orderIds);
+        $itemsToAdd = $prepared['items'];
+        $skipped = $prepared['skipped'];
+
+        if ($itemsToAdd === []) {
+            return [
+                'success' => false,
+                'message' => 'No eligible orders to add.',
+                'skipped' => $skipped,
+            ];
+        }
+
+        $mixError = $this->validateNoMixedBookPicklist($itemsToAdd);
+        if ($mixError !== null) {
+            $mixError['skipped'] = $skipped;
+            return $mixError;
+        }
+
+        usort($itemsToAdd, [$this, 'comparePicklistItemLocations']);
+
+        $numberResult = $this->resolvePicklistNumber($picklistName);
+        if (empty($numberResult['success'])) {
+            $numberResult['skipped'] = $skipped;
+            return $numberResult;
+        }
+        $picklistNumber = (string) $numberResult['picklist_number'];
+
+        $this->db->begin_transaction();
+        try {
+            $status = 'pending';
+            $warehouseId = 0;
+            if ($pickerId < 0) {
+                $pickerId = 0;
+            }
+
+            $sql = "INSERT INTO vp_picklists
+                    (picklist_number, picker_id, warehouse_id, status, notes, created_by)
+                    VALUES (?, ?, ?, ?, ?, ?)";
+            $stmt = $this->db->prepare($sql);
+            if (!$stmt) {
+                throw new RuntimeException('Prepare failed: ' . $this->db->error);
+            }
+            $stmt->bind_param('siissi', $picklistNumber, $pickerId, $warehouseId, $status, $notes, $createdBy);
+            if (!$stmt->execute()) {
+                throw new RuntimeException('Insert picklist failed: ' . $stmt->error);
+            }
+            $picklistId = (int) $this->db->insert_id;
+            $stmt->close();
+
+            $this->insertPicklistItems($picklistId, $itemsToAdd, 0);
+
+            $this->db->commit();
+
+            return [
+                'success' => true,
+                'message' => 'Picklist created successfully.',
+                'picklist_id' => $picklistId,
+                'picklist_number' => $picklistNumber,
+                'added' => count($itemsToAdd),
+                'order_ids' => array_column($itemsToAdd, 'order_id'),
+                'skipped' => $skipped,
+            ];
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            return ['success' => false, 'message' => $e->getMessage(), 'skipped' => $skipped];
+        }
+    }
+
+    /**
+     * @param int[] $orderIds
+     * @return array{success: bool, message?: string, picklist_id?: int, picklist_number?: string, added?: int, skipped?: array, order_ids?: int[]}
+     */
+    public function addOrdersToExistingPicklist(int $picklistId, array $orderIds, ?int $pickerId = null): array
+    {
+        $picklistId = (int) $picklistId;
+        if ($picklistId <= 0) {
+            return ['success' => false, 'message' => 'Please select a picklist.'];
+        }
+
+        $picklist = $this->getPicklistById($picklistId);
+        if (!$picklist) {
+            return ['success' => false, 'message' => 'Picklist not found.'];
+        }
+
+        $picklistStatus = (string) ($picklist['status'] ?? '');
+        if (!in_array($picklistStatus, ['pending', 'in_progress'], true)) {
+            return ['success' => false, 'message' => 'Only pending or in-progress picklists can receive new items.'];
+        }
+
+        $orderIds = array_values(array_unique(array_filter(array_map('intval', $orderIds))));
+        if ($orderIds === []) {
+            return ['success' => false, 'message' => 'No orders selected.'];
+        }
+
+        $prepared = $this->prepareOrdersForPicklist($orderIds);
+        $itemsToAdd = $prepared['items'];
+        $skipped = $prepared['skipped'];
+
+        if ($itemsToAdd === []) {
+            return [
+                'success' => false,
+                'message' => 'No eligible orders to add.',
+                'skipped' => $skipped,
+            ];
+        }
+
+        $existingItems = $this->getPicklistItems($picklistId);
+        $mixError = $this->validateBookMixWithExisting($itemsToAdd, $existingItems);
+        if ($mixError !== null) {
+            $mixError['skipped'] = $skipped;
+            return $mixError;
+        }
+
+        usort($itemsToAdd, [$this, 'comparePicklistItemLocations']);
+
+        $maxSort = 0;
+        foreach ($existingItems as $existing) {
+            $maxSort = max($maxSort, (int) ($existing['sort_order'] ?? 0));
+        }
+
+        $this->db->begin_transaction();
+        try {
+            $this->insertPicklistItems($picklistId, $itemsToAdd, $maxSort);
+
+            if ($pickerId !== null && $pickerId > 0 && (int) ($picklist['picker_id'] ?? 0) === 0) {
+                $upd = $this->db->prepare('UPDATE vp_picklists SET picker_id = ? WHERE id = ?');
+                $upd->bind_param('ii', $pickerId, $picklistId);
+                $upd->execute();
+                $upd->close();
+            }
+
+            $this->recalculatePicklistStatus($picklistId);
+
+            $this->db->commit();
+
+            return [
+                'success' => true,
+                'message' => 'Orders added to picklist successfully.',
+                'picklist_id' => $picklistId,
+                'picklist_number' => (string) ($picklist['picklist_number'] ?? ''),
+                'added' => count($itemsToAdd),
+                'order_ids' => array_column($itemsToAdd, 'order_id'),
+                'skipped' => $skipped,
+            ];
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            return ['success' => false, 'message' => $e->getMessage(), 'skipped' => $skipped];
+        }
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getOpenPicklistsForSelect(): array
+    {
+        $sql = "SELECT pl.id, pl.picklist_number, pl.status, pl.picker_id,
+                       pu.name AS picker_name,
+                       (SELECT COUNT(*) FROM vp_picklist_items i WHERE i.picklist_id = pl.id) AS item_count,
+                       (SELECT COUNT(*) FROM vp_picklist_items i WHERE i.picklist_id = pl.id AND i.status = 'picked') AS picked_count,
+                       (SELECT MAX(i.is_book) FROM vp_picklist_items i WHERE i.picklist_id = pl.id) AS has_book,
+                       (SELECT MIN(i.is_book) FROM vp_picklist_items i WHERE i.picklist_id = pl.id) AS has_non_book
+                FROM vp_picklists pl
+                LEFT JOIN vp_users pu ON pu.id = pl.picker_id
+                WHERE pl.status IN ('pending', 'in_progress')
+                ORDER BY pl.created_at DESC
+                LIMIT 200";
+        $res = $this->db->query($sql);
+        $rows = [];
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $itemCount = (int) ($row['item_count'] ?? 0);
+                $contentType = 'empty';
+                if ($itemCount > 0) {
+                    $hasBook = (int) ($row['has_book'] ?? 0) === 1;
+                    $hasNonBook = (int) ($row['has_non_book'] ?? 0) === 0;
+                    $contentType = ($hasBook && !$hasNonBook) ? 'book' : 'non_book';
+                }
+                $rows[] = [
+                    'id' => (int) ($row['id'] ?? 0),
+                    'picklist_number' => (string) ($row['picklist_number'] ?? ''),
+                    'status' => (string) ($row['status'] ?? ''),
+                    'picker_name' => (string) ($row['picker_name'] ?? ''),
+                    'item_count' => $itemCount,
+                    'picked_count' => (int) ($row['picked_count'] ?? 0),
+                    'content_type' => $contentType,
+                ];
+            }
+        }
+        return $rows;
+    }
+
+    /**
+     * @return array{success: bool, message?: string, picklist_number?: string}
+     */
+    private function resolvePicklistNumber(?string $picklistName): array
+    {
+        $custom = trim((string) $picklistName);
+        if ($custom === '') {
+            return [
+                'success' => true,
+                'picklist_number' => $this->generatePicklistNumber(),
+            ];
+        }
+
+        if (strlen($custom) > 50) {
+            return ['success' => false, 'message' => 'Picklist name must be 50 characters or fewer.'];
+        }
+
+        if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9\s._\-\/]*$/', $custom)) {
+            return ['success' => false, 'message' => 'Picklist name contains invalid characters. Use letters, numbers, spaces, dashes, dots, slashes, or underscores.'];
+        }
+
+        if ($this->picklistNumberExists($custom)) {
+            return ['success' => false, 'message' => 'Picklist name "' . $custom . '" is already in use. Choose a different name.'];
+        }
+
+        return ['success' => true, 'picklist_number' => $custom];
+    }
+
+    private function picklistNumberExists(string $number): bool
+    {
+        $stmt = $this->db->prepare('SELECT id FROM vp_picklists WHERE picklist_number = ? LIMIT 1');
+        $stmt->bind_param('s', $number);
+        $stmt->execute();
+        $exists = (bool) $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $exists;
+    }
+
+    /**
+     * @param int[] $orderIds
+     * @return array{items: array<int, array<string, mixed>>, skipped: array<int, array<string, mixed>>}
+     */
+    private function prepareOrdersForPicklist(array $orderIds): array
+    {
         require_once __DIR__ . '/../order/order.php';
         require_once __DIR__ . '/../product/product.php';
         $orderModel = new Order($this->db);
@@ -121,127 +356,97 @@ class Picklist
                 $qty = 1;
             }
 
-            $snapshot = $this->buildPicklistItemSnapshot($order, $product, $location, $qty);
-            $itemsToAdd[] = $snapshot;
+            $itemsToAdd[] = $this->buildPicklistItemSnapshot($order, $product, $location, $qty);
         }
 
+        return ['items' => $itemsToAdd, 'skipped' => $skipped];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $itemsToAdd
+     */
+    private function insertPicklistItems(int $picklistId, array $itemsToAdd, int $startSortOrder = 0): void
+    {
         if ($itemsToAdd === []) {
-            return [
-                'success' => false,
-                'message' => 'No eligible orders to add.',
-                'skipped' => $skipped,
-            ];
+            return;
         }
 
-        $mixError = $this->validateNoMixedBookPicklist($itemsToAdd);
-        if ($mixError !== null) {
-            $mixError['skipped'] = $skipped;
-            return $mixError;
+        $itemSql = $this->picklistItemHasDetailColumns()
+            ? "INSERT INTO vp_picklist_items
+                (picklist_id, order_id, order_number, item_code, sku, size, color, title, image,
+                 publisher, cover_type, physical_qty, is_book,
+                 warehouse_location, quantity, status, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)"
+            : "INSERT INTO vp_picklist_items
+                (picklist_id, order_id, order_number, item_code, sku, size, color, title, image,
+                 warehouse_location, quantity, status, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)";
+        $itemStmt = $this->db->prepare($itemSql);
+        if (!$itemStmt) {
+            throw new RuntimeException('Prepare items failed: ' . $this->db->error);
         }
 
-        usort($itemsToAdd, [$this, 'comparePicklistItemLocations']);
-
-        $this->db->begin_transaction();
-        try {
-            $picklistNumber = $this->generatePicklistNumber();
-            $status = 'pending';
-            $warehouseId = 0;
-            if ($pickerId < 0) {
-                $pickerId = 0;
+        $sortOrder = $startSortOrder;
+        foreach ($itemsToAdd as $item) {
+            $sortOrder++;
+            if ($this->picklistItemHasDetailColumns()) {
+                $isBook = (int) ($item['is_book'] ?? 0);
+                $physicalQty = (int) ($item['physical_qty'] ?? 0);
+                $itemStmt->bind_param(
+                    'iissssssssssiisii',
+                    $picklistId,
+                    $item['order_id'],
+                    $item['order_number'],
+                    $item['item_code'],
+                    $item['sku'],
+                    $item['size'],
+                    $item['color'],
+                    $item['title'],
+                    $item['image'],
+                    $item['publisher'],
+                    $item['cover_type'],
+                    $physicalQty,
+                    $isBook,
+                    $item['warehouse_location'],
+                    $item['quantity'],
+                    $sortOrder
+                );
+            } else {
+                $itemStmt->bind_param(
+                    'iissssssssii',
+                    $picklistId,
+                    $item['order_id'],
+                    $item['order_number'],
+                    $item['item_code'],
+                    $item['sku'],
+                    $item['size'],
+                    $item['color'],
+                    $item['title'],
+                    $item['image'],
+                    $item['warehouse_location'],
+                    $item['quantity'],
+                    $sortOrder
+                );
             }
-
-            $sql = "INSERT INTO vp_picklists
-                    (picklist_number, picker_id, warehouse_id, status, notes, created_by)
-                    VALUES (?, ?, ?, ?, ?, ?)";
-            $stmt = $this->db->prepare($sql);
-            if (!$stmt) {
-                throw new RuntimeException('Prepare failed: ' . $this->db->error);
+            if (!$itemStmt->execute()) {
+                throw new RuntimeException('Insert item failed: ' . $itemStmt->error);
             }
-            $stmt->bind_param('siissi', $picklistNumber, $pickerId, $warehouseId, $status, $notes, $createdBy);
-            if (!$stmt->execute()) {
-                throw new RuntimeException('Insert picklist failed: ' . $stmt->error);
-            }
-            $picklistId = (int) $this->db->insert_id;
-            $stmt->close();
-
-            $itemSql = $this->picklistItemHasDetailColumns()
-                ? "INSERT INTO vp_picklist_items
-                    (picklist_id, order_id, order_number, item_code, sku, size, color, title, image,
-                     publisher, cover_type, physical_qty, is_book,
-                     warehouse_location, quantity, status, sort_order)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)"
-                : "INSERT INTO vp_picklist_items
-                    (picklist_id, order_id, order_number, item_code, sku, size, color, title, image,
-                     warehouse_location, quantity, status, sort_order)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)";
-            $itemStmt = $this->db->prepare($itemSql);
-            if (!$itemStmt) {
-                throw new RuntimeException('Prepare items failed: ' . $this->db->error);
-            }
-
-            $sortOrder = 0;
-            foreach ($itemsToAdd as $item) {
-                $sortOrder++;
-                if ($this->picklistItemHasDetailColumns()) {
-                    $isBook = (int) ($item['is_book'] ?? 0);
-                    $physicalQty = (int) ($item['physical_qty'] ?? 0);
-                    $itemStmt->bind_param(
-                        'iissssssssssiisii',
-                        $picklistId,
-                        $item['order_id'],
-                        $item['order_number'],
-                        $item['item_code'],
-                        $item['sku'],
-                        $item['size'],
-                        $item['color'],
-                        $item['title'],
-                        $item['image'],
-                        $item['publisher'],
-                        $item['cover_type'],
-                        $physicalQty,
-                        $isBook,
-                        $item['warehouse_location'],
-                        $item['quantity'],
-                        $sortOrder
-                    );
-                } else {
-                    $itemStmt->bind_param(
-                        'iissssssssii',
-                        $picklistId,
-                        $item['order_id'],
-                        $item['order_number'],
-                        $item['item_code'],
-                        $item['sku'],
-                        $item['size'],
-                        $item['color'],
-                        $item['title'],
-                        $item['image'],
-                        $item['warehouse_location'],
-                        $item['quantity'],
-                        $sortOrder
-                    );
-                }
-                if (!$itemStmt->execute()) {
-                    throw new RuntimeException('Insert item failed: ' . $itemStmt->error);
-                }
-            }
-            $itemStmt->close();
-
-            $this->db->commit();
-
-            return [
-                'success' => true,
-                'message' => 'Picklist created successfully.',
-                'picklist_id' => $picklistId,
-                'picklist_number' => $picklistNumber,
-                'added' => count($itemsToAdd),
-                'order_ids' => array_column($itemsToAdd, 'order_id'),
-                'skipped' => $skipped,
-            ];
-        } catch (Throwable $e) {
-            $this->db->rollback();
-            return ['success' => false, 'message' => $e->getMessage(), 'skipped' => $skipped];
         }
+        $itemStmt->close();
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $newItems
+     * @param array<int, array<string, mixed>> $existingItems
+     * @return array{success: false, message: string}|null
+     */
+    private function validateBookMixWithExisting(array $newItems, array $existingItems): ?array
+    {
+        $combined = $existingItems;
+        foreach ($newItems as $item) {
+            $combined[] = $item;
+        }
+        return $this->validateNoMixedBookPicklist($combined);
     }
 
     public function searchPicklists(array $filters, int $pageNo = 1, int $limit = 20): array

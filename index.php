@@ -1796,6 +1796,9 @@ switch ($page) {
             case 'get_pickers':
                 $controller->getPickers();
                 break;
+            case 'get_open_picklists':
+                $controller->getOpenPicklists();
+                break;
             case 'delete':
                 $controller->delete();
                 break;
