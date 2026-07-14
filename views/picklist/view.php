@@ -34,14 +34,6 @@ $pct = $total > 0 ? round(($picked / $total) * 100) : 0;
             <a href="?page=picklist&action=view&id=<?= $plId ?>&print=1" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-700 text-white text-sm font-semibold hover:bg-gray-800 shadow-sm">
                 <i class="fas fa-print" aria-hidden="true"></i> Print
             </a>
-            <?php
-            $deleteConfirm = 'Delete picklist ' . (string) ($picklist['picklist_number'] ?? '') . '? Orders on this list will be set back to Item Received where applicable.';
-            ?>
-            <a href="?page=picklist&action=delete&id=<?= $plId ?>"
-               class="js-picklist-confirm-action inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm font-semibold hover:bg-red-100 shadow-sm"
-               data-confirm="<?= htmlspecialchars($deleteConfirm, ENT_QUOTES, 'UTF-8') ?>">
-                <i class="fas fa-trash-alt" aria-hidden="true"></i> Delete
-            </a>
         </div>
     </div>
 
