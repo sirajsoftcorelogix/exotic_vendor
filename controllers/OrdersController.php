@@ -2366,5 +2366,29 @@ class OrdersController
             );
         }
     }
+
+    public function searchFilterVendors()
+    {
+        is_login();
+        global $conn;
+        require_once 'helpers/order_filter_autocomplete.php';
+        orderFilterAutocompleteJson($conn, 'vendor', (string) ($_GET['q'] ?? $_GET['query'] ?? ''));
+    }
+
+    public function searchFilterAuthors()
+    {
+        is_login();
+        global $conn;
+        require_once 'helpers/order_filter_autocomplete.php';
+        orderFilterAutocompleteJson($conn, 'author', (string) ($_GET['q'] ?? $_GET['query'] ?? ''));
+    }
+
+    public function searchFilterPublishers()
+    {
+        is_login();
+        global $conn;
+        require_once 'helpers/order_filter_autocomplete.php';
+        orderFilterAutocompleteJson($conn, 'publisher', (string) ($_GET['q'] ?? $_GET['query'] ?? ''));
+    }
     
 }

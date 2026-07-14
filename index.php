@@ -330,6 +330,15 @@ switch ($page) {
                 $apiController = new OrdersAPIController($conn);
                 $apiController->generateToken();
                 break;
+            case 'search_filter_vendors':
+                $controller->searchFilterVendors();
+                break;
+            case 'search_filter_authors':
+                $controller->searchFilterAuthors();
+                break;
+            case 'search_filter_publishers':
+                $controller->searchFilterPublishers();
+                break;
             default:
                 $controller->index();
                 break;
