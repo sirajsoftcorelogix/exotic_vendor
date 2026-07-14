@@ -5,6 +5,7 @@ require_once 'models/searches/saved_search.php';
 require_once 'models/order/po_invoice.php';
 require_once 'models/product/product.php';
 require_once 'models/picklist/Picklist.php';
+require_once 'helpers/payment_type_groups.php';
 $ordersModel = new Order($conn);
 $commanModel = new Tables($conn);
 $savedSearchModel = new SavedSearch($conn);
@@ -192,23 +193,27 @@ class OrdersController
             $orders[$key]['on_picklist'] = $plItem !== null && (int) ($plItem['item_id'] ?? 0) > 0;
         }
 
+        $paymentTypes = $ordersModel->getPaymentTypes();
+
         // Render the orders view
-        renderTemplate('views/orders/index.php', [
-            'orders' => $orders,
-            'total_orders' => $total_orders,
-            'total_pages' => $total_pages,
-            'current_page' => $page,
-            'order_status_list' => $order_status_row,
-            'status_list' => $statusList,
-            'country_list' => $countryList,
-            'payment_types' => $ordersModel->getPaymentTypes(),
-            'staff_list' => $commanModel->get_staff_list(),
-            'picker_list' => $commanModel->get_picker_list(),
-            'open_picklists' => $picklistModel->getOpenPicklistsForSelect(),
-            'suggested_picklist_number' => $picklistModel->generatePicklistNumber(),
-            'filters' => $filters,
-            'saved_searches' => $saved_searches
-        ], 'Manage Orders');
+        renderTemplate('views/orders/index.php', array_merge(
+            [
+                'orders' => $orders,
+                'total_orders' => $total_orders,
+                'total_pages' => $total_pages,
+                'current_page' => $page,
+                'order_status_list' => $order_status_row,
+                'status_list' => $statusList,
+                'country_list' => $countryList,
+                'staff_list' => $commanModel->get_staff_list(),
+                'picker_list' => $commanModel->get_picker_list(),
+                'open_picklists' => $picklistModel->getOpenPicklistsForSelect(),
+                'suggested_picklist_number' => $picklistModel->generatePicklistNumber(),
+                'filters' => $filters,
+                'saved_searches' => $saved_searches,
+            ],
+            preparePaymentTypeFilterData($paymentTypes, $_GET['payment_type'] ?? null)
+        ), 'Manage Orders');
     }
 
     public function viewOrder()
