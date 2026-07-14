@@ -3209,15 +3209,18 @@
         return true;
     }
 
-    function openBulkAddToPicklistPopup(oids) {
-        if (oids.length === 0) {
-            showAlert('Please select at least one order to add to picklist.', 'warning');
-            return;
-        }
-        if (!validatePicklistSelectionMix(oids)) {
-            showAlert('Cannot mix book and non-book items in one picklist. Select only books or only non-book items.', 'error');
-            return;
-        }
+    function checkOrdersEligibleForPicklist(orderIds) {
+        const body = orderIds.map(function(id) {
+            return 'order_ids[]=' + encodeURIComponent(id);
+        }).join('&');
+        return fetch('index.php?page=picklist&action=check_orders_on_picklist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body
+        }).then(function(r) { return r.json(); });
+    }
+
+    function openBulkAddToPicklistPopupInternal(oids) {
         renderBulkPicklistSelectedItems(oids);
         document.getElementById('bulkAddToPicklistError').classList.add('hidden');
         document.getElementById('bulkAddToPicklistModeNew').checked = true;
@@ -3227,6 +3230,39 @@
         updateBulkPicklistModeUi();
         Promise.all([loadPicklistPickers(), loadOpenPicklists()]).finally(function() {
             document.getElementById('bulkAddToPicklistPopup').classList.remove('hidden');
+        });
+    }
+
+    function openBulkAddToPicklistPopup(oids) {
+        if (oids.length === 0) {
+            showAlert('Please select at least one order to add to picklist.', 'warning');
+            return;
+        }
+        if (!validatePicklistSelectionMix(oids)) {
+            showAlert('Cannot mix book and non-book items in one picklist. Select only books or only non-book items.', 'error');
+            return;
+        }
+        checkOrdersEligibleForPicklist(oids).then(function(data) {
+            if (!data || !data.success) {
+                showAlert((data && data.message) ? data.message : 'Could not verify picklist eligibility.', 'error');
+                return;
+            }
+            const blocked = Array.isArray(data.blocked) ? data.blocked : [];
+            if (blocked.length > 0) {
+                const msg = data.message || blocked.map(function(b) { return b.message; }).join(' ');
+                showAlert(msg, 'error');
+            }
+            const allowed = (Array.isArray(data.allowed_order_ids) ? data.allowed_order_ids : []).map(String);
+            if (allowed.length === 0) {
+                return;
+            }
+            if (!validatePicklistSelectionMix(allowed)) {
+                showAlert('Cannot mix book and non-book items in one picklist. Select only books or only non-book items.', 'error');
+                return;
+            }
+            openBulkAddToPicklistPopupInternal(allowed);
+        }).catch(function() {
+            showAlert('Could not verify picklist eligibility.', 'error');
         });
     }
 
@@ -3288,27 +3324,47 @@
                 return;
             }
         }
-        document.getElementById('bulkAddToPicklistError').textContent = 'Processing...';
-        document.getElementById('bulkAddToPicklistError').classList.remove('hidden', 'text-green-500');
-        document.getElementById('bulkAddToPicklistError').classList.add('text-red-500');
-        const formData = new FormData(this);
-        formData.delete('order_ids[]');
-        orderIds.forEach(function(orderId) {
-            formData.append('order_ids[]', orderId);
-        });
-        if (!isExisting) {
-            formData.delete('existing_picklist_id');
-        } else {
-            formData.delete('picklist_name');
-            formData.delete('notes');
-            formData.delete('picker_id');
-        }
-        fetch('index.php?page=picklist&action=bulk_add_from_orders', {
-            method: 'POST',
-            body: formData
+        checkOrdersEligibleForPicklist(orderIds).then(function(checkData) {
+            if (!checkData || !checkData.success) {
+                document.getElementById('bulkAddToPicklistError').textContent = (checkData && checkData.message) ? checkData.message : 'Could not verify picklist eligibility.';
+                document.getElementById('bulkAddToPicklistError').classList.remove('hidden', 'text-green-500');
+                document.getElementById('bulkAddToPicklistError').classList.add('text-red-500');
+                return;
+            }
+            const blocked = Array.isArray(checkData.blocked) ? checkData.blocked : [];
+            if (blocked.length > 0) {
+                const msg = checkData.message || blocked.map(function(b) { return b.message; }).join(' ');
+                document.getElementById('bulkAddToPicklistError').textContent = msg;
+                document.getElementById('bulkAddToPicklistError').classList.remove('hidden', 'text-green-500');
+                document.getElementById('bulkAddToPicklistError').classList.add('text-red-500');
+                return;
+            }
+            const formData = new FormData(document.getElementById('bulkAddToPicklistForm'));
+            formData.delete('order_ids[]');
+            orderIds.forEach(function(orderId) {
+                formData.append('order_ids[]', orderId);
+            });
+            if (!isExisting) {
+                formData.delete('existing_picklist_id');
+            } else {
+                formData.delete('picklist_name');
+                formData.delete('notes');
+                formData.delete('picker_id');
+            }
+            document.getElementById('bulkAddToPicklistError').textContent = 'Processing...';
+            document.getElementById('bulkAddToPicklistError').classList.remove('hidden', 'text-green-500');
+            document.getElementById('bulkAddToPicklistError').classList.add('text-red-500');
+            return fetch('index.php?page=picklist&action=bulk_add_from_orders', {
+                method: 'POST',
+                body: formData
+            });
         })
-        .then(response => response.json())
+        .then(function(response) {
+            if (!response) return null;
+            return response.json();
+        })
         .then(data => {
+            if (!data) return;
             const msgEl = document.getElementById('bulkAddToPicklistError');
             if (data.success) {
                 msgEl.classList.remove('text-red-500');
