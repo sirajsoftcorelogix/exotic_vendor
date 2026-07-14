@@ -24,6 +24,17 @@
         }).length;
     }
 
+    function updateRowSelectionState() {
+        document.querySelectorAll('.picklist-select-row').forEach(function(row) {
+            var cb = row.querySelector('.picklist-item-cb');
+            if (cb && cb.checked) {
+                row.classList.add('ring-2', 'ring-inset', 'ring-amber-400', 'bg-amber-50/60');
+            } else {
+                row.classList.remove('ring-2', 'ring-inset', 'ring-amber-400', 'bg-amber-50/60');
+            }
+        });
+    }
+
     function updateBulkBar() {
         var selected = selectedCheckboxes().length;
         var pendingCount = countByStatus('pending');
@@ -37,7 +48,25 @@
             selectAll.checked = selected > 0 && selected === checkboxes.length;
             selectAll.indeterminate = selected > 0 && selected < checkboxes.length;
         }
+        updateRowSelectionState();
     }
+
+    function isRowClickIgnored(target) {
+        return !!target.closest('.picklist-row-actions')
+            || !!target.closest('.js-picklist-expand-image')
+            || !!target.closest('a')
+            || !!target.closest('button');
+    }
+
+    document.querySelectorAll('.picklist-select-row').forEach(function(row) {
+        row.addEventListener('click', function(e) {
+            if (isRowClickIgnored(e.target)) return;
+            var cb = row.querySelector('.picklist-item-cb');
+            if (!cb) return;
+            cb.checked = !cb.checked;
+            updateBulkBar();
+        });
+    });
 
     if (selectAll) {
         selectAll.addEventListener('change', function() {
