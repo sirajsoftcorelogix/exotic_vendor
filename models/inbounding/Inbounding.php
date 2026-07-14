@@ -888,10 +888,22 @@ class Inbounding {
 
         return '';
     }
+    /** @return list<array{key:string,label:string}> */
+    public static function inboundBookCreatorRoleFields(): array
+    {
+        return [
+            ['key' => 'edited_by', 'label' => 'Edited by'],
+            ['key' => 'compiled_by', 'label' => 'Compiled by'],
+            ['key' => 'translated_by', 'label' => 'Translated by'],
+            ['key' => 'commentary_by', 'label' => 'Commentary by'],
+        ];
+    }
+
     public function getform2data($id) {
         $id = (int)$id;
         $this->ensureInboundAccountsGroupColumn();
         $this->ensureInboundBookLanguageColumns();
+        $this->ensureInboundBookCreatorRoleColumns();
         $this->ensureInboundLongDescriptionColumn();
         $this->ensureInboundLongDescriptionIndiaColumn();
 
@@ -1076,6 +1088,7 @@ class Inbounding {
         $this->ensureInboundRedirectColumn();
         $this->ensureInboundAccountsGroupColumn();
         $this->ensureInboundBookLanguageColumns();
+        $this->ensureInboundBookCreatorRoleColumns();
         $this->ensureInboundLongDescriptionColumn();
         $this->ensureInboundLongDescriptionIndiaColumn();
 
@@ -1161,6 +1174,22 @@ class Inbounding {
         $res = $this->conn->query("SHOW COLUMNS FROM vp_inbound LIKE 'long_description_india'");
         if ($res && $res->num_rows === 0) {
             @$this->conn->query("ALTER TABLE vp_inbound ADD COLUMN long_description_india TEXT NULL DEFAULT NULL AFTER long_description");
+        }
+    }
+
+    private function ensureInboundBookCreatorRoleColumns(): void
+    {
+        $columns = [
+            'compiled_by' => "VARCHAR(255) NULL DEFAULT NULL COMMENT 'field for books' AFTER edited_by",
+            'translated_by' => "VARCHAR(255) NULL DEFAULT NULL COMMENT 'field for books' AFTER compiled_by",
+            'commentary_by' => "VARCHAR(255) NULL DEFAULT NULL COMMENT 'field for books' AFTER translated_by",
+        ];
+
+        foreach ($columns as $column => $definition) {
+            $res = $this->conn->query("SHOW COLUMNS FROM vp_inbound LIKE '" . $this->conn->real_escape_string($column) . "'");
+            if ($res && $res->num_rows === 0) {
+                @$this->conn->query("ALTER TABLE vp_inbound ADD COLUMN $column $definition");
+            }
         }
     }
 
@@ -1498,7 +1527,7 @@ class Inbounding {
         $row = null;
         if ($size !== '' || $color !== '') {
             $row = $fetchRow(
-                "SELECT author, edited_by, publisher, isbn, cover_type, edition, publication_date, language, pages
+                "SELECT author, edited_by, compiled_by, translated_by, commentary_by, publisher, isbn, cover_type, edition, publication_date, language, pages
                  FROM vp_inbound
                  WHERE Item_code = ? AND TRIM(COALESCE(size, '')) = ? AND TRIM(COALESCE(color, '')) = ?
                  ORDER BY id DESC LIMIT 1",
@@ -1508,7 +1537,7 @@ class Inbounding {
         }
         if (!$row) {
             $row = $fetchRow(
-                "SELECT author, edited_by, publisher, isbn, cover_type, edition, publication_date, language, pages
+                "SELECT author, edited_by, compiled_by, translated_by, commentary_by, publisher, isbn, cover_type, edition, publication_date, language, pages
                  FROM vp_inbound WHERE Item_code = ? ORDER BY id DESC LIMIT 1",
                 's',
                 [$itemCode]
@@ -1537,6 +1566,9 @@ class Inbounding {
         return [
             'authors' => $this->resolveInboundAuthorNameList($row['author'] ?? ''),
             'edited_by_names' => $this->resolveInboundAuthorNameList($row['edited_by'] ?? ''),
+            'compiled_by_names' => $this->resolveInboundAuthorNameList($row['compiled_by'] ?? ''),
+            'translated_by_names' => $this->resolveInboundAuthorNameList($row['translated_by'] ?? ''),
+            'commentary_by_names' => $this->resolveInboundAuthorNameList($row['commentary_by'] ?? ''),
             'publisher' => $pubName,
             'isbn' => trim((string) ($row['isbn'] ?? '')),
             'cover_type' => trim((string) ($row['cover_type'] ?? '')),
@@ -1665,56 +1697,88 @@ class Inbounding {
     }
 
     /**
-     * Book publish API creator: "12,45, Edited by | 67,89" (author ids + edited-by ids).
+     * Book publish API creator: "12,45, Edited by | 67,89, Compiled by | 10" (author ids + role ids).
+     *
+     * @param array<string, string>|string $roleStored edited_by value, or map of role key => stored ids
      */
-    public function buildBookCreatorApiValue($authorStored, $editedByStored): string
+    public function buildBookCreatorApiValue($authorStored, $roleStored = ''): string
     {
+        $roles = is_array($roleStored)
+            ? $roleStored
+            : ['edited_by' => (string) $roleStored];
+
+        $parts = [];
         $authorPart = implode(',', $this->parseInboundAuthorIds($authorStored));
-        $editedPart = implode(',', $this->parseInboundAuthorIds($editedByStored));
-
-        if ($authorPart === '' && $editedPart === '') {
-            return '';
-        }
-        if ($editedPart === '') {
-            return $authorPart;
-        }
-        if ($authorPart === '') {
-            return 'Edited by | ' . $editedPart;
+        if ($authorPart !== '') {
+            $parts[] = $authorPart;
         }
 
-        return $authorPart . ', Edited by | ' . $editedPart;
+        foreach (self::inboundBookCreatorRoleFields() as $roleDef) {
+            $roleKey = $roleDef['key'];
+            $roleLabel = $roleDef['label'];
+            $roleIds = implode(',', $this->parseInboundAuthorIds($roles[$roleKey] ?? ''));
+            if ($roleIds !== '') {
+                $parts[] = $roleLabel . ' | ' . $roleIds;
+            }
+        }
+
+        return implode(', ', $parts);
     }
 
     /**
      * Reverse of buildBookCreatorApiValue — parse vendor API `creator` string.
      *
-     * @return array{author:string,edited_by:string}
+     * @return array{author:string,edited_by:string,compiled_by:string,translated_by:string,commentary_by:string}
      */
     public function parseBookCreatorApiValue(string $creator): array
     {
+        $result = [
+            'author' => '',
+            'edited_by' => '',
+            'compiled_by' => '',
+            'translated_by' => '',
+            'commentary_by' => '',
+        ];
         $creator = trim($creator);
         if ($creator === '') {
-            return ['author' => '', 'edited_by' => ''];
+            return $result;
         }
 
-        if (preg_match('/^Edited by\s*\|\s*(.+)$/i', $creator, $m)) {
-            return [
-                'author' => '',
-                'edited_by' => implode(',', $this->parseInboundAuthorIds($m[1])),
-            ];
+        $matches = [];
+        foreach (self::inboundBookCreatorRoleFields() as $roleDef) {
+            $label = preg_quote($roleDef['label'], '/');
+            if (preg_match('/(?:^|,\s*)' . $label . '\s*\|/i', $creator, $m, PREG_OFFSET_CAPTURE)) {
+                $matches[] = [
+                    'key' => $roleDef['key'],
+                    'pos' => $m[0][1],
+                    'len' => strlen($m[0][0]),
+                ];
+            }
         }
 
-        if (preg_match('/^(.+?),\s*Edited by\s*\|\s*(.+)$/i', $creator, $m)) {
-            return [
-                'author' => implode(',', $this->parseInboundAuthorIds($m[1])),
-                'edited_by' => implode(',', $this->parseInboundAuthorIds($m[2])),
-            ];
+        if ($matches === []) {
+            $result['author'] = implode(',', $this->parseInboundAuthorIds($creator));
+            return $result;
         }
 
-        return [
-            'author' => implode(',', $this->parseInboundAuthorIds($creator)),
-            'edited_by' => '',
-        ];
+        usort($matches, static function (array $a, array $b): int {
+            return $a['pos'] <=> $b['pos'];
+        });
+
+        $authorSegment = trim(substr($creator, 0, $matches[0]['pos']), ", \t");
+        if ($authorSegment !== '') {
+            $result['author'] = implode(',', $this->parseInboundAuthorIds($authorSegment));
+        }
+
+        $matchCount = count($matches);
+        for ($i = 0; $i < $matchCount; $i++) {
+            $start = $matches[$i]['pos'] + $matches[$i]['len'];
+            $end = ($i + 1 < $matchCount) ? $matches[$i + 1]['pos'] : strlen($creator);
+            $idsSegment = trim(substr($creator, $start, $end - $start), ", \t");
+            $result[$matches[$i]['key']] = implode(',', $this->parseInboundAuthorIds($idsSegment));
+        }
+
+        return $result;
     }
 
     public function searchAuthors($query) {
@@ -1831,6 +1895,9 @@ class Inbounding {
         $received_by_user_id = (int) ($data['received_by_user_id'] ?? 0);
         $author = $this->normalizeInboundAuthorValue($data['author'] ?? '');
         $edited_by = $this->normalizeInboundAuthorValue($data['edited_by'] ?? '');
+        $compiled_by = $this->normalizeInboundAuthorValue($data['compiled_by'] ?? '');
+        $translated_by = $this->normalizeInboundAuthorValue($data['translated_by'] ?? '');
+        $commentary_by = $this->normalizeInboundAuthorValue($data['commentary_by'] ?? '');
         $publisher = (int) ($data['publisher'] ?? 0);
         $isbn = trim($data['isbn'] ?? '');
         $language = trim($data['language'] ?? '');
@@ -1852,7 +1919,7 @@ class Inbounding {
               height = ?, width = ?, depth = ?, weight = ?,
               color = ?, size = ?, cp = ?, quantity_received = ?,
               received_by_user_id = ?, product_photo = ?,
-              store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?, author = ?, edited_by = ?, publisher = ?, isbn = ?, cover_type = ?, edition = ?, publication_date = ?, language = ?, pages = ?, modified_at = NOW()
+              store_location = ?, price_india = ?, price_india_mrp = ?, colormaps = ?, author = ?, edited_by = ?, compiled_by = ?, translated_by = ?, commentary_by = ?, publisher = ?, isbn = ?, cover_type = ?, edition = ?, publication_date = ?, language = ?, pages = ?, modified_at = NOW()
             WHERE id = ?";
 
         $stmt = $this->conn->prepare($sql);
@@ -1860,7 +1927,7 @@ class Inbounding {
           return ['success' => false, 'message' => $this->conn->error];
         }
 
-        $types = "sisssssisddddssdiissddsssissssssi";
+        $types = "sisssssisddddssdiissddssssssissssssi";
 
         $stmt->bind_param(
             $types,
@@ -1889,14 +1956,17 @@ class Inbounding {
             $colormaps,           // 20
             $author,              // 21
             $edited_by,           // 22
-            $publisher,           // 23
-            $isbn,                // 24
-            $cover_type,          // 25
-            $edition,             // 26
-            $publication_date,    // 27
-            $language,            // 28
-            $pages,               // 29
-            $id                   // 30
+            $compiled_by,         // 23
+            $translated_by,       // 24
+            $commentary_by,       // 25
+            $publisher,           // 26
+            $isbn,                // 27
+            $cover_type,          // 28
+            $edition,             // 29
+            $publication_date,    // 30
+            $language,            // 31
+            $pages,               // 32
+            $id                   // 33
         );
 
         if ($stmt->execute()) {

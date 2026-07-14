@@ -1644,6 +1644,9 @@ class InboundingController {
             // Book fields (saved when Group is Book)
             'author'    => $inboundingModel->normalizeInboundAuthorValue($_POST['author'] ?? ''),
             'edited_by' => $inboundingModel->normalizeInboundAuthorValue($_POST['edited_by'] ?? ''),
+            'compiled_by' => $inboundingModel->normalizeInboundAuthorValue($_POST['compiled_by'] ?? ''),
+            'translated_by' => $inboundingModel->normalizeInboundAuthorValue($_POST['translated_by'] ?? ''),
+            'commentary_by' => $inboundingModel->normalizeInboundAuthorValue($_POST['commentary_by'] ?? ''),
             'publisher'=> trim((string)($_POST['publisher'] ?? '')) === '' ? null : (int) $_POST['publisher'],
             'isbn'     => $_POST['isbn'] ?? '',
             'pages'    => trim((string)($_POST['pages'] ?? '')) === '' ? null : trim((string)($_POST['pages'] ?? '')),
@@ -1933,6 +1936,9 @@ class InboundingController {
           'dimensions'   => $mainVariant['dimensions'] ?? 0,
           'author'      => $inboundingModel->normalizeInboundAuthorValue($_POST['author'] ?? ''),
           'edited_by'   => $inboundingModel->normalizeInboundAuthorValue($_POST['edited_by'] ?? ''),
+          'compiled_by' => $inboundingModel->normalizeInboundAuthorValue($_POST['compiled_by'] ?? ''),
+          'translated_by' => $inboundingModel->normalizeInboundAuthorValue($_POST['translated_by'] ?? ''),
+          'commentary_by' => $inboundingModel->normalizeInboundAuthorValue($_POST['commentary_by'] ?? ''),
           'publisher'   => $_POST['publisher'] ?? '',
           'isbn'        => $_POST['isbn'] ?? '',
           'language'    => $_POST['language'] ?? '',
@@ -2396,7 +2402,12 @@ class InboundingController {
         if ($d['groupname'] == 'book') {
             $creatorApiValue = $inboundingModel->buildBookCreatorApiValue(
                 $d['author'] ?? '',
-                $d['edited_by'] ?? ''
+                [
+                    'edited_by' => $d['edited_by'] ?? '',
+                    'compiled_by' => $d['compiled_by'] ?? '',
+                    'translated_by' => $d['translated_by'] ?? '',
+                    'commentary_by' => $d['commentary_by'] ?? '',
+                ]
             );
             if ($creatorApiValue !== '') {
                 $API_data['creator'] = $creatorApiValue;

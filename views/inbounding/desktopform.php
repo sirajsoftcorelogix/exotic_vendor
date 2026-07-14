@@ -299,6 +299,33 @@ $edited_by_prefill_ids = array_map(static function ($opt) {
 }, $selected_edited_by_options);
 $edited_by_stored_value = (string) ($data['form2']['edited_by'] ?? '');
 
+$book_creator_role_prefill = [];
+if (isset($inboundingModel) && method_exists($inboundingModel, 'inboundBookCreatorRoleFields')) {
+    foreach ($inboundingModel->inboundBookCreatorRoleFields() as $roleDef) {
+        $roleKey = $roleDef['key'];
+        if ($roleKey === 'edited_by') {
+            continue;
+        }
+        $roleOptions = [];
+        if (!empty($data['form2'][$roleKey]) && method_exists($inboundingModel, 'parseInboundAuthorIds')) {
+            foreach ($inboundingModel->parseInboundAuthorIds($data['form2'][$roleKey]) as $roleAuthorId) {
+                $roleAuthorRow = $inboundingModel->getAuthorById($roleAuthorId);
+                if (!empty($roleAuthorRow['id'])) {
+                    $roleOptions[] = $roleAuthorRow;
+                }
+            }
+        }
+        $book_creator_role_prefill[$roleKey] = [
+            'label' => $roleDef['label'],
+            'options' => $roleOptions,
+            'ids' => array_map(static function ($opt) {
+                return (string) ($opt['id'] ?? '');
+            }, $roleOptions),
+            'stored_value' => (string) ($data['form2'][$roleKey] ?? ''),
+        ];
+    }
+}
+
 if (!empty($selected_publisher_id) && isset($inboundingModel) && method_exists($inboundingModel, 'getPublisherById')) {
     $publisherRow = $inboundingModel->getPublisherById((int)$selected_publisher_id);
     $selected_publisher_name = $publisherRow['publishers'] ?? $publisherRow['publisher_name'] ?? $publisherRow['name'] ?? '';
@@ -949,6 +976,17 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                     <?php endforeach; ?>
                                 </select>
                             </div>
+                            <?php foreach ($book_creator_role_prefill as $roleKey => $rolePrefill): ?>
+                            <div>
+                                <label class="block text-xs font-bold text-[#555] mb-1"><?php echo htmlspecialchars($rolePrefill['label']); ?></label>
+                                <input type="hidden" name="<?php echo htmlspecialchars($roleKey); ?>" id="<?php echo htmlspecialchars($roleKey); ?>_pipe_value" value="<?php echo htmlspecialchars($rolePrefill['stored_value'], ENT_QUOTES, 'UTF-8'); ?>">
+                                <select id="<?php echo htmlspecialchars($roleKey); ?>_select" multiple autocomplete="off">
+                                    <?php foreach ($rolePrefill['options'] as $roleOpt): ?>
+                                        <option value="<?php echo htmlspecialchars((string) $roleOpt['id']); ?>" selected><?php echo htmlspecialchars($roleOpt['name'] ?? ''); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <?php endforeach; ?>
                             <div>
                                 <div class="flex items-center gap-1.5 mb-1">
                                     <label class="text-xs font-bold text-[#555]">Publisher</label>
@@ -2607,26 +2645,31 @@ document.addEventListener('DOMContentLoaded', function() {
             editedByPipeInput.value = vals.filter(Boolean).join(',');
         }
 
-        let editedByTomSelect = null;
-        if (editedByEl && typeof window.safeTomSelect === 'function') {
-            editedByEl.setAttribute('multiple', 'multiple');
-            editedByTomSelect = window.safeTomSelect(editedByEl, {
+        function initInboundCreatorTomSelect(config) {
+            const hiddenInput = document.getElementById(config.hiddenId);
+            const selectEl = document.getElementById(config.selectId);
+            if (!selectEl || typeof window.safeTomSelect !== 'function') {
+                return null;
+            }
+
+            selectEl.setAttribute('multiple', 'multiple');
+            const ts = window.safeTomSelect(selectEl, {
                 plugins: ['remove_button'],
                 valueField: 'id',
                 labelField: 'name',
                 searchField: ['name'],
-                placeholder: 'Search and select editors...',
+                placeholder: config.placeholder || 'Search and select authors...',
                 maxItems: 100,
                 hideSelected: true,
                 closeAfterSelect: false,
                 create: false,
                 persist: true,
-                onChange: function () { syncEditedByPipeValue(this); },
+                onChange: function () { config.sync(this); },
                 onItemAdd: function () {
                     this.setTextboxValue('');
-                    syncEditedByPipeValue(this);
+                    config.sync(this);
                 },
-                onItemRemove: function () { syncEditedByPipeValue(this); },
+                onItemRemove: function () { config.sync(this); },
                 load: function (query, callback) {
                     if (!query || query.length < 2) return callback();
                     fetch(searchAuthorsUrl + encodeURIComponent(query), { credentials: 'include' })
@@ -2635,16 +2678,59 @@ document.addEventListener('DOMContentLoaded', function() {
                         .catch(function () { callback(); });
                 }
             });
-            if (editedByTomSelect) {
-                mapAuthorOptions(initialEditedByOptions).forEach(function (opt) {
-                    editedByTomSelect.addOption(opt);
+
+            if (ts) {
+                mapAuthorOptions(config.initialOptions || []).forEach(function (opt) {
+                    ts.addOption(opt);
                 });
-                if (initialEditedByIds.length) {
-                    editedByTomSelect.setValue(initialEditedByIds);
+                if ((config.initialIds || []).length) {
+                    ts.setValue(config.initialIds);
                 }
-                syncEditedByPipeValue(editedByTomSelect);
+                config.sync(ts);
             }
+
+            return ts;
         }
+
+        let editedByTomSelect = null;
+        if (editedByEl) {
+            editedByTomSelect = initInboundCreatorTomSelect({
+                hiddenId: 'edited_by_pipe_value',
+                selectId: 'edited_by_select',
+                initialOptions: initialEditedByOptions,
+                initialIds: initialEditedByIds,
+                sync: syncEditedByPipeValue
+            });
+        }
+
+        const bookCreatorRoleTomSelects = {};
+        const bookCreatorRoleFieldKeys = <?php echo json_encode(array_keys($book_creator_role_prefill), JSON_UNESCAPED_UNICODE); ?>;
+        const bookCreatorRolePrefill = <?php echo json_encode($book_creator_role_prefill, JSON_UNESCAPED_UNICODE); ?>;
+
+        bookCreatorRoleFieldKeys.forEach(function (roleKey) {
+            const rolePrefill = bookCreatorRolePrefill[roleKey] || {};
+            const hiddenId = roleKey + '_pipe_value';
+            const selectId = roleKey + '_select';
+
+            function syncRolePipeValue(ts) {
+                const hiddenInput = document.getElementById(hiddenId);
+                if (!hiddenInput || !ts) return;
+                let vals = ts.getValue();
+                if (!Array.isArray(vals)) vals = vals ? [String(vals)] : [];
+                hiddenInput.value = vals.filter(Boolean).join(',');
+            }
+
+            const roleTomSelect = initInboundCreatorTomSelect({
+                hiddenId: hiddenId,
+                selectId: selectId,
+                initialOptions: rolePrefill.options || [],
+                initialIds: rolePrefill.ids || [],
+                sync: syncRolePipeValue
+            });
+            if (roleTomSelect) {
+                bookCreatorRoleTomSelects[roleKey] = roleTomSelect;
+            }
+        });
 
         const bookLanguageFieldKeys = <?php echo json_encode(BookLanguageFormatter::orderedRoleKeys(), JSON_UNESCAPED_UNICODE); ?>;
         const bookLanguageNameMap = <?php echo json_encode($book_language_name_map, JSON_UNESCAPED_UNICODE); ?>;
@@ -2720,6 +2806,15 @@ document.addEventListener('DOMContentLoaded', function() {
             CKEDITOR?.instances?.long_description_india_input?.updateElement();
             if (authorTomSelect) syncAuthorPipeValue(authorTomSelect);
             if (editedByTomSelect) syncEditedByPipeValue(editedByTomSelect);
+            bookCreatorRoleFieldKeys.forEach(function (roleKey) {
+                const roleTomSelect = bookCreatorRoleTomSelects[roleKey];
+                if (!roleTomSelect) return;
+                const hiddenInput = document.getElementById(roleKey + '_pipe_value');
+                if (!hiddenInput) return;
+                let vals = roleTomSelect.getValue();
+                if (!Array.isArray(vals)) vals = vals ? [String(vals)] : [];
+                hiddenInput.value = vals.filter(Boolean).join(',');
+            });
             bookLanguageFieldKeys.forEach(function (fieldKey) {
                 const ts = bookLanguageTomSelects[fieldKey];
                 if (ts) syncBookLanguageHiddenValue(ts, fieldKey);
