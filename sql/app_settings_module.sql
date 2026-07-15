@@ -1,16 +1,13 @@
 -- =============================================================================
 -- App Settings Module — single install / migration script
 -- =============================================================================
--- Two-table design:
+-- Tables:
 --   app_settings        — id, setting_key, setting_value, updated_by, updated_at
 --   settings_audit_log  — id, setting_key, old_value, new_value, changed_by, changed_at
 --
--- UI metadata (label, group, input type) lives in config/app_settings_registry.php
+-- Field metadata (label, input type, sort) lives in config/app_settings_registry.php
 --
--- Safe to re-run: creates tables if missing, migrates legacy data without
--- overwriting existing app_settings values, then drops old tables.
---
--- Verify after run:
+-- Safe to re-run. Verify after run:
 --   SELECT setting_key, setting_value FROM app_settings ORDER BY setting_key;
 -- =============================================================================
 
@@ -304,3 +301,4 @@ RENAME TABLE firm_details TO firm_details_backup;
 DROP TABLE IF EXISTS global_settings;
 DROP TABLE IF EXISTS firm_details;
 DROP TABLE IF EXISTS app_settings_legacy_backup;
+DROP TABLE IF EXISTS app_setting_groups;

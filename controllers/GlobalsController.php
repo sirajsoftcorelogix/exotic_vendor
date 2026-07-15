@@ -11,15 +11,10 @@ class GlobalsController
         is_login();
         global $appSettingsModel;
 
-        $groups = $appSettingsModel->getAllGrouped();
-        $auditRows = $appSettingsModel->getRecentAudit(15);
-        $tableReady = $appSettingsModel->tableExists('app_settings');
-
         renderTemplate('views/globals/settings.php', [
-            'groups' => $groups,
-            'audit_rows' => $auditRows,
-            'table_ready' => $tableReady,
-            'active_group' => isset($_GET['group']) ? trim((string) $_GET['group']) : '',
+            'settings' => $appSettingsModel->getAllSettings(),
+            'audit_rows' => $appSettingsModel->getRecentAudit(15),
+            'table_ready' => $appSettingsModel->tableExists('app_settings'),
         ], 'Global Settings');
     }
 
@@ -45,15 +40,13 @@ class GlobalsController
         }
 
         $result = $appSettingsModel->updateSettings($submitted, $userId);
-        $group = isset($_POST['group']) ? trim((string) $_POST['group']) : '';
-        $groupQuery = $group !== '' ? '&group=' . urlencode($group) : '';
 
         if ($result['success']) {
-            header('Location: ' . base_url('?page=globals&action=settings&status=success' . $groupQuery));
+            header('Location: ' . base_url('?page=globals&action=settings&status=success'));
             exit;
         }
 
-        header('Location: ' . base_url('?page=globals&action=settings&status=error&message=' . urlencode($result['message']) . $groupQuery));
+        header('Location: ' . base_url('?page=globals&action=settings&status=error&message=' . urlencode($result['message'])));
         exit;
     }
 }

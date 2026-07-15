@@ -2,10 +2,12 @@
 
 /**
  * Developer-defined app settings metadata.
- * DB table app_settings stores only: setting_key, setting_value, updated_by, updated_at.
+ * DB tables:
+ *   app_settings       — setting_key, setting_value
+ *   settings_audit_log — change history
  *
  * To add a setting:
- * 1. Add an entry here (label, group, input, type, etc.)
+ * 1. Add an entry here (label, input, type, sort, etc.)
  * 2. INSERT the row into app_settings (setting_key, setting_value)
  */
 return [

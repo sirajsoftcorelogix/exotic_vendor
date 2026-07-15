@@ -4,14 +4,6 @@ class AppSettings
 {
     private $conn;
 
-    private const GROUP_LABELS = [
-        'company' => 'Company',
-        'invoice' => 'Invoice & Billing',
-        'compliance' => 'Compliance',
-        'dispatch' => 'Dispatch',
-        'general' => 'General',
-    ];
-
     private ?array $registry = null;
 
     public function __construct($db)
@@ -66,12 +58,7 @@ class AppSettings
         return $exists;
     }
 
-    public function getGroupLabel(string $groupKey): string
-    {
-        return self::GROUP_LABELS[$groupKey] ?? ucfirst(str_replace('_', ' ', $groupKey));
-    }
-
-    public function getAllGrouped(): array
+    public function getAllSettings(): array
     {
         if (!$this->tableExists('app_settings')) {
             return [];
@@ -86,39 +73,34 @@ class AppSettings
         }
 
         $registry = $this->getRegistry();
-        $grouped = [];
+        $settings = [];
 
         while ($row = $result->fetch_assoc()) {
             $key = $row['setting_key'];
             $meta = $registry[$key] ?? null;
-            if ($meta === null) {
+            if ($meta === null || empty($meta['active'])) {
                 continue;
             }
 
-            $groupKey = $meta['group'] ?? 'general';
-            if (!isset($grouped[$groupKey])) {
-                $grouped[$groupKey] = [
-                    'group_key' => $groupKey,
-                    'group_label' => $this->getGroupLabel($groupKey),
-                    'settings' => [],
-                ];
+            $settings[] = $this->mergeSettingRow($row, $meta);
+        }
+
+        usort($settings, static function (array $a, array $b): int {
+            $sort = ($a['sort_order'] ?? 0) <=> ($b['sort_order'] ?? 0);
+            if ($sort !== 0) {
+                return $sort;
             }
 
-            $grouped[$groupKey]['settings'][] = $this->mergeSettingRow($row, $meta);
-        }
-
-        foreach ($grouped as &$group) {
-            usort($group['settings'], static function (array $a, array $b): int {
-                return ($a['sort_order'] ?? 0) <=> ($b['sort_order'] ?? 0);
-            });
-        }
-        unset($group);
-
-        uasort($grouped, static function (array $a, array $b): int {
-            return strcmp($a['group_key'], $b['group_key']);
+            return strcmp($a['setting_key'], $b['setting_key']);
         });
 
-        return array_values($grouped);
+        return $settings;
+    }
+
+    /** @deprecated Use getAllSettings() */
+    public function getAllGrouped(): array
+    {
+        return $this->getAllSettings();
     }
 
     public function getByKeys(array $keys): array
@@ -394,7 +376,6 @@ class AppSettings
             'updated_at' => $row['updated_at'] ?? null,
             'label' => $meta['label'] ?? $row['setting_key'],
             'description' => $meta['description'] ?? '',
-            'group_key' => $meta['group'] ?? 'general',
             'input_type' => $meta['input'] ?? 'text',
             'value_type' => $meta['type'] ?? 'string',
             'is_editable' => !empty($meta['editable']) ? 1 : 0,
