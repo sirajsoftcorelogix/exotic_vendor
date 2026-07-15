@@ -906,11 +906,8 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
         }
 
         function validateForm3InvoiceDetails() {
-            let valid = true;
             const vendorErrorEl = document.getElementById('form3-vendor-error');
             const invoiceNoErrorEl = document.getElementById('form3-invoice-no-error');
-            const invoiceNoInput = document.getElementById('form3_invoice_no');
-
             if (vendorErrorEl) {
                 vendorErrorEl.textContent = '';
                 vendorErrorEl.classList.add('hidden');
@@ -919,33 +916,7 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
                 invoiceNoErrorEl.textContent = '';
                 invoiceNoErrorEl.classList.add('hidden');
             }
-
-            const vendorVal = String(getForm3VendorValue()).trim();
-            if (!vendorVal) {
-                if (vendorErrorEl) {
-                    vendorErrorEl.textContent = 'Vendor is required.';
-                    vendorErrorEl.classList.remove('hidden');
-                }
-                valid = false;
-            }
-
-            const invoiceNoVal = invoiceNoInput ? String(invoiceNoInput.value || '').trim() : '';
-            if (!invoiceNoVal) {
-                if (invoiceNoErrorEl) {
-                    invoiceNoErrorEl.textContent = 'Invoice number is required.';
-                    invoiceNoErrorEl.classList.remove('hidden');
-                }
-                valid = false;
-            }
-
-            if (!valid) {
-                const section = document.getElementById('form3-invoice-details-section');
-                if (section) {
-                    section.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            }
-
-            return valid;
+            return true;
         }
 
         const form3InvoiceInput = document.getElementById('form3_invoice_input');
