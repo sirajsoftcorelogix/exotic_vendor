@@ -21,4 +21,14 @@ return [
         'active' => true,
         'sort' => 10,
     ],
+    'stock_replenishment_book_price_cutoff' => [
+        'label' => 'Book price cutoff for replenishment',
+        'description' => 'Minimum book selling price (₹) included in stock replenishment calculations. Books below this price are excluded. Use 0 for no cutoff.',
+        'input' => 'number',
+        'type' => 'int',
+        'default' => 0,
+        'editable' => true,
+        'active' => true,
+        'sort' => 20,
+    ],
 ];

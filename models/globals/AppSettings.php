@@ -64,24 +64,30 @@ class AppSettings
             return [];
         }
 
+        $registry = $this->getRegistry();
+        $dbRows = [];
+
         $sql = 'SELECT id, setting_key, setting_value, updated_by, updated_at
                 FROM app_settings
                 ORDER BY setting_key ASC';
         $result = $this->conn->query($sql);
-        if (!$result) {
-            return [];
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $dbRows[$row['setting_key']] = $row;
+            }
         }
 
-        $registry = $this->getRegistry();
         $settings = [];
 
-        while ($row = $result->fetch_assoc()) {
-            $key = $row['setting_key'];
-            $meta = $registry[$key] ?? null;
-            if ($meta === null || empty($meta['active'])) {
+        foreach ($registry as $key => $meta) {
+            if (empty($meta['active'])) {
                 continue;
             }
 
+            $row = $dbRows[$key] ?? [
+                'setting_key' => $key,
+                'setting_value' => $this->serializeValue($meta['default'] ?? '', $meta['type'] ?? 'string'),
+            ];
             $settings[] = $this->mergeSettingRow($row, $meta);
         }
 
@@ -123,16 +129,25 @@ class AppSettings
         $stmt->execute();
         $result = $stmt->get_result();
 
-        $rows = [];
+        $dbRows = [];
         while ($row = $result->fetch_assoc()) {
-            $key = $row['setting_key'];
-            $meta = $this->getRegistryEntry($key);
-            if ($meta === null) {
-                continue;
-            }
-            $rows[$key] = $this->mergeSettingRow($row, $meta);
+            $dbRows[$row['setting_key']] = $row;
         }
         $stmt->close();
+
+        $rows = [];
+        foreach ($keys as $key) {
+            $meta = $this->getRegistryEntry($key);
+            if ($meta === null || empty($meta['active'])) {
+                continue;
+            }
+
+            $row = $dbRows[$key] ?? [
+                'setting_key' => $key,
+                'setting_value' => $this->serializeValue($meta['default'] ?? '', $meta['type'] ?? 'string'),
+            ];
+            $rows[$key] = $this->mergeSettingRow($row, $meta);
+        }
 
         return $rows;
     }
