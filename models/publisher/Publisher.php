@@ -4,9 +4,98 @@ class Publisher
 {
     private mysqli $conn;
 
+    private const LIST_COLUMNS = 'id, publishers_id, publishers, contact_name, publisher_email, country_code, publisher_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_days, is_active, create_at, update_at';
+
     public function __construct(mysqli $conn)
     {
         $this->conn = $conn;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function normalizePublisherFormData(array $data): array
+    {
+        return [
+            'contact_name' => trim((string)($data['contact_name'] ?? '')),
+            'publisher_email' => trim((string)($data['publisher_email'] ?? '')),
+            'country_code' => trim((string)($data['country_code'] ?? '')),
+            'publisher_phone' => trim((string)($data['publisher_phone'] ?? '')),
+            'alt_phone' => trim((string)($data['alt_phone'] ?? '')),
+            'gst_number' => trim((string)($data['gst_number'] ?? '')),
+            'pan_number' => trim((string)($data['pan_number'] ?? '')),
+            'address' => trim((string)($data['address'] ?? '')),
+            'city' => trim((string)($data['city'] ?? '')),
+            'state' => trim((string)($data['state'] ?? '')),
+            'country' => trim((string)($data['country'] ?? '')),
+            'postal_code' => trim((string)($data['postal_code'] ?? '')),
+            'webpage' => (string)($data['webpage'] ?? '0') === '1' ? '1' : '0',
+            'stock_replenishment_days' => trim((string)($data['stock_replenishment_days'] ?? '')) === ''
+                ? 0
+                : max(0, (int)$data['stock_replenishment_days']),
+        ];
+    }
+
+    private function publisherFieldExists(string $column, string $value, ?int $excludeId = null): bool
+    {
+        $allowed = ['publisher_phone', 'publisher_email', 'gst_number', 'pan_number'];
+        if (!in_array($column, $allowed, true)) {
+            return false;
+        }
+
+        $value = trim($value);
+        if ($value === '') {
+            return false;
+        }
+
+        if ($column === 'publisher_email') {
+            $sql = "SELECT id FROM vp_publishers WHERE LOWER(TRIM(publisher_email)) = LOWER(TRIM(?)) AND TRIM(COALESCE(publisher_email, '')) <> ''";
+        } else {
+            $sql = 'SELECT id FROM vp_publishers WHERE ' . $column . ' = ?';
+        }
+
+        if ($excludeId !== null && $excludeId > 0) {
+            $sql .= ' AND id != ? LIMIT 1';
+            $stmt = $this->conn->prepare($sql);
+            $stmt->bind_param('si', $value, $excludeId);
+        } else {
+            $sql .= ' LIMIT 1';
+            $stmt = $this->conn->prepare($sql);
+            $stmt->bind_param('s', $value);
+        }
+
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->execute();
+        $stmt->store_result();
+        $exists = $stmt->num_rows > 0;
+        $stmt->close();
+
+        return $exists;
+    }
+
+    private function validatePublisherUniqueness(
+        ?string $phone,
+        ?string $email,
+        ?string $gst,
+        ?string $pan,
+        ?int $excludeId = null
+    ): ?array {
+        if ($phone !== null && trim($phone) !== '' && $this->publisherFieldExists('publisher_phone', trim($phone), $excludeId)) {
+            return ['success' => false, 'message' => 'Phone number already exists. Please use a different phone number.'];
+        }
+        if ($email !== null && trim($email) !== '' && $this->publisherFieldExists('publisher_email', trim($email), $excludeId)) {
+            return ['success' => false, 'message' => 'Email already exists. Please use a different email.'];
+        }
+        if ($gst !== null && trim($gst) !== '' && $this->publisherFieldExists('gst_number', trim($gst), $excludeId)) {
+            return ['success' => false, 'message' => 'GST number already exists. Please use a different GST number.'];
+        }
+        if ($pan !== null && trim($pan) !== '' && $this->publisherFieldExists('pan_number', trim($pan), $excludeId)) {
+            return ['success' => false, 'message' => 'PAN number already exists. Please use a different PAN number.'];
+        }
+
+        return null;
     }
 
     public function getPublishers(int $page = 1, int $limit = 20, string $search = '', string $status = ''): array
@@ -20,11 +109,15 @@ class Publisher
         $params = [];
 
         if ($search !== '') {
-            $where[] = '(publishers LIKE ? OR publishers_id = ? OR id = ?)';
-            $types .= 'sii';
+            $where[] = '(publishers LIKE ? OR publishers_id = ? OR id = ? OR city LIKE ? OR state LIKE ? OR contact_name LIKE ? OR publisher_phone LIKE ?)';
+            $types .= 'siissss';
             $params[] = '%' . $search . '%';
             $params[] = (int)$search;
             $params[] = (int)$search;
+            $params[] = '%' . $search . '%';
+            $params[] = '%' . $search . '%';
+            $params[] = '%' . $search . '%';
+            $params[] = '%' . $search . '%';
         }
 
         if ($status === 'active') {
@@ -46,7 +139,7 @@ class Publisher
         $countStmt->close();
 
         $stmt = $this->conn->prepare(
-            'SELECT id, publishers_id, publishers, is_active, create_at, update_at
+            'SELECT ' . self::LIST_COLUMNS . '
              FROM vp_publishers' . $whereSql . '
              ORDER BY publishers ASC
              LIMIT ? OFFSET ?'
@@ -73,7 +166,7 @@ class Publisher
 
     public function getPublisherById(int $id): ?array
     {
-        $stmt = $this->conn->prepare('SELECT id, publishers_id, publishers, is_active, create_at, update_at FROM vp_publishers WHERE id = ? LIMIT 1');
+        $stmt = $this->conn->prepare('SELECT ' . self::LIST_COLUMNS . ' FROM vp_publishers WHERE id = ? LIMIT 1');
         if (!$stmt) {
             return null;
         }
@@ -119,10 +212,11 @@ class Publisher
         return ['exists' => $this->publisherNameExists($name, $excludeLocalId)];
     }
 
-    public function savePublisher(?int $id, string $name, int $isActive): array
+    public function savePublisher(?int $id, string $name, int $isActive, array $extra = []): array
     {
         $name = trim($name);
         $isActive = $isActive ? 1 : 0;
+        $fields = $this->normalizePublisherFormData($extra);
         if ($name === '') {
             return ['success' => false, 'message' => 'Publisher name is required.'];
         }
@@ -135,11 +229,45 @@ class Publisher
             return ['success' => false, 'message' => 'Publisher name already exists'];
         }
 
-        $stmt = $this->conn->prepare('UPDATE vp_publishers SET publishers = ?, is_active = ? WHERE id = ?');
+        $duplicate = $this->validatePublisherUniqueness(
+            $fields['publisher_phone'],
+            $fields['publisher_email'],
+            $fields['gst_number'],
+            $fields['pan_number'],
+            $id
+        );
+        if ($duplicate !== null) {
+            return $duplicate;
+        }
+
+        $stmt = $this->conn->prepare(
+            'UPDATE vp_publishers SET publishers = ?, contact_name = ?, publisher_email = ?, country_code = ?, publisher_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, stock_replenishment_days = ?, is_active = ? WHERE id = ?'
+        );
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
         }
-        $stmt->bind_param('sii', $name, $isActive, $id);
+        $webpage = (int)$fields['webpage'];
+        $stockReplenishmentDays = (int)$fields['stock_replenishment_days'];
+        $stmt->bind_param(
+            'sssssssssssssiiii',
+            $name,
+            $fields['contact_name'],
+            $fields['publisher_email'],
+            $fields['country_code'],
+            $fields['publisher_phone'],
+            $fields['alt_phone'],
+            $fields['gst_number'],
+            $fields['pan_number'],
+            $fields['address'],
+            $fields['city'],
+            $fields['state'],
+            $fields['country'],
+            $fields['postal_code'],
+            $webpage,
+            $stockReplenishmentDays,
+            $isActive,
+            $id
+        );
 
         try {
             $ok = $stmt->execute();
@@ -155,11 +283,12 @@ class Publisher
             : ['success' => false, 'message' => 'Could not save publisher: ' . $error];
     }
 
-    public function insertPublisher(int $publishersId, string $name, int $isActive): array
+    public function insertPublisher(int $publishersId, string $name, int $isActive, array $extra = []): array
     {
         $publishersId = (int) $publishersId;
         $name = trim($name);
         $isActive = $isActive ? 1 : 0;
+        $fields = $this->normalizePublisherFormData($extra);
 
         if ($publishersId <= 0) {
             return ['success' => false, 'message' => 'Remote publisher vendor_id is required.'];
@@ -172,11 +301,44 @@ class Publisher
             return ['success' => false, 'message' => 'Publisher name already exists'];
         }
 
-        $stmt = $this->conn->prepare('INSERT INTO vp_publishers (publishers_id, publishers, is_active) VALUES (?, ?, ?)');
+        $duplicate = $this->validatePublisherUniqueness(
+            $fields['publisher_phone'],
+            $fields['publisher_email'],
+            $fields['gst_number'],
+            $fields['pan_number']
+        );
+        if ($duplicate !== null) {
+            return $duplicate;
+        }
+
+        $stmt = $this->conn->prepare(
+            'INSERT INTO vp_publishers (publishers_id, publishers, contact_name, publisher_email, country_code, publisher_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_days, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
         }
-        $stmt->bind_param('isi', $publishersId, $name, $isActive);
+        $webpage = (int)$fields['webpage'];
+        $stockReplenishmentDays = (int)$fields['stock_replenishment_days'];
+        $stmt->bind_param(
+            'issssssssssssssiii',
+            $publishersId,
+            $name,
+            $fields['contact_name'],
+            $fields['publisher_email'],
+            $fields['country_code'],
+            $fields['publisher_phone'],
+            $fields['alt_phone'],
+            $fields['gst_number'],
+            $fields['pan_number'],
+            $fields['address'],
+            $fields['city'],
+            $fields['state'],
+            $fields['country'],
+            $fields['postal_code'],
+            $webpage,
+            $stockReplenishmentDays,
+            $isActive
+        );
 
         try {
             $ok = $stmt->execute();
