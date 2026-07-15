@@ -807,6 +807,11 @@ switch ($page) {
                 $controller = new ProductsController($conn);
                 $controller->updateStockLimits();
                 break;
+            case 'update_stock_replenishment_days':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->updateStockReplenishmentDays();
+                break;
             case 'update_permanently_available':
                 require_once 'controllers/ProductsController.php';
                 $controller = new ProductsController($conn);
