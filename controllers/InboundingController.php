@@ -1521,12 +1521,6 @@ class InboundingController {
 
         $vendor_id = trim((string) ($_POST['vendor_code'] ?? ''));
         $invoice_no = trim((string) ($_POST['invoice_no'] ?? ''));
-        $validationError = $this->validateForm1RequiredFields($vendor_id, $invoice_no);
-        if ($validationError !== null) {
-            $_SESSION['desktopform_flash'] = ['type' => 'error', 'text' => $validationError];
-            header('Location: ' . base_url('?page=inbounding&action=desktopform&id=' . $id));
-            exit;
-        }
 
         // Gallery deletions first (single CSV field avoids PHP max_input_vars dropping many delete_gallery_image_ids[] fields on large forms)
         $delCsv = trim((string) ($_POST['delete_gallery_image_ids_csv'] ?? ''));
@@ -1923,10 +1917,6 @@ class InboundingController {
 
         $vendor_id = trim((string) ($_POST['vendor_code'] ?? ''));
         $invoice_no = trim((string) ($_POST['invoice_no'] ?? ''));
-        $validationError = $this->validateForm1RequiredFields($vendor_id, $invoice_no);
-        if ($validationError !== null) {
-            $this->redirectForm3WithError($validationError, $record_id);
-        }
 
         $oldInvoiceData = $inboundingModel->getform1data($record_id);
         $invoicePath = $oldInvoiceData['form1']['invoice_image'] ?? '';

@@ -37,13 +37,11 @@ $hasInvoicePreview = ($invoiceUrl ?? '') !== '';
         </div>
 
         <div>
-            <label class="block text-gray-800 font-bold text-xs mb-1">Invoice Number <span class="text-red-500" aria-hidden="true">*</span></label>
+            <label class="block text-gray-800 font-bold text-xs mb-1">Invoice Number</label>
             <input type="text"
                    name="invoice_no"
                    id="form3_invoice_no"
                    value="<?php echo htmlspecialchars($invoice_no_value ?? '', ENT_QUOTES, 'UTF-8'); ?>"
-                   required
-                   aria-required="true"
                    autocomplete="off"
                    class="w-full border border-gray-400 rounded px-2 py-2 text-sm focus:border-black outline-none bg-white">
             <p id="form3-invoice-no-error" class="text-red-600 text-xs mt-1 font-semibold hidden"></p>
@@ -51,7 +49,7 @@ $hasInvoicePreview = ($invoiceUrl ?? '') !== '';
 
         <div>
             <div class="flex items-center gap-1.5 mb-1">
-                <label class="text-gray-800 font-bold text-xs" for="form3_vendor_code">Vendor <span class="text-red-500" aria-hidden="true">*</span></label>
+                <label class="text-gray-800 font-bold text-xs" for="form3_vendor_code">Vendor</label>
                 <?php
                 $btnId = 'form3-vendor-cache-sync-btn';
                 $title = 'Refresh vendors from catalog';
@@ -60,7 +58,7 @@ $hasInvoicePreview = ($invoiceUrl ?? '') !== '';
                 require __DIR__ . '/catalog_refresh_btn.php';
                 ?>
             </div>
-            <select id="form3_vendor_code" name="vendor_code" required aria-required="true" class="w-full border border-gray-400 rounded px-2 py-2 text-sm focus:border-black outline-none bg-white">
+            <select id="form3_vendor_code" name="vendor_code" class="w-full border border-gray-400 rounded px-2 py-2 text-sm focus:border-black outline-none bg-white">
                 <option value="">Select vendor</option>
                 <?php if (!empty($vendorsList)): ?>
                     <?php foreach ($vendorsList as $v): ?>
