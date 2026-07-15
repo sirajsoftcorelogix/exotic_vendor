@@ -101,10 +101,14 @@ SET setting_key = 'stock_replenishment_months',
 WHERE setting_key = 'stock_replenishment_lookback_days';
 
 DELETE FROM app_settings
-WHERE setting_key <> 'stock_replenishment_months';
+WHERE setting_key NOT IN (
+    'stock_replenishment_months',
+    'stock_replenishment_book_price_cutoff'
+);
 
 INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES
-('stock_replenishment_months', '1');
+('stock_replenishment_months', '1'),
+('stock_replenishment_book_price_cutoff', '0');
 
 
 -- -----------------------------------------------------------------------------

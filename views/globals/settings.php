@@ -135,7 +135,13 @@ function globals_setting_input_id(string $key): string
                                             id="<?php echo htmlspecialchars($inputId); ?>"
                                             name="values[<?php echo htmlspecialchars($key); ?>]"
                                             value="<?php echo htmlspecialchars((string) $value); ?>"
-                                            <?php echo $valueType === 'decimal' ? 'step="0.01" min="0.01"' : 'step="1"'; ?>
+                                            <?php
+                                            if ($valueType === 'decimal') {
+                                                echo 'step="0.01" min="0.01"';
+                                            } else {
+                                                echo 'step="1" min="0"';
+                                            }
+                                            ?>
                                             class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500">
                                     <?php else: ?>
                                         <input
