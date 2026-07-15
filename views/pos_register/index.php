@@ -886,6 +886,32 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           <span class="mt-0.5 block text-xs text-slate-500">Goods will be dispatched later · keeps order <strong>Pending</strong></span>
         </span>
       </label>
+      
+      <!-- E-way bill section (shown when collected_from_showroom is selected) -->
+      <div id="ewayBillSection" class="space-y-3 border-t pt-4">
+        <div class="flex items-center gap-2">
+          <input type="checkbox" id="generate_ewb_for_delivery" class="rounded border-slate-300">
+          <label for="generate_ewb_for_delivery" class="text-xs text-slate-600 cursor-pointer font-medium">Generate E-way bill for this shipment</label>
+        </div>
+        <div id="ewayBillFields" class="hidden grid grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div>
+            <label for="delivery_veh_no" class="text-xs text-slate-600">Vehicle Number <span class="text-red-600">*</span></label>
+            <input type="text" id="delivery_veh_no" placeholder="e.g., DL01AB1234" maxlength="20" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label for="delivery_veh_type" class="text-xs text-slate-600">Vehicle Type <span class="text-red-600">*</span></label>
+            <select id="delivery_veh_type" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+              <option value="">-- Select --</option>
+              <option value="1">(1) Road</option>
+              <option value="2">(2) Rail</option>
+              <option value="3">(3) Air</option>
+              <option value="4">(4) Ship</option>
+              
+            </select>
+          </div>
+        </div>
+      </div>
+      
       <div id="deliveryStatusValidation" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"></div>
     </div>
     <div class="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3 rounded-b-2xl">
@@ -1489,6 +1515,26 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       label.classList.toggle("border-transparent", !on);
       label.classList.toggle("bg-slate-50", !on);
     });
+  }
+
+  function syncEwayBillSectionVisibility() {
+    var status = getSelectedPosDeliveryStatus();
+    var ewayBillSection = document.getElementById("ewayBillSection");
+    if (ewayBillSection) {
+      if (status === "collected_from_showroom") {
+        ewayBillSection.classList.remove("hidden");
+      } else {
+        ewayBillSection.classList.add("hidden");
+        // Reset E-way bill fields when section is hidden
+        var generateEwbCheckbox = document.getElementById("generate_ewb_for_delivery");
+        if (generateEwbCheckbox) {
+          generateEwbCheckbox.checked = false;
+          document.getElementById("ewayBillFields").classList.add("hidden");
+          document.getElementById("delivery_veh_no").value = "";
+          document.getElementById("delivery_veh_type").value = "";
+        }
+      }
+    }
   }
 
   function getSelectedPosDeliveryStatus() {
@@ -2415,13 +2461,32 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     initConfirmShippingSameAsBilling();
 
     document.querySelectorAll('#deliveryStatusModal input[name="pos_delivery_status"]').forEach(function(el) {
-      el.addEventListener("change", syncDeliveryStatusOptionStyles);
+      el.addEventListener("change", function() {
+        syncDeliveryStatusOptionStyles();
+        syncEwayBillSectionVisibility();
+      });
     });
 
     var deliveryStatusBackBtn = document.getElementById("deliveryStatusBackBtn");
     if (deliveryStatusBackBtn) {
       deliveryStatusBackBtn.addEventListener("click", function() {
         closeDeliveryStatusModal();
+      });
+    }
+
+    // E-way bill checkbox handler
+    var generateEwbCheckbox = document.getElementById("generate_ewb_for_delivery");
+    var ewayBillFields = document.getElementById("ewayBillFields");
+    if (generateEwbCheckbox && ewayBillFields) {
+      generateEwbCheckbox.addEventListener("change", function() {
+        if (this.checked) {
+          ewayBillFields.classList.remove("hidden");
+        } else {
+          ewayBillFields.classList.add("hidden");
+          // Reset fields when unchecked
+          document.getElementById("delivery_veh_no").value = "";
+          document.getElementById("delivery_veh_type").value = "";
+        }
       });
     }
 
@@ -2437,11 +2502,43 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           }
           return;
         }
+
+        // Validate E-way bill fields if checkbox is checked
+        var generateEwb = document.getElementById("generate_ewb_for_delivery") && document.getElementById("generate_ewb_for_delivery").checked;
+        if (generateEwb) {
+          var vehNo = (document.getElementById("delivery_veh_no").value || "").trim();
+          var vehType = (document.getElementById("delivery_veh_type").value || "").trim();
+          if (!vehNo) {
+            if (err) {
+              err.textContent = "⚠ Vehicle Number is required for E-way bill generation.";
+              err.classList.remove("hidden");
+            }
+            document.getElementById("delivery_veh_no").focus();
+            return;
+          }
+          if (!vehType) {
+            if (err) {
+              err.textContent = "⚠ Vehicle Type is required for E-way bill generation.";
+              err.classList.remove("hidden");
+            }
+            document.getElementById("delivery_veh_type").focus();
+            return;
+          }
+        }
+
         if (!pendingAddressPayloadForCheckout) {
           showToast("Address details missing — go back and confirm billing/shipping.", "red");
           return;
         }
         var payload = Object.assign({}, pendingAddressPayloadForCheckout, { pos_delivery_status: status });
+        
+        // Add E-way bill data if checked
+        if (generateEwb) {
+          payload.generate_ewb = "1";
+          payload.ewb_veh_no = document.getElementById("delivery_veh_no").value;
+          payload.ewb_veh_type = document.getElementById("delivery_veh_type").value;
+        }
+        
         createOrderNow(payload);
       });
     }

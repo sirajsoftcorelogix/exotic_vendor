@@ -575,6 +575,127 @@ class POSRegisterController
         ];
     }
 
+    /**
+     * Handle E-way bill and IRN generation for POS checkout
+     * Calls DomesticEwbIrnService after invoice is created
+     */
+    private function handlePosEwbGeneration(mysqli $conn, int $invoiceId, array $payload): void
+    {
+        try {
+            // Get invoice details from database
+            $invStmt = $conn->prepare("SELECT * FROM vp_invoices WHERE id = ?");
+            if (!$invStmt) {
+                error_log("POS EWB: Failed to prepare invoice query: " . $conn->error);
+                return;
+            }
+            $invStmt->bind_param("i", $invoiceId);
+            $invStmt->execute();
+            $invResult = $invStmt->get_result();
+            $invoice = $invResult->fetch_assoc();
+            $invStmt->close();
+
+            if (!$invoice) {
+                error_log("POS EWB: Invoice not found for ID $invoiceId");
+                return;
+            }
+
+            // Get invoice items
+            $itemsStmt = $conn->prepare("
+                SELECT ii.id, ii.vp_products_id, ii.hsn, ii.item_name, ii.quantity, ii.unit, ii.unit_price,
+                       ii.tax_rate, ii.tax_amount, vp.item_code, vp.sku
+                FROM vp_invoices_items ii
+                LEFT JOIN vp_products vp ON ii.vp_products_id = vp.id
+                WHERE ii.vp_invoices_id = ?
+            ");
+            if (!$itemsStmt) {
+                error_log("POS EWB: Failed to prepare items query: " . $conn->error);
+                return;
+            }
+            $itemsStmt->bind_param("i", $invoiceId);
+            $itemsStmt->execute();
+            $itemsResult = $itemsStmt->get_result();
+            $items = [];
+            while ($item = $itemsResult->fetch_assoc()) {
+                $items[] = $item;
+            }
+            $itemsStmt->close();
+
+            if (empty($items)) {
+                error_log("POS EWB: No items found for invoice $invoiceId");
+                return;
+            }
+
+            // Get customer details
+            $custId = (int)($invoice['vp_customers_id'] ?? 0);
+            $custStmt = $conn->prepare("SELECT * FROM vp_customers WHERE id = ?");
+            if (!$custStmt) {
+                error_log("POS EWB: Failed to prepare customer query: " . $conn->error);
+                return;
+            }
+            $custStmt->bind_param("i", $custId);
+            $custStmt->execute();
+            $customer = $custStmt->get_result()->fetch_assoc();
+            $custStmt->close();
+
+            if (!$customer) {
+                error_log("POS EWB: Customer not found for ID $custId");
+                return;
+            }
+
+            // Get firm details
+            require_once __DIR__ . '/../models/comman/tables.php';
+            $comman = new Tables($conn);
+            $firm = $comman->getRecordById('firm_details', 1);
+
+            if (!$firm) {
+                error_log("POS EWB: Firm details not found");
+                return;
+            }
+
+            // Build E-way bill data from payload
+            $ewbData = [
+                'veh_no' => trim((string)($payload['ewb_veh_no'] ?? '')),
+                'veh_type' => trim((string)($payload['ewb_veh_type'] ?? '')),
+                'trans_id' => '', // Optional: can be extended later
+                'trans_name' => 'Transport', // Optional: can be extended later
+                'distance' => 100, // Optional: can be extended later
+                'trans_doc_no' => date('YmdHis'),
+                'trn_doc_dt' => date('d/m/Y'),
+                'trans_mode' => '1', // Road transport
+            ];
+
+            // Load and call DomesticEwbIrnService
+            require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
+            
+            // Get Alankit configuration from config.php
+            $config = include __DIR__ . '/../config.php';
+            $alankitConfig = $config['alankit'] ?? [];
+
+            if (
+                empty($alankitConfig) ||
+                empty($alankitConfig['username']) ||
+                empty($alankitConfig['password']) ||
+                empty($alankitConfig['subscription_key']) ||
+                empty($alankitConfig['app_key']) ||
+                empty($alankitConfig['gstin'])
+            ) {
+                error_log("POS EWB: Missing Alankit API credentials in config.php");
+                return;
+            }
+
+            $ewbService = new DomesticEwbIrnService($conn, $alankitConfig);
+            $result = $ewbService->generateIrnAndEwb($invoiceId, $invoice, $items, $customer, $firm, $ewbData);
+
+            if ($result['status']) {
+                error_log("POS EWB: IRN generated successfully for invoice $invoiceId - IRN: {$result['irn']}");
+            } else {
+                error_log("POS EWB: Generation failed for invoice $invoiceId - " . ($result['message'] ?? 'Unknown error'));
+            }
+        } catch (\Throwable $e) {
+            error_log("POS EWB Exception for invoice $invoiceId: " . $e->getMessage());
+        }
+    }
+
     private function appendPosDeliveryStatusToNote(string $note, string $label): string
     {
         $label = trim($label);
@@ -4677,6 +4798,12 @@ class POSRegisterController
             'coupon_display_name' => trim((string)($payload['coupon_display_name'] ?? '')),
         ];
         $invoiceMeta = $this->finalizePosReceiptInvoice($conn, $orderNumber, $paymentStage, $compliance, $customInvoiceNumber);
+        
+        // Generate IRN and E-way bill if requested
+        if (!empty($payload['generate_ewb']) && $payload['generate_ewb'] === '1' && !empty($invoiceMeta['invoice_id'])) {
+            $this->handlePosEwbGeneration($conn, (int)$invoiceMeta['invoice_id'], $payload);
+        }
+        
         $fulfillmentStatusMeta = $this->syncPosCheckoutOrderFulfillmentStatus(
             $conn,
             $orderNumber,
