@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Resolve invoice_number from optional user override or global_settings series.
+ * Resolve invoice_number from optional user override or app_settings series.
  *
  * @param list<string> $reservedNumbers Custom numbers already used in the same batch submit
  * @return array{success:bool, invoice_number?:string, message?:string}
@@ -40,29 +40,20 @@ function resolve_invoice_number(mysqli $conn, string $customInvoiceNumber = '', 
         return ['success' => true, 'invoice_number' => $customInvoiceNumber];
     }
 
-    $stmt = $conn->prepare('SELECT invoice_prefix, invoice_series FROM global_settings WHERE id = 1 LIMIT 1');
-    if (!$stmt) {
+    require_once __DIR__ . '/app_settings.php';
+    $model = app_settings_model();
+    if ($model === null) {
         return ['success' => false, 'message' => 'Could not read invoice series settings.'];
     }
-    $stmt->execute();
-    $settings = $stmt->get_result()?->fetch_assoc();
-    $stmt->close();
 
-    $invoicePrefix = is_array($settings) ? (string) ($settings['invoice_prefix'] ?? 'INV') : 'INV';
-    $invoiceSeries = is_array($settings) ? (int) ($settings['invoice_series'] ?? 0) : 0;
+    $invoicePrefix = (string) $model->get('invoice_prefix', 'INV');
+    $invoiceSeries = (int) $model->getStoredValue('invoice_series', 0);
     $invoiceSeries++;
 
-    $update = $conn->prepare('UPDATE global_settings SET invoice_series = ? WHERE id = 1');
-    if (!$update) {
+    $userId = (int) ($_SESSION['user']['id'] ?? 0);
+    if (!$model->setValue('invoice_series', $invoiceSeries, $userId, true)) {
         return ['success' => false, 'message' => 'Could not update invoice series.'];
     }
-    $update->bind_param('i', $invoiceSeries);
-    if (!$update->execute()) {
-        $update->close();
-
-        return ['success' => false, 'message' => 'Could not update invoice series.'];
-    }
-    $update->close();
 
     return [
         'success' => true,
