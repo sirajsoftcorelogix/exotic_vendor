@@ -33,8 +33,11 @@ function globals_setting_input_id(string $key): string
                     Global <span class="text-amber-800">settings</span>
                 </h1>
                 <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
-                    Update application values defined by developers in <code class="text-xs bg-gray-100 px-1 rounded">app_settings</code>.
-                    Setting keys cannot be added or renamed from this screen. Inactive settings are ignored by the application.
+                    Values are stored in <code class="text-xs bg-gray-100 px-1 rounded">app_settings</code>;
+                    changes are logged in <code class="text-xs bg-gray-100 px-1 rounded">settings_audit_log</code>.
+                    Keys and UI metadata are defined by developers in
+                    <code class="text-xs bg-gray-100 px-1 rounded">config/app_settings_registry.php</code>
+                    and the database.
                 </p>
             </div>
         </div>
@@ -43,24 +46,24 @@ function globals_setting_input_id(string $key): string
     <?php if (!$table_ready): ?>
         <div class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
             <p class="font-semibold">Database setup required</p>
-            <p class="mt-1">Run <code class="text-xs bg-white px-1 rounded">sql/create_app_settings_tables.sql</code> and
-                <code class="text-xs bg-white px-1 rounded">sql/seed_app_settings.sql</code> to enable this module.
+            <p class="mt-1">Run <code class="text-xs bg-white px-1 rounded">sql/app_settings_module.sql</code> to enable this module.
             </p>
         </div>
     <?php elseif ($groups === []): ?>
         <div class="rounded-2xl border border-gray-200 bg-white px-5 py-8 text-center text-sm text-gray-600">
-            No settings are configured yet. Developers can insert rows into <code class="text-xs bg-gray-100 px-1 rounded">app_settings</code>.
+            No settings found. Developers must add rows to <code class="text-xs bg-gray-100 px-1 rounded">app_settings</code>
+            and register them in <code class="text-xs bg-gray-100 px-1 rounded">config/app_settings_registry.php</code>.
         </div>
     <?php else: ?>
         <div class="flex flex-wrap gap-2">
             <?php foreach ($groups as $group): ?>
                 <?php
                 $groupKey = $group['group_key'];
-                $isActive = $groupKey === $active_group;
+                $isActiveTab = $groupKey === $active_group;
                 $tabUrl = base_url('?page=globals&action=settings&group=' . urlencode($groupKey));
                 ?>
                 <a href="<?php echo htmlspecialchars($tabUrl); ?>"
-                    class="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition <?php echo $isActive ? 'bg-amber-600 text-white shadow-sm' : 'bg-white text-gray-700 border border-gray-200 hover:border-amber-200 hover:text-amber-800'; ?>">
+                    class="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition <?php echo $isActiveTab ? 'bg-amber-600 text-white shadow-sm' : 'bg-white text-gray-700 border border-gray-200 hover:border-amber-200 hover:text-amber-800'; ?>">
                     <i class="fas fa-folder-open text-xs opacity-80" aria-hidden="true"></i>
                     <?php echo htmlspecialchars($group['group_label']); ?>
                 </a>
@@ -82,7 +85,7 @@ function globals_setting_input_id(string $key): string
                             </span>
                             <div class="min-w-0">
                                 <h2 class="text-sm font-semibold text-gray-900"><?php echo htmlspecialchars($group['group_label']); ?></h2>
-                                <p class="text-xs text-gray-500 mt-0.5">Change values and active status. Keys are managed in the database by developers.</p>
+                                <p class="text-xs text-gray-500 mt-0.5">Admins can update values only. Keys cannot be added from this screen.</p>
                             </div>
                         </div>
                     </div>
@@ -92,43 +95,21 @@ function globals_setting_input_id(string $key): string
                             <?php
                             $key = $setting['setting_key'];
                             $inputId = globals_setting_input_id($key);
-                            $activeInputId = globals_setting_input_id($key . '_active');
                             $isEditable = (int) ($setting['is_editable'] ?? 1) === 1;
-                            $isSettingActive = (int) ($setting['is_active'] ?? 1) === 1;
                             $value = $setting['setting_value'] ?? '';
                             $inputType = $setting['input_type'] ?? 'text';
                             $valueType = $setting['value_type'] ?? 'string';
-                            $inactiveClass = $isSettingActive ? '' : 'opacity-60 bg-gray-50/60';
-                            $fieldDisabled = $isSettingActive ? '' : 'disabled';
                             ?>
-                            <div class="px-5 py-5 sm:px-6 <?php echo $inactiveClass; ?>" data-setting-row data-setting-key="<?php echo htmlspecialchars($key); ?>">
+                            <div class="px-5 py-5 sm:px-6">
                                 <div class="flex flex-col lg:flex-row lg:items-start gap-4 lg:gap-8">
                                     <div class="lg:w-2/5 min-w-0">
-                                        <div class="flex items-start justify-between gap-3">
-                                            <label for="<?php echo htmlspecialchars($inputId); ?>" class="block text-sm font-semibold text-gray-900">
-                                                <?php echo htmlspecialchars($setting['label']); ?>
-                                            </label>
-                                            <label for="<?php echo htmlspecialchars($activeInputId); ?>" class="inline-flex items-center gap-2 shrink-0 cursor-pointer" title="Activate or deactivate this setting">
-                                                <input type="hidden" name="active[<?php echo htmlspecialchars($key); ?>]" value="0">
-                                                <input
-                                                    type="checkbox"
-                                                    id="<?php echo htmlspecialchars($activeInputId); ?>"
-                                                    name="active[<?php echo htmlspecialchars($key); ?>]"
-                                                    value="1"
-                                                    class="setting-active-toggle h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                                                    <?php echo $isSettingActive ? 'checked' : ''; ?>>
-                                                <span class="text-xs font-medium <?php echo $isSettingActive ? 'text-emerald-700' : 'text-gray-500'; ?>" data-active-label>
-                                                    <?php echo $isSettingActive ? 'Active' : 'Inactive'; ?>
-                                                </span>
-                                            </label>
-                                        </div>
+                                        <label for="<?php echo htmlspecialchars($inputId); ?>" class="block text-sm font-semibold text-gray-900">
+                                            <?php echo htmlspecialchars($setting['label']); ?>
+                                        </label>
                                         <div class="mt-1.5 inline-flex items-center gap-2 flex-wrap">
                                             <code class="text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded"><?php echo htmlspecialchars($key); ?></code>
                                             <?php if (!$isEditable): ?>
                                                 <span class="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Read only</span>
-                                            <?php endif; ?>
-                                            <?php if (!$isSettingActive): ?>
-                                                <span class="text-[11px] font-medium text-amber-700 uppercase tracking-wide">Not in use</span>
                                             <?php endif; ?>
                                         </div>
                                         <?php if (!empty($setting['description'])): ?>
@@ -136,7 +117,7 @@ function globals_setting_input_id(string $key): string
                                         <?php endif; ?>
                                     </div>
 
-                                    <div class="lg:flex-1 min-w-0" data-setting-fields>
+                                    <div class="lg:flex-1 min-w-0">
                                         <?php if (!$isEditable): ?>
                                             <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 whitespace-pre-wrap break-words">
                                                 <?php
@@ -152,18 +133,16 @@ function globals_setting_input_id(string $key): string
                                                 id="<?php echo htmlspecialchars($inputId); ?>"
                                                 name="values[<?php echo htmlspecialchars($key); ?>]"
                                                 rows="4"
-                                                <?php echo $fieldDisabled; ?>
-                                                class="setting-value-input w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 disabled:bg-gray-100 disabled:text-gray-500"><?php echo htmlspecialchars((string) $value); ?></textarea>
+                                                class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500"><?php echo htmlspecialchars((string) $value); ?></textarea>
                                         <?php elseif ($inputType === 'toggle' || $valueType === 'bool'): ?>
-                                            <label class="inline-flex items-center gap-3 <?php echo $isSettingActive ? 'cursor-pointer' : 'cursor-not-allowed'; ?>">
+                                            <label class="inline-flex items-center gap-3 cursor-pointer">
                                                 <input type="hidden" name="values[<?php echo htmlspecialchars($key); ?>]" value="0">
                                                 <input
                                                     type="checkbox"
                                                     id="<?php echo htmlspecialchars($inputId); ?>"
                                                     name="values[<?php echo htmlspecialchars($key); ?>]"
                                                     value="1"
-                                                    <?php echo $fieldDisabled; ?>
-                                                    class="setting-value-input h-5 w-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500 disabled:opacity-60"
+                                                    class="h-5 w-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
                                                     <?php echo in_array((string) $value, ['1', 'true', 'yes'], true) ? 'checked' : ''; ?>>
                                                 <span class="text-sm text-gray-700"><?php echo in_array((string) $value, ['1', 'true', 'yes'], true) ? 'Enabled' : 'Disabled'; ?></span>
                                             </label>
@@ -171,8 +150,7 @@ function globals_setting_input_id(string $key): string
                                             <select
                                                 id="<?php echo htmlspecialchars($inputId); ?>"
                                                 name="values[<?php echo htmlspecialchars($key); ?>]"
-                                                <?php echo $fieldDisabled; ?>
-                                                class="setting-value-input w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 disabled:bg-gray-100 disabled:text-gray-500">
+                                                class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500">
                                                 <?php foreach ($setting['options'] as $option): ?>
                                                     <?php
                                                     $optionValue = is_array($option) ? ($option['value'] ?? '') : $option;
@@ -190,19 +168,14 @@ function globals_setting_input_id(string $key): string
                                                 name="values[<?php echo htmlspecialchars($key); ?>]"
                                                 value="<?php echo htmlspecialchars((string) $value); ?>"
                                                 <?php echo $valueType === 'decimal' ? 'step="0.01" min="0.01"' : 'step="1"'; ?>
-                                                <?php echo $fieldDisabled; ?>
-                                                class="setting-value-input w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 disabled:bg-gray-100 disabled:text-gray-500">
+                                                class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500">
                                         <?php else: ?>
                                             <input
                                                 type="text"
                                                 id="<?php echo htmlspecialchars($inputId); ?>"
                                                 name="values[<?php echo htmlspecialchars($key); ?>]"
                                                 value="<?php echo htmlspecialchars((string) $value); ?>"
-                                                <?php echo $fieldDisabled; ?>
-                                                class="setting-value-input w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500 disabled:bg-gray-100 disabled:text-gray-500">
-                                        <?php endif; ?>
-                                        <?php if ($isEditable && !$isSettingActive): ?>
-                                            <p class="mt-2 text-xs text-gray-500">Activate this setting to edit and apply its value in the application.</p>
+                                                class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500">
                                         <?php endif; ?>
                                     </div>
                                 </div>
@@ -225,7 +198,7 @@ function globals_setting_input_id(string $key): string
             <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
                 <div class="px-5 py-4 border-b border-gray-100 bg-gray-50/80">
                     <h2 class="text-sm font-semibold text-gray-900">Recent changes</h2>
-                    <p class="text-xs text-gray-500 mt-0.5">Value and active/inactive changes logged in <code class="text-[11px] bg-gray-100 px-1 rounded">settings_audit_log</code>.</p>
+                    <p class="text-xs text-gray-500 mt-0.5">Logged in <code class="text-[11px] bg-gray-100 px-1 rounded">settings_audit_log</code>.</p>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full text-sm">
@@ -258,32 +231,6 @@ function globals_setting_input_id(string $key): string
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    function setRowActiveState(row, isActive) {
-        row.classList.toggle('opacity-60', !isActive);
-        row.classList.toggle('bg-gray-50/60', !isActive);
-
-        const label = row.querySelector('[data-active-label]');
-        if (label) {
-            label.textContent = isActive ? 'Active' : 'Inactive';
-            label.classList.toggle('text-emerald-700', isActive);
-            label.classList.toggle('text-gray-500', !isActive);
-        }
-
-        row.querySelectorAll('.setting-value-input').forEach(function (input) {
-            input.disabled = !isActive;
-        });
-    }
-
-    document.querySelectorAll('[data-setting-row]').forEach(function (row) {
-        const toggle = row.querySelector('.setting-active-toggle');
-        if (!toggle) {
-            return;
-        }
-        toggle.addEventListener('change', function () {
-            setRowActiveState(row, toggle.checked);
-        });
-    });
-
     <?php if (isset($_GET['status']) && $_GET['status'] === 'success'): ?>
         if (typeof window.showToast === 'function') {
             window.showToast('Settings saved successfully.', 'success');
