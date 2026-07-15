@@ -4616,6 +4616,20 @@ class product
         return $stmt->execute();
     }
 
+    public function setProductStockReplenishmentDays($productId, $days)
+    {
+        $productId = (int)$productId;
+        $days = max(0, (int)$days);
+        $sql = 'UPDATE vp_products SET stock_replenishment_days = ? WHERE id = ?';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('ii', $days, $productId);
+
+        return $stmt->execute();
+    }
+
     public function setProductPermanentlyAvailable($productId, $permanentlyAvailable)
     {
         $productId = (int)$productId;
