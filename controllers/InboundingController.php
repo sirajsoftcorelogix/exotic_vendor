@@ -506,21 +506,9 @@ class InboundingController {
         is_login();
         global $inboundingModel;
         $id = (int) ($_GET['id'] ?? 0);
-        if ($id <= 0) {
-            $insertId = $inboundingModel->saveform1(0, [
-                'vendor_id' => '',
-                'invoice' => '',
-                'invoice_no' => '',
-            ]);
-            if (!$insertId) {
-                header('Location: ' . base_url('?page=inbounding&action=list'));
-                exit;
-            }
-            header('Location: ' . base_url('?page=inbounding&action=form3&id=' . $insertId));
-            exit;
-        }
 
-        $data = $inboundingModel->getform2data($id);
+        // Do not create a DB row on page load — record is created on submitStep3 only.
+        $data = $inboundingModel->getform2data($id > 0 ? $id : 0);
         $data['form2']['gecolormaps'] = $this->gecolormaps();
         renderTemplateClean('views/inbounding/form3.php', $data, 'form3 inbounding');
     }
@@ -1913,13 +1901,15 @@ class InboundingController {
         global $inboundingModel;
         // 1. Basic Setup
         $record_id = (int) ($_POST['record_id'] ?? 0);
-        if ($record_id <= 0) { echo "Record ID missing"; exit; }
 
         $vendor_id = trim((string) ($_POST['vendor_code'] ?? ''));
         $invoice_no = trim((string) ($_POST['invoice_no'] ?? ''));
 
-        $oldInvoiceData = $inboundingModel->getform1data($record_id);
-        $invoicePath = $oldInvoiceData['form1']['invoice_image'] ?? '';
+        $invoicePath = '';
+        if ($record_id > 0) {
+            $oldInvoiceData = $inboundingModel->getform1data($record_id);
+            $invoicePath = $oldInvoiceData['form1']['invoice_image'] ?? '';
+        }
         if (isset($_FILES['invoice']) && $_FILES['invoice']['error'] === UPLOAD_ERR_OK) {
             $uploadDir = __DIR__ . '/../uploads/invoice/';
             if (!is_dir($uploadDir)) {
@@ -1942,14 +1932,26 @@ class InboundingController {
             }
         }
 
-        $invoiceUpdated = $inboundingModel->updateform1([
-            'id' => $record_id,
-            'vendor_id' => $vendor_id,
-            'invoice' => $invoicePath,
-            'invoice_no' => $invoice_no,
-        ]);
-        if (!$invoiceUpdated) {
-            $this->redirectForm3WithError('Could not save invoice details.', $record_id);
+        if ($record_id <= 0) {
+            $newId = (int) $inboundingModel->saveform1(0, [
+                'vendor_id' => $vendor_id,
+                'invoice' => $invoicePath,
+                'invoice_no' => $invoice_no,
+            ]);
+            if ($newId <= 0) {
+                $this->redirectForm3WithError('Could not create inbound record.', 0);
+            }
+            $record_id = $newId;
+        } else {
+            $invoiceUpdated = $inboundingModel->updateform1([
+                'id' => $record_id,
+                'vendor_id' => $vendor_id,
+                'invoice' => $invoicePath,
+                'invoice_no' => $invoice_no,
+            ]);
+            if (!$invoiceUpdated) {
+                $this->redirectForm3WithError('Could not save invoice details.', $record_id);
+            }
         }
 
         // Use existing code if it's a variant, otherwise generate a new one

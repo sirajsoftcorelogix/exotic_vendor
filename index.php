@@ -249,6 +249,9 @@ switch ($page) {
             case 'list':
                 $controller->index();
                 break;
+            case 'get_filtered_order_ids':
+                $controller->getFilteredOrderIds();
+                break;
             case 'view':
                 $controller->viewOrder();
                 break;

@@ -32,98 +32,7 @@ class OrdersController
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page
         $offset = ($page - 1) * $limit;
 
-        //Advanced Search Filters
-        $filters = [];
-        if (!empty($_GET['order_number'])) {
-            $filters['order_number'] = $_GET['order_number'];
-        }
-        if (!empty($_GET['item_code'])) {
-            $filters['item_code'] = $_GET['item_code'];
-        }
-        if (!empty($_GET['sku'])) {
-            $filters['sku'] = $_GET['sku'];
-        }
-        if (!empty($_GET['order_from']) && !empty($_GET['order_till'])) {
-            $filters['order_from'] = $_GET['order_from'];
-            $filters['order_till'] = $_GET['order_till'];
-        }
-
-        // if(!empty($_GET['daterange'])){
-        //     echo urldecode($_GET['daterange']);
-        //     $dateRange = explode(' - ', $_GET['daterange']);       
-        //     print_array($dateRange);     
-        //     if (count($dateRange) === 2) {
-        //         $filters['order_from'] = date('Y-m-d', strtotime($dateRange[0]));
-        //         $filters['order_till'] = date('Y-m-d', strtotime($dateRange[1]));
-        //     }
-        // }
-        if (!empty($_GET['item_name'])) {
-            $filters['title'] = $_GET['item_name'];
-        }
-        if (!empty($_GET['min_amount'])) {
-            $filters['min_amount'] = $_GET['min_amount'];
-        }
-        if (!empty($_GET['max_amount'])) {
-            $filters['max_amount'] = $_GET['max_amount'];
-        }
-        if (!empty($_GET['po_no'])) {
-            $filters['po_no'] = $_GET['po_no'];
-        }
-        if (!empty($_GET['status'])) {
-            $filters['status_filter'] = $_GET['status'];
-        }
-
-        if (!empty($_GET['category']) && $_GET['category'] != 'all') {
-            $filters['category'] = $_GET['category'];
-        } else {
-            $filters['category'] = 'all';
-        }
-        if (!empty($_GET['country'])) {
-            $filters['country'] = $_GET['country'];
-        }
-        if (!empty($_GET['options']) && $_GET['options'] == 'express') {
-            $filters['options'] = 'express';
-        }
-        if (!empty($_GET['sort'])) {
-            $filters['sort'] = strtolower($_GET['sort']);
-        } else {
-            $filters['sort'] = 'desc'; // Default sort order
-        }
-        if (!empty($_GET['payment_type']) && $_GET['payment_type'] != 'all') {
-            $filters['payment_type'] = $_GET['payment_type'];
-        } else {
-            $filters['payment_type'] = 'all';
-        }
-        if (!empty($_GET['staff_name'])) {
-            $filters['staff_name'] = $_GET['staff_name'];
-        }
-        if (!empty($_GET['priority'])) {
-            $filters['priority'] = $_GET['priority'];
-        }
-        $vendorFilter = resolveOrderListVendorFilter($_GET);
-        if ($vendorFilter !== '') {
-            $filters['vendor'] = $vendorFilter;
-        }
-        if (!empty($_GET['agent'])) {
-            $filters['agent'] = $_GET['agent'];
-        }
-        $publisherFilter = resolveOrderListPublisherFilter($_GET);
-        if ($publisherFilter !== '') {
-            $filters['publisher'] = $publisherFilter;
-        }
-        $authorFilter = resolveOrderListAuthorFilter($_GET);
-        if ($authorFilter !== '') {
-            $filters['author'] = $authorFilter;
-        }
-        //unshipped
-        if (!empty($_GET['options']) && $_GET['options'] == 'unshipped') {
-            $filters['unshipped'] = true;
-        }
-        //sort-date-range
-        if (!empty($_GET['sortdaterange'])) {
-            $filters['sortdaterange'] = $_GET['sortdaterange'];
-        }
-
+        $filters = $this->buildOrderListFiltersFromRequest($_GET);
 
         //order status list
         $statusList = $commanModel->get_order_status_list();
@@ -2393,6 +2302,108 @@ class OrdersController
         global $conn;
         require_once 'helpers/order_filter_autocomplete.php';
         orderFilterAutocompleteJson($conn, 'publisher', (string) ($_GET['q'] ?? $_GET['query'] ?? ''));
+    }
+
+    public function getFilteredOrderIds()
+    {
+        is_login();
+        global $ordersModel;
+
+        header('Content-Type: application/json');
+        $_GET = sanitizeGet($_GET);
+        $filters = $this->buildOrderListFiltersFromRequest($_GET);
+        $orderIds = $ordersModel->getFilteredOrderIds($filters);
+
+        echo json_encode([
+            'success' => true,
+            'order_ids' => $orderIds,
+            'total' => count($orderIds),
+        ]);
+        exit;
+    }
+
+    private function buildOrderListFiltersFromRequest(array $request): array
+    {
+        $filters = [];
+        if (!empty($request['order_number'])) {
+            $filters['order_number'] = $request['order_number'];
+        }
+        if (!empty($request['item_code'])) {
+            $filters['item_code'] = $request['item_code'];
+        }
+        if (!empty($request['sku'])) {
+            $filters['sku'] = $request['sku'];
+        }
+        if (!empty($request['order_from']) && !empty($request['order_till'])) {
+            $filters['order_from'] = $request['order_from'];
+            $filters['order_till'] = $request['order_till'];
+        }
+        if (!empty($request['item_name'])) {
+            $filters['title'] = $request['item_name'];
+        }
+        if (!empty($request['min_amount'])) {
+            $filters['min_amount'] = $request['min_amount'];
+        }
+        if (!empty($request['max_amount'])) {
+            $filters['max_amount'] = $request['max_amount'];
+        }
+        if (!empty($request['po_no'])) {
+            $filters['po_no'] = $request['po_no'];
+        }
+        if (!empty($request['status'])) {
+            $filters['status_filter'] = $request['status'];
+        }
+
+        if (!empty($request['category']) && $request['category'] != 'all') {
+            $filters['category'] = $request['category'];
+        } else {
+            $filters['category'] = 'all';
+        }
+        if (!empty($request['country'])) {
+            $filters['country'] = $request['country'];
+        }
+        if (!empty($request['options']) && $request['options'] == 'express') {
+            $filters['options'] = 'express';
+        }
+        if (!empty($request['sort'])) {
+            $filters['sort'] = strtolower($request['sort']);
+        } else {
+            $filters['sort'] = 'desc';
+        }
+        if (!empty($request['payment_type']) && $request['payment_type'] != 'all') {
+            $filters['payment_type'] = $request['payment_type'];
+        } else {
+            $filters['payment_type'] = 'all';
+        }
+        if (!empty($request['staff_name'])) {
+            $filters['staff_name'] = $request['staff_name'];
+        }
+        if (!empty($request['priority'])) {
+            $filters['priority'] = $request['priority'];
+        }
+        $vendorFilter = resolveOrderListVendorFilter($request);
+        if ($vendorFilter !== '') {
+            $filters['vendor'] = $vendorFilter;
+        }
+        if (!empty($request['agent'])) {
+            $filters['agent'] = $request['agent'];
+        }
+        $publisherFilter = resolveOrderListPublisherFilter($request);
+        if ($publisherFilter !== '') {
+            $filters['publisher'] = $publisherFilter;
+        }
+        $authorFilter = resolveOrderListAuthorFilter($request);
+        if ($authorFilter !== '') {
+            $filters['author'] = $authorFilter;
+        }
+        if (!empty($request['options']) && $request['options'] == 'unshipped') {
+            $filters['unshipped'] = true;
+        }
+        if (!empty($request['sortdaterange'])) {
+            $filters['sortdaterange'] = $request['sortdaterange'];
+        }
+
+        return $filters;
     }
     
 }

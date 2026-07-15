@@ -8,7 +8,7 @@ $usersModel = new User($conn);
 $currentuserDetails = $usersModel->getUserById($_SESSION['user']['id']);
 unset($usersModel);
 
-$record_id = $_GET['id'] ?? '';
+$record_id = (int) ($_GET['id'] ?? 0);
 $form2 = $form2 ?? ($data['form2'] ?? []);
 $raw_categories = $category ?? ($data['category'] ?? []);
 $saved_category_code = $form2['group_name'] ?? '';
@@ -131,7 +131,7 @@ $invoiceExt = $invoicePath !== '' ? strtolower(pathinfo($invoicePath, PATHINFO_E
 $isInvoicePdf = ($invoiceExt === 'pdf');
 
 global $inboundingModel;
-$extraVars = $inboundingModel->getVariations($record_id);
+$extraVars = $record_id > 0 ? $inboundingModel->getVariations($record_id) : [];
 
 $viewVariations = [];
 $viewVariations[] = $mainVar; 
