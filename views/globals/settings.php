@@ -1,15 +1,7 @@
 <?php
-$groups = $groups ?? [];
+$settings = $settings ?? [];
 $audit_rows = $audit_rows ?? [];
 $table_ready = $table_ready ?? false;
-$active_group = $active_group ?? '';
-$groupKeys = array_column($groups, 'group_key');
-if ($active_group === '' && $groupKeys !== []) {
-    $active_group = $groupKeys[0];
-}
-if (!in_array($active_group, $groupKeys, true) && $groupKeys !== []) {
-    $active_group = $groupKeys[0];
-}
 
 function globals_setting_input_id(string $key): string
 {
@@ -33,11 +25,9 @@ function globals_setting_input_id(string $key): string
                     Global <span class="text-amber-800">settings</span>
                 </h1>
                 <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
-                    Values are stored in <code class="text-xs bg-gray-100 px-1 rounded">app_settings</code>;
-                    changes are logged in <code class="text-xs bg-gray-100 px-1 rounded">settings_audit_log</code>.
-                    Keys and UI metadata are defined by developers in
-                    <code class="text-xs bg-gray-100 px-1 rounded">config/app_settings_registry.php</code>
-                    and the database.
+                    Values in <code class="text-xs bg-gray-100 px-1 rounded">app_settings</code>;
+                    audit trail in <code class="text-xs bg-gray-100 px-1 rounded">settings_audit_log</code>.
+                    Field labels and input types in <code class="text-xs bg-gray-100 px-1 rounded">config/app_settings_registry.php</code>.
                 </p>
             </div>
         </div>
@@ -46,153 +36,130 @@ function globals_setting_input_id(string $key): string
     <?php if (!$table_ready): ?>
         <div class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
             <p class="font-semibold">Database setup required</p>
-            <p class="mt-1">Run <code class="text-xs bg-white px-1 rounded">sql/app_settings_module.sql</code> to enable this module.
-            </p>
+            <p class="mt-1">Run <code class="text-xs bg-white px-1 rounded">sql/app_settings_module.sql</code> to enable this module.</p>
         </div>
-    <?php elseif ($groups === []): ?>
+    <?php elseif ($settings === []): ?>
         <div class="rounded-2xl border border-gray-200 bg-white px-5 py-8 text-center text-sm text-gray-600">
-            No settings found. Developers must add rows to <code class="text-xs bg-gray-100 px-1 rounded">app_settings</code>
-            and register them in <code class="text-xs bg-gray-100 px-1 rounded">config/app_settings_registry.php</code>.
+            No settings found. Add rows to <code class="text-xs bg-gray-100 px-1 rounded">app_settings</code>
+            and register keys in <code class="text-xs bg-gray-100 px-1 rounded">config/app_settings_registry.php</code>.
         </div>
     <?php else: ?>
-        <div class="flex flex-wrap gap-2">
-            <?php foreach ($groups as $group): ?>
-                <?php
-                $groupKey = $group['group_key'];
-                $isActiveTab = $groupKey === $active_group;
-                $tabUrl = base_url('?page=globals&action=settings&group=' . urlencode($groupKey));
-                ?>
-                <a href="<?php echo htmlspecialchars($tabUrl); ?>"
-                    class="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition <?php echo $isActiveTab ? 'bg-amber-600 text-white shadow-sm' : 'bg-white text-gray-700 border border-gray-200 hover:border-amber-200 hover:text-amber-800'; ?>">
-                    <i class="fas fa-folder-open text-xs opacity-80" aria-hidden="true"></i>
-                    <?php echo htmlspecialchars($group['group_label']); ?>
-                </a>
-            <?php endforeach; ?>
-        </div>
-
-        <?php foreach ($groups as $group): ?>
-            <?php if ($group['group_key'] !== $active_group) {
-                continue;
-            } ?>
-            <form action="<?php echo base_url('?page=globals&action=update_settings'); ?>" method="post" class="space-y-6">
-                <input type="hidden" name="group" value="<?php echo htmlspecialchars($group['group_key']); ?>">
-
-                <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
-                    <div class="px-5 py-4 bg-gradient-to-r from-amber-50/50 via-gray-50/90 to-gray-50/90 border-b border-amber-100/80">
-                        <div class="flex items-center gap-3 min-w-0">
-                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-amber-700 shadow-sm border border-amber-100">
-                                <i class="fas fa-pen-to-square text-sm" aria-hidden="true"></i>
-                            </span>
-                            <div class="min-w-0">
-                                <h2 class="text-sm font-semibold text-gray-900"><?php echo htmlspecialchars($group['group_label']); ?></h2>
-                                <p class="text-xs text-gray-500 mt-0.5">Admins can update values only. Keys cannot be added from this screen.</p>
-                            </div>
+        <form action="<?php echo base_url('?page=globals&action=update_settings'); ?>" method="post" class="space-y-6">
+            <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
+                <div class="px-5 py-4 bg-gradient-to-r from-amber-50/50 via-gray-50/90 to-gray-50/90 border-b border-amber-100/80">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-amber-700 shadow-sm border border-amber-100">
+                            <i class="fas fa-pen-to-square text-sm" aria-hidden="true"></i>
+                        </span>
+                        <div class="min-w-0">
+                            <h2 class="text-sm font-semibold text-gray-900">Application settings</h2>
+                            <p class="text-xs text-gray-500 mt-0.5">Update values only. Keys are defined by developers in the database and registry.</p>
                         </div>
                     </div>
+                </div>
 
-                    <div class="divide-y divide-gray-100">
-                        <?php foreach ($group['settings'] as $setting): ?>
-                            <?php
-                            $key = $setting['setting_key'];
-                            $inputId = globals_setting_input_id($key);
-                            $isEditable = (int) ($setting['is_editable'] ?? 1) === 1;
-                            $value = $setting['setting_value'] ?? '';
-                            $inputType = $setting['input_type'] ?? 'text';
-                            $valueType = $setting['value_type'] ?? 'string';
-                            ?>
-                            <div class="px-5 py-5 sm:px-6">
-                                <div class="flex flex-col lg:flex-row lg:items-start gap-4 lg:gap-8">
-                                    <div class="lg:w-2/5 min-w-0">
-                                        <label for="<?php echo htmlspecialchars($inputId); ?>" class="block text-sm font-semibold text-gray-900">
-                                            <?php echo htmlspecialchars($setting['label']); ?>
-                                        </label>
-                                        <div class="mt-1.5 inline-flex items-center gap-2 flex-wrap">
-                                            <code class="text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded"><?php echo htmlspecialchars($key); ?></code>
-                                            <?php if (!$isEditable): ?>
-                                                <span class="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Read only</span>
-                                            <?php endif; ?>
-                                        </div>
-                                        <?php if (!empty($setting['description'])): ?>
-                                            <p class="mt-2 text-xs text-gray-500 leading-relaxed"><?php echo htmlspecialchars($setting['description']); ?></p>
-                                        <?php endif; ?>
-                                    </div>
-
-                                    <div class="lg:flex-1 min-w-0">
+                <div class="divide-y divide-gray-100">
+                    <?php foreach ($settings as $setting): ?>
+                        <?php
+                        $key = $setting['setting_key'];
+                        $inputId = globals_setting_input_id($key);
+                        $isEditable = (int) ($setting['is_editable'] ?? 1) === 1;
+                        $value = $setting['setting_value'] ?? '';
+                        $inputType = $setting['input_type'] ?? 'text';
+                        $valueType = $setting['value_type'] ?? 'string';
+                        ?>
+                        <div class="px-5 py-5 sm:px-6">
+                            <div class="flex flex-col lg:flex-row lg:items-start gap-4 lg:gap-8">
+                                <div class="lg:w-2/5 min-w-0">
+                                    <label for="<?php echo htmlspecialchars($inputId); ?>" class="block text-sm font-semibold text-gray-900">
+                                        <?php echo htmlspecialchars($setting['label']); ?>
+                                    </label>
+                                    <div class="mt-1.5 inline-flex items-center gap-2 flex-wrap">
+                                        <code class="text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded"><?php echo htmlspecialchars($key); ?></code>
                                         <?php if (!$isEditable): ?>
-                                            <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 whitespace-pre-wrap break-words">
-                                                <?php
-                                                if ($valueType === 'bool') {
-                                                    echo in_array((string) $value, ['1', 'true', 'yes'], true) ? 'Enabled' : 'Disabled';
-                                                } else {
-                                                    echo htmlspecialchars((string) $value);
-                                                }
-                                                ?>
-                                            </div>
-                                        <?php elseif ($inputType === 'textarea' || $valueType === 'text'): ?>
-                                            <textarea
-                                                id="<?php echo htmlspecialchars($inputId); ?>"
-                                                name="values[<?php echo htmlspecialchars($key); ?>]"
-                                                rows="4"
-                                                class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500"><?php echo htmlspecialchars((string) $value); ?></textarea>
-                                        <?php elseif ($inputType === 'toggle' || $valueType === 'bool'): ?>
-                                            <label class="inline-flex items-center gap-3 cursor-pointer">
-                                                <input type="hidden" name="values[<?php echo htmlspecialchars($key); ?>]" value="0">
-                                                <input
-                                                    type="checkbox"
-                                                    id="<?php echo htmlspecialchars($inputId); ?>"
-                                                    name="values[<?php echo htmlspecialchars($key); ?>]"
-                                                    value="1"
-                                                    class="h-5 w-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
-                                                    <?php echo in_array((string) $value, ['1', 'true', 'yes'], true) ? 'checked' : ''; ?>>
-                                                <span class="text-sm text-gray-700"><?php echo in_array((string) $value, ['1', 'true', 'yes'], true) ? 'Enabled' : 'Disabled'; ?></span>
-                                            </label>
-                                        <?php elseif ($inputType === 'select' && !empty($setting['options'])): ?>
-                                            <select
-                                                id="<?php echo htmlspecialchars($inputId); ?>"
-                                                name="values[<?php echo htmlspecialchars($key); ?>]"
-                                                class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500">
-                                                <?php foreach ($setting['options'] as $option): ?>
-                                                    <?php
-                                                    $optionValue = is_array($option) ? ($option['value'] ?? '') : $option;
-                                                    $optionLabel = is_array($option) ? ($option['label'] ?? $optionValue) : $option;
-                                                    ?>
-                                                    <option value="<?php echo htmlspecialchars((string) $optionValue); ?>" <?php echo (string) $value === (string) $optionValue ? 'selected' : ''; ?>>
-                                                        <?php echo htmlspecialchars((string) $optionLabel); ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        <?php elseif ($inputType === 'number' || in_array($valueType, ['int', 'decimal'], true)): ?>
-                                            <input
-                                                type="number"
-                                                id="<?php echo htmlspecialchars($inputId); ?>"
-                                                name="values[<?php echo htmlspecialchars($key); ?>]"
-                                                value="<?php echo htmlspecialchars((string) $value); ?>"
-                                                <?php echo $valueType === 'decimal' ? 'step="0.01" min="0.01"' : 'step="1"'; ?>
-                                                class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500">
-                                        <?php else: ?>
-                                            <input
-                                                type="text"
-                                                id="<?php echo htmlspecialchars($inputId); ?>"
-                                                name="values[<?php echo htmlspecialchars($key); ?>]"
-                                                value="<?php echo htmlspecialchars((string) $value); ?>"
-                                                class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500">
+                                            <span class="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Read only</span>
                                         <?php endif; ?>
                                     </div>
+                                    <?php if (!empty($setting['description'])): ?>
+                                        <p class="mt-2 text-xs text-gray-500 leading-relaxed"><?php echo htmlspecialchars($setting['description']); ?></p>
+                                    <?php endif; ?>
+                                </div>
+
+                                <div class="lg:flex-1 min-w-0">
+                                    <?php if (!$isEditable): ?>
+                                        <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 whitespace-pre-wrap break-words">
+                                            <?php
+                                            if ($valueType === 'bool') {
+                                                echo in_array((string) $value, ['1', 'true', 'yes'], true) ? 'Enabled' : 'Disabled';
+                                            } else {
+                                                echo htmlspecialchars((string) $value);
+                                            }
+                                            ?>
+                                        </div>
+                                    <?php elseif ($inputType === 'textarea' || $valueType === 'text'): ?>
+                                        <textarea
+                                            id="<?php echo htmlspecialchars($inputId); ?>"
+                                            name="values[<?php echo htmlspecialchars($key); ?>]"
+                                            rows="4"
+                                            class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500"><?php echo htmlspecialchars((string) $value); ?></textarea>
+                                    <?php elseif ($inputType === 'toggle' || $valueType === 'bool'): ?>
+                                        <label class="inline-flex items-center gap-3 cursor-pointer">
+                                            <input type="hidden" name="values[<?php echo htmlspecialchars($key); ?>]" value="0">
+                                            <input
+                                                type="checkbox"
+                                                id="<?php echo htmlspecialchars($inputId); ?>"
+                                                name="values[<?php echo htmlspecialchars($key); ?>]"
+                                                value="1"
+                                                class="h-5 w-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                                                <?php echo in_array((string) $value, ['1', 'true', 'yes'], true) ? 'checked' : ''; ?>>
+                                            <span class="text-sm text-gray-700"><?php echo in_array((string) $value, ['1', 'true', 'yes'], true) ? 'Enabled' : 'Disabled'; ?></span>
+                                        </label>
+                                    <?php elseif ($inputType === 'select' && !empty($setting['options'])): ?>
+                                        <select
+                                            id="<?php echo htmlspecialchars($inputId); ?>"
+                                            name="values[<?php echo htmlspecialchars($key); ?>]"
+                                            class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500">
+                                            <?php foreach ($setting['options'] as $option): ?>
+                                                <?php
+                                                $optionValue = is_array($option) ? ($option['value'] ?? '') : $option;
+                                                $optionLabel = is_array($option) ? ($option['label'] ?? $optionValue) : $option;
+                                                ?>
+                                                <option value="<?php echo htmlspecialchars((string) $optionValue); ?>" <?php echo (string) $value === (string) $optionValue ? 'selected' : ''; ?>>
+                                                    <?php echo htmlspecialchars((string) $optionLabel); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    <?php elseif ($inputType === 'number' || in_array($valueType, ['int', 'decimal'], true)): ?>
+                                        <input
+                                            type="number"
+                                            id="<?php echo htmlspecialchars($inputId); ?>"
+                                            name="values[<?php echo htmlspecialchars($key); ?>]"
+                                            value="<?php echo htmlspecialchars((string) $value); ?>"
+                                            <?php echo $valueType === 'decimal' ? 'step="0.01" min="0.01"' : 'step="1"'; ?>
+                                            class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500">
+                                    <?php else: ?>
+                                        <input
+                                            type="text"
+                                            id="<?php echo htmlspecialchars($inputId); ?>"
+                                            name="values[<?php echo htmlspecialchars($key); ?>]"
+                                            value="<?php echo htmlspecialchars((string) $value); ?>"
+                                            class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500">
+                                    <?php endif; ?>
                                 </div>
                             </div>
-                        <?php endforeach; ?>
-                    </div>
-
-                    <div class="px-5 py-4 sm:px-6 border-t border-gray-100 bg-gray-50/70 flex justify-end">
-                        <button type="submit"
-                            class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition">
-                            <i class="fas fa-save text-xs opacity-95" aria-hidden="true"></i>
-                            Save <?php echo htmlspecialchars($group['group_label']); ?>
-                        </button>
-                    </div>
+                        </div>
+                    <?php endforeach; ?>
                 </div>
-            </form>
-        <?php endforeach; ?>
+
+                <div class="px-5 py-4 sm:px-6 border-t border-gray-100 bg-gray-50/70 flex justify-end">
+                    <button type="submit"
+                        class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition">
+                        <i class="fas fa-save text-xs opacity-95" aria-hidden="true"></i>
+                        Save settings
+                    </button>
+                </div>
+            </div>
+        </form>
 
         <?php if ($audit_rows !== []): ?>
             <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
