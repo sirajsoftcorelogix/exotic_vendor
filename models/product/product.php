@@ -4616,16 +4616,16 @@ class product
         return $stmt->execute();
     }
 
-    public function setProductStockReplenishmentDays($productId, $days)
+    public function setProductStockReplenishmentMonths($productId, $months)
     {
         $productId = (int)$productId;
-        $days = max(0, (int)$days);
-        $sql = 'UPDATE vp_products SET stock_replenishment_days = ? WHERE id = ?';
+        $months = max(0, (int)$months);
+        $sql = 'UPDATE vp_products SET stock_replenishment_months = ? WHERE id = ?';
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
             return false;
         }
-        $stmt->bind_param('ii', $days, $productId);
+        $stmt->bind_param('ii', $months, $productId);
 
         return $stmt->execute();
     }

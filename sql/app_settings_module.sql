@@ -95,11 +95,16 @@ DEALLOCATE PREPARE stmt;
 -- 3. Seed default setting(s)
 -- -----------------------------------------------------------------------------
 
+UPDATE app_settings
+SET setting_key = 'stock_replenishment_months',
+    setting_value = IF(setting_value = '30', '1', setting_value)
+WHERE setting_key = 'stock_replenishment_lookback_days';
+
 DELETE FROM app_settings
-WHERE setting_key <> 'stock_replenishment_lookback_days';
+WHERE setting_key <> 'stock_replenishment_months';
 
 INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES
-('stock_replenishment_lookback_days', '30');
+('stock_replenishment_months', '1');
 
 
 -- -----------------------------------------------------------------------------

@@ -5038,7 +5038,7 @@ class ProductsController
         exit;
     }
 
-    public function updateStockReplenishmentDays()
+    public function updateStockReplenishmentMonths()
     {
         is_login();
         global $productModel;
@@ -5067,21 +5067,21 @@ class ProductsController
 
             $groupLower = strtolower(trim((string)($product['groupname'] ?? '')));
             if (strpos($groupLower, 'book') === false) {
-                throw new Exception('Stock replenishment days applies to book products only.');
+                throw new Exception('Stock replenishment months applies to book products only.');
             }
 
-            $days = trim((string)($data['stock_replenishment_days'] ?? '')) === ''
+            $months = trim((string)($data['stock_replenishment_months'] ?? '')) === ''
                 ? 0
-                : max(0, (int)$data['stock_replenishment_days']);
+                : max(0, (int)$data['stock_replenishment_months']);
 
-            $result = $productModel->setProductStockReplenishmentDays($productId, $days);
+            $result = $productModel->setProductStockReplenishmentMonths($productId, $months);
             if (!$result) {
-                throw new Exception('Could not update stock replenishment days.');
+                throw new Exception('Could not update stock replenishment months.');
             }
 
             echo json_encode([
                 'success' => true,
-                'stock_replenishment_days' => $days,
+                'stock_replenishment_months' => $months,
             ]);
         } catch (Exception $e) {
             echo json_encode([
