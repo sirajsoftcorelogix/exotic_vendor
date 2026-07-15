@@ -44,7 +44,12 @@ class GlobalsController
             $submitted = [];
         }
 
-        $result = $appSettingsModel->updateValues($submitted, $userId);
+        $submittedActive = $_POST['active'] ?? [];
+        if (!is_array($submittedActive)) {
+            $submittedActive = [];
+        }
+
+        $result = $appSettingsModel->updateSettings($submitted, $submittedActive, $userId);
         $group = isset($_POST['group']) ? trim((string) $_POST['group']) : '';
         $groupQuery = $group !== '' ? '&group=' . urlencode($group) : '';
 
