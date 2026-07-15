@@ -13,11 +13,13 @@ CREATE TABLE IF NOT EXISTS app_settings (
     options_json JSON NULL,
     sort_order SMALLINT UNSIGNED NOT NULL DEFAULT 0,
     is_editable TINYINT(1) NOT NULL DEFAULT 1,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
     updated_by INT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_app_settings_key (setting_key),
-    KEY idx_app_settings_group (group_key)
+    KEY idx_app_settings_group (group_key),
+    KEY idx_app_settings_active (is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS settings_audit_log (

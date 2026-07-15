@@ -92,7 +92,7 @@ class AppSettings
         return array_values($grouped);
     }
 
-    public function getEditableByKeys(array $keys): array
+    public function getByKeys(array $keys): array
     {
         if (!$this->tableExists('app_settings') || $keys === []) {
             return [];
@@ -101,8 +101,7 @@ class AppSettings
         $placeholders = implode(',', array_fill(0, count($keys), '?'));
         $sql = "SELECT *
                 FROM app_settings
-                WHERE setting_key IN ($placeholders)
-                  AND is_editable = 1";
+                WHERE setting_key IN ($placeholders)";
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
             return [];
@@ -130,7 +129,7 @@ class AppSettings
         }
 
         $stmt = $this->conn->prepare(
-            'SELECT setting_value, value_type
+            'SELECT setting_value, value_type, is_active
              FROM app_settings
              WHERE setting_key = ?
              LIMIT 1'
@@ -144,29 +143,49 @@ class AppSettings
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
-        if (!$row) {
+        if (!$row || (int) ($row['is_active'] ?? 0) !== 1) {
             return $default;
         }
 
         return $this->castValue($row['setting_value'], $row['value_type']);
     }
 
-    public function updateValues(array $submittedValues, int $userId): array
+    public function updateSettings(array $submittedValues, array $submittedActive, int $userId): array
     {
         if (!$this->tableExists('app_settings')) {
             return ['success' => false, 'message' => 'Settings table is not installed. Run sql/create_app_settings_tables.sql.'];
         }
 
-        $keys = array_keys($submittedValues);
-        $definitions = $this->getEditableByKeys($keys);
+        $keys = array_unique(array_merge(array_keys($submittedActive), array_keys($submittedValues)));
+        $definitions = $this->getByKeys($keys);
         if ($definitions === []) {
-            return ['success' => false, 'message' => 'No editable settings were submitted.'];
+            return ['success' => false, 'message' => 'No settings were submitted.'];
         }
 
         $updated = 0;
         $errors = [];
 
         foreach ($definitions as $key => $definition) {
+            $definition = $this->applyActiveStateUpdate(
+                $key,
+                $definition,
+                $submittedActive,
+                $userId,
+                $updated,
+                $errors
+            );
+            if ($definition === null) {
+                continue;
+            }
+
+            if ((int) ($definition['is_editable'] ?? 0) !== 1) {
+                continue;
+            }
+
+            if (!array_key_exists($key, $submittedValues)) {
+                continue;
+            }
+
             $rawValue = $submittedValues[$key] ?? null;
             $normalized = $this->normalizeSubmittedValue($definition, $rawValue);
             if ($normalized['error'] !== null) {
@@ -201,7 +220,12 @@ class AppSettings
             $stmt->close();
 
             $this->logAudit($key, $oldValue, $storedValue, $userId);
-            $this->syncLegacyValue($key, $newValue, $definition['value_type']);
+            $definition['setting_value'] = $storedValue;
+
+            if ((int) ($definition['is_active'] ?? 0) === 1) {
+                $this->syncLegacyValue($key, $newValue, $definition['value_type']);
+            }
+
             $updated++;
         }
 
@@ -218,6 +242,70 @@ class AppSettings
             'message' => $updated > 0 ? 'Settings saved successfully.' : 'No changes detected.',
             'updated' => $updated,
         ];
+    }
+
+    /** @deprecated Use updateSettings() */
+    public function updateValues(array $submittedValues, int $userId): array
+    {
+        return $this->updateSettings($submittedValues, [], $userId);
+    }
+
+    private function applyActiveStateUpdate(
+        string $key,
+        array $definition,
+        array $submittedActive,
+        int $userId,
+        int &$updated,
+        array &$errors
+    ): ?array {
+        if (!array_key_exists($key, $submittedActive)) {
+            return $definition;
+        }
+
+        $newActive = ($submittedActive[$key] ?? '0') === '1' || $submittedActive[$key] === 1 ? 1 : 0;
+        $oldActive = (int) ($definition['is_active'] ?? 1);
+
+        if ($newActive === $oldActive) {
+            return $definition;
+        }
+
+        $stmt = $this->conn->prepare(
+            'UPDATE app_settings
+             SET is_active = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE setting_key = ?'
+        );
+        if (!$stmt) {
+            $errors[] = $definition['label'] . ': failed to prepare status update.';
+            return null;
+        }
+
+        $stmt->bind_param('iis', $newActive, $userId, $key);
+        if (!$stmt->execute()) {
+            $errors[] = $definition['label'] . ': status update failed.';
+            $stmt->close();
+            return null;
+        }
+        $stmt->close();
+
+        $this->logAudit(
+            $key,
+            $oldActive === 1 ? 'Active' : 'Inactive',
+            $newActive === 1 ? 'Active' : 'Inactive',
+            $userId
+        );
+
+        $definition['is_active'] = $newActive;
+        $updated++;
+
+        if ($newActive === 1) {
+            $this->syncLegacyValue(
+                $key,
+                $this->castValue($definition['setting_value'] ?? '', $definition['value_type'] ?? 'string'),
+                $definition['value_type'] ?? 'string'
+            );
+        }
+
+        return $definition;
     }
 
     public function getRecentAudit(int $limit = 20): array
