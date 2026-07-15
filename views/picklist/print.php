@@ -53,7 +53,7 @@ $showBookColumns = picklist_any_book_items($items);
 
     <div class="section section-a">
         <h2>A) Full quantity available <span class="section-count">(<?= count($fullItems) ?> item<?= count($fullItems) === 1 ? '' : 's' ?>)</span></h2>
-        <p class="section-desc">Physical stock meets or exceeds order quantity — pick the full order qty.</p>
+        <p class="section-desc">Physical stock meets or exceeds order quantity for every line on the order — pick the full order qty.</p>
         <?php
         $printItems = $fullItems;
         $showShortfallColumns = false;
@@ -64,7 +64,7 @@ $showBookColumns = picklist_any_book_items($items);
 
     <div class="section section-b">
         <h2>B) Partially available &amp; not available <span class="section-count">(<?= count($shortItems) ?> item<?= count($shortItems) === 1 ? '' : 's' ?>)</span></h2>
-        <p class="section-desc">Physical stock is less than order quantity — pick what is available; shortfall shown for follow-up.</p>
+        <p class="section-desc">If any line on an order is short or unavailable, all lines for that order are listed here — pick what is available; shortfall shown for follow-up.</p>
         <?php
         $printItems = $shortItems;
         $showShortfallColumns = true;
