@@ -1,14 +1,20 @@
 <?php
 require_once 'models/publisher/Publisher.php';
+require_once 'models/country/country.php';
+require_once 'models/country/state.php';
 require_once __DIR__ . '/../helpers/vendor_external_api.php';
 
 class PublishersController
 {
     private Publisher $publisherModel;
+    private Country $countryModel;
+    private State $stateModel;
 
     public function __construct(mysqli $conn)
     {
         $this->publisherModel = new Publisher($conn);
+        $this->countryModel = new Country($conn);
+        $this->stateModel = new State($conn);
     }
 
     public function index(): void
@@ -22,6 +28,8 @@ class PublishersController
         $limit = in_array($limit, [10, 20, 50, 100], true) ? $limit : 20;
 
         $listing = $this->publisherModel->getPublishers($pageNo, $limit, $search, $status);
+        $countryList = $this->countryModel->getAllCountries();
+        $stateList = $this->stateModel->getAllStates(105);
         renderTemplate('views/publishers/index.php', [
             'publishers' => $listing['publishers'],
             'search' => $search,
@@ -30,6 +38,8 @@ class PublishersController
             'totalPages' => $listing['totalPages'],
             'totalRecords' => $listing['totalRecords'],
             'limit' => $listing['limit'],
+            'countryList' => $countryList['countries'] ?? [],
+            'stateList' => $stateList['states'] ?? [],
         ], 'Manage Publishers');
     }
 
@@ -46,7 +56,7 @@ class PublishersController
         $id = trim((string)($_POST['id'] ?? '')) !== '' ? (int)$_POST['id'] : null;
         $name = trim((string)($_POST['publishers'] ?? ''));
         $isActive = (int)($_POST['is_active'] ?? 1);
-        $webpage = (string)($_POST['webpage'] ?? '0') === '1' ? '1' : '0';
+        $extra = $this->publisherModel->normalizePublisherFormData($_POST);
 
         if ($name === '') {
             echo json_encode(['success' => false, 'message' => 'Publisher name is required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
@@ -57,6 +67,8 @@ class PublishersController
             echo json_encode(['success' => false, 'message' => 'Publisher name already exists'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
+
+        $webpage = $extra['webpage'];
 
         if ($id && $id > 0) {
             $existing = $this->publisherModel->getPublisherById($id);
@@ -89,7 +101,7 @@ class PublishersController
                 exit;
             }
 
-            $result = $this->publisherModel->savePublisher($id, $name, $isActive);
+            $result = $this->publisherModel->savePublisher($id, $name, $isActive, $extra);
             if ($result['success']) {
                 $result['message'] = 'Publisher saved on Exotic India and locally.';
             }
@@ -109,7 +121,7 @@ class PublishersController
             exit;
         }
 
-        $result = $this->publisherModel->insertPublisher($remoteId, $name, $isActive);
+        $result = $this->publisherModel->insertPublisher($remoteId, $name, $isActive, $extra);
         if ($result['success']) {
             $result['message'] = 'Publisher created on Exotic India and saved locally.';
         }
