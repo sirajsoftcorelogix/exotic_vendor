@@ -158,7 +158,7 @@ $queryBase = [
                                 'country' => (string)($publisher['country'] ?? ''),
                                 'postal_code' => (string)($publisher['postal_code'] ?? ''),
                                 'webpage' => (int)($publisher['webpage'] ?? 0),
-                                'stock_replenishment_days' => (int)($publisher['stock_replenishment_days'] ?? 0),
+                                'stock_replenishment_months' => (int)($publisher['stock_replenishment_months'] ?? 0),
                                 'is_active' => $active ? 1 : 0,
                             ];
                             ?>
@@ -251,11 +251,11 @@ $queryBase = [
                         </select>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Stock Replenishment Days</label>
-                        <input type="number" name="stock_replenishment_days" id="publisher_stock_replenishment_days" min="0" step="1"
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Stock Replenishment Months</label>
+                        <input type="number" name="stock_replenishment_months" id="publisher_stock_replenishment_months" min="0" step="1"
                             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none"
                             placeholder="e.g. 30">
-                        <p class="mt-1 text-xs text-gray-500">Expected days to replenish stock for this publisher. Leave empty or 0 if not set.</p>
+                        <p class="mt-1 text-xs text-gray-500">Expected months to replenish stock for this publisher. Leave empty or 0 if not set.</p>
                     </div>
                 </div>
                 <div class="mt-3">
@@ -493,9 +493,9 @@ function openPublisherModal(publisher) {
     document.getElementById('publisher_postal_code').value = publisher.postal_code || '';
     document.getElementById('publisher_gst_number').value = publisher.gst_number || '';
     document.getElementById('publisher_pan_number').value = publisher.pan_number || '';
-    document.getElementById('publisher_stock_replenishment_days').value =
-        publisher.stock_replenishment_days != null && publisher.stock_replenishment_days !== 0
-            ? String(publisher.stock_replenishment_days)
+    document.getElementById('publisher_stock_replenishment_months').value =
+        publisher.stock_replenishment_months != null && publisher.stock_replenishment_months !== 0
+            ? String(publisher.stock_replenishment_months)
             : '';
 
     const countrySelect = document.getElementById('publisher_country');

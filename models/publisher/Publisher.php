@@ -4,7 +4,7 @@ class Publisher
 {
     private mysqli $conn;
 
-    private const LIST_COLUMNS = 'id, publishers_id, publishers, contact_name, publisher_email, country_code, publisher_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_days, is_active, create_at, update_at';
+    private const LIST_COLUMNS = 'id, publishers_id, publishers, contact_name, publisher_email, country_code, publisher_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_months, is_active, create_at, update_at';
 
     public function __construct(mysqli $conn)
     {
@@ -30,9 +30,9 @@ class Publisher
             'country' => trim((string)($data['country'] ?? '')),
             'postal_code' => trim((string)($data['postal_code'] ?? '')),
             'webpage' => (string)($data['webpage'] ?? '0') === '1' ? '1' : '0',
-            'stock_replenishment_days' => trim((string)($data['stock_replenishment_days'] ?? '')) === ''
+            'stock_replenishment_months' => trim((string)($data['stock_replenishment_months'] ?? '')) === ''
                 ? 0
-                : max(0, (int)$data['stock_replenishment_days']),
+                : max(0, (int)$data['stock_replenishment_months']),
         ];
     }
 
@@ -241,13 +241,13 @@ class Publisher
         }
 
         $stmt = $this->conn->prepare(
-            'UPDATE vp_publishers SET publishers = ?, contact_name = ?, publisher_email = ?, country_code = ?, publisher_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, stock_replenishment_days = ?, is_active = ? WHERE id = ?'
+            'UPDATE vp_publishers SET publishers = ?, contact_name = ?, publisher_email = ?, country_code = ?, publisher_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, stock_replenishment_months = ?, is_active = ? WHERE id = ?'
         );
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
         }
         $webpage = (int)$fields['webpage'];
-        $stockReplenishmentDays = (int)$fields['stock_replenishment_days'];
+        $stockReplenishmentMonths = (int)$fields['stock_replenishment_months'];
         $stmt->bind_param(
             'sssssssssssssiiii',
             $name,
@@ -264,7 +264,7 @@ class Publisher
             $fields['country'],
             $fields['postal_code'],
             $webpage,
-            $stockReplenishmentDays,
+            $stockReplenishmentMonths,
             $isActive,
             $id
         );
@@ -312,13 +312,13 @@ class Publisher
         }
 
         $stmt = $this->conn->prepare(
-            'INSERT INTO vp_publishers (publishers_id, publishers, contact_name, publisher_email, country_code, publisher_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_days, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO vp_publishers (publishers_id, publishers, contact_name, publisher_email, country_code, publisher_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_months, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
         }
         $webpage = (int)$fields['webpage'];
-        $stockReplenishmentDays = (int)$fields['stock_replenishment_days'];
+        $stockReplenishmentMonths = (int)$fields['stock_replenishment_months'];
         $stmt->bind_param(
             'issssssssssssssiii',
             $publishersId,
@@ -336,7 +336,7 @@ class Publisher
             $fields['country'],
             $fields['postal_code'],
             $webpage,
-            $stockReplenishmentDays,
+            $stockReplenishmentMonths,
             $isActive
         );
 

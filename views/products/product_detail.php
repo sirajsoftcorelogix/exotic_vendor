@@ -637,18 +637,18 @@
 
           <?php if ($isBookProduct): ?>
           <?php
-          $stockReplenishmentDays = (int)($products['stock_replenishment_days'] ?? 0);
-          $stockReplenishmentDisplay = $stockReplenishmentDays > 0 ? (string)$stockReplenishmentDays : '—';
+          $stockReplenishmentMonths = (int)($products['stock_replenishment_months'] ?? 0);
+          $stockReplenishmentDisplay = $stockReplenishmentMonths > 0 ? (string)$stockReplenishmentMonths : '—';
           ?>
           <div class="<?php echo $invCard; ?> border-teal-100 bg-teal-50 pr-6 sm:pr-7">
             <div class="<?php echo $invBody; ?>">
-              <p class="<?php echo $invLbl; ?>"><span class="sm:hidden">Replenish Days</span><span class="hidden sm:inline">Stock Replenishment Days</span></p>
-              <p id="stockReplenishmentDaysDisplay" class="<?php echo $invVal; ?> text-teal-700"><?php echo htmlspecialchars($stockReplenishmentDisplay, ENT_QUOTES, 'UTF-8'); ?></p>
+              <p class="<?php echo $invLbl; ?>"><span class="sm:hidden">Replenish Months</span><span class="hidden sm:inline">Stock Replenishment Months</span></p>
+              <p id="stockReplenishmentMonthsDisplay" class="<?php echo $invVal; ?> text-teal-700"><?php echo htmlspecialchars($stockReplenishmentDisplay, ENT_QUOTES, 'UTF-8'); ?></p>
             </div>
             <div class="<?php echo $invIco; ?> bg-teal-100 text-teal-700">
-               <i class="fas fa-calendar-day"></i>
+               <i class="fas fa-calendar-alt"></i>
             </div>
-            <button type="button" class="<?php echo $invEdit; ?> text-gray-400 hover:text-teal-700" onclick="openStockReplenishmentDaysModal()" title="Edit stock replenishment days" aria-label="Edit stock replenishment days">
+            <button type="button" class="<?php echo $invEdit; ?> text-gray-400 hover:text-teal-700" onclick="openStockReplenishmentMonthsModal()" title="Edit stock replenishment months" aria-label="Edit stock replenishment months">
               <i class="fas fa-pencil-alt text-[10px]"></i>
             </button>
           </div>
@@ -1297,25 +1297,25 @@
     </div>
 </div>
 <?php if ($isBookProduct): ?>
-<div id="stockReplenishmentDaysModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+<div id="stockReplenishmentMonthsModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
     <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
-        <button type="button" onclick="closeStockReplenishmentDaysModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
-        <h2 class="text-lg font-semibold text-gray-800 mb-4">Stock Replenishment Days</h2>
-        <p class="text-sm text-gray-500 mb-4">Expected days to replenish stock for this book. Leave empty or 0 if not set.</p>
+        <button type="button" onclick="closeStockReplenishmentMonthsModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Stock Replenishment Months</h2>
+        <p class="text-sm text-gray-500 mb-4">Expected months to replenish stock for this book. Leave empty or 0 if not set.</p>
         <div>
-            <label for="input_stock_replenishment_days" class="block text-sm font-medium text-gray-600 mb-1">Days</label>
+            <label for="input_stock_replenishment_months" class="block text-sm font-medium text-gray-600 mb-1">Months</label>
             <input
                 type="number"
-                id="input_stock_replenishment_days"
+                id="input_stock_replenishment_months"
                 min="0"
                 step="1"
-                value="<?php echo $stockReplenishmentDays > 0 ? htmlspecialchars((string)$stockReplenishmentDays, ENT_QUOTES, 'UTF-8') : ''; ?>"
+                value="<?php echo $stockReplenishmentMonths > 0 ? htmlspecialchars((string)$stockReplenishmentMonths, ENT_QUOTES, 'UTF-8') : ''; ?>"
                 class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none"
             >
         </div>
         <div class="flex justify-end gap-3 mt-6">
-            <button type="button" onclick="closeStockReplenishmentDaysModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
-            <button type="button" onclick="submitStockReplenishmentDaysUpdate()" class="px-4 py-2 text-sm bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-700">Save</button>
+            <button type="button" onclick="closeStockReplenishmentMonthsModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button type="button" onclick="submitStockReplenishmentMonthsUpdate()" class="px-4 py-2 text-sm bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-700">Save</button>
         </div>
     </div>
 </div>
@@ -2318,22 +2318,22 @@ function submitMinMaxUpdate() {
 }
 
 <?php if ($isBookProduct): ?>
-function openStockReplenishmentDaysModal() {
-    document.getElementById('stockReplenishmentDaysModal').classList.remove('hidden');
+function openStockReplenishmentMonthsModal() {
+    document.getElementById('stockReplenishmentMonthsModal').classList.remove('hidden');
 }
 
-function closeStockReplenishmentDaysModal() {
-    document.getElementById('stockReplenishmentDaysModal').classList.add('hidden');
+function closeStockReplenishmentMonthsModal() {
+    document.getElementById('stockReplenishmentMonthsModal').classList.add('hidden');
 }
 
-function submitStockReplenishmentDaysUpdate() {
-    const input = document.getElementById('input_stock_replenishment_days');
+function submitStockReplenishmentMonthsUpdate() {
+    const input = document.getElementById('input_stock_replenishment_months');
     const data = {
         product_id: <?php echo json_encode($products['id'] ?? 0); ?>,
-        stock_replenishment_days: input ? input.value : ''
+        stock_replenishment_months: input ? input.value : ''
     };
 
-    fetch('index.php?page=products&action=update_stock_replenishment_days', {
+    fetch('index.php?page=products&action=update_stock_replenishment_months', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -2341,19 +2341,19 @@ function submitStockReplenishmentDaysUpdate() {
     .then(function (response) { return response.json(); })
     .then(function (res) {
         if (res.success) {
-            const display = document.getElementById('stockReplenishmentDaysDisplay');
-            const days = parseInt(res.stock_replenishment_days, 10) || 0;
+            const display = document.getElementById('stockReplenishmentMonthsDisplay');
+            const months = parseInt(res.stock_replenishment_months, 10) || 0;
             if (display) {
-                display.textContent = days > 0 ? String(days) : '—';
+                display.textContent = months > 0 ? String(months) : '—';
             }
-            closeStockReplenishmentDaysModal();
-            alert('✅ Stock replenishment days updated!');
+            closeStockReplenishmentMonthsModal();
+            alert('✅ Stock replenishment months updated!');
         } else {
-            alert('❌ Failed: ' + (res.message || 'Could not update stock replenishment days.'));
+            alert('❌ Failed: ' + (res.message || 'Could not update stock replenishment months.'));
         }
     })
     .catch(function () {
-        alert('❌ Failed: Could not update stock replenishment days.');
+        alert('❌ Failed: Could not update stock replenishment months.');
     });
 }
 <?php endif; ?>

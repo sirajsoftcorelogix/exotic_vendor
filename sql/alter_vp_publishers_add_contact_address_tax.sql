@@ -13,4 +13,4 @@ ALTER TABLE vp_publishers
     ADD COLUMN country VARCHAR(100) NULL DEFAULT NULL AFTER state,
     ADD COLUMN postal_code VARCHAR(20) NULL DEFAULT NULL AFTER country,
     ADD COLUMN webpage TINYINT(1) NOT NULL DEFAULT 0 AFTER postal_code,
-    ADD COLUMN stock_replenishment_days INT UNSIGNED NOT NULL DEFAULT 0 AFTER webpage;
+    ADD COLUMN stock_replenishment_months INT UNSIGNED NOT NULL DEFAULT 0 AFTER webpage;
