@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once 'models/PosInvoice/invoice.php';
 require_once 'models/order/order.php';
 require_once 'models/user/user.php';
@@ -6,7 +6,7 @@ require_once 'models/comman/tables.php';
 require_once 'models/customer/Customer.php';
 require_once 'models/product/product.php';
 require_once __DIR__ . '/../models/payment/Payment.php';
-// Register in $GLOBALS so methods work when this file is required from a function scope (e.g. payments → create invoice).
+// Register in $GLOBALS so methods work when this file is required from a function scope (e.g. payments â†’ create invoice).
 $GLOBALS['invoiceModel'] = $GLOBALS['invoiceModel'] ?? new POSInvoice($conn);
 $GLOBALS['ordersModel'] = $GLOBALS['ordersModel'] ?? new Order($conn);
 $GLOBALS['usersModel'] = $GLOBALS['usersModel'] ?? new User($conn);
@@ -563,7 +563,7 @@ class PosInvoiceController
             'invoice_html' => $invoiceHtml,
             'invoice_number' => (string)($invoice['invoice_number'] ?? ''),
             'invoice_pdf_url' => $pdfUrl,
-        ], 'Invoice — ' . ($invoice['invoice_number'] ?? ''));
+        ], 'Invoice â€” ' . ($invoice['invoice_number'] ?? ''));
     }
 
     private function parsePosInvoiceDiscountMeta(?string $notes): array
@@ -942,6 +942,138 @@ class PosInvoiceController
     }
 
     /**
+     * Rebuild checkout invoice snapshot from persisted order rows (payments / delayed invoice create).
+     *
+     * @param list<array<string, mixed>> $orderItems
+     * @param array<string, mixed>|null $orderInfo vp_order_info row
+     * @return array<string, mixed>|null
+     */
+    private function buildPosInvoiceSnapshotFromOrder(string $orderNumber, array $orderItems, ?array $orderInfo): ?array
+    {
+        global $conn;
+
+        if ($orderNumber === '' || $orderItems === []) {
+            return null;
+        }
+
+        require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+
+        $listLinePrices = $this->buildPosLinePriceRowsFromOrderItems($orderItems, 'list');
+        $discLinePrices = $this->buildPosLinePriceRowsFromOrderItems($orderItems, 'disc');
+        if ($listLinePrices === [] && $discLinePrices === []) {
+            return null;
+        }
+
+        $listSubtotal = 0.0;
+        $discSubtotal = 0.0;
+        foreach ($orderItems as $it) {
+            $qty = max(1, (int)($it['quantity'] ?? 1));
+            $listUnit = (float)($it['itemprice'] ?? 0);
+            if ($listUnit <= 0) {
+                $listUnit = (float)($it['finalprice'] ?? 0) / $qty;
+            }
+            $listSubtotal += round($listUnit * $qty, 2);
+            $discSubtotal += round((float)($it['finalprice'] ?? 0), 2);
+        }
+
+        $couponDiscount = round((float)($orderInfo['coupon_reduce'] ?? 0), 2);
+        $giftDiscount = round((float)($orderInfo['giftvoucher_reduce'] ?? 0), 2);
+        $credit = round((float)($orderInfo['credit'] ?? 0), 2);
+
+        $cashDiscount = 0.0;
+        foreach ($orderItems as $it) {
+            $cashDiscount = max($cashDiscount, round((float)($it['custom_reduce'] ?? 0), 2));
+        }
+
+        $lineDiscount = max(0.0, round($listSubtotal - $discSubtotal, 2));
+
+        $grandTotal = ($conn instanceof mysqli)
+            ? pos_payment_resolve_order_total($conn, $orderNumber)
+            : 0.0;
+        if ($grandTotal <= 0) {
+            $grandTotal = round((float)($orderInfo['total'] ?? 0), 2);
+        }
+        if ($grandTotal <= 0) {
+            $grandTotal = max(0.0, round($discSubtotal - $couponDiscount - $cashDiscount - $giftDiscount - $credit, 2));
+        }
+
+        $subtotalGoods = round($listSubtotal, 2);
+        if ($subtotalGoods <= 0 && $grandTotal > 0) {
+            $subtotalGoods = $grandTotal;
+        }
+
+        $customMode = '';
+        $customValue = 0.0;
+        if ($cashDiscount > 0) {
+            $customNote = trim((string)($orderInfo['custom_note'] ?? ''));
+            if ($customNote !== '' && preg_match('/(\d+(?:\.\d+)?)\s*%/', $customNote, $matches)) {
+                $customMode = 'percent';
+                $customValue = round((float)$matches[1], 2);
+            } else {
+                $customMode = 'fixed';
+                $customValue = $cashDiscount;
+            }
+        }
+
+        return [
+            'order_number' => $orderNumber,
+            'subtotal_goods' => $subtotalGoods,
+            'gst_total' => 0.0,
+            'coupon_discount' => $couponDiscount,
+            'cash_discount' => $cashDiscount,
+            'gift_discount' => $giftDiscount,
+            'line_discount' => $lineDiscount,
+            'grand_total' => $grandTotal,
+            'line_prices' => $discLinePrices,
+            'list_line_prices' => $listLinePrices,
+            'discounts_absorbed' => true,
+            'custom_discount_mode' => $customMode,
+            'custom_discount_value' => $customValue,
+            'coupon_display_name' => trim((string)($orderInfo['coupon'] ?? '')),
+        ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $orderItems
+     * @return list<array{itemcode: string, size: string, color: string, price: string}>
+     */
+    private function buildPosLinePriceRowsFromOrderItems(array $orderItems, string $kind): array
+    {
+        $rows = [];
+        foreach ($orderItems as $it) {
+            $itemCode = trim((string)($it['item_code'] ?? ''));
+            if ($itemCode === '') {
+                continue;
+            }
+
+            $qty = max(1, (int)($it['quantity'] ?? 1));
+            if ($kind === 'list') {
+                $unit = (float)($it['itemprice'] ?? 0);
+                if ($unit <= 0) {
+                    $unit = (float)($it['finalprice'] ?? 0) / $qty;
+                }
+            } else {
+                $unit = (float)($it['finalprice'] ?? 0) / $qty;
+                if ($unit <= 0) {
+                    $unit = (float)($it['itemprice'] ?? 0);
+                }
+            }
+            if ($unit <= 0) {
+                continue;
+            }
+
+            $rows[] = [
+                'itemcode' => $itemCode,
+                'size' => trim((string)($it['size'] ?? '')),
+                'color' => trim((string)($it['color'] ?? '')),
+                'price' => number_format($unit, 2, '.', ''),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
      * @param list<array<string, mixed>> $orderItems
      * @param array<string, mixed> $snapshot
      */
@@ -1163,7 +1295,7 @@ class PosInvoiceController
             return 'Custom Discount (' . $pct . '%)';
         }
 
-        return 'Custom Discount (fixed ₹)';
+        return 'Custom Discount (fixed â‚¹)';
     }
 
     private function posInvoiceCouponLabel(array $posMeta): string
@@ -1567,26 +1699,11 @@ class PosInvoiceController
         }
 
         // Fetch customer and address information
+        require_once __DIR__ . '/../helpers/invoice/invoice_address_html.php';
         $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
-        $billToInfo = '';
-        $shipToInfo = '';
-
-        if ($customer) {
-            $billToInfo = '<strong>' . htmlspecialchars($customer['first_name'] . ' ' . $customer['last_name'] ?? 'N/A') . '</strong><br>';
-            $billToInfo .= htmlspecialchars($customer['address_line1'] ?? '') . '';
-            $billToInfo .= htmlspecialchars($customer['address_line2'] ?? '') . '<br>';
-            $billToInfo .= htmlspecialchars($customer['city'] ?? '') . ' ' . htmlspecialchars($customer['state'] ?? '') . ' ' . htmlspecialchars($customer['zipcode'] ?? '') . '<br>';
-            $billToInfo .= 'Tel: ' . htmlspecialchars($customer['mobile'] ?? '') . '<br>';
-        }
-        if (!empty($customer['shipping_address_line1']) && !empty($customer['shipping_address_line2'])) {
-            $shipToInfo = '<strong>' . htmlspecialchars($customer['shipping_first_name'] . ' ' . $customer['shipping_last_name'] ?? 'N/A') . '</strong><br>';
-            $shipToInfo .= htmlspecialchars($customer['shipping_address_line1'] ?? '') . '';
-            $shipToInfo .= htmlspecialchars($customer['shipping_address_line2'] ?? '') . '<br>';
-            $shipToInfo .= htmlspecialchars($customer['shipping_city'] ?? '') . ' ' . htmlspecialchars($customer['shipping_state'] ?? '') . ' ' . htmlspecialchars($customer['shipping_zipcode'] ?? '') . '<br>';
-            $shipToInfo .= 'Tel: ' . htmlspecialchars($customer['shipping_mobile'] ?? '') . '<br>';
-        } else {
-            $shipToInfo = $billToInfo; // Use same info unless stored separately
-        }
+        $addressBlocks = invoice_resolve_bill_ship_html(is_array($customer) ? $customer : null);
+        $billToInfo = $addressBlocks['bill'];
+        $shipToInfo = $addressBlocks['ship'];
         //print_r($billToInfo);
         // Load template
         if ($invoice['status'] == 'proforma') {
@@ -1703,6 +1820,14 @@ class PosInvoiceController
         $useSnapshot = is_array($checkoutSnapshot)
             && trim((string)($checkoutSnapshot['order_number'] ?? '')) === $orderNumber;
 
+        if (!$useSnapshot) {
+            $rebuiltSnapshot = $this->buildPosInvoiceSnapshotFromOrder($orderNumber, $items, $info);
+            if (is_array($rebuiltSnapshot)) {
+                $checkoutSnapshot = $rebuiltSnapshot;
+                $useSnapshot = true;
+            }
+        }
+
         if ($useSnapshot) {
             $this->buildInvoicePostFromCheckoutSnapshot($items, $checkoutSnapshot);
         } else {
@@ -1731,24 +1856,17 @@ class PosInvoiceController
             $_POST['total_amount'] = $_POST['subtotal'] + $_POST['tax_amount'];
         }
 
-        $posDiscountMeta = $useSnapshot ? $checkoutSnapshot : [];
         $lineItemsMeta = $useSnapshot
             ? $this->computePosInvoiceLineMetaFromSnapshot($items, $checkoutSnapshot)
             : [];
-        $result = $this->createPostInternal();
-        if (!empty($result['success']) && !empty($result['invoice_id']) && $useSnapshot && is_array($posDiscountMeta)) {
-            $posDiscountMeta['gst_total'] = round((float)($_POST['tax_amount'] ?? 0), 2);
-            $posDiscountMeta['grand_total'] = round((float)($_POST['total_amount'] ?? 0), 2);
-            if (!empty($posDiscountMeta['discounts_absorbed'])) {
-                $posDiscountMeta['subtotal_goods'] = $posDiscountMeta['grand_total'];
-            } elseif (empty($posDiscountMeta['subtotal_goods']) && $posDiscountMeta['grand_total'] > 0) {
-                $posDiscountMeta['subtotal_goods'] = $posDiscountMeta['grand_total'];
-            }
-            if (!isset($posDiscountMeta['discounts_absorbed']) || $posDiscountMeta['discounts_absorbed'] === '') {
-                $posDiscountMeta['discounts_absorbed'] = true;
-            }
-            $this->persistPosInvoiceDiscountNotes((int)$result['invoice_id'], $posDiscountMeta, $lineItemsMeta);
-        }
+        $result = $this->invoiceCreationService()->createFromPost($_POST, [
+            'source' => 'pos',
+            'discount_meta' => $useSnapshot ? $checkoutSnapshot : null,
+            'line_items_meta' => $lineItemsMeta,
+            'duplicate_order_check' => true,
+            'clear_invoice_session' => false,
+            'update_order_invoice_id' => true,
+        ]);
         unset($_SESSION['pos_checkout_invoice_snapshot']);
 
         return $result;
@@ -1821,7 +1939,7 @@ class PosInvoiceController
 
         $_POST['total_amount'] = $_POST['subtotal'] + $_POST['tax_amount'];
 
-        // ✅ CALL MAIN INVOICE LOGIC 🔥
+        // âœ… CALL MAIN INVOICE LOGIC ðŸ”¥
         return $this->createPost();
     }
     public function createPost()
@@ -1834,194 +1952,22 @@ class PosInvoiceController
 
     private function createPostInternal(): array
     {
-        global $invoiceModel, $ordersModel, $commanModel, $conn;
-        //print_r($_POST);
-        //exit;
-        // Validate form inputs
-        $invoice_date = isset($_POST['invoice_date']) ? $_POST['invoice_date'] : date('Y-m-d');
-        $customer_id = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
-        $vp_order_info_id = isset($_POST['vp_order_info_id']) ? trim($_POST['vp_order_info_id']) : '';
-        $currency = isset($_POST['currency']) ? $_POST['currency'] : [];
-        $subtotal = isset($_POST['subtotal']) ? floatval($_POST['subtotal']) : 0;
-        $tax_amount = isset($_POST['tax_amount']) ? floatval($_POST['tax_amount']) : 0;
-        $discount_amount = isset($_POST['discount_amount']) ? floatval($_POST['discount_amount']) : 0;
-        $total_amount = isset($_POST['total_amount']) ? floatval($_POST['total_amount']) : 0;
-
-        $order_numbers = isset($_POST['order_number']) && is_array($_POST['order_number']) ? $_POST['order_number'] : [];
-        $item_codes = isset($_POST['item_code']) && is_array($_POST['item_code']) ? $_POST['item_code'] : [];
-        $item_names = isset($_POST['item_name']) && is_array($_POST['item_name']) ? $_POST['item_name'] : [];
-        $hsn_codes = isset($_POST['hsn']) && is_array($_POST['hsn']) ? $_POST['hsn'] : [];
-        $quantities = isset($_POST['quantity']) && is_array($_POST['quantity']) ? $_POST['quantity'] : [];
-        $unit_prices = isset($_POST['unit_price']) && is_array($_POST['unit_price']) ? $_POST['unit_price'] : [];
-        $tax_rates = isset($_POST['tax_rate']) && is_array($_POST['tax_rate']) ? $_POST['tax_rate'] : [];
-        $cgst = isset($_POST['cgst']) && is_array($_POST['cgst']) ? $_POST['cgst'] : [];
-        $sgst = isset($_POST['sgst']) && is_array($_POST['sgst']) ? $_POST['sgst'] : [];
-        $igst = isset($_POST['igst']) && is_array($_POST['igst']) ? $_POST['igst'] : [];
-        $box_no = isset($_POST['box_no']) && is_array($_POST['box_no']) ? $_POST['box_no'] : [];
-
-        if ($customer_id <= 0 || empty($order_numbers)) {
-            return ['success' => false, 'message' => 'Invalid parameters'];
-        }
-        foreach ($order_numbers as $order_number) {
-            $existingInvoice = $invoiceModel->getActiveInvoiceForOrderNumber($order_number);
-            if ($existingInvoice) {
-                return ['success' => false, 'message' => "Invoice already exists for Order Number: $order_number"];
-            }
-        }
-        $firstCurrency = $currency[0] ?? '';
-        foreach ($currency as $curr) {
-            if ($curr !== $firstCurrency) {
-                return ['success' => false, 'message' => 'All items must have the same currency'];
-            }
-        }
-        require_once __DIR__ . '/../helpers/invoice_number_resolver.php';
-        $customInvoiceNumber = trim((string)($_POST['custom_invoice_number'] ?? ''));
-        $invoiceNumberResult = resolve_invoice_number($conn, $customInvoiceNumber);
-        if (empty($invoiceNumberResult['success'])) {
-            return ['success' => false, 'message' => $invoiceNumberResult['message'] ?? 'Invalid invoice number.'];
-        }
-        $invoice_number = (string) $invoiceNumberResult['invoice_number'];
-
-        // Create invoice header
-        $isInternational = ($firstCurrency && $firstCurrency !== 'INR') ? 1 : 0;
-        $invoiceData = [
-            'invoice_number' => $invoice_number,
-            'invoice_date' => $invoice_date,
-            'customer_id' => $customer_id,
-            'vp_order_info_id' => $vp_order_info_id,
-            'currency' => $currency[0] ?? 'INR',
-            'subtotal' => $subtotal,
-            'tax_amount' => $tax_amount,
-            'discount_amount' => $discount_amount,
-            'total_amount' => $total_amount,
-            'status' => isset($_POST['status']) ? trim($_POST['status']) : 'final',
-            'created_by' => $_SESSION['user']['id'] ?? 0,
-            'created_at' => date('Y-m-d H:i:s')
-        ];
-        if ($currency[0] && $currency[0] !== 'INR') {
-            $currencyRecord = $this->getCurrencyByCode($currency[0]);
-            if ($currencyRecord) {
-                $exchangeRate = floatval($currencyRecord['rate_export'] ?? 1);
-                $convertedAmount = $total_amount * $exchangeRate;
-                $invoiceData['converted_amount'] = $convertedAmount;
-                $invoiceData['exchange_text'] = 'Exchange Rate (' . $currencyRecord['currency_unit'] . ' to INR): ' . number_format($exchangeRate, 6);
-            }
-        } else {
-            $invoiceData['exchange_text'] = '';
-            $invoiceData['converted_amount'] = 0.00;
-        }
-        $invoiceId = $invoiceModel->createInvoice($invoiceData);
-
-        if (!$invoiceId) {
-            return ['success' => false, 'message' => 'Failed to create invoice'];
-        }
-
-        // Create invoice items
-        $itemCreated = 0;
-        $itemsFailed = [];
-        $productModel = new Product($conn);
-
-        foreach ($order_numbers as $idx => $order_number) {
-            $quantity = isset($quantities[$idx]) ? (int)$quantities[$idx] : 0;
-            $unit_price = isset($unit_prices[$idx]) ? floatval($unit_prices[$idx]) : 0;
-            $tax_rate = isset($tax_rates[$idx]) ? floatval($tax_rates[$idx]) : 0;
-
-            $amount = $quantity * $unit_price;
-            $totalTaxAmount = ($amount * $tax_rate) / 100;
-
-            // Calculate SGST/CGST/IGST (assuming 50/50 split for SGST/CGST, IGST is 0)
-            //$sgstRate = $tax_rate / 2;
-            //$cgstRate = $tax_rate / 2;
-            $sgstRate = (float)($sgst[$idx] ?? 0);
-            $cgstRate = (float)($cgst[$idx] ?? 0);
-            $igstRate = (float)($igst[$idx] ?? 0);
-            $sgstAmt = ($amount * $sgstRate) / 100;
-            $cgstAmt = ($amount * $cgstRate) / 100;
-            $igstAmt = ($amount * $igstRate) / 100;
-
-            $itemData = [
-                'invoice_id' => $invoiceId,
-                'order_number' => $order_number,
-                'item_code' => isset($item_codes[$idx]) ? trim($item_codes[$idx]) : '',
-                'item_name' => isset($item_names[$idx]) ? trim($item_names[$idx]) : '',
-                'image_url' => isset($_POST['image_url'][$idx]) ? trim($_POST['image_url'][$idx]) : '',
-                'description' => '',
-                'box_no' => isset($box_no[$idx]) ? trim($box_no[$idx]) : '',
-                'hsn' => isset($hsn_codes[$idx]) ? trim($hsn_codes[$idx]) : '',
-                'quantity' => $quantity,
-                'unit_price' => $unit_price,
-                'tax_rate' => $tax_rate,
-                'cgst' => $cgstAmt,
-                'sgst' => $sgstAmt,
-                'igst' => $igstAmt,
-                'tax_amount' => $totalTaxAmount,
-                'line_total' => $amount + $totalTaxAmount,
-                'groupname' => isset($_POST['groupname'][$idx]) ? trim($_POST['groupname'][$idx]) : ''
-            ];
-            $itemData['product_id'] = $productModel->getProductIdForInvoiceLine(
-                (string)$order_number,
-                (string)($itemData['item_code'] ?? '')
-            );
-            //print_r($itemData);
-            $result = $invoiceModel->createInvoiceItem($itemData);
-            if ($result) {
-                $itemCreated++;
-            } else {
-                $itemsFailed[] = $order_number;
-            }
-        }
-
-        require_once __DIR__ . '/../models/order/stock.php';
-        $stockModel = new Stock($conn);
-        $stockResult = $stockModel->applyInvoiceStockOnCreate((int)$invoiceId, (string)($invoiceData['status'] ?? 'final'));
-        if (empty($stockResult['success'])) {
-            return [
-                'success' => false,
-                'message' => 'Invoice saved but stock update failed: ' . ($stockResult['message'] ?? 'Unknown error'),
-                'invoice_id' => $invoiceId,
-                'invoice_number' => $invoice_number,
-                'items_created' => $itemCreated,
-                'items_failed' => $itemsFailed,
-            ];
-        }
-
-        //save international fields
-        if ($isInternational) {
-            $internationalData = [
-                'invoice_id' => $invoiceId,
-                'pre_carriage_by' => isset($_POST['pre_carriage_by']) ? trim($_POST['pre_carriage_by']) : '',
-                'port_of_loading' => isset($_POST['port_of_loading']) ? trim($_POST['port_of_loading']) : '',
-                'port_of_discharge' => isset($_POST['port_of_discharge']) ? trim($_POST['port_of_discharge']) : '',
-                'country_of_origin' => isset($_POST['country_of_origin']) ? trim($_POST['country_of_origin']) : '',
-                'country_of_final_destination' => isset($_POST['country_of_final_destination']) ? trim($_POST['country_of_final_destination']) : '',
-                'final_destination' => isset($_POST['final_destination']) ? trim($_POST['final_destination']) : '',
-                'usd_export_rate' => isset($_POST['usd_export_rate']) ? floatval($_POST['usd_export_rate']) : 0,
-                'ap_cost' => isset($_POST['ap_cost']) ? floatval($_POST['ap_cost']) : 0,
-                'freight_charge' => isset($_POST['freight_charge']) ? floatval($_POST['freight_charge']) : 0,
-                'insurance_charge' => isset($_POST['insurance_charge']) ? floatval($_POST['insurance_charge']) : 0
-            ];
-            $invoiceModel->insert_international_invoice_data($internationalData);
-        }
-        //call irisirp api to generate irn
-        //$this->generateIrnForInvoice($invoiceId);
-
-        // Update order status to invoiced
-        foreach ($order_numbers as $order_number) {
-            $ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
-        }
-
-        // Clear session
-        unset($_SESSION['invoice_items']);
-
-        return [
-            'success' => true,
-            'message' => "Invoice created with $itemCreated items",
-            'invoice_id' => $invoiceId,
-            'invoice_number' => $invoice_number,
-            'items_created' => $itemCreated,
-            'items_failed' => $itemsFailed,
-        ];
+        return $this->invoiceCreationService()->createFromPost($_POST, [
+            'source' => 'pos',
+            'duplicate_order_check' => true,
+            'clear_invoice_session' => true,
+            'update_order_invoice_id' => true,
+        ]);
     }
+
+    private function invoiceCreationService(): InvoiceCreationService
+    {
+        global $conn, $invoiceModel, $ordersModel, $commanModel;
+        require_once __DIR__ . '/../helpers/invoice/InvoiceCreationService.php';
+
+        return new InvoiceCreationService($conn, $invoiceModel, $ordersModel, $commanModel);
+    }
+
     private function getCurrencyByCode($code)
     {
         global $commanModel;

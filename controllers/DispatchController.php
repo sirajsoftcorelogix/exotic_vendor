@@ -1819,8 +1819,6 @@ class DispatchController {
 
             global $conn;
             $batchCustomInvoiceNumbers = [];
-            require_once __DIR__ . '/../models/product/product.php';
-            $productModel = new product($conn);
 
             // Process each order
             foreach ($input['orders'] as $orderData) {
@@ -1846,8 +1844,7 @@ class DispatchController {
                         continue;
                     }
                 } else {
-                    // Fallback: fetch all items for the order number
-                    //$orders = $ordersModel->getOrderByOrderNumber($order_number);
+                    $orders = $ordersModel->getOrderByOrderNumber($order_number);
                     if (empty($orders)) {
                         $errors[] = "Order #$order_number not found";
                         continue;
@@ -1863,56 +1860,6 @@ class DispatchController {
                 }
                 $vp_order_info_id = ($orderInfo && isset($orderInfo['id'])) ? (int)$orderInfo['id'] : 0;
 
-                // Calculate totals
-                $subtotal = 0;
-                $tax_amount = 0;
-                $total_amount = 0;
-
-                foreach ($orders as $item) {
-                    $item_total = ($item['quantity'] ?? 0) * ($item['finalprice'] ?? 0);
-                    $item_tax = ($item_total * ($item['gst'] ?? 0)) / 100;
-                    
-                    $subtotal += $item_total;
-                    $tax_amount += $item_tax;
-                    $total_amount += ($item_total + $item_tax);
-                }
-
-                $customInvoiceNumber = trim((string) ($orderData['custom_invoice_number'] ?? ''));
-                $invoiceNumberResult = resolve_invoice_number($conn, $customInvoiceNumber, $batchCustomInvoiceNumbers);
-                if (empty($invoiceNumberResult['success'])) {
-                    $errors[] = 'Order #' . $order_number . ': ' . ($invoiceNumberResult['message'] ?? 'Invalid invoice number.');
-                    continue;
-                }
-                $invoice_number = (string) $invoiceNumberResult['invoice_number'];
-                if ($customInvoiceNumber !== '') {
-                    $batchCustomInvoiceNumbers[] = $customInvoiceNumber;
-                }
-
-                $invoiceData = [
-                    'invoice_number' => $invoice_number,
-                    'invoice_date' => date('Y-m-d'),
-                    'customer_id' => $customer_id,
-                    'vp_order_info_id' => $vp_order_info_id,
-                    'currency' => 'INR',
-                    'subtotal' => $subtotal,
-                    'tax_amount' => $tax_amount,
-                    'discount_amount' => 0,
-                    'total_amount' => $total_amount,
-                    'status' => 'final',
-                    'created_by' => $_SESSION['user']['id'] ?? $_SESSION['user_id'] ?? 0,
-                    'created_at' => date('Y-m-d H:i:s'),
-                    'exchange_text' => '',
-                    'converted_amount' => 0,
-                    'batch_no' => $batch_no
-                ];
-
-                $invoiceId = $invoiceModel->createInvoice($invoiceData);
-                if (!$invoiceId) {
-                    $errors[] = "Failed to create invoice for order #$order_number";
-                    continue;
-                }
-
-                // Map items to box numbers based on $boxes
                 $itemBoxMap = [];
                 foreach ($boxes as $boxIndex => $boxData) {
                     $box_no = $boxIndex + 1;
@@ -1922,53 +1869,51 @@ class DispatchController {
                     }
                 }
 
-                // Create invoice items
-                foreach ($orders as $order) {
-                    $quantity = $order['quantity'] ?? 0;
-                    $finalprice = $order['finalprice'] ?? 0;
-                    $gst = $order['gst'] ?? 0;
-                    $item_total = $quantity * $finalprice;
-                    $tax_amount_item = ($item_total * $gst) / 100;
-
-                    // Determine box_no from boxes mapping, default to 1 if not found
-                    $item_box_no = isset($itemBoxMap[$order['id']]) ? $itemBoxMap[$order['id']] : 1;
-
-                    $itemData = [
-                        'invoice_id' => $invoiceId,
-                        'order_number' => $order_number,
-                        'item_code' => $order['item_code'] ?? '',
-                        'hsn' => $order['hsn_code'] ?? '',
-                        'item_name' => $order['title'] ?? 'Product',
-                        'description' => '',
-                        'box_no' => $item_box_no,
-                        'quantity' => $quantity,
-                        'unit_price' => $finalprice,
-                        'tax_rate' => $gst,
-                        'cgst' => ($item_total * ($gst / 2)) / 100,
-                        'sgst' => ($item_total * ($gst / 2)) / 100,
-                        'igst' => 0,
-                        'tax_amount' => $tax_amount_item,
-                        'line_total' => $item_total + $tax_amount_item,
-                        'image_url' => '',
-                        'groupname' => $order['groupname'] ?? ''
-                    ];
-                    $itemData['product_id'] = $productModel->getProductIdForInvoiceLine(
-                        (string)$order_number,
-                        (string)($itemData['item_code'] ?? ''),
-                        (string)($order['size'] ?? ''),
-                        (string)($order['color'] ?? '')
-                    );
-
-                    $invoiceModel->createInvoiceItem($itemData);
+                $orderLines = [];
+                foreach ($orders as $orderRow) {
+                    $orderRow['box_no'] = (string)($itemBoxMap[$orderRow['id']] ?? 1);
+                    $orderLines[] = $orderRow;
                 }
 
-                require_once __DIR__ . '/../models/order/stock.php';
-                $stockModel = new Stock($conn);
-                $stockResult = $stockModel->applyInvoiceStockOnCreate((int)$invoiceId, 'final');
-                if (empty($stockResult['success'])) {
-                    $errors[] = 'Order #' . $order_number . ': stock update failed — ' . ($stockResult['message'] ?? 'Unknown error');
+                require_once __DIR__ . '/../helpers/invoice/InvoiceRequestBuilder.php';
+                require_once __DIR__ . '/../helpers/invoice/InvoiceCreationService.php';
+
+                $customInvoiceNumber = trim((string) ($orderData['custom_invoice_number'] ?? ''));
+                $invoiceRequest = InvoiceRequestBuilder::fromOrderLines(
+                    $orderLines,
+                    [
+                        'customer_id' => (int)$customer_id,
+                        'vp_order_info_id' => $vp_order_info_id,
+                        'batch_no' => $batch_no,
+                        'currency' => 'INR',
+                        'status' => 'final',
+                        'created_by' => (int)($_SESSION['user']['id'] ?? $_SESSION['user_id'] ?? 0),
+                    ],
+                    [
+                        'source' => 'dispatch',
+                        'custom_invoice_number' => $customInvoiceNumber,
+                        'reserved_invoice_numbers' => $batchCustomInvoiceNumbers,
+                        'duplicate_order_check' => true,
+                        'update_order_invoice_id' => true,
+                        'update_order_by' => 'vp_order_id',
+                        'pos_flag' => 0,
+                    ]
+                );
+
+                $invoiceService = new InvoiceCreationService($conn, $invoiceModel, $ordersModel, $commanModel);
+                $createResult = $invoiceService->create($invoiceRequest);
+                if (empty($createResult['success'])) {
+                    $errors[] = 'Order #' . $order_number . ': ' . ($createResult['message'] ?? 'Invoice could not be created.');
                     continue;
                 }
+
+                if ($customInvoiceNumber !== '') {
+                    $batchCustomInvoiceNumbers[] = $customInvoiceNumber;
+                }
+
+                $invoiceId = (int)($createResult['invoice_id'] ?? 0);
+                $invoice_number = (string)($createResult['invoice_number'] ?? '');
+                $total_amount = (float)($invoiceRequest['header']['total_amount'] ?? 0);
 
                 $created_invoices[] = [
                     'invoice_id' => $invoiceId,
@@ -1978,13 +1923,6 @@ class DispatchController {
                     'customer_name' => $customer_name,
                     'total_amount' => $total_amount
                 ];
-                
-                // Update order status to invoiced
-                foreach ($orders as $item) {  
-                    $ordersModel->updateOrderById($item['id'], ['invoice_id' => $invoiceId]);
-                }    
-                //$ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
-                       
                 // Create dispatch records for each box
                 foreach ($boxes as $boxIndex => $boxData) {
                     $box_no = $boxIndex + 1;
