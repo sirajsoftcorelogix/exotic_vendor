@@ -704,6 +704,47 @@ class PosOrdersController
 
         exit;
     }
+
+    /**
+     * @param array<string, mixed>|null $invoice
+     * @return array<string, mixed>|null
+     */
+    private function buildOrderInvoiceDisplaySummary(?array $invoice): ?array
+    {
+        if (!is_array($invoice) || (int)($invoice['id'] ?? 0) <= 0) {
+            return null;
+        }
+
+        $discount = round((float)($invoice['discount_amount'] ?? 0), 2);
+        if ($discount <= 0) {
+            $notes = $invoice['notes'] ?? null;
+            if ($notes !== null && trim((string)$notes) !== '') {
+                $decoded = json_decode((string)$notes, true);
+                $posDiscounts = is_array($decoded) ? ($decoded['pos_discounts'] ?? null) : null;
+                if (is_array($posDiscounts)) {
+                    $discount = round(
+                        (float)($posDiscounts['line_discount'] ?? 0)
+                        + (float)($posDiscounts['coupon_discount'] ?? 0)
+                        + (float)($posDiscounts['cash_discount'] ?? 0)
+                        + (float)($posDiscounts['gift_discount'] ?? 0),
+                        2
+                    );
+                }
+            }
+        }
+
+        return [
+            'id' => (int)$invoice['id'],
+            'invoice_number' => (string)($invoice['invoice_number'] ?? ''),
+            'invoice_date' => (string)($invoice['invoice_date'] ?? ''),
+            'subtotal' => round((float)($invoice['subtotal'] ?? 0), 2),
+            'tax_amount' => round((float)($invoice['tax_amount'] ?? 0), 2),
+            'discount' => $discount,
+            'grand_total' => round((float)($invoice['total_amount'] ?? 0), 2),
+            'status' => (string)($invoice['status'] ?? ''),
+        ];
+    }
+
     public function getOrderDetailsHTML()
     {
         is_login();
@@ -748,6 +789,7 @@ class PosOrdersController
         }
 
         $invoicePdfUrl = $invoiceId > 0 ? pos_invoice_pdf_url($invoiceId) : '';
+        $invoiceDisplay = $this->buildOrderInvoiceDisplaySummary($activeInvoice);
 
         if ($type === 'inner') {
             renderPartial('views/posorders/partial_order_details.php', [
@@ -761,7 +803,9 @@ class PosOrdersController
                 'orderremarks' => $orderremarks,
                 'fullOrderJourny' => $fullOrderJourny,
                 'customerdetails' => $customerdetails,
+                'invoiceDisplay' => $invoiceDisplay,
                 'invoicePdfUrl' => $invoicePdfUrl,
+                'canEditInvoiceNumber' => canSrEmpAccess(),
             ], 'Order Details');
         }
         exit;

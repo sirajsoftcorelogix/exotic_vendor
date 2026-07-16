@@ -724,4 +724,61 @@ class POSInvoice
 
         return $this->findInvoiceIdByLegacyOrderNumber($orderNumber);
     }
+
+    /**
+     * @return array{success: bool, message?: string, invoice_number?: string}
+     */
+    public function updateInvoiceNumber(int $invoiceId, string $newInvoiceNumber): array
+    {
+        $invoiceId = (int)$invoiceId;
+        $newInvoiceNumber = trim($newInvoiceNumber);
+        if ($invoiceId <= 0) {
+            return ['success' => false, 'message' => 'Invalid invoice.'];
+        }
+        if ($newInvoiceNumber === '') {
+            return ['success' => false, 'message' => 'Invoice number is required.'];
+        }
+        if (strlen($newInvoiceNumber) > 100) {
+            return ['success' => false, 'message' => 'Invoice number is too long.'];
+        }
+
+        $invoice = $this->getInvoiceById($invoiceId);
+        if (!$invoice) {
+            return ['success' => false, 'message' => 'Invoice not found.'];
+        }
+
+        $current = trim((string)($invoice['invoice_number'] ?? ''));
+        if ($current === $newInvoiceNumber) {
+            return ['success' => true, 'message' => 'No change.', 'invoice_number' => $newInvoiceNumber];
+        }
+
+        $stmt = $this->db->prepare('SELECT id FROM vp_invoices WHERE invoice_number = ? AND id <> ? LIMIT 1');
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Could not validate invoice number.'];
+        }
+        $stmt->bind_param('si', $newInvoiceNumber, $invoiceId);
+        $stmt->execute();
+        $duplicate = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if ($duplicate) {
+            return ['success' => false, 'message' => 'That invoice number is already in use.'];
+        }
+
+        $stmt = $this->db->prepare('UPDATE vp_invoices SET invoice_number = ? WHERE id = ?');
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Could not update invoice number.'];
+        }
+        $stmt->bind_param('si', $newInvoiceNumber, $invoiceId);
+        $ok = $stmt->execute();
+        $stmt->close();
+        if (!$ok) {
+            return ['success' => false, 'message' => 'Could not update invoice number.'];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Invoice number updated.',
+            'invoice_number' => $newInvoiceNumber,
+        ];
+    }
 }
