@@ -6,6 +6,7 @@ require_once 'models/posorder/po_invoice.php';
 require_once 'models/product/product.php';
 require_once 'helpers/payment_type_groups.php';
 require_once 'helpers/order_filter_autocomplete.php';
+require_once 'helpers/BookPurchaseReplenishment.php';
 $ordersModel = new POSOrder($conn);
 $commanModel = new Tables($conn);
 $savedSearchModel = new SavedSearch($conn);
@@ -428,7 +429,6 @@ class PosOrdersController
 
                 if (isset($data['success']) && $data['success'] == 1) {
                     $imported++;
-                    require_once __DIR__ . '/../helpers/BookPurchaseReplenishment.php';
                     BookPurchaseReplenishment::tryProcessImportedOrderLine($conn, $productModel, $rdata);
                 }
                 //print_array($rdata);   

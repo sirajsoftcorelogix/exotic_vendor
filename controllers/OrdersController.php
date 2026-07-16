@@ -7,6 +7,7 @@ require_once 'models/product/product.php';
 require_once 'models/picklist/Picklist.php';
 require_once 'helpers/payment_type_groups.php';
 require_once 'helpers/order_filter_autocomplete.php';
+require_once 'helpers/BookPurchaseReplenishment.php';
 $ordersModel = new Order($conn);
 $commanModel = new Tables($conn);
 $savedSearchModel = new SavedSearch($conn);
@@ -433,7 +434,6 @@ class OrdersController
 
                 if (isset($data['success']) && $data['success'] == 1) {
                     $imported++;
-                    require_once __DIR__ . '/../helpers/BookPurchaseReplenishment.php';
                     BookPurchaseReplenishment::tryProcessImportedOrderLine($conn, $productModel, $rdata);
                 }
 

@@ -4816,6 +4816,10 @@ class ProductsController
                         $order['book_detail_selected_publisher_name'] = (string) ($publisherRow['publishers'] ?? $publisherRow['publisher_name'] ?? $publisherRow['name'] ?? '');
                     }
                 }
+
+                require_once dirname(__DIR__) . '/helpers/BookPurchaseReplenishment.php';
+                $bookReplenishment = new BookPurchaseReplenishment($conn);
+                $order['book_replenishment'] = $bookReplenishment->evaluate($order, 0, $physicalStock);
             }
 
             if (!headers_sent()) {
