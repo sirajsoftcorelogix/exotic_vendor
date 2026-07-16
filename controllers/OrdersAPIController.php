@@ -695,7 +695,7 @@ class OrdersAPIController
 
             // Fetch invoices with pagination
             $sql = "SELECT DISTINCT i.id, i.invoice_number, i.invoice_date, i.updated_at, i.customer_id, i.total_amount, 
-                           i.subtotal, i.tax_amount, i.discount_amount, i.status, 
+                           i.subtotal, i.tax_amount, i.discount_amount, i.status, i.currency,
                            c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, c.city, c.zipcode, c.state, c.country, c.gstin,
                            ea.address_title,                           
                            ea.address                          
