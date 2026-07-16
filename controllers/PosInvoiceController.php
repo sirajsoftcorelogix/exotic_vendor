@@ -6,6 +6,7 @@ require_once 'models/comman/tables.php';
 require_once 'models/customer/Customer.php';
 require_once 'models/product/product.php';
 require_once __DIR__ . '/../models/payment/Payment.php';
+require_once __DIR__ . '/../helpers/invoice/pos_order_pricing.php';
 // Register in $GLOBALS so methods work when this file is required from a function scope (e.g. payments â†’ create invoice).
 $GLOBALS['invoiceModel'] = $GLOBALS['invoiceModel'] ?? new POSInvoice($conn);
 $GLOBALS['ordersModel'] = $GLOBALS['ordersModel'] ?? new Order($conn);
@@ -671,16 +672,11 @@ class PosInvoiceController
             $discInclUnit = $discMap[$key] ?? ($itemCode !== '' ? ($discMapByCode[$itemCode] ?? null) : null);
 
             if ($discInclUnit === null || $discInclUnit <= 0) {
-                $discInclLine = (float)($it['finalprice'] ?? 0);
-                $discInclUnit = $qty >= 1 ? $discInclLine / $qty : $discInclLine;
+                $discInclUnit = pos_order_inclusive_unit_price($it, 'disc');
             }
 
             if ($listInclUnit === null || $listInclUnit <= 0) {
-                $listInclLine = (float)($it['finalprice'] ?? 0);
-                if ($listInclLine <= 0) {
-                    $listInclLine = (float)($it['itemprice'] ?? 0) * $qty;
-                }
-                $listInclUnit = $qty >= 1 ? $listInclLine / $qty : $listInclLine;
+                $listInclUnit = pos_order_inclusive_unit_price($it, 'list');
             }
 
             $rows[] = [
@@ -967,13 +963,8 @@ class PosInvoiceController
         $listSubtotal = 0.0;
         $discSubtotal = 0.0;
         foreach ($orderItems as $it) {
-            $qty = max(1, (int)($it['quantity'] ?? 1));
-            $listUnit = (float)($it['itemprice'] ?? 0);
-            if ($listUnit <= 0) {
-                $listUnit = (float)($it['finalprice'] ?? 0) / $qty;
-            }
-            $listSubtotal += round($listUnit * $qty, 2);
-            $discSubtotal += round((float)($it['finalprice'] ?? 0), 2);
+            $listSubtotal += pos_order_inclusive_line_total($it, 'list');
+            $discSubtotal += pos_order_inclusive_line_total($it, 'disc');
         }
 
         $couponDiscount = round((float)($orderInfo['coupon_reduce'] ?? 0), 2);
@@ -1046,18 +1037,7 @@ class PosInvoiceController
                 continue;
             }
 
-            $qty = max(1, (int)($it['quantity'] ?? 1));
-            if ($kind === 'list') {
-                $unit = (float)($it['itemprice'] ?? 0);
-                if ($unit <= 0) {
-                    $unit = (float)($it['finalprice'] ?? 0) / $qty;
-                }
-            } else {
-                $unit = (float)($it['finalprice'] ?? 0) / $qty;
-                if ($unit <= 0) {
-                    $unit = (float)($it['itemprice'] ?? 0);
-                }
-            }
+            $unit = pos_order_inclusive_unit_price($it, $kind === 'list' ? 'list' : 'disc');
             if ($unit <= 0) {
                 continue;
             }
@@ -1130,11 +1110,10 @@ class PosInvoiceController
 
             $inclUnit = $priceMap[$key] ?? null;
             if ($inclUnit === null || $inclUnit <= 0) {
-                $listInclLine = (float)($it['finalprice'] ?? 0);
-                if ($listInclLine <= 0) {
-                    $listInclLine = (float)($it['itemprice'] ?? 0) * $qty;
+                $inclLine = pos_order_inclusive_line_total($it, 'disc');
+                if ($inclLine <= 0) {
+                    $inclLine = pos_order_inclusive_line_total($it, 'list');
                 }
-                $inclLine = $listInclLine;
             } else {
                 $inclLine = round($inclUnit * $qty, 2);
             }
@@ -1427,7 +1406,27 @@ class PosInvoiceController
 
     private function generateInvoiceHtml($invoice, $items, $type = '')
     {
-        global $commanModel;
+        global $commanModel, $invoiceModel;
+
+        $orderNumberForRepair = '';
+        if (!empty($items[0]['order_number'])) {
+            $orderNumberForRepair = trim((string)$items[0]['order_number']);
+        }
+        $invoiceId = (int)($invoice['id'] ?? 0);
+        if ($invoiceId > 0 && $orderNumberForRepair !== '') {
+            $notesEmpty = trim((string)($invoice['notes'] ?? '')) === '';
+            $lineMetaEmpty = empty($this->parsePosInvoiceLineItemsMeta($invoice['notes'] ?? null));
+            $discountMetaEmpty = empty($this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null));
+            if ($notesEmpty || $lineMetaEmpty || $discountMetaEmpty) {
+                if ($this->repairPosInvoiceMetadataForOrder($invoiceId, $orderNumberForRepair)) {
+                    $reloaded = $invoiceModel->getInvoiceById($invoiceId);
+                    if (is_array($reloaded)) {
+                        $invoice = $reloaded;
+                    }
+                }
+            }
+        }
+
         // Initialize variables
         $itemsrows = '';
         $summaryrows = '';
@@ -1768,6 +1767,47 @@ class PosInvoiceController
     }
 
     /**
+     * Backfill POS line/discount metadata on invoices created before notes were persisted.
+     */
+    public function repairPosInvoiceMetadataForOrder(int $invoiceId, string $orderNumber): bool
+    {
+        global $invoiceModel, $ordersModel;
+
+        $invoiceId = (int)$invoiceId;
+        $orderNumber = trim($orderNumber);
+        if ($invoiceId <= 0 || $orderNumber === '') {
+            return false;
+        }
+
+        $invoice = $invoiceModel->getInvoiceById($invoiceId);
+        if (!$invoice) {
+            return false;
+        }
+
+        $existingLines = $this->parsePosInvoiceLineItemsMeta($invoice['notes'] ?? null);
+        $existingDiscount = $this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null);
+        if (!empty($existingLines) && !empty($existingDiscount)) {
+            return false;
+        }
+
+        $items = $ordersModel->getOrderByOrderNumber($orderNumber);
+        if ($items === []) {
+            return false;
+        }
+
+        $info = $ordersModel->getAddressInfoByOrderNumber($orderNumber);
+        $snapshot = $this->buildPosInvoiceSnapshotFromOrder($orderNumber, $items, $info);
+        if (!is_array($snapshot)) {
+            return false;
+        }
+
+        $lineItemsMeta = $this->computePosInvoiceLineMetaFromSnapshot($items, $snapshot);
+        $this->persistPosInvoiceDiscountNotes($invoiceId, $snapshot, $lineItemsMeta);
+
+        return true;
+    }
+
+    /**
      * Build and create a POS invoice from vp_orders (used by AJAX and checkout).
      */
     public function createAutoInvoiceForOrder(string $orderNumber, string $customInvoiceNumber = '', bool $forceFinal = false): array
@@ -1781,10 +1821,14 @@ class PosInvoiceController
 
         $existing = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
         if ($existing) {
+            $invoiceId = (int)$existing['id'];
+            $repaired = $this->repairPosInvoiceMetadataForOrder($invoiceId, $orderNumber);
+
             return [
                 'success' => true,
-                'invoice_id' => (int)$existing['id'],
+                'invoice_id' => $invoiceId,
                 'invoice_number' => $existing['invoice_number'] ?? '',
+                'repaired' => $repaired,
             ];
         }
 
@@ -1839,7 +1883,7 @@ class PosInvoiceController
                 $_POST['quantity'][] = $it['quantity'];
 
                 $qty = max(1, (int)$it['quantity']);
-                $unit = ($it['finalprice'] / (1 + ($it['gst'] / 100))) / $qty;
+                $unit = pos_order_pretax_unit_price($it, 'disc');
 
                 $_POST['unit_price'][] = $unit;
                 $_POST['tax_rate'][] = $it['gst'];
@@ -1921,7 +1965,7 @@ class PosInvoiceController
             $_POST['hsn'][] = $item['hsn'];
             $_POST['quantity'][] = $item['quantity'];
 
-            $unit = ($item['finalprice'] / (1 + ($item['gst'] / 100))) / $item['quantity'];
+            $unit = pos_order_pretax_unit_price($item, 'disc');
 
             $_POST['unit_price'][] = $unit;
             $_POST['tax_rate'][] = $item['gst'];
@@ -1939,7 +1983,6 @@ class PosInvoiceController
 
         $_POST['total_amount'] = $_POST['subtotal'] + $_POST['tax_amount'];
 
-        // âœ… CALL MAIN INVOICE LOGIC ðŸ”¥
         return $this->createPost();
     }
     public function createPost()
