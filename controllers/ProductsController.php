@@ -7578,6 +7578,8 @@ class ProductsController
 
     public function validateTransferStockBulkPreview()
     {
+        @set_time_limit(300);
+        @ini_set('memory_limit', '1024M');
         $this->prepareJsonAjaxResponse();
         $this->startJsonApiErrorCapture();
 
@@ -7695,24 +7697,16 @@ class ProductsController
         }
 
         $insufficient = [];
+        $stockCheckLines = [];
         foreach ($requestedQtyBySku as $sku => $requestedQty) {
-            $existingQty = (int)($existingQtyBySku[$sku] ?? 0);
-            $validation = $stockTransferModel->validateItemStock(
-                $sku,
-                $fromWarehouse,
-                (int)$requestedQty,
-                $existingQty,
-                (int)($productIdBySku[$sku] ?? 0)
-            );
-            if (!($validation['valid'] ?? false)) {
-                $insufficient[] = [
-                    'sku' => $sku,
-                    'item_code' => (string)($firstItemCodeBySku[$sku] ?? ''),
-                    'requested_qty' => (int)$requestedQty,
-                    'available_qty' => (int)($validation['available'] ?? 0),
-                ];
-            }
+            $stockCheckLines[] = [
+                'sku' => $sku,
+                'product_id' => (int)($productIdBySku[$sku] ?? 0),
+                'requested_qty' => (int)$requestedQty,
+                'item_code' => (string)($firstItemCodeBySku[$sku] ?? ''),
+            ];
         }
+        $insufficient = $stockTransferModel->validateBulkItemStock($stockCheckLines, $fromWarehouse, $existingQtyBySku);
 
         if (!empty($insufficient)) {
             $parts = [];
