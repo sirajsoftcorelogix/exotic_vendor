@@ -5038,6 +5038,60 @@ class ProductsController
         exit;
     }
 
+    public function updateStockReplenishmentMonths()
+    {
+        is_login();
+        global $productModel;
+
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json');
+
+        try {
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true);
+            if (!is_array($data) || empty($data['product_id'])) {
+                throw new Exception('Invalid data received');
+            }
+
+            $productId = (int)$data['product_id'];
+            if ($productId <= 0) {
+                throw new Exception('Invalid product id');
+            }
+
+            $product = $productModel->getProduct($productId);
+            if (!$product || !is_array($product)) {
+                throw new Exception('Product not found');
+            }
+
+            $groupLower = strtolower(trim((string)($product['groupname'] ?? '')));
+            if (strpos($groupLower, 'book') === false) {
+                throw new Exception('Stock replenishment months applies to book products only.');
+            }
+
+            $months = trim((string)($data['stock_replenishment_months'] ?? '')) === ''
+                ? 0
+                : max(0, (int)$data['stock_replenishment_months']);
+
+            $result = $productModel->setProductStockReplenishmentMonths($productId, $months);
+            if (!$result) {
+                throw new Exception('Could not update stock replenishment months.');
+            }
+
+            echo json_encode([
+                'success' => true,
+                'stock_replenishment_months' => $months,
+            ]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+        exit;
+    }
+
     public function updatePermanentlyAvailable()
     {
         is_login();

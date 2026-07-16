@@ -249,6 +249,9 @@ switch ($page) {
             case 'list':
                 $controller->index();
                 break;
+            case 'get_filtered_order_ids':
+                $controller->getFilteredOrderIds();
+                break;
             case 'view':
                 $controller->viewOrder();
                 break;
@@ -803,6 +806,11 @@ switch ($page) {
                 require_once 'controllers/ProductsController.php';
                 $controller = new ProductsController($conn);
                 $controller->updateStockLimits();
+                break;
+            case 'update_stock_replenishment_months':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->updateStockReplenishmentMonths();
                 break;
             case 'update_permanently_available':
                 require_once 'controllers/ProductsController.php';

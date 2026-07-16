@@ -85,18 +85,58 @@ if (!function_exists('picklist_item_availability')) {
 }
 
 /**
+ * Group key for picklist lines that belong to the same customer order.
+ */
+if (!function_exists('picklist_item_order_group_key')) {
+    function picklist_item_order_group_key(array $item): string
+    {
+        $orderNumber = trim((string) ($item['order_number'] ?? ''));
+        if ($orderNumber !== '') {
+            return 'num:' . $orderNumber;
+        }
+
+        $orderId = (int) ($item['order_id'] ?? 0);
+        if ($orderId > 0) {
+            return 'id:' . $orderId;
+        }
+
+        return 'item:' . (int) ($item['id'] ?? 0);
+    }
+}
+
+if (!function_exists('picklist_item_is_short_for_print')) {
+    function picklist_item_is_short_for_print(array $item): bool
+    {
+        if (picklist_item_availability($item) !== 'full') {
+            return true;
+        }
+
+        $status = (string) ($item['status'] ?? 'pending');
+
+        return in_array($status, ['not_available', 'partially_available'], true);
+    }
+}
+
+/**
  * @return array{full: array<int, array<string, mixed>>, short: array<int, array<string, mixed>>}
  */
 if (!function_exists('picklist_split_items_for_print')) {
     function picklist_split_items_for_print(array $items): array
     {
+        $shortOrderGroups = [];
+        foreach ($items as $item) {
+            if (picklist_item_is_short_for_print($item)) {
+                $shortOrderGroups[picklist_item_order_group_key($item)] = true;
+            }
+        }
+
         $full = [];
         $short = [];
         foreach ($items as $item) {
-            if (picklist_item_availability($item) === 'full') {
-                $full[] = $item;
-            } else {
+            if (isset($shortOrderGroups[picklist_item_order_group_key($item)])) {
                 $short[] = $item;
+            } else {
+                $full[] = $item;
             }
         }
 

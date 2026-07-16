@@ -148,10 +148,12 @@
     $page = $page < 1 ? 1 : $page;
     $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page, default 50
     $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 50; // Only allow specific values
-    $total_orders = isset($data['total_orders']) ? (int)$data['total_orders'] : 0;
-    $picker_list = isset($data['picker_list']) && is_array($data['picker_list']) ? $data['picker_list'] : [];
-    $open_picklists = isset($data['open_picklists']) && is_array($data['open_picklists']) ? $data['open_picklists'] : [];
-    $suggested_picklist_number = isset($data['suggested_picklist_number']) ? (string) $data['suggested_picklist_number'] : '';
+    $total_orders = isset($total_orders) ? (int)$total_orders : 0;
+    $orders = isset($orders) && is_array($orders) ? $orders : [];
+    $orders_on_page = count($orders);
+    $picker_list = isset($picker_list) && is_array($picker_list) ? $picker_list : [];
+    $open_picklists = isset($open_picklists) && is_array($open_picklists) ? $open_picklists : [];
+    $suggested_picklist_number = isset($suggested_picklist_number) ? (string) $suggested_picklist_number : '';
     $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
 
     // Prepare query string for pagination links
@@ -159,6 +161,10 @@
     unset($search_params['page_no'], $search_params['limit'], $search_params['sort']);
     $query_string = http_build_query($search_params);
     $query_string = $query_string ? '&' . $query_string : '';
+
+    $select_all_filter_params = $_GET;
+    unset($select_all_filter_params['page_no'], $select_all_filter_params['limit'], $select_all_filter_params['page'], $select_all_filter_params['action']);
+    $select_all_filter_query = http_build_query($select_all_filter_params);
 
     // Calculate start/end slot for 10 pages
     $slot_size = 10;
@@ -822,12 +828,43 @@
                 </div>
             </div>
 
+            <?php if ($orders_on_page > 0): ?>
+            <div id="orders-selection-bar" class="mt-4 mb-2 px-4 py-3 bg-gray-50/80 border border-gray-200 rounded-lg">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex flex-col gap-1 min-w-0">
+                        <label class="inline-flex items-center gap-2 cursor-pointer select-none text-sm font-semibold text-gray-800">
+                            <input type="checkbox"
+                                   id="orders-select-all-page"
+                                   class="custom-checkbox"
+                                   aria-label="Select all orders on this page">
+                            <span class="whitespace-nowrap">Select all on this page (<?= $orders_on_page ?>)</span>
+                        </label>
+                        <?php if ($total_orders > $orders_on_page): ?>
+                            <button type="button"
+                                    id="orders-select-all-filtered"
+                                    class="text-sm font-medium text-amber-700 hover:text-amber-900 hover:underline text-left pl-[22px]">
+                                Select all <?= number_format($total_orders) ?> orders matching current filters
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                    <div class="flex items-center gap-3 shrink-0">
+                        <span id="orders-selected-count" class="text-sm font-medium text-gray-600 tabular-nums whitespace-nowrap">0 selected</span>
+                        <button type="button"
+                                id="orders-clear-selection"
+                                class="text-sm bg-white border border-gray-300 rounded-md px-2 py-1 text-gray-700 hover:bg-gray-50 whitespace-nowrap">
+                            Clear selection
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
             <!-- Table h-96 overflow-y-scroll-->
             <div class="overflow-x-auto mt-4 ">
                
                 <?php
-                if (!empty($data['orders'])) {
-                    foreach ($data['orders'] as $order) {
+                if (!empty($orders)) {
+                    foreach ($orders as $order) {
 
                         $options = $order['options'] ?? '';
                         $optionsArr = [];
@@ -2034,11 +2071,15 @@
     document.addEventListener('change', function(e) {
         if (e.target && e.target.name === 'poitem[]') {
             saveCheckedOrders();
+            updateOrdersSelectionBar();
         }
     });
 
     // Restore on page load
-    document.addEventListener('DOMContentLoaded', restoreCheckedOrders);
+    document.addEventListener('DOMContentLoaded', function() {
+        restoreCheckedOrders();
+        updateOrdersSelectionBar();
+    });
 
     // Optional: Clear storage on successful PO creation
     // document.querySelector('form[action*="purchase_orders&action=create"]').addEventListener('submit', function() {
@@ -2645,6 +2686,88 @@
         const merged = Array.from(new Set([...stored, ...visibleChecked]));
         return merged;
     }
+
+    function getPageOrderCheckboxes() {
+        return Array.from(document.querySelectorAll('input[name="poitem[]"]'));
+    }
+
+    function updateOrdersSelectionBar() {
+        const selectAllPage = document.getElementById('orders-select-all-page');
+        const selectedCountEl = document.getElementById('orders-selected-count');
+        const pageCbs = getPageOrderCheckboxes();
+
+        if (!selectAllPage && !selectedCountEl) {
+            return;
+        }
+
+        const pageChecked = pageCbs.filter(cb => cb.checked).length;
+        const totalSelected = getSelectedOrderIds().length;
+
+        if (selectedCountEl) {
+            selectedCountEl.textContent = totalSelected + ' selected';
+        }
+
+        if (selectAllPage && pageCbs.length) {
+            selectAllPage.checked = pageChecked > 0 && pageChecked === pageCbs.length;
+            selectAllPage.indeterminate = pageChecked > 0 && pageChecked < pageCbs.length;
+        }
+    }
+
+    (function initOrdersSelectionBar() {
+        const selectAllPage = document.getElementById('orders-select-all-page');
+        const selectAllFilteredBtn = document.getElementById('orders-select-all-filtered');
+        const clearSelectionBtn = document.getElementById('orders-clear-selection');
+        const filteredIdsUrl = <?= json_encode(base_url('?page=orders&action=get_filtered_order_ids' . ($select_all_filter_query ? '&' . $select_all_filter_query : ''))) ?>;
+
+        if (selectAllPage) {
+            selectAllPage.addEventListener('change', function() {
+                getPageOrderCheckboxes().forEach(cb => {
+                    cb.checked = selectAllPage.checked;
+                });
+                saveCheckedOrders();
+                updateOrdersSelectionBar();
+            });
+        }
+
+        if (selectAllFilteredBtn) {
+            selectAllFilteredBtn.addEventListener('click', async function() {
+                const originalText = selectAllFilteredBtn.textContent;
+                selectAllFilteredBtn.disabled = true;
+                selectAllFilteredBtn.textContent = 'Selecting...';
+
+                try {
+                    const resp = await fetch(filteredIdsUrl);
+                    const data = await resp.json();
+                    if (!data.success) {
+                        alert(data.message || 'Failed to select orders.');
+                        return;
+                    }
+
+                    const ids = (data.order_ids || []).map(String);
+                    localStorage.setItem('selected_po_orders', JSON.stringify(ids));
+                    getPageOrderCheckboxes().forEach(cb => {
+                        cb.checked = ids.includes(cb.value);
+                    });
+                    updateOrdersSelectionBar();
+                } catch (err) {
+                    alert('Failed to select orders. Please try again.');
+                } finally {
+                    selectAllFilteredBtn.disabled = false;
+                    selectAllFilteredBtn.textContent = originalText;
+                }
+            });
+        }
+
+        if (clearSelectionBtn) {
+            clearSelectionBtn.addEventListener('click', function() {
+                localStorage.removeItem('selected_po_orders');
+                getPageOrderCheckboxes().forEach(cb => {
+                    cb.checked = false;
+                });
+                updateOrdersSelectionBar();
+            });
+        }
+    })();
 
     // Toggle bulk actions menu
     document.getElementById('bulk-action-toggle').addEventListener('click', function(e) {

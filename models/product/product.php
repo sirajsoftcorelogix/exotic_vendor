@@ -4616,6 +4616,20 @@ class product
         return $stmt->execute();
     }
 
+    public function setProductStockReplenishmentMonths($productId, $months)
+    {
+        $productId = (int)$productId;
+        $months = max(0, (int)$months);
+        $sql = 'UPDATE vp_products SET stock_replenishment_months = ? WHERE id = ?';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('ii', $months, $productId);
+
+        return $stmt->execute();
+    }
+
     public function setProductPermanentlyAvailable($productId, $permanentlyAvailable)
     {
         $productId = (int)$productId;

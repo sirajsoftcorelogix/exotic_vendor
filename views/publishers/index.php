@@ -5,6 +5,8 @@ $currentPage = max(1, (int)($currentPage ?? 1));
 $totalPages = max(1, (int)($totalPages ?? 1));
 $limit = (int)($limit ?? 20);
 $totalRecords = (int)($totalRecords ?? 0);
+$countryList = is_array($countryList ?? null) ? $countryList : [];
+$stateList = is_array($stateList ?? null) ? $stateList : [];
 $queryBase = [
     'page' => 'publishers',
     'action' => 'list',
@@ -59,7 +61,7 @@ $queryBase = [
                 </span>
                 <div class="min-w-0">
                     <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
-                    <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Find publishers by name, remote publisher id, and active status.</p>
+                    <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Find publishers by name, contact, phone, city, state, or id.</p>
                 </div>
             </div>
         </div>
@@ -69,7 +71,7 @@ $queryBase = [
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4">
                 <div class="sm:col-span-2">
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Search</label>
-                    <input type="text" name="search_text" placeholder="Search by publisher name or id"
+                    <input type="text" name="search_text" placeholder="Search by name, contact, phone, city, state, or id"
                         class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition"
                         value="<?php echo $searchValue; ?>" autocomplete="off">
                 </div>
@@ -117,6 +119,10 @@ $queryBase = [
                         <th class="px-5 py-3.5 whitespace-nowrap">#</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Publisher ID</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Publisher Name</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Contact</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Phone</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">City</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">State</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Status</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Updated</th>
                         <th class="px-5 py-3.5 whitespace-nowrap text-right">Action</th>
@@ -131,11 +137,39 @@ $queryBase = [
                             $publisherExternalId = (int)($publisher['publishers_id'] ?? 0);
                             $name = (string)($publisher['publishers'] ?? '');
                             $active = (int)($publisher['is_active'] ?? 0) === 1;
+                            $contactName = (string)($publisher['contact_name'] ?? '');
+                            $phone = (string)($publisher['publisher_phone'] ?? '');
+                            $city = (string)($publisher['city'] ?? '');
+                            $state = (string)($publisher['state'] ?? '');
+                            $publisherPayload = [
+                                'id' => $id,
+                                'publishers_id' => $publisherExternalId,
+                                'publishers' => $name,
+                                'contact_name' => $contactName,
+                                'publisher_email' => (string)($publisher['publisher_email'] ?? ''),
+                                'country_code' => (string)($publisher['country_code'] ?? ''),
+                                'publisher_phone' => $phone,
+                                'alt_phone' => (string)($publisher['alt_phone'] ?? ''),
+                                'gst_number' => (string)($publisher['gst_number'] ?? ''),
+                                'pan_number' => (string)($publisher['pan_number'] ?? ''),
+                                'address' => (string)($publisher['address'] ?? ''),
+                                'city' => $city,
+                                'state' => $state,
+                                'country' => (string)($publisher['country'] ?? ''),
+                                'postal_code' => (string)($publisher['postal_code'] ?? ''),
+                                'webpage' => (int)($publisher['webpage'] ?? 0),
+                                'stock_replenishment_months' => (int)($publisher['stock_replenishment_months'] ?? 0),
+                                'is_active' => $active ? 1 : 0,
+                            ];
                             ?>
                             <tr class="hover:bg-amber-50/40 transition-colors">
                                 <td class="px-5 py-4 text-sm text-gray-700"><?php echo ++$counter; ?></td>
                                 <td class="px-5 py-4 text-sm font-medium text-gray-800"><?php echo $publisherExternalId; ?></td>
                                 <td class="px-5 py-4 text-sm font-semibold text-gray-900"><?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($contactName, ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($phone, ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($city, ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($state, ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm">
                                     <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold <?php echo $active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200'; ?>">
                                         <?php echo $active ? 'Active' : 'Inactive'; ?>
@@ -144,7 +178,7 @@ $queryBase = [
                                 <td class="px-5 py-4 text-sm text-gray-600"><?php echo htmlspecialchars((string)($publisher['update_at'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm text-right whitespace-nowrap">
                                     <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                                        onclick='openPublisherModal(<?php echo json_encode(['id' => $id, 'publishers_id' => $publisherExternalId, 'publishers' => $name, 'is_active' => $active ? 1 : 0], JSON_HEX_APOS | JSON_HEX_QUOT); ?>)'>
+                                        onclick='openPublisherModal(<?php echo json_encode($publisherPayload, JSON_HEX_APOS | JSON_HEX_QUOT); ?>)'>
                                         Edit
                                     </button>
                                     <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50"
@@ -160,7 +194,7 @@ $queryBase = [
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="6" class="px-5 py-12 text-center text-sm text-gray-500">No publishers found.</td>
+                            <td colspan="10" class="px-5 py-12 text-center text-sm text-gray-500">No publishers found.</td>
                         </tr>
                     <?php endif; ?>
                     </tbody>
@@ -190,36 +224,151 @@ $queryBase = [
     </div>
 </div>
 
-<div id="publisherModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4">
-    <div class="w-full max-w-lg rounded-2xl bg-white shadow-xl">
-        <div class="flex items-center justify-between border-b px-6 py-4">
+<div id="publisherModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4 py-6">
+    <div class="w-full max-w-3xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col">
+        <div class="flex items-center justify-between border-b px-6 py-4 shrink-0">
             <h2 id="publisherModalTitle" class="text-lg font-semibold text-gray-900">Add Publisher</h2>
             <button type="button" onclick="closePublisherModal()" class="text-gray-400 hover:text-gray-700">x</button>
         </div>
-        <form id="publisherForm" class="space-y-4 px-6 py-5">
+        <form id="publisherForm" class="overflow-y-auto px-6 py-5 space-y-5">
             <input type="hidden" name="id" id="publisher_id">
+
             <div>
-                <label class="mb-1 block text-sm font-semibold text-gray-700">Publisher Name</label>
-                <input type="text" name="publishers" id="publisher_name" required
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
-                <span id="publisherNameMsg" class="text-sm text-red-500"></span>
+                <h3 class="text-sm font-bold text-gray-800 mb-3">Basic Information</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Publisher Name</label>
+                        <input type="text" name="publishers" id="publisher_name" required
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                        <span id="publisherNameMsg" class="text-sm text-red-500"></span>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Status</label>
+                        <select name="is_active" id="publisher_is_active"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                            <option value="1">Active</option>
+                            <option value="0">Inactive</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Stock Replenishment Months</label>
+                        <input type="number" name="stock_replenishment_months" id="publisher_stock_replenishment_months" min="0" step="1"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none"
+                            placeholder="e.g. 30">
+                        <p class="mt-1 text-xs text-gray-500">Expected months to replenish stock for this publisher. Leave empty or 0 if not set.</p>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                        <input type="checkbox" name="webpage" id="publisher_webpage" value="1"
+                            class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                        <span>Allow webpage on Exotic India</span>
+                    </label>
+                    <p class="mt-1 text-xs text-gray-500">Maps to the <code>webpage</code> parameter (0 or 1) on the vendor API.</p>
+                </div>
             </div>
+
             <div>
-                <label class="mb-1 block text-sm font-semibold text-gray-700">Status</label>
-                <select name="is_active" id="publisher_is_active"
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
-                    <option value="1">Active</option>
-                    <option value="0">Inactive</option>
-                </select>
+                <h3 class="text-sm font-bold text-gray-800 mb-3">Contact Details</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Contact Person</label>
+                        <input type="text" name="contact_name" id="publisher_contact_name"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Email</label>
+                        <input type="email" name="publisher_email" id="publisher_email"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Country Code</label>
+                        <select name="country_code" id="publisher_country_code"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                            <option value="">Select Code</option>
+                            <?php foreach ($countryList as $cl): ?>
+                                <option value="<?php echo htmlspecialchars((string)($cl['phone_code'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" <?php echo (($cl['name'] ?? '') === 'India') ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars((string)($cl['name'] ?? ''), ENT_QUOTES, 'UTF-8') . ' (+' . (string)($cl['phone_code'] ?? '') . ')'; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Phone</label>
+                        <input type="number" name="publisher_phone" id="publisher_phone" oninput="limitPublisherPhoneDigits(this)"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Alternate Phone (optional)</label>
+                        <input type="number" name="alt_phone" id="publisher_alt_phone" oninput="limitPublisherPhoneDigits(this)"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                    </div>
+                </div>
             </div>
+
             <div>
-                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                    <input type="checkbox" name="webpage" id="publisher_webpage" value="1"
-                        class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
-                    <span>Allow webpage on Exotic India</span>
-                </label>
-                <p class="mt-1 text-xs text-gray-500">Maps to the <code>webpage</code> parameter (0 or 1) on the vendor API.</p>
+                <h3 class="text-sm font-bold text-gray-800 mb-3">Address</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Address</label>
+                        <input type="text" name="address" id="publisher_address"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">City</label>
+                            <input type="text" name="city" id="publisher_city"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">State</label>
+                            <span id="publisherStateBlock">
+                                <select name="state" id="publisher_state"
+                                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                                    <?php foreach ($stateList as $item): ?>
+                                        <option value="<?php echo htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                                            <?php echo htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </span>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Country</label>
+                            <select name="country" id="publisher_country" onchange="fetchPublisherStates(this.value);"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                                <?php foreach ($countryList as $item): ?>
+                                    <option value="<?php echo htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" <?php echo (($item['name'] ?? '') === 'India') ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Zip Code</label>
+                            <input type="text" name="postal_code" id="publisher_postal_code"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                        </div>
+                    </div>
+                </div>
             </div>
+
+            <div>
+                <h3 class="text-sm font-bold text-gray-800 mb-3">Tax Information</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">GST Number</label>
+                        <input type="text" name="gst_number" id="publisher_gst_number"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">PAN Number</label>
+                        <input type="text" name="pan_number" id="publisher_pan_number"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                    </div>
+                </div>
+            </div>
+
             <div class="flex justify-end gap-3 border-t pt-4">
                 <button type="button" onclick="closePublisherModal()" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
                 <button type="submit" id="publisherSaveBtn" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Save Publisher</button>
@@ -230,6 +379,62 @@ $queryBase = [
 
 <script>
 let publisherNameExists = false;
+
+function limitPublisherPhoneDigits(input) {
+    if (!input) return;
+    if (input.value.length > 10) {
+        input.value = input.value.slice(0, 10);
+    }
+}
+
+function setPublisherStateControl(countryName, stateValue) {
+    const block = document.getElementById('publisherStateBlock');
+    if (!block) return;
+
+    if (countryName !== 'India') {
+        block.innerHTML = '<input type="text" name="state" id="publisher_state" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none" />';
+        const input = document.getElementById('publisher_state');
+        if (input) input.value = stateValue || '';
+        return;
+    }
+
+    fetch('index.php?page=vendors&action=getStates', { credentials: 'same-origin' })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            const states = Array.isArray(data) ? data : [];
+            const select = document.createElement('select');
+            select.id = 'publisher_state';
+            select.name = 'state';
+            select.className = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none';
+            states.forEach(function (state) {
+                const option = document.createElement('option');
+                option.value = state.name;
+                option.textContent = state.name;
+                if (stateValue && state.name === stateValue) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+            block.innerHTML = '';
+            block.appendChild(select);
+        })
+        .catch(function (err) { console.error('State fetch error:', err); });
+}
+
+function fetchPublisherStates(countryName) {
+    setPublisherStateControl(countryName, '');
+}
+
+function setSelectValueByTextOrValue(selectEl, value) {
+    if (!selectEl || value == null || value === '') return;
+    const normalized = String(value);
+    for (let i = 0; i < selectEl.options.length; i++) {
+        if (selectEl.options[i].value === normalized || selectEl.options[i].text === normalized) {
+            selectEl.selectedIndex = i;
+            return;
+        }
+    }
+}
 
 function bindCreatorNameDuplicateCheck(inputEl, msgEl, page, existsFlagSetter, excludeIdGetter, duplicateMessage) {
     if (!inputEl || !msgEl) return;
@@ -278,6 +483,28 @@ function openPublisherModal(publisher) {
     document.getElementById('publisher_name').value = publisher.publishers || '';
     document.getElementById('publisher_is_active').value = publisher.is_active != null ? String(publisher.is_active) : '1';
     document.getElementById('publisher_webpage').checked = publisher.webpage === 1 || publisher.webpage === '1';
+    document.getElementById('publisher_contact_name').value = publisher.contact_name || '';
+    document.getElementById('publisher_email').value = publisher.publisher_email || '';
+    setSelectValueByTextOrValue(document.getElementById('publisher_country_code'), publisher.country_code || '');
+    document.getElementById('publisher_phone').value = publisher.publisher_phone || '';
+    document.getElementById('publisher_alt_phone').value = publisher.alt_phone || '';
+    document.getElementById('publisher_address').value = publisher.address || '';
+    document.getElementById('publisher_city').value = publisher.city || '';
+    document.getElementById('publisher_postal_code').value = publisher.postal_code || '';
+    document.getElementById('publisher_gst_number').value = publisher.gst_number || '';
+    document.getElementById('publisher_pan_number').value = publisher.pan_number || '';
+    document.getElementById('publisher_stock_replenishment_months').value =
+        publisher.stock_replenishment_months != null && publisher.stock_replenishment_months !== 0
+            ? String(publisher.stock_replenishment_months)
+            : '';
+
+    const countrySelect = document.getElementById('publisher_country');
+    const countryValue = publisher.country || 'India';
+    if (countrySelect) {
+        setSelectValueByTextOrValue(countrySelect, countryValue);
+    }
+    setPublisherStateControl(countryValue, publisher.state || '');
+
     document.getElementById('publisherModal').classList.remove('hidden');
     document.getElementById('publisherModal').classList.add('flex');
     setTimeout(function () { document.getElementById('publisher_name').focus(); }, 50);

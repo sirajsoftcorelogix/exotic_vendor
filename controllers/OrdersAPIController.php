@@ -661,11 +661,11 @@ class OrdersAPIController
 
             $whereClauses = [];
             if (!empty($startDate) && !empty($endDate)) {
-                $whereClauses[] = "DATE(i.invoice_date) BETWEEN ? AND ?";
+                $whereClauses[] = "DATE(i.updated_at) BETWEEN ? AND ?";
             } elseif (!empty($startDate)) {
-                $whereClauses[] = "DATE(i.invoice_date) >= ?";
+                $whereClauses[] = "DATE(i.updated_at) >= ?";
             } elseif (!empty($endDate)) {
-                $whereClauses[] = "DATE(i.invoice_date) <= ?";
+                $whereClauses[] = "DATE(i.updated_at) <= ?";
             }
 
             $whereSql = "";
@@ -694,13 +694,13 @@ class OrdersAPIController
             $totalPages = ceil($totalRecords / $limit);
 
             // Fetch invoices with pagination
-            $sql = "SELECT i.id, i.invoice_number, i.invoice_date, i.customer_id, i.total_amount, 
-                           i.subtotal, i.tax_amount, i.discount_amount, i.status, 
+            $sql = "SELECT DISTINCT i.id, i.invoice_number, i.invoice_date, i.updated_at, i.customer_id, i.total_amount, 
+                           i.subtotal, i.tax_amount, i.discount_amount, i.status, i.currency,
                            c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, c.city, c.zipcode, c.state, c.country, c.gstin,
                            ea.address_title,                           
                            ea.address                          
                     FROM vp_invoices i
-                    LEFT JOIN vp_order_info c ON i.customer_id = c.customer_id
+                    LEFT JOIN vp_order_info c ON i.customer_id = c.customer_id AND c.id = (SELECT MAX(id) FROM vp_order_info WHERE customer_id = i.customer_id)
                     left join exotic_address as ea on i.warehouse_id = ea.id
                     $whereSql
                     ORDER BY i.invoice_date DESC
@@ -709,11 +709,11 @@ class OrdersAPIController
             //echo $sql;
             if (!$stmt) {
                 // If the column doesn't exist, we fallback to a safer query
-                $sql = "SELECT i.id, i.invoice_number, i.invoice_date, i.customer_id, i.total_amount, 
+                $sql = "SELECT DISTINCT i.id, i.invoice_number, i.invoice_date, i.customer_id, i.total_amount, 
                                i.subtotal, i.tax_amount, i.discount_amount, i.status, i.currency,
                                c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, c.city, c.zipcode, c.state, c.country, c.gstin
                         FROM vp_invoices i
-                        LEFT JOIN vp_order_info c ON i.customer_id = c.customer_id
+                        LEFT JOIN vp_order_info c ON i.customer_id = c.customer_id AND c.id = (SELECT MAX(id) FROM vp_order_info WHERE customer_id = i.customer_id)
                         $whereSql
                         ORDER BY i.invoice_date DESC
                         LIMIT ? OFFSET ?";
@@ -811,6 +811,7 @@ class OrdersAPIController
                         'Material Centre'     => $invoice['address_title'] ?? 'Main Location',
                         'Narration'           => '',
                         'is_international'    => isset($invoice['currency']) && $invoice['currency'] !== 'INR' ? true : false,
+                        'status'               => $invoice['status'] ?? '',
                         'Currency'            => $invoice['currency'] ?? 'INR',
                         'Shipping Details'    => $shippingDetails,
                         'Item Details'        => $itemDetails,

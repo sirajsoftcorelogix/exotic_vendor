@@ -404,37 +404,36 @@ class Tables {
         return $data;
     }
     public function updateGlobalSettings($data, $id) {
-        //print_r($data); Array ( [setting_key] => invoice_prefix [setting_value] => inv/2025-26/ )
-        $setClause = [];
-        $types = '';
-        $values = [];
-        foreach ($data as $key => $value) {
-            $setClause[] = "$key = ?";
-            if (is_int($value)) {
-                $types .= 'i';
-            } elseif (is_double($value) || is_float($value)) {
-                $types .= 'd';
-            } else {
-                $types .= 's';
-            }
-            $values[] = $value;
-        }
-        $values[] = $id;
-        $types .= 'i';
+        require_once __DIR__ . '/../globals/AppSettings.php';
+        $model = new AppSettings($this->ci);
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
 
-        $sql = "UPDATE global_settings SET " . implode(', ', $setClause) . " WHERE id = ?";
-        $stmt = $this->ci->prepare($sql);
-        if (!$stmt) return false; 
-        $stmt->bind_param($types, ...$values);
-        return $stmt->execute();
+        $columnToKey = [
+            'invoice_prefix' => 'invoice_prefix',
+            'invoice_series' => 'invoice_series',
+            'terms_and_conditions' => 'terms_and_conditions',
+            'high_value_transaction_limit' => 'high_value_transaction_limit',
+        ];
+
+        $ok = true;
+        foreach ($data as $column => $value) {
+            $key = $columnToKey[$column] ?? null;
+            if ($key === null) {
+                continue;
+            }
+            if (!$model->setValue($key, $value, $userId, true)) {
+                $ok = false;
+            }
+        }
+
+        return $ok;
     }
+
     public function getAllGlobalSettings() {
-        $sql = "SELECT * FROM global_settings";
-        $stmt = $this->ci->prepare($sql);        
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $data = $result->fetch_assoc();
-        return $data;
+        require_once __DIR__ . '/../globals/AppSettings.php';
+        $model = new AppSettings($this->ci);
+
+        return $model->getGlobalSettingsRow();
     }
     public function getCommittedStockBySku($sku) {
         //$sql = "SELECT SUM(quantity) AS committed_stock FROM vp_po_items WHERE sku = ? AND purchase_orders_id IN (SELECT id FROM purchase_orders WHERE status IN ('pending', 'processing'))";

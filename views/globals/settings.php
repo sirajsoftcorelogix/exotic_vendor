@@ -1,24 +1,217 @@
-<div class="bg-white p-4 md:p-8">
-     <form action="<?php echo base_url('?page=globals&action=update_settings'); ?>" id="update_settings" method="post">
-    <!--	invoice_prefix invoice_series terms_and_conditions-->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4 mb-6 w-60">
-            <div>
-                <label for="invoice_prefix" class="block text-gray-700 form-label text-sm">Invoice Prefix</label>
-                <input type="text" name="invoice_prefix" id="invoice_prefix" value="<?php echo htmlspecialchars($data['invoice_prefix'] ?? ''); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
-            </div>
-            <div>
-                <label for="invoice_series" class="block text-gray-700 form-label text-sm">Invoice Series</label>
-                <input type="text" name="invoice_series" id="invoice_series" value="<?php echo htmlspecialchars($data['invoice_series'] ?? ''); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
-            </div>
-            <div>
-                <label for="terms_and_conditions" class="block text-gray-700 form-label text-sm">Terms and Conditions</label>
-                <textarea name="terms_and_conditions" id="terms_and_conditions" rows="8" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full h-32"><?php echo htmlspecialchars($data['terms_and_conditions'] ?? ''); ?></textarea>
-            </div>
-            <div>
-                <label for="high_value_transaction_limit" class="block text-gray-700 form-label text-sm">High Value Transaction Limit</label>
-                <input type="number" min="1" step="0.01" name="high_value_transaction_limit" id="high_value_transaction_limit" value="<?php echo htmlspecialchars((string)($data['high_value_transaction_limit'] ?? '200000.00')); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
-                <p class="mt-1 text-xs text-gray-500">Default: ₹2,00,000. Used for Section 269ST / Rule 114B POS compliance prompts.</p>
+<?php
+$settings = $settings ?? [];
+$audit_rows = $audit_rows ?? [];
+$table_ready = $table_ready ?? false;
+
+function globals_setting_input_id(string $key): string
+{
+    return 'setting_' . preg_replace('/[^a-z0-9_]+/i', '_', $key);
+}
+?>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+    <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04]">
+        <div class="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-amber-300/20 blur-3xl" aria-hidden="true"></div>
+        <div class="pointer-events-none absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-sky-200/15 blur-2xl" aria-hidden="true"></div>
+        <div class="relative px-5 py-7 sm:px-8 sm:py-9 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
+            <div class="min-w-0 max-w-3xl">
+                <div class="inline-flex items-center gap-2 rounded-full border border-amber-200/60 bg-white/70 px-3 py-1 text-xs font-semibold text-amber-900/90 shadow-sm backdrop-blur-sm mb-4">
+                    <span class="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-700">
+                        <i class="fas fa-sliders-h text-[11px]" aria-hidden="true"></i>
+                    </span>
+                    <span>Administration · App configuration</span>
+                </div>
+                <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
+                    Global <span class="text-amber-800">settings</span>
+                </h1>
+                <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
+                    Values in <code class="text-xs bg-gray-100 px-1 rounded">app_settings</code>;
+                    audit trail in <code class="text-xs bg-gray-100 px-1 rounded">settings_audit_log</code>.
+                    Field labels and input types in <code class="text-xs bg-gray-100 px-1 rounded">config/app_settings_registry.php</code>.
+                </p>
             </div>
         </div>
-        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Save Settings</button>
-<?php 
+    </div>
+
+    <?php if (!$table_ready): ?>
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+            <p class="font-semibold">Database setup required</p>
+            <p class="mt-1">Run <code class="text-xs bg-white px-1 rounded">sql/app_settings_module.sql</code> to enable this module.</p>
+        </div>
+    <?php elseif ($settings === []): ?>
+        <div class="rounded-2xl border border-gray-200 bg-white px-5 py-8 text-center text-sm text-gray-600">
+            No settings found. Add rows to <code class="text-xs bg-gray-100 px-1 rounded">app_settings</code>
+            and register keys in <code class="text-xs bg-gray-100 px-1 rounded">config/app_settings_registry.php</code>.
+        </div>
+    <?php else: ?>
+        <form action="<?php echo base_url('?page=globals&action=update_settings'); ?>" method="post" class="space-y-6">
+            <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
+                <div class="px-5 py-4 bg-gradient-to-r from-amber-50/50 via-gray-50/90 to-gray-50/90 border-b border-amber-100/80">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-amber-700 shadow-sm border border-amber-100">
+                            <i class="fas fa-pen-to-square text-sm" aria-hidden="true"></i>
+                        </span>
+                        <div class="min-w-0">
+                            <h2 class="text-sm font-semibold text-gray-900">Application settings</h2>
+                            <p class="text-xs text-gray-500 mt-0.5">Update values only. Keys are defined by developers in the database and registry.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="divide-y divide-gray-100">
+                    <?php foreach ($settings as $setting): ?>
+                        <?php
+                        $key = $setting['setting_key'];
+                        $inputId = globals_setting_input_id($key);
+                        $isEditable = (int) ($setting['is_editable'] ?? 1) === 1;
+                        $value = $setting['setting_value'] ?? '';
+                        $inputType = $setting['input_type'] ?? 'text';
+                        $valueType = $setting['value_type'] ?? 'string';
+                        ?>
+                        <div class="px-5 py-5 sm:px-6">
+                            <div class="flex flex-col lg:flex-row lg:items-start gap-4 lg:gap-8">
+                                <div class="lg:w-2/5 min-w-0">
+                                    <label for="<?php echo htmlspecialchars($inputId); ?>" class="block text-sm font-semibold text-gray-900">
+                                        <?php echo htmlspecialchars($setting['label']); ?>
+                                    </label>
+                                    <div class="mt-1.5 inline-flex items-center gap-2 flex-wrap">
+                                        <code class="text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded"><?php echo htmlspecialchars($key); ?></code>
+                                        <?php if (!$isEditable): ?>
+                                            <span class="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Read only</span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php if (!empty($setting['description'])): ?>
+                                        <p class="mt-2 text-xs text-gray-500 leading-relaxed"><?php echo htmlspecialchars($setting['description']); ?></p>
+                                    <?php endif; ?>
+                                </div>
+
+                                <div class="lg:flex-1 min-w-0">
+                                    <?php if (!$isEditable): ?>
+                                        <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 whitespace-pre-wrap break-words">
+                                            <?php
+                                            if ($valueType === 'bool') {
+                                                echo in_array((string) $value, ['1', 'true', 'yes'], true) ? 'Enabled' : 'Disabled';
+                                            } else {
+                                                echo htmlspecialchars((string) $value);
+                                            }
+                                            ?>
+                                        </div>
+                                    <?php elseif ($inputType === 'textarea' || $valueType === 'text'): ?>
+                                        <textarea
+                                            id="<?php echo htmlspecialchars($inputId); ?>"
+                                            name="values[<?php echo htmlspecialchars($key); ?>]"
+                                            rows="4"
+                                            class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500"><?php echo htmlspecialchars((string) $value); ?></textarea>
+                                    <?php elseif ($inputType === 'toggle' || $valueType === 'bool'): ?>
+                                        <label class="inline-flex items-center gap-3 cursor-pointer">
+                                            <input type="hidden" name="values[<?php echo htmlspecialchars($key); ?>]" value="0">
+                                            <input
+                                                type="checkbox"
+                                                id="<?php echo htmlspecialchars($inputId); ?>"
+                                                name="values[<?php echo htmlspecialchars($key); ?>]"
+                                                value="1"
+                                                class="h-5 w-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                                                <?php echo in_array((string) $value, ['1', 'true', 'yes'], true) ? 'checked' : ''; ?>>
+                                            <span class="text-sm text-gray-700"><?php echo in_array((string) $value, ['1', 'true', 'yes'], true) ? 'Enabled' : 'Disabled'; ?></span>
+                                        </label>
+                                    <?php elseif ($inputType === 'select' && !empty($setting['options'])): ?>
+                                        <select
+                                            id="<?php echo htmlspecialchars($inputId); ?>"
+                                            name="values[<?php echo htmlspecialchars($key); ?>]"
+                                            class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500">
+                                            <?php foreach ($setting['options'] as $option): ?>
+                                                <?php
+                                                $optionValue = is_array($option) ? ($option['value'] ?? '') : $option;
+                                                $optionLabel = is_array($option) ? ($option['label'] ?? $optionValue) : $option;
+                                                ?>
+                                                <option value="<?php echo htmlspecialchars((string) $optionValue); ?>" <?php echo (string) $value === (string) $optionValue ? 'selected' : ''; ?>>
+                                                    <?php echo htmlspecialchars((string) $optionLabel); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    <?php elseif ($inputType === 'number' || in_array($valueType, ['int', 'decimal'], true)): ?>
+                                        <input
+                                            type="number"
+                                            id="<?php echo htmlspecialchars($inputId); ?>"
+                                            name="values[<?php echo htmlspecialchars($key); ?>]"
+                                            value="<?php echo htmlspecialchars((string) $value); ?>"
+                                            <?php
+                                            if ($valueType === 'decimal') {
+                                                echo 'step="0.01" min="0.01"';
+                                            } else {
+                                                echo 'step="1" min="0"';
+                                            }
+                                            ?>
+                                            class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500">
+                                    <?php else: ?>
+                                        <input
+                                            type="text"
+                                            id="<?php echo htmlspecialchars($inputId); ?>"
+                                            name="values[<?php echo htmlspecialchars($key); ?>]"
+                                            value="<?php echo htmlspecialchars((string) $value); ?>"
+                                            class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500">
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+
+                <div class="px-5 py-4 sm:px-6 border-t border-gray-100 bg-gray-50/70 flex justify-end">
+                    <button type="submit"
+                        class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition">
+                        <i class="fas fa-save text-xs opacity-95" aria-hidden="true"></i>
+                        Save settings
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <?php if ($audit_rows !== []): ?>
+            <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
+                <div class="px-5 py-4 border-b border-gray-100 bg-gray-50/80">
+                    <h2 class="text-sm font-semibold text-gray-900">Recent changes</h2>
+                    <p class="text-xs text-gray-500 mt-0.5">Logged in <code class="text-[11px] bg-gray-100 px-1 rounded">settings_audit_log</code>.</p>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+                            <tr>
+                                <th class="px-5 py-3 font-semibold">Setting key</th>
+                                <th class="px-5 py-3 font-semibold">Old value</th>
+                                <th class="px-5 py-3 font-semibold">New value</th>
+                                <th class="px-5 py-3 font-semibold">Changed by</th>
+                                <th class="px-5 py-3 font-semibold">When</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <?php foreach ($audit_rows as $row): ?>
+                                <tr>
+                                    <td class="px-5 py-3"><code class="text-xs bg-slate-100 px-1.5 py-0.5 rounded"><?php echo htmlspecialchars($row['setting_key']); ?></code></td>
+                                    <td class="px-5 py-3 text-gray-600 max-w-xs truncate" title="<?php echo htmlspecialchars((string) ($row['old_value'] ?? '')); ?>"><?php echo htmlspecialchars((string) ($row['old_value'] ?? '—')); ?></td>
+                                    <td class="px-5 py-3 text-gray-900 max-w-xs truncate" title="<?php echo htmlspecialchars((string) ($row['new_value'] ?? '')); ?>"><?php echo htmlspecialchars((string) ($row['new_value'] ?? '—')); ?></td>
+                                    <td class="px-5 py-3 text-gray-700"><?php echo htmlspecialchars($row['changed_by_name'] ?? ('User #' . ($row['changed_by'] ?? ''))); ?></td>
+                                    <td class="px-5 py-3 text-gray-500 whitespace-nowrap"><?php echo htmlspecialchars((string) ($row['changed_at'] ?? '')); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        <?php endif; ?>
+    <?php endif; ?>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    <?php if (isset($_GET['status']) && $_GET['status'] === 'success'): ?>
+        if (typeof window.showToast === 'function') {
+            window.showToast('Settings saved successfully.', 'success');
+        }
+    <?php elseif (isset($_GET['status']) && $_GET['status'] === 'error'): ?>
+        if (typeof window.showToast === 'function') {
+            window.showToast(<?php echo json_encode($_GET['message'] ?? 'Unable to save settings.'); ?>, 'error');
+        }
+    <?php endif; ?>
+});
+</script>

@@ -289,6 +289,19 @@ class Order
             return [];
         }
     }
+    public function getFilteredOrderIds($filters = [], $maxIds = 10000)
+    {
+        $count = (int) $this->getOrdersCount($filters);
+        if ($count <= 0) {
+            return [];
+        }
+
+        $limit = min($count, $maxIds);
+        $orders = $this->getAllOrders($filters, $limit, 0);
+
+        return array_map('strval', array_column($orders, 'order_id'));
+    }
+
     public function getOrdersCount($filters = [])
     {
         $needsStaffJoin = !empty($filters['staff_name']) && $filters['staff_name'] !== 'all';
