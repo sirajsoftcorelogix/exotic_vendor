@@ -424,79 +424,86 @@ $invoiceGrandTotalDisplay = number_format((float)($invoiceDisplay['grand_total']
         </div>
         <div class="space-y-6">
             <?php if ($invoiceDisplay !== null): ?>
-                <div class="rounded-lg border bg-white p-5 shadow-sm relative" id="order-invoice-details-card">
-                    <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-                        <h3 class="text-sm font-bold text-black-700">Tax Invoice</h3>
+                <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm" id="order-invoice-details-card">
+                    <div class="flex items-center justify-between gap-3 border-b border-orange-100 bg-gradient-to-r from-orange-50 to-white px-5 py-4">
+                        <div class="flex items-center gap-2.5">
+                            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-100 text-orange-700">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                            </span>
+                            <div>
+                                <h3 class="text-sm font-bold text-gray-900">Tax Invoice</h3>
+                                <p class="text-xs text-gray-500">Generated for this order</p>
+                            </div>
+                        </div>
                         <?php if ($invoiceStatus !== ''): ?>
-                            <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold <?php echo $invoiceStatusBadgeClass; ?>">
+                            <span class="rounded-full px-2.5 py-1 text-xs font-semibold <?php echo $invoiceStatusBadgeClass; ?>">
                                 <?php echo htmlspecialchars(ucfirst($invoiceStatus)); ?>
                             </span>
                         <?php endif; ?>
                     </div>
-                    <dl class="space-y-3 text-sm">
-                        <div class="flex justify-between gap-4 items-start">
-                            <dt class="font-medium text-gray-600">Invoice Number</dt>
-                            <dd class="text-right font-semibold text-gray-900">
-                                <span class="inline-flex items-center justify-end gap-1">
-                                    <?php if ($invoicePdfUrl !== ''): ?>
-                                        <a href="<?php echo htmlspecialchars($invoicePdfUrl, ENT_QUOTES, 'UTF-8'); ?>"
-                                            id="order-invoice-number-link"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            class="text-blue-600 hover:text-blue-800 hover:underline">
-                                            <?php echo htmlspecialchars($invoiceNumberDisplay); ?>
-                                        </a>
-                                    <?php else: ?>
-                                        <span id="order-invoice-number-text"><?php echo htmlspecialchars($invoiceNumberDisplay); ?></span>
-                                    <?php endif; ?>
+
+                    <div class="space-y-4 p-5">
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5">
+                                <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Invoice Number</p>
+                                <div class="mt-1 flex items-start justify-between gap-2">
+                                    <p id="order-invoice-number-text" class="break-all font-mono text-sm font-semibold text-gray-900 leading-snug">
+                                        <?php echo htmlspecialchars($invoiceNumberDisplay); ?>
+                                    </p>
                                     <?php if ($canEditInvoiceNumber): ?>
                                         <button type="button"
                                             onclick="openInvoiceNumberEditPopup(<?php echo (int)$invoiceDisplay['id']; ?>, '<?php echo htmlspecialchars($invoiceNumberDisplay, ENT_QUOTES); ?>')"
-                                            class="inline-flex items-center justify-center rounded p-0.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                                            class="inline-flex shrink-0 items-center justify-center rounded-md p-1 text-gray-400 hover:bg-white hover:text-orange-600"
                                             title="Edit invoice number">
                                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                             </svg>
                                         </button>
                                     <?php endif; ?>
-                                </span>
-                            </dd>
+                                </div>
+                            </div>
+                            <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5">
+                                <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Invoice Date</p>
+                                <p class="mt-1 text-sm font-semibold text-gray-900"><?php echo htmlspecialchars($invoiceDateDisplay); ?></p>
+                            </div>
                         </div>
-                        <div class="flex justify-between gap-4">
-                            <dt class="font-medium text-gray-600">Invoice Date</dt>
-                            <dd class="text-right text-gray-900"><?php echo htmlspecialchars($invoiceDateDisplay); ?></dd>
+
+                        <div class="rounded-lg border border-gray-200 bg-white">
+                            <div class="divide-y divide-gray-100 px-4 py-1 text-sm">
+                                <div class="flex items-center justify-between gap-4 py-2.5">
+                                    <span class="text-gray-600">Subtotal</span>
+                                    <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceSubtotalDisplay; ?></span>
+                                </div>
+                                <div class="flex items-center justify-between gap-4 py-2.5">
+                                    <span class="text-gray-600">Tax</span>
+                                    <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceTaxDisplay; ?></span>
+                                </div>
+                                <div class="flex items-center justify-between gap-4 py-2.5">
+                                    <span class="text-gray-600">Discount</span>
+                                    <span class="tabular-nums font-medium text-emerald-700">- ₹ <?php echo $invoiceDiscountDisplay; ?></span>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between gap-4 border-t border-gray-200 bg-gray-50 px-4 py-3">
+                                <span class="text-sm font-bold text-gray-900">Grand Total</span>
+                                <span class="text-base font-bold tabular-nums text-gray-900">₹ <?php echo $invoiceGrandTotalDisplay; ?></span>
+                            </div>
                         </div>
-                        <div class="flex justify-between gap-4">
-                            <dt class="font-medium text-gray-600">Subtotal</dt>
-                            <dd class="text-right text-gray-900">₹ <?php echo $invoiceSubtotalDisplay; ?></dd>
-                        </div>
-                        <div class="flex justify-between gap-4">
-                            <dt class="font-medium text-gray-600">Tax</dt>
-                            <dd class="text-right text-gray-900">₹ <?php echo $invoiceTaxDisplay; ?></dd>
-                        </div>
-                        <div class="flex justify-between gap-4">
-                            <dt class="font-medium text-gray-600">Discount</dt>
-                            <dd class="text-right text-green-700">- ₹ <?php echo $invoiceDiscountDisplay; ?></dd>
-                        </div>
-                        <div class="flex justify-between gap-4 border-t border-gray-100 pt-3">
-                            <dt class="font-bold text-gray-800">Grand Total</dt>
-                            <dd class="text-right text-base font-bold text-gray-900">₹ <?php echo $invoiceGrandTotalDisplay; ?></dd>
-                        </div>
-                    </dl>
-                    <?php if ($invoicePdfUrl !== ''): ?>
-                        <div class="mt-4 border-t border-gray-100 pt-4">
+
+                        <?php if ($invoicePdfUrl !== ''): ?>
                             <a href="<?php echo htmlspecialchars($invoicePdfUrl, ENT_QUOTES, 'UTF-8'); ?>"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                class="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800">
-                                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+                                class="flex w-full items-center justify-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-800 transition hover:border-orange-300 hover:bg-orange-100">
+                                <svg width="16" height="16" viewBox="0 0 15 15" fill="none" aria-hidden="true">
                                     <path d="M2.62925 10.3889C1.64271 9.68768 1 8.54159 1 7.24672C1 5.47783 2.3 3.84375 4.25 3.52778C4.86168 2.07349 6.30934 1 7.99783 1C10.1607 1 11.9284 2.67737 12.05 4.79167C13.1978 5.29352 14 6.52522 14 7.85887C14 8.98648 13.4266 9.98004 12.5556 10.5634M7.5 14V6.77778M7.5 14L5.33333 11.8333M7.5 14L9.66667 11.8333"
                                         stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
                                 </svg>
                                 Download / Print Invoice
                             </a>
-                        </div>
-                    <?php endif; ?>
+                        <?php endif; ?>
+                    </div>
                 </div>
             <?php endif; ?>
             <!-- Note Section -->
@@ -754,12 +761,8 @@ $invoiceGrandTotalDisplay = number_format((float)($invoiceDisplay['grand_total']
 
                 closeInvoiceNumberEditPopup();
 
-                const link = document.getElementById('order-invoice-number-link');
                 const text = document.getElementById('order-invoice-number-text');
                 const updated = data.invoice_number || newInvoiceNumber;
-                if (link) {
-                    link.textContent = updated;
-                }
                 if (text) {
                     text.textContent = updated;
                 }

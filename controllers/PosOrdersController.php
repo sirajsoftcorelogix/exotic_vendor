@@ -709,27 +709,73 @@ class PosOrdersController
      * @param array<string, mixed>|null $invoice
      * @return array<string, mixed>|null
      */
-    private function buildOrderInvoiceDisplaySummary(?array $invoice): ?array
+    private function buildOrderInvoiceDisplaySummary(?array $invoice, string $orderNumber = ''): ?array
     {
+        global $conn, $ordersModel;
+
         if (!is_array($invoice) || (int)($invoice['id'] ?? 0) <= 0) {
             return null;
         }
 
-        $discount = round((float)($invoice['discount_amount'] ?? 0), 2);
-        if ($discount <= 0) {
-            $notes = $invoice['notes'] ?? null;
-            if ($notes !== null && trim((string)$notes) !== '') {
-                $decoded = json_decode((string)$notes, true);
-                $posDiscounts = is_array($decoded) ? ($decoded['pos_discounts'] ?? null) : null;
-                if (is_array($posDiscounts)) {
-                    $discount = round(
-                        (float)($posDiscounts['line_discount'] ?? 0)
-                        + (float)($posDiscounts['coupon_discount'] ?? 0)
-                        + (float)($posDiscounts['cash_discount'] ?? 0)
-                        + (float)($posDiscounts['gift_discount'] ?? 0),
-                        2
-                    );
-                }
+        $orderNumber = trim($orderNumber);
+        $subtotal = round((float)($invoice['subtotal'] ?? 0), 2);
+        $taxAmount = round((float)($invoice['tax_amount'] ?? 0), 2);
+        $inclusiveGoods = round($subtotal + $taxAmount, 2);
+
+        $posDiscounts = null;
+        $notes = $invoice['notes'] ?? null;
+        if ($notes !== null && trim((string)$notes) !== '') {
+            $decoded = json_decode((string)$notes, true);
+            $posDiscounts = is_array($decoded) ? ($decoded['pos_discounts'] ?? null) : null;
+        }
+
+        $lineDiscount = 0.0;
+        $orderLevelDisc = 0.0;
+        $notesGrand = 0.0;
+        if (is_array($posDiscounts)) {
+            $lineDiscount = round((float)($posDiscounts['line_discount'] ?? 0), 2);
+            $orderLevelDisc = round(
+                (float)($posDiscounts['coupon_discount'] ?? 0)
+                + (float)($posDiscounts['cash_discount'] ?? 0)
+                + (float)($posDiscounts['gift_discount'] ?? 0),
+                2
+            );
+            $notesGrand = round((float)($posDiscounts['grand_total'] ?? 0), 2);
+        }
+
+        if ($orderLevelDisc <= 0 && $orderNumber !== '') {
+            $info = $ordersModel->getAddressInfoByOrderNumber($orderNumber);
+            if (is_array($info)) {
+                $orderLevelDisc = round(
+                    (float)($info['custom_reduce'] ?? 0)
+                    + (float)($info['coupon_reduce'] ?? 0)
+                    + (float)($info['giftvoucher_reduce'] ?? 0),
+                    2
+                );
+            }
+        }
+
+        $displayDiscount = $orderLevelDisc > 0
+            ? $orderLevelDisc
+            : round((float)($invoice['discount_amount'] ?? 0), 2);
+        if ($displayDiscount <= 0 && is_array($posDiscounts)) {
+            $displayDiscount = round($lineDiscount + $orderLevelDisc, 2);
+        }
+
+        $grandTotal = $notesGrand > 0
+            ? $notesGrand
+            : round((float)($invoice['total_amount'] ?? 0), 2);
+
+        if ($orderLevelDisc > 0.001 && $inclusiveGoods > 0
+            && (abs($grandTotal - $inclusiveGoods) < 0.02 || $grandTotal <= 0)) {
+            $grandTotal = max(0.0, round($inclusiveGoods - $orderLevelDisc, 2));
+        }
+
+        if ($orderNumber !== '' && $conn instanceof mysqli) {
+            require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+            $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
+            if ($orderTotal > 0) {
+                $grandTotal = $orderTotal;
             }
         }
 
@@ -737,10 +783,10 @@ class PosOrdersController
             'id' => (int)$invoice['id'],
             'invoice_number' => (string)($invoice['invoice_number'] ?? ''),
             'invoice_date' => (string)($invoice['invoice_date'] ?? ''),
-            'subtotal' => round((float)($invoice['subtotal'] ?? 0), 2),
-            'tax_amount' => round((float)($invoice['tax_amount'] ?? 0), 2),
-            'discount' => $discount,
-            'grand_total' => round((float)($invoice['total_amount'] ?? 0), 2),
+            'subtotal' => $subtotal,
+            'tax_amount' => $taxAmount,
+            'discount' => $displayDiscount,
+            'grand_total' => $grandTotal,
             'status' => (string)($invoice['status'] ?? ''),
         ];
     }
@@ -789,7 +835,7 @@ class PosOrdersController
         }
 
         $invoicePdfUrl = $invoiceId > 0 ? pos_invoice_pdf_url($invoiceId) : '';
-        $invoiceDisplay = $this->buildOrderInvoiceDisplaySummary($activeInvoice);
+        $invoiceDisplay = $this->buildOrderInvoiceDisplaySummary($activeInvoice, $resolvedOrderNumber);
 
         if ($type === 'inner') {
             renderPartial('views/posorders/partial_order_details.php', [
