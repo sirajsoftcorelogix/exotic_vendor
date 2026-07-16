@@ -1836,6 +1836,21 @@ class PosInvoiceController
         exit;
     }
 
+    public function updateInvoiceNumberAjax(): void
+    {
+        is_login();
+        if (!canSrEmpAccess()) {
+            vendorJsonResponse(['success' => false, 'message' => 'Access denied. Sr Emp, Top Management, or Admin access required.']);
+        }
+
+        global $invoiceModel;
+
+        $invoiceId = (int)($_POST['invoice_id'] ?? 0);
+        $newInvoiceNumber = trim((string)($_POST['new_invoice_number'] ?? ''));
+
+        vendorJsonResponse($invoiceModel->updateInvoiceNumber($invoiceId, $newInvoiceNumber));
+    }
+
     /**
      * Backfill POS line/discount metadata on invoices created before notes were persisted.
      */

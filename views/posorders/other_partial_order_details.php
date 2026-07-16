@@ -27,6 +27,23 @@ endforeach;
 $currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
 $displayOrderNumber = (string)($orderremarks['order_number'] ?? ($order[0]['order_number'] ?? ''));
 $invoicePdfUrl = trim((string)($invoicePdfUrl ?? ''));
+$invoiceDisplay = is_array($invoiceDisplay ?? null) ? $invoiceDisplay : null;
+$canEditInvoiceNumber = !empty($canEditInvoiceNumber);
+$invoiceStatus = strtolower(trim((string)($invoiceDisplay['status'] ?? '')));
+$invoiceStatusBadgeClass = match ($invoiceStatus) {
+    'final' => 'bg-green-100 text-green-700',
+    'proforma' => 'bg-yellow-100 text-yellow-700',
+    'draft' => 'bg-gray-100 text-gray-700',
+    default => 'bg-slate-100 text-slate-700',
+};
+$invoiceNumberDisplay = (string)($invoiceDisplay['invoice_number'] ?? '');
+$invoiceDateDisplay = !empty($invoiceDisplay['invoice_date'])
+    ? date('d M Y', strtotime((string)$invoiceDisplay['invoice_date']))
+    : '—';
+$invoiceSubtotalDisplay = number_format((float)($invoiceDisplay['subtotal'] ?? 0), 2);
+$invoiceTaxDisplay = number_format((float)($invoiceDisplay['tax_amount'] ?? 0), 2);
+$invoiceDiscountDisplay = number_format((float)($invoiceDisplay['discount'] ?? 0), 2);
+$invoiceGrandTotalDisplay = number_format((float)($invoiceDisplay['grand_total'] ?? 0), 2);
 ?>
 
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
@@ -406,6 +423,82 @@ $invoicePdfUrl = trim((string)($invoicePdfUrl ?? ''));
             </div>
         </div>
         <div class="space-y-6">
+            <?php if ($invoiceDisplay !== null): ?>
+                <div class="rounded-lg border bg-white p-5 shadow-sm relative" id="order-invoice-details-card">
+                    <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+                        <h3 class="text-sm font-bold text-black-700">Tax Invoice</h3>
+                        <?php if ($invoiceStatus !== ''): ?>
+                            <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold <?php echo $invoiceStatusBadgeClass; ?>">
+                                <?php echo htmlspecialchars(ucfirst($invoiceStatus)); ?>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                    <dl class="space-y-3 text-sm">
+                        <div class="flex justify-between gap-4 items-start">
+                            <dt class="font-medium text-gray-600">Invoice Number</dt>
+                            <dd class="text-right font-semibold text-gray-900">
+                                <span class="inline-flex items-center justify-end gap-1">
+                                    <?php if ($invoicePdfUrl !== ''): ?>
+                                        <a href="<?php echo htmlspecialchars($invoicePdfUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                            id="order-invoice-number-link"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="text-blue-600 hover:text-blue-800 hover:underline">
+                                            <?php echo htmlspecialchars($invoiceNumberDisplay); ?>
+                                        </a>
+                                    <?php else: ?>
+                                        <span id="order-invoice-number-text"><?php echo htmlspecialchars($invoiceNumberDisplay); ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($canEditInvoiceNumber): ?>
+                                        <button type="button"
+                                            onclick="openInvoiceNumberEditPopup(<?php echo (int)$invoiceDisplay['id']; ?>, '<?php echo htmlspecialchars($invoiceNumberDisplay, ENT_QUOTES); ?>')"
+                                            class="inline-flex items-center justify-center rounded p-0.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                                            title="Edit invoice number">
+                                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                        </button>
+                                    <?php endif; ?>
+                                </span>
+                            </dd>
+                        </div>
+                        <div class="flex justify-between gap-4">
+                            <dt class="font-medium text-gray-600">Invoice Date</dt>
+                            <dd class="text-right text-gray-900"><?php echo htmlspecialchars($invoiceDateDisplay); ?></dd>
+                        </div>
+                        <div class="flex justify-between gap-4">
+                            <dt class="font-medium text-gray-600">Subtotal</dt>
+                            <dd class="text-right text-gray-900">₹ <?php echo $invoiceSubtotalDisplay; ?></dd>
+                        </div>
+                        <div class="flex justify-between gap-4">
+                            <dt class="font-medium text-gray-600">Tax</dt>
+                            <dd class="text-right text-gray-900">₹ <?php echo $invoiceTaxDisplay; ?></dd>
+                        </div>
+                        <div class="flex justify-between gap-4">
+                            <dt class="font-medium text-gray-600">Discount</dt>
+                            <dd class="text-right text-green-700">- ₹ <?php echo $invoiceDiscountDisplay; ?></dd>
+                        </div>
+                        <div class="flex justify-between gap-4 border-t border-gray-100 pt-3">
+                            <dt class="font-bold text-gray-800">Grand Total</dt>
+                            <dd class="text-right text-base font-bold text-gray-900">₹ <?php echo $invoiceGrandTotalDisplay; ?></dd>
+                        </div>
+                    </dl>
+                    <?php if ($invoicePdfUrl !== ''): ?>
+                        <div class="mt-4 border-t border-gray-100 pt-4">
+                            <a href="<?php echo htmlspecialchars($invoicePdfUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800">
+                                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+                                    <path d="M2.62925 10.3889C1.64271 9.68768 1 8.54159 1 7.24672C1 5.47783 2.3 3.84375 4.25 3.52778C4.86168 2.07349 6.30934 1 7.99783 1C10.1607 1 11.9284 2.67737 12.05 4.79167C13.1978 5.29352 14 6.52522 14 7.85887C14 8.98648 13.4266 9.98004 12.5556 10.5634M7.5 14V6.77778M7.5 14L5.33333 11.8333M7.5 14L9.66667 11.8333"
+                                        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                                Download / Print Invoice
+                            </a>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
             <!-- Note Section -->
             <div class="rounded-lg border bg-white p-5 shadow-sm relative" id="note-container-<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>">
                 <button type="button" onclick="openNoteEditPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>','<?= htmlspecialchars($orderremarks['remarks'] ?? '', ENT_QUOTES) ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit Note">
@@ -587,7 +680,93 @@ $invoicePdfUrl = trim((string)($invoicePdfUrl ?? ''));
         </div>
     </div>
 </div>
+<?php if ($canEditInvoiceNumber && $invoiceDisplay !== null): ?>
+<div id="invoiceNumberEditPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6 relative">
+        <button type="button" onclick="closeInvoiceNumberEditPopup()" class="absolute top-3 right-4 text-gray-500 hover:text-gray-800">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+
+        <h2 class="text-xl font-bold mb-4 text-gray-800">Edit Invoice Number</h2>
+
+        <form id="invoiceNumberEditForm">
+            <input type="hidden" id="edit_invoice_id" name="invoice_id">
+
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="new_invoice_number">Invoice number</label>
+            <input type="text" id="new_invoice_number" name="new_invoice_number"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                required>
+
+            <div class="mt-6 flex justify-end gap-3">
+                <button type="button" onclick="closeInvoiceNumberEditPopup()"
+                    class="rounded-full px-5 py-2.5 bg-gray-200 text-gray-800 hover:bg-gray-300">
+                    Cancel
+                </button>
+                <button type="submit"
+                    class="rounded-full bg-[#D46B08] px-10 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700">
+                    Save
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
 <script>
+    function openInvoiceNumberEditPopup(invoiceId, currentNumber) {
+        document.getElementById('edit_invoice_id').value = invoiceId;
+        document.getElementById('new_invoice_number').value = currentNumber || '';
+        document.getElementById('invoiceNumberEditPopup').classList.remove('hidden');
+        document.getElementById('new_invoice_number').focus();
+        document.getElementById('new_invoice_number').select();
+    }
+
+    function closeInvoiceNumberEditPopup() {
+        document.getElementById('invoiceNumberEditPopup')?.classList.add('hidden');
+    }
+
+    document.getElementById('invoiceNumberEditForm')?.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const invoiceId = document.getElementById('edit_invoice_id').value.trim();
+        const newInvoiceNumber = document.getElementById('new_invoice_number').value.trim();
+
+        if (!invoiceId || !newInvoiceNumber) {
+            alert('Invoice number is required.');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('invoice_id', invoiceId);
+        formData.append('new_invoice_number', newInvoiceNumber);
+
+        fetch('index.php?page=posinvoice&action=update_invoice_number_ajax', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success) {
+                    alert(data.message || 'Could not update invoice number.');
+                    return;
+                }
+
+                closeInvoiceNumberEditPopup();
+
+                const link = document.getElementById('order-invoice-number-link');
+                const text = document.getElementById('order-invoice-number-text');
+                const updated = data.invoice_number || newInvoiceNumber;
+                if (link) {
+                    link.textContent = updated;
+                }
+                if (text) {
+                    text.textContent = updated;
+                }
+            })
+            .catch(() => alert('Request failed. Please try again.'));
+    });
+
     function openNoteEditPopup(orderNumber, currentRemarks) {
         document.getElementById('note_order_number').value = orderNumber;
         document.getElementById('note_remarks').value = currentRemarks || '';

@@ -1701,6 +1701,10 @@ switch ($page) {
                 $controller->printPreview();
                 break;
 
+            case 'update_invoice_number_ajax':
+                $controller->updateInvoiceNumberAjax();
+                break;
+
             default:
                 $controller->index();
                 break;
