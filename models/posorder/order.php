@@ -974,6 +974,21 @@ class POSOrder
     /**
      * @return string[]
      */
+    private function getJourneyLogDetailColumns(): array
+    {
+        $columns = [];
+        foreach (['remarks', 'note', 'notes', 'description'] as $column) {
+            if ($this->tableHasColumn('vp_order_journey_log', $column)) {
+                $columns[] = $column;
+            }
+        }
+
+        return $columns;
+    }
+
+    /**
+     * @return string[]
+     */
     private function findPriorOrderNumbersForJourney(string $currentOrderNumber, array $seen = []): array
     {
         $currentOrderNumber = trim($currentOrderNumber);
@@ -987,15 +1002,16 @@ class POSOrder
             return [];
         }
 
-        $stmt = $this->db->prepare(
-            "SELECT status, remarks, note, notes, description
+        $selectColumns = array_merge(['status'], $this->getJourneyLogDetailColumns());
+        $sql = 'SELECT ' . implode(', ', $selectColumns) . '
              FROM vp_order_journey_log
              WHERE order_number = ?
                AND (
-                    status = 'order_number_changed'
-                    OR status LIKE 'Order number changed from % to %'
-               )"
-        );
+                    status = \'order_number_changed\'
+                    OR status LIKE \'Order number changed from % to %\'
+               )';
+
+        $stmt = $this->db->prepare($sql);
         if (!$stmt) {
             return [];
         }
