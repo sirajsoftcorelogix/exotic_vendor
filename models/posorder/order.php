@@ -946,9 +946,147 @@ class POSOrder
     }
 
     /**
+     * Tables/columns that store the business order_number string (updated on rename).
+     *
+     * Not included (by design):
+     * - vp_order_status_log — uses order_id (vp_orders.id), not order_number
+     * - vp_order_journey_log — existing rows are not rewritten; append rename audit via logOrderNumberChange()
+     * - vp_invoices — header links via vp_order_info_id; optional order_number column updated when present
+     * - notifications / saved_searches — free-text or filter URLs, not transactional FKs
+     *
+     * @return array<string, string> table => column
+     */
+    private function getOrderNumberRenameTargets(): array
+    {
+        return [
+            'vp_orders' => 'order_number',
+            'vp_order_info' => 'order_number',
+            'pos_payments' => 'order_number',
+            'vp_invoice_items' => 'order_number',
+            'vp_po_items' => 'order_number',
+            'vp_dispatch_details' => 'order_number',
+            'vp_picklist_items' => 'order_number',
+            'courier_shipments' => 'order_number',
+            'vp_invoices' => 'order_number',
+        ];
+    }
+
+    /**
+     * @return string[]
+     */
+    private function findPriorOrderNumbersForJourney(string $currentOrderNumber, array $seen = []): array
+    {
+        $currentOrderNumber = trim($currentOrderNumber);
+        if ($currentOrderNumber === '' || isset($seen[$currentOrderNumber])) {
+            return [];
+        }
+        $seen[$currentOrderNumber] = true;
+
+        if (!$this->tableHasColumn('vp_order_journey_log', 'order_number')
+            || !$this->tableHasColumn('vp_order_journey_log', 'status')) {
+            return [];
+        }
+
+        $stmt = $this->db->prepare(
+            "SELECT status FROM vp_order_journey_log
+             WHERE order_number = ? AND status LIKE 'Order number changed from % to %'"
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('s', $currentOrderNumber);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $stmt->close();
+
+        $priors = [];
+        while ($row = $res->fetch_assoc()) {
+            $status = trim((string)($row['status'] ?? ''));
+            if (!preg_match('/^Order number changed from (.+) to (.+)$/u', $status, $matches)) {
+                continue;
+            }
+            $oldOrderNumber = trim($matches[1]);
+            $newOrderNumber = trim($matches[2]);
+            if ($newOrderNumber !== $currentOrderNumber || $oldOrderNumber === '' || $oldOrderNumber === $currentOrderNumber) {
+                continue;
+            }
+            $priors[] = $oldOrderNumber;
+            foreach ($this->findPriorOrderNumbersForJourney($oldOrderNumber, $seen) as $prior) {
+                $priors[] = $prior;
+            }
+        }
+
+        return array_values(array_unique($priors));
+    }
+
+    private function logOrderNumberChange(string $oldOrderNumber, string $newOrderNumber): void
+    {
+        if (!$this->tableHasColumn('vp_order_journey_log', 'order_number')
+            || !$this->tableHasColumn('vp_order_journey_log', 'status')) {
+            return;
+        }
+
+        $changedBy = trim((string)($_SESSION['user']['name'] ?? $_SESSION['user']['email'] ?? 'System'));
+        if ($changedBy === '') {
+            $changedBy = 'System';
+        }
+
+        $status = 'Order number changed from ' . $oldOrderNumber . ' to ' . $newOrderNumber;
+        $createdOn = date('Y-m-d H:i:s');
+
+        if ($this->tableHasColumn('vp_order_journey_log', 'changed_by')
+            && $this->tableHasColumn('vp_order_journey_log', 'created_on')) {
+            $stmt = $this->db->prepare(
+                'INSERT INTO vp_order_journey_log (order_number, status, changed_by, created_on) VALUES (?, ?, ?, ?)'
+            );
+            if (!$stmt) {
+                throw new \RuntimeException('Could not log order number change.');
+            }
+            $stmt->bind_param('ssss', $newOrderNumber, $status, $changedBy, $createdOn);
+        } else {
+            $stmt = $this->db->prepare(
+                'INSERT INTO vp_order_journey_log (order_number, status) VALUES (?, ?)'
+            );
+            if (!$stmt) {
+                throw new \RuntimeException('Could not log order number change.');
+            }
+            $stmt->bind_param('ss', $newOrderNumber, $status);
+        }
+
+        if (!$stmt->execute()) {
+            $err = $stmt->error;
+            $stmt->close();
+            throw new \RuntimeException($err ?: 'Could not log order number change.');
+        }
+        $stmt->close();
+    }
+
+    private function tableHasColumn(string $table, string $column): bool
+    {
+        $table = preg_replace('/[^a-z0-9_]/i', '', $table);
+        $column = preg_replace('/[^a-z0-9_]/i', '', $column);
+        if ($table === '' || $column === '') {
+            return false;
+        }
+
+        $sql = 'SHOW COLUMNS FROM `' . $table . '` LIKE ?';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('s', $column);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $exists = $res && $res->num_rows > 0;
+        $stmt->close();
+
+        return $exists;
+    }
+
+    /**
      * Rename order_number across related POS order tables.
      *
-     * @return array{success:bool,message:string,order_number?:string}
+     * @return array{success:bool,message:string,order_number?:string,updated?:array<int,array{table:string,column:string,rows:int}>}
      */
     public function renameOrderNumber(string $oldOrderNumber, string $newOrderNumber): array
     {
@@ -959,7 +1097,7 @@ class POSOrder
             return ['success' => false, 'message' => 'Order numbers are required.'];
         }
         if ($oldOrderNumber === $newOrderNumber) {
-            return ['success' => true, 'message' => 'No change.', 'order_number' => $newOrderNumber];
+            return ['success' => true, 'message' => 'No change.', 'order_number' => $newOrderNumber, 'updated' => []];
         }
 
         $existing = $this->getOrderByOrderNumber($oldOrderNumber);
@@ -972,36 +1110,51 @@ class POSOrder
             return ['success' => false, 'message' => 'Order number already in use.'];
         }
 
-        $tables = [
-            'vp_orders',
-            'vp_order_info',
-            'vp_order_journey_log',
-            'pos_payments',
-            'vp_invoice_items',
-        ];
-
+        $updated = [];
         $this->db->begin_transaction();
         try {
-            foreach ($tables as $table) {
-                $sql = "UPDATE {$table} SET order_number = ? WHERE order_number = ?";
+            foreach ($this->getOrderNumberRenameTargets() as $table => $column) {
+                if (!$this->tableHasColumn($table, $column)) {
+                    continue;
+                }
+
+                $sql = "UPDATE `{$table}` SET `{$column}` = ? WHERE `{$column}` = ?";
                 $stmt = $this->db->prepare($sql);
                 if (!$stmt) {
-                    throw new \RuntimeException('Database prepare failed.');
+                    throw new \RuntimeException('Database prepare failed for ' . $table . '.');
                 }
                 $stmt->bind_param('ss', $newOrderNumber, $oldOrderNumber);
                 if (!$stmt->execute()) {
                     $err = $stmt->error;
                     $stmt->close();
-                    throw new \RuntimeException($err ?: 'Database update failed.');
+                    throw new \RuntimeException($err ?: 'Database update failed for ' . $table . '.');
                 }
+                $rows = $stmt->affected_rows;
                 $stmt->close();
+
+                if ($rows > 0) {
+                    $updated[] = [
+                        'table' => $table,
+                        'column' => $column,
+                        'rows' => $rows,
+                    ];
+                }
             }
+
+            $this->logOrderNumberChange($oldOrderNumber, $newOrderNumber);
+            $updated[] = [
+                'table' => 'vp_order_journey_log',
+                'column' => 'status',
+                'rows' => 1,
+            ];
+
             $this->db->commit();
 
             return [
                 'success' => true,
                 'message' => 'Order number updated.',
                 'order_number' => $newOrderNumber,
+                'updated' => $updated,
             ];
         } catch (\Throwable $e) {
             $this->db->rollback();
@@ -1025,15 +1178,36 @@ class POSOrder
     }
     function getfullOrderJournyByNumber($order_number)
     {
-        $sql = "SELECT * FROM vp_order_journey_log WHERE order_number = ? ORDER BY created_on ASC";
-        $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('s', $order_number);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $journey = [];
-        while ($row = $result->fetch_assoc()) {
-            $journey[] = $row;
+        $order_number = trim((string)$order_number);
+        if ($order_number === '') {
+            return [];
         }
+
+        $orderNumbers = array_values(array_unique(array_merge(
+            [$order_number],
+            $this->findPriorOrderNumbersForJourney($order_number)
+        )));
+
+        $journey = [];
+        foreach ($orderNumbers as $number) {
+            $sql = 'SELECT * FROM vp_order_journey_log WHERE order_number = ? ORDER BY created_on ASC';
+            $stmt = $this->db->prepare($sql);
+            if (!$stmt) {
+                continue;
+            }
+            $stmt->bind_param('s', $number);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            while ($row = $result->fetch_assoc()) {
+                $journey[] = $row;
+            }
+            $stmt->close();
+        }
+
+        usort($journey, static function (array $a, array $b): int {
+            return strtotime((string)($a['created_on'] ?? '')) <=> strtotime((string)($b['created_on'] ?? ''));
+        });
+
         return $journey;
     }
     function getCustomerNameAndEmailByOrderNumber($order_number)
