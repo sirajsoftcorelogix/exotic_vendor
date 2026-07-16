@@ -1069,12 +1069,14 @@ class POSOrder
             return false;
         }
 
-        $sql = 'SHOW COLUMNS FROM `' . $table . '` LIKE ?';
+        $sql = 'SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?
+                LIMIT 1';
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
             return false;
         }
-        $stmt->bind_param('s', $column);
+        $stmt->bind_param('ss', $table, $column);
         $stmt->execute();
         $res = $stmt->get_result();
         $exists = $res && $res->num_rows > 0;
