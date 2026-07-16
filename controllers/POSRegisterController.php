@@ -123,11 +123,6 @@ class POSRegisterController
             return;
         }
 
-        if (!$this->columnExists($conn, 'global_settings', 'high_value_transaction_limit')) {
-            @$conn->query("ALTER TABLE global_settings ADD COLUMN high_value_transaction_limit DECIMAL(15,2) NOT NULL DEFAULT 200000.00");
-        }
-        @$conn->query("UPDATE global_settings SET high_value_transaction_limit = 200000.00 WHERE id = 1 AND (high_value_transaction_limit IS NULL OR high_value_transaction_limit <= 0)");
-
         $customerColumns = [
             'customer_residency_status' => "ALTER TABLE vp_customers ADD COLUMN customer_residency_status ENUM('INDIAN_RESIDENT','NRI','FOREIGN_NATIONAL') NOT NULL DEFAULT 'INDIAN_RESIDENT' AFTER phone",
             'customer_pan' => "ALTER TABLE vp_customers ADD COLUMN customer_pan VARCHAR(10) NOT NULL DEFAULT '' AFTER customer_residency_status",
@@ -157,15 +152,10 @@ class POSRegisterController
     private function getHighValueTransactionLimit(mysqli $conn): float
     {
         $this->ensureHighValueComplianceSchema($conn);
-        $limit = 200000.00;
-        $res = $conn->query('SELECT high_value_transaction_limit FROM global_settings WHERE id = 1 LIMIT 1');
-        if ($res && ($row = $res->fetch_assoc())) {
-            $configured = (float)($row['high_value_transaction_limit'] ?? 0);
-            if ($configured > 0) {
-                $limit = $configured;
-            }
-        }
-        return $limit;
+        require_once __DIR__ . '/../helpers/app_settings.php';
+        $configured = (float) app_setting('high_value_transaction_limit', 200000.00);
+
+        return $configured > 0 ? $configured : 200000.00;
     }
 
     private function normalizeResidencyStatus(string $status): string
@@ -4294,9 +4284,8 @@ class POSRegisterController
             }
         }
 
-        require_once __DIR__ . '/../models/comman/tables.php';
-        $comman = new Tables($conn);
-        $firm = $comman->getRecordById('firm_details', 1);
+        require_once __DIR__ . '/../helpers/app_settings.php';
+        $firm = app_setting_firm_details();
         if (is_array($firm)) {
             foreach (['pin', 'pincode', 'zip', 'zipcode'] as $col) {
                 $pin = trim((string)($firm[$col] ?? ''));
