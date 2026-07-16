@@ -668,20 +668,6 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                     </div>
                 <?php endif; ?>
             </div>
-            <!-- Conversion Summary -->
-            <?php if (!empty($orderremarks['payment_type']) || !empty($orderremarks['country'])): ?>
-                <div class="rounded-lg border bg-white p-5 shadow-sm relative">
-                    <h3 class="mb-2 text-sm font-bold text-black-700">Conversion Summary</h3>
-                    <div
-                        class="text-sm text-black-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
-                        <b>Payment Type:</b> <?php echo ($orderremarks['payment_type'] ?? 'N/A'); ?>
-                        <br>
-                        <b>Payment ID:</b> <?php echo ($orderremarks['transid'] ?? 'N/A'); ?>
-                        <br>
-                        <b>Country:</b> <?php echo ($orderremarks['country'] ?? 'N/A'); ?>
-                    </div>
-                </div>
-            <?php endif; ?>
             <!-- address Section -->
             <?php /* <div class="rounded-lg border bg-white p-5 shadow-sm relative">
                 <button type="button" onclick="openNameEmailPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit address">
