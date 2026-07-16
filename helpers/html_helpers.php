@@ -79,6 +79,21 @@ function pos_invoice_pdf_url(int $invoiceId): string
 	return base_url('?page=posinvoice&action=generate_pdf&invoice_id=' . $invoiceId);
 }
 
+/** Browser print preview for POS tax invoice (HTML + window.print). */
+function pos_invoice_print_url(int $invoiceId, bool $autoPrint = true): string
+{
+	if ($invoiceId <= 0) {
+		return '';
+	}
+
+	$url = base_url('?page=posinvoice&action=print-preview&invoice_id=' . $invoiceId);
+	if ($autoPrint) {
+		$url .= '&autoprint=1';
+	}
+
+	return $url;
+}
+
 /** Inbound book shipping fee (INR): MAX(min, billable_kg × rate). Constants in init.php. */
 function book_shipping_fee_inr($weightKg): float
 {
