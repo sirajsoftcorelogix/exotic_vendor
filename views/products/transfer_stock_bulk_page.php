@@ -1249,17 +1249,63 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         }
     }
 
-    function tryBulkExactSku(tr, sku) {
-        sku = (sku || '').trim();
-        if (!sku) return Promise.resolve();
-        return fetch(apiUrl('search_product', '&q=' + encodeURIComponent(sku) + '&exact=1'), { credentials: 'same-origin' })
+    function resolveBulkGridRow(tr) {
+        if (!tr) return Promise.resolve(false);
+        const ic = tr.querySelector('.bulk-inp-item-code');
+        const skuIn = tr.querySelector('.bulk-inp-sku');
+        if (ic && ic.value.trim()) return Promise.resolve(true);
+        const q = skuIn ? skuIn.value.trim() : '';
+        if (!q) return Promise.resolve(false);
+
+        function pickFromList(products) {
+            if (!products || !products.length) return null;
+            if (products.length === 1) return products[0];
+            const qLower = q.toLowerCase();
+            for (let i = 0; i < products.length; i++) {
+                const p = products[i];
+                if (String(p.sku || '').trim().toLowerCase() === qLower) return p;
+                if (String(p.item_code || '').trim().toLowerCase() === qLower) return p;
+            }
+            return null;
+        }
+
+        return fetch(apiUrl('search_product', '&q=' + encodeURIComponent(q) + '&exact=1'), { credentials: 'same-origin' })
             .then(function (r) { return parseFetchJsonResponse(r); })
             .then(function (data) {
                 if (data.success && data.product) {
                     applyBulkSkuProduct(tr, data.product);
+                    return true;
                 }
+                return fetch(apiUrl('search_product', '&q=' + encodeURIComponent(q)), { credentials: 'same-origin' })
+                    .then(function (r2) { return parseFetchJsonResponse(r2); })
+                    .then(function (data2) {
+                        const picked = data2.success ? pickFromList(data2.products) : null;
+                        if (picked) {
+                            applyBulkSkuProduct(tr, picked);
+                            return true;
+                        }
+                        return false;
+                    });
             })
-            .catch(function () {});
+            .catch(function () { return false; });
+    }
+
+    function resolveAllBulkGridRows() {
+        const pending = [];
+        document.querySelectorAll('#bulk_grid_body tr.bulk-grid-row').forEach(function (tr) {
+            const ic = tr.querySelector('.bulk-inp-item-code');
+            const skuIn = tr.querySelector('.bulk-inp-sku');
+            if (skuIn && skuIn.value.trim() && (!ic || !ic.value.trim())) {
+                pending.push(resolveBulkGridRow(tr));
+            }
+        });
+        return pending.length ? Promise.all(pending) : Promise.resolve([]);
+    }
+
+    function tryBulkExactSku(tr, sku) {
+        sku = (sku || '').trim();
+        if (!sku) return Promise.resolve();
+        return resolveBulkGridRow(tr);
     }
 
     const bulkImageLightbox = document.getElementById('bulkImageLightbox');
@@ -1461,6 +1507,13 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         const fd = new FormData(form);
 
         if (bulkMode.value === 'grid') {
+            try {
+                await resolveAllBulkGridRows();
+            } catch (err) {
+                showFetchErrorNotice(err, 'Stock Transfer Validation');
+                return;
+            }
+
             const gridData = collectGridRows();
             if (gridData.length === 0) {
                 showTransferNotice('Add at least one row with a resolved product (search SKU and pick a match, or type an exact SKU) and quantity.');
