@@ -747,7 +747,7 @@ class PosOrdersController
             $invoiceId = (int)($activeInvoice['id'] ?? 0);
         }
 
-        $invoicePrintUrl = $invoiceId > 0 ? pos_invoice_print_url($invoiceId) : '';
+        $invoicePdfUrl = $invoiceId > 0 ? pos_invoice_pdf_url($invoiceId) : '';
 
         if ($type === 'inner') {
             renderPartial('views/posorders/partial_order_details.php', [
@@ -761,7 +761,7 @@ class PosOrdersController
                 'orderremarks' => $orderremarks,
                 'fullOrderJourny' => $fullOrderJourny,
                 'customerdetails' => $customerdetails,
-                'invoicePrintUrl' => $invoicePrintUrl,
+                'invoicePdfUrl' => $invoicePdfUrl,
             ], 'Order Details');
         }
         exit;
