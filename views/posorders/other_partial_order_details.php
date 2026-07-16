@@ -26,23 +26,13 @@ foreach ($order as $items => $item):
 endforeach;
 $currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
 $displayOrderNumber = (string)($orderremarks['order_number'] ?? ($order[0]['order_number'] ?? ''));
-$canEditOrderNumber = !empty($canEditOrderNumber);
+$invoicePrintUrl = trim((string)($invoicePrintUrl ?? ''));
 ?>
 
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-2">
-            <h1 class="text-xl font-bold" id="orderDetailsNumberLabel"><?php echo htmlspecialchars($displayOrderNumber); ?></h1>
-            <?php if ($canEditOrderNumber && $displayOrderNumber !== ''): ?>
-                <button type="button"
-                    onclick="openOrderNumberEditPopup('<?php echo htmlspecialchars($displayOrderNumber, ENT_QUOTES); ?>')"
-                    class="inline-flex items-center justify-center rounded p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
-                    title="Edit order number">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                </button>
-            <?php endif; ?>
+            <h1 class="text-xl font-bold"><?php echo htmlspecialchars($displayOrderNumber); ?></h1>
             <!-- <span class="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white">Paid</span>
             <span class="rounded-full bg-red-500 px-3 py-1 text-xs font-semibold text-white">Canceled</span>
             <span class="rounded-full bg-yellow-500 px-3 py-1 text-xs font-semibold text-white">Refunded</span>
@@ -65,9 +55,19 @@ $canEditOrderNumber = !empty($canEditOrderNumber);
                 </label>
                 <div class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden opacity-0 invisible scale-95 transition-all duration-200 peer-checked:opacity-100 peer-checked:visible peer-checked:scale-100">
                     <div class="py-1">
-                        <a href="#" class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100">
-                            Print Invoice
-                        </a>
+                        <?php if ($invoicePrintUrl !== ''): ?>
+                            <a href="<?php echo htmlspecialchars($invoicePrintUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100">
+                                Print Invoice
+                            </a>
+                        <?php else: ?>
+                            <span class="flex items-center px-4 py-2 text-[13px] text-gray-400 cursor-not-allowed"
+                                title="No invoice exists for this order yet.">
+                                Print Invoice
+                            </span>
+                        <?php endif; ?>
                         <a href="#" class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100 border-t border-gray-50">
                             print order
                         </a>
@@ -587,82 +587,7 @@ $canEditOrderNumber = !empty($canEditOrderNumber);
         </div>
     </div>
 </div>
-<div id="orderNumberEditPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6 relative">
-        <button type="button" onclick="closeOrderNumberEditPopup()" class="absolute top-3 right-4 text-gray-500 hover:text-gray-800">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-        </button>
-
-        <h2 class="text-xl font-bold mb-4 text-gray-800">Edit Order Number</h2>
-
-        <form id="orderNumberEditForm">
-            <input type="hidden" id="old_order_number" name="old_order_number">
-
-            <label class="block text-sm font-medium text-gray-700 mb-1" for="new_order_number">New order number</label>
-            <input type="text" id="new_order_number" name="new_order_number"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                required>
-
-            <div class="mt-6 flex justify-end gap-3">
-                <button type="button" onclick="closeOrderNumberEditPopup()"
-                    class="rounded-full px-5 py-2.5 bg-gray-200 text-gray-800 hover:bg-gray-300">
-                    Cancel
-                </button>
-                <button type="submit"
-                    class="rounded-full bg-[#D46B08] px-10 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700">
-                    Save
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
 <script>
-    function openOrderNumberEditPopup(orderNumber) {
-        document.getElementById('old_order_number').value = orderNumber;
-        document.getElementById('new_order_number').value = orderNumber;
-        document.getElementById('orderNumberEditPopup').classList.remove('hidden');
-        document.getElementById('new_order_number').focus();
-        document.getElementById('new_order_number').select();
-    }
-
-    function closeOrderNumberEditPopup() {
-        document.getElementById('orderNumberEditPopup').classList.add('hidden');
-    }
-
-    document.getElementById('orderNumberEditForm')?.addEventListener('submit', function(e) {
-        e.preventDefault();
-
-        const oldOrderNumber = document.getElementById('old_order_number').value.trim();
-        const newOrderNumber = document.getElementById('new_order_number').value.trim();
-
-        if (!oldOrderNumber || !newOrderNumber) {
-            alert('Order number is required.');
-            return;
-        }
-
-        const formData = new FormData();
-        formData.append('old_order_number', oldOrderNumber);
-        formData.append('new_order_number', newOrderNumber);
-
-        fetch('index.php?page=posorders&action=update_order_number_ajax', {
-                method: 'POST',
-                body: formData
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (!data.success) {
-                    alert(data.message || 'Could not update order number.');
-                    return;
-                }
-
-                closeOrderNumberEditPopup();
-                window.location.href = `index.php?page=posorders&action=get_order_details_html&type=outer&order_number=${encodeURIComponent(data.order_number || newOrderNumber)}`;
-            })
-            .catch(() => alert('Request failed. Please try again.'));
-    });
-
     function openNoteEditPopup(orderNumber, currentRemarks) {
         document.getElementById('note_order_number').value = orderNumber;
         document.getElementById('note_remarks').value = currentRemarks || '';

@@ -707,7 +707,7 @@ class PosOrdersController
     public function getOrderDetailsHTML()
     {
         is_login();
-        global $ordersModel, $commanModel;
+        global $ordersModel, $commanModel, $conn;
         $orderRef = trim((string)($_GET['order_number'] ?? ''));
         $type = isset($_GET['type']) ? $_GET['type'] : 'inner';
         if ($orderRef === '') {
@@ -730,11 +730,29 @@ class PosOrdersController
             $order[$key]['status_log'] = $commanModel->get_order_status_log($orders['id']);
         }
 
+        $invoiceId = (int)($order[0]['invoice_id'] ?? 0);
+        require_once __DIR__ . '/../models/PosInvoice/invoice.php';
+        $posInvoiceModel = new POSInvoice($conn);
+
+        $activeInvoice = null;
+        if ($invoiceId > 0) {
+            $activeInvoice = $posInvoiceModel->getInvoiceById($invoiceId);
+            if ($activeInvoice && strtolower(trim((string)($activeInvoice['status'] ?? ''))) === 'cancelled') {
+                $activeInvoice = null;
+                $invoiceId = 0;
+            }
+        }
+        if (!$activeInvoice) {
+            $activeInvoice = $posInvoiceModel->getActiveInvoiceForOrderNumber($resolvedOrderNumber);
+            $invoiceId = (int)($activeInvoice['id'] ?? 0);
+        }
+
+        $invoicePrintUrl = $invoiceId > 0 ? pos_invoice_print_url($invoiceId) : '';
+
         if ($type === 'inner') {
             renderPartial('views/posorders/partial_order_details.php', [
                 'order' => $order,
                 'statusList' => $statusList,
-                'canEditOrderNumber' => canSrEmpAccess(),
             ]);
         } else {
             renderTemplate('views/posorders/other_partial_order_details.php', [
@@ -743,7 +761,7 @@ class PosOrdersController
                 'orderremarks' => $orderremarks,
                 'fullOrderJourny' => $fullOrderJourny,
                 'customerdetails' => $customerdetails,
-                'canEditOrderNumber' => canSrEmpAccess(),
+                'invoicePrintUrl' => $invoicePrintUrl,
             ], 'Order Details');
         }
         exit;

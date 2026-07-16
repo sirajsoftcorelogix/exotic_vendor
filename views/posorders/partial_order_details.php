@@ -14,16 +14,6 @@
                 <?php $link = 'index.php?page=posorders&action=get_order_details_html&type=outer&order_number=' . $order[0]['order_number']; ?>
                 <p><span class="font-bold">Order number : </span><span class="inline-flex items-center gap-1">
                     <a href="<?php echo $link; ?>" class="text-blue-600 hover:underline" target="_blank"><?php echo htmlspecialchars($order[0]['order_number']); ?></a>
-                    <?php if (!empty($canEditOrderNumber)): ?>
-                        <button type="button"
-                            onclick="openOrderNumberEditPopup('<?php echo htmlspecialchars($order[0]['order_number'], ENT_QUOTES); ?>')"
-                            class="inline-flex items-center justify-center rounded p-0.5 text-gray-500 hover:text-blue-600"
-                            title="Edit order number">
-                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                        </button>
-                    <?php endif; ?>
                 </span></p>
                 <p><span class="font-bold">Order Date : </span><span class=""><?php echo date('d-M-Y', strtotime($order[0]['order_date'])); ?></span>
                 </p>
@@ -273,49 +263,3 @@
             </div>
         <?php endforeach; ?>
     </div>
-<?php if (!empty($canEditOrderNumber)): ?>
-<div id="innerOrderNumberEditPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-[10000] p-4">
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6 relative">
-        <button type="button" onclick="closeInnerOrderNumberEditPopup()" class="absolute top-3 right-4 text-gray-500 hover:text-gray-800">&times;</button>
-        <h2 class="text-lg font-bold mb-4">Edit Order Number</h2>
-        <form id="innerOrderNumberEditForm">
-            <input type="hidden" id="inner_old_order_number" name="old_order_number">
-            <input type="text" id="inner_new_order_number" name="new_order_number" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
-            <div class="mt-4 flex justify-end gap-2">
-                <button type="button" onclick="closeInnerOrderNumberEditPopup()" class="px-4 py-2 bg-gray-200 rounded">Cancel</button>
-                <button type="submit" class="px-4 py-2 bg-orange-600 text-white rounded">Save</button>
-            </div>
-        </form>
-    </div>
-</div>
-<script>
-    function openOrderNumberEditPopup(orderNumber) {
-        document.getElementById('inner_old_order_number').value = orderNumber;
-        document.getElementById('inner_new_order_number').value = orderNumber;
-        document.getElementById('innerOrderNumberEditPopup').classList.remove('hidden');
-        document.getElementById('inner_new_order_number').focus();
-    }
-    function closeInnerOrderNumberEditPopup() {
-        document.getElementById('innerOrderNumberEditPopup').classList.add('hidden');
-    }
-    document.getElementById('innerOrderNumberEditForm')?.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const oldOrderNumber = document.getElementById('inner_old_order_number').value.trim();
-        const newOrderNumber = document.getElementById('inner_new_order_number').value.trim();
-        const formData = new FormData();
-        formData.append('old_order_number', oldOrderNumber);
-        formData.append('new_order_number', newOrderNumber);
-        fetch('index.php?page=posorders&action=update_order_number_ajax', { method: 'POST', body: formData })
-            .then(res => res.json())
-            .then(data => {
-                if (!data.success) {
-                    alert(data.message || 'Could not update order number.');
-                    return;
-                }
-                closeInnerOrderNumberEditPopup();
-                window.location.href = `index.php?page=posorders&action=get_order_details_html&type=outer&order_number=${encodeURIComponent(data.order_number || newOrderNumber)}`;
-            })
-            .catch(() => alert('Request failed.'));
-    });
-</script>
-<?php endif; ?>
