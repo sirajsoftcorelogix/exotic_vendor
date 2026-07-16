@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../invoice_number_resolver.php';
+require_once __DIR__ . '/pos_order_pricing.php';
 
 class InvoiceRequestBuilder
 {
@@ -66,10 +67,7 @@ class InvoiceRequestBuilder
         foreach ($orderItems as $order) {
             $qty = max(1, (int)($order['quantity'] ?? 1));
             $gst = (float)($order['gst'] ?? 0);
-            $finalLine = (float)($order['finalprice'] ?? 0);
-            $unitPretax = $gst > 0
-                ? ($finalLine / (1 + ($gst / 100))) / $qty
-                : ($qty > 0 ? $finalLine / $qty : $finalLine);
+            $unitPretax = pos_order_pretax_unit_price($order, 'disc');
 
             $amount = $unitPretax * $qty;
             $taxAmount = ($amount * $gst) / 100;

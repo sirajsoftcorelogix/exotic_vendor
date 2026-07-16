@@ -348,18 +348,24 @@ function pos_payment_finalize_invoice_for_order(mysqli $conn, string $orderNumbe
     require_once __DIR__ . '/../models/PosInvoice/invoice.php';
     $invoiceModel = new POSInvoice($conn);
     $existing = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
-    if ($existing) {
-        $status = strtolower(trim((string)($existing['status'] ?? '')));
-        $invoiceId = (int)($existing['id'] ?? 0);
-        if ($status === 'final') {
-            return [
-                'success' => true,
-                'attempted' => true,
-                'fully_paid' => true,
-                'invoice_id' => $invoiceId,
-                'created' => false,
-            ];
-        }
+        if ($existing) {
+            $status = strtolower(trim((string)($existing['status'] ?? '')));
+            $invoiceId = (int)($existing['id'] ?? 0);
+            if ($status === 'final') {
+                if ($invoiceId > 0) {
+                    require_once __DIR__ . '/../controllers/PosInvoiceController.php';
+                    $posInv = new PosInvoiceController();
+                    $posInv->repairPosInvoiceMetadataForOrder($invoiceId, $orderNumber);
+                }
+
+                return [
+                    'success' => true,
+                    'attempted' => true,
+                    'fully_paid' => true,
+                    'invoice_id' => $invoiceId,
+                    'created' => false,
+                ];
+            }
         if (in_array($status, ['proforma', 'draft'], true) && $invoiceId > 0) {
             $stmt = $conn->prepare(
                 'UPDATE vp_invoices SET status = \'final\', invoice_date = CURDATE() WHERE id = ?'
@@ -369,6 +375,10 @@ function pos_payment_finalize_invoice_for_order(mysqli $conn, string $orderNumbe
                 $stmt->execute();
                 $stmt->close();
             }
+
+            require_once __DIR__ . '/../controllers/PosInvoiceController.php';
+            $posInv = new PosInvoiceController();
+            $posInv->repairPosInvoiceMetadataForOrder($invoiceId, $orderNumber);
 
             return [
                 'success' => true,
