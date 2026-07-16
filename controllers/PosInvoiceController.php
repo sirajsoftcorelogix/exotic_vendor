@@ -6,11 +6,17 @@ require_once 'models/comman/tables.php';
 require_once 'models/customer/Customer.php';
 require_once 'models/product/product.php';
 require_once __DIR__ . '/../models/payment/Payment.php';
-$invoiceModel = new POSInvoice($conn);
-$ordersModel = new Order($conn);
-$usersModel = new User($conn);
-$commanModel = new Tables($conn);
-$paymentModel = new Payment($conn);
+// Register in $GLOBALS so methods work when this file is required from a function scope (e.g. payments → create invoice).
+$GLOBALS['invoiceModel'] = $GLOBALS['invoiceModel'] ?? new POSInvoice($conn);
+$GLOBALS['ordersModel'] = $GLOBALS['ordersModel'] ?? new Order($conn);
+$GLOBALS['usersModel'] = $GLOBALS['usersModel'] ?? new User($conn);
+$GLOBALS['commanModel'] = $GLOBALS['commanModel'] ?? new Tables($conn);
+$GLOBALS['paymentModel'] = $GLOBALS['paymentModel'] ?? new Payment($conn);
+$invoiceModel = $GLOBALS['invoiceModel'];
+$ordersModel = $GLOBALS['ordersModel'];
+$usersModel = $GLOBALS['usersModel'];
+$commanModel = $GLOBALS['commanModel'];
+$paymentModel = $GLOBALS['paymentModel'];
 class PosInvoiceController
 {
 

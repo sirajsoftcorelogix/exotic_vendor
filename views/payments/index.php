@@ -623,13 +623,27 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         fetch('index.php?page=payments&action=create_from_payment', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
                 },
                 body: JSON.stringify({
                     payment_id: paymentId
                 })
             })
-            .then(res => res.json())
+            .then(async (res) => {
+                const text = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    throw new Error(text.trim().slice(0, 300) || 'Invalid server response');
+                }
+                if (!res.ok && data && data.message) {
+                    throw new Error(data.message);
+                }
+                return data;
+            })
             .then(data => {
 
                 if (!data.success) {
@@ -644,8 +658,8 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
 
                 loadPayments();
             })
-            .catch(() => {
-                alert('Invoice request failed');
+            .catch((err) => {
+                alert(err.message || 'Invoice request failed');
             });
 
     }
