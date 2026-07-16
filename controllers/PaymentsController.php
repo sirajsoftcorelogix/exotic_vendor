@@ -221,41 +221,40 @@ class PaymentsController
         global $conn;
 
         $data = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($data)) {
+            vendorJsonResponse(['success' => false, 'message' => 'Invalid request body']);
+        }
+
         $paymentId = (int)($data['payment_id'] ?? 0);
         if ($paymentId <= 0) {
-            echo json_encode(['success' => false, 'message' => 'Payment id missing']);
-            exit;
+            vendorJsonResponse(['success' => false, 'message' => 'Payment id missing']);
         }
 
         $orderNumber = $this->paymentModel->getOrderNumberByPaymentId($paymentId);
         if ($orderNumber === '') {
-            echo json_encode(['success' => false, 'message' => 'Payment not found']);
-            exit;
+            vendorJsonResponse(['success' => false, 'message' => 'Payment not found']);
         }
 
         if (!pos_payment_is_fully_paid($conn, $orderNumber)) {
-            echo json_encode([
+            vendorJsonResponse([
                 'success' => false,
                 'message' => 'Order is not fully paid yet. Invoice can be created only when balance is zero.',
             ]);
-            exit;
         }
 
         $invoiceMeta = pos_payment_finalize_invoice_for_order($conn, $orderNumber);
         if (empty($invoiceMeta['success']) || empty($invoiceMeta['invoice_id'])) {
-            echo json_encode([
+            vendorJsonResponse([
                 'success' => false,
                 'message' => $invoiceMeta['message'] ?? 'Invoice could not be created.',
             ]);
-            exit;
         }
 
-        echo json_encode([
+        vendorJsonResponse([
             'success' => true,
             'invoice_id' => (int)$invoiceMeta['invoice_id'],
             'created' => !empty($invoiceMeta['created']),
         ]);
-        exit;
     }
 
     public function get_payment_summary()
