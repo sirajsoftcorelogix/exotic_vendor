@@ -656,7 +656,13 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
 
             <!-- Note Section -->
             <div class="rounded-lg border bg-white p-5 shadow-sm relative" id="note-container-<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>">
-                <button type="button" onclick="openNoteEditPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>','<?= htmlspecialchars($orderremarks['remarks'] ?? '', ENT_QUOTES) ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit Note">
+                <textarea id="note-remarks-source" class="hidden" aria-hidden="true"><?php echo htmlspecialchars($orderremarks['remarks'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
+                <button type="button"
+                    id="note-edit-btn"
+                    data-order-number="<?php echo htmlspecialchars($orderremarks['order_number'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+                    onclick="openNoteEditPopup()"
+                    class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors"
+                    title="Edit Note">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
@@ -904,9 +910,14 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
             .catch(() => alert('Request failed. Please try again.'));
     });
 
-    function openNoteEditPopup(orderNumber, currentRemarks) {
+    function openNoteEditPopup() {
+        const btn = document.getElementById('note-edit-btn');
+        const orderNumber = btn ? (btn.dataset.orderNumber || '') : '';
+        const src = document.getElementById('note-remarks-source');
+        const currentRemarks = src ? src.value : '';
+
         document.getElementById('note_order_number').value = orderNumber;
-        document.getElementById('note_remarks').value = currentRemarks || '';
+        document.getElementById('note_remarks').value = currentRemarks;
         document.getElementById('noteEditPopup').classList.remove('hidden');
     }
 
@@ -945,6 +956,11 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                         } else {
                             displayEl.innerHTML = '<em class="text-black-400">No notes from customer</em>';
                         }
+                    }
+
+                    const remarksSource = document.getElementById('note-remarks-source');
+                    if (remarksSource) {
+                        remarksSource.value = remarks;
                     }
 
                     // Optional success feedback
