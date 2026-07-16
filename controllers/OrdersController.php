@@ -302,7 +302,7 @@ class OrdersController
      */
     private function importVendorOrdersFromApiPayload(array $ordersList, ?string $onlyOrderNumber = null): array
     {
-        global $ordersModel, $productModel;
+        global $ordersModel, $productModel, $conn;
 
         $statusList = $ordersModel->adminOrderStatusList('true');
         $skipIds = ['2658982', '2660434', '2662287', '469282', '2664206'];
@@ -433,6 +433,8 @@ class OrdersController
 
                 if (isset($data['success']) && $data['success'] == 1) {
                     $imported++;
+                    require_once __DIR__ . '/../helpers/BookPurchaseReplenishment.php';
+                    BookPurchaseReplenishment::tryProcessImportedOrderLine($conn, $productModel, $rdata);
                 }
 
                 $vendorRaw = trim((string)($item['vendor'] ?? ''));

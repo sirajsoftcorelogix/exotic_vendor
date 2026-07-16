@@ -198,6 +198,7 @@ class PosOrdersController
         //is_login();
         global $ordersModel;
         global $productModel;
+        global $conn;
         // if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
         //     http_response_code(403); // Forbidden
         //     die('Unauthorized access.');
@@ -427,6 +428,8 @@ class PosOrdersController
 
                 if (isset($data['success']) && $data['success'] == 1) {
                     $imported++;
+                    require_once __DIR__ . '/../helpers/BookPurchaseReplenishment.php';
+                    BookPurchaseReplenishment::tryProcessImportedOrderLine($conn, $productModel, $rdata);
                 }
                 //print_array($rdata);   
                 // insert vendor name(s) into vp_vendors during import
