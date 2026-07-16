@@ -64,27 +64,110 @@ final class StockMovement
         if ($productId <= 0 || $warehouseId <= 0) {
             return 0.0;
         }
-        $sql = '
-            SELECT sm.running_stock
-            FROM vp_stock_movements sm
-            INNER JOIN (
-                SELECT product_id, MAX(id) AS max_id
-                FROM vp_stock_movements
-                WHERE warehouse_id = ?
-                GROUP BY product_id
-            ) latest ON latest.product_id = sm.product_id AND latest.max_id = sm.id
-            WHERE sm.warehouse_id = ? AND sm.product_id = ?
-            LIMIT 1';
-        $stmt = $conn->prepare($sql);
+        $stmt = $conn->prepare(
+            'SELECT running_stock FROM vp_stock_movements
+             WHERE product_id = ? AND warehouse_id = ?
+             ORDER BY id DESC LIMIT 1'
+        );
         if (!$stmt) {
             return 0.0;
         }
-        $stmt->bind_param('iii', $warehouseId, $warehouseId, $productId);
+        $stmt->bind_param('ii', $productId, $warehouseId);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
         return (float) ($row['running_stock'] ?? 0);
+    }
+
+    /**
+     * Latest running_stock for many products at one warehouse (bulk transfer validation).
+     *
+     * @param list<int> $productIds
+     * @return array<int, float>
+     */
+    public static function getLastRunningStockMapByProductIds(\mysqli $conn, array $productIds, int $warehouseId): array
+    {
+        $productIds = array_values(array_unique(array_filter(array_map('intval', $productIds), static function (int $id): bool {
+            return $id > 0;
+        })));
+        if ($warehouseId <= 0 || $productIds === []) {
+            return [];
+        }
+
+        $stockMap = [];
+        foreach (array_chunk($productIds, 100) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $sql = "SELECT sm.product_id, sm.running_stock
+                    FROM vp_stock_movements sm
+                    INNER JOIN (
+                        SELECT product_id, MAX(id) AS max_id
+                        FROM vp_stock_movements
+                        WHERE warehouse_id = ? AND product_id IN ($placeholders)
+                        GROUP BY product_id
+                    ) latest ON sm.product_id = latest.product_id AND sm.id = latest.max_id
+                    WHERE sm.warehouse_id = ?";
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                continue;
+            }
+            $types = 'i' . str_repeat('i', count($chunk)) . 'i';
+            $params = array_merge([$warehouseId], $chunk, [$warehouseId]);
+            $stmt->bind_param($types, ...$params);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            while ($row = $result->fetch_assoc()) {
+                $stockMap[(int) $row['product_id']] = (float) ($row['running_stock'] ?? 0);
+            }
+            $stmt->close();
+        }
+
+        return $stockMap;
+    }
+
+    /**
+     * Latest running_stock for many SKUs at one warehouse.
+     *
+     * @param list<string> $skus
+     * @return array<string, float>
+     */
+    public static function getLastRunningStockMapBySkus(\mysqli $conn, array $skus, int $warehouseId): array
+    {
+        $skus = array_values(array_unique(array_filter(array_map(static function ($sku): string {
+            return trim((string) $sku);
+        }, $skus))));
+        if ($warehouseId <= 0 || $skus === []) {
+            return [];
+        }
+
+        $stockMap = [];
+        foreach (array_chunk($skus, 100) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $sql = "SELECT sm.sku, sm.running_stock
+                    FROM vp_stock_movements sm
+                    INNER JOIN (
+                        SELECT sku, MAX(id) AS max_id
+                        FROM vp_stock_movements
+                        WHERE warehouse_id = ? AND sku IN ($placeholders)
+                        GROUP BY sku
+                    ) latest ON sm.sku = latest.sku AND sm.id = latest.max_id
+                    WHERE sm.warehouse_id = ?";
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                continue;
+            }
+            $types = 'i' . str_repeat('s', count($chunk)) . 'i';
+            $params = array_merge([$warehouseId], $chunk, [$warehouseId]);
+            $stmt->bind_param($types, ...$params);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            while ($row = $result->fetch_assoc()) {
+                $stockMap[(string) $row['sku']] = (float) ($row['running_stock'] ?? 0);
+            }
+            $stmt->close();
+        }
+
+        return $stockMap;
     }
 
     /**

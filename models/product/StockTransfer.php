@@ -103,6 +103,8 @@ class StockTransfer
     public function aggregateBulkVariantRows(array $rows): array
     {
         $merged = [];
+        $notFound = [];
+        $pendingSkuRows = [];
         foreach ($rows as $row) {
             if (!is_array($row)) {
                 continue;
@@ -117,29 +119,13 @@ class StockTransfer
             }
 
             if ($ic === '' && $sku !== '') {
-                $resolved = $this->resolveProductForTransferItem([
-                    'product_id' => 0,
+                $pendingSkuRows[] = [
                     'sku' => $sku,
-                    'item_code' => '',
                     'size' => $sz,
                     'color' => $cl,
-                ]);
-                if (!$resolved) {
-                    $notFound[] = [
-                        'item_code' => $sku,
-                        'size' => $sz,
-                        'color' => $cl,
-                        'quantity' => $qty,
-                    ];
-                    continue;
-                }
-                $ic = (string)($resolved['item_code'] ?? $ic);
-                if ($sz === '') {
-                    $sz = (string)($resolved['size'] ?? '');
-                }
-                if ($cl === '') {
-                    $cl = (string)($resolved['color'] ?? '');
-                }
+                    'quantity' => $qty,
+                ];
+                continue;
             }
 
             $k = strtolower($ic) . "\x1e" . $sz . "\x1e" . $cl;
@@ -149,21 +135,60 @@ class StockTransfer
             $merged[$k]['qty'] += $qty;
         }
 
-        if ($merged === []) {
-            return ['items' => [], 'errors' => ['No valid rows. Each row needs ItemCode (or SKU) and a positive Quantity.']];
+        if (!empty($pendingSkuRows)) {
+            $skuMap = $this->resolveBulkProductsBySku(array_column($pendingSkuRows, 'sku'));
+            foreach ($pendingSkuRows as $pending) {
+                $sku = trim((string)($pending['sku'] ?? ''));
+                $sz = trim((string)($pending['size'] ?? ''));
+                $cl = trim((string)($pending['color'] ?? ''));
+                $qty = (int)($pending['quantity'] ?? 0);
+                $resolved = $skuMap[$sku] ?? null;
+                if (!$resolved) {
+                    $notFound[] = [
+                        'item_code' => $sku,
+                        'size' => $sz,
+                        'color' => $cl,
+                        'quantity' => $qty,
+                    ];
+                    continue;
+                }
+                $ic = (string)($resolved['item_code'] ?? '');
+                if ($sz === '') {
+                    $sz = (string)($resolved['size'] ?? '');
+                }
+                if ($cl === '') {
+                    $cl = (string)($resolved['color'] ?? '');
+                }
+                $k = strtolower($ic) . "\x1e" . $sz . "\x1e" . $cl;
+                if (!isset($merged[$k])) {
+                    $merged[$k] = ['item_code' => $ic, 'size' => $sz, 'color' => $cl, 'qty' => 0];
+                }
+                $merged[$k]['qty'] += $qty;
+            }
         }
 
-        $items = [];
-        $errors = [];
-        $notFound = [];
+        if ($merged === []) {
+            return ['items' => [], 'errors' => ['No valid rows. Each row needs ItemCode (or SKU) and a positive Quantity.'], 'not_found' => $notFound];
+        }
+
+        $variantInputs = [];
         foreach ($merged as $m) {
-            $resolved = $this->resolveProductForTransferItem([
-                'product_id' => 0,
-                'sku' => '',
+            $variantInputs[] = [
                 'item_code' => $m['item_code'],
                 'size' => $m['size'],
                 'color' => $m['color'],
-            ]);
+            ];
+        }
+        $resolvedMap = $this->resolveBulkVariantProducts($variantInputs);
+
+        $items = [];
+        $errors = [];
+        foreach ($merged as $m) {
+            $resolved = $resolvedMap[$this->variantLookupKey(
+                (string)$m['item_code'],
+                (string)$m['size'],
+                (string)$m['color']
+            )] ?? null;
             if (!$resolved) {
                 $notFound[] = [
                     'item_code' => $m['item_code'],
@@ -189,6 +214,178 @@ class StockTransfer
         }
 
         return ['items' => array_values($items), 'errors' => $errors, 'not_found' => $notFound];
+    }
+
+    private function variantLookupKey(string $itemCode, string $size, string $color): string
+    {
+        return strtolower(trim($itemCode)) . "\x1e" . trim($size) . "\x1e" . trim($color);
+    }
+
+    /**
+     * @param list<string> $skus
+     * @return array<string, array{id:int,sku:string,item_code:string,title:string,location:string,size:string,color:string}>
+     */
+    public function resolveBulkProductsBySku(array $skus): array
+    {
+        $skus = array_values(array_unique(array_filter(array_map(static function ($sku): string {
+            return trim((string)$sku);
+        }, $skus))));
+        if ($skus === []) {
+            return [];
+        }
+
+        $map = [];
+        $select = 'SELECT id, sku, item_code, title, location, IFNULL(size, \'\') AS size, IFNULL(color, \'\') AS color FROM vp_products';
+        foreach (array_chunk($skus, 100) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $stmt = $this->db->prepare($select . " WHERE sku IN ($placeholders)");
+            if (!$stmt) {
+                continue;
+            }
+            $types = str_repeat('s', count($chunk));
+            $stmt->bind_param($types, ...$chunk);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            while ($row = $result->fetch_assoc()) {
+                $sku = trim((string)($row['sku'] ?? ''));
+                if ($sku === '') {
+                    continue;
+                }
+                $map[$sku] = [
+                    'id' => (int)$row['id'],
+                    'sku' => $sku,
+                    'item_code' => (string)($row['item_code'] ?? ''),
+                    'title' => (string)($row['title'] ?? ''),
+                    'location' => (string)($row['location'] ?? ''),
+                    'size' => (string)($row['size'] ?? ''),
+                    'color' => (string)($row['color'] ?? ''),
+                ];
+            }
+            $stmt->close();
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param list<array{item_code:string,size:string,color:string}> $variants
+     * @return array<string, array{id:int,sku:string,item_code:string,title:string,location:string,size:string,color:string}>
+     */
+    public function resolveBulkVariantProducts(array $variants): array
+    {
+        $wantedKeys = [];
+        $itemCodes = [];
+        foreach ($variants as $variant) {
+            if (!is_array($variant)) {
+                continue;
+            }
+            $itemCode = trim((string)($variant['item_code'] ?? ''));
+            if ($itemCode === '') {
+                continue;
+            }
+            $size = trim((string)($variant['size'] ?? ''));
+            $color = trim((string)($variant['color'] ?? ''));
+            $wantedKeys[$this->variantLookupKey($itemCode, $size, $color)] = true;
+            $itemCodes[$itemCode] = true;
+        }
+        if ($wantedKeys === []) {
+            return [];
+        }
+
+        $map = [];
+        $select = 'SELECT id, sku, item_code, title, location, IFNULL(TRIM(size), \'\') AS size, IFNULL(TRIM(color), \'\') AS color FROM vp_products';
+        foreach (array_chunk(array_keys($itemCodes), 100) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $stmt = $this->db->prepare($select . " WHERE item_code IN ($placeholders)");
+            if (!$stmt) {
+                continue;
+            }
+            $types = str_repeat('s', count($chunk));
+            $stmt->bind_param($types, ...$chunk);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            while ($row = $result->fetch_assoc()) {
+                $key = $this->variantLookupKey(
+                    (string)($row['item_code'] ?? ''),
+                    (string)($row['size'] ?? ''),
+                    (string)($row['color'] ?? '')
+                );
+                if (!isset($wantedKeys[$key])) {
+                    continue;
+                }
+                $map[$key] = [
+                    'id' => (int)$row['id'],
+                    'sku' => (string)($row['sku'] ?? ''),
+                    'item_code' => (string)($row['item_code'] ?? ''),
+                    'title' => (string)($row['title'] ?? ''),
+                    'location' => (string)($row['location'] ?? ''),
+                    'size' => (string)($row['size'] ?? ''),
+                    'color' => (string)($row['color'] ?? ''),
+                ];
+            }
+            $stmt->close();
+        }
+
+        return $map;
+    }
+
+    /**
+     * Validate stock for many transfer lines in batched queries.
+     *
+     * @param list<array{sku:string,product_id:int,requested_qty:int,item_code?:string}> $lines
+     * @param array<string,int> $existingQtyBySku
+     * @return list<array{sku:string,item_code:string,requested_qty:int,available_qty:int}>
+     */
+    public function validateBulkItemStock(array $lines, int $warehouseId, array $existingQtyBySku = []): array
+    {
+        require_once __DIR__ . '/StockMovement.php';
+
+        $productIds = [];
+        $skus = [];
+        foreach ($lines as $line) {
+            $productId = (int)($line['product_id'] ?? 0);
+            $sku = trim((string)($line['sku'] ?? ''));
+            if ($productId > 0) {
+                $productIds[] = $productId;
+            } elseif ($sku !== '') {
+                $skus[] = $sku;
+            }
+        }
+
+        $stockByProductId = StockMovement::getLastRunningStockMapByProductIds($this->db, $productIds, $warehouseId);
+        $stockBySku = StockMovement::getLastRunningStockMapBySkus($this->db, $skus, $warehouseId);
+
+        $insufficient = [];
+        foreach ($lines as $line) {
+            $sku = trim((string)($line['sku'] ?? ''));
+            $productId = (int)($line['product_id'] ?? 0);
+            $requestedQty = max(0, (int)($line['requested_qty'] ?? 0));
+            if ($requestedQty <= 0) {
+                continue;
+            }
+
+            if ($productId > 0) {
+                $availableStock = (int)($stockByProductId[$productId] ?? 0);
+            } else {
+                $availableStock = (int)($stockBySku[$sku] ?? 0);
+            }
+
+            $existingQty = (int)($existingQtyBySku[$sku] ?? 0);
+            if ($existingQty > 0) {
+                $availableStock += $existingQty;
+            }
+
+            if ($requestedQty > $availableStock) {
+                $insufficient[] = [
+                    'sku' => $sku,
+                    'item_code' => trim((string)($line['item_code'] ?? '')),
+                    'requested_qty' => $requestedQty,
+                    'available_qty' => $availableStock,
+                ];
+            }
+        }
+
+        return $insufficient;
     }
 
     /**
