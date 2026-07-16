@@ -743,32 +743,44 @@ class PosOrdersController
             $notesGrand = round((float)($posDiscounts['grand_total'] ?? 0), 2);
         }
 
-        if ($orderLevelDisc <= 0 && $orderNumber !== '') {
+        if ($orderNumber !== '') {
             $info = $ordersModel->getAddressInfoByOrderNumber($orderNumber);
-            if (is_array($info)) {
-                $orderLevelDisc = round(
-                    (float)($info['custom_reduce'] ?? 0)
-                    + (float)($info['coupon_reduce'] ?? 0)
-                    + (float)($info['giftvoucher_reduce'] ?? 0),
-                    2
-                );
-            }
+        } else {
+            $info = null;
+        }
+        if ($orderLevelDisc <= 0 && is_array($info)) {
+            $orderLevelDisc = round(
+                (float)($info['custom_reduce'] ?? 0)
+                + (float)($info['coupon_reduce'] ?? 0)
+                + (float)($info['giftvoucher_reduce'] ?? 0),
+                2
+            );
         }
 
-        $displayDiscount = $orderLevelDisc > 0
-            ? $orderLevelDisc
-            : round((float)($invoice['discount_amount'] ?? 0), 2);
-        if ($displayDiscount <= 0 && is_array($posDiscounts)) {
-            $displayDiscount = round($lineDiscount + $orderLevelDisc, 2);
+        $discountLines = $this->buildOrderInvoiceDiscountLines(is_array($posDiscounts) ? $posDiscounts : [], is_array($info) ? $info : null);
+        $orderLevelDiscForGrand = 0.0;
+        $displayDiscount = 0.0;
+        foreach ($discountLines as $discountLine) {
+            $amount = round((float)($discountLine['amount'] ?? 0), 2);
+            $displayDiscount += $amount;
+            if (($discountLine['type'] ?? '') !== 'line') {
+                $orderLevelDiscForGrand += $amount;
+            }
+        }
+        if ($displayDiscount <= 0) {
+            $displayDiscount = $orderLevelDisc > 0
+                ? $orderLevelDisc
+                : round((float)($invoice['discount_amount'] ?? 0), 2);
+            $orderLevelDiscForGrand = $orderLevelDisc;
         }
 
         $grandTotal = $notesGrand > 0
             ? $notesGrand
             : round((float)($invoice['total_amount'] ?? 0), 2);
 
-        if ($orderLevelDisc > 0.001 && $inclusiveGoods > 0
+        if ($orderLevelDiscForGrand > 0.001 && $inclusiveGoods > 0
             && (abs($grandTotal - $inclusiveGoods) < 0.02 || $grandTotal <= 0)) {
-            $grandTotal = max(0.0, round($inclusiveGoods - $orderLevelDisc, 2));
+            $grandTotal = max(0.0, round($inclusiveGoods - $orderLevelDiscForGrand, 2));
         }
 
         if ($orderNumber !== '' && $conn instanceof mysqli) {
@@ -785,10 +797,116 @@ class PosOrdersController
             'invoice_date' => (string)($invoice['invoice_date'] ?? ''),
             'subtotal' => $subtotal,
             'tax_amount' => $taxAmount,
+            'subtotal_goods_incl' => is_array($posDiscounts)
+                ? round((float)($posDiscounts['subtotal_goods'] ?? 0), 2)
+                : $inclusiveGoods,
             'discount' => $displayDiscount,
+            'discount_lines' => $discountLines,
+            'discounts_absorbed' => is_array($posDiscounts) && !empty($posDiscounts['discounts_absorbed']),
             'grand_total' => $grandTotal,
             'status' => (string)($invoice['status'] ?? ''),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $posDiscounts
+     * @param array<string, mixed>|null $orderInfo
+     * @return list<array{type: string, label: string, amount: float, note: string}>
+     */
+    private function buildOrderInvoiceDiscountLines(array $posDiscounts, ?array $orderInfo): array
+    {
+        $absorbed = !empty($posDiscounts['discounts_absorbed']);
+
+        $line = round((float)($posDiscounts['line_discount'] ?? 0), 2);
+        $coupon = round((float)($posDiscounts['coupon_discount'] ?? 0), 2);
+        $cash = round((float)($posDiscounts['cash_discount'] ?? 0), 2);
+        $gift = round((float)($posDiscounts['gift_discount'] ?? 0), 2);
+
+        if (is_array($orderInfo)) {
+            if ($cash <= 0) {
+                $cash = round((float)($orderInfo['custom_reduce'] ?? 0), 2);
+            }
+            if ($coupon <= 0) {
+                $coupon = round((float)($orderInfo['coupon_reduce'] ?? 0), 2);
+            }
+            if ($gift <= 0) {
+                $gift = round((float)($orderInfo['giftvoucher_reduce'] ?? 0), 2);
+            }
+        }
+
+        $lines = [];
+
+        if ($line > 0.001) {
+            $lines[] = [
+                'type' => 'line',
+                'label' => 'Line Discount',
+                'amount' => $line,
+                'note' => $absorbed ? 'Included in line item prices (list vs discounted price).' : '',
+            ];
+        }
+
+        if ($cash > 0.001) {
+            $lines[] = [
+                'type' => 'custom',
+                'label' => $this->orderInvoiceCustomDiscountLabel($posDiscounts, $orderInfo),
+                'amount' => $cash,
+                'note' => is_array($orderInfo) ? trim((string)($orderInfo['custom_note'] ?? '')) : '',
+            ];
+        }
+
+        if ($coupon > 0.001) {
+            $couponName = trim((string)($posDiscounts['coupon_display_name'] ?? ''));
+            if ($couponName === '' && is_array($orderInfo)) {
+                $couponName = trim((string)($orderInfo['coupon'] ?? ''));
+            }
+            $lines[] = [
+                'type' => 'coupon',
+                'label' => $couponName !== '' ? 'Coupon (' . $couponName . ')' : 'Coupon Discount',
+                'amount' => $coupon,
+                'note' => '',
+            ];
+        }
+
+        if ($gift > 0.001) {
+            $giftName = is_array($orderInfo) ? trim((string)($orderInfo['giftvoucher'] ?? '')) : '';
+            $lines[] = [
+                'type' => 'gift',
+                'label' => $giftName !== '' ? 'Gift Voucher (' . $giftName . ')' : 'Gift Voucher',
+                'amount' => $gift,
+                'note' => '',
+            ];
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @param array<string, mixed> $posDiscounts
+     * @param array<string, mixed>|null $orderInfo
+     */
+    private function orderInvoiceCustomDiscountLabel(array $posDiscounts, ?array $orderInfo): string
+    {
+        $mode = trim((string)($posDiscounts['custom_discount_mode'] ?? ''));
+        $value = round((float)($posDiscounts['custom_discount_value'] ?? 0), 2);
+
+        if ($mode === 'percent' && $value > 0) {
+            $pct = rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.');
+
+            return 'Custom Discount (' . $pct . '%)';
+        }
+
+        if ($mode === 'fixed' && $value > 0) {
+            return 'Custom Discount (fixed amount)';
+        }
+
+        $note = is_array($orderInfo) ? trim((string)($orderInfo['custom_note'] ?? '')) : '';
+        if ($note !== '' && preg_match('/(\d+(?:\.\d+)?)\s*%/', $note, $matches)) {
+            $pct = rtrim(rtrim($matches[1], '0'), '.');
+
+            return 'Custom Discount (' . $pct . '%)';
+        }
+
+        return 'Custom Discount';
     }
 
     /**
