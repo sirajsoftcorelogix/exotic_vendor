@@ -708,29 +708,32 @@ class PosOrdersController
     {
         is_login();
         global $ordersModel, $commanModel;
-        $order_number = isset($_GET['order_number']) ? (int)$_GET['order_number'] : 0;
+        $orderRef = trim((string)($_GET['order_number'] ?? ''));
         $type = isset($_GET['type']) ? $_GET['type'] : 'inner';
-        if ($order_number > 0) {
-            $order = $ordersModel->getOrderByOrderNumber($order_number);
-            $orderremarks = $ordersModel->getRemarksByOrderNumber($order_number);
-            $fullOrderJourny = $ordersModel->getfullOrderJournyByNumber($order_number);
-            $customerdetails = $ordersModel->getCustomerNameAndEmailByOrderNumber($order_number);
-            $statusList = $commanModel->get_order_status_list();
-            $assignmentDates = [];
-            foreach ($order as $key => $orders) {
-                $order[$key]['status_log'] = $commanModel->get_order_status_log($orders['id']);
-                $assignmentDates[$orders['id']] =  $orders[$key]['status_log']['change_date'] ?? '';
-            }
-            if ($order) {
-                if ($type === 'inner')
-                    renderPartial('views/posorders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList]);
-                else
-                    renderTemplate('views/posorders/other_partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks, 'fullOrderJourny' => $fullOrderJourny, 'customerdetails' => $customerdetails], 'Order Details');
-            } else {
-                echo '<p>Order details not found.</p>';
-            }
-        } else {
+        if ($orderRef === '') {
             echo '<p>Invalid Order Number.</p>';
+            exit;
+        }
+
+        $order = $ordersModel->getOrderLineItemsByRef($orderRef);
+        if (!$order) {
+            echo '<p>Order details not found.</p>';
+            exit;
+        }
+
+        $resolvedOrderNumber = (string)($order[0]['order_number'] ?? $orderRef);
+        $orderremarks = $ordersModel->getRemarksByOrderNumber($resolvedOrderNumber);
+        $fullOrderJourny = $ordersModel->getfullOrderJournyByNumber($resolvedOrderNumber);
+        $customerdetails = $ordersModel->getCustomerNameAndEmailByOrderNumber($resolvedOrderNumber);
+        $statusList = $commanModel->get_order_status_list();
+        foreach ($order as $key => $orders) {
+            $order[$key]['status_log'] = $commanModel->get_order_status_log($orders['id']);
+        }
+
+        if ($type === 'inner') {
+            renderPartial('views/posorders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList]);
+        } else {
+            renderTemplate('views/posorders/other_partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks, 'fullOrderJourny' => $fullOrderJourny, 'customerdetails' => $customerdetails], 'Order Details');
         }
         exit;
     }
