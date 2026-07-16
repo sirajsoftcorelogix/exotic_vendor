@@ -87,9 +87,13 @@ SELECT
     u.name AS user_name,
     w.address_title AS warehouse,
     vo.order_id AS order_id,
+    vo.order_grand_total,
 
     ROUND(
-        IFNULL(vo.order_line_total, 0)
+        IFNULL(
+            NULLIF(vo.order_grand_total, 0),
+            IFNULL(NULLIF(p.order_amount, 0), IFNULL(vo.order_line_subtotal, 0))
+        )
         -
         IFNULL(
             (
@@ -112,12 +116,36 @@ LEFT JOIN exotic_address w
     ON w.id = p.warehouse_id
 
 LEFT JOIN (
-    SELECT 
-        order_number,
-        MIN(id) AS order_id,
-        SUM(finalprice) AS order_line_total
-    FROM vp_orders
-    GROUP BY order_number
+    SELECT
+        agg.order_number,
+        agg.order_id,
+        agg.order_line_subtotal,
+        COALESCE(
+            NULLIF(agg.order_info_total, 0),
+            GREATEST(
+                agg.order_line_subtotal
+                - agg.custom_reduce
+                - agg.coupon_reduce
+                - agg.gift_reduce
+                - agg.credit,
+                0
+            )
+        ) AS order_grand_total
+    FROM (
+        SELECT
+            o.order_number,
+            MIN(o.id) AS order_id,
+            SUM(o.finalprice * o.quantity) AS order_line_subtotal,
+            MAX(CASE WHEN oi.total > 0 THEN oi.total ELSE NULL END) AS order_info_total,
+            IFNULL(MAX(o.custom_reduce), 0) AS custom_reduce,
+            IFNULL(MAX(oi.coupon_reduce), 0) AS coupon_reduce,
+            IFNULL(MAX(oi.giftvoucher_reduce), 0) AS gift_reduce,
+            IFNULL(MAX(oi.credit), 0) AS credit
+        FROM vp_orders o
+        LEFT JOIN vp_order_info oi
+            ON oi.order_number COLLATE utf8mb4_unicode_ci = o.order_number COLLATE utf8mb4_unicode_ci
+        GROUP BY o.order_number
+    ) agg
 ) vo ON vo.order_number COLLATE utf8mb4_unicode_ci = p.order_number COLLATE utf8mb4_unicode_ci
 
 WHERE 1=1
@@ -209,6 +237,14 @@ WHERE 1=1
         $data = [];
 
         while ($row = $result->fetch_assoc()) {
+            $resolvedOrderAmount = round((float)($row['order_grand_total'] ?? 0), 2);
+            if ($resolvedOrderAmount <= 0) {
+                $resolvedOrderAmount = round((float)($row['order_amount'] ?? 0), 2);
+            }
+            if ($resolvedOrderAmount > 0) {
+                $row['order_amount'] = $resolvedOrderAmount;
+            }
+            unset($row['order_grand_total'], $row['order_line_subtotal']);
             $data[] = $row;
         }
 
@@ -529,23 +565,20 @@ WHERE 1=1
             exit;
         }
 
-        // total order value
-        $res = $conn->query("
-        SELECT SUM(finalprice) as total 
-        FROM vp_orders 
-        WHERE order_number = '$orderNumber'
-    ");
-        $orderTotal = $res->fetch_assoc()['total'] ?? 0;
+        $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
 
-        // total paid
-        $res2 = $conn->query("
-        SELECT SUM(payment_amount) as paid 
-        FROM pos_payments 
-        WHERE order_number = '$orderNumber'
-    ");
-        $paid = $res2->fetch_assoc()['paid'] ?? 0;
+        $stmtPaid = $conn->prepare(
+            'SELECT IFNULL(SUM(payment_amount), 0) AS paid FROM pos_payments WHERE order_number = ?'
+        );
+        $paid = 0.0;
+        if ($stmtPaid) {
+            $stmtPaid->bind_param('s', $orderNumber);
+            $stmtPaid->execute();
+            $paid = round((float)($stmtPaid->get_result()->fetch_assoc()['paid'] ?? 0), 2);
+            $stmtPaid->close();
+        }
 
-        $pending = $orderTotal - $paid;
+        $pending = round($orderTotal - $paid, 2);
 
         echo json_encode([
             'success' => true,

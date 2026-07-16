@@ -141,6 +141,89 @@ function pos_payment_resolve_session_user_id(): int
 }
 
 /**
+ * Payable order total after discounts (grand total), not raw line list prices.
+ * Priority: vp_order_info.total → pos_payments.order_amount → vp_invoices.total_amount → line subtotal minus reductions.
+ */
+function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): float
+{
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return 0.0;
+    }
+
+    $stmt = $conn->prepare('SELECT total FROM vp_order_info WHERE order_number = ? LIMIT 1');
+    if ($stmt) {
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $total = round((float)($row['total'] ?? 0), 2);
+        if ($total > 0) {
+            return $total;
+        }
+    }
+
+    $stmt = $conn->prepare(
+        'SELECT MAX(order_amount) AS order_total FROM pos_payments WHERE order_number = ? AND order_amount > 0'
+    );
+    if ($stmt) {
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $total = round((float)($row['order_total'] ?? 0), 2);
+        if ($total > 0) {
+            return $total;
+        }
+    }
+
+    $stmt = $conn->prepare(
+        'SELECT total_amount FROM vp_invoices WHERE order_number = ? ORDER BY id DESC LIMIT 1'
+    );
+    if ($stmt) {
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $total = round((float)($row['total_amount'] ?? 0), 2);
+        if ($total > 0) {
+            return $total;
+        }
+    }
+
+    $stmt = $conn->prepare(
+        'SELECT
+            IFNULL(SUM(o.finalprice * o.quantity), 0) AS subtotal,
+            IFNULL(MAX(o.custom_reduce), 0) AS custom_reduce,
+            IFNULL(MAX(oi.coupon_reduce), 0) AS coupon_reduce,
+            IFNULL(MAX(oi.giftvoucher_reduce), 0) AS gift_reduce,
+            IFNULL(MAX(oi.credit), 0) AS credit
+         FROM vp_orders o
+         LEFT JOIN vp_order_info oi ON oi.order_number = o.order_number
+         WHERE o.order_number = ?'
+    );
+    if ($stmt) {
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $subtotal = round((float)($row['subtotal'] ?? 0), 2);
+        $reductions = round(
+            (float)($row['custom_reduce'] ?? 0)
+            + (float)($row['coupon_reduce'] ?? 0)
+            + (float)($row['gift_reduce'] ?? 0)
+            + (float)($row['credit'] ?? 0),
+            2
+        );
+        if ($subtotal > 0) {
+            return max(0.0, round($subtotal - $reductions, 2));
+        }
+    }
+
+    return 0.0;
+}
+
+/**
  * Order total (vp_orders) and balance remaining after this payment is applied (pos_payments exclude new row).
  * When $orderTotalOverride is set (>0), use it instead of vp_orders (e.g. Exotic order not imported yet).
  *
@@ -157,14 +240,7 @@ function pos_payment_compute_order_snapshots(mysqli $conn, string $orderNumber, 
     if ($orderTotalOverride !== null && $orderTotalOverride > 0) {
         $orderTotal = round($orderTotalOverride, 2);
     } else {
-        $stmt = $conn->prepare('SELECT IFNULL(SUM(finalprice), 0) AS t FROM vp_orders WHERE order_number = ?');
-        if ($stmt) {
-            $stmt->bind_param('s', $orderNumber);
-            $stmt->execute();
-            $row = $stmt->get_result()->fetch_assoc();
-            $stmt->close();
-            $orderTotal = round((float)($row['t'] ?? 0), 2);
-        }
+        $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
     }
 
     $paidPrior = 0.0;
