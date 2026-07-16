@@ -971,10 +971,12 @@ class PosInvoiceController
         $giftDiscount = round((float)($orderInfo['giftvoucher_reduce'] ?? 0), 2);
         $credit = round((float)($orderInfo['credit'] ?? 0), 2);
 
-        $cashDiscount = 0.0;
-        foreach ($orderItems as $it) {
-            $cashDiscount = max($cashDiscount, round((float)($it['custom_reduce'] ?? 0), 2));
-        }
+        $cashDiscount = round(max(
+            (float)($orderInfo['custom_reduce'] ?? 0),
+            array_reduce($orderItems, static function (float $max, array $it): float {
+                return max($max, round((float)($it['custom_reduce'] ?? 0), 2));
+            }, 0.0)
+        ), 2);
 
         $lineDiscount = max(0.0, round($listSubtotal - $discSubtotal, 2));
 
@@ -988,7 +990,10 @@ class PosInvoiceController
             $grandTotal = max(0.0, round($discSubtotal - $couponDiscount - $cashDiscount - $giftDiscount - $credit, 2));
         }
 
-        $subtotalGoods = round($listSubtotal, 2);
+        $subtotalGoods = round($discSubtotal, 2);
+        if ($subtotalGoods <= 0 && $listSubtotal > 0) {
+            $subtotalGoods = round($listSubtotal, 2);
+        }
         if ($subtotalGoods <= 0 && $grandTotal > 0) {
             $subtotalGoods = $grandTotal;
         }
@@ -1322,14 +1327,24 @@ class PosInvoiceController
                     </tr>';
 
         if ($absorbed) {
+            $orderLevelDisc = round($coupon + $cash + $gift, 2);
+            $lineDisc = round($line, 2);
+
+            if ($subInclGst <= 0 && $grandTotal > 0) {
+                $subInclGst = round($grandTotal + $orderLevelDisc, 2);
+            }
             if ($grandTotal <= 0) {
                 $grandTotal = $subInclGst;
             }
             if ($subInclGst <= 0) {
                 $subInclGst = $grandTotal;
             }
-
-            $totalDiscount = round($coupon + $cash + $gift + $line, 2);
+            if ($orderLevelDisc > 0.001 && $subInclGst > 0) {
+                $computedGrand = max(0.0, round($subInclGst - $orderLevelDisc, 2));
+                if (abs($grandTotal - $subInclGst) < 0.02 || $grandTotal <= 0) {
+                    $grandTotal = $computedGrand;
+                }
+            }
 
             $rows .= $this->posInvoiceSummaryLabelRow(
                 'Sub total (incl. GST)',
@@ -1339,11 +1354,38 @@ class PosInvoiceController
                 $colCount,
                 true
             );
-            if ($totalDiscount > 0.001) {
+            if ($lineDisc > 0.001) {
                 $rows .= $this->posInvoiceSummaryLabelRow(
-                    'Total Discount',
-                    $totalDiscount,
+                    'Line Discount',
+                    $lineDisc,
                     $absorbedNote,
+                    false,
+                    $colCount
+                );
+            }
+            if ($cash > 0.001) {
+                $rows .= $this->posInvoiceSummaryLabelRow(
+                    $this->posInvoiceCustomDiscountLabel($posMeta),
+                    $cash,
+                    '',
+                    false,
+                    $colCount
+                );
+            }
+            if ($coupon > 0.001) {
+                $rows .= $this->posInvoiceSummaryLabelRow(
+                    $this->posInvoiceCouponLabel($posMeta),
+                    $coupon,
+                    '',
+                    false,
+                    $colCount
+                );
+            }
+            if ($gift > 0.001) {
+                $rows .= $this->posInvoiceSummaryLabelRow(
+                    'Gift Voucher',
+                    $gift,
+                    '',
                     false,
                     $colCount
                 );
@@ -1416,8 +1458,11 @@ class PosInvoiceController
         if ($invoiceId > 0 && $orderNumberForRepair !== '') {
             $notesEmpty = trim((string)($invoice['notes'] ?? '')) === '';
             $lineMetaEmpty = empty($this->parsePosInvoiceLineItemsMeta($invoice['notes'] ?? null));
-            $discountMetaEmpty = empty($this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null));
-            if ($notesEmpty || $lineMetaEmpty || $discountMetaEmpty) {
+            $parsedDiscount = $this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null);
+            $discountMetaEmpty = empty($parsedDiscount);
+            $discountMetaStale = !$discountMetaEmpty
+                && $this->posInvoiceDiscountMetaNeedsRepair($parsedDiscount, $orderNumberForRepair);
+            if ($notesEmpty || $lineMetaEmpty || $discountMetaEmpty || $discountMetaStale) {
                 if ($this->repairPosInvoiceMetadataForOrder($invoiceId, $orderNumberForRepair)) {
                     $reloaded = $invoiceModel->getInvoiceById($invoiceId);
                     if (is_array($reloaded)) {
@@ -1603,12 +1648,37 @@ class PosInvoiceController
             ];
         }
         if ($usePosItemLayout && $showDiscPriceColumn && $sumLineTotals > 0.001) {
-            $posDiscountMeta['subtotal_goods'] = round($sumLineTotals, 2);
-            $posDiscountMeta['grand_total'] = round($sumLineTotals, 2);
+            $existingSub = round((float)($posDiscountMeta['subtotal_goods'] ?? 0), 2);
+            $orderLevelDisc = round(
+                (float)($posDiscountMeta['coupon_discount'] ?? 0)
+                + (float)($posDiscountMeta['cash_discount'] ?? 0)
+                + (float)($posDiscountMeta['gift_discount'] ?? 0),
+                2
+            );
+            if ($existingSub <= 0 || ($existingSub > $sumLineTotals + 0.02 && $orderLevelDisc > 0.001)) {
+                $posDiscountMeta['subtotal_goods'] = round($sumLineTotals, 2);
+            }
         }
         $summaryGrandTotal = round((float)($posDiscountMeta['grand_total'] ?? 0), 2);
+        $summarySubtotal = round((float)($posDiscountMeta['subtotal_goods'] ?? 0), 2);
+        $orderLevelDisc = round(
+            (float)($posDiscountMeta['coupon_discount'] ?? 0)
+            + (float)($posDiscountMeta['cash_discount'] ?? 0)
+            + (float)($posDiscountMeta['gift_discount'] ?? 0),
+            2
+        );
+        $summaryBase = $summarySubtotal > 0 ? $summarySubtotal : round($sumLineTotals, 2);
+        if ($orderLevelDisc > 0.001 && $summaryBase > 0) {
+            $computedGrand = max(0.0, round($summaryBase - $orderLevelDisc, 2));
+            if ($summaryGrandTotal <= 0 || abs($summaryGrandTotal - $summaryBase) < 0.02) {
+                $summaryGrandTotal = $computedGrand;
+            }
+        }
         if ($summaryGrandTotal <= 0) {
             $summaryGrandTotal = round((float)$totalAmount, 2);
+        }
+        if ($summaryGrandTotal <= 0 && $sumLineTotals > 0.001) {
+            $summaryGrandTotal = round($sumLineTotals, 2);
         }
         $summaryTaxAmount = round((float)($invoice['tax_amount'] ?? 0), 2);
         $tableLineTotal = ($usePosItemLayout && $showDiscPriceColumn && $sumLineTotals > 0.001)
@@ -1769,6 +1839,42 @@ class PosInvoiceController
     /**
      * Backfill POS line/discount metadata on invoices created before notes were persisted.
      */
+    private function posInvoiceDiscountMetaNeedsRepair(array $meta, string $orderNumber): bool
+    {
+        global $ordersModel;
+
+        $orderLevelDisc = round(
+            (float)($meta['coupon_discount'] ?? 0)
+            + (float)($meta['cash_discount'] ?? 0)
+            + (float)($meta['gift_discount'] ?? 0),
+            2
+        );
+        $sub = round((float)($meta['subtotal_goods'] ?? 0), 2);
+        $grand = round((float)($meta['grand_total'] ?? 0), 2);
+
+        if ($orderLevelDisc > 0.001 && $sub > 0.001) {
+            $expectedGrand = max(0.0, round($sub - $orderLevelDisc, 2));
+            if (abs($grand - $expectedGrand) > 0.02) {
+                return true;
+            }
+        }
+
+        if ($orderNumber === '') {
+            return false;
+        }
+
+        $info = $ordersModel->getAddressInfoByOrderNumber($orderNumber);
+        $cashOnOrder = round((float)($info['custom_reduce'] ?? 0), 2);
+        if ($cashOnOrder > 0.001 && round((float)($meta['cash_discount'] ?? 0), 2) <= 0) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Backfill POS line/discount metadata on invoices created before notes were persisted.
+     */
     public function repairPosInvoiceMetadataForOrder(int $invoiceId, string $orderNumber): bool
     {
         global $invoiceModel, $ordersModel;
@@ -1786,7 +1892,7 @@ class PosInvoiceController
 
         $existingLines = $this->parsePosInvoiceLineItemsMeta($invoice['notes'] ?? null);
         $existingDiscount = $this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null);
-        if (!empty($existingLines) && !empty($existingDiscount)) {
+        if (!empty($existingLines) && !empty($existingDiscount) && !$this->posInvoiceDiscountMetaNeedsRepair($existingDiscount, $orderNumber)) {
             return false;
         }
 
