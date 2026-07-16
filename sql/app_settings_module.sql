@@ -103,12 +103,20 @@ WHERE setting_key = 'stock_replenishment_lookback_days';
 DELETE FROM app_settings
 WHERE setting_key NOT IN (
     'stock_replenishment_months',
-    'stock_replenishment_book_price_cutoff'
+    'stock_replenishment_book_price_cutoff',
+    'invoice_prefix',
+    'invoice_series',
+    'terms_and_conditions',
+    'high_value_transaction_limit'
 );
 
 INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES
 ('stock_replenishment_months', '1'),
-('stock_replenishment_book_price_cutoff', '0');
+('stock_replenishment_book_price_cutoff', '0'),
+('invoice_prefix', 'inv/2025-26/'),
+('invoice_series', '10017'),
+('terms_and_conditions', ''),
+('high_value_transaction_limit', '200000.00');
 
 
 -- -----------------------------------------------------------------------------
