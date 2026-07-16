@@ -575,4 +575,48 @@ WHERE 1=1
 
         return $row ?: null;
     }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function listByOrderNumber(string $orderNumber): array
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return [];
+        }
+
+        $stmt = $this->db->prepare("
+            SELECT
+                p.id,
+                p.receipt_number,
+                p.payment_date,
+                p.payment_amount,
+                p.payment_mode,
+                p.payment_stage,
+                p.transaction_id,
+                p.note,
+                p.order_amount,
+                p.pending_amount,
+                p.currency,
+                w.address_title AS warehouse
+            FROM pos_payments p
+            LEFT JOIN exotic_address w ON w.id = p.warehouse_id
+            WHERE p.order_number = ?
+            ORDER BY p.payment_date ASC, p.id ASC
+        ");
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = [];
+        while ($row = $result->fetch_assoc()) {
+            $rows[] = $row;
+        }
+        $stmt->close();
+
+        return $rows;
+    }
 }
