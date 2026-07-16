@@ -346,14 +346,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
             return '';
         }
 
-        const orderRef = parseInt(p.order_id, 10) > 0
-            ? parseInt(p.order_id, 10)
-            : (/^\d+$/.test(label) ? label : '');
-        if (!orderRef) {
-            return escapeHtmlText(label);
-        }
-
-        const href = `?page=posorders&action=get_order_details_html&type=outer&order_number=${encodeURIComponent(orderRef)}`;
+        const href = `?page=posorders&action=get_order_details_html&type=outer&order_number=${encodeURIComponent(label)}`;
         return `<a href="${href}" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline font-medium" title="View order details">${escapeHtmlText(label)}</a>`;
     }
 
