@@ -988,8 +988,13 @@ class POSOrder
         }
 
         $stmt = $this->db->prepare(
-            "SELECT status FROM vp_order_journey_log
-             WHERE order_number = ? AND status LIKE 'Order number changed from % to %'"
+            "SELECT status, remarks, note, notes, description
+             FROM vp_order_journey_log
+             WHERE order_number = ?
+               AND (
+                    status = 'order_number_changed'
+                    OR status LIKE 'Order number changed from % to %'
+               )"
         );
         if (!$stmt) {
             return [];
@@ -1001,12 +1006,12 @@ class POSOrder
 
         $priors = [];
         while ($row = $res->fetch_assoc()) {
-            $status = trim((string)($row['status'] ?? ''));
-            if (!preg_match('/^Order number changed from (.+) to (.+)$/u', $status, $matches)) {
+            $parsed = $this->parseOrderNumberChangeDetail((string)($row['status'] ?? ''), $row);
+            if (!$parsed) {
                 continue;
             }
-            $oldOrderNumber = trim($matches[1]);
-            $newOrderNumber = trim($matches[2]);
+            $oldOrderNumber = $parsed['old'];
+            $newOrderNumber = $parsed['new'];
             if ($newOrderNumber !== $currentOrderNumber || $oldOrderNumber === '' || $oldOrderNumber === $currentOrderNumber) {
                 continue;
             }
@@ -1019,47 +1024,198 @@ class POSOrder
         return array_values(array_unique($priors));
     }
 
+    /**
+     * @param array<string, mixed> $row
+     * @return array{old:string,new:string}|null
+     */
+    private function parseOrderNumberChangeDetail(string $status, array $row): ?array
+    {
+        $text = trim($status);
+        foreach (['remarks', 'note', 'notes', 'description'] as $col) {
+            $candidate = trim((string)($row[$col] ?? ''));
+            if ($candidate !== '') {
+                $text = $candidate;
+                break;
+            }
+        }
+
+        if (!preg_match('/Order number changed from (.+) to (.+)/u', $text, $matches)) {
+            return null;
+        }
+
+        return [
+            'old' => trim($matches[1]),
+            'new' => trim($matches[2]),
+        ];
+    }
+
     private function logOrderNumberChange(string $oldOrderNumber, string $newOrderNumber): void
     {
-        if (!$this->tableHasColumn('vp_order_journey_log', 'order_number')
-            || !$this->tableHasColumn('vp_order_journey_log', 'status')) {
+        if (!$this->tableHasColumn('vp_order_journey_log', 'order_number')) {
             return;
         }
 
-        $changedBy = trim((string)($_SESSION['user']['name'] ?? $_SESSION['user']['email'] ?? 'System'));
-        if ($changedBy === '') {
-            $changedBy = 'System';
+        $detail = 'Order number changed from ' . $oldOrderNumber . ' to ' . $newOrderNumber;
+        $row = [
+            'order_number' => $newOrderNumber,
+        ];
+
+        if ($this->tableHasColumn('vp_order_journey_log', 'status')) {
+            $statusType = strtolower((string)$this->getColumnType('vp_order_journey_log', 'status'));
+            if (strpos($statusType, 'enum(') === 0) {
+                $row['status'] = $this->pickEnumValue(
+                    $statusType,
+                    ['order_number_changed', 'updated', 'note', 'pending', 'confirmed']
+                ) ?? 'pending';
+            } else {
+                $row['status'] = $detail;
+            }
         }
 
-        $status = 'Order number changed from ' . $oldOrderNumber . ' to ' . $newOrderNumber;
-        $createdOn = date('Y-m-d H:i:s');
-
-        if ($this->tableHasColumn('vp_order_journey_log', 'changed_by')
-            && $this->tableHasColumn('vp_order_journey_log', 'created_on')) {
-            $stmt = $this->db->prepare(
-                'INSERT INTO vp_order_journey_log (order_number, status, changed_by, created_on) VALUES (?, ?, ?, ?)'
-            );
-            if (!$stmt) {
-                throw new \RuntimeException('Could not log order number change.');
+        foreach (['remarks', 'note', 'notes', 'description'] as $col) {
+            if ($this->tableHasColumn('vp_order_journey_log', $col)) {
+                $row[$col] = $detail;
+                break;
             }
-            $stmt->bind_param('ssss', $newOrderNumber, $status, $changedBy, $createdOn);
-        } else {
-            $stmt = $this->db->prepare(
-                'INSERT INTO vp_order_journey_log (order_number, status) VALUES (?, ?)'
-            );
-            if (!$stmt) {
-                throw new \RuntimeException('Could not log order number change.');
-            }
-            $stmt->bind_param('ss', $newOrderNumber, $status);
         }
 
+        if ($this->tableHasColumn('vp_order_journey_log', 'changed_by')) {
+            $row['changed_by'] = $this->resolveJourneyChangedByValue();
+        }
+
+        foreach (['created_on', 'created_at'] as $col) {
+            if ($this->tableHasColumn('vp_order_journey_log', $col)) {
+                $row[$col] = date('Y-m-d H:i:s');
+                break;
+            }
+        }
+
+        $this->insertDynamicRow('vp_order_journey_log', $row);
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function insertDynamicRow(string $table, array $row): void
+    {
+        $table = preg_replace('/[^a-z0-9_]/i', '', $table);
+        if ($table === '' || empty($row)) {
+            return;
+        }
+
+        $columns = [];
+        $placeholders = [];
+        $types = '';
+        $values = [];
+
+        foreach ($row as $column => $value) {
+            $column = preg_replace('/[^a-z0-9_]/i', '', (string)$column);
+            if ($column === '' || !$this->tableHasColumn($table, $column)) {
+                continue;
+            }
+            $columns[] = '`' . $column . '`';
+            $placeholders[] = '?';
+            if (is_int($value)) {
+                $types .= 'i';
+            } elseif (is_float($value)) {
+                $types .= 'd';
+            } else {
+                $types .= 's';
+            }
+            $values[] = $value;
+        }
+
+        if (empty($columns)) {
+            return;
+        }
+
+        $sql = 'INSERT INTO `' . $table . '` (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ')';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            throw new \RuntimeException('Could not prepare journey log insert.');
+        }
+
+        $stmt->bind_param($types, ...$values);
         if (!$stmt->execute()) {
             $err = $stmt->error;
             $stmt->close();
-            throw new \RuntimeException($err ?: 'Could not log order number change.');
+            throw new \RuntimeException($err ?: 'Could not insert journey log row.');
         }
         $stmt->close();
     }
+
+    /** @return int|string */
+    private function resolveJourneyChangedByValue()
+    {
+        $columnType = strtolower((string)$this->getColumnType('vp_order_journey_log', 'changed_by'));
+        $userId = (int)($_SESSION['user']['id'] ?? 0);
+        if ($userId > 0 && (strpos($columnType, 'int') !== false || strpos($columnType, 'bigint') !== false)) {
+            return $userId;
+        }
+
+        $userName = trim((string)($_SESSION['user']['name'] ?? $_SESSION['user']['email'] ?? 'System'));
+
+        return $userName !== '' ? $userName : 'System';
+    }
+
+    /**
+     * @param string[] $preferred
+     */
+    private function pickEnumValue(string $enumType, array $preferred): ?string
+    {
+        if (!preg_match("/^enum\\((.*)\\)$/i", $enumType, $matches)) {
+            return null;
+        }
+        $raw = str_getcsv($matches[1], ',', "'");
+        $allowed = [];
+        foreach ($raw as $value) {
+            $value = trim((string)$value);
+            if ($value !== '') {
+                $allowed[] = $value;
+            }
+        }
+        foreach ($preferred as $candidate) {
+            if (in_array($candidate, $allowed, true)) {
+                return $candidate;
+            }
+        }
+
+        return $allowed[0] ?? null;
+    }
+
+    private function getColumnType(string $table, string $column): ?string
+    {
+        $table = preg_replace('/[^a-z0-9_]/i', '', $table);
+        $column = preg_replace('/[^a-z0-9_]/i', '', $column);
+        if ($table === '' || $column === '') {
+            return null;
+        }
+
+        static $cache = [];
+        $cacheKey = $table . '.' . $column . '.type';
+        if (array_key_exists($cacheKey, $cache)) {
+            return $cache[$cacheKey];
+        }
+
+        $sql = 'SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?
+                LIMIT 1';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('ss', $table, $column);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+        $cache[$cacheKey] = isset($row['COLUMN_TYPE']) ? (string)$row['COLUMN_TYPE'] : null;
+
+        return $cache[$cacheKey];
+    }
+
+    /** @var array<string, bool> */
+    private static $columnExistsCache = [];
 
     private function tableHasColumn(string $table, string $column): bool
     {
@@ -1069,11 +1225,17 @@ class POSOrder
             return false;
         }
 
+        $cacheKey = $table . '.' . $column;
+        if (array_key_exists($cacheKey, self::$columnExistsCache)) {
+            return self::$columnExistsCache[$cacheKey];
+        }
+
         $sql = 'SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?
                 LIMIT 1';
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
+            self::$columnExistsCache[$cacheKey] = false;
             return false;
         }
         $stmt->bind_param('ss', $table, $column);
@@ -1081,6 +1243,8 @@ class POSOrder
         $res = $stmt->get_result();
         $exists = $res && $res->num_rows > 0;
         $stmt->close();
+
+        self::$columnExistsCache[$cacheKey] = $exists;
 
         return $exists;
     }
@@ -1113,6 +1277,7 @@ class POSOrder
         }
 
         $updated = [];
+        $ordersUpdated = false;
         $this->db->begin_transaction();
         try {
             foreach ($this->getOrderNumberRenameTargets() as $table => $column) {
@@ -1134,6 +1299,10 @@ class POSOrder
                 $rows = $stmt->affected_rows;
                 $stmt->close();
 
+                if ($table === 'vp_orders' && $rows > 0) {
+                    $ordersUpdated = true;
+                }
+
                 if ($rows > 0) {
                     $updated[] = [
                         'table' => $table,
@@ -1143,12 +1312,21 @@ class POSOrder
                 }
             }
 
-            $this->logOrderNumberChange($oldOrderNumber, $newOrderNumber);
-            $updated[] = [
-                'table' => 'vp_order_journey_log',
-                'column' => 'status',
-                'rows' => 1,
-            ];
+            if (!$ordersUpdated) {
+                throw new \RuntimeException('No order rows were updated.');
+            }
+
+            try {
+                $this->logOrderNumberChange($oldOrderNumber, $newOrderNumber);
+                $updated[] = [
+                    'table' => 'vp_order_journey_log',
+                    'column' => 'audit',
+                    'rows' => 1,
+                ];
+            } catch (\Throwable $logError) {
+                // Do not fail the rename if only the journey audit insert fails.
+                error_log('Order number rename journey log failed: ' . $logError->getMessage());
+            }
 
             $this->db->commit();
 
@@ -1161,7 +1339,10 @@ class POSOrder
         } catch (\Throwable $e) {
             $this->db->rollback();
 
-            return ['success' => false, 'message' => 'Could not update order number.'];
+            return [
+                'success' => false,
+                'message' => 'Could not update order number: ' . $e->getMessage(),
+            ];
         }
     }
 
