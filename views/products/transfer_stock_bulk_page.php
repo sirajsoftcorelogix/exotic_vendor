@@ -451,6 +451,9 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
     left: -38%;
     animation: bulk-transfer-progress-sweep 2.2s ease-in-out infinite;
 }
+tr.bulk-grid-row-error td {
+    scroll-margin-top: 6rem;
+}
 </style>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -1247,6 +1250,7 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
             menu.classList.add('hidden');
             menu.innerHTML = '';
         }
+        tr.classList.remove('bulk-grid-row-error', 'ring-2', 'ring-inset', 'ring-red-300', 'bg-red-50/40');
     }
 
     function resolveBulkGridRow(tr) {
@@ -1361,8 +1365,17 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
 
     gridBody.addEventListener('input', function (e) {
         const inp = e.target;
+        if (inp.classList && (inp.classList.contains('bulk-inp-qty') || inp.classList.contains('bulk-inp-size') || inp.classList.contains('bulk-inp-color'))) {
+            const tr = inp.closest('tr.bulk-grid-row');
+            if (tr) {
+                tr.classList.remove('bulk-grid-row-error', 'ring-2', 'ring-inset', 'ring-red-300', 'bg-red-50/40');
+            }
+        }
         if (!inp.classList || !inp.classList.contains('bulk-inp-sku')) return;
-        const tr = inp.closest('tr');
+        const tr = inp.closest('tr.bulk-grid-row');
+        if (tr) {
+            tr.classList.remove('bulk-grid-row-error', 'ring-2', 'ring-inset', 'ring-red-300', 'bg-red-50/40');
+        }
         const menu = tr && tr.querySelector('.bulk-ac-menu');
         if (!tr || !menu) return;
 
@@ -1449,18 +1462,136 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
         hideAllBulkAcMenus(null);
     });
 
-    function collectGridRows() {
-        const rows = [];
+    function clearBulkGridRowHighlights() {
         document.querySelectorAll('#bulk_grid_body tr.bulk-grid-row').forEach(function (tr) {
+            tr.classList.remove('bulk-grid-row-error', 'ring-2', 'ring-inset', 'ring-red-300', 'bg-red-50/40');
+        });
+    }
+
+    function highlightBulkGridIssueRows(issues) {
+        clearBulkGridRowHighlights();
+        (issues || []).forEach(function (issue) {
+            if (issue.tr) {
+                issue.tr.classList.add('bulk-grid-row-error', 'ring-2', 'ring-inset', 'ring-red-300', 'bg-red-50/40');
+            }
+        });
+        const first = issues && issues[0] && issues[0].tr;
+        if (first && typeof first.scrollIntoView === 'function') {
+            setTimeout(function () {
+                first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 120);
+        }
+    }
+
+    function inspectBulkGridRows() {
+        const issues = [];
+        const validRows = [];
+        let attemptedCount = 0;
+
+        document.querySelectorAll('#bulk_grid_body tr.bulk-grid-row').forEach(function (tr, idx) {
+            const rowNum = idx + 1;
+            const sku = tr.querySelector('.bulk-inp-sku')?.value.trim() || '';
             const item = tr.querySelector('.bulk-inp-item-code')?.value.trim() || '';
             const size = tr.querySelector('.bulk-inp-size')?.value.trim() || '';
             const color = tr.querySelector('.bulk-inp-color')?.value.trim() || '';
-            const qty = parseInt(tr.querySelector('.bulk-inp-qty')?.value || '0', 10);
-            if (item && qty > 0) {
-                rows.push({ item_code: item, size: size, color: color, quantity: qty });
+            const qtyRaw = (tr.querySelector('.bulk-inp-qty')?.value || '').trim();
+            const qtyParsed = qtyRaw === '' ? NaN : parseInt(qtyRaw, 10);
+            const qtyValid = qtyRaw !== '' && !isNaN(qtyParsed) && qtyParsed > 0;
+            const hasAnyInput = !!(sku || item || size || color || qtyRaw);
+
+            if (!hasAnyInput) {
+                return;
+            }
+            attemptedCount++;
+
+            const rowProblems = [];
+            if (!item) {
+                if (!sku) {
+                    rowProblems.push('SKU is empty — type a SKU and pick a match from search');
+                } else {
+                    rowProblems.push('Product not resolved for SKU "' + sku + '" — pick a match from the dropdown, or confirm this SKU exists in your catalog');
+                }
+            }
+            if (!qtyValid) {
+                if (qtyRaw === '') {
+                    rowProblems.push('Quantity is missing — enter a whole number greater than 0');
+                } else if (isNaN(qtyParsed)) {
+                    rowProblems.push('Quantity "' + qtyRaw + '" is not a valid number');
+                } else if (qtyParsed <= 0) {
+                    rowProblems.push('Quantity must be greater than 0 (entered: ' + qtyRaw + ')');
+                }
+            }
+
+            const rowInfo = {
+                rowNum: rowNum,
+                tr: tr,
+                sku: sku,
+                item: item,
+                size: size,
+                color: color,
+                qtyRaw: qtyRaw,
+                problems: rowProblems,
+            };
+
+            if (item && qtyValid) {
+                validRows.push({ item_code: item, size: size, color: color, quantity: qtyParsed });
+            } else if (rowProblems.length > 0) {
+                issues.push(rowInfo);
             }
         });
-        return rows;
+
+        return { validRows: validRows, issues: issues, attemptedCount: attemptedCount };
+    }
+
+    function formatBulkGridIssueLine(issue) {
+        const bits = ['Row ' + issue.rowNum];
+        const fields = [];
+        if (issue.sku) fields.push('SKU "' + issue.sku + '"');
+        if (issue.item) fields.push('item code "' + issue.item + '"');
+        if (issue.qtyRaw !== '') fields.push('qty ' + issue.qtyRaw);
+        if (issue.size) fields.push('size "' + issue.size + '"');
+        if (issue.color) fields.push('color "' + issue.color + '"');
+        if (fields.length) {
+            bits.push('(' + fields.join(', ') + ')');
+        }
+        bits.push('— ' + issue.problems.join('; '));
+        return bits.join(' ');
+    }
+
+    function showBulkGridRowIssues(analysis) {
+        analysis = analysis || { validRows: [], issues: [], attemptedCount: 0 };
+        const issues = analysis.issues || [];
+        highlightBulkGridIssueRows(issues);
+
+        let summary;
+        if (analysis.attemptedCount === 0) {
+            summary = 'No line items were entered in the grid. Add at least one row with a SKU, pick a catalog match, and enter a quantity greater than 0.';
+        } else if (analysis.validRows.length === 0 && issues.length === 1) {
+            summary = '1 row has problems and cannot be submitted yet. See the details below.';
+        } else if (analysis.validRows.length === 0 && issues.length > 1) {
+            summary = issues.length + ' rows have problems and none are ready to submit. See each row below.';
+        } else {
+            summary = 'Add at least one complete row: resolved product (item code filled after SKU search) and quantity greater than 0.';
+        }
+
+        const listItems = issues.map(formatBulkGridIssueLine);
+
+        showTransferNotice(summary, {
+            title: 'Grid line items incomplete',
+            subtitle: issues.length
+                ? 'Highlighted rows in the grid match this list. Fix each issue, then submit again.'
+                : 'Use the Enter line items grid tab to add products.',
+            tone: 'warning',
+            listItems: listItems.length ? listItems : [
+                'Type a SKU (2+ characters) and pick a product from the dropdown',
+                'Or type an exact SKU / item code and press Tab to auto-fill the row',
+                'Enter quantity as a whole number greater than 0',
+            ],
+        });
+    }
+
+    function collectGridRows() {
+        return inspectBulkGridRows().validRows;
     }
 
     function validateBulkStockPreview(rows, fromWarehouse, transferId) {
@@ -1514,11 +1645,13 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                 return;
             }
 
-            const gridData = collectGridRows();
-            if (gridData.length === 0) {
-                showTransferNotice('Add at least one row with a resolved product (search SKU and pick a match, or type an exact SKU) and quantity.');
+            const gridAnalysis = inspectBulkGridRows();
+            if (gridAnalysis.validRows.length === 0) {
+                showBulkGridRowIssues(gridAnalysis);
                 return;
             }
+
+            const gridData = gridAnalysis.validRows;
 
             try {
                 const preview = await validateBulkStockPreview(gridData, fromSel.value, bulkEditTransferId);
