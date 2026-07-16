@@ -732,7 +732,7 @@ final class StockRebuildService
         $table = self::SCOPE_TABLE;
         $sql = "INSERT INTO {$table} (sku, product_id) VALUES " . implode(',', $valueRows)
             . ' ON DUPLICATE KEY UPDATE product_id = GREATEST(product_id, VALUES(product_id))';
-        $this->queryOrFail($sql, 'preview.scope_table.insert', [
+        $this->execOrFail($sql, 'preview.scope_table.insert', [
             'phase' => 'preview',
             'tables' => [$table],
             'columns' => ['sku', 'product_id'],
@@ -1640,7 +1640,7 @@ final class StockRebuildService
         }
 
         $sql = "DELETE FROM vp_stock_movements WHERE " . implode(' OR ', $clauses);
-        $this->queryOrFail($sql, 'execute.delete_scoped_movements', [
+        $this->execOrFail($sql, 'execute.delete_scoped_movements', [
             'phase' => 'execute',
             'tables' => ['vp_stock_movements'],
             'columns' => ['vp_stock_movements.sku', 'vp_stock_movements.product_id'],
@@ -1657,7 +1657,7 @@ final class StockRebuildService
         }
 
         $sql = "DELETE FROM vp_stock WHERE sku IN (" . $this->quoteStringsForIn($scopeSkus) . ")";
-        $this->queryOrFail($sql, 'execute.delete_scoped_vp_stock', [
+        $this->execOrFail($sql, 'execute.delete_scoped_vp_stock', [
             'phase' => 'execute',
             'tables' => ['vp_stock'],
             'columns' => ['vp_stock.sku'],
@@ -1830,6 +1830,28 @@ final class StockRebuildService
             $res->free();
         }
         @$this->conn->query('ALTER TABLE vp_products ADD COLUMN physical_stock INT NOT NULL DEFAULT 0 AFTER local_stock');
+    }
+
+    /** @param array<string, mixed> $context */
+    private function execOrFail(string $sql, string $step, array $context = []): void
+    {
+        $this->rememberSqlDebug($step, $sql, $context);
+        try {
+            $res = $this->conn->query($sql);
+            if ($res === true) {
+                return;
+            }
+            if ($res instanceof mysqli_result) {
+                $res->free();
+                return;
+            }
+
+            throw $this->sqlException($step, $sql, $context);
+        } catch (StockRebuildSqlException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw $this->sqlException($step, $sql, $context, $e);
+        }
     }
 
     /** @return mysqli_result */
