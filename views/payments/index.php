@@ -333,6 +333,30 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
             .replace(/\n/g, '\\n');
     }
 
+    function escapeHtmlText(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function buildOrderNumberLinkHtml(p) {
+        const label = String(p.order_number ?? '').trim();
+        if (label === '') {
+            return '';
+        }
+
+        const orderRef = parseInt(p.order_id, 10) > 0
+            ? parseInt(p.order_id, 10)
+            : (/^\d+$/.test(label) ? label : '');
+        if (!orderRef) {
+            return escapeHtmlText(label);
+        }
+
+        const href = `?page=posorders&action=get_order_details_html&type=outer&order_number=${encodeURIComponent(orderRef)}`;
+        return `<a href="${href}" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline font-medium" title="View order details">${escapeHtmlText(label)}</a>`;
+    }
+
     function buildInvoiceActionHtml(p) {
         const settled = p.is_settled === true
             || p.is_settled === 1
@@ -399,7 +423,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         <td class="p-3">${(String(p.receipt_number || '').trim() !== '')
             ? String(p.receipt_number).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
             : ('#' + p.id)}</td>
-        <td class="p-3">${p.order_number ?? ''}</td>
+        <td class="p-3">${buildOrderNumberLinkHtml(p)}</td>
         <td class="p-3">${p.payment_date ?? ''}</td>
         <td class="p-3">${p.warehouse ?? ''}</td>
         <td class="p-3">${p.order_amount ?? ''}</td>
