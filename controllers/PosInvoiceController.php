@@ -623,8 +623,8 @@ WHERE i.pos_flag = 1";
             }
 
             //term and conditions fetch
-            global $commanModel;
-            $firmSettings = $commanModel->getRecordById('global_settings', 1);
+            require_once __DIR__ . '/../helpers/app_settings.php';
+            $firmSettings = app_setting_global_settings();
             $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
 
             // Generate HTML for PDF
@@ -700,7 +700,8 @@ WHERE i.pos_flag = 1";
             exit;
         }
 
-        $firmSettings = $commanModel->getRecordById('global_settings', 1);
+        require_once __DIR__ . '/../helpers/app_settings.php';
+        $firmSettings = app_setting_global_settings();
         $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
 
         $invoiceHtml = $this->generateInvoiceHtml($invoice, $items, 'tax_invoice');

@@ -180,16 +180,14 @@ class InvoicesController
                 exit;
             }
         }
-        // Generate invoice number from global_settings
-        $globalSettings = $commanModel->getRecordById('global_settings', 1);
-        $invoice_prefix = is_array($globalSettings) ? (string)($globalSettings['invoice_prefix'] ?? 'INV') : 'INV';
-        $invoice_series = is_array($globalSettings) ? (int)($globalSettings['invoice_series'] ?? 0) : 0;
-        $invoice_series++;
-
-        // Update global_settings with new invoice_series
-        $commanModel->updateRecord('global_settings', ['invoice_series' => $invoice_series], ['id' => 1]);
-
-        $invoice_number = $invoice_prefix . '-' . str_pad($invoice_series, 6, '0', STR_PAD_LEFT);
+        // Generate invoice number from app_settings
+        require_once __DIR__ . '/../helpers/invoice_number_resolver.php';
+        $resolved = resolve_invoice_number($conn);
+        if (!$resolved['success']) {
+            echo json_encode(['success' => false, 'message' => $resolved['message'] ?? 'Could not generate invoice number.']);
+            exit;
+        }
+        $invoice_number = $resolved['invoice_number'];
 
         // Create invoice header
         $isInternational = ($firstCurrency && $firstCurrency !== 'INR') ? 1 : 0;
@@ -1036,8 +1034,8 @@ class InvoicesController
             }
 
             //term and conditions fetch
-            global $commanModel;
-            $firmSettings = $commanModel->getRecordById('global_settings', 1);
+            require_once __DIR__ . '/../helpers/app_settings.php';
+            $firmSettings = app_setting_global_settings();
             $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
 
             // Generate HTML for PDF
@@ -1370,7 +1368,8 @@ class InvoicesController
             ];
             //print_array($invoice);exit;
             // Get firm settings for terms and conditions
-            $firmSettings = $commanModel->getRecordById('global_settings', 1);
+            require_once __DIR__ . '/../helpers/app_settings.php';
+            $firmSettings = app_setting_global_settings();
             $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
 
             // Convert items to proper format for HTML generation
