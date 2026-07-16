@@ -731,9 +731,20 @@ class PosOrdersController
         }
 
         if ($type === 'inner') {
-            renderPartial('views/posorders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList]);
+            renderPartial('views/posorders/partial_order_details.php', [
+                'order' => $order,
+                'statusList' => $statusList,
+                'canEditOrderNumber' => canSrEmpAccess(),
+            ]);
         } else {
-            renderTemplate('views/posorders/other_partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks, 'fullOrderJourny' => $fullOrderJourny, 'customerdetails' => $customerdetails], 'Order Details');
+            renderTemplate('views/posorders/other_partial_order_details.php', [
+                'order' => $order,
+                'statusList' => $statusList,
+                'orderremarks' => $orderremarks,
+                'fullOrderJourny' => $fullOrderJourny,
+                'customerdetails' => $customerdetails,
+                'canEditOrderNumber' => canSrEmpAccess(),
+            ], 'Order Details');
         }
         exit;
     }
@@ -1538,6 +1549,20 @@ class PosOrdersController
         $result = $ordersModel->updateCustomerNameAndEmail($order_number, $customer_name, $customer_phone, $address_line1, $address_line2, $city, $zipcode, $country, $billing_address_line1, $billing_address_line2, $billing_city, $billing_zipcode, $billing_country);
         echo json_encode($result);
         exit;
+    }
+
+    public function updateOrderNumberAjax()
+    {
+        is_login();
+        if (!canSrEmpAccess()) {
+            vendorJsonResponse(['success' => false, 'message' => 'Access denied. Sr Emp, Top Management, or Admin access required.']);
+        }
+
+        global $ordersModel;
+        $oldOrderNumber = trim((string)($_POST['old_order_number'] ?? ''));
+        $newOrderNumber = trim((string)($_POST['new_order_number'] ?? ''));
+
+        vendorJsonResponse($ordersModel->renameOrderNumber($oldOrderNumber, $newOrderNumber));
     }
 
     public function getOrderDetailsForDispatch()

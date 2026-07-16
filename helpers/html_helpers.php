@@ -605,6 +605,91 @@ function canViewOrderVendorName(): bool
 	return !in_array($roleName, $hiddenRoles, true);
 }
 
+/**
+ * Administrator role — unrestricted access to all modules and actions.
+ */
+function isAdministratorUser(): bool
+{
+	return (int)($_SESSION['user']['role_id'] ?? 0) === 1;
+}
+
+/**
+ * Access tiers that satisfy a minimum required permission (implicit grants).
+ *
+ * Sr Emp Access      → Sr Emp, Top Management, Admin
+ * Top Management     → Top Management, Admin
+ * Administrator      → always via isAdministratorUser() / hasPermission()
+ *
+ * @return string[]
+ */
+function getAccessTiersIncluding(string $minimumAccess): array
+{
+	$chains = [
+		'Sr Emp Access' => ['Sr Emp Access', 'Top Management Access'],
+		'Top Management Access' => ['Top Management Access'],
+	];
+
+	return $chains[$minimumAccess] ?? [$minimumAccess];
+}
+
+/**
+ * Check module permission with tiered implicit grants (Top Management / Admin).
+ */
+function hasTieredModuleAccess(int $userId, string $module, string $minimumAccess): bool
+{
+	if ($userId <= 0) {
+		return false;
+	}
+	if (isAdministratorUser()) {
+		return true;
+	}
+	foreach (getAccessTiersIncluding($minimumAccess) as $action) {
+		if (hasPermission($userId, $module, $action)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Check permission across one or more modules with tiered implicit grants.
+ *
+ * @param string[] $moduleNames
+ */
+function hasTieredAccess(int $userId, string $minimumAccess, array $moduleNames = ['POS Orders', 'Orders']): bool
+{
+	if ($userId <= 0) {
+		return false;
+	}
+	if (isAdministratorUser()) {
+		return true;
+	}
+	foreach ($moduleNames as $moduleName) {
+		if (hasTieredModuleAccess($userId, $moduleName, $minimumAccess)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * POS / order admin actions requiring Sr Emp tier (includes Top Management + Admin).
+ */
+function canSrEmpAccess(): bool
+{
+	return hasTieredAccess((int)($_SESSION['user']['id'] ?? 0), 'Sr Emp Access');
+}
+
+/**
+ * Actions requiring Top Management tier (includes Admin).
+ */
+function canTopManagementAccess(): bool
+{
+	return hasTieredAccess((int)($_SESSION['user']['id'] ?? 0), 'Top Management Access');
+}
+
 function hasPermission($user_id, $module, $action)
 {
 	if ($_SESSION["user"]["role_id"] == 1) { // Admin has all permissions
