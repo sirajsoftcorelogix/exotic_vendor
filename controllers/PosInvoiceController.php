@@ -5,10 +5,12 @@ require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
 require_once 'models/customer/Customer.php';
 require_once 'models/product/product.php';
+require_once __DIR__ . '/../models/payment/Payment.php';
 $invoiceModel = new POSInvoice($conn);
 $ordersModel = new Order($conn);
 $usersModel = new User($conn);
 $commanModel = new Tables($conn);
+$paymentModel = new Payment($conn);
 class PosInvoiceController
 {
 
@@ -48,105 +50,28 @@ class PosInvoiceController
     =============================== */
     public function list_ajax()
     {
-        global $conn;
+        global $invoiceModel;
 
         is_login();
 
         $isAdminUser = $this->isPosInvoiceAdminUser();
+        $filters = [
+            'order_number' => $_GET['order_number'] ?? '',
+            'status' => $_GET['status'] ?? '',
+            'from_date' => $_GET['from_date'] ?? '',
+            'to_date' => $_GET['to_date'] ?? '',
+            'type' => $_GET['type'] ?? '',
+            'customer_id' => $_GET['customer_id'] ?? '',
+            'amount_min' => $_GET['amount_min'] ?? '',
+            'amount_max' => $_GET['amount_max'] ?? '',
+            'warehouse_id' => null,
+        ];
 
-        $sql = "
-    SELECT 
-    i.id,
-    i.invoice_number,
-    i.invoice_date,
-    i.status,
-    i.total_amount,
-    i.warehouse_id,
-
-    o.order_number,
-    o.payment_type,
-
-    c.name AS customer_name,
-
-    COALESCE(ea.address_title, CONCAT('Warehouse #', i.warehouse_id)) AS warehouse_name,
-
-    IFNULL((
-        SELECT SUM(pp.payment_amount)
-        FROM pos_payments pp
-        WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
-              CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
-    ),0) AS paid_amount,
-
-    i.total_amount - IFNULL((
-        SELECT SUM(pp.payment_amount)
-        FROM pos_payments pp
-        WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
-              CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
-    ),0) AS due_amount
-
-FROM vp_invoices i
-
-LEFT JOIN vp_order_info o 
-    ON o.id = i.vp_order_info_id
-
-LEFT JOIN vp_customers c 
-    ON c.id = i.customer_id
-
-LEFT JOIN exotic_address ea
-    ON ea.id = i.warehouse_id
-
-WHERE i.pos_flag = 1";
-
-        // Staff: restrict to their warehouse/store. Admin: no warehouse filter (all invoices).
         if (!$isAdminUser) {
-            $warehouseId = $this->getSessionWarehouseId();
-            $sql .= ' AND i.warehouse_id = ' . $warehouseId;
+            $filters['warehouse_id'] = $this->getSessionWarehouseId();
         }
 
-        if (!empty($_GET['order_number'])) {
-            $sql .= " AND o.order_number LIKE '%" . $conn->real_escape_string($_GET['order_number']) . "%'";
-        }
-
-        if (!empty($_GET['status'])) {
-            $sql .= " AND i.status = '" . $conn->real_escape_string($_GET['status']) . "'";
-        }
-
-        if (!empty($_GET['from_date'])) {
-            $sql .= " AND i.invoice_date >= '" . $_GET['from_date'] . "'";
-        }
-
-        if (!empty($_GET['to_date'])) {
-            $sql .= " AND i.invoice_date <= '" . $_GET['to_date'] . "'";
-        }
-
-        if (!empty($_GET['type'])) {
-            $sql .= " AND IFNULL(o.payment_type,'') = '" . $conn->real_escape_string($_GET['type']) . "'";
-        }
-
-        if (!empty($_GET['customer_id'])) {
-            $sql .= " AND i.customer_id = " . intval($_GET['customer_id']);
-        }
-
-        if (!empty($_GET['amount_min'])) {
-            $sql .= " AND i.total_amount >= " . floatval($_GET['amount_min']);
-        }
-
-        if (!empty($_GET['amount_max'])) {
-            $sql .= " AND i.total_amount <= " . floatval($_GET['amount_max']);
-        }
-
-        $sql .= " ORDER BY i.id DESC";
-        $res = $conn->query($sql);
-
-        $data = [];
-
-        if ($res) {
-            while ($row = $res->fetch_assoc()) {
-                $data[] = $row;
-            }
-        }
-
-        echo json_encode($data);
+        echo json_encode($invoiceModel->searchPosListAjax($filters));
         exit;
     }
     /* ===============================
@@ -154,15 +79,12 @@ WHERE i.pos_flag = 1";
     =============================== */
     public function delete()
     {
-        global $conn;
+        global $invoiceModel;
 
-        $id = $_POST['id'];
+        $id = (int)($_POST['id'] ?? 0);
+        $invoiceModel->deleteInvoice($id);
 
-        $stmt = $conn->prepare("DELETE FROM vp_invoices WHERE id=?");
-        $stmt->bind_param("i", $id);
-        $stmt->execute();
-
-        echo json_encode(["success" => true]);
+        echo json_encode(['success' => true]);
         exit;
     }
 
@@ -250,7 +172,7 @@ WHERE i.pos_flag = 1";
 
             $orderCancelMeta = ['message' => ''];
             try {
-                $orderCancelMeta = $this->markPosInvoiceOrdersCancelled($conn, $invoiceId);
+                $orderCancelMeta = $this->markPosInvoiceOrdersCancelled($invoiceId);
             } catch (\Throwable $orderSyncEx) {
                 error_log('[POS invoice cancel order sync] ' . $orderSyncEx->getMessage());
                 $orderCancelMeta = [
@@ -279,9 +201,9 @@ WHERE i.pos_flag = 1";
      *
      * @return array{order_numbers: list<string>, local_updated: int, api_called: int, api_failed: int, message: string}
      */
-    private function markPosInvoiceOrdersCancelled(\mysqli $conn, int $invoiceId): array
+    private function markPosInvoiceOrdersCancelled(int $invoiceId): array
     {
-        global $commanModel;
+        global $commanModel, $invoiceModel;
 
         $result = [
             'order_numbers' => [],
@@ -297,26 +219,7 @@ WHERE i.pos_flag = 1";
             return $result;
         }
 
-        $orderStmt = $conn->prepare(
-            "SELECT DISTINCT order_number FROM vp_invoice_items
-             WHERE invoice_id = ? AND order_number IS NOT NULL AND TRIM(order_number) != ''"
-        );
-        if (!$orderStmt) {
-            $result['message'] = 'Could not load invoice order numbers.';
-            return $result;
-        }
-        $orderStmt->bind_param('i', $invoiceId);
-        $orderStmt->execute();
-        $orderRes = $orderStmt->get_result();
-        $orderNumbers = [];
-        while ($row = $orderRes->fetch_assoc()) {
-            $on = trim((string) ($row['order_number'] ?? ''));
-            if ($on !== '') {
-                $orderNumbers[] = $on;
-            }
-        }
-        $orderStmt->close();
-        $orderNumbers = array_values(array_unique($orderNumbers));
+        $orderNumbers = $invoiceModel->getDistinctOrderNumbersForInvoice($invoiceId);
         $result['order_numbers'] = $orderNumbers;
 
         if ($orderNumbers === []) {
@@ -329,19 +232,8 @@ WHERE i.pos_flag = 1";
         $userId = (int) ($_SESSION['user']['id'] ?? 0);
         $changeDate = date('Y-m-d H:i:s');
 
-        $lineStmt = $conn->prepare('SELECT id, item_code, size, color FROM vp_orders WHERE order_number = ? ORDER BY id ASC');
-        $updStmt = $conn->prepare(
-            "UPDATE vp_orders SET status = 'cancelled', invoice_id = NULL WHERE order_number = ? AND invoice_id = ?"
-        );
-        if (!$lineStmt || !$updStmt) {
-            $result['message'] = 'Could not prepare POS order cancel update.';
-            return $result;
-        }
-
         foreach ($orderNumbers as $orderNumber) {
-            $lineStmt->bind_param('s', $orderNumber);
-            $lineStmt->execute();
-            $lines = $lineStmt->get_result()->fetch_all(MYSQLI_ASSOC) ?: [];
+            $lines = $invoiceModel->getOrderLinesForCancelSync($orderNumber);
 
             foreach ($lines as $line) {
                 $apiRes = null;
@@ -385,14 +277,8 @@ WHERE i.pos_flag = 1";
                 }
             }
 
-            $updStmt->bind_param('si', $orderNumber, $invoiceId);
-            if ($updStmt->execute()) {
-                $result['local_updated'] += (int) $updStmt->affected_rows;
-            }
+            $result['local_updated'] += $invoiceModel->cancelLinkedOrderLines($orderNumber, $invoiceId);
         }
-
-        $lineStmt->close();
-        $updStmt->close();
 
         if ($result['api_failed'] > 0) {
             $result['message'] = 'Orders marked cancelled locally, but Exotic cancel status API failed for ' . $result['api_failed'] . ' item(s).';
@@ -410,151 +296,117 @@ WHERE i.pos_flag = 1";
     =============================== */
     public function preview()
     {
-        global $conn;
+        global $invoiceModel;
 
-        $invoiceId = $_POST['invoice_id'];
-
-        $items = $conn->query("
-            SELECT * FROM invoice_items
-            WHERE invoice_id = $invoiceId
-        ");
+        $invoiceId = (int)($_POST['invoice_id'] ?? 0);
+        $items = $invoiceModel->getLegacyPreviewItemsResult($invoiceId);
 
         ob_start();
-        require "views/invoices/preview_template.php";
+        require 'views/invoices/preview_template.php';
         $html = ob_get_clean();
 
         echo json_encode([
-            "success" => true,
-            "html" => $html
+            'success' => true,
+            'html' => $html,
         ]);
     }
+
     public function preview_new()
     {
-        global $conn;
+        global $invoiceModel;
 
-        $data = json_decode(file_get_contents("php://input"), true);
+        $data = json_decode(file_get_contents('php://input'), true);
+        $invoiceId = (int)($data['invoice_id'] ?? 0);
+        $orderNumber = trim((string)($data['orderid'] ?? ''));
 
-        $invoiceId = $data['invoice_id'] ?? 0;
-        $orderNumber = $data['orderid'] ?? '';
-
-        // ✅ FIX: use order_number (NOT order_id)
-        if (!$invoiceId && $orderNumber) {
-
-            $orderNumber = $conn->real_escape_string($orderNumber);
-
-            $res = $conn->query("
-            SELECT id FROM vp_invoices 
-            WHERE order_number = '$orderNumber'
-            LIMIT 1
-        ");
-
-            $row = $res->fetch_assoc();
-            $invoiceId = $row['id'] ?? 0;
+        if (!$invoiceId && $orderNumber !== '') {
+            $invoiceId = $invoiceModel->findInvoiceIdByLegacyOrderNumber($orderNumber);
         }
 
         if (!$invoiceId) {
             echo json_encode([
-                "success" => false,
-                "message" => "Invoice not found"
+                'success' => false,
+                'message' => 'Invoice not found',
             ]);
             exit;
         }
 
-        // ✅ get invoice
-        $invoice = $conn->query("
-        SELECT * FROM vp_invoices WHERE id = $invoiceId
-    ")->fetch_assoc();
-
-        // ✅ template switch
-        if ($invoice['status'] === 'proforma') {
-            $template = "views/invoices/proforma_invoice.php";
-        } else {
-            $template = "views/invoices/tax_invoice.php";
+        $invoice = $invoiceModel->getInvoiceById($invoiceId);
+        if (!$invoice) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invoice not found',
+            ]);
+            exit;
         }
 
-        // ✅ items
-        $items = $conn->query("
-        SELECT * FROM invoice_items WHERE invoice_id = $invoiceId
-    ");
+        if ($invoice['status'] === 'proforma') {
+            $template = 'views/invoices/proforma_invoice.php';
+        } else {
+            $template = 'views/invoices/tax_invoice.php';
+        }
+
+        $items = $invoiceModel->getLegacyInvoiceItemsResult($invoiceId);
 
         ob_start();
         require $template;
         $html = ob_get_clean();
 
         echo json_encode([
-            "success" => true,
-            "html" => $html,
-            "invoice_id" => $invoiceId
+            'success' => true,
+            'html' => $html,
+            'invoice_id' => $invoiceId,
         ]);
     }
 
 
     public function create_from_payment()
     {
-        global $conn;
+        global $invoiceModel, $paymentModel;
 
-        $data = json_decode(file_get_contents("php://input"), true);
-        $paymentId = (int)$data['payment_id'];
+        $data = json_decode(file_get_contents('php://input'), true);
+        $paymentId = (int)($data['payment_id'] ?? 0);
 
-        $payment = $conn->query("
-        SELECT * FROM pos_payments WHERE id = $paymentId
-    ")->fetch_assoc();
-
+        $payment = $paymentModel->findById($paymentId);
         if (!$payment) {
-            echo json_encode(["success" => false]);
+            echo json_encode(['success' => false]);
             exit;
         }
 
         $orderNumber = (string)($payment['order_number'] ?? '');
-
-        // ✅ FIND EXISTING INVOICE
-        $invoice = $conn->query("
-        SELECT * FROM vp_invoices 
-        WHERE order_number = '" . $conn->real_escape_string($orderNumber) . "'
-        LIMIT 1
-    ")->fetch_assoc();
+        $invoice = $invoiceModel->findInvoiceByOrderNumberColumn($orderNumber);
 
         if ($invoice) {
-
-            // ✅ UPDATE STATUS ONLY (NO NEW INSERT)
-            if ($payment['payment_stage'] === 'final') {
-
-                $conn->query("
-                UPDATE vp_invoices 
-                SET status = 'final'
-                WHERE id = " . $invoice['id'] . "
-            ");
+            if (($payment['payment_stage'] ?? '') === 'final') {
+                $invoiceModel->finalizeInvoiceStatus((int)$invoice['id']);
             }
 
             echo json_encode([
-                "success" => true,
-                "invoice_id" => $invoice['id']
+                'success' => true,
+                'invoice_id' => $invoice['id'],
             ]);
             exit;
         }
 
-        // ❗ fallback (rare)
         echo json_encode([
-            "success" => false,
-            "message" => "Invoice not found for update"
+            'success' => false,
+            'message' => 'Invoice not found for update',
         ]);
     }
+
     /* ===============================
        GET SINGLE
     =============================== */
     public function get_single_invoice()
     {
-        global $conn;
+        global $invoiceModel;
 
-        $id = $_GET['id'];
-
-        $res = $conn->query("
-        SELECT * FROM vp_invoices WHERE id=$id
-        ");
+        $id = (int)($_GET['id'] ?? 0);
+        $invoice = $invoiceModel->getInvoiceById($id);
 
         echo json_encode([
-            "success" => true,
-            "invoice" => $res->fetch_assoc()
+            'success' => true,
+            'invoice' => $invoice,
         ]);
     }
 
@@ -563,19 +415,13 @@ WHERE i.pos_flag = 1";
     =============================== */
     public function update_status()
     {
-        global $conn;
+        global $invoiceModel;
 
-        $id = $_POST['id'];
-        $status = $_POST['status'];
+        $id = (int)($_POST['id'] ?? 0);
+        $status = (string)($_POST['status'] ?? '');
+        $invoiceModel->updateInvoiceStatus($id, $status);
 
-        $stmt = $conn->prepare("
-        UPDATE vp_invoices SET status=? WHERE id=?
-        ");
-
-        $stmt->bind_param("si", $status, $id);
-        $stmt->execute();
-
-        echo json_encode(["success" => true]);
+        echo json_encode(['success' => true]);
     }
 
     /* ===============================
@@ -1226,8 +1072,10 @@ WHERE i.pos_flag = 1";
         }
     }
 
-    private function persistPosInvoiceDiscountNotes(mysqli $conn, int $invoiceId, array $discountMeta, array $lineItemsMeta = []): void
+    private function persistPosInvoiceDiscountNotes(int $invoiceId, array $discountMeta, array $lineItemsMeta = []): void
     {
+        global $invoiceModel;
+
         if ($invoiceId <= 0) {
             return;
         }
@@ -1268,13 +1116,7 @@ WHERE i.pos_flag = 1";
             return;
         }
 
-        $stmt = $conn->prepare('UPDATE vp_invoices SET notes = ? WHERE id = ?');
-        if (!$stmt) {
-            return;
-        }
-        $stmt->bind_param('si', $json, $invoiceId);
-        $stmt->execute();
-        $stmt->close();
+        $invoiceModel->updateInvoiceNotes($invoiceId, $json);
     }
 
     private function posInvoiceSummaryLabelRow(
@@ -1805,9 +1647,9 @@ WHERE i.pos_flag = 1";
     /**
      * Build and create a POS invoice from vp_orders (used by AJAX and checkout).
      */
-    public function createAutoInvoiceForOrder(string $orderNumber, string $customInvoiceNumber = ''): array
+    public function createAutoInvoiceForOrder(string $orderNumber, string $customInvoiceNumber = '', bool $forceFinal = false): array
     {
-        global $conn, $invoiceModel;
+        global $invoiceModel, $ordersModel, $paymentModel;
 
         $orderNumber = trim($orderNumber);
         if ($orderNumber === '') {
@@ -1823,48 +1665,15 @@ WHERE i.pos_flag = 1";
             ];
         }
 
-        $paymentStage = 'final';
-        $stmtPay = $conn->prepare(
-            'SELECT payment_stage FROM pos_payments WHERE order_number = ? ORDER BY id DESC LIMIT 1'
-        );
-        if ($stmtPay) {
-            $stmtPay->bind_param('s', $orderNumber);
-            $stmtPay->execute();
-            $payment = $stmtPay->get_result()->fetch_assoc();
-            $stmtPay->close();
-            if (is_array($payment) && isset($payment['payment_stage'])) {
-                $paymentStage = (string)$payment['payment_stage'];
-            }
-        }
-        $status = (strtolower(trim($paymentStage)) === 'final') ? 'final' : 'proforma';
+        $paymentStage = $paymentModel->getLatestPaymentStage($orderNumber);
+        $status = $forceFinal || (strtolower(trim($paymentStage)) === 'final') ? 'final' : 'proforma';
 
-        $stmt = $conn->prepare('SELECT * FROM vp_orders WHERE order_number = ?');
-        if (!$stmt) {
-            return ['success' => false, 'message' => 'Database error loading order lines'];
-        }
-        $stmt->bind_param('s', $orderNumber);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if ($result->num_rows === 0) {
-            $stmt->close();
+        $items = $ordersModel->getOrderByOrderNumber($orderNumber);
+        if (empty($items)) {
             return ['success' => false, 'message' => 'Order not found in vp_orders'];
         }
 
-        $items = [];
-        while ($row = $result->fetch_assoc()) {
-            $items[] = $row;
-        }
-        $stmt->close();
-
-        $stmt2 = $conn->prepare('SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1');
-        if (!$stmt2) {
-            return ['success' => false, 'message' => 'Database error loading order info'];
-        }
-        $stmt2->bind_param('s', $orderNumber);
-        $stmt2->execute();
-        $info = $stmt2->get_result()->fetch_assoc();
-        $stmt2->close();
-
+        $info = $ordersModel->getAddressInfoByOrderNumber($orderNumber);
         if (empty($info['id'])) {
             return ['success' => false, 'message' => 'Order info not found'];
         }
@@ -1932,7 +1741,7 @@ WHERE i.pos_flag = 1";
             if (!isset($posDiscountMeta['discounts_absorbed']) || $posDiscountMeta['discounts_absorbed'] === '') {
                 $posDiscountMeta['discounts_absorbed'] = true;
             }
-            $this->persistPosInvoiceDiscountNotes($conn, (int)$result['invoice_id'], $posDiscountMeta, $lineItemsMeta);
+            $this->persistPosInvoiceDiscountNotes((int)$result['invoice_id'], $posDiscountMeta, $lineItemsMeta);
         }
         unset($_SESSION['pos_checkout_invoice_snapshot']);
 
@@ -1940,63 +1749,44 @@ WHERE i.pos_flag = 1";
     }
     public function create_auto_from_order1()
     {
-        global $conn;
+        global $invoiceModel, $ordersModel, $paymentModel;
 
-        $data = json_decode(file_get_contents("php://input"), true);
-        $orderNumber = $conn->real_escape_string($data['orderid']);
-
-        // ✅ get order items
-        $items = $conn->query("
-        SELECT * FROM vp_orders 
-        WHERE order_number = '$orderNumber'
-    ");
-
-        if ($items->num_rows == 0) {
-            echo json_encode(["success" => false, "message" => "Order not found"]);
+        $data = json_decode(file_get_contents('php://input'), true);
+        $orderNumber = trim((string)($data['orderid'] ?? ''));
+        if ($orderNumber === '') {
+            echo json_encode(['success' => false, 'message' => 'Order number missing']);
             exit;
         }
 
-        $orderItems = [];
-        while ($row = $items->fetch_assoc()) {
-            $orderItems[] = $row;
+        $orderItems = $ordersModel->getOrderByOrderNumber($orderNumber);
+        if (empty($orderItems)) {
+            echo json_encode(['success' => false, 'message' => 'Order not found']);
+            exit;
         }
 
-        // ✅ get payment stage
-        $payment = $conn->query("
-        SELECT * FROM pos_payments 
-        WHERE order_number = '$orderNumber'
-        ORDER BY id DESC LIMIT 1
-    ")->fetch_assoc();
-
+        $payment = $paymentModel->findLatestByOrderNumber($orderNumber);
         $stage = $payment['payment_stage'] ?? 'final';
         $status = ($stage === 'final') ? 'final' : 'proforma';
 
-        // ✅ check existing invoice
-        $check = $conn->query("
-        SELECT id FROM vp_invoices 
-        WHERE order_number = '$orderNumber'
-    ");
-
-        if ($check->num_rows > 0) {
-            $invoiceId = $check->fetch_assoc()['id'];
-
+        $invoiceId = $invoiceModel->findInvoiceIdByOrderNumber($orderNumber);
+        if ($invoiceId > 0) {
             echo json_encode([
-                "success" => true,
-                "invoice_id" => $invoiceId
+                'success' => true,
+                'invoice_id' => $invoiceId,
             ]);
             exit;
         }
 
-        // ✅ build POST like main system
+        $info = $ordersModel->getAddressInfoByOrderNumber($orderNumber);
         $_POST = [
             'invoice_date' => date('Y-m-d'),
             'customer_id' => $orderItems[0]['customer_id'],
-            'vp_order_info_id' => $orderItems[0]['vp_order_info_id'] ?? 0,
+            'vp_order_info_id' => $info['id'] ?? ($orderItems[0]['vp_order_info_id'] ?? 0),
             'status' => $status,
             'subtotal' => 0,
             'tax_amount' => 0,
             'discount_amount' => 0,
-            'total_amount' => 0
+            'total_amount' => 0,
         ];
 
         foreach ($orderItems as $i => $item) {

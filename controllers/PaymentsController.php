@@ -1,55 +1,36 @@
 <?php
 
 require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
-require_once 'models/user/user.php';
-require_once 'models/order/order.php';
-require_once 'models/comman/tables.php';
-
-$ordersModel = new Order($conn);
-$commanModel = new Tables($conn);
+require_once __DIR__ . '/../models/payment/Payment.php';
 
 class PaymentsController
 {
+    /** @var Payment */
+    private $paymentModel;
+
+    public function __construct()
+    {
+        global $conn;
+        $this->paymentModel = new Payment($conn);
+    }
+
     /* =========================
        PAYMENT LIST PAGE
     ==========================*/
     public function index()
     {
-        // echo '123'; exit;
-        global $conn;
-
-        $page_no = $_GET['page_no'] ?? 1;
+        $page_no = (int)($_GET['page_no'] ?? 1);
         $per_page = 20;
-
         $offset = ($page_no - 1) * $per_page;
 
-        $sql = "SELECT COUNT(*) as total FROM pos_payments";
-        $total = $conn->query($sql)->fetch_assoc()['total'];
-
-        $total_pages = ceil($total / $per_page);
-
-        $payments = $conn->query("
-        SELECT 
-            p.*,
-            u.name as user,
-            w.address_title as warehouse
-        FROM pos_payments p
-        LEFT JOIN vp_users u ON u.id = p.user_id
-        LEFT JOIN exotic_address w ON w.id = p.warehouse_id
-        ORDER BY p.id DESC
-        LIMIT $offset,$per_page
-    ");
-
-        $rows = [];
-
-        while ($r = $payments->fetch_assoc()) {
-            $rows[] = $r;
-        }
+        $total = $this->paymentModel->countAll();
+        $total_pages = (int)ceil($total / $per_page);
+        $rows = $this->paymentModel->getPaginatedList($offset, $per_page);
 
         renderTemplate('views/payments/index.php', [
             'payments' => $rows,
             'total_pages' => $total_pages,
-            'page_no' => $page_no
+            'page_no' => $page_no,
         ]);
     }
 
@@ -58,197 +39,18 @@ class PaymentsController
     ==========================*/
     public function list_ajax()
     {
-        global $conn;
+        $filters = [
+            'payment_mode' => $_GET['payment_mode'] ?? '',
+            'from_date' => $_GET['from_date'] ?? '',
+            'to_date' => $_GET['to_date'] ?? '',
+            'order_id' => $_GET['order_id'] ?? '',
+            'order_number' => $_GET['order_number'] ?? '',
+            'order_exact' => isset($_GET['order_exact']) && (string)$_GET['order_exact'] === '1',
+            'amount_min' => $_GET['amount_min'] ?? '',
+            'amount_max' => $_GET['amount_max'] ?? '',
+        ];
 
-        // $sql = "
-        // SELECT 
-        //     p.*,
-        //     u.name as user_name,
-        //     w.address_title as warehouse
-        // FROM pos_payments p
-        // LEFT JOIN vp_users u ON u.id = p.user_id
-        // LEFT JOIN 	exotic_address w ON w.id = p.warehouse_id
-        // WHERE 1=1
-        // ";
-        // Warehouse: already from LEFT JOIN exotic_address (pos_payments.warehouse_id).
-        // vp_orders can have many rows per order_number (line items), so we join an aggregate
-        // of vp_orders instead of correlating subqueries or joining vp_orders raw (row duplication).
-        $sql = "
-SELECT 
-    p.id,
-    p.order_number,
-    p.receipt_number,
-    p.payment_date,
-    p.payment_amount AS amount,
-    p.order_amount,
-    p.pending_amount AS balance_snapshot,
-    p.payment_mode,
-    p.payment_stage,
-    u.name AS user_name,
-    w.address_title AS warehouse,
-    vo.order_id AS order_id,
-    vo.order_grand_total,
-
-    ROUND(
-        IFNULL(
-            NULLIF(vo.order_grand_total, 0),
-            IFNULL(NULLIF(p.order_amount, 0), IFNULL(vo.order_line_subtotal, 0))
-        )
-        -
-        IFNULL(
-            (
-                SELECT SUM(p2.payment_amount) 
-                FROM pos_payments p2 
-                WHERE p2.order_number COLLATE utf8mb4_unicode_ci
-                      = p.order_number COLLATE utf8mb4_unicode_ci
-                AND p2.id <= p.id
-            ), 0
-        ),
-        2
-    ) AS pending_balance
-
-FROM pos_payments p
-
-LEFT JOIN vp_users u 
-    ON u.id = p.user_id
-
-LEFT JOIN exotic_address w 
-    ON w.id = p.warehouse_id
-
-LEFT JOIN (
-    SELECT
-        agg.order_number,
-        agg.order_id,
-        agg.order_line_subtotal,
-        COALESCE(
-            NULLIF(agg.order_info_total, 0),
-            GREATEST(
-                agg.order_line_subtotal
-                - agg.custom_reduce
-                - agg.coupon_reduce
-                - agg.gift_reduce
-                - agg.credit,
-                0
-            )
-        ) AS order_grand_total
-    FROM (
-        SELECT
-            o.order_number,
-            MIN(o.id) AS order_id,
-            SUM(o.finalprice * o.quantity) AS order_line_subtotal,
-            MAX(CASE WHEN oi.total > 0 THEN oi.total ELSE NULL END) AS order_info_total,
-            IFNULL(MAX(o.custom_reduce), 0) AS custom_reduce,
-            IFNULL(MAX(oi.coupon_reduce), 0) AS coupon_reduce,
-            IFNULL(MAX(oi.giftvoucher_reduce), 0) AS gift_reduce,
-            IFNULL(MAX(oi.credit), 0) AS credit
-        FROM vp_orders o
-        LEFT JOIN vp_order_info oi
-            ON oi.order_number COLLATE utf8mb4_unicode_ci = o.order_number COLLATE utf8mb4_unicode_ci
-        GROUP BY o.order_number
-    ) agg
-) vo ON vo.order_number COLLATE utf8mb4_unicode_ci = p.order_number COLLATE utf8mb4_unicode_ci
-
-WHERE 1=1
-";
-        $params = [];
-        $types = "";
-
-        if (!empty($_GET['payment_mode'])) {
-            $sql .= " AND p.payment_mode = ?";
-            $params[] = $_GET['payment_mode'];
-            $types .= "s";
-        }
-
-        if (!empty($_GET['from_date'])) {
-            $sql .= " AND p.payment_date >= ?";
-            $params[] = $_GET['from_date'];
-            $types .= "s";
-        }
-
-        if (!empty($_GET['to_date'])) {
-            $sql .= " AND p.payment_date <= ?";
-            $params[] = $_GET['to_date'];
-            $types .= "s";
-        }
-
-        $orderPkFilter = (
-            isset($_GET['order_id'])
-            && $_GET['order_id'] !== ''
-            && ctype_digit((string)$_GET['order_id'])
-        ) ? (int)$_GET['order_id'] : 0;
-
-        if ($orderPkFilter > 0) {
-            $onStmt = $conn->prepare('SELECT order_number FROM vp_orders WHERE id = ? LIMIT 1');
-            $filterOrderNum = '';
-            if ($onStmt) {
-                $onStmt->bind_param('i', $orderPkFilter);
-                $onStmt->execute();
-                $onRow = $onStmt->get_result()->fetch_assoc();
-                $onStmt->close();
-                $filterOrderNum = trim((string)($onRow['order_number'] ?? ''));
-            }
-            if ($filterOrderNum !== '') {
-                $sql .= ' AND p.order_number = ?';
-                $params[] = $filterOrderNum;
-                $types .= 's';
-            }
-        } elseif (!empty($_GET['order_number'])) {
-            $exact = isset($_GET['order_exact']) && (string)$_GET['order_exact'] === '1';
-            if ($exact) {
-                $sql .= ' AND p.order_number = ?';
-                $params[] = trim((string)$_GET['order_number']);
-                $types .= 's';
-            } else {
-                $sql .= ' AND p.order_number LIKE ?';
-                $params[] = '%' . $_GET['order_number'] . '%';
-                $types .= 's';
-            }
-        }
-
-        if (!empty($_GET['amount_min'])) {
-            $sql .= " AND p.payment_amount >= ?";
-            $params[] = $_GET['amount_min'];
-            $types .= "d";
-        }
-
-        if (!empty($_GET['amount_max'])) {
-            $sql .= " AND p.payment_amount <= ?";
-            $params[] = $_GET['amount_max'];
-            $types .= "d";
-        }
-
-        $sql .= " ORDER BY p.id DESC";
-
-        $stmt = $conn->prepare($sql);
-
-        if ($types) {
-            $stmt->bind_param($types, ...$params);
-        }
-
-        // $stmt->execute();
-        // $result = $stmt->get_result();
-        $stmt->execute();
-        $result = $stmt->get_result();
-
-        // echo '<pre>';
-        // print_r($result->fetch_all(MYSQLI_ASSOC));
-        // exit;
-
-        $data = [];
-
-        while ($row = $result->fetch_assoc()) {
-            $resolvedOrderAmount = round((float)($row['order_grand_total'] ?? 0), 2);
-            if ($resolvedOrderAmount <= 0) {
-                $resolvedOrderAmount = round((float)($row['order_amount'] ?? 0), 2);
-            }
-            if ($resolvedOrderAmount > 0) {
-                $row['order_amount'] = $resolvedOrderAmount;
-            }
-            unset($row['order_grand_total'], $row['order_line_subtotal']);
-            $data[] = $row;
-        }
-
-        echo json_encode($data);
+        echo json_encode($this->paymentModel->searchListAjax($filters));
         exit;
     }
 
@@ -257,28 +59,11 @@ WHERE 1=1
     ==========================*/
     public function view()
     {
-        global $conn;
-
-        $id = $_GET['id'] ?? 0;
-
-        $stmt = $conn->prepare("
-            SELECT 
-                p.*,
-                u.name as user_name,
-                w.address_title as warehouse
-            FROM pos_payments p
-            LEFT JOIN vp_users u ON u.id = p.user_id
-            LEFT JOIN 	exotic_address w ON w.id = p.warehouse_id
-            WHERE p.id = ?
-        ");
-
-        $stmt->bind_param("i", $id);
-        $stmt->execute();
-
-        $payment = $stmt->get_result()->fetch_assoc();
+        $id = (int)($_GET['id'] ?? 0);
+        $payment = $this->paymentModel->findByIdWithDetails($id);
 
         renderTemplate('views/payments/view.php', [
-            'payment' => $payment
+            'payment' => $payment,
         ]);
     }
 
@@ -287,16 +72,11 @@ WHERE 1=1
     ==========================*/
     public function delete()
     {
-        global $conn;
-
-        $id = $_POST['id'] ?? 0;
-
-        $stmt = $conn->prepare("DELETE FROM pos_payments WHERE id = ?");
-        $stmt->bind_param("i", $id);
-        $stmt->execute();
+        $id = (int)($_POST['id'] ?? 0);
+        $this->paymentModel->deleteById($id);
 
         echo json_encode([
-            "success" => true
+            'success' => true,
         ]);
         exit;
     }
@@ -306,102 +86,41 @@ WHERE 1=1
     ==========================*/
     public function receipt()
     {
-        global $conn;
-
-        $id = $_GET['id'] ?? 0;
-
-        $stmt = $conn->prepare("
-            SELECT 
-                p.*,
-                u.name as user_name,
-                w.address_title as warehouse,
-                w.address as warehouse_address,
-                c.name AS customer_name
-            FROM pos_payments p
-            LEFT JOIN vp_users u ON u.id = p.user_id
-            LEFT JOIN exotic_address w ON w.id = p.warehouse_id
-            LEFT JOIN vp_customers c ON c.id = p.customer_id
-            WHERE p.id = ?
-        ");
-
-        $stmt->bind_param("i", $id);
-        $stmt->execute();
-
-        $payment = $stmt->get_result()->fetch_assoc();
-
-        $defaultWarehouseAddress = ['title' => '', 'lines' => []];
-        if ($conn instanceof \mysqli) {
-            $dwRes = $conn->query(
-                'SELECT address_title, display_name, address FROM exotic_address WHERE is_active = 1 ORDER BY is_default DESC, order_no ASC, id ASC LIMIT 1'
-            );
-            if ($dwRes && ($dw = $dwRes->fetch_assoc())) {
-                $defaultWarehouseAddress['title'] = trim((string)($dw['address_title'] ?? ''));
-                $addrText = trim((string)($dw['address'] ?? ''));
-                if ($addrText === '') {
-                    $addrText = trim((string)($dw['display_name'] ?? ''));
-                }
-                $parts = preg_split('/\r\n|\r|\n/', $addrText);
-                $lines = [];
-                foreach (is_array($parts) ? $parts : [] as $ln) {
-                    $ln = trim((string)$ln);
-                    if ($ln !== '') {
-                        $lines[] = $ln;
-                    }
-                }
-                $defaultWarehouseAddress['lines'] = $lines;
-            }
-        }
+        $id = (int)($_GET['id'] ?? 0);
+        $payment = $this->paymentModel->findForReceipt($id);
+        $defaultWarehouseAddress = $this->paymentModel->getDefaultWarehouseAddress();
 
         require 'views/payments/receipt.php';
         exit;
     }
+
     public function add_payment()
     {
-        global $conn;
+        $order_id = (int)($_GET['order_id'] ?? 0);
 
-        $order_id = $_GET['order_id'] ?? 0;
-
-        if (!$order_id) {
-            echo json_encode(["success" => false, "message" => "Order ID missing"]);
+        if ($order_id <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Order ID missing']);
             exit;
         }
 
-        $order_id = (int)$order_id;
-        $stmtVo = $conn->prepare('SELECT order_number, customer_id FROM vp_orders WHERE id = ? LIMIT 1');
-        $order = null;
-        if ($stmtVo) {
-            $stmtVo->bind_param('i', $order_id);
-            $stmtVo->execute();
-            $order = $stmtVo->get_result()->fetch_assoc();
-            $stmtVo->close();
-        }
-
+        $order = $this->paymentModel->findVpOrderById($order_id);
         if (!$order || trim((string)($order['order_number'] ?? '')) === '') {
-            echo json_encode(["success" => false, "message" => "Order not found"]);
+            echo json_encode(['success' => false, 'message' => 'Order not found']);
             exit;
         }
 
         $orderNumKey = trim((string)$order['order_number']);
-
-        // total paid
-        $stmt2 = $conn->prepare('
-        SELECT SUM(amount) as paid
-        FROM pos_payments
-        WHERE order_number = ?
-    ');
-        $stmt2->bind_param('s', $orderNumKey);
-        $stmt2->execute();
-
-        $paid = $stmt2->get_result()->fetch_assoc()['paid'] ?? 0;
+        $paid = $this->paymentModel->sumPaidByOrderNumber($orderNumKey);
 
         echo json_encode([
-            "success" => true,
-            "order_number" => $order['order_number'],
-            "customer_id" => $order['customer_id'],
-            "paid" => $paid
+            'success' => true,
+            'order_number' => $order['order_number'],
+            'customer_id' => $order['customer_id'],
+            'paid' => $paid,
         ]);
         exit;
     }
+
     public function save_payment()
     {
         global $conn;
@@ -419,47 +138,30 @@ WHERE 1=1
 
         $orderNumberStr = '';
         $customerId = 0;
-        $vpRow = null;
-        $anchor = null;
 
         if ($postOrderInt > 0) {
-            $stmt = $conn->prepare('SELECT id, order_number, customer_id FROM vp_orders WHERE id = ? ORDER BY id ASC LIMIT 1');
-            if ($stmt) {
-                $stmt->bind_param('i', $postOrderInt);
-                $stmt->execute();
-                $vpRow = $stmt->get_result()->fetch_assoc();
-                $stmt->close();
-            }
+            $vpRow = $this->paymentModel->findVpOrderRowById($postOrderInt);
+        } else {
+            $vpRow = null;
         }
+
         if (!$vpRow && $postOrderKey !== '') {
-            $stmt = $conn->prepare('SELECT id, order_number, customer_id FROM vp_orders WHERE order_number = ? ORDER BY id ASC LIMIT 1');
-            if ($stmt) {
-                $stmt->bind_param('s', $postOrderKey);
-                $stmt->execute();
-                $vpRow = $stmt->get_result()->fetch_assoc();
-                $stmt->close();
-            }
+            $vpRow = $this->paymentModel->findVpOrderRowByNumber($postOrderKey);
         }
 
         if ($vpRow) {
             $orderNumberStr = (string)($vpRow['order_number'] ?? '');
             $customerId = (int)($vpRow['customer_id'] ?? 0);
         } elseif ($postOrderKey !== '') {
-            $stmt = $conn->prepare('SELECT order_number, customer_id FROM pos_payments WHERE order_number = ? ORDER BY id ASC LIMIT 1');
-            if ($stmt) {
-                $stmt->bind_param('s', $postOrderKey);
-                $stmt->execute();
-                $anchor = $stmt->get_result()->fetch_assoc();
-                $stmt->close();
-                if ($anchor) {
-                    $orderNumberStr = (string)($anchor['order_number'] ?? '');
-                    $customerId = (int)($anchor['customer_id'] ?? 0);
-                }
+            $anchor = $this->paymentModel->findPaymentAnchorByOrderKey($postOrderKey);
+            if ($anchor) {
+                $orderNumberStr = (string)($anchor['order_number'] ?? '');
+                $customerId = (int)($anchor['customer_id'] ?? 0);
             }
         }
 
         if ($orderNumberStr === '') {
-            echo json_encode(["success" => false, "message" => "Order data missing"]);
+            echo json_encode(['success' => false, 'message' => 'Order data missing']);
             exit;
         }
 
@@ -495,156 +197,140 @@ WHERE 1=1
             ]);
             exit;
         }
+
         $newPaymentId = $insertRes['payment_id'];
 
-        /* 🔥 FINAL PAYMENT → UPDATE INVOICE */
-        if ($stage === 'final') {
+        pos_payment_refresh_order_snapshots($conn, $orderNumberStr);
+        $invoiceMeta = pos_payment_finalize_invoice_for_order($conn, $orderNumberStr);
 
-            $order_number_safe = $conn->real_escape_string($orderNumberStr);
-
-            $inv = $conn->query("
-            SELECT id 
-            FROM vp_invoices 
-            WHERE order_number = '$order_number_safe'
-            ORDER BY id DESC 
-            LIMIT 1
-        ")->fetch_assoc();
-
-            if ($inv) {
-                $conn->query("
-                UPDATE vp_invoices
-                SET status = 'final',
-                    invoice_date = NOW()
-                WHERE id = {$inv['id']}
-            ");
-            }
-        }
-
-        /* ================= FINAL PAYMENT → UPDATE INVOICE DATE ================= */
-
-        //     if ($stage === 'final') {
-
-        //         // get invoice id for this order
-        //         $inv = $conn->query("
-        //     SELECT id 
-        //     FROM vp_invoices 
-        //     WHERE order_id = $order_id 
-        //     ORDER BY id DESC 
-        //     LIMIT 1
-        // ")->fetch_assoc();
-
-        //         if ($inv) {
-
-        //             $conn->query("
-        //         UPDATE vp_invoices
-        //         SET invoice_date = NOW(),
-        //             status = 'final'
-        //         WHERE id = {$inv['id']}
-        //     ");
-        //         }
-        //     }
         echo json_encode([
             'success' => true,
             'receipt_number' => $receiptNumber,
             'payment_id' => $newPaymentId,
             'order_amount' => $insertRes['order_amount'] ?? null,
             'pending_amount' => $insertRes['pending_amount'] ?? null,
+            'invoice_id' => (int)($invoiceMeta['invoice_id'] ?? 0),
+            'invoice_created' => !empty($invoiceMeta['created']),
+            'invoice_message' => $invoiceMeta['message'] ?? null,
         ]);
         exit;
     }
 
+    public function create_from_payment()
+    {
+        global $conn;
 
+        $data = json_decode(file_get_contents('php://input'), true);
+        $paymentId = (int)($data['payment_id'] ?? 0);
+        if ($paymentId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Payment id missing']);
+            exit;
+        }
+
+        $orderNumber = $this->paymentModel->getOrderNumberByPaymentId($paymentId);
+        if ($orderNumber === '') {
+            echo json_encode(['success' => false, 'message' => 'Payment not found']);
+            exit;
+        }
+
+        if (!pos_payment_is_fully_paid($conn, $orderNumber)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Order is not fully paid yet. Invoice can be created only when balance is zero.',
+            ]);
+            exit;
+        }
+
+        $invoiceMeta = pos_payment_finalize_invoice_for_order($conn, $orderNumber);
+        if (empty($invoiceMeta['success']) || empty($invoiceMeta['invoice_id'])) {
+            echo json_encode([
+                'success' => false,
+                'message' => $invoiceMeta['message'] ?? 'Invoice could not be created.',
+            ]);
+            exit;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'invoice_id' => (int)$invoiceMeta['invoice_id'],
+            'created' => !empty($invoiceMeta['created']),
+        ]);
+        exit;
+    }
 
     public function get_payment_summary()
     {
         global $conn;
 
-        $orderNumber = $_GET['order_number'] ?? '';
-        if (!$orderNumber) {
+        $orderNumber = trim((string)($_GET['order_number'] ?? ''));
+        if ($orderNumber === '') {
             echo json_encode(['success' => false]);
             exit;
         }
 
         $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
-
-        $stmtPaid = $conn->prepare(
-            'SELECT IFNULL(SUM(payment_amount), 0) AS paid FROM pos_payments WHERE order_number = ?'
-        );
-        $paid = 0.0;
-        if ($stmtPaid) {
-            $stmtPaid->bind_param('s', $orderNumber);
-            $stmtPaid->execute();
-            $paid = round((float)($stmtPaid->get_result()->fetch_assoc()['paid'] ?? 0), 2);
-            $stmtPaid->close();
-        }
-
+        $paid = $this->paymentModel->sumPaidByOrderNumber($orderNumber);
         $pending = round($orderTotal - $paid, 2);
 
         echo json_encode([
             'success' => true,
             'order_total' => $orderTotal,
             'paid' => $paid,
-            'pending' => $pending
+            'pending' => $pending,
         ]);
         exit;
     }
+
     public function update_payment()
     {
-
         global $conn;
 
-        $id = $_POST['id'];
-        $amount = $_POST['amount'];
-        $mode = $_POST['payment_type'];
-        $stage = $_POST['payment_stage'];
-        $transaction = $_POST['transaction_id'];
-        $note = $_POST['note'];
-        $date = $_POST['payment_date'];
+        $id = (int)($_POST['id'] ?? 0);
+        $amount = (float)($_POST['amount'] ?? 0);
+        $mode = (string)($_POST['payment_type'] ?? '');
+        $stage = (string)($_POST['payment_stage'] ?? 'final');
+        $transaction = (string)($_POST['transaction_id'] ?? '');
+        $note = (string)($_POST['note'] ?? '');
+        $date = (string)($_POST['payment_date'] ?? '');
 
+        if ($id <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Payment id missing']);
+            exit;
+        }
+
+        $orderNumber = $this->paymentModel->getOrderNumberByPaymentId($id);
         $editorUserId = pos_payment_resolve_session_user_id();
 
-        $stmt = $conn->prepare('
-        UPDATE pos_payments 
-        SET payment_amount=?, payment_mode=?, payment_stage=?, transaction_id=?, note=?, payment_date=?, user_id=?
-        WHERE id=?
-    ');
+        if (!$this->paymentModel->updatePayment($id, $amount, $mode, $stage, $transaction, $note, $date, $editorUserId)) {
+            echo json_encode(['success' => false, 'message' => 'Payment update failed']);
+            exit;
+        }
 
-        $stmt->bind_param(
-            'dsssssii',
-            $amount,
-            $mode,
-            $stage,
-            $transaction,
-            $note,
-            $date,
-            $editorUserId,
-            $id
-        );
+        $invoiceMeta = [
+            'success' => true,
+            'attempted' => false,
+            'fully_paid' => false,
+            'invoice_id' => 0,
+            'created' => false,
+        ];
+        if ($orderNumber !== '') {
+            pos_payment_refresh_order_snapshots($conn, $orderNumber);
+            $invoiceMeta = pos_payment_finalize_invoice_for_order($conn, $orderNumber);
+        }
 
-        $stmt->execute();
-
-        echo json_encode(["success" => true]);
+        echo json_encode([
+            'success' => true,
+            'invoice_id' => (int)($invoiceMeta['invoice_id'] ?? 0),
+            'invoice_created' => !empty($invoiceMeta['created']),
+            'invoice_message' => $invoiceMeta['message'] ?? null,
+        ]);
         exit;
     }
+
     public function get_single_payment()
     {
-
-        global $conn;
-
-        $id = $_GET['id'];
-
-        $stmt = $conn->prepare(
-            'SELECT p.*,
-                (
-                    SELECT MIN(o.id) FROM vp_orders o
-                    WHERE o.order_number COLLATE utf8mb4_unicode_ci = p.order_number COLLATE utf8mb4_unicode_ci
-                ) AS order_id
-             FROM pos_payments p WHERE p.id = ?'
-        );
-        $stmt->bind_param('i', $id);
-        $stmt->execute();
-
-        $payment = $stmt->get_result()->fetch_assoc();
+        $id = (int)($_GET['id'] ?? 0);
+        $payment = $this->paymentModel->findSingleWithOrderId($id);
 
         echo json_encode([
             'success' => true,

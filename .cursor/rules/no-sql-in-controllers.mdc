@@ -1,0 +1,36 @@
+---
+description: Keep SQL out of controllers; use model classes for database access
+alwaysApply: true
+---
+
+# No SQL in Controllers
+
+Controllers must **not** contain SQL queries, `$conn->query()`, `$conn->prepare()`, or inline database logic.
+
+## Required pattern
+
+- Put all database access in **model classes** under `models/` (e.g. `models/payment/Payment.php`, `models/PosInvoice/invoice.php`).
+- Controllers orchestrate: read request input, call model methods, return views/JSON.
+- Reuse existing models before adding new query methods.
+
+```php
+// ❌ BAD — SQL in controller
+public function list_ajax() {
+    global $conn;
+    $res = $conn->query("SELECT * FROM pos_payments WHERE ...");
+}
+
+// ✅ GOOD — delegate to model
+public function list_ajax() {
+    global $paymentModel;
+    echo json_encode($paymentModel->searchListAjax($filters));
+}
+```
+
+## When adding features
+
+1. Add or extend a model method for the query/mutation.
+2. Call that method from the controller (Presenter layer).
+3. Keep business rules in controllers/helpers; keep persistence in models.
+
+See also: `mvp-architecture.mdc` for full layer separation.
