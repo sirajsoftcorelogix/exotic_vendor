@@ -44,6 +44,13 @@ $invoiceSubtotalDisplay = number_format((float)($invoiceDisplay['subtotal'] ?? 0
 $invoiceTaxDisplay = number_format((float)($invoiceDisplay['tax_amount'] ?? 0), 2);
 $invoiceDiscountDisplay = number_format((float)($invoiceDisplay['discount'] ?? 0), 2);
 $invoiceGrandTotalDisplay = number_format((float)($invoiceDisplay['grand_total'] ?? 0), 2);
+$paymentSummary = is_array($paymentSummary ?? null) ? $paymentSummary : ['order_total' => 0, 'paid_total' => 0, 'pending' => 0, 'is_fully_paid' => false, 'payments' => []];
+$paymentRows = is_array($paymentSummary['payments'] ?? null) ? $paymentSummary['payments'] : [];
+$paymentOrderTotalDisplay = number_format((float)($paymentSummary['order_total'] ?? 0), 2);
+$paymentPaidTotalDisplay = number_format((float)($paymentSummary['paid_total'] ?? 0), 2);
+$paymentPendingDisplay = number_format((float)($paymentSummary['pending'] ?? 0), 2);
+$paymentIsFullyPaid = !empty($paymentSummary['is_fully_paid']);
+$paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurlencode($displayOrderNumber) . '&order_exact=1');
 ?>
 
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
@@ -506,6 +513,111 @@ $invoiceGrandTotalDisplay = number_format((float)($invoiceDisplay['grand_total']
                     </div>
                 </div>
             <?php endif; ?>
+
+            <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm" id="order-payment-details-card">
+                <div class="flex items-center justify-between gap-3 border-b border-emerald-100 bg-gradient-to-r from-emerald-50 to-white px-5 py-4">
+                    <div class="flex items-center gap-2.5">
+                        <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                        </span>
+                        <div>
+                            <h3 class="text-sm font-bold text-gray-900">Payments</h3>
+                            <p class="text-xs text-gray-500"><?php echo count($paymentRows); ?> payment<?php echo count($paymentRows) === 1 ? '' : 's'; ?> recorded</p>
+                        </div>
+                    </div>
+                    <?php if ($paymentIsFullyPaid): ?>
+                        <span class="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">Fully paid</span>
+                    <?php elseif ((float)($paymentSummary['paid_total'] ?? 0) > 0): ?>
+                        <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">Partial</span>
+                    <?php else: ?>
+                        <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">Unpaid</span>
+                    <?php endif; ?>
+                </div>
+
+                <div class="space-y-4 p-5">
+                    <div class="grid grid-cols-3 gap-2 text-center">
+                        <div class="rounded-lg border border-gray-100 bg-gray-50 px-2 py-2.5">
+                            <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Order Total</p>
+                            <p class="mt-1 text-sm font-bold tabular-nums text-gray-900">₹ <?php echo $paymentOrderTotalDisplay; ?></p>
+                        </div>
+                        <div class="rounded-lg border border-emerald-100 bg-emerald-50/60 px-2 py-2.5">
+                            <p class="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Paid</p>
+                            <p class="mt-1 text-sm font-bold tabular-nums text-emerald-800">₹ <?php echo $paymentPaidTotalDisplay; ?></p>
+                        </div>
+                        <div class="rounded-lg border border-gray-100 bg-gray-50 px-2 py-2.5">
+                            <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Pending</p>
+                            <p class="mt-1 text-sm font-bold tabular-nums <?php echo (float)($paymentSummary['pending'] ?? 0) > 0.02 ? 'text-red-600' : 'text-gray-900'; ?>">₹ <?php echo $paymentPendingDisplay; ?></p>
+                        </div>
+                    </div>
+
+                    <?php if ($paymentRows === []): ?>
+                        <div class="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+                            No payments recorded for this order yet.
+                        </div>
+                    <?php else: ?>
+                        <div class="space-y-2">
+                            <?php foreach ($paymentRows as $paymentRow):
+                                $paymentId = (int)($paymentRow['id'] ?? 0);
+                                $receiptLabel = trim((string)($paymentRow['receipt_number'] ?? ''));
+                                if ($receiptLabel === '') {
+                                    $receiptLabel = '#' . $paymentId;
+                                }
+                                $paymentDateRaw = trim((string)($paymentRow['payment_date'] ?? ''));
+                                $paymentDateLabel = $paymentDateRaw !== ''
+                                    ? date('d M Y', strtotime($paymentDateRaw))
+                                    : '—';
+                                $paymentAmount = number_format((float)($paymentRow['payment_amount'] ?? 0), 2);
+                                $paymentMode = trim((string)($paymentRow['payment_mode'] ?? ''));
+                                $paymentStage = trim((string)($paymentRow['payment_stage'] ?? ''));
+                                $transactionId = trim((string)($paymentRow['transaction_id'] ?? ''));
+                                $warehouseName = trim((string)($paymentRow['warehouse'] ?? ''));
+                                $receiptUrl = base_url('?page=payments&action=receipt&id=' . $paymentId);
+                            ?>
+                                <div class="rounded-lg border border-gray-200 bg-white px-3 py-3">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div class="min-w-0">
+                                            <a href="<?php echo htmlspecialchars($receiptUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                class="text-sm font-semibold text-blue-600 hover:text-blue-800 hover:underline">
+                                                <?php echo htmlspecialchars($receiptLabel); ?>
+                                            </a>
+                                            <p class="mt-0.5 text-xs text-gray-500"><?php echo htmlspecialchars($paymentDateLabel); ?></p>
+                                        </div>
+                                        <p class="shrink-0 text-sm font-bold tabular-nums text-gray-900">₹ <?php echo $paymentAmount; ?></p>
+                                    </div>
+                                    <div class="mt-2 flex flex-wrap gap-1.5">
+                                        <?php if ($paymentMode !== ''): ?>
+                                            <span class="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700"><?php echo htmlspecialchars($paymentMode); ?></span>
+                                        <?php endif; ?>
+                                        <?php if ($paymentStage !== ''): ?>
+                                            <span class="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium capitalize text-slate-700"><?php echo htmlspecialchars(str_replace('_', ' ', $paymentStage)); ?></span>
+                                        <?php endif; ?>
+                                        <?php if ($warehouseName !== ''): ?>
+                                            <span class="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600"><?php echo htmlspecialchars($warehouseName); ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php if ($transactionId !== ''): ?>
+                                        <p class="mt-2 truncate text-[11px] text-gray-500" title="<?php echo htmlspecialchars($transactionId, ENT_QUOTES); ?>">
+                                            Txn: <?php echo htmlspecialchars($transactionId); ?>
+                                        </p>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <a href="<?php echo htmlspecialchars($paymentsListUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100">
+                        View all payments
+                    </a>
+                </div>
+            </div>
+
             <!-- Note Section -->
             <div class="rounded-lg border bg-white p-5 shadow-sm relative" id="note-container-<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>">
                 <button type="button" onclick="openNoteEditPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>','<?= htmlspecialchars($orderremarks['remarks'] ?? '', ENT_QUOTES) ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit Note">

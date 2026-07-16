@@ -791,6 +791,48 @@ class PosOrdersController
         ];
     }
 
+    /**
+     * @return array{
+     *   order_total: float,
+     *   paid_total: float,
+     *   pending: float,
+     *   is_fully_paid: bool,
+     *   payments: list<array<string, mixed>>
+     * }
+     */
+    private function buildOrderPaymentSummary(string $orderNumber, ?array $orderInfo = null): array
+    {
+        global $conn;
+
+        require_once __DIR__ . '/../models/payment/Payment.php';
+        require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+
+        $orderNumber = trim($orderNumber);
+        $paymentModel = new Payment($conn);
+        $payments = $paymentModel->listByOrderNumber($orderNumber);
+        $paidTotal = $paymentModel->sumPaidByOrderNumber($orderNumber);
+
+        $orderTotal = ($conn instanceof mysqli)
+            ? pos_payment_resolve_order_total($conn, $orderNumber)
+            : 0.0;
+        if ($orderTotal <= 0 && is_array($orderInfo)) {
+            $orderTotal = round((float)($orderInfo['total'] ?? 0), 2);
+        }
+        if ($orderTotal <= 0 && !empty($payments)) {
+            $orderTotal = round((float)($payments[count($payments) - 1]['order_amount'] ?? 0), 2);
+        }
+
+        $pending = max(0.0, round($orderTotal - $paidTotal, 2));
+
+        return [
+            'order_total' => $orderTotal,
+            'paid_total' => $paidTotal,
+            'pending' => $pending,
+            'is_fully_paid' => $pending <= 0.02,
+            'payments' => $payments,
+        ];
+    }
+
     public function getOrderDetailsHTML()
     {
         is_login();
@@ -836,6 +878,7 @@ class PosOrdersController
 
         $invoicePdfUrl = $invoiceId > 0 ? pos_invoice_pdf_url($invoiceId) : '';
         $invoiceDisplay = $this->buildOrderInvoiceDisplaySummary($activeInvoice, $resolvedOrderNumber);
+        $paymentSummary = $this->buildOrderPaymentSummary($resolvedOrderNumber, is_array($orderremarks) ? $orderremarks : null);
 
         if ($type === 'inner') {
             renderPartial('views/posorders/partial_order_details.php', [
@@ -852,6 +895,7 @@ class PosOrdersController
                 'invoiceDisplay' => $invoiceDisplay,
                 'invoicePdfUrl' => $invoicePdfUrl,
                 'canEditInvoiceNumber' => canSrEmpAccess(),
+                'paymentSummary' => $paymentSummary,
             ], 'Order Details');
         }
         exit;
