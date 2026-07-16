@@ -1,0 +1,57 @@
+---
+description: Strict MVP architecture — Model, View, Controller/Presenter separation for all new code
+alwaysApply: true
+---
+
+# Strict MVP Architecture
+
+Follow **Model–View–Presenter** separation for all new and refactored code unless a legacy constraint makes it impossible. Prefer refactoring toward MVP over adding shortcuts.
+
+## Layer responsibilities
+
+| Layer | Location | Owns | Must NOT own |
+|-------|----------|------|--------------|
+| **Model** | `models/` | Database access, queries, persistence, domain data shaping | HTTP, `$_GET`/`$_POST`, HTML/JS output |
+| **View** | `views/` | Display markup, minimal presentation helpers | SQL, business rules, request handling |
+| **Presenter** | `controllers/` | Read request input, call models/helpers, choose view, return JSON/redirects | SQL, heavy HTML generation, direct `$conn` usage |
+
+In this codebase, **Controller = Presenter**.
+
+## Required workflow for new features
+
+1. **Model first** — add/extend methods in the appropriate `models/` class.
+2. **Presenter** — controller method validates input, calls model(s), maps results, handles response.
+3. **View last** — template receives prepared data only; no DB calls in views.
+
+```php
+// ✅ Model
+public function searchListAjax(array $filters): array { /* SQL here */ }
+
+// ✅ Presenter (controller)
+public function list_ajax() {
+    $filters = [/* from $_GET */];
+    echo json_encode($this->paymentModel->searchListAjax($filters));
+    exit;
+}
+
+// ✅ View — display only
+<td><?= htmlspecialchars($row['order_number']) ?></td>
+```
+
+## Helpers
+
+- Use `helpers/` for cross-cutting, reusable logic that is not persistence (e.g. receipt numbering, invoice finalization orchestration).
+- Helpers must not replace models for database access.
+
+## When deviation is allowed
+
+Only skip strict MVP when:
+- Touching legacy code where a full split would be out of scope for the task
+- A third-party/library API requires logic in a specific layer
+- The user explicitly approves a temporary exception
+
+If deviating, keep the diff minimal and leave a short comment explaining why MVP could not be followed.
+
+## Related rules
+
+- **No SQL in controllers** — all queries live in models (see `no-sql-in-controllers.mdc`).
