@@ -945,6 +945,71 @@ class POSOrder
         return null;
     }
 
+    /**
+     * Rename order_number across related POS order tables.
+     *
+     * @return array{success:bool,message:string,order_number?:string}
+     */
+    public function renameOrderNumber(string $oldOrderNumber, string $newOrderNumber): array
+    {
+        $oldOrderNumber = trim($oldOrderNumber);
+        $newOrderNumber = trim($newOrderNumber);
+
+        if ($oldOrderNumber === '' || $newOrderNumber === '') {
+            return ['success' => false, 'message' => 'Order numbers are required.'];
+        }
+        if ($oldOrderNumber === $newOrderNumber) {
+            return ['success' => true, 'message' => 'No change.', 'order_number' => $newOrderNumber];
+        }
+
+        $existing = $this->getOrderByOrderNumber($oldOrderNumber);
+        if (empty($existing)) {
+            return ['success' => false, 'message' => 'Order not found.'];
+        }
+
+        $conflict = $this->getOrderByOrderNumber($newOrderNumber);
+        if (!empty($conflict)) {
+            return ['success' => false, 'message' => 'Order number already in use.'];
+        }
+
+        $tables = [
+            'vp_orders',
+            'vp_order_info',
+            'vp_order_journey_log',
+            'pos_payments',
+            'vp_invoice_items',
+        ];
+
+        $this->db->begin_transaction();
+        try {
+            foreach ($tables as $table) {
+                $sql = "UPDATE {$table} SET order_number = ? WHERE order_number = ?";
+                $stmt = $this->db->prepare($sql);
+                if (!$stmt) {
+                    throw new \RuntimeException('Database prepare failed.');
+                }
+                $stmt->bind_param('ss', $newOrderNumber, $oldOrderNumber);
+                if (!$stmt->execute()) {
+                    $err = $stmt->error;
+                    $stmt->close();
+                    throw new \RuntimeException($err ?: 'Database update failed.');
+                }
+                $stmt->close();
+            }
+            $this->db->commit();
+
+            return [
+                'success' => true,
+                'message' => 'Order number updated.',
+                'order_number' => $newOrderNumber,
+            ];
+        } catch (\Throwable $e) {
+            $this->db->rollback();
+
+            return ['success' => false, 'message' => 'Could not update order number.'];
+        }
+    }
+
     function getRemarksByOrderNumber($order_number)
     {
         $sql = "SELECT * FROM vp_order_info WHERE order_number = ?";

@@ -1,0 +1,54 @@
+---
+description: Role access hierarchy — Admin, Top Management, Sr Emp (implicit grants)
+alwaysApply: true
+---
+
+# Role Access Hierarchy
+
+When gating modules or functionality by role permissions, follow this **implicit grant chain**. Do not require each tier to be checked manually in every feature.
+
+## Default rules
+
+1. **Administrator (`role_id = 1`)** — unrestricted access to everything. Never duplicate Admin checks beyond the shared helpers.
+2. **Top Management Access** — any feature gated on `Top Management Access` must also allow **Administrator**.
+3. **Sr Emp Access** — any feature gated on `Sr Emp Access` must also allow **Top Management Access** and **Administrator**.
+
+## Hierarchy (lowest → highest privilege for gating)
+
+```
+Sr Emp Access  →  Top Management Access  →  Administrator (unrestricted)
+```
+
+## Implementation (required)
+
+Use helpers in `helpers/html_helpers.php` — do **not** hand-roll permission checks in controllers/views:
+
+| Helper | Use when |
+|--------|----------|
+| `isAdministratorUser()` | Admin-only bypass |
+| `hasTieredAccess($userId, $minimumAccess, $moduleNames)` | Feature needs Sr Emp or Top Management tier |
+| `hasTieredModuleAccess($userId, $module, $minimumAccess)` | Single module check |
+| `canSrEmpAccess()` | Sr Emp–level POS/order admin actions (includes Top Management + Admin) |
+
+```php
+// ✅ Sr Emp–gated feature (Top Management + Admin included automatically)
+if (!hasTieredAccess((int)($_SESSION['user']['id'] ?? 0), 'Sr Emp Access')) {
+    vendorJsonResponse(['success' => false, 'message' => 'Access denied.']);
+}
+
+// ✅ Top Management–gated feature (Admin included automatically)
+if (!hasTieredAccess((int)($_SESSION['user']['id'] ?? 0), 'Top Management Access', ['Reports'])) {
+    exit;
+}
+
+// ❌ BAD — omits Top Management / Admin implicit grants
+if (!hasPermission($userId, 'POS Orders', 'Sr Emp Access')) { ... }
+```
+
+## Views
+
+Pass a boolean from the presenter (e.g. `canEditOrderNumber => canSrEmpAccess()`) or call tiered helpers in the view only when the presenter already validated the pattern. Never show Admin-only UI without the helper chain.
+
+## New permissions
+
+When adding a new access tier to `vp_role_access`, document where it sits in the hierarchy and extend `getAccessTiersIncluding()` in `html_helpers.php` if it sits between existing tiers.

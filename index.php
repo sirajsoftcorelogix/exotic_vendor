@@ -1746,6 +1746,9 @@ switch ($page) {
             case 'update_name_email_ajax':
                 $controller->updateNameEmailAjax();
                 break;
+            case 'update_order_number_ajax':
+                $controller->updateOrderNumberAjax();
+                break;
             case 'update_import':
                 $controller->skuUpdateImportedOrders();
                 break;
