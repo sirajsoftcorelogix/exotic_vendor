@@ -113,3 +113,39 @@ if (!function_exists('app_setting_global_settings')) {
         return $model->getGlobalSettingsRow();
     }
 }
+
+if (!function_exists('app_setting_upsert_raw')) {
+    /**
+     * Direct upsert into app_settings when registry-based setValue is unavailable.
+     */
+    function app_setting_upsert_raw(string $key, string $value, int $userId = 0): bool
+    {
+        global $conn;
+
+        if (!($conn instanceof mysqli)) {
+            return false;
+        }
+
+        $stmt = $conn->prepare(
+            'INSERT INTO app_settings (setting_key, setting_value, updated_by)
+             VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                setting_value = VALUES(setting_value),
+                updated_by = VALUES(updated_by),
+                updated_at = CURRENT_TIMESTAMP'
+        );
+        if (!$stmt) {
+            return false;
+        }
+
+        $stmt->bind_param('ssi', $key, $value, $userId);
+        $ok = $stmt->execute();
+        $stmt->close();
+
+        if ($ok) {
+            app_setting_forget($key);
+        }
+
+        return $ok;
+    }
+}
