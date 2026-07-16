@@ -909,6 +909,42 @@ class POSOrder
         }
         return null;
     }
+
+    /**
+     * Resolve vp_orders line items by order_number or numeric vp_orders.id.
+     *
+     * @return array<int, array<string, mixed>>|null
+     */
+    public function getOrderLineItemsByRef($ref): ?array
+    {
+        $ref = trim((string)$ref);
+        if ($ref === '') {
+            return null;
+        }
+
+        $rows = $this->getOrderByOrderNumber($ref);
+        if (!empty($rows)) {
+            return $rows;
+        }
+
+        if (ctype_digit($ref)) {
+            $one = $this->getOrderById((int)$ref);
+            if (!$one) {
+                return null;
+            }
+            if (!empty($one['order_number'])) {
+                $rows = $this->getOrderByOrderNumber($one['order_number']);
+                if (!empty($rows)) {
+                    return $rows;
+                }
+            }
+
+            return [$one];
+        }
+
+        return null;
+    }
+
     function getRemarksByOrderNumber($order_number)
     {
         $sql = "SELECT * FROM vp_order_info WHERE order_number = ?";
