@@ -271,6 +271,36 @@ class product
         return 0.0;
     }
 
+    /** India list price from vendor product/fetch — prefer variant row, then parent. */
+    public static function vendorApiPriceIndia(array $apiItem, array $fallback = []): float
+    {
+        foreach ([$apiItem, $fallback] as $row) {
+            if (!isset($row['price_india']) || $row['price_india'] === '' || $row['price_india'] === null) {
+                continue;
+            }
+            return (float) $row['price_india'];
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * Use stored size/color for UPDATE WHERE when a fuzzy catalog match exists (Import uses the same lookup).
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function resolveVpProductVariantWhereKeys(?array $existingBase, string $apiSize, string $apiColor): array
+    {
+        if (is_array($existingBase)) {
+            return [
+                trim((string) ($existingBase['size'] ?? $apiSize)),
+                trim((string) ($existingBase['color'] ?? $apiColor)),
+            ];
+        }
+
+        return [trim($apiSize), trim($apiColor)];
+    }
+
     /** Master API row: HSN is on `hscode` (or `hsn`). Same value for all variants — pass the parent object only. */
     public static function vendorApiHsn(array $masterRow): string
     {
@@ -1397,6 +1427,7 @@ class product
                     $sku = isset($product['sku']) && !empty($product['sku']) ? $product['sku'] : $product['itemcode'];
                     $color = isset($product['color']) ? (string)$product['color'] : '';
                     $size = isset($product['size']) ? (string)$product['size'] : '';
+                    [$whereSize, $whereColor] = $this->resolveVpProductVariantWhereKeys($existingBase, $size, $color);
                     // $costPrice = isset($product['cost_price']) ? (float)$product['cost_price'] : 0.0;
                     // $gst = isset($product['gst']) ? (float)$product['gst'] : 0.0;
                     // $hsn = isset($product['hsn']) ? $product['hsn'] : '';
@@ -1423,7 +1454,7 @@ class product
                     $shippingfee = isset($product['shippingfee']) ? (float)$product['shippingfee'] : 0.0;
                     $sourcingfee = isset($product['sourcingfee']) ? (float)$product['sourcingfee'] : 0.0;
                     $price = self::vendorApiUsdPrice($product);
-                    $price_india = isset($product['price_india']) ? (float)$product['price_india'] : 0.0;
+                    $price_india = self::vendorApiPriceIndia($product);
                     $mrp_india = isset($product['mrp_india']) ? (float)$product['mrp_india'] : 0.0;
                     $permanent_discount = isset($product['permanent_discount']) ? (float)$product['permanent_discount'] : 0.0;
                     $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
@@ -1525,22 +1556,22 @@ class product
                         $sketchfab_links,
                         $dimensions,
                         $product['itemcode'],
-                        $size,
-                        $color
+                        $whereSize,
+                        $whereColor
                     );
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
                     if ($this->executeVpProductsStmt($stmt)) {
                         $updatedCount++;
                         $this->syncBookFieldsFromVendorApiRow(
                             (string) $product['itemcode'],
-                            (string) $size,
-                            (string) $color,
+                            (string) $whereSize,
+                            (string) $whereColor,
                             $product
                         );
                         $this->syncPriceIndiaSuggestedFromApiRow(
                             (string) $product['itemcode'],
-                            (string) $size,
-                            (string) $color,
+                            (string) $whereSize,
+                            (string) $whereColor,
                             $product
                         );
                         if (!$preserveLocalStock && $syncPhysicalStock) {
@@ -1673,6 +1704,7 @@ class product
                             $sku = isset($variation['sku']) && !empty($variation['sku']) ? $variation['sku'] : $product['itemcode'];
                             $color = isset($variation['color']) ? (string)$variation['color'] : '';
                             $size = isset($variation['size']) ? (string)$variation['size'] : '';
+                            [$whereSize, $whereColor] = $this->resolveVpProductVariantWhereKeys($existingBase, $size, $color);
                             // $costPrice = isset($product['cost_price']) ? (float)$product['cost_price'] : 0.0;
                             // $gst = isset($product['gst']) ? (float)$product['gst'] : 0.0;
                             // $hsn = isset($product['hsn']) ? $product['hsn'] : '';
@@ -1699,11 +1731,11 @@ class product
                             $shippingfee = isset($product['shippingfee']) ? (float)$product['shippingfee'] : 0.0;
                             $sourcingfee = isset($product['sourcingfee']) ? (float)$product['sourcingfee'] : 0.0;
                             $price = self::vendorApiUsdPrice(array_merge($product, $variation));
-                            $price_india = isset($product['price_india']) ? (float)$product['price_india'] : 0.0;
-                            $mrp_india = isset($product['mrp_india']) ? (float)$product['mrp_india'] : 0.0;
-                            $permanent_discount = isset($product['permanent_discount']) ? (float)$product['permanent_discount'] : 0.0;
-                            $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
-                            $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
+                            $price_india = self::vendorApiPriceIndia($variation, $product);
+                            $mrp_india = (float) ($variation['mrp_india'] ?? $product['mrp_india'] ?? 0);
+                            $permanent_discount = (float) ($variation['permanent_discount'] ?? $product['permanent_discount'] ?? 0);
+                            $discount_global = (float) ($variation['discount_global'] ?? $product['discount_global'] ?? 0);
+                            $discount_india = (float) ($variation['discount_india'] ?? $product['discount_india'] ?? 0);
                             $hsn = self::vendorApiHsn($product);
                             $updated_at = $now;
                             $category = isset($variation['category']) ? $variation['category'] : (isset($product['category']) ? $product['category'] : '');
@@ -1808,21 +1840,21 @@ class product
                                 $sketchfab_links,
                                 $dimensions,
                                 $product['itemcode'],
-                                $size,
-                                $color
+                                $whereSize,
+                                $whereColor
                             );
                             if ($this->executeVpProductsStmt($stmt)) {
                                 $updatedCount++;
                                 $this->syncBookFieldsFromVendorApiRow(
                                     (string) $product['itemcode'],
-                                    (string) $size,
-                                    (string) $color,
-                                    $product
+                                    (string) $whereSize,
+                                    (string) $whereColor,
+                                    array_merge($product, $variation)
                                 );
                                 $this->syncPriceIndiaSuggestedFromApiRow(
                                     (string) $product['itemcode'],
-                                    (string) $size,
-                                    (string) $color,
+                                    (string) $whereSize,
+                                    (string) $whereColor,
                                     array_merge($product, $variation)
                                 );
                                 if (!$preserveLocalStock && $syncPhysicalStock) {
