@@ -72,7 +72,7 @@
                         <th class="p-3 text-left">Customer</th>
                         <th class="p-3 text-left">Amount</th>
                         <th class="p-3 text-left">Paid</th>
-                        <th class="p-3 text-left">Due</th>
+                        <th class="p-3 text-left">Pending</th>
                         <th class="p-3 text-left">Status</th>
                         <th class="p-3 text-left">Action</th>
                     </tr>
@@ -243,7 +243,7 @@ stroke-linejoin="round"/>
 
 <td class="p-3 font-semibold">₹ ${i.total_amount}</td>
 <td class="p-3 text-green-600">₹ ${i.paid_amount}</td>
-<td class="p-3 text-red-600">₹ ${i.due_amount}</td>
+<td class="p-3 text-red-600">₹ ${i.pending_amount}</td>
 
 <td class="p-3">${badge}</td>
 

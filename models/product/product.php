@@ -4510,38 +4510,44 @@ class product
      * physical_stock = 0, at most one ledger row (by product_id or SKU),
      * and no vp_stock rows for the product SKU.
      *
-     * SKU joins use BINARY comparison to avoid mixed-collation errors (MySQL 1267)
-     * without ALTER TABLE on vp_products / vp_stock_movements / vp_stock.
+     * Movement count uses product_id aggregate (fast); matches most ledger rows.
+     * vp_stock check uses BINARY sku match against distinct vp_stock.skus.
      */
     private function stockRefreshSkuCompareSql(string $leftExpr, string $rightExpr): string
     {
         return 'BINARY TRIM(' . $leftExpr . ') = BINARY TRIM(' . $rightExpr . ')';
     }
 
+    private function stockRefreshCandidateJoinSql(): string
+    {
+        return 'vp_products p
+            LEFT JOIN (
+                SELECT product_id, COUNT(*) AS movement_count
+                FROM vp_stock_movements
+                WHERE product_id > 0
+                GROUP BY product_id
+            ) mov ON mov.product_id = p.id
+            LEFT JOIN (
+                SELECT DISTINCT sku
+                FROM vp_stock
+                WHERE TRIM(COALESCE(sku, \'\')) <> \'\'
+            ) vs_has ON TRIM(COALESCE(p.sku, \'\')) <> \'\'
+                AND ' . $this->stockRefreshSkuCompareSql('vs_has.sku', 'p.sku');
+    }
+
     private function stockRefreshCandidateWhereSql(): string
     {
-        $movementSkuMatch = $this->stockRefreshSkuCompareSql('sm.sku', 'p.sku');
-        $vpStockSkuMatch = $this->stockRefreshSkuCompareSql('vs.sku', 'p.sku');
-
         return 'p.is_active = 1
               AND IFNULL(p.physical_stock, 0) = 0
-              AND (
-                SELECT COUNT(*)
-                FROM vp_stock_movements sm
-                WHERE sm.product_id = p.id
-                   OR (TRIM(COALESCE(p.sku, \'\')) <> \'\' AND ' . $movementSkuMatch . ')
-              ) <= 1
-              AND (
-                SELECT COUNT(*)
-                FROM vp_stock vs
-                WHERE TRIM(COALESCE(p.sku, \'\')) <> \'\' AND ' . $vpStockSkuMatch . '
-              ) = 0';
+              AND IFNULL(mov.movement_count, 0) <= 1
+              AND vs_has.sku IS NULL';
     }
 
     public function countStockRefreshCandidates(): int
     {
-        $where = $this->stockRefreshCandidateWhereSql();
-        $sql = 'SELECT COUNT(*) AS total FROM vp_products p WHERE ' . $where;
+        $sql = 'SELECT COUNT(*) AS total
+            FROM ' . $this->stockRefreshCandidateJoinSql() . '
+            WHERE ' . $this->stockRefreshCandidateWhereSql();
 
         $res = $this->db->query($sql);
         if (!$res) {
@@ -4560,24 +4566,12 @@ class product
     {
         $limit = max(1, min(500, $limit));
         $offset = max(0, $offset);
-        $where = $this->stockRefreshCandidateWhereSql();
-        $movementSkuMatch = $this->stockRefreshSkuCompareSql('sm.sku', 'p.sku');
-        $vpStockSkuMatch = $this->stockRefreshSkuCompareSql('vs.sku', 'p.sku');
 
         $sql = 'SELECT p.id, p.sku, p.item_code, p.title, IFNULL(p.local_stock, 0) AS local_stock,
-                (
-                    SELECT COUNT(*)
-                    FROM vp_stock_movements sm
-                    WHERE sm.product_id = p.id
-                       OR (TRIM(COALESCE(p.sku, \'\')) <> \'\' AND ' . $movementSkuMatch . ')
-                ) AS movement_count,
-                (
-                    SELECT COUNT(*)
-                    FROM vp_stock vs
-                    WHERE TRIM(COALESCE(p.sku, \'\')) <> \'\' AND ' . $vpStockSkuMatch . '
-                ) AS vp_stock_count
-            FROM vp_products p
-            WHERE ' . $where . '
+                IFNULL(mov.movement_count, 0) AS movement_count,
+                0 AS vp_stock_count
+            FROM ' . $this->stockRefreshCandidateJoinSql() . '
+            WHERE ' . $this->stockRefreshCandidateWhereSql() . '
             ORDER BY p.id ASC
             LIMIT ? OFFSET ?';
 
