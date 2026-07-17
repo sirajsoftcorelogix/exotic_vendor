@@ -454,13 +454,31 @@ class POSInvoice
         return $invoices;
     }
 
+    private function posInvoiceNotesDiscountSumSql(): string
+    {
+        return "(
+            IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.coupon_discount')) AS DECIMAL(15,2)), 0)
+            + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.cash_discount')) AS DECIMAL(15,2)), 0)
+            + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.gift_discount')) AS DECIMAL(15,2)), 0)
+            + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.line_discount')) AS DECIMAL(15,2)), 0)
+        )";
+    }
+
     /**
-     * Net payable total for a POS invoice row (matches pos_payment_resolve_order_total priority).
+     * Net payable total for a POS invoice row.
+     * Invoice notes grand_total is authoritative for discounted POS checkout orders.
      */
     private function posInvoicePayableAmountSql(): string
     {
+        $discountSum = $this->posInvoiceNotesDiscountSumSql();
+        $grandTotal = "NULLIF(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.grand_total')) AS DECIMAL(15,2)), 0)";
+        $subtotalGoods = "NULLIF(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.subtotal_goods')) AS DECIMAL(15,2)), 0)";
+
         return "COALESCE(
-            NULLIF(o.total, 0),
+            {$grandTotal},
+            NULLIF(GREATEST(0, ROUND({$subtotalGoods} - {$discountSum}, 2)), 0),
+            NULLIF(GREATEST(0, ROUND(i.total_amount - {$discountSum}, 2)), 0),
+            NULLIF(GREATEST(0, ROUND(i.total_amount - IFNULL(i.discount_amount, 0), 2)), 0),
             (
                 SELECT MAX(pp2.order_amount)
                 FROM pos_payments pp2
@@ -468,11 +486,9 @@ class POSInvoice
                       CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
                   AND pp2.order_amount > 0
             ),
-            NULLIF(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.grand_total')) AS DECIMAL(15,2)), 0),
-            CASE
-                WHEN IFNULL(i.discount_amount, 0) > 0 THEN i.total_amount - i.discount_amount
-                ELSE i.total_amount
-            END
+            NULLIF(GREATEST(0, ROUND(NULLIF(o.total, 0) - {$discountSum}, 2)), 0),
+            NULLIF(o.total, 0),
+            i.total_amount
         )";
     }
 
@@ -481,20 +497,14 @@ class POSInvoice
      */
     private function posInvoiceDiscountAmountSql(string $payableSql): string
     {
+        $discountSum = $this->posInvoiceNotesDiscountSumSql();
+        $subtotalGoods = "NULLIF(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.subtotal_goods')) AS DECIMAL(15,2)), 0)";
+
         return "GREATEST(0, ROUND(
             CASE
-                WHEN (
-                    IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.coupon_discount')) AS DECIMAL(15,2)), 0)
-                    + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.cash_discount')) AS DECIMAL(15,2)), 0)
-                    + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.gift_discount')) AS DECIMAL(15,2)), 0)
-                    + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.line_discount')) AS DECIMAL(15,2)), 0)
-                ) > 0.001 THEN (
-                    IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.coupon_discount')) AS DECIMAL(15,2)), 0)
-                    + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.cash_discount')) AS DECIMAL(15,2)), 0)
-                    + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.gift_discount')) AS DECIMAL(15,2)), 0)
-                    + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.line_discount')) AS DECIMAL(15,2)), 0)
-                )
+                WHEN {$discountSum} > 0.001 THEN {$discountSum}
                 WHEN IFNULL(i.discount_amount, 0) > 0 THEN i.discount_amount
+                WHEN {$subtotalGoods} > ({$payableSql}) + 0.001 THEN GREATEST(0, ROUND({$subtotalGoods} - ({$payableSql}), 2))
                 ELSE GREATEST(0, i.total_amount - ({$payableSql}))
             END,
         2))";
