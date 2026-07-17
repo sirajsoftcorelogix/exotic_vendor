@@ -4509,21 +4509,32 @@ class product
      * Products eligible for product-detail "Refresh stock":
      * physical_stock = 0, at most one ledger row (by product_id or SKU),
      * and no vp_stock rows for the product SKU.
+     *
+     * SKU joins use BINARY comparison to avoid mixed-collation errors (MySQL 1267)
+     * without ALTER TABLE on vp_products / vp_stock_movements / vp_stock.
      */
+    private function stockRefreshSkuCompareSql(string $leftExpr, string $rightExpr): string
+    {
+        return 'BINARY TRIM(' . $leftExpr . ') = BINARY TRIM(' . $rightExpr . ')';
+    }
+
     private function stockRefreshCandidateWhereSql(): string
     {
+        $movementSkuMatch = $this->stockRefreshSkuCompareSql('sm.sku', 'p.sku');
+        $vpStockSkuMatch = $this->stockRefreshSkuCompareSql('vs.sku', 'p.sku');
+
         return 'p.is_active = 1
               AND IFNULL(p.physical_stock, 0) = 0
               AND (
                 SELECT COUNT(*)
                 FROM vp_stock_movements sm
                 WHERE sm.product_id = p.id
-                   OR (TRIM(COALESCE(p.sku, \'\')) <> \'\' AND sm.sku = p.sku)
+                   OR (TRIM(COALESCE(p.sku, \'\')) <> \'\' AND ' . $movementSkuMatch . ')
               ) <= 1
               AND (
                 SELECT COUNT(*)
                 FROM vp_stock vs
-                WHERE TRIM(COALESCE(p.sku, \'\')) <> \'\' AND vs.sku = p.sku
+                WHERE TRIM(COALESCE(p.sku, \'\')) <> \'\' AND ' . $vpStockSkuMatch . '
               ) = 0';
     }
 
@@ -4550,18 +4561,20 @@ class product
         $limit = max(1, min(500, $limit));
         $offset = max(0, $offset);
         $where = $this->stockRefreshCandidateWhereSql();
+        $movementSkuMatch = $this->stockRefreshSkuCompareSql('sm.sku', 'p.sku');
+        $vpStockSkuMatch = $this->stockRefreshSkuCompareSql('vs.sku', 'p.sku');
 
         $sql = 'SELECT p.id, p.sku, p.item_code, p.title, IFNULL(p.local_stock, 0) AS local_stock,
                 (
                     SELECT COUNT(*)
                     FROM vp_stock_movements sm
                     WHERE sm.product_id = p.id
-                       OR (TRIM(COALESCE(p.sku, \'\')) <> \'\' AND sm.sku = p.sku)
+                       OR (TRIM(COALESCE(p.sku, \'\')) <> \'\' AND ' . $movementSkuMatch . ')
                 ) AS movement_count,
                 (
                     SELECT COUNT(*)
                     FROM vp_stock vs
-                    WHERE TRIM(COALESCE(p.sku, \'\')) <> \'\' AND vs.sku = p.sku
+                    WHERE TRIM(COALESCE(p.sku, \'\')) <> \'\' AND ' . $vpStockSkuMatch . '
                 ) AS vp_stock_count
             FROM vp_products p
             WHERE ' . $where . '
