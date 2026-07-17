@@ -71,6 +71,7 @@
                         <th class="p-3 text-left">Store / Warehouse</th>
                         <th class="p-3 text-left">Customer</th>
                         <th class="p-3 text-left">Amount</th>
+                        <th class="p-3 text-left">Discount</th>
                         <th class="p-3 text-left">Paid</th>
                         <th class="p-3 text-left">Pending</th>
                         <th class="p-3 text-left">Status</th>
@@ -157,6 +158,14 @@
     }
     document.addEventListener("DOMContentLoaded", loadInvoices);
 
+    function formatInvoiceAmount(value) {
+        const n = parseFloat(value);
+        if (Number.isNaN(n)) {
+            return '0.00';
+        }
+        return n.toFixed(2);
+    }
+
     function loadInvoices() {
 
         let url = `?page=posinvoice&action=list_ajax&from_date=${document.getElementById('from_date').value}
@@ -176,7 +185,7 @@
 
                 if (!data.length) {
                     html = `<tr>
-<td colspan="11" class="p-6 text-center text-gray-400">
+<td colspan="12" class="p-6 text-center text-gray-400">
 No invoices
 </td>
 </tr>`;
@@ -241,9 +250,10 @@ stroke-linejoin="round"/>
 <td class="p-3 text-gray-700">${i.warehouse_name ?? ''}</td>
 <td class="p-3">${i.customer_name ?? ''}</td>
 
-<td class="p-3 font-semibold">₹ ${i.total_amount}</td>
-<td class="p-3 text-green-600">₹ ${i.paid_amount}</td>
-<td class="p-3 text-red-600">₹ ${i.pending_amount}</td>
+<td class="p-3 font-semibold tabular-nums">₹ ${formatInvoiceAmount(i.payable_amount)}</td>
+<td class="p-3 text-amber-700 tabular-nums">₹ ${formatInvoiceAmount(i.discount_amount)}</td>
+<td class="p-3 text-green-600 tabular-nums">₹ ${formatInvoiceAmount(i.paid_amount)}</td>
+<td class="p-3 text-red-600 tabular-nums">₹ ${formatInvoiceAmount(i.pending_amount)}</td>
 
 <td class="p-3">${badge}</td>
 

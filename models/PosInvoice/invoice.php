@@ -455,6 +455,62 @@ class POSInvoice
     }
 
     /**
+     * Net payable total for a POS invoice row (matches pos_payment_resolve_order_total priority).
+     */
+    private function posInvoicePayableAmountSql(): string
+    {
+        return "COALESCE(
+            NULLIF(o.total, 0),
+            (
+                SELECT MAX(pp2.order_amount)
+                FROM pos_payments pp2
+                WHERE CONVERT(pp2.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+                      CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                  AND pp2.order_amount > 0
+            ),
+            NULLIF(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.grand_total')) AS DECIMAL(15,2)), 0),
+            CASE
+                WHEN IFNULL(i.discount_amount, 0) > 0 THEN i.total_amount - i.discount_amount
+                ELSE i.total_amount
+            END
+        )";
+    }
+
+    /**
+     * POS checkout discount total from notes, legacy column, or gross-minus-payable fallback.
+     */
+    private function posInvoiceDiscountAmountSql(string $payableSql): string
+    {
+        return "GREATEST(0, ROUND(
+            CASE
+                WHEN (
+                    IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.coupon_discount')) AS DECIMAL(15,2)), 0)
+                    + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.cash_discount')) AS DECIMAL(15,2)), 0)
+                    + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.gift_discount')) AS DECIMAL(15,2)), 0)
+                    + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.line_discount')) AS DECIMAL(15,2)), 0)
+                ) > 0.001 THEN (
+                    IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.coupon_discount')) AS DECIMAL(15,2)), 0)
+                    + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.cash_discount')) AS DECIMAL(15,2)), 0)
+                    + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.gift_discount')) AS DECIMAL(15,2)), 0)
+                    + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.line_discount')) AS DECIMAL(15,2)), 0)
+                )
+                WHEN IFNULL(i.discount_amount, 0) > 0 THEN i.discount_amount
+                ELSE GREATEST(0, i.total_amount - ({$payableSql}))
+            END,
+        2))";
+    }
+
+    private function posInvoicePaidAmountSql(): string
+    {
+        return "IFNULL((
+            SELECT SUM(pp.payment_amount)
+            FROM pos_payments pp
+            WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+                  CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
+        ), 0)";
+    }
+
+    /**
      * POS invoice AJAX list with payment pending amounts.
      *
      * @param array<string, mixed> $filters
@@ -462,6 +518,10 @@ class POSInvoice
      */
     public function searchPosListAjax(array $filters): array
     {
+        $payableSql = $this->posInvoicePayableAmountSql();
+        $paidSql = $this->posInvoicePaidAmountSql();
+        $discountSql = $this->posInvoiceDiscountAmountSql($payableSql);
+
         $sql = "
             SELECT
                 i.id,
@@ -474,34 +534,10 @@ class POSInvoice
                 o.payment_type,
                 c.name AS customer_name,
                 COALESCE(ea.address_title, CONCAT('Warehouse #', i.warehouse_id)) AS warehouse_name,
-                IFNULL((
-                    SELECT SUM(pp.payment_amount)
-                    FROM pos_payments pp
-                    WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
-                          CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                ), 0) AS paid_amount,
-                GREATEST(0, ROUND(
-                    COALESCE(
-                        NULLIF(o.total, 0),
-                        (
-                            SELECT MAX(pp2.order_amount)
-                            FROM pos_payments pp2
-                            WHERE CONVERT(pp2.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
-                                  CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                              AND pp2.order_amount > 0
-                        ),
-                        NULLIF(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.grand_total')) AS DECIMAL(15,2)), 0),
-                        CASE
-                            WHEN IFNULL(i.discount_amount, 0) > 0 THEN i.total_amount - i.discount_amount
-                            ELSE i.total_amount
-                        END
-                    ) - IFNULL((
-                        SELECT SUM(pp.payment_amount)
-                        FROM pos_payments pp
-                        WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
-                              CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                    ), 0),
-                2)) AS pending_amount
+                ROUND({$payableSql}, 2) AS payable_amount,
+                {$discountSql} AS discount_amount,
+                {$paidSql} AS paid_amount,
+                GREATEST(0, ROUND({$payableSql} - {$paidSql}, 2)) AS pending_amount
             FROM vp_invoices i
             LEFT JOIN vp_order_info o ON o.id = i.vp_order_info_id
             LEFT JOIN vp_customers c ON c.id = i.customer_id
@@ -538,11 +574,11 @@ class POSInvoice
         }
 
         if (!empty($filters['amount_min'])) {
-            $sql .= ' AND i.total_amount >= ' . (float)$filters['amount_min'];
+            $sql .= ' AND ROUND(' . $payableSql . ', 2) >= ' . (float)$filters['amount_min'];
         }
 
         if (!empty($filters['amount_max'])) {
-            $sql .= ' AND i.total_amount <= ' . (float)$filters['amount_max'];
+            $sql .= ' AND ROUND(' . $payableSql . ', 2) <= ' . (float)$filters['amount_max'];
         }
 
         $sql .= ' ORDER BY i.id DESC';
