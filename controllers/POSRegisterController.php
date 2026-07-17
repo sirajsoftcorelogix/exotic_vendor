@@ -1803,7 +1803,7 @@ class POSRegisterController
     }
 
     /** @return array<string, mixed> */
-    private function performStockReportRefresh(int $productId): array
+    public function performStockReportRefresh(int $productId): array
     {
         global $conn;
 

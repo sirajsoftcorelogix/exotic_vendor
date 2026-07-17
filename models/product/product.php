@@ -4505,6 +4505,82 @@ class product
         return 0;
     }
 
+    /**
+     * Products eligible for product-detail "Refresh stock":
+     * physical_stock = 0, at most one ledger row (by product_id or SKU),
+     * and no vp_stock rows for the product SKU.
+     */
+    private function stockRefreshCandidateWhereSql(): string
+    {
+        return 'p.is_active = 1
+              AND IFNULL(p.physical_stock, 0) = 0
+              AND (
+                SELECT COUNT(*)
+                FROM vp_stock_movements sm
+                WHERE sm.product_id = p.id
+                   OR (TRIM(COALESCE(p.sku, \'\')) <> \'\' AND sm.sku = p.sku)
+              ) <= 1
+              AND (
+                SELECT COUNT(*)
+                FROM vp_stock vs
+                WHERE TRIM(COALESCE(p.sku, \'\')) <> \'\' AND vs.sku = p.sku
+              ) = 0';
+    }
+
+    public function countStockRefreshCandidates(): int
+    {
+        $where = $this->stockRefreshCandidateWhereSql();
+        $sql = 'SELECT COUNT(*) AS total FROM vp_products p WHERE ' . $where;
+
+        $res = $this->db->query($sql);
+        if (!$res) {
+            return 0;
+        }
+        $row = $res->fetch_assoc();
+        $res->free();
+
+        return (int) ($row['total'] ?? 0);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function listStockRefreshCandidates(int $limit, int $offset): array
+    {
+        $limit = max(1, min(500, $limit));
+        $offset = max(0, $offset);
+        $where = $this->stockRefreshCandidateWhereSql();
+
+        $sql = 'SELECT p.id, p.sku, p.item_code, p.title, IFNULL(p.local_stock, 0) AS local_stock,
+                (
+                    SELECT COUNT(*)
+                    FROM vp_stock_movements sm
+                    WHERE sm.product_id = p.id
+                       OR (TRIM(COALESCE(p.sku, \'\')) <> \'\' AND sm.sku = p.sku)
+                ) AS movement_count,
+                (
+                    SELECT COUNT(*)
+                    FROM vp_stock vs
+                    WHERE TRIM(COALESCE(p.sku, \'\')) <> \'\' AND vs.sku = p.sku
+                ) AS vp_stock_count
+            FROM vp_products p
+            WHERE ' . $where . '
+            ORDER BY p.id ASC
+            LIMIT ? OFFSET ?';
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('ii', $limit, $offset);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        return is_array($rows) ? $rows : [];
+    }
+
     public function getAllWarehouses()
     {
         $sql = "SELECT id, address_title as name FROM exotic_address WHERE is_active = 1 ORDER BY address_title";
