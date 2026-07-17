@@ -1514,7 +1514,7 @@ class product
                     $youtube_links = isset($product['youtube_links']) ? $product['youtube_links'] : '';
                     $sketchfab_links = isset($product['sketchfab_links']) ? $product['sketchfab_links'] : '';
                     $dimensions = isset($product['dimensions']) ? $product['dimensions'] : '';
-                    $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 8) . str_repeat('s', 4) . 'sssisiissssssssssssssiiiddiissss' . str_repeat('s', 3);
+                    $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 8) . str_repeat('s', 4) . 'sssisiissssssssssssssiiiddiissss';
                     $bindValues = [
                         $asin,
                         $localStock,
