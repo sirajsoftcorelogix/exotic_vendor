@@ -2125,16 +2125,7 @@ class product
         }
 
         if ($stockSyncMode === 'user_selected') {
-            $allowedIds = array_map('intval', $options['stock_sync_product_ids'] ?? []);
-            $productId = is_array($existingBase) ? (int) ($existingBase['id'] ?? 0) : 0;
-            if ($productId > 0 && in_array($productId, $allowedIds, true)) {
-                return ['local_stock' => $apiLocalStock, 'sync_stock' => true];
-            }
-            $preserved = is_array($existingBase)
-                ? (int) ($existingBase['local_stock'] ?? $apiLocalStock)
-                : $apiLocalStock;
-
-            return ['local_stock' => $preserved, 'sync_stock' => false];
+            return ['local_stock' => $apiLocalStock, 'sync_stock' => true];
         }
 
         if ($preserveLocalStock && is_array($existingBase)) {
@@ -2145,6 +2136,36 @@ class product
         }
 
         return ['local_stock' => $apiLocalStock, 'sync_stock' => true];
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function resolvePhysicalStockSyncProductIds(array $options): array
+    {
+        $raw = $options['physical_stock_sync_product_ids'] ?? $options['stock_sync_product_ids'] ?? [];
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($raw as $pid) {
+            $pid = (int) $pid;
+            if ($pid > 0) {
+                $ids[] = $pid;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    private function isPhysicalStockSyncSelected(array $options, int $productId): bool
+    {
+        if ($productId <= 0) {
+            return false;
+        }
+
+        return in_array($productId, $this->resolvePhysicalStockSyncProductIds($options), true);
     }
 
     /**
@@ -2279,6 +2300,13 @@ class product
         }
 
         if ($stockSyncMode === 'refresh_rules' || $stockSyncMode === 'user_selected') {
+            if ($stockSyncMode === 'user_selected') {
+                $productId = is_array($existingBase) ? (int) ($existingBase['id'] ?? 0) : 0;
+                if ($productId <= 0 || !$this->isPhysicalStockSyncSelected($options, $productId)) {
+                    return;
+                }
+            }
+
             $this->applyRefreshApiStockSync(
                 $productId,
                 $sku,

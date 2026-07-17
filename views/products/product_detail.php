@@ -1643,14 +1643,14 @@
         <div class="min-w-0">
           <h3 class="text-base font-semibold text-gray-900">Refresh Product From API</h3>
           <p class="mt-1 text-sm text-gray-600 leading-relaxed">
-            All variants for this item code will refresh catalog fields from the API. Select which variants should also sync <strong>local stock</strong> and <strong>physical stock</strong> from the API.
+            All variants for this item code will refresh catalog fields and <strong>local stock</strong> from the API. Check a variant only if its <strong>physical stock</strong> should also sync from the API.
           </p>
         </div>
       </div>
     </div>
     <div class="px-5 py-4 overflow-y-auto flex-1">
       <div class="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900 mb-4">
-        Each row shows current <strong>local stock</strong> and the API value it would become. Unchecked variants keep stock unchanged; checked variants sync local and physical stock from the API.
+        Catalog fields and local stock always update from the API. Each row shows current local stock and the API value. Leave unchecked to keep <strong>physical stock</strong> unchanged; check to sync physical stock (and warehouse ledger) from the API.
       </div>
       <div id="refreshStockVariantList" class="space-y-2"></div>
     </div>
@@ -2087,19 +2087,23 @@
       var stockHint =
         '<span class="block">Local stock: <span class="font-medium text-gray-800">' + oldLocal + '</span>'
         + ' → <span class="font-semibold ' + (localChanged ? 'text-amber-700' : 'text-gray-800') + '">' + apiLocalText + '</span>'
-        + ' <span class="text-gray-400">(API)</span></span>'
-        + '<span class="block mt-0.5">Physical stock (current): <span class="font-medium text-gray-800">' + physical + '</span></span>';
+        + ' <span class="text-gray-400">(API, always updated)</span></span>'
+        + '<span class="block mt-0.5">Physical stock (current): <span class="font-medium text-gray-800">' + physical + '</span>'
+        + (apiLocal !== null && apiLocal !== undefined
+          ? ' · check below to sync to <span class="font-medium text-gray-800">' + apiLocal + '</span>'
+          : '')
+        + '</span>';
       var wrap = document.createElement('label');
       wrap.className = 'flex items-start gap-3 rounded-xl border border-gray-200 bg-white px-3 py-3 cursor-pointer hover:border-amber-300 hover:bg-amber-50/40';
       wrap.innerHTML =
         '<input type="checkbox" class="refresh-stock-variant-checkbox mt-1 h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" '
-        + 'data-product-id="' + String(row.id) + '" '
-        + (isCurrent ? 'checked' : '') + ' />'
+        + 'data-product-id="' + String(row.id) + '" />'
         + '<span class="min-w-0 flex-1">'
         + '<span class="block text-sm ' + (isCurrent ? 'font-bold text-gray-900' : 'font-medium text-gray-800') + '">'
         + (isCurrent ? label + ' (current)' : label)
         + '</span>'
         + '<span class="block text-xs text-gray-600 mt-1 leading-relaxed">' + stockHint + '</span>'
+        + '<span class="block text-xs font-medium text-gray-700 mt-1.5">Sync physical stock from API</span>'
         + '</span>';
       listEl.appendChild(wrap);
     });
@@ -2112,7 +2116,7 @@
     var listEl = document.getElementById('refreshStockVariantList');
 
     if (!modal || !confirmBtn || !cancelBtn) {
-      return { confirmed: false, stockSyncProductIds: [] };
+      return { confirmed: false, physicalStockSyncProductIds: [] };
     }
 
     modal.classList.remove('hidden');
@@ -2159,11 +2163,11 @@
           var pid = parseInt(String(cb.getAttribute('data-product-id') || '0'), 10);
           if (pid > 0) ids.push(pid);
         });
-        cleanup({ confirmed: true, stockSyncProductIds: ids });
+        cleanup({ confirmed: true, physicalStockSyncProductIds: ids });
       }
 
       function onCancel() {
-        cleanup({ confirmed: false, stockSyncProductIds: [] });
+        cleanup({ confirmed: false, physicalStockSyncProductIds: [] });
       }
 
       function onBackdrop(e) {
@@ -2250,7 +2254,7 @@
     var requestBody = {
       itemCode: itemCode,
       refresh_from_detail: true,
-      stock_sync_product_ids: Array.isArray(stockChoice.stockSyncProductIds) ? stockChoice.stockSyncProductIds : []
+      physical_stock_sync_product_ids: Array.isArray(stockChoice.physicalStockSyncProductIds) ? stockChoice.physicalStockSyncProductIds : []
     };
     try {
       var res = await fetch(requestUrl, {
@@ -2287,12 +2291,12 @@
       }
       saveRefreshProductApiDebug(itemCode, debugPayload);
       if (data && data.success) {
-        var stockCount = Array.isArray(stockChoice.stockSyncProductIds) ? stockChoice.stockSyncProductIds.length : 0;
-        var stockMsg = stockCount > 0
-          ? (' Stock synced for ' + stockCount + ' selected variant' + (stockCount === 1 ? '' : 's') + '.')
-          : ' Stock was not changed for any variant.';
+        var physicalCount = Array.isArray(stockChoice.physicalStockSyncProductIds) ? stockChoice.physicalStockSyncProductIds.length : 0;
+        var stockMsg = physicalCount > 0
+          ? (' Physical stock synced for ' + physicalCount + ' selected variant' + (physicalCount === 1 ? '' : 's') + '.')
+          : ' Physical stock was left unchanged.';
         showProfileStatusModal(
-          'Product and all variants updated from API.' + stockMsg,
+          'Product and all variants updated from API (catalog and local stock refreshed).' + stockMsg,
           'success',
           true
         );

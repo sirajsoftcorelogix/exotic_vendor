@@ -764,15 +764,20 @@ class ProductsController
             || (isset($_GET['refresh_stock_rules']) && (string) $_GET['refresh_stock_rules'] === '1');
         $updateLocalStock = isset($_GET['update_local_stock']) && (string) $_GET['update_local_stock'] === '1';
         $stockSyncProductIds = [];
-        if (is_array($postPayload) && isset($postPayload['stock_sync_product_ids']) && is_array($postPayload['stock_sync_product_ids'])) {
-            foreach ($postPayload['stock_sync_product_ids'] as $pid) {
-                $pid = (int) $pid;
-                if ($pid > 0) {
-                    $stockSyncProductIds[] = $pid;
+        $physicalStockSyncProductIds = [];
+        if (is_array($postPayload)) {
+            $rawPhysicalIds = $postPayload['physical_stock_sync_product_ids'] ?? $postPayload['stock_sync_product_ids'] ?? null;
+            if (is_array($rawPhysicalIds)) {
+                foreach ($rawPhysicalIds as $pid) {
+                    $pid = (int) $pid;
+                    if ($pid > 0) {
+                        $physicalStockSyncProductIds[] = $pid;
+                    }
                 }
+                $physicalStockSyncProductIds = array_values(array_unique($physicalStockSyncProductIds));
             }
-            $stockSyncProductIds = array_values(array_unique($stockSyncProductIds));
         }
+        $stockSyncProductIds = $physicalStockSyncProductIds;
         if ($useRefreshFromDetail) {
             $productRows = product::expandVendorProductFetchVariants($productRows);
             $externalApi['normalized_rows'] = $productRows;
@@ -784,7 +789,8 @@ class ProductsController
                 $updateResult = $productModel->updateProductFromApi($productRows, [
                     'stock_sync_mode' => 'user_selected',
                     'variants_already_expanded' => true,
-                    'stock_sync_product_ids' => $stockSyncProductIds,
+                    'physical_stock_sync_product_ids' => $physicalStockSyncProductIds,
+                    'stock_sync_product_ids' => $physicalStockSyncProductIds,
                 ]);
             } else {
                 $updateResult = $productModel->updateProductFromApi($productRows, ['preserve_local_stock' => !$updateLocalStock]);
@@ -795,9 +801,10 @@ class ProductsController
         if (!is_array($updateResult)) {
             $updateResult = ['success' => false, 'message' => 'Product update failed.'];
         }
-        $updateResult['local_stock_updated'] = $useRefreshFromDetail ? $stockSyncProductIds : $updateLocalStock;
+        $updateResult['local_stock_updated'] = $useRefreshFromDetail;
+        $updateResult['physical_stock_sync_product_ids'] = $physicalStockSyncProductIds;
         $updateResult['variants_expanded'] = $useRefreshFromDetail;
-        $updateResult['stock_sync_product_ids'] = $stockSyncProductIds;
+        $updateResult['stock_sync_product_ids'] = $physicalStockSyncProductIds;
         $updateResult['external_api'] = $externalApi;
         $this->stopJsonApiErrorCapture();
         echo json_encode(
