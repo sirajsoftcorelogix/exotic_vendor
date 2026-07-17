@@ -1419,38 +1419,120 @@ class ProductsController
     public function stockRebuildGuide(): void
     {
         is_login();
-        global $productModel, $conn;
-
-        require_once __DIR__ . '/../models/product/StockRebuildService.php';
-
-        $isAdminUser = isset($_SESSION['user']['role_id']) && (int) $_SESSION['user']['role_id'] === 1;
-        $loginWarehouseId = (int) ($_SESSION['warehouse_id'] ?? 0);
-        if ($loginWarehouseId <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
-            $loginWarehouseId = (int) $_SESSION['user']['warehouse_id'];
+        if (!isAdministratorUser()) {
+            header('Location: index.php?page=products&action=list');
+            exit;
         }
 
-        $allWarehouses = $productModel->getAllWarehouses();
-        $warehouses = [];
-        foreach ((array) $allWarehouses as $wh) {
-            $wid = (int) ($wh['id'] ?? 0);
-            if ($wid <= 0) {
-                continue;
-            }
-            if (!$isAdminUser && $loginWarehouseId > 0 && $wid !== $loginWarehouseId) {
-                continue;
-            }
-            $warehouses[] = $wh;
-        }
-
-        $service = new StockRebuildService($conn);
-        $categories = ['allProducts' => 'All Products'] + getCategories();
+        global $productModel;
 
         renderTemplate('views/products/stock_rebuild_guide.php', [
-            'warehouses' => $warehouses,
-            'selectedWarehouseId' => $loginWarehouseId,
-            'defaultWarehouse' => $service->getDefaultWarehouse(),
-            'categories' => $categories,
-        ], 'Warehouse Stock Rebuild');
+            'candidateTotal' => $productModel->countStockRefreshCandidates(),
+        ], 'Stock Refresh (Batch)');
+    }
+
+    public function stockRebuildCandidates(): void
+    {
+        is_login();
+        if (!isAdministratorUser()) {
+            vendorJsonResponse(['success' => false, 'message' => 'Access denied.']);
+        }
+
+        global $productModel;
+
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $limit = (int) ($_GET['limit'] ?? 100);
+        if ($limit < 20) {
+            $limit = 20;
+        }
+        if ($limit > 500) {
+            $limit = 500;
+        }
+        $offset = ($page - 1) * $limit;
+
+        $total = $productModel->countStockRefreshCandidates();
+        $items = $productModel->listStockRefreshCandidates($limit, $offset);
+
+        vendorJsonResponse([
+            'success' => true,
+            'total' => $total,
+            'page' => $page,
+            'limit' => $limit,
+            'pages' => $limit > 0 ? (int) ceil($total / $limit) : 0,
+            'items' => $items,
+        ]);
+    }
+
+    public function stockRebuildRefreshBatch(): void
+    {
+        is_login();
+        if (!isAdministratorUser()) {
+            vendorJsonResponse(['success' => false, 'message' => 'Access denied.']);
+        }
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            vendorJsonResponse(['success' => false, 'message' => 'POST required.']);
+        }
+
+        @set_time_limit(0);
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $rawIds = $payload['product_ids'] ?? [];
+        if (!is_array($rawIds)) {
+            vendorJsonResponse(['success' => false, 'message' => 'Invalid product list.']);
+        }
+
+        $productIds = [];
+        foreach ($rawIds as $rawId) {
+            $id = (int) $rawId;
+            if ($id > 0) {
+                $productIds[$id] = $id;
+            }
+        }
+        $productIds = array_values($productIds);
+
+        if ($productIds === []) {
+            vendorJsonResponse(['success' => false, 'message' => 'Select at least one product.']);
+        }
+        if (count($productIds) > 10) {
+            vendorJsonResponse(['success' => false, 'message' => 'Maximum 10 products per batch.']);
+        }
+
+        global $conn;
+        require_once __DIR__ . '/POSRegisterController.php';
+        $posController = new POSRegisterController($conn);
+
+        $results = [];
+        $succeeded = 0;
+        $failed = 0;
+        foreach ($productIds as $productId) {
+            $result = $posController->performStockReportRefresh((int) $productId);
+            $results[] = $result;
+            if (!empty($result['success'])) {
+                $succeeded++;
+            } else {
+                $failed++;
+            }
+        }
+
+        $total = count($productIds);
+        $message = 'Refreshed ' . $succeeded . ' of ' . $total . ' item(s).';
+        if ($failed > 0) {
+            $message .= ' ' . $failed . ' failed.';
+        }
+
+        vendorJsonResponse([
+            'success' => $failed === 0,
+            'message' => $message,
+            'total' => $total,
+            'succeeded' => $succeeded,
+            'failed' => $failed,
+            'results' => $results,
+        ]);
     }
 
     /**

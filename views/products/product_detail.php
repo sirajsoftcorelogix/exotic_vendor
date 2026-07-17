@@ -642,7 +642,6 @@
           $bookReplenishment = is_array($products['book_replenishment'] ?? null) ? $products['book_replenishment'] : [];
           $replenishmentLookbackMonths = (int)($bookReplenishment['lookback_months'] ?? 0);
           $replenishmentLookbackSource = (string)($bookReplenishment['lookback_source'] ?? '');
-          $replenishmentLookbackSold = (int)($bookReplenishment['total_sold_lookback'] ?? 0);
           $replenishmentStockThreshold = (int)($bookReplenishment['stock_threshold'] ?? 0);
           $replenishmentBuyQty = (int)($bookReplenishment['recommended_buy_qty'] ?? 0);
           $replenishmentReason = (string)($bookReplenishment['reason'] ?? '');
@@ -674,19 +673,6 @@
             <button type="button" class="<?php echo $invEdit; ?> text-gray-400 hover:text-teal-700" onclick="openStockReplenishmentMonthsModal()" title="Edit stock replenishment months" aria-label="Edit stock replenishment months">
               <i class="fas fa-pencil-alt text-[10px]"></i>
             </button>
-          </div>
-
-          <div class="<?php echo $invCard; ?> border-violet-100 bg-violet-50/80" title="<?php echo htmlspecialchars($replenishmentReason, ENT_QUOTES, 'UTF-8'); ?>">
-            <div class="<?php echo $invBody; ?>">
-              <p class="<?php echo $invLbl; ?>">Lookback Sales</p>
-              <p class="<?php echo $invVal; ?> text-violet-700"><?php echo htmlspecialchars((string)$replenishmentLookbackSold, ENT_QUOTES, 'UTF-8'); ?></p>
-              <?php if ($replenishmentLookbackMonths > 0): ?>
-                <p class="text-[10px] sm:text-xs text-violet-800/80 mt-0.5 leading-snug"><?php echo htmlspecialchars($effectiveLookbackLabel, ENT_QUOTES, 'UTF-8'); ?></p>
-              <?php endif; ?>
-            </div>
-            <div class="<?php echo $invIco; ?> bg-violet-100 text-violet-700">
-               <i class="fas fa-history"></i>
-            </div>
           </div>
 
           <?php if ($replenishmentBranch === 'demand_based'): ?>

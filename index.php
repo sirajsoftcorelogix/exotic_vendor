@@ -649,6 +649,12 @@ switch ($page) {
             case 'stock_rebuild_guide':
                 $controller->stockRebuildGuide();
                 break;
+            case 'stock_rebuild_candidates':
+                $controller->stockRebuildCandidates();
+                break;
+            case 'stock_rebuild_refresh_batch':
+                $controller->stockRebuildRefreshBatch();
+                break;
             case 'stock_rebuild_preview':
                 $controller->stockRebuildPreview();
                 break;
