@@ -664,8 +664,23 @@ class ProductsController
         is_login();
         header('Content-Type: application/json; charset=UTF-8');
         global $productModel;
+
+        $postPayload = null;
+        if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'POST') {
+            $rawBody = file_get_contents('php://input');
+            $decodedBody = is_string($rawBody) && $rawBody !== '' ? json_decode($rawBody, true) : null;
+            if (is_array($decodedBody)) {
+                $postPayload = $decodedBody;
+            }
+        }
+
         // Vendor API: https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=CODE1,CODE2
-        $raw = isset($_GET['itemCode']) ? trim((string)$_GET['itemCode']) : '';
+        $raw = '';
+        if (is_array($postPayload) && isset($postPayload['itemCode'])) {
+            $raw = trim((string) $postPayload['itemCode']);
+        } elseif (isset($_GET['itemCode'])) {
+            $raw = trim((string) $_GET['itemCode']);
+        }
         if ($raw === '') {
             echo json_encode(['success' => false, 'message' => 'itemcode invalid to update product.']);
             exit;
@@ -745,17 +760,44 @@ class ProductsController
         }
 
         $externalApi['normalized_rows'] = $productRows;
-        $updateLocalStock = isset($_GET['update_local_stock']) && (string)$_GET['update_local_stock'] === '1';
+        $useRefreshFromDetail = (is_array($postPayload) && !empty($postPayload['refresh_from_detail']))
+            || (isset($_GET['refresh_stock_rules']) && (string) $_GET['refresh_stock_rules'] === '1');
+        $updateLocalStock = isset($_GET['update_local_stock']) && (string) $_GET['update_local_stock'] === '1';
+        $stockSyncProductIds = [];
+        if (is_array($postPayload) && isset($postPayload['stock_sync_product_ids']) && is_array($postPayload['stock_sync_product_ids'])) {
+            foreach ($postPayload['stock_sync_product_ids'] as $pid) {
+                $pid = (int) $pid;
+                if ($pid > 0) {
+                    $stockSyncProductIds[] = $pid;
+                }
+            }
+            $stockSyncProductIds = array_values(array_unique($stockSyncProductIds));
+        }
+        if ($useRefreshFromDetail) {
+            $productRows = product::expandVendorProductFetchVariants($productRows);
+            $externalApi['normalized_rows'] = $productRows;
+            $externalApi['variants_expanded'] = true;
+        }
         $bulkConnection = $productModel->beginBulkProductUpdateConnection();
         try {
-            $updateResult = $productModel->updateProductFromApi($productRows, ['preserve_local_stock' => !$updateLocalStock]);
+            if ($useRefreshFromDetail) {
+                $updateResult = $productModel->updateProductFromApi($productRows, [
+                    'stock_sync_mode' => 'user_selected',
+                    'variants_already_expanded' => true,
+                    'stock_sync_product_ids' => $stockSyncProductIds,
+                ]);
+            } else {
+                $updateResult = $productModel->updateProductFromApi($productRows, ['preserve_local_stock' => !$updateLocalStock]);
+            }
         } finally {
             $productModel->endBulkProductUpdateConnection($bulkConnection);
         }
         if (!is_array($updateResult)) {
             $updateResult = ['success' => false, 'message' => 'Product update failed.'];
         }
-        $updateResult['local_stock_updated'] = $updateLocalStock;
+        $updateResult['local_stock_updated'] = $useRefreshFromDetail ? $stockSyncProductIds : $updateLocalStock;
+        $updateResult['variants_expanded'] = $useRefreshFromDetail;
+        $updateResult['stock_sync_product_ids'] = $stockSyncProductIds;
         $updateResult['external_api'] = $externalApi;
         $this->stopJsonApiErrorCapture();
         echo json_encode(
