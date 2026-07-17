@@ -2254,6 +2254,7 @@
     var requestBody = {
       itemCode: itemCode,
       refresh_from_detail: true,
+      detail_variant_rows: Array.isArray(refreshStockVariantChoices.variants) ? refreshStockVariantChoices.variants : [],
       physical_stock_sync_product_ids: Array.isArray(stockChoice.physicalStockSyncProductIds) ? stockChoice.physicalStockSyncProductIds : []
     };
     try {
@@ -2295,6 +2296,15 @@
         var stockMsg = physicalCount > 0
           ? (' Physical stock synced for ' + physicalCount + ' selected variant' + (physicalCount === 1 ? '' : 's') + '.')
           : ' Physical stock was left unchanged.';
+        var updatedCount = parseInt(String((data && data.updated_count) ? data.updated_count : '0'), 10);
+        if (updatedCount <= 0) {
+          showProfileStatusModal(
+            (data && data.message) ? data.message : 'Refresh completed but no product rows were updated.',
+            'error',
+            false
+          );
+          return;
+        }
         showProfileStatusModal(
           'Product and all variants updated from API (catalog and local stock refreshed).' + stockMsg,
           'success',

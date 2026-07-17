@@ -778,6 +778,10 @@ class ProductsController
             }
         }
         $stockSyncProductIds = $physicalStockSyncProductIds;
+        $detailVariantRows = [];
+        if (is_array($postPayload) && isset($postPayload['detail_variant_rows']) && is_array($postPayload['detail_variant_rows'])) {
+            $detailVariantRows = $postPayload['detail_variant_rows'];
+        }
         if ($useRefreshFromDetail) {
             $productRows = product::expandVendorProductFetchVariants($productRows);
             $externalApi['normalized_rows'] = $productRows;
@@ -791,6 +795,7 @@ class ProductsController
                     'variants_already_expanded' => true,
                     'physical_stock_sync_product_ids' => $physicalStockSyncProductIds,
                     'stock_sync_product_ids' => $physicalStockSyncProductIds,
+                    'detail_variant_rows' => $detailVariantRows,
                 ]);
             } else {
                 $updateResult = $productModel->updateProductFromApi($productRows, ['preserve_local_stock' => !$updateLocalStock]);
