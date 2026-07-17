@@ -1611,8 +1611,8 @@
   </div>
 </div>
 <div id="refreshStockChoiceModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-4">
-  <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
-    <div class="px-5 py-4 border-b border-amber-100 bg-gradient-to-r from-amber-50 via-white to-orange-50">
+  <div class="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+    <div class="px-5 py-4 border-b border-amber-100 bg-gradient-to-r from-amber-50 via-white to-orange-50 shrink-0">
       <div class="flex items-start gap-3">
         <div class="h-10 w-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
           <i class="fas fa-sync-alt"></i>
@@ -1620,22 +1620,23 @@
         <div class="min-w-0">
           <h3 class="text-base font-semibold text-gray-900">Refresh Product From API</h3>
           <p class="mt-1 text-sm text-gray-600 leading-relaxed">
-            Do you want to update the local stock from API as well?
+            All variants for this item code will refresh catalog fields from the API. Select which variants should also sync <strong>local stock</strong> and <strong>physical stock</strong> from the API.
           </p>
         </div>
       </div>
     </div>
-    <div class="px-5 py-4">
-      <div class="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
-        Choose <strong>Yes</strong> to sync API stock into local stock. Choose <strong>No</strong> to refresh product details but keep the current local stock unchanged.
+    <div class="px-5 py-4 overflow-y-auto flex-1">
+      <div class="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900 mb-4">
+        Unchecked variants keep their current stock unchanged. Checked variants will update local stock and warehouse physical stock from the API.
       </div>
+      <div id="refreshStockVariantList" class="space-y-2"></div>
     </div>
-    <div class="px-5 py-4 border-t border-gray-100 bg-gray-50 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-      <button type="button" id="refreshStockChoiceNoBtn" class="px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-100">
-        No, keep local stock
+    <div class="px-5 py-4 border-t border-gray-100 bg-gray-50 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 shrink-0">
+      <button type="button" id="refreshStockChoiceCancelBtn" class="px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-100">
+        Cancel
       </button>
-      <button type="button" id="refreshStockChoiceYesBtn" class="px-4 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold shadow-sm">
-        Yes, update local stock
+      <button type="button" id="refreshStockChoiceConfirmBtn" class="px-4 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold shadow-sm">
+        Refresh from API
       </button>
     </div>
   </div>
@@ -1661,6 +1662,37 @@
 <script>
   var profileStatusReloadOnClose = false;
   var lastRefreshProductApiDebug = null;
+  var refreshStockVariantChoices = <?php
+    $refreshStockVariantRows = [];
+    $currentProductIdForRefresh = (int) ($products['id'] ?? 0);
+    foreach (($products['variants'] ?? []) as $variantRow) {
+      if (!is_array($variantRow) || empty($variantRow['id'])) {
+        continue;
+      }
+      $refreshStockVariantRows[] = [
+        'id' => (int) $variantRow['id'],
+        'sku' => (string) ($variantRow['sku'] ?? ''),
+        'size' => (string) ($variantRow['size'] ?? ''),
+        'color' => (string) ($variantRow['color'] ?? ''),
+        'local_stock' => (int) ($variantRow['local_stock'] ?? 0),
+        'physical_stock' => (int) ($variantRow['physical_stock'] ?? 0),
+      ];
+    }
+    if ($refreshStockVariantRows === [] && $currentProductIdForRefresh > 0) {
+      $refreshStockVariantRows[] = [
+        'id' => $currentProductIdForRefresh,
+        'sku' => (string) ($products['sku'] ?? ''),
+        'size' => (string) ($products['size'] ?? ''),
+        'color' => (string) ($products['color'] ?? ''),
+        'local_stock' => (int) ($products['local_stock'] ?? 0),
+        'physical_stock' => (int) ($products['physical_stock'] ?? 0),
+      ];
+    }
+    echo json_encode(
+      ['current_product_id' => $currentProductIdForRefresh, 'variants' => $refreshStockVariantRows],
+      JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+    );
+  ?>;
 
   function refreshProductApiDebugStorageKey(itemCode) {
     return 'refreshProductApiDebug:' + String(itemCode || '').trim();
@@ -1856,51 +1888,107 @@
     }
   }
 
-  function askRefreshLocalStockChoice() {
-    var modal = document.getElementById('refreshStockChoiceModal');
-    var yesBtn = document.getElementById('refreshStockChoiceYesBtn');
-    var noBtn = document.getElementById('refreshStockChoiceNoBtn');
+  function formatRefreshVariantLabel(row) {
+    var parts = [];
+    var sku = String(row.sku || '').trim();
+    if (sku !== '') parts.push(sku);
+    var color = String(row.color || '').trim();
+    if (color !== '') parts.push('Color: ' + color);
+    var size = String(row.size || '').trim();
+    if (size !== '') parts.push('Size: ' + size);
+    if (parts.length === 0) parts.push('Variant #' + row.id);
+    return parts.join(' · ');
+  }
 
-    if (!modal || !yesBtn || !noBtn) {
-      return Promise.resolve(false);
+  function buildRefreshStockVariantList(currentProductId) {
+    var listEl = document.getElementById('refreshStockVariantList');
+    if (!listEl) return;
+
+    var rows = Array.isArray(refreshStockVariantChoices.variants) ? refreshStockVariantChoices.variants.slice() : [];
+    rows.sort(function (a, b) {
+      if (Number(a.id) === Number(currentProductId)) return -1;
+      if (Number(b.id) === Number(currentProductId)) return 1;
+      return String(a.sku || '').localeCompare(String(b.sku || ''));
+    });
+
+    listEl.innerHTML = '';
+    if (rows.length === 0) {
+      listEl.innerHTML = '<p class="text-sm text-gray-500">No variants found for this item code.</p>';
+      return;
     }
+
+    rows.forEach(function (row) {
+      var isCurrent = Number(row.id) === Number(currentProductId);
+      var label = formatRefreshVariantLabel(row);
+      var stockHint = 'Local: ' + Number(row.local_stock || 0) + ', Physical: ' + Number(row.physical_stock || 0);
+      var wrap = document.createElement('label');
+      wrap.className = 'flex items-start gap-3 rounded-xl border border-gray-200 bg-white px-3 py-3 cursor-pointer hover:border-amber-300 hover:bg-amber-50/40';
+      wrap.innerHTML =
+        '<input type="checkbox" class="refresh-stock-variant-checkbox mt-1 h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" '
+        + 'data-product-id="' + String(row.id) + '" '
+        + (isCurrent ? 'checked' : '') + ' />'
+        + '<span class="min-w-0 flex-1">'
+        + '<span class="block text-sm ' + (isCurrent ? 'font-bold text-gray-900' : 'font-medium text-gray-800') + '">'
+        + (isCurrent ? label + ' (current)' : label)
+        + '</span>'
+        + '<span class="block text-xs text-gray-500 mt-0.5">' + stockHint + '</span>'
+        + '</span>';
+      listEl.appendChild(wrap);
+    });
+  }
+
+  function askRefreshVariantStockChoices(currentProductId) {
+    var modal = document.getElementById('refreshStockChoiceModal');
+    var confirmBtn = document.getElementById('refreshStockChoiceConfirmBtn');
+    var cancelBtn = document.getElementById('refreshStockChoiceCancelBtn');
+
+    if (!modal || !confirmBtn || !cancelBtn) {
+      return Promise.resolve({ confirmed: false, stockSyncProductIds: [] });
+    }
+
+    buildRefreshStockVariantList(currentProductId);
 
     return new Promise(function (resolve) {
       var settled = false;
 
-      function cleanup(choice) {
+      function cleanup(result) {
         if (settled) return;
         settled = true;
         modal.classList.add('hidden');
-        yesBtn.removeEventListener('click', onYes);
-        noBtn.removeEventListener('click', onNo);
+        confirmBtn.removeEventListener('click', onConfirm);
+        cancelBtn.removeEventListener('click', onCancel);
         modal.removeEventListener('click', onBackdrop);
         document.removeEventListener('keydown', onKeydown);
-        resolve(choice);
+        resolve(result);
       }
 
-      function onYes() {
-        cleanup(true);
+      function onConfirm() {
+        var ids = [];
+        modal.querySelectorAll('.refresh-stock-variant-checkbox:checked').forEach(function (cb) {
+          var pid = parseInt(String(cb.getAttribute('data-product-id') || '0'), 10);
+          if (pid > 0) ids.push(pid);
+        });
+        cleanup({ confirmed: true, stockSyncProductIds: ids });
       }
 
-      function onNo() {
-        cleanup(false);
+      function onCancel() {
+        cleanup({ confirmed: false, stockSyncProductIds: [] });
       }
 
       function onBackdrop(e) {
-        if (e.target === modal) cleanup(false);
+        if (e.target === modal) onCancel();
       }
 
       function onKeydown(e) {
-        if (e.key === 'Escape') cleanup(false);
+        if (e.key === 'Escape') onCancel();
       }
 
-      yesBtn.addEventListener('click', onYes);
-      noBtn.addEventListener('click', onNo);
+      confirmBtn.addEventListener('click', onConfirm);
+      cancelBtn.addEventListener('click', onCancel);
       modal.addEventListener('click', onBackdrop);
       document.addEventListener('keydown', onKeydown);
       modal.classList.remove('hidden');
-      setTimeout(function () { noBtn.focus(); }, 50);
+      setTimeout(function () { cancelBtn.focus(); }, 50);
     });
   }
 
@@ -1957,18 +2045,29 @@
       return;
     }
 
-    var updateLocalStock = await askRefreshLocalStockChoice();
+    var currentProductId = parseInt(String(refreshStockVariantChoices.current_product_id || '0'), 10);
+    var stockChoice = await askRefreshVariantStockChoices(currentProductId);
+    if (!stockChoice || !stockChoice.confirmed) {
+      return;
+    }
+
     var oldHtml = btn.innerHTML;
     btn.disabled = true;
     btn.classList.add('opacity-70', 'cursor-not-allowed');
     btn.innerHTML = '<i class="fas fa-spinner fa-spin text-[11px]" aria-hidden="true"></i> Updating...';
 
-    var requestUrl = 'index.php?page=products&action=update_api_call&itemCode=' + encodeURIComponent(itemCode)
-      + '&update_local_stock=' + (updateLocalStock ? '1' : '0');
+    var requestUrl = 'index.php?page=products&action=update_api_call';
+    var requestBody = {
+      itemCode: itemCode,
+      refresh_from_detail: true,
+      stock_sync_product_ids: Array.isArray(stockChoice.stockSyncProductIds) ? stockChoice.stockSyncProductIds : []
+    };
     try {
       var res = await fetch(requestUrl, {
+        method: 'POST',
         credentials: 'same-origin',
-        headers: { 'Accept': 'application/json' }
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(requestBody)
       });
       var rawText = await res.text();
       var data = null;
@@ -1981,9 +2080,10 @@
         at: new Date().toISOString(),
         source: 'refresh_from_api',
         request: {
-          method: 'GET',
+          method: 'POST',
           url: requestUrl,
-          headers: { 'Accept': 'application/json' }
+          body: requestBody,
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
         },
         response: {
           http_status: res.status,
@@ -1997,8 +2097,12 @@
       }
       saveRefreshProductApiDebug(itemCode, debugPayload);
       if (data && data.success) {
+        var stockCount = Array.isArray(stockChoice.stockSyncProductIds) ? stockChoice.stockSyncProductIds.length : 0;
+        var stockMsg = stockCount > 0
+          ? (' Stock synced for ' + stockCount + ' selected variant' + (stockCount === 1 ? '' : 's') + '.')
+          : ' Stock was not changed for any variant.';
         showProfileStatusModal(
-          'Product updated successfully from API. Local stock was ' + (updateLocalStock ? 'updated.' : 'not updated.'),
+          'Product and all variants updated from API.' + stockMsg,
           'success',
           true
         );
@@ -2010,9 +2114,10 @@
         at: new Date().toISOString(),
         source: 'refresh_from_api',
         request: {
-          method: 'GET',
+          method: 'POST',
           url: requestUrl,
-          headers: { 'Accept': 'application/json' }
+          body: requestBody,
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
         },
         response: {
           network_error: (e && e.message) ? e.message : String(e)
