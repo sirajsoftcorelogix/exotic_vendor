@@ -582,6 +582,7 @@ class POSRegisterController
     private function handlePosEwbGeneration(mysqli $conn, int $invoiceId, array $payload): void
     {
         try {
+            echo "POS EWB: Starting E-way bill generation for invoice $invoiceId\n";
             // Get invoice details from database
             $invStmt = $conn->prepare("SELECT * FROM vp_invoices WHERE id = ?");
             if (!$invStmt) {
@@ -652,17 +653,58 @@ class POSRegisterController
                 return;
             }
 
-            // Build E-way bill data from payload
+            // Build E-way bill data based on transport mode
+            $transportMode = trim((string)($payload['ewb_veh_type'] ?? '1'));
             $ewbData = [
-                'veh_no' => trim((string)($payload['ewb_veh_no'] ?? '')),
-                'veh_type' => trim((string)($payload['ewb_veh_type'] ?? '')),
-                'trans_id' => '', // Optional: can be extended later
-                'trans_name' => 'Transport', // Optional: can be extended later
-                'distance' => 100, // Optional: can be extended later
-                'trans_doc_no' => date('YmdHis'),
-                'trn_doc_dt' => date('d/m/Y'),
-                'trans_mode' => '1', // Road transport
+                // 'trans_id' => '',
+                // 'trans_name' => '',
+                'distance' => 0,
+                'trans_mode' => $transportMode, // 1=Road, 2=Rail, 3=Air, 4=Ship, 5=Road cum Ship
             ];
+
+            // For Road transport (mode 1), use vehicle number and type
+            if ($transportMode === '1') {
+                $ewbData['veh_no'] = trim((string)($payload['ewb_veh_no'] ?? ''));
+                $ewbData['veh_type'] = 'R'; // Vehicle type for Road
+                $ewbData['trans_doc_no'] = date('YmdHis');
+                $ewbData['trn_doc_dt'] = date('d/m/Y');
+            }
+            // For Rail (2) or Air (3) transport, use transport document number and date
+            elseif ($transportMode === '2' || $transportMode === '3') {
+                $ewbData['veh_no'] = null;
+                $ewbData['veh_type'] = null;
+                $ewbData['trans_doc_no'] = trim((string)($payload['ewb_trans_doc_no'] ?? date('YmdHis')));
+                $ewbData['trn_doc_dt'] = trim((string)($payload['ewb_trans_doc_date'] ?? date('d/m/Y')));
+            }
+            // For Ship (4) or Road cum Ship (5): vehicle number OR transport document OR both
+            // Vehicle type is ODC (Over Dimensional Cargo) for ship modes
+            elseif ($transportMode === '4' || $transportMode === '5') {
+                $shipVehNo = trim((string)($payload['ewb_ship_veh_no'] ?? ''));
+                $shipTransDocNo = trim((string)($payload['ewb_ship_trans_doc_no'] ?? ''));
+                $shipTransDocDate = trim((string)($payload['ewb_ship_trans_doc_date'] ?? ''));
+
+                $ewbData['veh_type'] = 'ODC'; // Over Dimensional Cargo for Ship modes
+
+                // If vehicle number is provided, use it
+                if ($shipVehNo !== '') {
+                    $ewbData['veh_no'] = $shipVehNo;
+                    $ewbData['trans_doc_no'] = $shipTransDocNo !== '' ? $shipTransDocNo : date('YmdHis');
+                    $ewbData['trn_doc_dt'] = $shipTransDocDate !== '' ? $shipTransDocDate : date('d/m/Y');
+                }
+                // Otherwise use transport document details
+                else {
+                    $ewbData['veh_no'] = null;
+                    $ewbData['trans_doc_no'] = $shipTransDocNo !== '' ? $shipTransDocNo : date('YmdHis');
+                    $ewbData['trn_doc_dt'] = $shipTransDocDate !== '' ? $shipTransDocDate : date('d/m/Y');
+                }
+            }
+            // Default fallback for unknown modes
+            else {
+                $ewbData['veh_no'] = trim((string)($payload['ewb_veh_no'] ?? ''));
+                $ewbData['veh_type'] = 'R';
+                $ewbData['trans_doc_no'] = date('YmdHis');
+                $ewbData['trn_doc_dt'] = date('d/m/Y');
+            }
 
             // Load and call DomesticEwbIrnService
             require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';

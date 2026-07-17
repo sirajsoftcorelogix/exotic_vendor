@@ -36,6 +36,7 @@ class DomesticEwbIrnService {
      */
     public function generateIrnAndEwb($invoiceId, $invoice, $items, $customer, $firm, $ewbData = []) {
         try {
+            echo "Domestic EWB: Starting IRN and EWB generation for invoice #$invoiceId\n";
             // Validate required data
             if (!$invoice || empty($items) || !$customer || !$firm) {
                 $this->lastError = "Missing required invoice, items, customer, or firm data";
@@ -46,6 +47,7 @@ class DomesticEwbIrnService {
             $existingRecord = $this->getEwbIrnRecord($invoiceId);
             if (!$existingRecord) {
                 $this->createEwbIrnRecord($invoiceId);
+                echo "Domestic EWB: Created new record for invoice #$invoiceId\n";
             }
             
             // Initialize Alankit client with credentials
