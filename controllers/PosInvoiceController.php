@@ -792,6 +792,46 @@ class PosInvoiceController
         return round($unitPretax, 2);
     }
 
+    /**
+     * GST amounts and rate columns from a GST-inclusive discounted unit price.
+     *
+     * @return array{sgst: float, cgst: float, igst: float, sgst_rate: float, cgst_rate: float, igst_rate: float}
+     */
+    private function posInvoiceComputeLineTaxBreakdown(
+        float $discUnitIncl,
+        int $qty,
+        float $taxRate,
+        bool $useIgst
+    ): array {
+        $lineIncl = round($discUnitIncl * $qty, 2);
+        $pretaxExtended = round($this->posInvoiceInclToPretax($discUnitIncl, $taxRate) * $qty, 2);
+        $taxTotal = round($lineIncl - $pretaxExtended, 2);
+
+        if ($useIgst) {
+            return [
+                'sgst' => 0.0,
+                'cgst' => 0.0,
+                'igst' => $taxTotal,
+                'sgst_rate' => 0.0,
+                'cgst_rate' => 0.0,
+                'igst_rate' => round($taxRate, 2),
+            ];
+        }
+
+        $sgst = round($taxTotal / 2, 2);
+        $cgst = round($taxTotal - $sgst, 2);
+        $halfRate = round($taxRate / 2, 2);
+
+        return [
+            'sgst' => $sgst,
+            'cgst' => $cgst,
+            'igst' => 0.0,
+            'sgst_rate' => $halfRate,
+            'cgst_rate' => $halfRate,
+            'igst_rate' => 0.0,
+        ];
+    }
+
     private function posInvoiceOrderLevelDiscountTotal(array $posDiscountMeta): float
     {
         return round(
@@ -1609,34 +1649,9 @@ class PosInvoiceController
 
         // Build item rows
         foreach ($items as $idx => $item) {
-            // $amount = $item['quantity'] * $item['unit_price'];
-            // $taxAmount = ($amount * $item['tax_rate']) / 100;
-            // $lineTotal = $amount + $taxAmount;
-
-            // $totalSubtotal += $amount;
-            // $totalTax += $taxAmount;
-            // $totalAmount += $lineTotal;
-            $totalGstAmount += $item['tax_amount'];
-
-            // // Determine tax type (simplified - assuming SGST/CGST for domestic, IGST for other)
-            // $sgstRate = $item['tax_rate'] / 2;
-            // $cgstRate = $item['tax_rate'] / 2;
-            // $igstRate = 0;
-            // $sgstAmt = ($amount * $sgstRate) / 100;
-            // $cgstAmt = ($amount * $cgstRate) / 100;
-            // $igstAmt = 0;
-
-            // $totalSgstAmt += $sgstAmt;
-            // $totalCgstAmt += $cgstAmt;
-            // $totalIgstAmt += $igstAmt;
             $qtyInt = $this->posInvoiceFormatQty($item['quantity'] ?? 1);
             $totalQuantity += $qtyInt;
-            $totalSgstAmt += $item['sgst'];
-            $totalCgstAmt += $item['cgst'];
-            $totalIgstAmt += $item['igst'];
 
-            $unitPrices = $this->posInvoiceResolveLineUnitPretax($item, $idx, $lineItemsMeta);
-            $discUnitPretax = $unitPrices['disc'];
             $displayPrices = $this->posInvoiceResolveLineDisplayPrices(
                 $item,
                 $idx,
@@ -1645,7 +1660,6 @@ class PosInvoiceController
             $listUnitDisplay = $showDiscPriceColumn ? $displayPrices['list'] : $displayPrices['disc'];
             $discUnitDisplay = $displayPrices['disc'];
             $taxRate = (float)($item['tax_rate'] ?? 0);
-            $rateBase = $discUnitPretax > 0 ? $discUnitPretax : (float)($item['unit_price'] ?? 0);
             $lineTotalDisplay = $showDiscPriceColumn
                 ? round($discUnitDisplay * $qtyInt, 2)
                 : round((float)($item['line_total'] ?? 0), 2);
@@ -1654,15 +1668,41 @@ class PosInvoiceController
                 $sumListLineTotals += round($listUnitDisplay * $qtyInt, 2);
             }
 
-            if ($item['igst'] > 0) {
-                $igstRate = $rateBase > 0 ? ($item['igst'] / $qtyInt) / ($rateBase / 100) : 0;
-                $sgstRate = 0;
-                $cgstRate = 0;
+            $useIgst = (float)($item['igst'] ?? 0) > 0;
+            if ($showDiscPriceColumn) {
+                $taxBreakdown = $this->posInvoiceComputeLineTaxBreakdown(
+                    $discUnitDisplay,
+                    $qtyInt,
+                    $taxRate,
+                    $useIgst
+                );
+                $sgstAmt = $taxBreakdown['sgst'];
+                $cgstAmt = $taxBreakdown['cgst'];
+                $igstAmt = $taxBreakdown['igst'];
+                $sgstRate = $taxBreakdown['sgst_rate'];
+                $cgstRate = $taxBreakdown['cgst_rate'];
+                $igstRate = $taxBreakdown['igst_rate'];
             } else {
-                $sgstRate = $rateBase > 0 ? ($item['sgst'] / $qtyInt) / ($rateBase / 100) : 0;
-                $cgstRate = $rateBase > 0 ? ($item['cgst'] / $qtyInt) / ($rateBase / 100) : 0;
-                $igstRate = 0;
+                $sgstAmt = (float)($item['sgst'] ?? 0);
+                $cgstAmt = (float)($item['cgst'] ?? 0);
+                $igstAmt = (float)($item['igst'] ?? 0);
+                $unitPrices = $this->posInvoiceResolveLineUnitPretax($item, $idx, $lineItemsMeta);
+                $rateBase = $unitPrices['disc'] > 0 ? $unitPrices['disc'] : (float)($item['unit_price'] ?? 0);
+                if ($useIgst) {
+                    $igstRate = $rateBase > 0 ? ($igstAmt / $qtyInt) / ($rateBase / 100) : 0;
+                    $sgstRate = 0;
+                    $cgstRate = 0;
+                } else {
+                    $sgstRate = $rateBase > 0 ? ($sgstAmt / $qtyInt) / ($rateBase / 100) : 0;
+                    $cgstRate = $rateBase > 0 ? ($cgstAmt / $qtyInt) / ($rateBase / 100) : 0;
+                    $igstRate = 0;
+                }
             }
+
+            $totalSgstAmt += $sgstAmt;
+            $totalCgstAmt += $cgstAmt;
+            $totalIgstAmt += $igstAmt;
+            $totalGstAmount += $sgstAmt + $cgstAmt + $igstAmt;
 
             if ($usePosItemLayout) {
                 $itemName = htmlspecialchars($item['item_name'] ?? '');
@@ -1684,11 +1724,11 @@ class PosInvoiceController
                         ' . $listPriceCell . $discPriceCell . '
                         <td>' . $qtyInt . '</td>
                         <td class="right">' . number_format($sgstRate, 2) . '</td>
-                        <td class="right">' . number_format($item['sgst'], 2) . '</td>
+                        <td class="right">' . number_format($sgstAmt, 2) . '</td>
                         <td class="right">' . number_format($cgstRate, 2) . '</td>
-                        <td class="right">' . number_format($item['cgst'], 2) . '</td>
+                        <td class="right">' . number_format($cgstAmt, 2) . '</td>
                         <td class="right">' . number_format($igstRate, 2) . '</td>
-                        <td class="right">' . number_format($item['igst'], 2) . '</td>
+                        <td class="right">' . number_format($igstAmt, 2) . '</td>
                         <td class="right bold">' . number_format($lineTotalDisplay, 2) . '</td>
                     </tr>
             ';
@@ -1702,11 +1742,11 @@ class PosInvoiceController
                         <td>' . $qtyInt . '</td>
                         <td class="right">' . number_format($item['unit_price'], 2) . '</td>
                         <td class="right">' . number_format($sgstRate, 2) . '</td>
-                        <td class="right">' . number_format($item['sgst'], 2) . '</td>
+                        <td class="right">' . number_format($sgstAmt, 2) . '</td>
                         <td class="right">' . number_format($cgstRate, 2) . '</td>
-                        <td class="right">' . number_format($item['cgst'], 2) . '</td>
+                        <td class="right">' . number_format($cgstAmt, 2) . '</td>
                         <td class="right">' . number_format($igstRate, 2) . '</td>
-                        <td class="right">' . number_format($item['igst'], 2) . '</td>
+                        <td class="right">' . number_format($igstAmt, 2) . '</td>
                         <td class="right bold">' . number_format($lineTotalDisplay, 2) . '</td>
                     </tr>
             ';
@@ -1772,7 +1812,12 @@ class PosInvoiceController
         if ($summaryGrandTotal <= 0 && $sumLineTotals > 0.001) {
             $summaryGrandTotal = round($sumLineTotals, 2);
         }
-        $summaryTaxAmount = round((float)($invoice['tax_amount'] ?? 0), 2);
+        $summaryTaxAmount = round($totalSgstAmt + $totalCgstAmt + $totalIgstAmt, 2);
+        if ($showDiscPriceColumn && $summaryTaxAmount > 0.001) {
+            $posDiscountMeta['gst_total'] = $summaryTaxAmount;
+        } elseif ($summaryTaxAmount <= 0) {
+            $summaryTaxAmount = round((float)($invoice['tax_amount'] ?? 0), 2);
+        }
         $tableLineTotal = ($usePosItemLayout && $showDiscPriceColumn && $sumLineTotals > 0.001)
             ? round($sumLineTotals, 2)
             : round((float)$totalAmount, 2);
