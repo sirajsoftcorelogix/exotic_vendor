@@ -422,6 +422,17 @@ class product
                     continue;
                 }
                 $merged = array_merge($row, $variation);
+                foreach (['price_india', 'price', 'mrp_india', 'local_stock'] as $inheritKey) {
+                    if (!array_key_exists($inheritKey, $variation)) {
+                        continue;
+                    }
+                    $variationVal = $variation[$inheritKey];
+                    if ($variationVal === null || $variationVal === '') {
+                        if (array_key_exists($inheritKey, $row)) {
+                            $merged[$inheritKey] = $row[$inheritKey];
+                        }
+                    }
+                }
                 if ($itemCode !== '') {
                     $merged['itemcode'] = $itemCode;
                 }
@@ -1409,6 +1420,7 @@ class product
         // exit;
         $vendorMapSynced = 0;
         $vendorMapSkipped = 0;
+        $rowsAffected = 0;
         if (isset($productData) && is_array($productData)) {
             foreach ($productData as $product) {
                 if (!is_array($product)) {
@@ -1423,13 +1435,19 @@ class product
                 $now = date('Y-m-d H:i:s');
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
                 $existingBase = $this->findByItemCodeSizeColor($product['itemcode'], (string)($product['size'] ?? ''), (string)($product['color'] ?? ''));
-                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), ''), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ?, update_flag = 1 WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
+                $sku = isset($product['sku']) && !empty($product['sku']) ? $product['sku'] : $product['itemcode'];
+                $color = isset($product['color']) ? (string)$product['color'] : '';
+                $size = isset($product['size']) ? (string)$product['size'] : '';
+                $targetProductId = $this->resolveApiRefreshTargetProductId($options, (string) $sku, $size, $color);
+                if ($targetProductId > 0) {
+                    $existingById = $this->getProduct($targetProductId);
+                    if (is_array($existingById)) {
+                        $existingBase = $existingById;
+                    }
+                }
+                [$whereSize, $whereColor] = $this->resolveVpProductVariantWhereKeys($existingBase, $size, $color);
+                $stmt = $this->db->prepare($this->apiRefreshCatalogUpdateSql($targetProductId > 0));
                 if ($stmt) {
-                    // $title = isset($product['title']) ? $product['title'] : '';
-                    $sku = isset($product['sku']) && !empty($product['sku']) ? $product['sku'] : $product['itemcode'];
-                    $color = isset($product['color']) ? (string)$product['color'] : '';
-                    $size = isset($product['size']) ? (string)$product['size'] : '';
-                    [$whereSize, $whereColor] = $this->resolveVpProductVariantWhereKeys($existingBase, $size, $color);
                     // $costPrice = isset($product['cost_price']) ? (float)$product['cost_price'] : 0.0;
                     // $gst = isset($product['gst']) ? (float)$product['gst'] : 0.0;
                     // $hsn = isset($product['hsn']) ? $product['hsn'] : '';
@@ -1497,8 +1515,7 @@ class product
                     $sketchfab_links = isset($product['sketchfab_links']) ? $product['sketchfab_links'] : '';
                     $dimensions = isset($product['dimensions']) ? $product['dimensions'] : '';
                     $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 8) . str_repeat('s', 4) . 'sssisiissssssssssssssiiiddiissss' . str_repeat('s', 3);
-                    $stmt->bind_param(
-                        $bt,
+                    $bindValues = [
                         $asin,
                         $localStock,
                         $upc,
@@ -1557,36 +1574,56 @@ class product
                         $youtube_links,
                         $sketchfab_links,
                         $dimensions,
-                        $product['itemcode'],
-                        $whereSize,
-                        $whereColor
-                    );
+                    ];
+                    if ($targetProductId > 0) {
+                        $bindValues[] = $targetProductId;
+                        $bt .= 'i';
+                    } else {
+                        $bindValues[] = $product['itemcode'];
+                        $bindValues[] = $whereSize;
+                        $bindValues[] = $whereColor;
+                        $bt .= 'sss';
+                    }
+                    $stmt->bind_param($bt, ...$bindValues);
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
                     if ($this->executeVpProductsStmt($stmt)) {
-                        $updatedCount++;
-                        $this->syncBookFieldsFromVendorApiRow(
-                            (string) $product['itemcode'],
-                            (string) $whereSize,
-                            (string) $whereColor,
-                            $product
-                        );
-                        $this->syncPriceIndiaSuggestedFromApiRow(
-                            (string) $product['itemcode'],
-                            (string) $whereSize,
-                            (string) $whereColor,
-                            $product
-                        );
-                        $this->maybeApplyApiRefreshPhysicalStock(
-                            $options,
-                            $existingBase,
-                            (string) $sku,
-                            (string) $product['itemcode'],
-                            (string) $whereSize,
-                            (string) $whereColor,
-                            (int) $localStock,
-                            $syncStockFromApi,
-                            $syncPhysicalStock
-                        );
+                        $affected = (int) $stmt->affected_rows;
+                        $didUpdate = ($targetProductId > 0 && is_array($existingBase)) || $affected > 0;
+                        if ($didUpdate) {
+                            $updatedCount++;
+                            if ($affected > 0) {
+                                $rowsAffected += $affected;
+                            }
+                            $syncItemCode = is_array($existingBase)
+                                ? trim((string) ($existingBase['item_code'] ?? $product['itemcode']))
+                                : (string) $product['itemcode'];
+                            if ($syncItemCode === '') {
+                                $syncItemCode = (string) $product['itemcode'];
+                            }
+                            $this->syncBookFieldsFromVendorApiRow(
+                                $syncItemCode,
+                                (string) $whereSize,
+                                (string) $whereColor,
+                                $product
+                            );
+                            $this->syncPriceIndiaSuggestedFromApiRow(
+                                $syncItemCode,
+                                (string) $whereSize,
+                                (string) $whereColor,
+                                $product
+                            );
+                            $this->maybeApplyApiRefreshPhysicalStock(
+                                $options,
+                                $existingBase,
+                                (string) $sku,
+                                $syncItemCode,
+                                (string) $whereSize,
+                                (string) $whereColor,
+                                (int) $localStock,
+                                $syncStockFromApi,
+                                $syncPhysicalStock
+                            );
+                        }
                     }
                     if ($stmt->error) {
                         return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
@@ -2024,12 +2061,16 @@ class product
                 }
             }
         }
+        $requireDetailUpdates = $stockSyncMode === 'user_selected' && !empty($options['detail_variant_rows']);
         return [
-            'success' => true,
+            'success' => !$requireDetailUpdates || $updatedCount > 0,
             'updated_count' => $updatedCount,
+            'rows_affected' => $rowsAffected,
             'vendor_map_synced' => $vendorMapSynced,
             'vendor_map_skipped' => $vendorMapSkipped,
-            'message' => 'Products updated successfully.',
+            'message' => $updatedCount > 0
+                ? 'Products updated successfully.'
+                : 'API data fetched but no matching product rows were updated.',
         ];
     }
 
@@ -2098,6 +2139,82 @@ class product
         $physicalStock = (int) ($existingBase['physical_stock'] ?? 0);
 
         return $localStock === 0 || $physicalStock === 0;
+    }
+
+    public static function apiRefreshVariantMatchKey(string $sku, string $size, string $color): string
+    {
+        $sku = strtolower(trim($sku));
+        if ($sku !== '') {
+            return 'sku:' . $sku;
+        }
+
+        $normalize = static function (string $value): string {
+            return strtolower(preg_replace('/[\s\-_]+/', '', trim($value)) ?? '');
+        };
+
+        return 'sc:' . $normalize($size) . '|' . $normalize($color);
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function buildDetailVariantProductIdMap(array $options): array
+    {
+        $raw = $options['detail_variant_rows'] ?? [];
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        $map = [];
+        foreach ($raw as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $id = (int) ($row['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $key = self::apiRefreshVariantMatchKey(
+                (string) ($row['sku'] ?? ''),
+                (string) ($row['size'] ?? ''),
+                (string) ($row['color'] ?? '')
+            );
+            $map[$key] = $id;
+        }
+
+        return $map;
+    }
+
+    private function resolveApiRefreshTargetProductId(array $options, string $sku, string $size, string $color): int
+    {
+        $map = $this->buildDetailVariantProductIdMap($options);
+        if ($map === []) {
+            return 0;
+        }
+
+        $key = self::apiRefreshVariantMatchKey($sku, $size, $color);
+        if (isset($map[$key])) {
+            return (int) $map[$key];
+        }
+
+        if (count($map) === 1) {
+            return (int) reset($map);
+        }
+
+        return 0;
+    }
+
+    private function apiRefreshCatalogUpdateSql(bool $whereByProductId): string
+    {
+        $sql = 'UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), \'\'), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), \'\'), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ?';
+        if ($this->vpProductsHasColumn('update_flag')) {
+            $sql .= ', update_flag = 1';
+        }
+        if ($whereByProductId) {
+            return $sql . ' WHERE id = ?';
+        }
+
+        return $sql . " WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')";
     }
 
     /**
