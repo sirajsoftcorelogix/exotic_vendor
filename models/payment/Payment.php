@@ -576,6 +576,18 @@ WHERE 1=1
         return $row ?: null;
     }
 
+    public function getWarehouseIdForOrder(string $orderNumber): int
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return 0;
+        }
+
+        $payment = $this->findLatestByOrderNumber($orderNumber);
+
+        return (int)($payment['warehouse_id'] ?? 0);
+    }
+
     /**
      * @return list<array<string, mixed>>
      */

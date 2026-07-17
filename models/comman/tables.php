@@ -37,6 +37,44 @@ class Tables {
 
     }
 
+    /**
+     * Active location for invoice footer: specific warehouse when valid, else primary default row.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function get_exotic_address_for_footer(int $warehouseId = 0): ?array
+    {
+        $select = 'SELECT id, address_title, display_name, address FROM exotic_address';
+
+        if ($warehouseId > 0) {
+            $stmt = $this->ci->prepare(
+                $select . ' WHERE id = ? AND is_active = 1 LIMIT 1'
+            );
+            if ($stmt) {
+                $stmt->bind_param('i', $warehouseId);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if (is_array($row)) {
+                    return $row;
+                }
+            }
+        }
+
+        $stmt = $this->ci->prepare(
+            $select . ' WHERE is_active = 1 ORDER BY is_default DESC, order_no ASC, id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return is_array($row) ? $row : null;
+    }
+
     public function get_terms_and_conditions() {
         $sql = "SELECT * FROM terms_and_conditions";
         $result = $this->ci->query($sql);

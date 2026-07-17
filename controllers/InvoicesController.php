@@ -1094,9 +1094,35 @@ class InvoicesController
 
         $temphtml = file_get_contents($templatePath);
 
+        require_once __DIR__ . '/../helpers/invoice/invoice_address_html.php';
+        require_once __DIR__ . '/../helpers/invoice/invoice_footer_html.php';
+
+        $footerPaymentModel = null;
+        if (!empty($invoice['pos_flag'])) {
+            require_once __DIR__ . '/../models/payment/Payment.php';
+            global $conn;
+            $footerPaymentModel = new Payment($conn);
+        }
+        $exclusiveStoresFooter = invoice_resolve_exclusive_stores_footer_html(
+            $invoice,
+            $items,
+            $commanModel,
+            $footerPaymentModel
+        );
+
         // Replace placeholders
         $html = str_replace(
-            ['{{INVOICE_NUMBER}}', '{{INVOICE_DATE}}', '{{BILL_TO_INFO}}', '{{SHIP_TO_INFO}}', '{{ITEM_ROWS}}', '{{SUMMARY_ROWS}}', '{{AMOUNT_IN_WORDS}}', '{{TERM_AND_CONDITIONS}}'],
+            [
+                '{{INVOICE_NUMBER}}',
+                '{{INVOICE_DATE}}',
+                '{{BILL_TO_INFO}}',
+                '{{SHIP_TO_INFO}}',
+                '{{ITEM_ROWS}}',
+                '{{SUMMARY_ROWS}}',
+                '{{AMOUNT_IN_WORDS}}',
+                '{{TERM_AND_CONDITIONS}}',
+                '{{EXCLUSIVE_STORES_FOOTER}}',
+            ],
             [
                 htmlspecialchars($invoice['invoice_number'] ?? 'N/A'),
                 date('d M Y', strtotime($invoice['invoice_date'])),
@@ -1105,7 +1131,8 @@ class InvoicesController
                 $itemsrows,
                 $summaryrows,
                 numberToWords($totalAmount ?? 0),
-                nl2br(htmlspecialchars($invoice['terms_and_conditions'] ?? ''))
+                nl2br(htmlspecialchars($invoice['terms_and_conditions'] ?? '')),
+                $exclusiveStoresFooter,
             ],
             $temphtml
         );
