@@ -320,7 +320,7 @@ class Publisher
         $webpage = (int)$fields['webpage'];
         $stockReplenishmentMonths = (int)$fields['stock_replenishment_months'];
         $stmt->bind_param(
-            'issssssssssssssiii',
+            'isssssssssssssiii',
             $publishersId,
             $name,
             $fields['contact_name'],
