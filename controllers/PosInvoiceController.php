@@ -1906,6 +1906,14 @@ class PosInvoiceController
 
         // Fetch customer and address information
         require_once __DIR__ . '/../helpers/invoice/invoice_address_html.php';
+        require_once __DIR__ . '/../helpers/invoice/invoice_footer_html.php';
+        global $paymentModel;
+        $exclusiveStoresFooter = invoice_resolve_exclusive_stores_footer_html(
+            $invoice,
+            $items,
+            $commanModel,
+            !empty($invoice['pos_flag']) ? $paymentModel : null
+        );
         $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
         $addressBlocks = invoice_resolve_bill_ship_html(is_array($customer) ? $customer : null);
         $billToInfo = $addressBlocks['bill'];
@@ -1942,7 +1950,17 @@ class PosInvoiceController
 
         // Replace placeholders
         $html = str_replace(
-            ['{{INVOICE_NUMBER}}', '{{INVOICE_DATE}}', '{{BILL_TO_INFO}}', '{{SHIP_TO_INFO}}', '{{ITEM_ROWS}}', '{{SUMMARY_ROWS}}', '{{AMOUNT_IN_WORDS}}', '{{TERM_AND_CONDITIONS}}'],
+            [
+                '{{INVOICE_NUMBER}}',
+                '{{INVOICE_DATE}}',
+                '{{BILL_TO_INFO}}',
+                '{{SHIP_TO_INFO}}',
+                '{{ITEM_ROWS}}',
+                '{{SUMMARY_ROWS}}',
+                '{{AMOUNT_IN_WORDS}}',
+                '{{TERM_AND_CONDITIONS}}',
+                '{{EXCLUSIVE_STORES_FOOTER}}',
+            ],
             [
                 htmlspecialchars($invoice['invoice_number'] ?? 'N/A'),
                 date('d M Y', strtotime($invoice['invoice_date'])),
@@ -1951,7 +1969,8 @@ class PosInvoiceController
                 $itemsrows,
                 $summaryrows,
                 numberToWords($totalAmount ?? 0),
-                nl2br(htmlspecialchars($invoice['terms_and_conditions'] ?? ''))
+                nl2br(htmlspecialchars($invoice['terms_and_conditions'] ?? '')),
+                $exclusiveStoresFooter,
             ],
             $temphtml
         );
