@@ -78,6 +78,12 @@ function invoice_format_order_info_address_html(array $orderInfo, string $type):
     }
     $html .= '<br>';
     $html .= htmlspecialchars(trim($city . ' ' . $state . ' ' . $zip)) . '<br>';
+    if (!$isShipping) {
+        $gstin = trim((string)($orderInfo['gstin'] ?? ''));
+        if ($gstin !== '') {
+            $html .= 'GSTIN: ' . htmlspecialchars($gstin) . '<br>';
+        }
+    }
     if ($phone !== '') {
         $html .= 'Tel: ' . htmlspecialchars($phone) . '<br>';
     }
