@@ -564,7 +564,7 @@ class PosInvoiceController
             'invoice_html' => $invoiceHtml,
             'invoice_number' => (string)($invoice['invoice_number'] ?? ''),
             'invoice_pdf_url' => $pdfUrl,
-        ], 'Invoice â€” ' . ($invoice['invoice_number'] ?? ''));
+        ], 'Invoice - ' . ($invoice['invoice_number'] ?? ''));
     }
 
     private function parsePosInvoiceDiscountMeta(?string $notes): array
@@ -1371,7 +1371,11 @@ class PosInvoiceController
             return 'Custom Discount (' . $pct . '%)';
         }
 
-        return 'Custom Discount (fixed â‚¹)';
+        if ($mode === 'fixed' && $value > 0) {
+            return 'Custom Discount (fixed amount)';
+        }
+
+        return 'Custom Discount';
     }
 
     private function posInvoiceCouponLabel(array $posMeta): string
