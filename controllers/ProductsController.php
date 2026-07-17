@@ -4955,6 +4955,7 @@ class ProductsController
                 header('Pragma: no-cache');
                 header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
             }
+            $order['canEditAddedOnDate'] = function_exists('canSrEmpAccess') && canSrEmpAccess();
             renderTemplate('views/products/product_detail.php', ['products' => $order], 'Product Details');
         } else {
             echo '<p>Invalid Product Item Code.</p>';
@@ -5994,8 +5995,8 @@ class ProductsController
     {
         is_login();
         $this->runProductDetailJsonAction(function () {
-            if ((int) ($_SESSION['user']['role_id'] ?? 0) !== 1) {
-                throw new Exception('Only administrators can change the added on date.');
+            if (!function_exists('canSrEmpAccess') || !canSrEmpAccess()) {
+                throw new Exception('You do not have permission to change the added on date.');
             }
             $data = $this->readJsonRequestBody();
             $date = $this->normalizeProfileDateInput((string) ($data['date_first_added'] ?? ''), 'Added on date');

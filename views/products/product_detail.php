@@ -238,6 +238,7 @@
     $isBookProduct = strpos($groupNameLower, 'book') !== false;
     $authorRaw = trim((string)($products['author'] ?? ''));
     $isAdminUser = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
+    $canEditAddedOnDate = !empty($products['canEditAddedOnDate']);
     $canAccessCp = function_exists('canAccessProductCp') && canAccessProductCp();
     $publishedVal = (int)($products['published'] ?? 0);
     $publishedText = $publishedVal === 1 ? 'Published' : 'Unpublished';
@@ -356,6 +357,7 @@
                 onclick="openPublishedStatusModal()">
                 <span id="publishedStatusDisplay"><?php echo htmlspecialchars($publishedText, ENT_QUOTES, 'UTF-8'); ?></span>
               </button>
+              <?php if ($canEditAddedOnDate): ?>
               <div class="shrink-0 flex items-center gap-1.5">
                 <span id="productAddedOnDisplay" class="text-xs font-semibold px-3 py-1 rounded-md border border-sky-300 bg-sky-50 text-sky-800 whitespace-nowrap">
                   Added On: <?php echo htmlspecialchars($addedOnDisplay !== '' ? $addedOnDisplay : '—', ENT_QUOTES, 'UTF-8'); ?>
@@ -369,13 +371,32 @@
                   <i class="fas fa-pencil-alt text-[10px]"></i>
                 </button>
               </div>
+              <?php elseif ($addedOnDisplay !== ''): ?>
+                <span class="text-xs font-semibold px-3 py-1 rounded-md border border-sky-300 bg-sky-50 text-sky-800 whitespace-nowrap">
+                  Added On: <?php echo htmlspecialchars($addedOnDisplay, ENT_QUOTES, 'UTF-8'); ?>
+                </span>
+              <?php endif; ?>
             </div>
           <?php else: ?>
             <div class="shrink-0 flex items-center gap-2">
               <span id="publishedStatusDisplay" class="text-xs font-semibold px-3 py-1 rounded-md border <?php echo $publishedVal === 1 ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-red-300 bg-red-50 text-red-700'; ?>">
                 <?php echo htmlspecialchars($publishedText, ENT_QUOTES, 'UTF-8'); ?>
               </span>
-              <?php if ($addedOnDisplay !== ''): ?>
+              <?php if ($canEditAddedOnDate): ?>
+              <div class="shrink-0 flex items-center gap-1.5">
+                <span id="productAddedOnDisplay" class="text-xs font-semibold px-3 py-1 rounded-md border border-sky-300 bg-sky-50 text-sky-800 whitespace-nowrap">
+                  Added On: <?php echo htmlspecialchars($addedOnDisplay !== '' ? $addedOnDisplay : '—', ENT_QUOTES, 'UTF-8'); ?>
+                </span>
+                <button
+                  type="button"
+                  class="inline-flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-emerald-700 hover:border-emerald-300"
+                  onclick="toggleProductDetailModal('addedOnModal', true)"
+                  title="Edit added on date"
+                  aria-label="Edit added on date">
+                  <i class="fas fa-pencil-alt text-[10px]"></i>
+                </button>
+              </div>
+              <?php elseif ($addedOnDisplay !== ''): ?>
                 <span class="text-xs font-semibold px-3 py-1 rounded-md border border-sky-300 bg-sky-50 text-sky-800 whitespace-nowrap">
                   Added On: <?php echo htmlspecialchars($addedOnDisplay, ENT_QUOTES, 'UTF-8'); ?>
                 </span>
@@ -1113,6 +1134,7 @@
         </div>
     </div>
 </div>
+<?php if ($canEditAddedOnDate): ?>
 <div id="addedOnModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
     <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
         <button type="button" onclick="toggleProductDetailModal('addedOnModal', false)" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
@@ -1125,6 +1147,7 @@
         </div>
     </div>
 </div>
+<?php endif; ?>
 <div id="priceSectionModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
     <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
         <button type="button" onclick="closePriceSectionModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
