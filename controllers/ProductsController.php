@@ -1426,9 +1426,7 @@ class ProductsController
 
         global $productModel;
 
-        renderTemplate('views/products/stock_rebuild_guide.php', [
-            'candidateTotal' => $productModel->countStockRefreshCandidates(),
-        ], 'Stock Refresh (Batch)');
+        renderTemplate('views/products/stock_rebuild_guide.php', [], 'Stock Refresh (Batch)');
     }
 
     public function stockRebuildCandidates(): void
@@ -1438,19 +1436,25 @@ class ProductsController
             vendorJsonResponse(['success' => false, 'message' => 'Access denied.']);
         }
 
-        global $productModel;
+        @set_time_limit(120);
+
+        global $productModel, $conn;
+        if (isset($conn) && $conn instanceof mysqli) {
+            @$conn->query('SET SESSION max_execution_time = 120000');
+        }
 
         $page = max(1, (int) ($_GET['page'] ?? 1));
         $limit = (int) ($_GET['limit'] ?? 100);
         if ($limit < 20) {
             $limit = 20;
         }
-        if ($limit > 500) {
-            $limit = 500;
+        if ($limit > 200) {
+            $limit = 200;
         }
         $offset = ($page - 1) * $limit;
+        $includeTotal = !isset($_GET['include_total']) || (string) $_GET['include_total'] !== '0';
 
-        $total = $productModel->countStockRefreshCandidates();
+        $total = $includeTotal ? $productModel->countStockRefreshCandidates() : null;
         $items = $productModel->listStockRefreshCandidates($limit, $offset);
 
         vendorJsonResponse([
@@ -1458,7 +1462,7 @@ class ProductsController
             'total' => $total,
             'page' => $page,
             'limit' => $limit,
-            'pages' => $limit > 0 ? (int) ceil($total / $limit) : 0,
+            'pages' => ($total !== null && $limit > 0) ? (int) ceil($total / $limit) : null,
             'items' => $items,
         ]);
     }

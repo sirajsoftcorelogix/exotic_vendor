@@ -455,7 +455,7 @@ class POSInvoice
     }
 
     /**
-     * POS invoice AJAX list with payment due amounts.
+     * POS invoice AJAX list with payment pending amounts.
      *
      * @param array<string, mixed> $filters
      * @return array<int, array<string, mixed>>
@@ -480,12 +480,28 @@ class POSInvoice
                     WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
                           CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
                 ), 0) AS paid_amount,
-                i.total_amount - IFNULL((
-                    SELECT SUM(pp.payment_amount)
-                    FROM pos_payments pp
-                    WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
-                          CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                ), 0) AS due_amount
+                GREATEST(0, ROUND(
+                    COALESCE(
+                        NULLIF(o.total, 0),
+                        (
+                            SELECT MAX(pp2.order_amount)
+                            FROM pos_payments pp2
+                            WHERE CONVERT(pp2.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+                                  CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                              AND pp2.order_amount > 0
+                        ),
+                        NULLIF(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.grand_total')) AS DECIMAL(15,2)), 0),
+                        CASE
+                            WHEN IFNULL(i.discount_amount, 0) > 0 THEN i.total_amount - i.discount_amount
+                            ELSE i.total_amount
+                        END
+                    ) - IFNULL((
+                        SELECT SUM(pp.payment_amount)
+                        FROM pos_payments pp
+                        WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+                              CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                    ), 0),
+                2)) AS pending_amount
             FROM vp_invoices i
             LEFT JOIN vp_order_info o ON o.id = i.vp_order_info_id
             LEFT JOIN vp_customers c ON c.id = i.customer_id

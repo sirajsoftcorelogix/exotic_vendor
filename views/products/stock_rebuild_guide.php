@@ -1,6 +1,3 @@
-<?php
-$candidateTotal = (int) ($candidateTotal ?? 0);
-?>
 <div class="max-w-6xl mx-auto p-4 sm:p-6 space-y-4">
     <div class="bg-white border rounded-xl shadow-sm p-4 sm:p-5">
         <div class="flex flex-wrap items-start justify-between gap-3">
@@ -29,11 +26,7 @@ $candidateTotal = (int) ($candidateTotal ?? 0);
             <div>
                 <p class="text-sm font-semibold text-gray-800">Eligible products</p>
                 <p id="stockRefreshCandidateSummary" class="text-xs text-gray-500 mt-0.5">
-                    <?php if ($candidateTotal > 0): ?>
-                        About <?= number_format($candidateTotal) ?> product(s) match the criteria.
-                    <?php else: ?>
-                        No matching products found.
-                    <?php endif; ?>
+                    Click “Reload list” to load eligible products (100 per page).
                 </p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
@@ -218,15 +211,23 @@ $candidateTotal = (int) ($candidateTotal ?? 0);
         return out;
     }
 
-    async function fetchCandidates(page, append) {
-        const url = '?page=products&action=stock_rebuild_candidates&page=' + page + '&limit=' + PAGE_SIZE;
+    async function fetchCandidates(page, append, withTotal) {
+        let url = '?page=products&action=stock_rebuild_candidates&page=' + page + '&limit=' + PAGE_SIZE;
+        if (!withTotal) {
+            url += '&include_total=0';
+        }
         const res = await fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
         const data = await res.json();
         if (!data || !data.success) {
             throw new Error((data && data.message) ? data.message : 'Could not load candidates.');
         }
-        totalCount = parseInt(data.total, 10) || 0;
-        totalPages = parseInt(data.pages, 10) || 0;
+        if (data.total != null) {
+            totalCount = parseInt(data.total, 10) || 0;
+            totalPages = parseInt(data.pages, 10) || 0;
+        } else if (!append) {
+            totalCount = null;
+            totalPages = null;
+        }
         currentPage = parseInt(data.page, 10) || page;
         const newItems = Array.isArray(data.items) ? data.items : [];
         if (append) {
@@ -235,11 +236,16 @@ $candidateTotal = (int) ($candidateTotal ?? 0);
             items = newItems;
         }
         if (summaryEl) {
-            summaryEl.textContent = totalCount + ' eligible product(s) · showing ' + items.length + ' loaded';
+            if (totalCount != null) {
+                summaryEl.textContent = totalCount + ' eligible · showing ' + items.length + ' loaded (page ' + currentPage + (totalPages ? ' of ' + totalPages : '') + ')';
+            } else {
+                summaryEl.textContent = 'Showing ' + items.length + ' on page ' + currentPage + '. Use Load more for additional pages.';
+            }
         }
         renderRows(append);
         if (loadMoreWrap && loadMoreBtn) {
-            if (currentPage < totalPages) {
+            const hasMore = totalPages ? currentPage < totalPages : newItems.length >= PAGE_SIZE;
+            if (hasMore) {
                 loadMoreWrap.classList.remove('hidden');
             } else {
                 loadMoreWrap.classList.add('hidden');
@@ -247,15 +253,12 @@ $candidateTotal = (int) ($candidateTotal ?? 0);
         }
     }
 
-    async function loadAllCandidates() {
+    async function loadFirstPage() {
         loading = true;
         loadBtn.disabled = true;
         loadBtn.textContent = 'Loading…';
         try {
-            await fetchCandidates(1, false);
-            while (currentPage < totalPages) {
-                await fetchCandidates(currentPage + 1, true);
-            }
+            await fetchCandidates(1, false, true);
         } finally {
             loading = false;
             loadBtn.disabled = running;
@@ -359,16 +362,16 @@ $candidateTotal = (int) ($candidateTotal ?? 0);
 
     loadBtn.addEventListener('click', function () {
         if (loading || running) return;
-        loadAllCandidates().catch(function (err) {
+        loadFirstPage().catch(function (err) {
             window.alert((err && err.message) ? err.message : 'Load failed.');
         });
     });
 
     loadMoreBtn.addEventListener('click', function () {
-        if (loading || running || currentPage >= totalPages) return;
+        if (loading || running) return;
         loading = true;
         loadMoreBtn.disabled = true;
-        fetchCandidates(currentPage + 1, true)
+        fetchCandidates(currentPage + 1, true, false)
             .catch(function (err) {
                 window.alert((err && err.message) ? err.message : 'Load failed.');
             })
@@ -393,9 +396,5 @@ $candidateTotal = (int) ($candidateTotal ?? 0);
             updateRunButton();
         }
     });
-
-    if (<?= $candidateTotal > 0 ? 'true' : 'false' ?>) {
-        loadAllCandidates().catch(function () {});
-    }
 })();
 </script>
