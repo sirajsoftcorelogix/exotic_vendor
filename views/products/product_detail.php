@@ -1627,7 +1627,7 @@
     </div>
     <div class="px-5 py-4 overflow-y-auto flex-1">
       <div class="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900 mb-4">
-        Unchecked variants keep their current stock unchanged. Checked variants will update local stock and warehouse physical stock from the API.
+        Each row shows current <strong>local stock</strong> and the API value it would become. Unchecked variants keep stock unchanged; checked variants sync local and physical stock from the API.
       </div>
       <div id="refreshStockVariantList" class="space-y-2"></div>
     </div>
@@ -1888,6 +1888,139 @@
     }
   }
 
+  function normalizeVariantDimensionForStockMatch(value) {
+    return String(value || '').trim().toLowerCase().replace(/[\s\-_]+/g, '');
+  }
+
+  function refreshVariantMatchKey(row) {
+    var sku = String(row.sku || '').trim().toLowerCase();
+    if (sku !== '') {
+      return 'sku:' + sku;
+    }
+    return 'sc:' + normalizeVariantDimensionForStockMatch(row.size) + '|' + normalizeVariantDimensionForStockMatch(row.color);
+  }
+
+  function normalizeVendorProductFetchItemsClient(data) {
+    if (!data || typeof data !== 'object') {
+      return [];
+    }
+    if (Array.isArray(data.data)) {
+      return normalizeVendorProductFetchItemsClient(data.data);
+    }
+    if (data.itemcode || data.item_code) {
+      return [data];
+    }
+    var rows = [];
+    Object.keys(data).forEach(function (key) {
+      var row = data[key];
+      if (!row || typeof row !== 'object') {
+        return;
+      }
+      var code = String(row.itemcode || row.item_code || '').trim();
+      if (code !== '') {
+        if (!row.itemcode && row.item_code) {
+          row.itemcode = code;
+        }
+        rows.push(row);
+      }
+    });
+    if (rows.length > 0) {
+      return rows;
+    }
+    if (Array.isArray(data)) {
+      return data.filter(function (row) {
+        return row && typeof row === 'object' && String(row.itemcode || row.item_code || '').trim() !== '';
+      });
+    }
+    return [];
+  }
+
+  function expandVendorProductFetchVariantsClient(rows) {
+    var out = [];
+    (rows || []).forEach(function (row) {
+      if (!row || typeof row !== 'object') {
+        return;
+      }
+      var variations = row.variations;
+      if (!Array.isArray(variations) || variations.length === 0) {
+        var clean = Object.assign({}, row);
+        delete clean.variations;
+        out.push(clean);
+        return;
+      }
+      var itemCode = String(row.itemcode || row.item_code || '').trim();
+      variations.forEach(function (variation) {
+        if (!variation || typeof variation !== 'object') {
+          return;
+        }
+        var merged = Object.assign({}, row, variation);
+        if (itemCode !== '') {
+          merged.itemcode = itemCode;
+        }
+        delete merged.variations;
+        out.push(merged);
+      });
+    });
+    return out;
+  }
+
+  function parseApiLocalStockValue(row) {
+    if (!row || typeof row !== 'object') {
+      return null;
+    }
+    var raw = row.local_stock;
+    if (raw === null || raw === undefined || raw === '') {
+      raw = row.stock;
+    }
+    if (raw === null || raw === undefined || raw === '') {
+      return null;
+    }
+    var num = parseFloat(String(raw));
+    if (isNaN(num)) {
+      return null;
+    }
+    return Math.max(0, Math.round(num));
+  }
+
+  function buildApiLocalStockMap(apiPayloadRoot) {
+    var map = {};
+    var rows = expandVendorProductFetchVariantsClient(
+      normalizeVendorProductFetchItemsClient(apiPayloadRoot)
+    );
+    rows.forEach(function (row) {
+      var stock = parseApiLocalStockValue(row);
+      if (stock === null) {
+        return;
+      }
+      map[refreshVariantMatchKey({
+        sku: row.sku || '',
+        size: row.size || '',
+        color: row.color || ''
+      })] = stock;
+    });
+    return map;
+  }
+
+  async function fetchApiLocalStockMapForItemCode(itemCode) {
+    var fetchUrl = 'index.php?page=products&action=vendor_product_fetch_payload&itemCode='
+      + encodeURIComponent(itemCode);
+    var res = await fetch(fetchUrl, {
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' }
+    });
+    var rawText = await res.text();
+    var data = null;
+    try {
+      data = rawText ? JSON.parse(rawText) : null;
+    } catch (parseErr) {
+      data = null;
+    }
+    if (!data || !data.success) {
+      throw new Error((data && data.message) ? data.message : 'Could not load API stock preview.');
+    }
+    return buildApiLocalStockMap(data.payload || data);
+  }
+
   function formatRefreshVariantLabel(row) {
     var parts = [];
     var sku = String(row.sku || '').trim();
@@ -1900,11 +2033,12 @@
     return parts.join(' · ');
   }
 
-  function buildRefreshStockVariantList(currentProductId) {
+  function buildRefreshStockVariantList(currentProductId, apiLocalStockMap) {
     var listEl = document.getElementById('refreshStockVariantList');
     if (!listEl) return;
 
     var rows = Array.isArray(refreshStockVariantChoices.variants) ? refreshStockVariantChoices.variants.slice() : [];
+    apiLocalStockMap = apiLocalStockMap || {};
     rows.sort(function (a, b) {
       if (Number(a.id) === Number(currentProductId)) return -1;
       if (Number(b.id) === Number(currentProductId)) return 1;
@@ -1920,7 +2054,18 @@
     rows.forEach(function (row) {
       var isCurrent = Number(row.id) === Number(currentProductId);
       var label = formatRefreshVariantLabel(row);
-      var stockHint = 'Local: ' + Number(row.local_stock || 0) + ', Physical: ' + Number(row.physical_stock || 0);
+      var oldLocal = Number(row.local_stock || 0);
+      var physical = Number(row.physical_stock || 0);
+      var apiLocal = apiLocalStockMap[refreshVariantMatchKey(row)];
+      var apiLocalText = (apiLocal === null || apiLocal === undefined)
+        ? '—'
+        : String(apiLocal);
+      var localChanged = apiLocal !== null && apiLocal !== undefined && Number(apiLocal) !== oldLocal;
+      var stockHint =
+        '<span class="block">Local stock: <span class="font-medium text-gray-800">' + oldLocal + '</span>'
+        + ' → <span class="font-semibold ' + (localChanged ? 'text-amber-700' : 'text-gray-800') + '">' + apiLocalText + '</span>'
+        + ' <span class="text-gray-400">(API)</span></span>'
+        + '<span class="block mt-0.5">Physical stock (current): <span class="font-medium text-gray-800">' + physical + '</span></span>';
       var wrap = document.createElement('label');
       wrap.className = 'flex items-start gap-3 rounded-xl border border-gray-200 bg-white px-3 py-3 cursor-pointer hover:border-amber-300 hover:bg-amber-50/40';
       wrap.innerHTML =
@@ -1931,22 +2076,44 @@
         + '<span class="block text-sm ' + (isCurrent ? 'font-bold text-gray-900' : 'font-medium text-gray-800') + '">'
         + (isCurrent ? label + ' (current)' : label)
         + '</span>'
-        + '<span class="block text-xs text-gray-500 mt-0.5">' + stockHint + '</span>'
+        + '<span class="block text-xs text-gray-600 mt-1 leading-relaxed">' + stockHint + '</span>'
         + '</span>';
       listEl.appendChild(wrap);
     });
   }
 
-  function askRefreshVariantStockChoices(currentProductId) {
+  async function askRefreshVariantStockChoices(currentProductId, itemCode) {
     var modal = document.getElementById('refreshStockChoiceModal');
     var confirmBtn = document.getElementById('refreshStockChoiceConfirmBtn');
     var cancelBtn = document.getElementById('refreshStockChoiceCancelBtn');
+    var listEl = document.getElementById('refreshStockVariantList');
 
     if (!modal || !confirmBtn || !cancelBtn) {
-      return Promise.resolve({ confirmed: false, stockSyncProductIds: [] });
+      return { confirmed: false, stockSyncProductIds: [] };
     }
 
-    buildRefreshStockVariantList(currentProductId);
+    modal.classList.remove('hidden');
+    if (listEl) {
+      listEl.innerHTML = '<p class="text-sm text-gray-500 flex items-center gap-2"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Loading API stock values...</p>';
+    }
+    confirmBtn.disabled = true;
+
+    var apiLocalStockMap = {};
+    var apiLoadError = '';
+    try {
+      apiLocalStockMap = await fetchApiLocalStockMapForItemCode(itemCode);
+    } catch (e) {
+      apiLoadError = (e && e.message) ? e.message : 'Could not load API stock preview.';
+    }
+
+    buildRefreshStockVariantList(currentProductId, apiLocalStockMap);
+    if (apiLoadError && listEl) {
+      var warn = document.createElement('p');
+      warn.className = 'mt-3 text-xs text-amber-700 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2';
+      warn.textContent = apiLoadError + ' You can still refresh catalog fields; API local stock is shown as — until loaded.';
+      listEl.appendChild(warn);
+    }
+    confirmBtn.disabled = false;
 
     return new Promise(function (resolve) {
       var settled = false;
@@ -1955,6 +2122,7 @@
         if (settled) return;
         settled = true;
         modal.classList.add('hidden');
+        confirmBtn.disabled = false;
         confirmBtn.removeEventListener('click', onConfirm);
         cancelBtn.removeEventListener('click', onCancel);
         modal.removeEventListener('click', onBackdrop);
@@ -1987,7 +2155,6 @@
       cancelBtn.addEventListener('click', onCancel);
       modal.addEventListener('click', onBackdrop);
       document.addEventListener('keydown', onKeydown);
-      modal.classList.remove('hidden');
       setTimeout(function () { cancelBtn.focus(); }, 50);
     });
   }
@@ -2046,7 +2213,7 @@
     }
 
     var currentProductId = parseInt(String(refreshStockVariantChoices.current_product_id || '0'), 10);
-    var stockChoice = await askRefreshVariantStockChoices(currentProductId);
+    var stockChoice = await askRefreshVariantStockChoices(currentProductId, itemCode);
     if (!stockChoice || !stockChoice.confirmed) {
       return;
     }
