@@ -62,14 +62,16 @@
                     Search
                 </button>
 
-                <button type="button" id="exportInvoicesBtn" onclick="exportInvoicesToExcel()"
-                    class="inline-flex items-center justify-center gap-1.5 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-emerald-800 hover:bg-emerald-100">
-                    <i class="fas fa-file-excel text-xs" aria-hidden="true"></i>
-                    <span id="exportInvoicesBtnLabel">Export to Excel</span>
-                </button>
-
             </div>
 
+        </div>
+
+        <div class="flex justify-end mb-3">
+            <button type="button" id="exportInvoicesBtn" onclick="exportInvoicesToExcel()"
+                class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100">
+                <i class="fas fa-file-excel text-xs" aria-hidden="true"></i>
+                <span id="exportInvoicesBtnLabel">Export to Excel</span>
+            </button>
         </div>
 
         <div class="bg-white rounded-xl border overflow-hidden">
