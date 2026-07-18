@@ -19,6 +19,13 @@ function invoice_resolve_bill_ship_html(?array $orderInfo, $conn = null): array
         $ship = $bill;
     }
 
+    if ($ship !== '') {
+        $placeOfSupply = invoice_resolve_place_of_supply_display_state($orderInfo);
+        if ($placeOfSupply !== '') {
+            $ship .= 'Place of Supply: ' . htmlspecialchars($placeOfSupply) . '<br>';
+        }
+    }
+
     return ['bill' => $bill, 'ship' => $ship];
 }
 
@@ -94,6 +101,21 @@ function invoice_format_order_info_address_html(array $orderInfo, string $type, 
     }
 
     return $html;
+}
+
+/**
+ * Place of supply state for Ship To block (shipping state when present, else billing state).
+ */
+function invoice_resolve_place_of_supply_display_state(array $orderInfo): string
+{
+    if (invoice_order_info_has_shipping($orderInfo)) {
+        $shippingState = trim((string)($orderInfo['shipping_state'] ?? ''));
+        if ($shippingState !== '') {
+            return $shippingState;
+        }
+    }
+
+    return trim((string)($orderInfo['state'] ?? ''));
 }
 
 /**

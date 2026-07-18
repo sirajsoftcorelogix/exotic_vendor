@@ -1366,24 +1366,24 @@ class PosInvoiceController
         float $amount,
         string $note = '',
         bool $isGrand = false,
-        int $colCount = 13,
-        bool $largeFont = false
+        int $colCount = 13
     ): string {
         $colCount = max(3, $colCount);
         $labelSpan = $colCount - 2;
         $noteHtml = $note !== ''
-            ? '<br><span style="font-size:11px;font-weight:normal;color:#555;">' . htmlspecialchars($note) . '</span>'
+            ? '<br><span class="invoice-summary-note">' . htmlspecialchars($note) . '</span>'
             : '';
         $bg = $isGrand ? '#f0f0f0' : '#f9f9f9';
-        $weight = $largeFont ? 'font-weight:bold;font-size:14px;' : 'font-weight:bold;';
+        $rowClass = $isGrand ? 'invoice-summary-grand' : '';
         $borderTop = $isGrand ? 'border-top:2px solid #000;' : '';
+        $cellStyle = 'text-align:right;padding:8px 10px;border:1px solid #ddd;';
 
         return '
-                    <tr style="background:' . $bg . ';' . $borderTop . '">
-                        <td colspan="' . $labelSpan . '" class="right" style="text-align:right;padding:8px 10px;border:1px solid #ddd;">'
-                            . '<span style="' . $weight . '">' . htmlspecialchars($label) . '</span>' . $noteHtml .
+                    <tr class="' . $rowClass . '" style="background:' . $bg . ';' . $borderTop . '">
+                        <td colspan="' . $labelSpan . '" class="right invoice-text" style="' . $cellStyle . '">'
+                            . htmlspecialchars($label) . $noteHtml .
                         '</td>
-                        <td colspan="2" class="right" style="text-align:right;padding:8px 10px;border:1px solid #ddd;' . $weight . '">'
+                        <td colspan="2" class="right invoice-text" style="' . $cellStyle . '">'
                             . number_format($amount, 2) .
                         '</td>
                     </tr>';
@@ -1471,12 +1471,11 @@ class PosInvoiceController
             }
 
             $rows .= $this->posInvoiceSummaryLabelRow(
-                'Sub total (incl. GST)',
+                'Total Before Discount (incl. GST)',
                 $subInclGst,
                 '',
                 false,
-                $colCount,
-                true
+                $colCount
             );
             if ($lineDisc > 0.001) {
                 $rows .= $this->posInvoiceSummaryLabelRow(
@@ -1529,12 +1528,11 @@ class PosInvoiceController
         }
 
         $rows .= $this->posInvoiceSummaryLabelRow(
-            'Sub total (incl. GST)',
+            'Total Before Discount (incl. GST)',
             $subInclGst,
             '',
             false,
-            $colCount,
-            true
+            $colCount
         );
         if ($line > 0.001) {
             $rows .= $this->posInvoiceSummaryLabelRow('Line Discount', $line, '', false, $colCount);
