@@ -170,6 +170,36 @@ $initialFilters = is_array($initial_filters ?? null) ? $initial_filters : [];
                 </div>
             </section>
 
+            <div id="posStoreChartsSection" class="hidden">
+                <h2 class="text-sm font-semibold text-gray-900 mb-3">Charts</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-4">
+                    <div class="bg-white rounded-xl border p-4">
+                        <h3 class="text-xs font-semibold text-gray-600 mb-3">Net sales by payment type</h3>
+                        <div class="relative h-64">
+                            <canvas id="chartL2PaymentType" aria-label="Payment type chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl border p-4">
+                        <h3 class="text-xs font-semibold text-gray-600 mb-3">Net sales by status</h3>
+                        <div class="relative h-64">
+                            <canvas id="chartL2Status" aria-label="Invoice status chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl border p-4">
+                        <h3 class="text-xs font-semibold text-gray-600 mb-3">Invoices by discount</h3>
+                        <div class="relative h-64">
+                            <canvas id="chartL2Discount" aria-label="Discount breakdown chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl border p-4 mb-6">
+                    <h3 class="text-xs font-semibold text-gray-600 mb-3">Daily net sales trend</h3>
+                    <div class="relative h-72">
+                        <canvas id="chartL2DailyTrend" aria-label="Daily net sales line chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 <section class="bg-white rounded-xl border overflow-hidden">
                     <div class="px-4 py-3 border-b bg-gray-50">
@@ -259,6 +289,8 @@ $initialFilters = is_array($initial_filters ?? null) ? $initial_filters : [];
 
     </main>
 </div>
+
+<?php renderPartial('views/posinvoice/partials/sales_chart_assets.php'); ?>
 
 <script>
     const POS_STORE_DETAIL_WAREHOUSE_ID = <?= (int) ($warehouse_id ?? 0) ?>;
@@ -361,6 +393,18 @@ $initialFilters = is_array($initial_filters ?? null) ? $initial_filters : [];
         if (contentEl) contentEl.classList.add('hidden');
         if (errorEl) errorEl.classList.add('hidden');
         updateInvoiceListingLink();
+        if (window.PosSalesCharts) {
+            window.PosSalesCharts.destroy([
+                'chartL2PaymentType',
+                'chartL2Status',
+                'chartL2Discount',
+                'chartL2DailyTrend',
+            ]);
+        }
+        const chartsSection = document.getElementById('posStoreChartsSection');
+        if (chartsSection) {
+            chartsSection.classList.add('hidden');
+        }
 
         fetch(buildStoreDetailAjaxQuery(), { credentials: 'same-origin' })
             .then(function (res) { return res.json(); })
@@ -449,9 +493,16 @@ $initialFilters = is_array($initial_filters ?? null) ? $initial_filters : [];
                         dateFoot.classList.add('hidden');
                     }
                 }
+
+                if (window.PosSalesCharts) {
+                    window.PosSalesCharts.renderLevel2(data);
+                }
             })
             .catch(function () {
                 if (loadingEl) loadingEl.classList.add('hidden');
+                if (window.PosSalesCharts) {
+                    window.PosSalesCharts.renderLevel2(null);
+                }
                 if (errorEl) {
                     errorEl.textContent = 'Could not load store summary. Please try again.';
                     errorEl.classList.remove('hidden');

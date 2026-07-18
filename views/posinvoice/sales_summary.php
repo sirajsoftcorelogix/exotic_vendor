@@ -153,6 +153,30 @@
             </button>
         </div>
 
+        <div id="posSalesChartsSection" class="hidden mb-6">
+            <h2 class="text-sm font-semibold text-gray-900 mb-3">Charts</h2>
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
+                <div class="bg-white rounded-xl border p-4">
+                    <h3 class="text-xs font-semibold text-gray-600 mb-3">Net sales by store</h3>
+                    <div class="relative h-72">
+                        <canvas id="chartL1NetSalesBar" aria-label="Net sales by store bar chart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl border p-4">
+                    <h3 class="text-xs font-semibold text-gray-600 mb-3">Net sales share</h3>
+                    <div class="relative h-72">
+                        <canvas id="chartL1NetSalesPie" aria-label="Net sales share doughnut chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl border p-4">
+                <h3 class="text-xs font-semibold text-gray-600 mb-3">Collected vs pending by store</h3>
+                <div class="relative h-72">
+                    <canvas id="chartL1CollectedPending" aria-label="Collected versus pending bar chart"></canvas>
+                </div>
+            </div>
+        </div>
+
         <div class="bg-white rounded-xl border overflow-hidden">
             <table class="w-full text-sm">
                 <thead class="bg-gray-100 text-xs">
@@ -180,6 +204,8 @@
 
     </main>
 </div>
+
+<?php renderPartial('views/posinvoice/partials/sales_chart_assets.php'); ?>
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -387,6 +413,13 @@
             tfoot.innerHTML = '';
             tfoot.classList.add('hidden');
         }
+        if (window.PosSalesCharts) {
+            window.PosSalesCharts.destroy(['chartL1NetSalesBar', 'chartL1NetSalesPie', 'chartL1CollectedPending']);
+        }
+        const chartsSection = document.getElementById('posSalesChartsSection');
+        if (chartsSection) {
+            chartsSection.classList.add('hidden');
+        }
 
         fetch(buildPosSalesFilterQuery('sales_summary_ajax'), { credentials: 'same-origin' })
             .then(function (res) { return res.json(); })
@@ -402,6 +435,9 @@
 
                 if (rows.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-gray-400">No sales match the current filters.</td></tr>';
+                    if (window.PosSalesCharts) {
+                        window.PosSalesCharts.renderLevel1([]);
+                    }
                     return;
                 }
 
@@ -415,9 +451,16 @@
                     tfoot.innerHTML = renderSalesSummaryRow(Object.assign({}, totals, { warehouse_name: 'TOTAL' }), true);
                     tfoot.classList.remove('hidden');
                 }
+
+                if (window.PosSalesCharts) {
+                    window.PosSalesCharts.renderLevel1(rows);
+                }
             })
             .catch(function () {
                 updatePosSalesResultSummary(0, false);
+                if (window.PosSalesCharts) {
+                    window.PosSalesCharts.renderLevel1([]);
+                }
                 if (tbody) {
                     tbody.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-red-500">Could not load sales summary. Please try again.</td></tr>';
                 }
