@@ -1421,6 +1421,7 @@ class product
         $vendorMapSynced = 0;
         $vendorMapSkipped = 0;
         $rowsAffected = 0;
+        $apiRowCount = is_array($productData) ? count($productData) : 0;
         if (isset($productData) && is_array($productData)) {
             foreach ($productData as $product) {
                 if (!is_array($product)) {
@@ -1438,7 +1439,7 @@ class product
                 $sku = isset($product['sku']) && !empty($product['sku']) ? $product['sku'] : $product['itemcode'];
                 $color = isset($product['color']) ? (string)$product['color'] : '';
                 $size = isset($product['size']) ? (string)$product['size'] : '';
-                $targetProductId = $this->resolveApiRefreshTargetProductId($options, (string) $sku, $size, $color);
+                $targetProductId = $this->resolveApiRefreshTargetProductId($options, (string) $sku, $size, $color, $apiRowCount);
                 if ($targetProductId > 0) {
                     $existingById = $this->getProduct($targetProductId);
                     if (is_array($existingById)) {
@@ -1447,6 +1448,12 @@ class product
                 }
                 [$whereSize, $whereColor] = $this->resolveVpProductVariantWhereKeys($existingBase, $size, $color);
                 $stmt = $this->db->prepare($this->apiRefreshCatalogUpdateSql($targetProductId > 0));
+                if (!$stmt) {
+                    return [
+                        'success' => false,
+                        'message' => 'Database prepare failed: ' . ($this->db->error ?: 'Could not prepare product refresh update.'),
+                    ];
+                }
                 if ($stmt) {
                     // $costPrice = isset($product['cost_price']) ? (float)$product['cost_price'] : 0.0;
                     // $gst = isset($product['gst']) ? (float)$product['gst'] : 0.0;
@@ -2185,11 +2192,21 @@ class product
         return $map;
     }
 
-    private function resolveApiRefreshTargetProductId(array $options, string $sku, string $size, string $color): int
-    {
+    private function resolveApiRefreshTargetProductId(
+        array $options,
+        string $sku,
+        string $size,
+        string $color,
+        int $apiRowCount = 1
+    ): int {
+        $currentProductId = (int) ($options['current_product_id'] ?? 0);
+        if ($apiRowCount === 1 && $currentProductId > 0) {
+            return $currentProductId;
+        }
+
         $map = $this->buildDetailVariantProductIdMap($options);
         if ($map === []) {
-            return 0;
+            return $currentProductId > 0 ? $currentProductId : 0;
         }
 
         $key = self::apiRefreshVariantMatchKey($sku, $size, $color);
@@ -2201,7 +2218,7 @@ class product
             return (int) reset($map);
         }
 
-        return 0;
+        return $currentProductId > 0 ? $currentProductId : 0;
     }
 
     private function apiRefreshCatalogUpdateSql(bool $whereByProductId): string

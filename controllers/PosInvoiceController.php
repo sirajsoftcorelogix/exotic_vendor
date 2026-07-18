@@ -1713,15 +1713,16 @@ class PosInvoiceController
                         . htmlspecialchars($hsnCode) . '</span>';
                 }
                 $listPriceCell = '<td class="right">' . number_format($listUnitDisplay, 2) . '</td>';
-                $discPriceCell = $showDiscPriceColumn
-                    ? '<td class="right">' . number_format($discUnitDisplay, 2) . '</td>'
+                $taxableUnitDisplay = round($this->posInvoiceInclToPretax($discUnitDisplay, $taxRate), 2);
+                $taxableValueCell = $showDiscPriceColumn
+                    ? '<td class="right">' . number_format($taxableUnitDisplay, 2) . '</td>'
                     : '';
                 $itemsrows .= '
                     <tr>
                         <td>' . ($idx + 1) . '</td>
                         <td>' . htmlspecialchars($item['box_no'] ?? '') . '</td>
                         <td class="desc">' . $descHtml . '</td>
-                        ' . $listPriceCell . $discPriceCell . '
+                        ' . $listPriceCell . $taxableValueCell . '
                         <td>' . $qtyInt . '</td>
                         <td class="right">' . number_format($sgstRate, 2) . '</td>
                         <td class="right">' . number_format($sgstAmt, 2) . '</td>
@@ -1935,7 +1936,7 @@ class PosInvoiceController
             if ($showDiscPriceColumn) {
                 $temphtml = str_replace(
                     "<th>HSN</th>\n        <th>Qty</th>\n        <th>Price</th>",
-                    "<th>List Price</th>\n        <th>Disc. Price</th>\n        <th>Qty</th>",
+                    "<th>List Price</th>\n        <th>Taxable Value</th>\n        <th>Qty</th>",
                     $temphtml
                 );
             } else {
