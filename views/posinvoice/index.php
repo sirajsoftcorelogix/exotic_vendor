@@ -65,7 +65,7 @@
                     </span>
                     <div class="min-w-0">
                         <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
-                        <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Invoice date, order, customer, payment type, amount range, and status.</p>
+                        <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Invoice date, order, invoice no., store, customer, payment type, discount flag, amount range, and status.</p>
                     </div>
                 </div>
                 <span class="shrink-0 inline-flex items-center gap-2 text-xs font-semibold text-orange-800">
@@ -89,6 +89,14 @@
                     <div>
                         <label for="order_number" class="block text-xs font-semibold text-gray-600 mb-1">Order number</label>
                         <input type="text" id="order_number" class="pi-filter-input" placeholder="Search order number">
+                    </div>
+                    <div>
+                        <label for="invoice_number" class="block text-xs font-semibold text-gray-600 mb-1">Invoice number</label>
+                        <input type="text" id="invoice_number" class="pi-filter-input" placeholder="Search invoice number">
+                    </div>
+                    <div>
+                        <label for="store_name" class="block text-xs font-semibold text-gray-600 mb-1">Store name</label>
+                        <input type="text" id="store_name" class="pi-filter-input" placeholder="Search store / warehouse">
                     </div>
                     <div>
                         <label for="type" class="block text-xs font-semibold text-gray-600 mb-1">Payment type</label>
@@ -121,6 +129,14 @@
                     <div>
                         <label for="amount_max" class="block text-xs font-semibold text-gray-600 mb-1">Amount max (net payable)</label>
                         <input type="number" id="amount_max" class="pi-filter-input" placeholder="0.00" min="0" step="0.01">
+                    </div>
+                    <div>
+                        <label for="discount_applied" class="block text-xs font-semibold text-gray-600 mb-1">Discount applied</label>
+                        <select id="discount_applied" class="pi-filter-input">
+                            <option value="">All</option>
+                            <option value="1">Yes</option>
+                            <option value="0">No</option>
+                        </select>
                     </div>
                     <div>
                         <label for="status" class="block text-xs font-semibold text-gray-600 mb-1">Invoice status</label>
@@ -173,6 +189,7 @@
                         <th class="p-3 text-left">Store / Warehouse</th>
                         <th class="p-3 text-left">Customer</th>
                         <th class="p-3 text-left">Amount</th>
+                        <th class="p-3 text-left">Disc.</th>
                         <th class="p-3 text-left">Discount</th>
                         <th class="p-3 text-left">Paid</th>
                         <th class="p-3 text-left">Pending</th>
@@ -274,6 +291,18 @@
         return n.toFixed(2);
     }
 
+    function invoiceHasDiscount(value) {
+        const n = parseFloat(value);
+        return !Number.isNaN(n) && n > 0.001;
+    }
+
+    function formatDiscountAppliedFlag(value) {
+        if (invoiceHasDiscount(value)) {
+            return '<span class="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800">Yes</span>';
+        }
+        return '<span class="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">No</span>';
+    }
+
     function escapeHtml(value) {
         return String(value ?? '')
             .replace(/&/g, '&amp;')
@@ -314,10 +343,13 @@
             { id: 'from_date', type: 'value' },
             { id: 'to_date', type: 'value' },
             { id: 'order_number', type: 'value' },
+            { id: 'invoice_number', type: 'value' },
+            { id: 'store_name', type: 'value' },
             { id: 'type', type: 'value' },
             { id: 'customer_id', type: 'value' },
             { id: 'amount_min', type: 'value' },
             { id: 'amount_max', type: 'value' },
+            { id: 'discount_applied', type: 'value' },
             { id: 'status', type: 'value' },
         ];
 
@@ -361,9 +393,12 @@
         document.getElementById('from_date').value = '';
         document.getElementById('to_date').value = '';
         document.getElementById('order_number').value = '';
+        document.getElementById('invoice_number').value = '';
+        document.getElementById('store_name').value = '';
         document.getElementById('type').value = '';
         document.getElementById('amount_min').value = '';
         document.getElementById('amount_max').value = '';
+        document.getElementById('discount_applied').value = '';
         document.getElementById('status').value = '';
         $('#customer_id').val(null).trigger('change');
         loadInvoices();
@@ -376,10 +411,13 @@
             from_date: document.getElementById('from_date').value,
             to_date: document.getElementById('to_date').value,
             order_number: document.getElementById('order_number').value,
+            invoice_number: document.getElementById('invoice_number').value,
+            store_name: document.getElementById('store_name').value,
             type: document.getElementById('type').value,
             customer_id: document.getElementById('customer_id').value,
             amount_min: document.getElementById('amount_min').value,
             amount_max: document.getElementById('amount_max').value,
+            discount_applied: document.getElementById('discount_applied').value,
             status: document.getElementById('status').value,
         });
 
@@ -453,7 +491,7 @@
         const tbody = document.getElementById('invoiceTable');
         if (tbody) {
             tbody.innerHTML = `<tr>
-<td colspan="12" class="p-6 text-center text-gray-400">
+<td colspan="13" class="p-6 text-center text-gray-400">
 <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Loading…
 </td>
 </tr>`;
@@ -470,7 +508,7 @@
 
                 if (!data.length) {
                     html = `<tr>
-<td colspan="12" class="p-6 text-center text-gray-400">
+<td colspan="13" class="p-6 text-center text-gray-400">
 No invoices
 </td>
 </tr>`;
@@ -536,6 +574,7 @@ stroke-linejoin="round"/>
 <td class="p-3">${formatCustomerCell(i)}</td>
 
 <td class="p-3 font-semibold tabular-nums">₹ ${formatInvoiceAmount(i.payable_amount)}</td>
+<td class="p-3">${formatDiscountAppliedFlag(i.discount_amount)}</td>
 <td class="p-3 text-amber-700 tabular-nums">₹ ${formatInvoiceAmount(i.discount_amount)}</td>
 <td class="p-3 text-green-600 tabular-nums">₹ ${formatInvoiceAmount(i.paid_amount)}</td>
 <td class="p-3 text-red-600 tabular-nums">₹ ${formatInvoiceAmount(i.pending_amount)}</td>
@@ -560,7 +599,7 @@ ${deleteBtn}
                 updatePosInvoiceResultSummary(0, false);
                 if (tbody) {
                     tbody.innerHTML = `<tr>
-<td colspan="12" class="p-6 text-center text-red-500">
+<td colspan="13" class="p-6 text-center text-red-500">
 Could not load invoices. Please try again.
 </td>
 </tr>`;

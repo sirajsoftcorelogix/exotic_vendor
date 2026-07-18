@@ -567,6 +567,19 @@ class POSInvoice
             $sql .= " AND o.order_number LIKE '%" . $this->db->real_escape_string((string)$filters['order_number']) . "%'";
         }
 
+        if (!empty($filters['invoice_number'])) {
+            $sql .= " AND i.invoice_number LIKE '%" . $this->db->real_escape_string((string)$filters['invoice_number']) . "%'";
+        }
+
+        if (!empty($filters['store_name'])) {
+            $storeTerm = $this->db->real_escape_string((string) $filters['store_name']);
+            $sql .= " AND (
+                ea.address_title LIKE '%{$storeTerm}%'
+                OR ea.display_name LIKE '%{$storeTerm}%'
+                OR ea.address LIKE '%{$storeTerm}%'
+            )";
+        }
+
         if (!empty($filters['status'])) {
             $sql .= " AND i.status = '" . $this->db->real_escape_string((string)$filters['status']) . "'";
         }
@@ -593,6 +606,14 @@ class POSInvoice
 
         if (!empty($filters['amount_max'])) {
             $sql .= ' AND ROUND(' . $payableSql . ', 2) <= ' . (float)$filters['amount_max'];
+        }
+
+        if (isset($filters['discount_applied']) && $filters['discount_applied'] !== '') {
+            if ((string) $filters['discount_applied'] === '1') {
+                $sql .= " AND ({$discountSql}) > 0.001";
+            } elseif ((string) $filters['discount_applied'] === '0') {
+                $sql .= " AND ({$discountSql}) <= 0.001";
+            }
         }
 
         $sql .= ' ORDER BY i.id DESC';
