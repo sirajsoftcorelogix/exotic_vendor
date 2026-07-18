@@ -758,6 +758,7 @@ class OrdersController
             $previous_remarks = isset($_POST['previous_remarks']) ? trim($_POST['previous_remarks']) : NULL;
 
             if ($order_id > 0 && !empty($new_status)) {
+                $invoiceCancel = null;
                 $update_data = [
                     'status' => $new_status,
                     'remarks' => $remarks,
@@ -803,6 +804,9 @@ class OrdersController
                     && is_array($orderval)
                 ) {
                     $this->syncLocalStockFromVendorApiForOrder($orderval);
+                    global $conn;
+                    require_once __DIR__ . '/../helpers/order_cancel_invoice.php';
+                    $invoiceCancel = order_cancel_linked_invoice_for_order_row($conn, $orderval);
                 }
                 if ($agent_id != $previous_agent) {
                     //log agent change
@@ -857,7 +861,13 @@ class OrdersController
                 }
 
                 if ($updated) {
-                    echo json_encode(['success' => true, 'message' => 'Order status updated successfully.']);
+                    $message = 'Order status updated successfully.';
+                    if (!empty($invoiceCancel['attempted'])) {
+                        $message .= empty($invoiceCancel['success'])
+                            ? ' Linked invoice cancel failed: ' . (string) ($invoiceCancel['message'] ?? '')
+                            : ' Linked invoice cancelled.';
+                    }
+                    echo json_encode(['success' => true, 'message' => $message]);
                 } else {
                     echo json_encode(['success' => false, 'message' => 'Failed to update order status.']);
                 }
@@ -1477,6 +1487,7 @@ class OrdersController
             //exit;
             if (!empty($order_ids) && !empty($new_status)) {
                 $ordersToSyncLocalStock = [];
+                $ordersToCancelInvoice = [];
                 if ($this->isCancelledOrderStatus($new_status)) {
                     foreach ($order_ids as $oid) {
                         $oid = (int) $oid;
@@ -1484,9 +1495,11 @@ class OrdersController
                             continue;
                         }
                         $row = $ordersModel->getOrderById($oid);
-                        if (is_array($row) && !$this->isCancelledOrderStatus((string) ($row['status'] ?? ''))) {
-                            $ordersToSyncLocalStock[] = $row;
+                        if (!is_array($row) || $this->isCancelledOrderStatus((string) ($row['status'] ?? ''))) {
+                            continue;
                         }
+                        $ordersToSyncLocalStock[] = $row;
+                        $ordersToCancelInvoice[] = $row;
                     }
                 }
                 $result = $ordersModel->updateStatusBulk($order_ids, $new_status);
@@ -1524,6 +1537,13 @@ class OrdersController
                 if ($result) {
                     foreach ($ordersToSyncLocalStock as $orderRow) {
                         $this->syncLocalStockFromVendorApiForOrder($orderRow);
+                    }
+                    global $conn;
+                    require_once __DIR__ . '/../helpers/order_cancel_invoice.php';
+                    $invoiceCancelResults = order_cancel_linked_invoices_for_order_rows($conn, $ordersToCancelInvoice);
+                    $invoiceCancelMessage = order_cancel_invoice_summary_message($invoiceCancelResults);
+                    if ($invoiceCancelMessage !== '') {
+                        $result['message'] = trim((string) ($result['message'] ?? 'Order statuses updated successfully.')) . $invoiceCancelMessage;
                     }
                     //session poitem array clean
 

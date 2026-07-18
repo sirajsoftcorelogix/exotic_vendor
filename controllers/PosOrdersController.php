@@ -596,6 +596,7 @@ class PosOrdersController
             $previous_remarks = isset($_POST['previous_remarks']) ? trim($_POST['previous_remarks']) : NULL;
 
             if ($order_id > 0 && !empty($new_status)) {
+                $invoiceCancel = null;
                 $update_data = [
                     'status' => $new_status,
                     'remarks' => $remarks,
@@ -628,6 +629,14 @@ class PosOrdersController
                 //print_array($_POST);
                 if ($new_status != $_POST['previousStatus']) {
                     $commanModel->add_order_status_log($logData);
+                }
+                if (strtolower(trim((string) $new_status)) === 'cancelled'
+                    && strtolower(trim((string) $previous_status)) !== 'cancelled'
+                    && is_array($orderval)
+                ) {
+                    global $conn;
+                    require_once __DIR__ . '/../helpers/order_cancel_invoice.php';
+                    $invoiceCancel = order_cancel_linked_invoice_for_order_row($conn, $orderval);
                 }
                 if ($agent_id != $previous_agent) {
                     //log agent change
@@ -685,6 +694,11 @@ class PosOrdersController
                     $localMessage = 'Order status updated successfully.';
                     if (!empty($apiSync['attempted']) && empty($apiSync['success'])) {
                         $localMessage .= ' Exotic India sync failed — use Retry to sync again.';
+                    }
+                    if (!empty($invoiceCancel['attempted'])) {
+                        $localMessage .= empty($invoiceCancel['success'])
+                            ? ' Linked invoice cancel failed: ' . (string) ($invoiceCancel['message'] ?? '')
+                            : ' Linked invoice cancelled.';
                     }
                     echo json_encode([
                         'success' => true,
@@ -1464,6 +1478,21 @@ class PosOrdersController
             //print_array($_POST);
             //exit;
             if (!empty($order_ids) && !empty($new_status)) {
+                $ordersToCancelInvoice = [];
+                if (strtolower(trim((string) $new_status)) === 'cancelled') {
+                    require_once __DIR__ . '/../helpers/order_cancel_invoice.php';
+                    foreach ($order_ids as $oid) {
+                        $oid = (int) $oid;
+                        if ($oid <= 0) {
+                            continue;
+                        }
+                        $row = $ordersModel->getOrderById($oid);
+                        if (!is_array($row) || is_order_status_cancelled((string) ($row['status'] ?? ''))) {
+                            continue;
+                        }
+                        $ordersToCancelInvoice[] = $row;
+                    }
+                }
                 $result = $ordersModel->updateStatusBulk($order_ids, $new_status);
                 $apiFailures = [];
                 $apiSynced = 0;
@@ -1502,6 +1531,15 @@ class PosOrdersController
                     $message = (string) ($result['message'] ?? 'Order statuses updated successfully.');
                     if (!empty($apiFailures)) {
                         $message .= ' Exotic India sync failed for ' . count($apiFailures) . ' item(s).';
+                    }
+                    if (!empty($ordersToCancelInvoice)) {
+                        global $conn;
+                        require_once __DIR__ . '/../helpers/order_cancel_invoice.php';
+                        $invoiceCancelResults = order_cancel_linked_invoices_for_order_rows($conn, $ordersToCancelInvoice);
+                        $invoiceCancelMessage = order_cancel_invoice_summary_message($invoiceCancelResults);
+                        if ($invoiceCancelMessage !== '') {
+                            $message .= $invoiceCancelMessage;
+                        }
                     }
                     echo json_encode([
                         'success' => true,
