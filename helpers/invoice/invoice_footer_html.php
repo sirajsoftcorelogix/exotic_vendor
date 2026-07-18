@@ -1,7 +1,8 @@
 <?php
 
 /**
- * Exclusive Stores footer from exotic_address (DB only).
+ * Exclusive Stores address block from exotic_address (DB only).
+ * Rendered in the invoice header below the company name.
  *
  * @param array<string, mixed> $invoice
  * @param list<array<string, mixed>> $items

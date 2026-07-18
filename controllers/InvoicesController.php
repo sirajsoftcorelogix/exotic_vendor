@@ -1103,7 +1103,7 @@ class InvoicesController
             global $conn;
             $footerPaymentModel = new Payment($conn);
         }
-        $exclusiveStoresFooter = invoice_resolve_exclusive_stores_footer_html(
+        $exclusiveStoresHeader = invoice_resolve_exclusive_stores_footer_html(
             $invoice,
             $items,
             $commanModel,
@@ -1121,7 +1121,7 @@ class InvoicesController
                 '{{SUMMARY_ROWS}}',
                 '{{AMOUNT_IN_WORDS}}',
                 '{{TERM_AND_CONDITIONS}}',
-                '{{EXCLUSIVE_STORES_FOOTER}}',
+                '{{EXCLUSIVE_STORES_HEADER}}',
             ],
             [
                 htmlspecialchars($invoice['invoice_number'] ?? 'N/A'),
@@ -1132,7 +1132,7 @@ class InvoicesController
                 $summaryrows,
                 numberToWords($totalAmount ?? 0),
                 nl2br(htmlspecialchars($invoice['terms_and_conditions'] ?? '')),
-                $exclusiveStoresFooter,
+                $exclusiveStoresHeader,
             ],
             $temphtml
         );
