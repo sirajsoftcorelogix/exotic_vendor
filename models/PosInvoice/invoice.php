@@ -553,7 +553,8 @@ class POSInvoice
             FROM vp_invoices i
             LEFT JOIN vp_order_info o ON o.id = i.vp_order_info_id
             LEFT JOIN vp_customers c ON c.id = i.customer_id
-            LEFT JOIN countries cnt ON UPPER(cnt.country_code) = UPPER(o.country)
+            LEFT JOIN countries cnt ON CONVERT(UPPER(cnt.country_code) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                = CONVERT(UPPER(o.country) USING utf8mb4) COLLATE utf8mb4_unicode_ci
             LEFT JOIN exotic_address ea ON ea.id = i.warehouse_id
             WHERE i.pos_flag = 1
         ";
