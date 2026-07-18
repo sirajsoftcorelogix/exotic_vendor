@@ -52,6 +52,12 @@ class PosInvoiceController
         ]);
     }
 
+    public function userGuide()
+    {
+        is_login();
+        renderTemplate('views/posinvoice/user_guide.php', [], 'Invoice Module — User Guide');
+    }
+
     /* ===============================
        AJAX LIST
     =============================== */

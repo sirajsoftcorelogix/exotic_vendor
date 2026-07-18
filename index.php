@@ -1711,6 +1711,10 @@ switch ($page) {
                 $controller->updateInvoiceNumberAjax();
                 break;
 
+            case 'user_guide':
+                $controller->userGuide();
+                break;
+
             default:
                 $controller->index();
                 break;

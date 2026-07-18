@@ -1,8 +1,16 @@
 <div class="min-h-screen bg-gray-50">
 
     <header class="border-b bg-white">
-        <div class="mx-auto flex max-w-[1500px] items-center gap-3 px-4 py-3">
+        <div class="mx-auto flex max-w-[1500px] items-center justify-between gap-3 px-4 py-3">
             <h1 class="text-lg font-semibold">POS Invoice Listing</h1>
+            <a href="?page=posinvoice&action=user_guide"
+               target="_blank"
+               rel="noopener noreferrer"
+               class="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-800 hover:bg-orange-100"
+               title="Open invoice module user guide">
+                <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
+                User guide
+            </a>
         </div>
     </header>
 
