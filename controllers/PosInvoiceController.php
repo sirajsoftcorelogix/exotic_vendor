@@ -66,6 +66,8 @@ class PosInvoiceController
     {
         $filters = [
             'order_number' => $_GET['order_number'] ?? '',
+            'invoice_number' => $_GET['invoice_number'] ?? '',
+            'store_name' => $_GET['store_name'] ?? '',
             'status' => $_GET['status'] ?? '',
             'from_date' => $_GET['from_date'] ?? '',
             'to_date' => $_GET['to_date'] ?? '',
@@ -73,6 +75,7 @@ class PosInvoiceController
             'customer_id' => $_GET['customer_id'] ?? '',
             'amount_min' => $_GET['amount_min'] ?? '',
             'amount_max' => $_GET['amount_max'] ?? '',
+            'discount_applied' => $_GET['discount_applied'] ?? '',
             'warehouse_id' => null,
         ];
 
@@ -147,6 +150,7 @@ class PosInvoiceController
             'Customer Country',
             'Payment Type',
             'Amount (Net Payable)',
+            'Discount Applied',
             'Discount',
             'Paid',
             'Pending',
@@ -155,7 +159,7 @@ class PosInvoiceController
         ];
         $sheet->fromArray($headers, null, 'A1');
 
-        $headerRange = 'A1:O1';
+        $headerRange = 'A1:P1';
         $sheet->getStyle($headerRange)->getFont()->setBold(true);
         $sheet->getStyle($headerRange)->getFill()
             ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
@@ -163,6 +167,7 @@ class PosInvoiceController
 
         $rowNum = 2;
         foreach ($rows as $row) {
+            $discountAmount = round((float) ($row['discount_amount'] ?? 0), 2);
             $sheet->fromArray([
                 (int) ($row['id'] ?? 0),
                 (string) ($row['invoice_date'] ?? ''),
@@ -174,7 +179,8 @@ class PosInvoiceController
                 (string) ($row['customer_billing_country'] ?? ''),
                 $this->formatPosInvoicePaymentTypeLabel($row['payment_type'] ?? ''),
                 round((float) ($row['payable_amount'] ?? 0), 2),
-                round((float) ($row['discount_amount'] ?? 0), 2),
+                $discountAmount > 0.001 ? 'Yes' : 'No',
+                $discountAmount,
                 round((float) ($row['paid_amount'] ?? 0), 2),
                 round((float) ($row['pending_amount'] ?? 0), 2),
                 round((float) ($row['total_amount'] ?? 0), 2),
@@ -184,11 +190,11 @@ class PosInvoiceController
         }
 
         $lastRow = max(2, $rowNum - 1);
-        $moneyRange = 'J2:N' . $lastRow;
+        $moneyRange = 'J2:J' . $lastRow . ',L2:O' . $lastRow;
         $sheet->getStyle($moneyRange)->getNumberFormat()->setFormatCode('#,##0.00');
         $sheet->getStyle('B2:B' . $lastRow)->getNumberFormat()->setFormatCode('yyyy-mm-dd');
 
-        foreach (range('A', 'O') as $col) {
+        foreach (range('A', 'P') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
