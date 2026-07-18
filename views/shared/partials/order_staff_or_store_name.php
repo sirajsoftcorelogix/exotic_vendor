@@ -5,7 +5,7 @@ $value = htmlspecialchars((string) ($order['staff_name'] ?? 'N/A'), ENT_QUOTES, 
 $labelClass = 'heading-typography';
 $valueClass = 'data-typography';
 if ($usesStoreName) {
-    $storeHighlightClass = ' inline-flex items-center rounded-full border border-[#5c4d99] bg-[#f0ebff] px-2.5 py-0.5 text-sm font-normal text-gray-900';
+    $storeHighlightClass = ' inline-flex items-center rounded-full border border-orange-600 bg-orange-50 px-2.5 py-0.5 text-sm font-normal text-gray-900';
     $labelClass .= $storeHighlightClass;
     $valueClass .= $storeHighlightClass;
 }
