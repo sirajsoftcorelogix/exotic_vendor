@@ -143,24 +143,12 @@ function invoice_resolve_seller_state(?array $firm): string
 }
 
 /**
- * Seller state for GST place-of-supply checks (app settings, firm_details, GSTIN fallback).
- *
- * @param object|null $commanModel
+ * Seller state for GST place-of-supply checks (app settings, GSTIN prefix, Delhi default).
  */
 function invoice_resolve_firm_seller_state($commanModel = null): string
 {
     require_once __DIR__ . '/../app_settings.php';
     $sellerState = invoice_resolve_seller_state(app_setting_firm_details());
-
-    if ($sellerState === ''
-        && is_object($commanModel)
-        && method_exists($commanModel, 'getRecordById')
-    ) {
-        $firmRow = $commanModel->getRecordById('firm_details', 1);
-        if (is_array($firmRow)) {
-            $sellerState = invoice_resolve_seller_state($firmRow);
-        }
-    }
 
     if ($sellerState === '') {
         $sellerState = 'DELHI';
