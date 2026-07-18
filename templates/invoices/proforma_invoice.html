@@ -112,7 +112,15 @@
         vertical-align: top;
     }
 
+    .items.invoice-notes td {
+        text-align: left;
+    }
+
     .invoice-notes .signatory {
+        text-align: center;
+    }
+
+    .items.invoice-notes td.signatory {
         text-align: center;
     }
 </style>
@@ -202,7 +210,7 @@
 </table>
 <table class="items invoice-notes">
     <tr>
-        <td class="invoice-text">
+        <td class="invoice-text" style="text-align: left;">
             <b>Amount in Words:</b><br>
             {{AMOUNT_IN_WORDS}} ONLY
         </td>
@@ -212,8 +220,7 @@
 <table class="items invoice-notes">
     <tr>
         <td class="invoice-text" style="width:50%;">
-            <b>Terms & Conditions:</b><br>
-            {{TERM_AND_CONDITIONS}}
+            {{TERMS_AND_CONDITIONS_BLOCK}}
         </td>
         <td class="invoice-text signatory" style="width:50%;">
             For EXOTIC INDIA ART PVT LTD<br><br>

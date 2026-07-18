@@ -1908,6 +1908,7 @@ class PosInvoiceController
         // Fetch customer and address information
         require_once __DIR__ . '/../helpers/invoice/invoice_address_html.php';
         require_once __DIR__ . '/../helpers/invoice/invoice_footer_html.php';
+        require_once __DIR__ . '/../helpers/invoice/invoice_terms_html.php';
         global $paymentModel;
         $exclusiveStoresHeader = invoice_resolve_exclusive_stores_footer_html(
             $invoice,
@@ -1959,7 +1960,7 @@ class PosInvoiceController
                 '{{ITEM_ROWS}}',
                 '{{SUMMARY_ROWS}}',
                 '{{AMOUNT_IN_WORDS}}',
-                '{{TERM_AND_CONDITIONS}}',
+                '{{TERMS_AND_CONDITIONS_BLOCK}}',
                 '{{EXCLUSIVE_STORES_HEADER}}',
             ],
             [
@@ -1970,7 +1971,7 @@ class PosInvoiceController
                 $itemsrows,
                 $summaryrows,
                 numberToWords($totalAmount ?? 0),
-                nl2br(htmlspecialchars($invoice['terms_and_conditions'] ?? '')),
+                invoice_format_terms_and_conditions_block($invoice['terms_and_conditions'] ?? ''),
                 $exclusiveStoresHeader,
             ],
             $temphtml
