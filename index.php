@@ -1683,6 +1683,10 @@ switch ($page) {
                 $controller->sales_summary_ajax();
                 break;
 
+            case 'sales_store_detail_ajax':
+                $controller->sales_store_detail_ajax();
+                break;
+
             case 'export_sales_summary':
                 $controller->export_sales_summary();
                 break;
