@@ -918,7 +918,7 @@ class InvoicesController
 
     private function generateInvoiceHtml($invoice, $items, $type = '')
     {
-        global $commanModel;
+        global $commanModel, $conn;
 
         // Initialize variables
         $itemsrows = '';
@@ -1098,7 +1098,8 @@ class InvoicesController
         // Fetch customer and address information
         require_once __DIR__ . '/../helpers/invoice/invoice_address_html.php';
         $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
-        $addressBlocks = invoice_resolve_bill_ship_html(is_array($customer) ? $customer : null);
+        global $conn;
+        $addressBlocks = invoice_resolve_bill_ship_html(is_array($customer) ? $customer : null, $conn ?? null);
         $billToInfo = $addressBlocks['bill'];
         $shipToInfo = $addressBlocks['ship'];
         //print_r($billToInfo);
