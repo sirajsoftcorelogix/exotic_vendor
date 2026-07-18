@@ -1687,6 +1687,10 @@ switch ($page) {
                 $controller->sales_store_detail_ajax();
                 break;
 
+            case 'sales_store_detail':
+                $controller->sales_store_detail();
+                break;
+
             case 'export_sales_summary':
                 $controller->export_sales_summary();
                 break;

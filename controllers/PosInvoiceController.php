@@ -336,6 +336,38 @@ class PosInvoiceController
         exit;
     }
 
+    public function sales_store_detail(): void
+    {
+        global $usersModel;
+
+        is_login();
+
+        $filters = $this->resolvePosSalesStoreDetailFiltersFromRequest();
+        if ($filters === null) {
+            header('Location: index.php?page=posinvoice&action=sales_summary');
+            exit;
+        }
+
+        $warehouseId = (int) $filters['warehouse_id'];
+        $warehouse = $usersModel->getWarehouseById($warehouseId);
+        $warehouseName = trim((string) ($warehouse['address_title'] ?? ''));
+        if ($warehouseName === '') {
+            $warehouseName = 'Warehouse #' . $warehouseId;
+        }
+
+        renderTemplate('views/posinvoice/sales_store_detail.php', [
+            'warehouse_id' => $warehouseId,
+            'warehouse_name' => $warehouseName,
+            'initial_filters' => [
+                'from_date' => $_GET['from_date'] ?? '',
+                'to_date' => $_GET['to_date'] ?? '',
+                'type' => $_GET['type'] ?? '',
+                'discount_applied' => $_GET['discount_applied'] ?? '',
+                'status' => $_GET['status'] ?? '',
+            ],
+        ], 'POS Sales — ' . $warehouseName);
+    }
+
     public function export_sales_summary(): void
     {
         global $invoiceModel;
