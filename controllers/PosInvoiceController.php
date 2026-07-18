@@ -142,76 +142,101 @@ class PosInvoiceController
 
         require_once 'vendor/autoload.php';
 
-        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('POS Invoices');
+        try {
+            $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('POS Invoices');
 
-        $headers = [
-            'ID',
-            'Invoice Date',
-            'Order Number',
-            'Invoice Number',
-            'Store / Warehouse',
-            'Customer',
-            'Customer State',
-            'Customer Country',
-            'Payment Type',
-            'Amount (Net Payable)',
-            'Discount Applied',
-            'Discount',
-            'Paid',
-            'Pending',
-            'Gross Amount',
-            'Status',
-        ];
-        $sheet->fromArray($headers, null, 'A1');
+            $headers = [
+                'ID',
+                'Invoice Date',
+                'Order Number',
+                'Invoice Number',
+                'Store / Warehouse',
+                'Customer',
+                'Customer State',
+                'Customer Country',
+                'Payment Type',
+                'Amount (Net Payable)',
+                'Discount Applied',
+                'Discount',
+                'Paid',
+                'Pending',
+                'Gross Amount',
+                'Status',
+            ];
+            $sheet->fromArray($headers, null, 'A1');
 
-        $headerRange = 'A1:P1';
-        $sheet->getStyle($headerRange)->getFont()->setBold(true);
-        $sheet->getStyle($headerRange)->getFill()
-            ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
-            ->getStartColor()->setARGB('FFF3F4F6');
+            $headerRange = 'A1:P1';
+            $sheet->getStyle($headerRange)->getFont()->setBold(true);
+            $sheet->getStyle($headerRange)->getFill()
+                ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                ->getStartColor()->setARGB('FFF3F4F6');
 
-        $rowNum = 2;
-        foreach ($rows as $row) {
-            $discountAmount = round((float) ($row['discount_amount'] ?? 0), 2);
-            $sheet->fromArray([
-                (int) ($row['id'] ?? 0),
-                (string) ($row['invoice_date'] ?? ''),
-                (string) ($row['order_number'] ?? ''),
-                (string) ($row['invoice_number'] ?? ''),
-                (string) ($row['warehouse_name'] ?? ''),
-                (string) ($row['customer_name'] ?? ''),
-                (string) ($row['customer_billing_state'] ?? ''),
-                (string) ($row['customer_billing_country'] ?? ''),
-                $this->formatPosInvoicePaymentTypeLabel($row['payment_type'] ?? ''),
-                round((float) ($row['payable_amount'] ?? 0), 2),
-                $discountAmount > 0.001 ? 'Yes' : 'No',
-                $discountAmount,
-                round((float) ($row['paid_amount'] ?? 0), 2),
-                round((float) ($row['pending_amount'] ?? 0), 2),
-                round((float) ($row['total_amount'] ?? 0), 2),
-                ucfirst(strtolower(trim((string) ($row['status'] ?? '')))),
-            ], null, 'A' . $rowNum);
-            $rowNum++;
+            $rowNum = 2;
+            foreach ($rows as $row) {
+                $discountAmount = round((float) ($row['discount_amount'] ?? 0), 2);
+                $sheet->fromArray([
+                    (int) ($row['id'] ?? 0),
+                    (string) ($row['invoice_date'] ?? ''),
+                    (string) ($row['order_number'] ?? ''),
+                    (string) ($row['invoice_number'] ?? ''),
+                    (string) ($row['warehouse_name'] ?? ''),
+                    (string) ($row['customer_name'] ?? ''),
+                    (string) ($row['customer_billing_state'] ?? ''),
+                    (string) ($row['customer_billing_country'] ?? ''),
+                    $this->formatPosInvoicePaymentTypeLabel($row['payment_type'] ?? ''),
+                    round((float) ($row['payable_amount'] ?? 0), 2),
+                    $discountAmount > 0.001 ? 'Yes' : 'No',
+                    $discountAmount,
+                    round((float) ($row['paid_amount'] ?? 0), 2),
+                    round((float) ($row['pending_amount'] ?? 0), 2),
+                    round((float) ($row['total_amount'] ?? 0), 2),
+                    ucfirst(strtolower(trim((string) ($row['status'] ?? '')))),
+                ], null, 'A' . $rowNum);
+                $rowNum++;
+            }
+
+            $lastRow = max(2, $rowNum - 1);
+            $moneyFormat = '#,##0.00';
+            $sheet->getStyle('J2:J' . $lastRow)->getNumberFormat()->setFormatCode($moneyFormat);
+            $sheet->getStyle('L2:O' . $lastRow)->getNumberFormat()->setFormatCode($moneyFormat);
+            $sheet->getStyle('B2:B' . $lastRow)->getNumberFormat()->setFormatCode('yyyy-mm-dd');
+
+            foreach (range('A', 'P') as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
+
+            $filename = 'pos_invoices_' . date('Y-m-d_His') . '.xlsx';
+
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            if (headers_sent()) {
+                throw new \RuntimeException('Export response headers were already sent.');
+            }
+
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Content-Transfer-Encoding: binary');
+            header('Cache-Control: max-age=0');
+            header('Pragma: public');
+
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save('php://output');
+        } catch (\Throwable $e) {
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Could not generate Excel file. Please try again.',
+            ]);
         }
-
-        $lastRow = max(2, $rowNum - 1);
-        $moneyRange = 'J2:J' . $lastRow . ',L2:O' . $lastRow;
-        $sheet->getStyle($moneyRange)->getNumberFormat()->setFormatCode('#,##0.00');
-        $sheet->getStyle('B2:B' . $lastRow)->getNumberFormat()->setFormatCode('yyyy-mm-dd');
-
-        foreach (range('A', 'P') as $col) {
-            $sheet->getColumnDimension($col)->setAutoSize(true);
-        }
-
-        $filename = 'pos_invoices_' . date('Y-m-d_His') . '.xlsx';
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
-        header('Cache-Control: max-age=0');
-
-        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
-        $writer->save('php://output');
         exit;
     }
     /* ===============================
