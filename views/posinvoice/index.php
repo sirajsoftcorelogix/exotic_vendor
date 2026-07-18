@@ -166,6 +166,41 @@
         return n.toFixed(2);
     }
 
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function formatCustomerCell(invoice) {
+        const name = escapeHtml(invoice.customer_name ?? '');
+        const state = String(invoice.customer_billing_state ?? '').trim();
+        const country = String(invoice.customer_billing_country ?? '').trim();
+        let location = '';
+
+        if (state && country) {
+            location = `${state}, ${country}`;
+        } else if (state) {
+            location = state;
+        } else if (country) {
+            location = country;
+        }
+
+        if (!location) {
+            return name;
+        }
+
+        return `
+            <div style="line-height:1.35">
+                <div>${name}</div>
+                <div style="font-size:11px;color:#6b7280">${escapeHtml(location)}</div>
+            </div>
+        `;
+    }
+
     function loadInvoices() {
 
         let url = `?page=posinvoice&action=list_ajax&from_date=${document.getElementById('from_date').value}
@@ -248,7 +283,7 @@ stroke-linejoin="round"/>
 <td class="p-3">${i.order_number ?? ''}</td>
 <td class="p-3">${invoiceCell}</td>
 <td class="p-3 text-gray-700">${i.warehouse_name ?? ''}</td>
-<td class="p-3">${i.customer_name ?? ''}</td>
+<td class="p-3">${formatCustomerCell(i)}</td>
 
 <td class="p-3 font-semibold tabular-nums">₹ ${formatInvoiceAmount(i.payable_amount)}</td>
 <td class="p-3 text-amber-700 tabular-nums">₹ ${formatInvoiceAmount(i.discount_amount)}</td>
