@@ -543,6 +543,8 @@ class POSInvoice
                 o.order_number,
                 o.payment_type,
                 c.name AS customer_name,
+                o.state AS customer_billing_state,
+                COALESCE(cnt.name, o.country) AS customer_billing_country,
                 COALESCE(ea.address_title, CONCAT('Warehouse #', i.warehouse_id)) AS warehouse_name,
                 ROUND({$payableSql}, 2) AS payable_amount,
                 {$discountSql} AS discount_amount,
@@ -551,6 +553,7 @@ class POSInvoice
             FROM vp_invoices i
             LEFT JOIN vp_order_info o ON o.id = i.vp_order_info_id
             LEFT JOIN vp_customers c ON c.id = i.customer_id
+            LEFT JOIN countries cnt ON UPPER(cnt.country_code) = UPPER(o.country)
             LEFT JOIN exotic_address ea ON ea.id = i.warehouse_id
             WHERE i.pos_flag = 1
         ";

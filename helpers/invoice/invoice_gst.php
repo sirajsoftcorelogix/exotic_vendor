@@ -97,7 +97,7 @@ function invoice_resolve_gst_component_plan(?array $orderInfo, float $gstRate, $
     }
 
     $useIgst = invoice_order_info_is_overseas($orderInfo)
-        || invoice_order_info_uses_igst($orderInfo);
+        || invoice_order_info_uses_igst($orderInfo, null, null);
     $rates = invoice_gst_component_rates($gstRate, $useIgst);
     $rates['use_igst'] = $useIgst;
 
@@ -129,7 +129,44 @@ function invoice_resolve_seller_state(?array $firm): string
         return '';
     }
 
-    return invoice_normalize_gst_state($firm['state'] ?? '');
+    $state = invoice_normalize_gst_state($firm['state'] ?? '');
+    if ($state !== '') {
+        return $state;
+    }
+
+    $gst = preg_replace('/\s+/', '', strtoupper((string)($firm['gst'] ?? $firm['gstin'] ?? '')));
+    if (preg_match('/^07/', $gst)) {
+        return 'DELHI';
+    }
+
+    return '';
+}
+
+/**
+ * Seller state for GST place-of-supply checks (app settings, firm_details, GSTIN fallback).
+ *
+ * @param object|null $commanModel
+ */
+function invoice_resolve_firm_seller_state($commanModel = null): string
+{
+    require_once __DIR__ . '/../app_settings.php';
+    $sellerState = invoice_resolve_seller_state(app_setting_firm_details());
+
+    if ($sellerState === ''
+        && is_object($commanModel)
+        && method_exists($commanModel, 'getRecordById')
+    ) {
+        $firmRow = $commanModel->getRecordById('firm_details', 1);
+        if (is_array($firmRow)) {
+            $sellerState = invoice_resolve_seller_state($firmRow);
+        }
+    }
+
+    if ($sellerState === '') {
+        $sellerState = 'DELHI';
+    }
+
+    return $sellerState;
 }
 
 function invoice_should_use_igst(?string $supplyState, ?string $sellerState): bool
@@ -144,16 +181,20 @@ function invoice_should_use_igst(?string $supplyState, ?string $sellerState): bo
     return $supply !== $seller;
 }
 
-function invoice_order_info_uses_igst(?array $orderInfo, ?array $firm = null): bool
+function invoice_order_info_uses_igst(?array $orderInfo, ?array $firm = null, $commanModel = null): bool
 {
     if ($firm === null) {
-        require_once __DIR__ . '/../app_settings.php';
-        $firm = app_setting_firm_details();
+        $sellerState = invoice_resolve_firm_seller_state($commanModel);
+    } else {
+        $sellerState = invoice_resolve_seller_state($firm);
+        if ($sellerState === '') {
+            $sellerState = invoice_resolve_firm_seller_state($commanModel);
+        }
     }
 
     return invoice_should_use_igst(
         invoice_resolve_place_of_supply_state($orderInfo),
-        invoice_resolve_seller_state($firm)
+        $sellerState
     );
 }
 
@@ -174,8 +215,8 @@ function invoice_resolve_uses_igst_for_invoice(array $invoice, $commanModel): ?b
 
     require_once __DIR__ . '/../app_settings.php';
     $supplyState = invoice_resolve_place_of_supply_state($orderInfo);
-    $sellerState = invoice_resolve_seller_state(app_setting_firm_details());
-    if ($supplyState === '' || $sellerState === '') {
+    $sellerState = invoice_resolve_firm_seller_state($commanModel);
+    if ($supplyState === '') {
         return null;
     }
 
