@@ -48,15 +48,87 @@ function resolve_invoice_number(mysqli $conn, string $customInvoiceNumber = '', 
 
     $invoicePrefix = (string) $model->get('invoice_prefix', 'INV');
     $invoiceSeries = (int) $model->getStoredValue('invoice_series', 0);
-    $invoiceSeries++;
+    if ($invoiceSeries <= 0) {
+        $invoiceSeries = infer_invoice_series_from_invoices($conn, $invoicePrefix);
+    }
 
+    $invoiceSeries++;
     $userId = (int) ($_SESSION['user']['id'] ?? 0);
-    if (!$model->setValue('invoice_series', $invoiceSeries, $userId, true)) {
-        return ['success' => false, 'message' => 'Could not update invoice series.'];
+
+    $saveResult = $model->setValue('invoice_series', $invoiceSeries, $userId, true);
+    if ($saveResult !== true && $saveResult !== 'unchanged') {
+        if (!app_setting_upsert_raw('invoice_series', (string) $invoiceSeries, $userId)) {
+            return ['success' => false, 'message' => 'Could not update invoice series.'];
+        }
     }
 
     return [
         'success' => true,
-        'invoice_number' => $invoicePrefix . '-' . str_pad((string) $invoiceSeries, 6, '0', STR_PAD_LEFT),
+        'invoice_number' => format_auto_invoice_number($invoicePrefix, $invoiceSeries),
     ];
+}
+
+function format_auto_invoice_number(string $prefix, int $series): string
+{
+    if ($prefix !== '' && preg_match('/[\/_]$/', $prefix)) {
+        return $prefix . (string) $series;
+    }
+
+    return $prefix . '-' . str_pad((string) $series, 6, '0', STR_PAD_LEFT);
+}
+
+function infer_invoice_series_from_invoices(mysqli $conn, string $prefix): int
+{
+    $maxSeries = 0;
+
+    if ($prefix !== '') {
+        $like = $prefix . '%';
+        $stmt = $conn->prepare(
+            'SELECT invoice_number
+             FROM vp_invoices
+             WHERE invoice_number LIKE ?
+             ORDER BY id DESC
+             LIMIT 300'
+        );
+        if ($stmt) {
+            $stmt->bind_param('s', $like);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $prefixLen = strlen($prefix);
+            while ($row = $result->fetch_assoc()) {
+                $number = (string) ($row['invoice_number'] ?? '');
+                if ($number === '' || strncmp($number, $prefix, $prefixLen) !== 0) {
+                    continue;
+                }
+                $suffix = substr($number, $prefixLen);
+                if ($suffix !== '' && ctype_digit($suffix)) {
+                    $maxSeries = max($maxSeries, (int) $suffix);
+                }
+            }
+            $stmt->close();
+        }
+    }
+
+    if ($maxSeries > 0) {
+        return $maxSeries;
+    }
+
+    $result = $conn->query(
+        "SELECT invoice_number
+         FROM vp_invoices
+         WHERE invoice_number REGEXP '^INV-[0-9]+$'
+         ORDER BY id DESC
+         LIMIT 300"
+    );
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $number = (string) ($row['invoice_number'] ?? '');
+            if (preg_match('/^INV-(\d+)$/', $number, $matches)) {
+                $maxSeries = max($maxSeries, (int) $matches[1]);
+            }
+        }
+        $result->free();
+    }
+
+    return $maxSeries;
 }

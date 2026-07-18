@@ -198,6 +198,7 @@ class PosOrdersController
         //is_login();
         global $ordersModel;
         global $productModel;
+        global $conn;
         // if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
         //     http_response_code(403); // Forbidden
         //     die('Unauthorized access.');
@@ -427,6 +428,8 @@ class PosOrdersController
 
                 if (isset($data['success']) && $data['success'] == 1) {
                     $imported++;
+                    require_once __DIR__ . '/../helpers/BookPurchaseReplenishment.php';
+                    BookPurchaseReplenishment::tryProcessImportedOrderLine($conn, $productModel, $rdata);
                 }
                 //print_array($rdata);   
                 // insert vendor name(s) into vp_vendors during import
@@ -701,33 +704,317 @@ class PosOrdersController
 
         exit;
     }
+
+    /**
+     * @param array<string, mixed>|null $invoice
+     * @return array<string, mixed>|null
+     */
+    private function buildOrderInvoiceDisplaySummary(?array $invoice, string $orderNumber = ''): ?array
+    {
+        global $conn, $ordersModel;
+
+        if (!is_array($invoice) || (int)($invoice['id'] ?? 0) <= 0) {
+            return null;
+        }
+
+        $orderNumber = trim($orderNumber);
+        $subtotal = round((float)($invoice['subtotal'] ?? 0), 2);
+        $taxAmount = round((float)($invoice['tax_amount'] ?? 0), 2);
+        $inclusiveGoods = round($subtotal + $taxAmount, 2);
+
+        $posDiscounts = null;
+        $notes = $invoice['notes'] ?? null;
+        if ($notes !== null && trim((string)$notes) !== '') {
+            $decoded = json_decode((string)$notes, true);
+            $posDiscounts = is_array($decoded) ? ($decoded['pos_discounts'] ?? null) : null;
+        }
+
+        $lineDiscount = 0.0;
+        $orderLevelDisc = 0.0;
+        $notesGrand = 0.0;
+        if (is_array($posDiscounts)) {
+            $lineDiscount = round((float)($posDiscounts['line_discount'] ?? 0), 2);
+            $orderLevelDisc = round(
+                (float)($posDiscounts['coupon_discount'] ?? 0)
+                + (float)($posDiscounts['cash_discount'] ?? 0)
+                + (float)($posDiscounts['gift_discount'] ?? 0),
+                2
+            );
+            $notesGrand = round((float)($posDiscounts['grand_total'] ?? 0), 2);
+        }
+
+        if ($orderNumber !== '') {
+            $info = $ordersModel->getAddressInfoByOrderNumber($orderNumber);
+        } else {
+            $info = null;
+        }
+        if ($orderLevelDisc <= 0 && is_array($info)) {
+            $orderLevelDisc = round(
+                (float)($info['custom_reduce'] ?? 0)
+                + (float)($info['coupon_reduce'] ?? 0)
+                + (float)($info['giftvoucher_reduce'] ?? 0),
+                2
+            );
+        }
+
+        $discountLines = $this->buildOrderInvoiceDiscountLines(is_array($posDiscounts) ? $posDiscounts : [], is_array($info) ? $info : null);
+        $orderLevelDiscForGrand = 0.0;
+        $displayDiscount = 0.0;
+        foreach ($discountLines as $discountLine) {
+            $amount = round((float)($discountLine['amount'] ?? 0), 2);
+            $displayDiscount += $amount;
+            if (($discountLine['type'] ?? '') !== 'line') {
+                $orderLevelDiscForGrand += $amount;
+            }
+        }
+        if ($displayDiscount <= 0) {
+            $displayDiscount = $orderLevelDisc > 0
+                ? $orderLevelDisc
+                : round((float)($invoice['discount_amount'] ?? 0), 2);
+            $orderLevelDiscForGrand = $orderLevelDisc;
+        }
+
+        $grandTotal = $notesGrand > 0
+            ? $notesGrand
+            : round((float)($invoice['total_amount'] ?? 0), 2);
+
+        if ($orderLevelDiscForGrand > 0.001 && $inclusiveGoods > 0
+            && (abs($grandTotal - $inclusiveGoods) < 0.02 || $grandTotal <= 0)) {
+            $grandTotal = max(0.0, round($inclusiveGoods - $orderLevelDiscForGrand, 2));
+        }
+
+        if ($orderNumber !== '' && $conn instanceof mysqli) {
+            require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+            $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
+            if ($orderTotal > 0) {
+                $grandTotal = $orderTotal;
+            }
+        }
+
+        return [
+            'id' => (int)$invoice['id'],
+            'invoice_number' => (string)($invoice['invoice_number'] ?? ''),
+            'invoice_date' => (string)($invoice['invoice_date'] ?? ''),
+            'subtotal' => $subtotal,
+            'tax_amount' => $taxAmount,
+            'subtotal_goods_incl' => is_array($posDiscounts)
+                ? round((float)($posDiscounts['subtotal_goods'] ?? 0), 2)
+                : $inclusiveGoods,
+            'discount' => $displayDiscount,
+            'discount_lines' => $discountLines,
+            'discounts_absorbed' => is_array($posDiscounts) && !empty($posDiscounts['discounts_absorbed']),
+            'grand_total' => $grandTotal,
+            'status' => (string)($invoice['status'] ?? ''),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $posDiscounts
+     * @param array<string, mixed>|null $orderInfo
+     * @return list<array{type: string, label: string, amount: float, note: string}>
+     */
+    private function buildOrderInvoiceDiscountLines(array $posDiscounts, ?array $orderInfo): array
+    {
+        $absorbed = !empty($posDiscounts['discounts_absorbed']);
+
+        $line = round((float)($posDiscounts['line_discount'] ?? 0), 2);
+        $coupon = round((float)($posDiscounts['coupon_discount'] ?? 0), 2);
+        $cash = round((float)($posDiscounts['cash_discount'] ?? 0), 2);
+        $gift = round((float)($posDiscounts['gift_discount'] ?? 0), 2);
+
+        if (is_array($orderInfo)) {
+            if ($cash <= 0) {
+                $cash = round((float)($orderInfo['custom_reduce'] ?? 0), 2);
+            }
+            if ($coupon <= 0) {
+                $coupon = round((float)($orderInfo['coupon_reduce'] ?? 0), 2);
+            }
+            if ($gift <= 0) {
+                $gift = round((float)($orderInfo['giftvoucher_reduce'] ?? 0), 2);
+            }
+        }
+
+        $lines = [];
+
+        if ($line > 0.001) {
+            $lines[] = [
+                'type' => 'line',
+                'label' => 'Line Discount',
+                'amount' => $line,
+                'note' => $absorbed ? 'Included in line item prices (list vs discounted price).' : '',
+            ];
+        }
+
+        if ($cash > 0.001) {
+            $lines[] = [
+                'type' => 'custom',
+                'label' => $this->orderInvoiceCustomDiscountLabel($posDiscounts, $orderInfo),
+                'amount' => $cash,
+                'note' => is_array($orderInfo) ? trim((string)($orderInfo['custom_note'] ?? '')) : '',
+            ];
+        }
+
+        if ($coupon > 0.001) {
+            $couponName = trim((string)($posDiscounts['coupon_display_name'] ?? ''));
+            if ($couponName === '' && is_array($orderInfo)) {
+                $couponName = trim((string)($orderInfo['coupon'] ?? ''));
+            }
+            $lines[] = [
+                'type' => 'coupon',
+                'label' => $couponName !== '' ? 'Coupon (' . $couponName . ')' : 'Coupon Discount',
+                'amount' => $coupon,
+                'note' => '',
+            ];
+        }
+
+        if ($gift > 0.001) {
+            $giftName = is_array($orderInfo) ? trim((string)($orderInfo['giftvoucher'] ?? '')) : '';
+            $lines[] = [
+                'type' => 'gift',
+                'label' => $giftName !== '' ? 'Gift Voucher (' . $giftName . ')' : 'Gift Voucher',
+                'amount' => $gift,
+                'note' => '',
+            ];
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @param array<string, mixed> $posDiscounts
+     * @param array<string, mixed>|null $orderInfo
+     */
+    private function orderInvoiceCustomDiscountLabel(array $posDiscounts, ?array $orderInfo): string
+    {
+        $mode = trim((string)($posDiscounts['custom_discount_mode'] ?? ''));
+        $value = round((float)($posDiscounts['custom_discount_value'] ?? 0), 2);
+
+        if ($mode === 'percent' && $value > 0) {
+            $pct = rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.');
+
+            return 'Custom Discount (' . $pct . '%)';
+        }
+
+        if ($mode === 'fixed' && $value > 0) {
+            return 'Custom Discount (fixed amount)';
+        }
+
+        $note = is_array($orderInfo) ? trim((string)($orderInfo['custom_note'] ?? '')) : '';
+        if ($note !== '' && preg_match('/(\d+(?:\.\d+)?)\s*%/', $note, $matches)) {
+            $pct = rtrim(rtrim($matches[1], '0'), '.');
+
+            return 'Custom Discount (' . $pct . '%)';
+        }
+
+        return 'Custom Discount';
+    }
+
+    /**
+     * @return array{
+     *   order_total: float,
+     *   paid_total: float,
+     *   pending: float,
+     *   is_fully_paid: bool,
+     *   payments: list<array<string, mixed>>
+     * }
+     */
+    private function buildOrderPaymentSummary(string $orderNumber, ?array $orderInfo = null): array
+    {
+        global $conn;
+
+        require_once __DIR__ . '/../models/payment/Payment.php';
+        require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+
+        $orderNumber = trim($orderNumber);
+        $paymentModel = new Payment($conn);
+        $payments = $paymentModel->listByOrderNumber($orderNumber);
+        $paidTotal = $paymentModel->sumPaidByOrderNumber($orderNumber);
+
+        $orderTotal = ($conn instanceof mysqli)
+            ? pos_payment_resolve_order_total($conn, $orderNumber)
+            : 0.0;
+        if ($orderTotal <= 0 && is_array($orderInfo)) {
+            $orderTotal = round((float)($orderInfo['total'] ?? 0), 2);
+        }
+        if ($orderTotal <= 0 && !empty($payments)) {
+            $orderTotal = round((float)($payments[count($payments) - 1]['order_amount'] ?? 0), 2);
+        }
+
+        $pending = max(0.0, round($orderTotal - $paidTotal, 2));
+
+        return [
+            'order_total' => $orderTotal,
+            'paid_total' => $paidTotal,
+            'pending' => $pending,
+            'is_fully_paid' => $pending <= 0.02,
+            'payments' => $payments,
+        ];
+    }
+
     public function getOrderDetailsHTML()
     {
         is_login();
-        global $ordersModel, $commanModel;
-        $order_number = isset($_GET['order_number']) ? (int)$_GET['order_number'] : 0;
+        global $ordersModel, $commanModel, $conn;
+        $orderRef = trim((string)($_GET['order_number'] ?? ''));
         $type = isset($_GET['type']) ? $_GET['type'] : 'inner';
-        if ($order_number > 0) {
-            $order = $ordersModel->getOrderByOrderNumber($order_number);
-            $orderremarks = $ordersModel->getRemarksByOrderNumber($order_number);
-            $fullOrderJourny = $ordersModel->getfullOrderJournyByNumber($order_number);
-            $customerdetails = $ordersModel->getCustomerNameAndEmailByOrderNumber($order_number);
-            $statusList = $commanModel->get_order_status_list();
-            $assignmentDates = [];
-            foreach ($order as $key => $orders) {
-                $order[$key]['status_log'] = $commanModel->get_order_status_log($orders['id']);
-                $assignmentDates[$orders['id']] =  $orders[$key]['status_log']['change_date'] ?? '';
-            }
-            if ($order) {
-                if ($type === 'inner')
-                    renderPartial('views/posorders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList]);
-                else
-                    renderTemplate('views/posorders/other_partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks, 'fullOrderJourny' => $fullOrderJourny, 'customerdetails' => $customerdetails], 'Order Details');
-            } else {
-                echo '<p>Order details not found.</p>';
-            }
-        } else {
+        if ($orderRef === '') {
             echo '<p>Invalid Order Number.</p>';
+            exit;
+        }
+
+        $order = $ordersModel->getOrderLineItemsByRef($orderRef);
+        if (!$order) {
+            echo '<p>Order details not found.</p>';
+            exit;
+        }
+
+        $resolvedOrderNumber = (string)($order[0]['order_number'] ?? $orderRef);
+        $orderremarks = $ordersModel->getRemarksByOrderNumber($resolvedOrderNumber);
+        $fullOrderJourny = $ordersModel->getfullOrderJournyByNumber($resolvedOrderNumber);
+        $customerdetails = $ordersModel->getCustomerNameAndEmailByOrderNumber($resolvedOrderNumber);
+        $statusList = $commanModel->get_order_status_list();
+        foreach ($order as $key => $orders) {
+            $order[$key]['status_log'] = $commanModel->get_order_status_log($orders['id']);
+        }
+
+        $invoiceId = (int)($order[0]['invoice_id'] ?? 0);
+        require_once __DIR__ . '/../models/PosInvoice/invoice.php';
+        $posInvoiceModel = new POSInvoice($conn);
+
+        $activeInvoice = null;
+        if ($invoiceId > 0) {
+            $activeInvoice = $posInvoiceModel->getInvoiceById($invoiceId);
+            if ($activeInvoice && strtolower(trim((string)($activeInvoice['status'] ?? ''))) === 'cancelled') {
+                $activeInvoice = null;
+                $invoiceId = 0;
+            }
+        }
+        if (!$activeInvoice) {
+            $activeInvoice = $posInvoiceModel->getActiveInvoiceForOrderNumber($resolvedOrderNumber);
+            $invoiceId = (int)($activeInvoice['id'] ?? 0);
+        }
+
+        $invoicePdfUrl = $invoiceId > 0 ? pos_invoice_pdf_url($invoiceId) : '';
+        $invoiceDisplay = $this->buildOrderInvoiceDisplaySummary($activeInvoice, $resolvedOrderNumber);
+        $paymentSummary = $this->buildOrderPaymentSummary($resolvedOrderNumber, is_array($orderremarks) ? $orderremarks : null);
+
+        if ($type === 'inner') {
+            renderPartial('views/posorders/partial_order_details.php', [
+                'order' => $order,
+                'statusList' => $statusList,
+            ]);
+        } else {
+            renderTemplate('views/posorders/other_partial_order_details.php', [
+                'order' => $order,
+                'statusList' => $statusList,
+                'orderremarks' => $orderremarks,
+                'fullOrderJourny' => $fullOrderJourny,
+                'customerdetails' => $customerdetails,
+                'invoiceDisplay' => $invoiceDisplay,
+                'invoicePdfUrl' => $invoicePdfUrl,
+                'canEditInvoiceNumber' => canSrEmpAccess(),
+                'paymentSummary' => $paymentSummary,
+            ], 'Order Details');
         }
         exit;
     }
@@ -1532,6 +1819,20 @@ class PosOrdersController
         $result = $ordersModel->updateCustomerNameAndEmail($order_number, $customer_name, $customer_phone, $address_line1, $address_line2, $city, $zipcode, $country, $billing_address_line1, $billing_address_line2, $billing_city, $billing_zipcode, $billing_country);
         echo json_encode($result);
         exit;
+    }
+
+    public function updateOrderNumberAjax()
+    {
+        is_login();
+        if (!canSrEmpAccess()) {
+            vendorJsonResponse(['success' => false, 'message' => 'Access denied. Sr Emp, Top Management, or Admin access required.']);
+        }
+
+        global $ordersModel;
+        $oldOrderNumber = trim((string)($_POST['old_order_number'] ?? ''));
+        $newOrderNumber = trim((string)($_POST['new_order_number'] ?? ''));
+
+        vendorJsonResponse($ordersModel->renameOrderNumber($oldOrderNumber, $newOrderNumber));
     }
 
     public function getOrderDetailsForDispatch()

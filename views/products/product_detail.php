@@ -238,6 +238,7 @@
     $isBookProduct = strpos($groupNameLower, 'book') !== false;
     $authorRaw = trim((string)($products['author'] ?? ''));
     $isAdminUser = isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1;
+    $canEditAddedOnDate = !empty($products['canEditAddedOnDate']);
     $canAccessCp = function_exists('canAccessProductCp') && canAccessProductCp();
     $publishedVal = (int)($products['published'] ?? 0);
     $publishedText = $publishedVal === 1 ? 'Published' : 'Unpublished';
@@ -356,6 +357,7 @@
                 onclick="openPublishedStatusModal()">
                 <span id="publishedStatusDisplay"><?php echo htmlspecialchars($publishedText, ENT_QUOTES, 'UTF-8'); ?></span>
               </button>
+              <?php if ($canEditAddedOnDate): ?>
               <div class="shrink-0 flex items-center gap-1.5">
                 <span id="productAddedOnDisplay" class="text-xs font-semibold px-3 py-1 rounded-md border border-sky-300 bg-sky-50 text-sky-800 whitespace-nowrap">
                   Added On: <?php echo htmlspecialchars($addedOnDisplay !== '' ? $addedOnDisplay : '—', ENT_QUOTES, 'UTF-8'); ?>
@@ -369,13 +371,32 @@
                   <i class="fas fa-pencil-alt text-[10px]"></i>
                 </button>
               </div>
+              <?php elseif ($addedOnDisplay !== ''): ?>
+                <span class="text-xs font-semibold px-3 py-1 rounded-md border border-sky-300 bg-sky-50 text-sky-800 whitespace-nowrap">
+                  Added On: <?php echo htmlspecialchars($addedOnDisplay, ENT_QUOTES, 'UTF-8'); ?>
+                </span>
+              <?php endif; ?>
             </div>
           <?php else: ?>
             <div class="shrink-0 flex items-center gap-2">
               <span id="publishedStatusDisplay" class="text-xs font-semibold px-3 py-1 rounded-md border <?php echo $publishedVal === 1 ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-red-300 bg-red-50 text-red-700'; ?>">
                 <?php echo htmlspecialchars($publishedText, ENT_QUOTES, 'UTF-8'); ?>
               </span>
-              <?php if ($addedOnDisplay !== ''): ?>
+              <?php if ($canEditAddedOnDate): ?>
+              <div class="shrink-0 flex items-center gap-1.5">
+                <span id="productAddedOnDisplay" class="text-xs font-semibold px-3 py-1 rounded-md border border-sky-300 bg-sky-50 text-sky-800 whitespace-nowrap">
+                  Added On: <?php echo htmlspecialchars($addedOnDisplay !== '' ? $addedOnDisplay : '—', ENT_QUOTES, 'UTF-8'); ?>
+                </span>
+                <button
+                  type="button"
+                  class="inline-flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-emerald-700 hover:border-emerald-300"
+                  onclick="toggleProductDetailModal('addedOnModal', true)"
+                  title="Edit added on date"
+                  aria-label="Edit added on date">
+                  <i class="fas fa-pencil-alt text-[10px]"></i>
+                </button>
+              </div>
+              <?php elseif ($addedOnDisplay !== ''): ?>
                 <span class="text-xs font-semibold px-3 py-1 rounded-md border border-sky-300 bg-sky-50 text-sky-800 whitespace-nowrap">
                   Added On: <?php echo htmlspecialchars($addedOnDisplay, ENT_QUOTES, 'UTF-8'); ?>
                 </span>
@@ -639,11 +660,33 @@
           <?php
           $stockReplenishmentMonths = (int)($products['stock_replenishment_months'] ?? 0);
           $stockReplenishmentDisplay = $stockReplenishmentMonths > 0 ? (string)$stockReplenishmentMonths : '—';
+          $bookReplenishment = is_array($products['book_replenishment'] ?? null) ? $products['book_replenishment'] : [];
+          $replenishmentLookbackMonths = (int)($bookReplenishment['lookback_months'] ?? 0);
+          $replenishmentLookbackSource = (string)($bookReplenishment['lookback_source'] ?? '');
+          $replenishmentStockThreshold = (int)($bookReplenishment['stock_threshold'] ?? 0);
+          $replenishmentBuyQty = (int)($bookReplenishment['recommended_buy_qty'] ?? 0);
+          $replenishmentReason = (string)($bookReplenishment['reason'] ?? '');
+          $replenishmentBranch = (string)($bookReplenishment['branch'] ?? 'none');
+          $lookbackSourceLabels = [
+              'product' => 'Product',
+              'publisher' => 'Publisher',
+              'vendor' => 'Vendor',
+              'global' => 'Global settings',
+          ];
+          $effectiveLookbackLabel = $replenishmentLookbackMonths > 0
+              ? $replenishmentLookbackMonths . ' mo'
+              : '—';
+          if ($replenishmentLookbackSource !== '' && isset($lookbackSourceLabels[$replenishmentLookbackSource])) {
+              $effectiveLookbackLabel .= ' (' . $lookbackSourceLabels[$replenishmentLookbackSource] . ')';
+          }
           ?>
           <div class="<?php echo $invCard; ?> border-teal-100 bg-teal-50 pr-6 sm:pr-7">
             <div class="<?php echo $invBody; ?>">
               <p class="<?php echo $invLbl; ?>"><span class="sm:hidden">Replenish Months</span><span class="hidden sm:inline">Stock Replenishment Months</span></p>
               <p id="stockReplenishmentMonthsDisplay" class="<?php echo $invVal; ?> text-teal-700"><?php echo htmlspecialchars($stockReplenishmentDisplay, ENT_QUOTES, 'UTF-8'); ?></p>
+              <?php if ($replenishmentLookbackMonths > 0 && $stockReplenishmentMonths <= 0): ?>
+                <p class="text-[10px] sm:text-xs text-teal-800/80 mt-0.5 leading-snug">Effective: <?php echo htmlspecialchars($effectiveLookbackLabel, ENT_QUOTES, 'UTF-8'); ?></p>
+              <?php endif; ?>
             </div>
             <div class="<?php echo $invIco; ?> bg-teal-100 text-teal-700">
                <i class="fas fa-calendar-alt"></i>
@@ -651,6 +694,31 @@
             <button type="button" class="<?php echo $invEdit; ?> text-gray-400 hover:text-teal-700" onclick="openStockReplenishmentMonthsModal()" title="Edit stock replenishment months" aria-label="Edit stock replenishment months">
               <i class="fas fa-pencil-alt text-[10px]"></i>
             </button>
+          </div>
+
+          <?php if ($replenishmentBranch === 'demand_based'): ?>
+          <div class="<?php echo $invCard; ?> border-rose-100 bg-rose-50/80" title="Replenish when physical stock is at or below this level (25% of lookback sales)">
+            <div class="<?php echo $invBody; ?>">
+              <p class="<?php echo $invLbl; ?>">Low Stock Threshold</p>
+              <p class="<?php echo $invVal; ?> text-rose-700"><?php echo htmlspecialchars((string)$replenishmentStockThreshold, ENT_QUOTES, 'UTF-8'); ?></p>
+            </div>
+            <div class="<?php echo $invIco; ?> bg-rose-100 text-rose-700">
+               <i class="fas fa-level-down-alt"></i>
+            </div>
+          </div>
+          <?php endif; ?>
+
+          <div class="<?php echo $invCard; ?> border-lime-100 bg-lime-50/90" title="<?php echo htmlspecialchars($replenishmentReason, ENT_QUOTES, 'UTF-8'); ?>">
+            <div class="<?php echo $invBody; ?>">
+              <p class="<?php echo $invLbl; ?>"><span class="sm:hidden">Replenish Buy</span><span class="hidden sm:inline">Replenishment Buy Qty</span></p>
+              <p class="<?php echo $invVal; ?> text-lime-800"><?php echo htmlspecialchars((string)$replenishmentBuyQty, ENT_QUOTES, 'UTF-8'); ?></p>
+              <?php if ($replenishmentBranch === 'direct_order_qty'): ?>
+                <p class="text-[10px] sm:text-xs text-lime-900/75 mt-0.5 leading-snug">Uses order qty on import</p>
+              <?php endif; ?>
+            </div>
+            <div class="<?php echo $invIco; ?> bg-lime-100 text-lime-800">
+               <i class="fas fa-cart-plus"></i>
+            </div>
           </div>
           <?php endif; ?>
         </div>
@@ -1066,6 +1134,7 @@
         </div>
     </div>
 </div>
+<?php if ($canEditAddedOnDate): ?>
 <div id="addedOnModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
     <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
         <button type="button" onclick="toggleProductDetailModal('addedOnModal', false)" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
@@ -1078,6 +1147,7 @@
         </div>
     </div>
 </div>
+<?php endif; ?>
 <div id="priceSectionModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
     <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
         <button type="button" onclick="closePriceSectionModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
@@ -1564,8 +1634,8 @@
   </div>
 </div>
 <div id="refreshStockChoiceModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-4">
-  <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
-    <div class="px-5 py-4 border-b border-amber-100 bg-gradient-to-r from-amber-50 via-white to-orange-50">
+  <div class="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+    <div class="px-5 py-4 border-b border-amber-100 bg-gradient-to-r from-amber-50 via-white to-orange-50 shrink-0">
       <div class="flex items-start gap-3">
         <div class="h-10 w-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
           <i class="fas fa-sync-alt"></i>
@@ -1573,22 +1643,23 @@
         <div class="min-w-0">
           <h3 class="text-base font-semibold text-gray-900">Refresh Product From API</h3>
           <p class="mt-1 text-sm text-gray-600 leading-relaxed">
-            Do you want to update the local stock from API as well?
+            All variants for this item code will refresh catalog fields and <strong>local stock</strong> from the API. Check a variant only if its <strong>physical stock</strong> should also sync from the API.
           </p>
         </div>
       </div>
     </div>
-    <div class="px-5 py-4">
-      <div class="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
-        Choose <strong>Yes</strong> to sync API stock into local stock. Choose <strong>No</strong> to refresh product details but keep the current local stock unchanged.
+    <div class="px-5 py-4 overflow-y-auto flex-1">
+      <div class="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900 mb-4">
+        Catalog fields and local stock always update from the API. Each row shows current local stock and the API value. Leave unchecked to keep <strong>physical stock</strong> unchanged; check to sync physical stock (and warehouse ledger) from the API.
       </div>
+      <div id="refreshStockVariantList" class="space-y-2"></div>
     </div>
-    <div class="px-5 py-4 border-t border-gray-100 bg-gray-50 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-      <button type="button" id="refreshStockChoiceNoBtn" class="px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-100">
-        No, keep local stock
+    <div class="px-5 py-4 border-t border-gray-100 bg-gray-50 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 shrink-0">
+      <button type="button" id="refreshStockChoiceCancelBtn" class="px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-100">
+        Cancel
       </button>
-      <button type="button" id="refreshStockChoiceYesBtn" class="px-4 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold shadow-sm">
-        Yes, update local stock
+      <button type="button" id="refreshStockChoiceConfirmBtn" class="px-4 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold shadow-sm">
+        Refresh from API
       </button>
     </div>
   </div>
@@ -1614,6 +1685,37 @@
 <script>
   var profileStatusReloadOnClose = false;
   var lastRefreshProductApiDebug = null;
+  var refreshStockVariantChoices = <?php
+    $refreshStockVariantRows = [];
+    $currentProductIdForRefresh = (int) ($products['id'] ?? 0);
+    foreach (($products['variants'] ?? []) as $variantRow) {
+      if (!is_array($variantRow) || empty($variantRow['id'])) {
+        continue;
+      }
+      $refreshStockVariantRows[] = [
+        'id' => (int) $variantRow['id'],
+        'sku' => (string) ($variantRow['sku'] ?? ''),
+        'size' => (string) ($variantRow['size'] ?? ''),
+        'color' => (string) ($variantRow['color'] ?? ''),
+        'local_stock' => (int) ($variantRow['local_stock'] ?? 0),
+        'physical_stock' => (int) ($variantRow['physical_stock'] ?? 0),
+      ];
+    }
+    if ($refreshStockVariantRows === [] && $currentProductIdForRefresh > 0) {
+      $refreshStockVariantRows[] = [
+        'id' => $currentProductIdForRefresh,
+        'sku' => (string) ($products['sku'] ?? ''),
+        'size' => (string) ($products['size'] ?? ''),
+        'color' => (string) ($products['color'] ?? ''),
+        'local_stock' => (int) ($products['local_stock'] ?? 0),
+        'physical_stock' => (int) ($products['physical_stock'] ?? 0),
+      ];
+    }
+    echo json_encode(
+      ['current_product_id' => $currentProductIdForRefresh, 'variants' => $refreshStockVariantRows],
+      JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+    );
+  ?>;
 
   function refreshProductApiDebugStorageKey(itemCode) {
     return 'refreshProductApiDebug:' + String(itemCode || '').trim();
@@ -1809,51 +1911,278 @@
     }
   }
 
-  function askRefreshLocalStockChoice() {
-    var modal = document.getElementById('refreshStockChoiceModal');
-    var yesBtn = document.getElementById('refreshStockChoiceYesBtn');
-    var noBtn = document.getElementById('refreshStockChoiceNoBtn');
+  function normalizeVariantDimensionForStockMatch(value) {
+    return String(value || '').trim().toLowerCase().replace(/[\s\-_]+/g, '');
+  }
 
-    if (!modal || !yesBtn || !noBtn) {
-      return Promise.resolve(false);
+  function refreshVariantMatchKey(row) {
+    var sku = String(row.sku || '').trim().toLowerCase();
+    if (sku !== '') {
+      return 'sku:' + sku;
     }
+    return 'sc:' + normalizeVariantDimensionForStockMatch(row.size) + '|' + normalizeVariantDimensionForStockMatch(row.color);
+  }
+
+  function normalizeVendorProductFetchItemsClient(data) {
+    if (!data || typeof data !== 'object') {
+      return [];
+    }
+    if (Array.isArray(data.data)) {
+      return normalizeVendorProductFetchItemsClient(data.data);
+    }
+    if (data.itemcode || data.item_code) {
+      return [data];
+    }
+    var rows = [];
+    Object.keys(data).forEach(function (key) {
+      var row = data[key];
+      if (!row || typeof row !== 'object') {
+        return;
+      }
+      var code = String(row.itemcode || row.item_code || '').trim();
+      if (code !== '') {
+        if (!row.itemcode && row.item_code) {
+          row.itemcode = code;
+        }
+        rows.push(row);
+      }
+    });
+    if (rows.length > 0) {
+      return rows;
+    }
+    if (Array.isArray(data)) {
+      return data.filter(function (row) {
+        return row && typeof row === 'object' && String(row.itemcode || row.item_code || '').trim() !== '';
+      });
+    }
+    return [];
+  }
+
+  function expandVendorProductFetchVariantsClient(rows) {
+    var out = [];
+    (rows || []).forEach(function (row) {
+      if (!row || typeof row !== 'object') {
+        return;
+      }
+      var variations = row.variations;
+      if (!Array.isArray(variations) || variations.length === 0) {
+        var clean = Object.assign({}, row);
+        delete clean.variations;
+        out.push(clean);
+        return;
+      }
+      var itemCode = String(row.itemcode || row.item_code || '').trim();
+      variations.forEach(function (variation) {
+        if (!variation || typeof variation !== 'object') {
+          return;
+        }
+        var merged = Object.assign({}, row, variation);
+        if (itemCode !== '') {
+          merged.itemcode = itemCode;
+        }
+        delete merged.variations;
+        out.push(merged);
+      });
+    });
+    return out;
+  }
+
+  function parseApiLocalStockValue(row) {
+    if (!row || typeof row !== 'object') {
+      return null;
+    }
+    var raw = row.local_stock;
+    if (raw === null || raw === undefined || raw === '') {
+      raw = row.stock;
+    }
+    if (raw === null || raw === undefined || raw === '') {
+      return null;
+    }
+    var num = parseFloat(String(raw));
+    if (isNaN(num)) {
+      return null;
+    }
+    return Math.max(0, Math.round(num));
+  }
+
+  function buildApiLocalStockMap(apiPayloadRoot) {
+    var map = {};
+    var rows = expandVendorProductFetchVariantsClient(
+      normalizeVendorProductFetchItemsClient(apiPayloadRoot)
+    );
+    rows.forEach(function (row) {
+      var stock = parseApiLocalStockValue(row);
+      if (stock === null) {
+        return;
+      }
+      map[refreshVariantMatchKey({
+        sku: row.sku || '',
+        size: row.size || '',
+        color: row.color || ''
+      })] = stock;
+    });
+    return map;
+  }
+
+  async function fetchApiLocalStockMapForItemCode(itemCode) {
+    var fetchUrl = 'index.php?page=products&action=vendor_product_fetch_payload&itemCode='
+      + encodeURIComponent(itemCode);
+    var res = await fetch(fetchUrl, {
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' }
+    });
+    var rawText = await res.text();
+    var data = null;
+    try {
+      data = rawText ? JSON.parse(rawText) : null;
+    } catch (parseErr) {
+      data = null;
+    }
+    if (!data || !data.success) {
+      throw new Error((data && data.message) ? data.message : 'Could not load API stock preview.');
+    }
+    return buildApiLocalStockMap(data.payload || data);
+  }
+
+  function formatRefreshVariantLabel(row) {
+    var parts = [];
+    var sku = String(row.sku || '').trim();
+    if (sku !== '') parts.push(sku);
+    var color = String(row.color || '').trim();
+    if (color !== '') parts.push('Color: ' + color);
+    var size = String(row.size || '').trim();
+    if (size !== '') parts.push('Size: ' + size);
+    if (parts.length === 0) parts.push('Variant #' + row.id);
+    return parts.join(' · ');
+  }
+
+  function buildRefreshStockVariantList(currentProductId, apiLocalStockMap) {
+    var listEl = document.getElementById('refreshStockVariantList');
+    if (!listEl) return;
+
+    var rows = Array.isArray(refreshStockVariantChoices.variants) ? refreshStockVariantChoices.variants.slice() : [];
+    apiLocalStockMap = apiLocalStockMap || {};
+    rows.sort(function (a, b) {
+      if (Number(a.id) === Number(currentProductId)) return -1;
+      if (Number(b.id) === Number(currentProductId)) return 1;
+      return String(a.sku || '').localeCompare(String(b.sku || ''));
+    });
+
+    listEl.innerHTML = '';
+    if (rows.length === 0) {
+      listEl.innerHTML = '<p class="text-sm text-gray-500">No variants found for this item code.</p>';
+      return;
+    }
+
+    rows.forEach(function (row) {
+      var isCurrent = Number(row.id) === Number(currentProductId);
+      var label = formatRefreshVariantLabel(row);
+      var oldLocal = Number(row.local_stock || 0);
+      var physical = Number(row.physical_stock || 0);
+      var apiLocal = apiLocalStockMap[refreshVariantMatchKey(row)];
+      var apiLocalText = (apiLocal === null || apiLocal === undefined)
+        ? '—'
+        : String(apiLocal);
+      var localChanged = apiLocal !== null && apiLocal !== undefined && Number(apiLocal) !== oldLocal;
+      var stockHint =
+        '<span class="block">Local stock: <span class="font-medium text-gray-800">' + oldLocal + '</span>'
+        + ' → <span class="font-semibold ' + (localChanged ? 'text-amber-700' : 'text-gray-800') + '">' + apiLocalText + '</span>'
+        + ' <span class="text-gray-400">(API, always updated)</span></span>'
+        + '<span class="block mt-0.5">Physical stock (current): <span class="font-medium text-gray-800">' + physical + '</span>'
+        + (apiLocal !== null && apiLocal !== undefined
+          ? ' · check below to sync to <span class="font-medium text-gray-800">' + apiLocal + '</span>'
+          : '')
+        + '</span>';
+      var wrap = document.createElement('label');
+      wrap.className = 'flex items-start gap-3 rounded-xl border border-gray-200 bg-white px-3 py-3 cursor-pointer hover:border-amber-300 hover:bg-amber-50/40';
+      wrap.innerHTML =
+        '<input type="checkbox" class="refresh-stock-variant-checkbox mt-1 h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" '
+        + 'data-product-id="' + String(row.id) + '" />'
+        + '<span class="min-w-0 flex-1">'
+        + '<span class="block text-sm ' + (isCurrent ? 'font-bold text-gray-900' : 'font-medium text-gray-800') + '">'
+        + (isCurrent ? label + ' (current)' : label)
+        + '</span>'
+        + '<span class="block text-xs text-gray-600 mt-1 leading-relaxed">' + stockHint + '</span>'
+        + '<span class="block text-xs font-medium text-gray-700 mt-1.5">Sync physical stock from API</span>'
+        + '</span>';
+      listEl.appendChild(wrap);
+    });
+  }
+
+  async function askRefreshVariantStockChoices(currentProductId, itemCode) {
+    var modal = document.getElementById('refreshStockChoiceModal');
+    var confirmBtn = document.getElementById('refreshStockChoiceConfirmBtn');
+    var cancelBtn = document.getElementById('refreshStockChoiceCancelBtn');
+    var listEl = document.getElementById('refreshStockVariantList');
+
+    if (!modal || !confirmBtn || !cancelBtn) {
+      return { confirmed: false, physicalStockSyncProductIds: [] };
+    }
+
+    modal.classList.remove('hidden');
+    if (listEl) {
+      listEl.innerHTML = '<p class="text-sm text-gray-500 flex items-center gap-2"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Loading API stock values...</p>';
+    }
+    confirmBtn.disabled = true;
+
+    var apiLocalStockMap = {};
+    var apiLoadError = '';
+    try {
+      apiLocalStockMap = await fetchApiLocalStockMapForItemCode(itemCode);
+    } catch (e) {
+      apiLoadError = (e && e.message) ? e.message : 'Could not load API stock preview.';
+    }
+
+    buildRefreshStockVariantList(currentProductId, apiLocalStockMap);
+    if (apiLoadError && listEl) {
+      var warn = document.createElement('p');
+      warn.className = 'mt-3 text-xs text-amber-700 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2';
+      warn.textContent = apiLoadError + ' You can still refresh catalog fields; API local stock is shown as — until loaded.';
+      listEl.appendChild(warn);
+    }
+    confirmBtn.disabled = false;
 
     return new Promise(function (resolve) {
       var settled = false;
 
-      function cleanup(choice) {
+      function cleanup(result) {
         if (settled) return;
         settled = true;
         modal.classList.add('hidden');
-        yesBtn.removeEventListener('click', onYes);
-        noBtn.removeEventListener('click', onNo);
+        confirmBtn.disabled = false;
+        confirmBtn.removeEventListener('click', onConfirm);
+        cancelBtn.removeEventListener('click', onCancel);
         modal.removeEventListener('click', onBackdrop);
         document.removeEventListener('keydown', onKeydown);
-        resolve(choice);
+        resolve(result);
       }
 
-      function onYes() {
-        cleanup(true);
+      function onConfirm() {
+        var ids = [];
+        modal.querySelectorAll('.refresh-stock-variant-checkbox:checked').forEach(function (cb) {
+          var pid = parseInt(String(cb.getAttribute('data-product-id') || '0'), 10);
+          if (pid > 0) ids.push(pid);
+        });
+        cleanup({ confirmed: true, physicalStockSyncProductIds: ids });
       }
 
-      function onNo() {
-        cleanup(false);
+      function onCancel() {
+        cleanup({ confirmed: false, physicalStockSyncProductIds: [] });
       }
 
       function onBackdrop(e) {
-        if (e.target === modal) cleanup(false);
+        if (e.target === modal) onCancel();
       }
 
       function onKeydown(e) {
-        if (e.key === 'Escape') cleanup(false);
+        if (e.key === 'Escape') onCancel();
       }
 
-      yesBtn.addEventListener('click', onYes);
-      noBtn.addEventListener('click', onNo);
+      confirmBtn.addEventListener('click', onConfirm);
+      cancelBtn.addEventListener('click', onCancel);
       modal.addEventListener('click', onBackdrop);
       document.addEventListener('keydown', onKeydown);
-      modal.classList.remove('hidden');
-      setTimeout(function () { noBtn.focus(); }, 50);
+      setTimeout(function () { cancelBtn.focus(); }, 50);
     });
   }
 
@@ -1910,18 +2239,30 @@
       return;
     }
 
-    var updateLocalStock = await askRefreshLocalStockChoice();
+    var currentProductId = parseInt(String(refreshStockVariantChoices.current_product_id || '0'), 10);
+    var stockChoice = await askRefreshVariantStockChoices(currentProductId, itemCode);
+    if (!stockChoice || !stockChoice.confirmed) {
+      return;
+    }
+
     var oldHtml = btn.innerHTML;
     btn.disabled = true;
     btn.classList.add('opacity-70', 'cursor-not-allowed');
     btn.innerHTML = '<i class="fas fa-spinner fa-spin text-[11px]" aria-hidden="true"></i> Updating...';
 
-    var requestUrl = 'index.php?page=products&action=update_api_call&itemCode=' + encodeURIComponent(itemCode)
-      + '&update_local_stock=' + (updateLocalStock ? '1' : '0');
+    var requestUrl = 'index.php?page=products&action=update_api_call';
+    var requestBody = {
+      itemCode: itemCode,
+      refresh_from_detail: true,
+      detail_variant_rows: Array.isArray(refreshStockVariantChoices.variants) ? refreshStockVariantChoices.variants : [],
+      physical_stock_sync_product_ids: Array.isArray(stockChoice.physicalStockSyncProductIds) ? stockChoice.physicalStockSyncProductIds : []
+    };
     try {
       var res = await fetch(requestUrl, {
+        method: 'POST',
         credentials: 'same-origin',
-        headers: { 'Accept': 'application/json' }
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(requestBody)
       });
       var rawText = await res.text();
       var data = null;
@@ -1934,9 +2275,10 @@
         at: new Date().toISOString(),
         source: 'refresh_from_api',
         request: {
-          method: 'GET',
+          method: 'POST',
           url: requestUrl,
-          headers: { 'Accept': 'application/json' }
+          body: requestBody,
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
         },
         response: {
           http_status: res.status,
@@ -1950,8 +2292,21 @@
       }
       saveRefreshProductApiDebug(itemCode, debugPayload);
       if (data && data.success) {
+        var physicalCount = Array.isArray(stockChoice.physicalStockSyncProductIds) ? stockChoice.physicalStockSyncProductIds.length : 0;
+        var stockMsg = physicalCount > 0
+          ? (' Physical stock synced for ' + physicalCount + ' selected variant' + (physicalCount === 1 ? '' : 's') + '.')
+          : ' Physical stock was left unchanged.';
+        var updatedCount = parseInt(String((data && data.updated_count) ? data.updated_count : '0'), 10);
+        if (updatedCount <= 0) {
+          showProfileStatusModal(
+            (data && data.message) ? data.message : 'Refresh completed but no product rows were updated.',
+            'error',
+            false
+          );
+          return;
+        }
         showProfileStatusModal(
-          'Product updated successfully from API. Local stock was ' + (updateLocalStock ? 'updated.' : 'not updated.'),
+          'Product and all variants updated from API (catalog and local stock refreshed).' + stockMsg,
           'success',
           true
         );
@@ -1963,9 +2318,10 @@
         at: new Date().toISOString(),
         source: 'refresh_from_api',
         request: {
-          method: 'GET',
+          method: 'POST',
           url: requestUrl,
-          headers: { 'Accept': 'application/json' }
+          body: requestBody,
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
         },
         response: {
           network_error: (e && e.message) ? e.message : String(e)

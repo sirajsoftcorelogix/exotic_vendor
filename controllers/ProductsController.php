@@ -664,8 +664,23 @@ class ProductsController
         is_login();
         header('Content-Type: application/json; charset=UTF-8');
         global $productModel;
+
+        $postPayload = null;
+        if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'POST') {
+            $rawBody = file_get_contents('php://input');
+            $decodedBody = is_string($rawBody) && $rawBody !== '' ? json_decode($rawBody, true) : null;
+            if (is_array($decodedBody)) {
+                $postPayload = $decodedBody;
+            }
+        }
+
         // Vendor API: https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=CODE1,CODE2
-        $raw = isset($_GET['itemCode']) ? trim((string)$_GET['itemCode']) : '';
+        $raw = '';
+        if (is_array($postPayload) && isset($postPayload['itemCode'])) {
+            $raw = trim((string) $postPayload['itemCode']);
+        } elseif (isset($_GET['itemCode'])) {
+            $raw = trim((string) $_GET['itemCode']);
+        }
         if ($raw === '') {
             echo json_encode(['success' => false, 'message' => 'itemcode invalid to update product.']);
             exit;
@@ -745,17 +760,56 @@ class ProductsController
         }
 
         $externalApi['normalized_rows'] = $productRows;
-        $updateLocalStock = isset($_GET['update_local_stock']) && (string)$_GET['update_local_stock'] === '1';
+        $useRefreshFromDetail = (is_array($postPayload) && !empty($postPayload['refresh_from_detail']))
+            || (isset($_GET['refresh_stock_rules']) && (string) $_GET['refresh_stock_rules'] === '1');
+        $updateLocalStock = isset($_GET['update_local_stock']) && (string) $_GET['update_local_stock'] === '1';
+        $stockSyncProductIds = [];
+        $physicalStockSyncProductIds = [];
+        if (is_array($postPayload)) {
+            $rawPhysicalIds = $postPayload['physical_stock_sync_product_ids'] ?? $postPayload['stock_sync_product_ids'] ?? null;
+            if (is_array($rawPhysicalIds)) {
+                foreach ($rawPhysicalIds as $pid) {
+                    $pid = (int) $pid;
+                    if ($pid > 0) {
+                        $physicalStockSyncProductIds[] = $pid;
+                    }
+                }
+                $physicalStockSyncProductIds = array_values(array_unique($physicalStockSyncProductIds));
+            }
+        }
+        $stockSyncProductIds = $physicalStockSyncProductIds;
+        $detailVariantRows = [];
+        if (is_array($postPayload) && isset($postPayload['detail_variant_rows']) && is_array($postPayload['detail_variant_rows'])) {
+            $detailVariantRows = $postPayload['detail_variant_rows'];
+        }
+        if ($useRefreshFromDetail) {
+            $productRows = product::expandVendorProductFetchVariants($productRows);
+            $externalApi['normalized_rows'] = $productRows;
+            $externalApi['variants_expanded'] = true;
+        }
         $bulkConnection = $productModel->beginBulkProductUpdateConnection();
         try {
-            $updateResult = $productModel->updateProductFromApi($productRows, ['preserve_local_stock' => !$updateLocalStock]);
+            if ($useRefreshFromDetail) {
+                $updateResult = $productModel->updateProductFromApi($productRows, [
+                    'stock_sync_mode' => 'user_selected',
+                    'variants_already_expanded' => true,
+                    'physical_stock_sync_product_ids' => $physicalStockSyncProductIds,
+                    'stock_sync_product_ids' => $physicalStockSyncProductIds,
+                    'detail_variant_rows' => $detailVariantRows,
+                ]);
+            } else {
+                $updateResult = $productModel->updateProductFromApi($productRows, ['preserve_local_stock' => !$updateLocalStock]);
+            }
         } finally {
             $productModel->endBulkProductUpdateConnection($bulkConnection);
         }
         if (!is_array($updateResult)) {
             $updateResult = ['success' => false, 'message' => 'Product update failed.'];
         }
-        $updateResult['local_stock_updated'] = $updateLocalStock;
+        $updateResult['local_stock_updated'] = $useRefreshFromDetail;
+        $updateResult['physical_stock_sync_product_ids'] = $physicalStockSyncProductIds;
+        $updateResult['variants_expanded'] = $useRefreshFromDetail;
+        $updateResult['stock_sync_product_ids'] = $physicalStockSyncProductIds;
         $updateResult['external_api'] = $externalApi;
         $this->stopJsonApiErrorCapture();
         echo json_encode(
@@ -1419,38 +1473,124 @@ class ProductsController
     public function stockRebuildGuide(): void
     {
         is_login();
+        if (!isAdministratorUser()) {
+            header('Location: index.php?page=products&action=list');
+            exit;
+        }
+
+        global $productModel;
+
+        renderTemplate('views/products/stock_rebuild_guide.php', [], 'Stock Refresh (Batch)');
+    }
+
+    public function stockRebuildCandidates(): void
+    {
+        is_login();
+        if (!isAdministratorUser()) {
+            vendorJsonResponse(['success' => false, 'message' => 'Access denied.']);
+        }
+
+        @set_time_limit(120);
+
         global $productModel, $conn;
-
-        require_once __DIR__ . '/../models/product/StockRebuildService.php';
-
-        $isAdminUser = isset($_SESSION['user']['role_id']) && (int) $_SESSION['user']['role_id'] === 1;
-        $loginWarehouseId = (int) ($_SESSION['warehouse_id'] ?? 0);
-        if ($loginWarehouseId <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
-            $loginWarehouseId = (int) $_SESSION['user']['warehouse_id'];
+        if (isset($conn) && $conn instanceof mysqli) {
+            @$conn->query('SET SESSION max_execution_time = 120000');
         }
 
-        $allWarehouses = $productModel->getAllWarehouses();
-        $warehouses = [];
-        foreach ((array) $allWarehouses as $wh) {
-            $wid = (int) ($wh['id'] ?? 0);
-            if ($wid <= 0) {
-                continue;
-            }
-            if (!$isAdminUser && $loginWarehouseId > 0 && $wid !== $loginWarehouseId) {
-                continue;
-            }
-            $warehouses[] = $wh;
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $limit = (int) ($_GET['limit'] ?? 100);
+        if ($limit < 20) {
+            $limit = 20;
+        }
+        if ($limit > 200) {
+            $limit = 200;
+        }
+        $offset = ($page - 1) * $limit;
+        $includeTotal = !isset($_GET['include_total']) || (string) $_GET['include_total'] !== '0';
+
+        $total = $includeTotal ? $productModel->countStockRefreshCandidates() : null;
+        $items = $productModel->listStockRefreshCandidates($limit, $offset);
+
+        vendorJsonResponse([
+            'success' => true,
+            'total' => $total,
+            'page' => $page,
+            'limit' => $limit,
+            'pages' => ($total !== null && $limit > 0) ? (int) ceil($total / $limit) : null,
+            'items' => $items,
+        ]);
+    }
+
+    public function stockRebuildRefreshBatch(): void
+    {
+        is_login();
+        if (!isAdministratorUser()) {
+            vendorJsonResponse(['success' => false, 'message' => 'Access denied.']);
         }
 
-        $service = new StockRebuildService($conn);
-        $categories = ['allProducts' => 'All Products'] + getCategories();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            vendorJsonResponse(['success' => false, 'message' => 'POST required.']);
+        }
 
-        renderTemplate('views/products/stock_rebuild_guide.php', [
-            'warehouses' => $warehouses,
-            'selectedWarehouseId' => $loginWarehouseId,
-            'defaultWarehouse' => $service->getDefaultWarehouse(),
-            'categories' => $categories,
-        ], 'Warehouse Stock Rebuild');
+        @set_time_limit(0);
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $rawIds = $payload['product_ids'] ?? [];
+        if (!is_array($rawIds)) {
+            vendorJsonResponse(['success' => false, 'message' => 'Invalid product list.']);
+        }
+
+        $productIds = [];
+        foreach ($rawIds as $rawId) {
+            $id = (int) $rawId;
+            if ($id > 0) {
+                $productIds[$id] = $id;
+            }
+        }
+        $productIds = array_values($productIds);
+
+        if ($productIds === []) {
+            vendorJsonResponse(['success' => false, 'message' => 'Select at least one product.']);
+        }
+        if (count($productIds) > 10) {
+            vendorJsonResponse(['success' => false, 'message' => 'Maximum 10 products per batch.']);
+        }
+
+        global $conn;
+        require_once __DIR__ . '/POSRegisterController.php';
+        $posController = new POSRegisterController($conn);
+
+        $results = [];
+        $succeeded = 0;
+        $failed = 0;
+        foreach ($productIds as $productId) {
+            $result = $posController->performStockReportRefresh((int) $productId);
+            $results[] = $result;
+            if (!empty($result['success'])) {
+                $succeeded++;
+            } else {
+                $failed++;
+            }
+        }
+
+        $total = count($productIds);
+        $message = 'Refreshed ' . $succeeded . ' of ' . $total . ' item(s).';
+        if ($failed > 0) {
+            $message .= ' ' . $failed . ' failed.';
+        }
+
+        vendorJsonResponse([
+            'success' => $failed === 0,
+            'message' => $message,
+            'total' => $total,
+            'succeeded' => $succeeded,
+            'failed' => $failed,
+            'results' => $results,
+        ]);
     }
 
     /**
@@ -4816,6 +4956,10 @@ class ProductsController
                         $order['book_detail_selected_publisher_name'] = (string) ($publisherRow['publishers'] ?? $publisherRow['publisher_name'] ?? $publisherRow['name'] ?? '');
                     }
                 }
+
+                require_once dirname(__DIR__) . '/helpers/BookPurchaseReplenishment.php';
+                $bookReplenishment = new BookPurchaseReplenishment($conn);
+                $order['book_replenishment'] = $bookReplenishment->evaluate($order, 0, $physicalStock);
             }
 
             if (!headers_sent()) {
@@ -4823,6 +4967,7 @@ class ProductsController
                 header('Pragma: no-cache');
                 header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
             }
+            $order['canEditAddedOnDate'] = function_exists('canSrEmpAccess') && canSrEmpAccess();
             renderTemplate('views/products/product_detail.php', ['products' => $order], 'Product Details');
         } else {
             echo '<p>Invalid Product Item Code.</p>';
@@ -5862,8 +6007,8 @@ class ProductsController
     {
         is_login();
         $this->runProductDetailJsonAction(function () {
-            if ((int) ($_SESSION['user']['role_id'] ?? 0) !== 1) {
-                throw new Exception('Only administrators can change the added on date.');
+            if (!function_exists('canSrEmpAccess') || !canSrEmpAccess()) {
+                throw new Exception('You do not have permission to change the added on date.');
             }
             $data = $this->readJsonRequestBody();
             $date = $this->normalizeProfileDateInput((string) ($data['date_first_added'] ?? ''), 'Added on date');
@@ -7574,6 +7719,8 @@ class ProductsController
 
     public function validateTransferStockBulkPreview()
     {
+        @set_time_limit(300);
+        @ini_set('memory_limit', '1024M');
         $this->prepareJsonAjaxResponse();
         $this->startJsonApiErrorCapture();
 
@@ -7691,24 +7838,16 @@ class ProductsController
         }
 
         $insufficient = [];
+        $stockCheckLines = [];
         foreach ($requestedQtyBySku as $sku => $requestedQty) {
-            $existingQty = (int)($existingQtyBySku[$sku] ?? 0);
-            $validation = $stockTransferModel->validateItemStock(
-                $sku,
-                $fromWarehouse,
-                (int)$requestedQty,
-                $existingQty,
-                (int)($productIdBySku[$sku] ?? 0)
-            );
-            if (!($validation['valid'] ?? false)) {
-                $insufficient[] = [
-                    'sku' => $sku,
-                    'item_code' => (string)($firstItemCodeBySku[$sku] ?? ''),
-                    'requested_qty' => (int)$requestedQty,
-                    'available_qty' => (int)($validation['available'] ?? 0),
-                ];
-            }
+            $stockCheckLines[] = [
+                'sku' => $sku,
+                'product_id' => (int)($productIdBySku[$sku] ?? 0),
+                'requested_qty' => (int)$requestedQty,
+                'item_code' => (string)($firstItemCodeBySku[$sku] ?? ''),
+            ];
         }
+        $insufficient = $stockTransferModel->validateBulkItemStock($stockCheckLines, $fromWarehouse, $existingQtyBySku);
 
         if (!empty($insufficient)) {
             $parts = [];

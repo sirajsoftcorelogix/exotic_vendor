@@ -1,14 +1,23 @@
-<?php
+﻿<?php
 require_once 'models/PosInvoice/invoice.php';
 require_once 'models/order/order.php';
 require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
 require_once 'models/customer/Customer.php';
 require_once 'models/product/product.php';
-$invoiceModel = new POSInvoice($conn);
-$ordersModel = new Order($conn);
-$usersModel = new User($conn);
-$commanModel = new Tables($conn);
+require_once __DIR__ . '/../models/payment/Payment.php';
+require_once __DIR__ . '/../helpers/invoice/pos_order_pricing.php';
+// Register in $GLOBALS so methods work when this file is required from a function scope (e.g. payments â†’ create invoice).
+$GLOBALS['invoiceModel'] = $GLOBALS['invoiceModel'] ?? new POSInvoice($conn);
+$GLOBALS['ordersModel'] = $GLOBALS['ordersModel'] ?? new Order($conn);
+$GLOBALS['usersModel'] = $GLOBALS['usersModel'] ?? new User($conn);
+$GLOBALS['commanModel'] = $GLOBALS['commanModel'] ?? new Tables($conn);
+$GLOBALS['paymentModel'] = $GLOBALS['paymentModel'] ?? new Payment($conn);
+$invoiceModel = $GLOBALS['invoiceModel'];
+$ordersModel = $GLOBALS['ordersModel'];
+$usersModel = $GLOBALS['usersModel'];
+$commanModel = $GLOBALS['commanModel'];
+$paymentModel = $GLOBALS['paymentModel'];
 class PosInvoiceController
 {
 
@@ -48,105 +57,28 @@ class PosInvoiceController
     =============================== */
     public function list_ajax()
     {
-        global $conn;
+        global $invoiceModel;
 
         is_login();
 
         $isAdminUser = $this->isPosInvoiceAdminUser();
+        $filters = [
+            'order_number' => $_GET['order_number'] ?? '',
+            'status' => $_GET['status'] ?? '',
+            'from_date' => $_GET['from_date'] ?? '',
+            'to_date' => $_GET['to_date'] ?? '',
+            'type' => $_GET['type'] ?? '',
+            'customer_id' => $_GET['customer_id'] ?? '',
+            'amount_min' => $_GET['amount_min'] ?? '',
+            'amount_max' => $_GET['amount_max'] ?? '',
+            'warehouse_id' => null,
+        ];
 
-        $sql = "
-    SELECT 
-    i.id,
-    i.invoice_number,
-    i.invoice_date,
-    i.status,
-    i.total_amount,
-    i.warehouse_id,
-
-    o.order_number,
-    o.payment_type,
-
-    c.name AS customer_name,
-
-    COALESCE(ea.address_title, CONCAT('Warehouse #', i.warehouse_id)) AS warehouse_name,
-
-    IFNULL((
-        SELECT SUM(pp.payment_amount)
-        FROM pos_payments pp
-        WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
-              CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
-    ),0) AS paid_amount,
-
-    i.total_amount - IFNULL((
-        SELECT SUM(pp.payment_amount)
-        FROM pos_payments pp
-        WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
-              CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
-    ),0) AS due_amount
-
-FROM vp_invoices i
-
-LEFT JOIN vp_order_info o 
-    ON o.id = i.vp_order_info_id
-
-LEFT JOIN vp_customers c 
-    ON c.id = i.customer_id
-
-LEFT JOIN exotic_address ea
-    ON ea.id = i.warehouse_id
-
-WHERE i.pos_flag = 1";
-
-        // Staff: restrict to their warehouse/store. Admin: no warehouse filter (all invoices).
         if (!$isAdminUser) {
-            $warehouseId = $this->getSessionWarehouseId();
-            $sql .= ' AND i.warehouse_id = ' . $warehouseId;
+            $filters['warehouse_id'] = $this->getSessionWarehouseId();
         }
 
-        if (!empty($_GET['order_number'])) {
-            $sql .= " AND o.order_number LIKE '%" . $conn->real_escape_string($_GET['order_number']) . "%'";
-        }
-
-        if (!empty($_GET['status'])) {
-            $sql .= " AND i.status = '" . $conn->real_escape_string($_GET['status']) . "'";
-        }
-
-        if (!empty($_GET['from_date'])) {
-            $sql .= " AND i.invoice_date >= '" . $_GET['from_date'] . "'";
-        }
-
-        if (!empty($_GET['to_date'])) {
-            $sql .= " AND i.invoice_date <= '" . $_GET['to_date'] . "'";
-        }
-
-        if (!empty($_GET['type'])) {
-            $sql .= " AND IFNULL(o.payment_type,'') = '" . $conn->real_escape_string($_GET['type']) . "'";
-        }
-
-        if (!empty($_GET['customer_id'])) {
-            $sql .= " AND i.customer_id = " . intval($_GET['customer_id']);
-        }
-
-        if (!empty($_GET['amount_min'])) {
-            $sql .= " AND i.total_amount >= " . floatval($_GET['amount_min']);
-        }
-
-        if (!empty($_GET['amount_max'])) {
-            $sql .= " AND i.total_amount <= " . floatval($_GET['amount_max']);
-        }
-
-        $sql .= " ORDER BY i.id DESC";
-        $res = $conn->query($sql);
-
-        $data = [];
-
-        if ($res) {
-            while ($row = $res->fetch_assoc()) {
-                $data[] = $row;
-            }
-        }
-
-        echo json_encode($data);
+        echo json_encode($invoiceModel->searchPosListAjax($filters));
         exit;
     }
     /* ===============================
@@ -154,15 +86,12 @@ WHERE i.pos_flag = 1";
     =============================== */
     public function delete()
     {
-        global $conn;
+        global $invoiceModel;
 
-        $id = $_POST['id'];
+        $id = (int)($_POST['id'] ?? 0);
+        $invoiceModel->deleteInvoice($id);
 
-        $stmt = $conn->prepare("DELETE FROM vp_invoices WHERE id=?");
-        $stmt->bind_param("i", $id);
-        $stmt->execute();
-
-        echo json_encode(["success" => true]);
+        echo json_encode(['success' => true]);
         exit;
     }
 
@@ -250,7 +179,7 @@ WHERE i.pos_flag = 1";
 
             $orderCancelMeta = ['message' => ''];
             try {
-                $orderCancelMeta = $this->markPosInvoiceOrdersCancelled($conn, $invoiceId);
+                $orderCancelMeta = $this->markPosInvoiceOrdersCancelled($invoiceId);
             } catch (\Throwable $orderSyncEx) {
                 error_log('[POS invoice cancel order sync] ' . $orderSyncEx->getMessage());
                 $orderCancelMeta = [
@@ -279,9 +208,9 @@ WHERE i.pos_flag = 1";
      *
      * @return array{order_numbers: list<string>, local_updated: int, api_called: int, api_failed: int, message: string}
      */
-    private function markPosInvoiceOrdersCancelled(\mysqli $conn, int $invoiceId): array
+    private function markPosInvoiceOrdersCancelled(int $invoiceId): array
     {
-        global $commanModel;
+        global $commanModel, $invoiceModel;
 
         $result = [
             'order_numbers' => [],
@@ -297,26 +226,7 @@ WHERE i.pos_flag = 1";
             return $result;
         }
 
-        $orderStmt = $conn->prepare(
-            "SELECT DISTINCT order_number FROM vp_invoice_items
-             WHERE invoice_id = ? AND order_number IS NOT NULL AND TRIM(order_number) != ''"
-        );
-        if (!$orderStmt) {
-            $result['message'] = 'Could not load invoice order numbers.';
-            return $result;
-        }
-        $orderStmt->bind_param('i', $invoiceId);
-        $orderStmt->execute();
-        $orderRes = $orderStmt->get_result();
-        $orderNumbers = [];
-        while ($row = $orderRes->fetch_assoc()) {
-            $on = trim((string) ($row['order_number'] ?? ''));
-            if ($on !== '') {
-                $orderNumbers[] = $on;
-            }
-        }
-        $orderStmt->close();
-        $orderNumbers = array_values(array_unique($orderNumbers));
+        $orderNumbers = $invoiceModel->getDistinctOrderNumbersForInvoice($invoiceId);
         $result['order_numbers'] = $orderNumbers;
 
         if ($orderNumbers === []) {
@@ -329,19 +239,8 @@ WHERE i.pos_flag = 1";
         $userId = (int) ($_SESSION['user']['id'] ?? 0);
         $changeDate = date('Y-m-d H:i:s');
 
-        $lineStmt = $conn->prepare('SELECT id, item_code, size, color FROM vp_orders WHERE order_number = ? ORDER BY id ASC');
-        $updStmt = $conn->prepare(
-            "UPDATE vp_orders SET status = 'cancelled', invoice_id = NULL WHERE order_number = ? AND invoice_id = ?"
-        );
-        if (!$lineStmt || !$updStmt) {
-            $result['message'] = 'Could not prepare POS order cancel update.';
-            return $result;
-        }
-
         foreach ($orderNumbers as $orderNumber) {
-            $lineStmt->bind_param('s', $orderNumber);
-            $lineStmt->execute();
-            $lines = $lineStmt->get_result()->fetch_all(MYSQLI_ASSOC) ?: [];
+            $lines = $invoiceModel->getOrderLinesForCancelSync($orderNumber);
 
             foreach ($lines as $line) {
                 $apiRes = null;
@@ -385,14 +284,8 @@ WHERE i.pos_flag = 1";
                 }
             }
 
-            $updStmt->bind_param('si', $orderNumber, $invoiceId);
-            if ($updStmt->execute()) {
-                $result['local_updated'] += (int) $updStmt->affected_rows;
-            }
+            $result['local_updated'] += $invoiceModel->cancelLinkedOrderLines($orderNumber, $invoiceId);
         }
-
-        $lineStmt->close();
-        $updStmt->close();
 
         if ($result['api_failed'] > 0) {
             $result['message'] = 'Orders marked cancelled locally, but Exotic cancel status API failed for ' . $result['api_failed'] . ' item(s).';
@@ -410,151 +303,117 @@ WHERE i.pos_flag = 1";
     =============================== */
     public function preview()
     {
-        global $conn;
+        global $invoiceModel;
 
-        $invoiceId = $_POST['invoice_id'];
-
-        $items = $conn->query("
-            SELECT * FROM invoice_items
-            WHERE invoice_id = $invoiceId
-        ");
+        $invoiceId = (int)($_POST['invoice_id'] ?? 0);
+        $items = $invoiceModel->getLegacyPreviewItemsResult($invoiceId);
 
         ob_start();
-        require "views/invoices/preview_template.php";
+        require 'views/invoices/preview_template.php';
         $html = ob_get_clean();
 
         echo json_encode([
-            "success" => true,
-            "html" => $html
+            'success' => true,
+            'html' => $html,
         ]);
     }
+
     public function preview_new()
     {
-        global $conn;
+        global $invoiceModel;
 
-        $data = json_decode(file_get_contents("php://input"), true);
+        $data = json_decode(file_get_contents('php://input'), true);
+        $invoiceId = (int)($data['invoice_id'] ?? 0);
+        $orderNumber = trim((string)($data['orderid'] ?? ''));
 
-        $invoiceId = $data['invoice_id'] ?? 0;
-        $orderNumber = $data['orderid'] ?? '';
-
-        // ✅ FIX: use order_number (NOT order_id)
-        if (!$invoiceId && $orderNumber) {
-
-            $orderNumber = $conn->real_escape_string($orderNumber);
-
-            $res = $conn->query("
-            SELECT id FROM vp_invoices 
-            WHERE order_number = '$orderNumber'
-            LIMIT 1
-        ");
-
-            $row = $res->fetch_assoc();
-            $invoiceId = $row['id'] ?? 0;
+        if (!$invoiceId && $orderNumber !== '') {
+            $invoiceId = $invoiceModel->findInvoiceIdByLegacyOrderNumber($orderNumber);
         }
 
         if (!$invoiceId) {
             echo json_encode([
-                "success" => false,
-                "message" => "Invoice not found"
+                'success' => false,
+                'message' => 'Invoice not found',
             ]);
             exit;
         }
 
-        // ✅ get invoice
-        $invoice = $conn->query("
-        SELECT * FROM vp_invoices WHERE id = $invoiceId
-    ")->fetch_assoc();
-
-        // ✅ template switch
-        if ($invoice['status'] === 'proforma') {
-            $template = "views/invoices/proforma_invoice.php";
-        } else {
-            $template = "views/invoices/tax_invoice.php";
+        $invoice = $invoiceModel->getInvoiceById($invoiceId);
+        if (!$invoice) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invoice not found',
+            ]);
+            exit;
         }
 
-        // ✅ items
-        $items = $conn->query("
-        SELECT * FROM invoice_items WHERE invoice_id = $invoiceId
-    ");
+        if ($invoice['status'] === 'proforma') {
+            $template = 'views/invoices/proforma_invoice.php';
+        } else {
+            $template = 'views/invoices/tax_invoice.php';
+        }
+
+        $items = $invoiceModel->getLegacyInvoiceItemsResult($invoiceId);
 
         ob_start();
         require $template;
         $html = ob_get_clean();
 
         echo json_encode([
-            "success" => true,
-            "html" => $html,
-            "invoice_id" => $invoiceId
+            'success' => true,
+            'html' => $html,
+            'invoice_id' => $invoiceId,
         ]);
     }
 
 
     public function create_from_payment()
     {
-        global $conn;
+        global $invoiceModel, $paymentModel;
 
-        $data = json_decode(file_get_contents("php://input"), true);
-        $paymentId = (int)$data['payment_id'];
+        $data = json_decode(file_get_contents('php://input'), true);
+        $paymentId = (int)($data['payment_id'] ?? 0);
 
-        $payment = $conn->query("
-        SELECT * FROM pos_payments WHERE id = $paymentId
-    ")->fetch_assoc();
-
+        $payment = $paymentModel->findById($paymentId);
         if (!$payment) {
-            echo json_encode(["success" => false]);
+            echo json_encode(['success' => false]);
             exit;
         }
 
         $orderNumber = (string)($payment['order_number'] ?? '');
-
-        // ✅ FIND EXISTING INVOICE
-        $invoice = $conn->query("
-        SELECT * FROM vp_invoices 
-        WHERE order_number = '" . $conn->real_escape_string($orderNumber) . "'
-        LIMIT 1
-    ")->fetch_assoc();
+        $invoice = $invoiceModel->findInvoiceByOrderNumberColumn($orderNumber);
 
         if ($invoice) {
-
-            // ✅ UPDATE STATUS ONLY (NO NEW INSERT)
-            if ($payment['payment_stage'] === 'final') {
-
-                $conn->query("
-                UPDATE vp_invoices 
-                SET status = 'final'
-                WHERE id = " . $invoice['id'] . "
-            ");
+            if (($payment['payment_stage'] ?? '') === 'final') {
+                $invoiceModel->finalizeInvoiceStatus((int)$invoice['id']);
             }
 
             echo json_encode([
-                "success" => true,
-                "invoice_id" => $invoice['id']
+                'success' => true,
+                'invoice_id' => $invoice['id'],
             ]);
             exit;
         }
 
-        // ❗ fallback (rare)
         echo json_encode([
-            "success" => false,
-            "message" => "Invoice not found for update"
+            'success' => false,
+            'message' => 'Invoice not found for update',
         ]);
     }
+
     /* ===============================
        GET SINGLE
     =============================== */
     public function get_single_invoice()
     {
-        global $conn;
+        global $invoiceModel;
 
-        $id = $_GET['id'];
-
-        $res = $conn->query("
-        SELECT * FROM vp_invoices WHERE id=$id
-        ");
+        $id = (int)($_GET['id'] ?? 0);
+        $invoice = $invoiceModel->getInvoiceById($id);
 
         echo json_encode([
-            "success" => true,
-            "invoice" => $res->fetch_assoc()
+            'success' => true,
+            'invoice' => $invoice,
         ]);
     }
 
@@ -563,19 +422,13 @@ WHERE i.pos_flag = 1";
     =============================== */
     public function update_status()
     {
-        global $conn;
+        global $invoiceModel;
 
-        $id = $_POST['id'];
-        $status = $_POST['status'];
+        $id = (int)($_POST['id'] ?? 0);
+        $status = (string)($_POST['status'] ?? '');
+        $invoiceModel->updateInvoiceStatus($id, $status);
 
-        $stmt = $conn->prepare("
-        UPDATE vp_invoices SET status=? WHERE id=?
-        ");
-
-        $stmt->bind_param("si", $status, $id);
-        $stmt->execute();
-
-        echo json_encode(["success" => true]);
+        echo json_encode(['success' => true]);
     }
 
     /* ===============================
@@ -623,8 +476,8 @@ WHERE i.pos_flag = 1";
             }
 
             //term and conditions fetch
-            global $commanModel;
-            $firmSettings = $commanModel->getRecordById('global_settings', 1);
+            require_once __DIR__ . '/../helpers/app_settings.php';
+            $firmSettings = app_setting_global_settings();
             $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
 
             // Generate HTML for PDF
@@ -700,7 +553,8 @@ WHERE i.pos_flag = 1";
             exit;
         }
 
-        $firmSettings = $commanModel->getRecordById('global_settings', 1);
+        require_once __DIR__ . '/../helpers/app_settings.php';
+        $firmSettings = app_setting_global_settings();
         $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
 
         $invoiceHtml = $this->generateInvoiceHtml($invoice, $items, 'tax_invoice');
@@ -710,7 +564,7 @@ WHERE i.pos_flag = 1";
             'invoice_html' => $invoiceHtml,
             'invoice_number' => (string)($invoice['invoice_number'] ?? ''),
             'invoice_pdf_url' => $pdfUrl,
-        ], 'Invoice — ' . ($invoice['invoice_number'] ?? ''));
+        ], 'Invoice - ' . ($invoice['invoice_number'] ?? ''));
     }
 
     private function parsePosInvoiceDiscountMeta(?string $notes): array
@@ -795,13 +649,6 @@ WHERE i.pos_flag = 1";
         $discMap = $this->posInclusiveUnitPriceMap($discRows);
         $listMapByCode = $this->posInclusiveUnitPriceMapByItemCode($listRows);
         $discMapByCode = $this->posInclusiveUnitPriceMapByItemCode($discRows);
-        $totalDiscount = round(
-            (float)($snapshot['coupon_discount'] ?? 0)
-            + (float)($snapshot['cash_discount'] ?? 0)
-            + (float)($snapshot['gift_discount'] ?? 0)
-            + (float)($snapshot['line_discount'] ?? 0),
-            2
-        );
 
         $rows = [];
         foreach ($orderItems as $it) {
@@ -818,16 +665,11 @@ WHERE i.pos_flag = 1";
             $discInclUnit = $discMap[$key] ?? ($itemCode !== '' ? ($discMapByCode[$itemCode] ?? null) : null);
 
             if ($discInclUnit === null || $discInclUnit <= 0) {
-                $discInclLine = (float)($it['finalprice'] ?? 0);
-                $discInclUnit = $qty >= 1 ? $discInclLine / $qty : $discInclLine;
+                $discInclUnit = pos_order_inclusive_unit_price($it, 'disc');
             }
 
             if ($listInclUnit === null || $listInclUnit <= 0) {
-                $listInclLine = (float)($it['finalprice'] ?? 0);
-                if ($listInclLine <= 0) {
-                    $listInclLine = (float)($it['itemprice'] ?? 0) * $qty;
-                }
-                $listInclUnit = $qty >= 1 ? $listInclLine / $qty : $listInclLine;
+                $listInclUnit = pos_order_inclusive_unit_price($it, 'list');
             }
 
             $rows[] = [
@@ -841,49 +683,42 @@ WHERE i.pos_flag = 1";
             ];
         }
 
-        if ($totalDiscount > 0.001 && count($rows) > 0) {
-            $discExtendedSum = 0.0;
-            foreach ($rows as $row) {
-                $discExtendedSum += round($row['disc_incl_unit'] * $row['qty'], 2);
-            }
-            if ($discExtendedSum <= 0) {
-                $discExtendedSum = round((float)($snapshot['grand_total'] ?? 0), 2);
-            }
-
-            $remainingDiscount = $totalDiscount;
-            $lastIndex = count($rows) - 1;
+        $orderLevelDisc = $this->posInvoiceOrderLevelDiscountTotal($snapshot);
+        if ($orderLevelDisc > 0.001 && $rows !== []) {
+            $shareItems = array_map(
+                static fn(array $row): array => [
+                    'line_total' => round((float)$row['disc_incl_unit'] * (float)$row['qty'], 2),
+                ],
+                $rows
+            );
+            $shares = $this->posInvoiceProportionalDiscountShares($shareItems, $orderLevelDisc);
             foreach ($rows as $index => &$row) {
-                $share = $index === $lastIndex
-                    ? round($remainingDiscount, 2)
-                    : round(($totalDiscount * round($row['disc_incl_unit'] * $row['qty'], 2)) / max($discExtendedSum, 0.001), 2);
-                $remainingDiscount = round($remainingDiscount - $share, 2);
-
-                if ($row['list_incl_unit'] <= $row['disc_incl_unit'] + 0.02) {
-                    $row['list_incl_unit'] = round(
-                        $row['disc_incl_unit'] + ($share / max(1, $row['qty'])),
-                        4
-                    );
+                if ($row['list_incl_unit'] > $row['disc_incl_unit'] + 0.02) {
+                    continue;
                 }
+                $share = (float)($shares[$index] ?? 0);
+                if ($share <= 0.001) {
+                    continue;
+                }
+                $listingIncl = max((float)$row['list_incl_unit'], (float)$row['disc_incl_unit']);
+                $row['list_incl_unit'] = $listingIncl;
+                $row['disc_incl_unit'] = max(
+                    0.0,
+                    round($listingIncl - ($share / max(1, (float)$row['qty'])), 4)
+                );
             }
             unset($row);
         }
 
-        $toPretax = static function (float $inclUnit, float $gstRate): float {
-            if ($gstRate > 0) {
-                return round($inclUnit / (1 + ($gstRate / 100)), 4);
-            }
-
-            return round($inclUnit, 4);
-        };
-
         $out = [];
         foreach ($rows as $row) {
+            $gstRate = (float)$row['gst_rate'];
             $out[] = [
                 'item_code' => $row['item_code'],
                 'size' => $row['size'],
                 'color' => $row['color'],
-                'list_unit_pretax' => $toPretax((float)$row['list_incl_unit'], (float)$row['gst_rate']),
-                'discounted_unit_pretax' => $toPretax((float)$row['disc_incl_unit'], (float)$row['gst_rate']),
+                'list_unit_pretax' => $this->posInvoiceInclToPretax((float)$row['list_incl_unit'], $gstRate),
+                'discounted_unit_pretax' => $this->posInvoiceInclToPretax((float)$row['disc_incl_unit'], $gstRate),
                 'list_unit_incl' => round((float)$row['list_incl_unit'], 2),
                 'discounted_unit_incl' => round((float)$row['disc_incl_unit'], 2),
             ];
@@ -958,6 +793,239 @@ WHERE i.pos_flag = 1";
     }
 
     /**
+     * GST amounts and rate columns from a GST-inclusive discounted unit price.
+     *
+     * @return array{sgst: float, cgst: float, igst: float, sgst_rate: float, cgst_rate: float, igst_rate: float}
+     */
+    private function posInvoiceComputeLineTaxBreakdown(
+        float $discUnitIncl,
+        int $qty,
+        float $taxRate,
+        bool $useIgst
+    ): array {
+        $lineIncl = round($discUnitIncl * $qty, 2);
+        $pretaxExtended = round($this->posInvoiceInclToPretax($discUnitIncl, $taxRate) * $qty, 2);
+        $taxTotal = round($lineIncl - $pretaxExtended, 2);
+
+        if ($useIgst) {
+            return [
+                'sgst' => 0.0,
+                'cgst' => 0.0,
+                'igst' => $taxTotal,
+                'sgst_rate' => 0.0,
+                'cgst_rate' => 0.0,
+                'igst_rate' => round($taxRate, 2),
+            ];
+        }
+
+        $sgst = round($taxTotal / 2, 2);
+        $cgst = round($taxTotal - $sgst, 2);
+        $halfRate = round($taxRate / 2, 2);
+
+        return [
+            'sgst' => $sgst,
+            'cgst' => $cgst,
+            'igst' => 0.0,
+            'sgst_rate' => $halfRate,
+            'cgst_rate' => $halfRate,
+            'igst_rate' => 0.0,
+        ];
+    }
+
+    private function posInvoiceOrderLevelDiscountTotal(array $posDiscountMeta): float
+    {
+        return round(
+            (float)($posDiscountMeta['coupon_discount'] ?? 0)
+            + (float)($posDiscountMeta['cash_discount'] ?? 0)
+            + (float)($posDiscountMeta['gift_discount'] ?? 0),
+            2
+        );
+    }
+
+    private function posInvoiceInclToPretax(float $inclUnit, float $gstRate): float
+    {
+        if ($gstRate > 0) {
+            return round($inclUnit / (1 + ($gstRate / 100)), 4);
+        }
+
+        return round($inclUnit, 4);
+    }
+
+    private function posInvoiceLineExtendedSum(array $items): float
+    {
+        $sum = 0.0;
+        foreach ($items as $item) {
+            $sum += round((float)($item['line_total'] ?? 0), 2);
+        }
+
+        return $sum;
+    }
+
+    /**
+     * Product-level line discount; skip stacking order-level discount on this line.
+     */
+    private function posInvoiceLineHasCatalogDiscountMeta(
+        float $listInclMeta,
+        float $discInclMeta,
+        float $listingIncl,
+        float $sharePerUnit
+    ): bool {
+        if ($listInclMeta <= $discInclMeta + 0.02) {
+            return false;
+        }
+
+        return $discInclMeta + 0.05 < round($listingIncl - $sharePerUnit, 2);
+    }
+
+    private function posInvoiceOrderDiscountAlreadyApplied(
+        float $listInclMeta,
+        float $discInclMeta,
+        float $listingIncl,
+        float $sharePerUnit
+    ): bool {
+        if ($listInclMeta <= 0 || $discInclMeta <= 0) {
+            return false;
+        }
+
+        $discTarget = max(0.0, round($listingIncl - $sharePerUnit, 2));
+
+        return abs($listInclMeta - $listingIncl) < 0.03 && abs($discInclMeta - $discTarget) < 0.03;
+    }
+
+    /**
+     * @return array{list: float, disc: float}
+     */
+    private function posInvoiceOrderDiscountLinePrices(float $listingIncl, float $sharePerUnit): array
+    {
+        $listingIncl = round($listingIncl, 2);
+
+        return [
+            'list' => $listingIncl,
+            'disc' => max(0.0, round($listingIncl - $sharePerUnit, 2)),
+        ];
+    }
+
+    /**
+     * Listing unit (GST incl.) from subtotal_goods ratio when order-level discount exists.
+     */
+    private function posInvoiceListingInclFromSubtotalRatio(
+        array $item,
+        float $subtotalGoods,
+        float $extendedSum,
+        ?array $meta = null
+    ): float {
+        $qty = max(1, (float)($item['quantity'] ?? 1));
+        if ($subtotalGoods > 0 && $extendedSum > 0.001) {
+            $lineExtended = round((float)($item['line_total'] ?? 0), 2);
+
+            return round(($subtotalGoods * $lineExtended / $extendedSum) / $qty, 2);
+        }
+
+        $listInclMeta = (float)($meta['list_unit_incl'] ?? 0);
+        $discInclMeta = (float)($meta['discounted_unit_incl'] ?? 0);
+        if ($listInclMeta > 0 || $discInclMeta > 0) {
+            return round(max($listInclMeta, $discInclMeta), 2);
+        }
+
+        $lineExtended = round((float)($item['line_total'] ?? 0), 2);
+
+        return $qty > 0 ? round($lineExtended / $qty, 2) : $lineExtended;
+    }
+
+    /**
+     * Split an order-level discount across lines by line-total ratio.
+     *
+     * @param list<array<string, mixed>> $items each row needs line_total
+     * @return array<int, float> line index => extended discount share
+     */
+    private function posInvoiceProportionalDiscountShares(array $items, float $totalDiscount): array
+    {
+        if ($totalDiscount <= 0.001 || $items === []) {
+            return [];
+        }
+
+        $extendedSum = $this->posInvoiceLineExtendedSum($items);
+        if ($extendedSum <= 0.001) {
+            return [];
+        }
+
+        $shares = [];
+        $remaining = $totalDiscount;
+        $lastIndex = count($items) - 1;
+        foreach ($items as $index => $item) {
+            $lineExtended = round((float)($item['line_total'] ?? 0), 2);
+            $share = $index === $lastIndex
+                ? round($remaining, 2)
+                : round(($totalDiscount * $lineExtended) / $extendedSum, 2);
+            $remaining = round($remaining - $share, 2);
+            $shares[$index] = $share;
+        }
+
+        return $shares;
+    }
+
+    /**
+     * Apply proportional order-level discount to line meta for PDF / stored notes.
+     *
+     * @param list<array<string, mixed>> $items
+     * @param list<array<string, mixed>> $lineItemsMeta
+     */
+    private function applyPosOrderLevelDiscountToLineMeta(array &$lineItemsMeta, array $items, array $posMeta): void
+    {
+        $totalDiscount = $this->posInvoiceOrderLevelDiscountTotal($posMeta);
+        if ($totalDiscount <= 0.001 || $items === []) {
+            return;
+        }
+
+        $subtotalGoods = round((float)($posMeta['subtotal_goods'] ?? 0), 2);
+        $extendedSum = $this->posInvoiceLineExtendedSum($items);
+        $shares = $this->posInvoiceProportionalDiscountShares($items, $totalDiscount);
+
+        foreach ($items as $index => $item) {
+            $share = (float)($shares[$index] ?? 0);
+            if ($share <= 0.001) {
+                continue;
+            }
+
+            $qty = max(1, (float)($item['quantity'] ?? 1));
+            $sharePerUnit = $share / $qty;
+            $meta = $this->posInvoiceLineMetaForItem($item, $index, $lineItemsMeta);
+            $listInclMeta = is_array($meta) ? (float)($meta['list_unit_incl'] ?? 0) : 0.0;
+            $discInclMeta = is_array($meta) ? (float)($meta['discounted_unit_incl'] ?? 0) : 0.0;
+            $listingIncl = $this->posInvoiceListingInclFromSubtotalRatio(
+                $item,
+                $subtotalGoods,
+                $extendedSum,
+                is_array($meta) ? $meta : null
+            );
+
+            if ($this->posInvoiceLineHasCatalogDiscountMeta($listInclMeta, $discInclMeta, $listingIncl, $sharePerUnit)
+                || $this->posInvoiceOrderDiscountAlreadyApplied($listInclMeta, $discInclMeta, $listingIncl, $sharePerUnit)) {
+                continue;
+            }
+
+            $prices = $this->posInvoiceOrderDiscountLinePrices($listingIncl, $sharePerUnit);
+            $gstRate = (float)($item['tax_rate'] ?? 0);
+            $entry = [
+                'list_unit_pretax' => $this->posInvoiceInclToPretax($prices['list'], $gstRate),
+                'discounted_unit_pretax' => $this->posInvoiceInclToPretax($prices['disc'], $gstRate),
+                'list_unit_incl' => $prices['list'],
+                'discounted_unit_incl' => $prices['disc'],
+            ];
+
+            if (is_array($meta)) {
+                $lineItemsMeta[$index] = array_merge($meta, $entry);
+            } else {
+                $lineItemsMeta[$index] = array_merge([
+                    'item_code' => (string)($item['item_code'] ?? ''),
+                    'size' => '',
+                    'color' => '',
+                ], $entry);
+            }
+        }
+    }
+
+    /**
      * GST-inclusive unit prices for PDF List / Disc columns.
      *
      * @return array{list: float, disc: float}
@@ -965,19 +1033,14 @@ WHERE i.pos_flag = 1";
     private function posInvoiceResolveLineDisplayPrices(
         array $item,
         int $index,
-        array $lineItemsMeta,
-        array $posDiscountMeta = []
+        array $lineItemsMeta
     ): array {
         $meta = $this->posInvoiceLineMetaForItem($item, $index, $lineItemsMeta);
         $taxRate = (float)($item['tax_rate'] ?? 0);
         $qtyInt = $this->posInvoiceFormatQty($item['quantity'] ?? 1);
 
-        $discIncl = 0.0;
-        $listIncl = 0.0;
-        if (is_array($meta)) {
-            $discIncl = (float)($meta['discounted_unit_incl'] ?? 0);
-            $listIncl = (float)($meta['list_unit_incl'] ?? 0);
-        }
+        $discIncl = is_array($meta) ? (float)($meta['discounted_unit_incl'] ?? 0) : 0.0;
+        $listIncl = is_array($meta) ? (float)($meta['list_unit_incl'] ?? 0) : 0.0;
 
         if ($discIncl <= 0) {
             $lineTotal = round((float)($item['line_total'] ?? 0), 2);
@@ -987,23 +1050,12 @@ WHERE i.pos_flag = 1";
             $pretax = $this->posInvoiceResolveLineUnitPretax($item, $index, $lineItemsMeta);
             $discIncl = $this->posInvoiceUnitIncl($pretax['disc'], $taxRate);
         }
-
         if ($listIncl <= 0) {
             $pretax = $this->posInvoiceResolveLineUnitPretax($item, $index, $lineItemsMeta);
             $listIncl = $this->posInvoiceUnitIncl($pretax['list'], $taxRate);
         }
-
         if ($listIncl <= $discIncl + 0.02) {
-            $totalDiscount = round(
-                (float)($posDiscountMeta['coupon_discount'] ?? 0)
-                + (float)($posDiscountMeta['cash_discount'] ?? 0)
-                + (float)($posDiscountMeta['gift_discount'] ?? 0)
-                + (float)($posDiscountMeta['line_discount'] ?? 0),
-                2
-            );
-            if ($totalDiscount > 0.001) {
-                $listIncl = round($discIncl + ($totalDiscount / $qtyInt), 2);
-            }
+            $listIncl = max($listIncl, $discIncl);
         }
 
         return [
@@ -1012,80 +1064,130 @@ WHERE i.pos_flag = 1";
         ];
     }
 
-    /**
-     * When stored line meta has list = discounted, rebuild list pretax from summary discounts.
-     *
-     * @param list<array<string, mixed>> $items
-     */
-    private function applyPosListPriceFallbackFromDiscountMeta(array &$lineItemsMeta, array $items, array $posMeta): void
-    {
-        $totalDiscount = round(
-            (float)($posMeta['coupon_discount'] ?? 0)
-            + (float)($posMeta['cash_discount'] ?? 0)
-            + (float)($posMeta['gift_discount'] ?? 0)
-            + (float)($posMeta['line_discount'] ?? 0),
-            2
-        );
-        if ($totalDiscount <= 0.001 || count($items) === 0) {
-            return;
-        }
-
-        $discExtendedSum = 0.0;
-        foreach ($items as $item) {
-            $discExtendedSum += round((float)($item['line_total'] ?? 0), 2);
-        }
-        if ($discExtendedSum <= 0) {
-            $discExtendedSum = round((float)($posMeta['grand_total'] ?? 0), 2);
-        }
-
-        $remainingDiscount = $totalDiscount;
-        $lastIndex = count($items) - 1;
-        foreach ($items as $index => $item) {
-            $qty = max(1, (float)($item['quantity'] ?? 1));
-            $gstRate = (float)($item['tax_rate'] ?? 0);
-            $discPretax = (float)($item['unit_price'] ?? 0);
-            $meta = $this->posInvoiceLineMetaForItem($item, $index, $lineItemsMeta);
-            $listPretax = is_array($meta) ? (float)($meta['list_unit_pretax'] ?? 0) : 0.0;
-            if ($listPretax <= 0) {
-                $listPretax = $discPretax;
-            }
-
-            if ($listPretax > $discPretax + 0.02) {
-                continue;
-            }
-
-            $share = $index === $lastIndex
-                ? round($remainingDiscount, 2)
-                : round(($totalDiscount * round((float)($item['line_total'] ?? 0), 2)) / max($discExtendedSum, 0.001), 2);
-            $remainingDiscount = round($remainingDiscount - $share, 2);
-
-            $discInclUnit = $gstRate > 0 ? $discPretax * (1 + ($gstRate / 100)) : $discPretax;
-            $listInclUnit = round($discInclUnit + ($share / $qty), 4);
-            $listPretax = $gstRate > 0 ? round($listInclUnit / (1 + ($gstRate / 100)), 4) : round($listInclUnit, 4);
-
-            if (is_array($meta)) {
-                $lineItemsMeta[$index]['list_unit_pretax'] = $listPretax;
-                $lineItemsMeta[$index]['list_unit_incl'] = round($listInclUnit, 2);
-                if ((float)($meta['discounted_unit_incl'] ?? 0) <= 0) {
-                    $lineItemsMeta[$index]['discounted_unit_incl'] = round($discInclUnit, 2);
-                }
-            } else {
-                $lineItemsMeta[$index] = [
-                    'item_code' => (string)($item['item_code'] ?? ''),
-                    'size' => '',
-                    'color' => '',
-                    'list_unit_pretax' => $listPretax,
-                    'discounted_unit_pretax' => $discPretax,
-                    'list_unit_incl' => round($listInclUnit, 2),
-                    'discounted_unit_incl' => round($discInclUnit, 2),
-                ];
-            }
-        }
-    }
-
     private function posLinePriceLookupKey(string $itemCode, string $size = '', string $color = ''): string
     {
         return strtolower(trim($itemCode)) . '|' . strtolower(trim($size)) . '|' . strtolower(trim($color));
+    }
+
+    /**
+     * Rebuild checkout invoice snapshot from persisted order rows (payments / delayed invoice create).
+     *
+     * @param list<array<string, mixed>> $orderItems
+     * @param array<string, mixed>|null $orderInfo vp_order_info row
+     * @return array<string, mixed>|null
+     */
+    private function buildPosInvoiceSnapshotFromOrder(string $orderNumber, array $orderItems, ?array $orderInfo): ?array
+    {
+        global $conn;
+
+        if ($orderNumber === '' || $orderItems === []) {
+            return null;
+        }
+
+        require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+
+        $listLinePrices = $this->buildPosLinePriceRowsFromOrderItems($orderItems, 'list');
+        $discLinePrices = $this->buildPosLinePriceRowsFromOrderItems($orderItems, 'disc');
+        if ($listLinePrices === [] && $discLinePrices === []) {
+            return null;
+        }
+
+        $listSubtotal = 0.0;
+        $discSubtotal = 0.0;
+        foreach ($orderItems as $it) {
+            $listSubtotal += pos_order_inclusive_line_total($it, 'list');
+            $discSubtotal += pos_order_inclusive_line_total($it, 'disc');
+        }
+
+        $couponDiscount = round((float)($orderInfo['coupon_reduce'] ?? 0), 2);
+        $giftDiscount = round((float)($orderInfo['giftvoucher_reduce'] ?? 0), 2);
+        $credit = round((float)($orderInfo['credit'] ?? 0), 2);
+
+        $cashDiscount = round(max(
+            (float)($orderInfo['custom_reduce'] ?? 0),
+            array_reduce($orderItems, static function (float $max, array $it): float {
+                return max($max, round((float)($it['custom_reduce'] ?? 0), 2));
+            }, 0.0)
+        ), 2);
+
+        $lineDiscount = max(0.0, round($listSubtotal - $discSubtotal, 2));
+
+        $grandTotal = ($conn instanceof mysqli)
+            ? pos_payment_resolve_order_total($conn, $orderNumber)
+            : 0.0;
+        if ($grandTotal <= 0) {
+            $grandTotal = round((float)($orderInfo['total'] ?? 0), 2);
+        }
+        if ($grandTotal <= 0) {
+            $grandTotal = max(0.0, round($discSubtotal - $couponDiscount - $cashDiscount - $giftDiscount - $credit, 2));
+        }
+
+        $subtotalGoods = round($discSubtotal, 2);
+        if ($subtotalGoods <= 0 && $listSubtotal > 0) {
+            $subtotalGoods = round($listSubtotal, 2);
+        }
+        if ($subtotalGoods <= 0 && $grandTotal > 0) {
+            $subtotalGoods = $grandTotal;
+        }
+
+        $customMode = '';
+        $customValue = 0.0;
+        if ($cashDiscount > 0) {
+            $customNote = trim((string)($orderInfo['custom_note'] ?? ''));
+            if ($customNote !== '' && preg_match('/(\d+(?:\.\d+)?)\s*%/', $customNote, $matches)) {
+                $customMode = 'percent';
+                $customValue = round((float)$matches[1], 2);
+            } else {
+                $customMode = 'fixed';
+                $customValue = $cashDiscount;
+            }
+        }
+
+        return [
+            'order_number' => $orderNumber,
+            'subtotal_goods' => $subtotalGoods,
+            'gst_total' => 0.0,
+            'coupon_discount' => $couponDiscount,
+            'cash_discount' => $cashDiscount,
+            'gift_discount' => $giftDiscount,
+            'line_discount' => $lineDiscount,
+            'grand_total' => $grandTotal,
+            'line_prices' => $discLinePrices,
+            'list_line_prices' => $listLinePrices,
+            'discounts_absorbed' => true,
+            'custom_discount_mode' => $customMode,
+            'custom_discount_value' => $customValue,
+            'coupon_display_name' => trim((string)($orderInfo['coupon'] ?? '')),
+        ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $orderItems
+     * @return list<array{itemcode: string, size: string, color: string, price: string}>
+     */
+    private function buildPosLinePriceRowsFromOrderItems(array $orderItems, string $kind): array
+    {
+        $rows = [];
+        foreach ($orderItems as $it) {
+            $itemCode = trim((string)($it['item_code'] ?? ''));
+            if ($itemCode === '') {
+                continue;
+            }
+
+            $unit = pos_order_inclusive_unit_price($it, $kind === 'list' ? 'list' : 'disc');
+            if ($unit <= 0) {
+                continue;
+            }
+
+            $rows[] = [
+                'itemcode' => $itemCode,
+                'size' => trim((string)($it['size'] ?? '')),
+                'color' => trim((string)($it['color'] ?? '')),
+                'price' => number_format($unit, 2, '.', ''),
+            ];
+        }
+
+        return $rows;
     }
 
     /**
@@ -1145,11 +1247,10 @@ WHERE i.pos_flag = 1";
 
             $inclUnit = $priceMap[$key] ?? null;
             if ($inclUnit === null || $inclUnit <= 0) {
-                $listInclLine = (float)($it['finalprice'] ?? 0);
-                if ($listInclLine <= 0) {
-                    $listInclLine = (float)($it['itemprice'] ?? 0) * $qty;
+                $inclLine = pos_order_inclusive_line_total($it, 'disc');
+                if ($inclLine <= 0) {
+                    $inclLine = pos_order_inclusive_line_total($it, 'list');
                 }
-                $inclLine = $listInclLine;
             } else {
                 $inclLine = round($inclUnit * $qty, 2);
             }
@@ -1225,8 +1326,10 @@ WHERE i.pos_flag = 1";
         }
     }
 
-    private function persistPosInvoiceDiscountNotes(mysqli $conn, int $invoiceId, array $discountMeta, array $lineItemsMeta = []): void
+    private function persistPosInvoiceDiscountNotes(int $invoiceId, array $discountMeta, array $lineItemsMeta = []): void
     {
+        global $invoiceModel;
+
         if ($invoiceId <= 0) {
             return;
         }
@@ -1267,13 +1370,7 @@ WHERE i.pos_flag = 1";
             return;
         }
 
-        $stmt = $conn->prepare('UPDATE vp_invoices SET notes = ? WHERE id = ?');
-        if (!$stmt) {
-            return;
-        }
-        $stmt->bind_param('si', $json, $invoiceId);
-        $stmt->execute();
-        $stmt->close();
+        $invoiceModel->updateInvoiceNotes($invoiceId, $json);
     }
 
     private function posInvoiceSummaryLabelRow(
@@ -1314,7 +1411,11 @@ WHERE i.pos_flag = 1";
             return 'Custom Discount (' . $pct . '%)';
         }
 
-        return 'Custom Discount (fixed ₹)';
+        if ($mode === 'fixed' && $value > 0) {
+            return 'Custom Discount (fixed amount)';
+        }
+
+        return 'Custom Discount';
     }
 
     private function posInvoiceCouponLabel(array $posMeta): string
@@ -1362,14 +1463,24 @@ WHERE i.pos_flag = 1";
                     </tr>';
 
         if ($absorbed) {
+            $orderLevelDisc = round($coupon + $cash + $gift, 2);
+            $lineDisc = round($line, 2);
+
+            if ($subInclGst <= 0 && $grandTotal > 0) {
+                $subInclGst = round($grandTotal + $orderLevelDisc, 2);
+            }
             if ($grandTotal <= 0) {
                 $grandTotal = $subInclGst;
             }
             if ($subInclGst <= 0) {
                 $subInclGst = $grandTotal;
             }
-
-            $totalDiscount = round($coupon + $cash + $gift + $line, 2);
+            if ($orderLevelDisc > 0.001 && $subInclGst > 0) {
+                $computedGrand = max(0.0, round($subInclGst - $orderLevelDisc, 2));
+                if (abs($grandTotal - $subInclGst) < 0.02 || $grandTotal <= 0) {
+                    $grandTotal = $computedGrand;
+                }
+            }
 
             $rows .= $this->posInvoiceSummaryLabelRow(
                 'Sub total (incl. GST)',
@@ -1379,11 +1490,38 @@ WHERE i.pos_flag = 1";
                 $colCount,
                 true
             );
-            if ($totalDiscount > 0.001) {
+            if ($lineDisc > 0.001) {
                 $rows .= $this->posInvoiceSummaryLabelRow(
-                    'Total Discount',
-                    $totalDiscount,
+                    'Line Discount',
+                    $lineDisc,
                     $absorbedNote,
+                    false,
+                    $colCount
+                );
+            }
+            if ($cash > 0.001) {
+                $rows .= $this->posInvoiceSummaryLabelRow(
+                    $this->posInvoiceCustomDiscountLabel($posMeta),
+                    $cash,
+                    '',
+                    false,
+                    $colCount
+                );
+            }
+            if ($coupon > 0.001) {
+                $rows .= $this->posInvoiceSummaryLabelRow(
+                    $this->posInvoiceCouponLabel($posMeta),
+                    $coupon,
+                    '',
+                    false,
+                    $colCount
+                );
+            }
+            if ($gift > 0.001) {
+                $rows .= $this->posInvoiceSummaryLabelRow(
+                    'Gift Voucher',
+                    $gift,
+                    '',
                     false,
                     $colCount
                 );
@@ -1446,7 +1584,30 @@ WHERE i.pos_flag = 1";
 
     private function generateInvoiceHtml($invoice, $items, $type = '')
     {
-        global $commanModel;
+        global $commanModel, $invoiceModel;
+
+        $orderNumberForRepair = '';
+        if (!empty($items[0]['order_number'])) {
+            $orderNumberForRepair = trim((string)$items[0]['order_number']);
+        }
+        $invoiceId = (int)($invoice['id'] ?? 0);
+        if ($invoiceId > 0 && $orderNumberForRepair !== '') {
+            $notesEmpty = trim((string)($invoice['notes'] ?? '')) === '';
+            $lineMetaEmpty = empty($this->parsePosInvoiceLineItemsMeta($invoice['notes'] ?? null));
+            $parsedDiscount = $this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null);
+            $discountMetaEmpty = empty($parsedDiscount);
+            $discountMetaStale = !$discountMetaEmpty
+                && $this->posInvoiceDiscountMetaNeedsRepair($parsedDiscount, $orderNumberForRepair);
+            if ($notesEmpty || $lineMetaEmpty || $discountMetaEmpty || $discountMetaStale) {
+                if ($this->repairPosInvoiceMetadataForOrder($invoiceId, $orderNumberForRepair)) {
+                    $reloaded = $invoiceModel->getInvoiceById($invoiceId);
+                    if (is_array($reloaded)) {
+                        $invoice = $reloaded;
+                    }
+                }
+            }
+        }
+
         // Initialize variables
         $itemsrows = '';
         $summaryrows = '';
@@ -1459,10 +1620,11 @@ WHERE i.pos_flag = 1";
         $totalCgstAmt = 0;
         $totalIgstAmt = 0;
         $sumLineTotals = 0.0;
+        $sumListLineTotals = 0.0;
         $lineItemsMeta = $this->parsePosInvoiceLineItemsMeta($invoice['notes'] ?? null);
         $posDiscountMeta = $this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null);
         if (!empty($posDiscountMeta)) {
-            $this->applyPosListPriceFallbackFromDiscountMeta($lineItemsMeta, $items, $posDiscountMeta);
+            $this->applyPosOrderLevelDiscountToLineMeta($lineItemsMeta, $items, $posDiscountMeta);
         }
         $usePosItemLayout = !empty($lineItemsMeta) || !empty($invoice['pos_flag']);
         $showDiscPriceColumn = false;
@@ -1472,8 +1634,7 @@ WHERE i.pos_flag = 1";
                 $displayPrices = $this->posInvoiceResolveLineDisplayPrices(
                     $scanItem,
                     $scanIdx,
-                    $lineItemsMeta,
-                    $posDiscountMeta
+                    $lineItemsMeta
                 );
                 if ($this->posInvoiceLineHasUnitDiscount($displayPrices['list'], $displayPrices['disc'])) {
                     $showDiscPriceColumn = true;
@@ -1488,53 +1649,60 @@ WHERE i.pos_flag = 1";
 
         // Build item rows
         foreach ($items as $idx => $item) {
-            // $amount = $item['quantity'] * $item['unit_price'];
-            // $taxAmount = ($amount * $item['tax_rate']) / 100;
-            // $lineTotal = $amount + $taxAmount;
-
-            // $totalSubtotal += $amount;
-            // $totalTax += $taxAmount;
-            // $totalAmount += $lineTotal;
-            $totalGstAmount += $item['tax_amount'];
-
-            // // Determine tax type (simplified - assuming SGST/CGST for domestic, IGST for other)
-            // $sgstRate = $item['tax_rate'] / 2;
-            // $cgstRate = $item['tax_rate'] / 2;
-            // $igstRate = 0;
-            // $sgstAmt = ($amount * $sgstRate) / 100;
-            // $cgstAmt = ($amount * $cgstRate) / 100;
-            // $igstAmt = 0;
-
-            // $totalSgstAmt += $sgstAmt;
-            // $totalCgstAmt += $cgstAmt;
-            // $totalIgstAmt += $igstAmt;
             $qtyInt = $this->posInvoiceFormatQty($item['quantity'] ?? 1);
             $totalQuantity += $qtyInt;
-            $totalSgstAmt += $item['sgst'];
-            $totalCgstAmt += $item['cgst'];
-            $totalIgstAmt += $item['igst'];
 
-            $unitPrices = $this->posInvoiceResolveLineUnitPretax($item, $idx, $lineItemsMeta);
-            $discUnitPretax = $unitPrices['disc'];
-            $displayPrices = $this->posInvoiceResolveLineDisplayPrices($item, $idx, $lineItemsMeta, $posDiscountMeta);
-            $listUnitDisplay = $showDiscPriceColumn ? $displayPrices['list'] : $unitPrices['list'];
-            $discUnitDisplay = $showDiscPriceColumn ? $displayPrices['disc'] : $discUnitPretax;
+            $displayPrices = $this->posInvoiceResolveLineDisplayPrices(
+                $item,
+                $idx,
+                $lineItemsMeta
+            );
+            $listUnitDisplay = $showDiscPriceColumn ? $displayPrices['list'] : $displayPrices['disc'];
+            $discUnitDisplay = $displayPrices['disc'];
             $taxRate = (float)($item['tax_rate'] ?? 0);
-            $rateBase = $discUnitPretax > 0 ? $discUnitPretax : (float)($item['unit_price'] ?? 0);
             $lineTotalDisplay = $showDiscPriceColumn
                 ? round($discUnitDisplay * $qtyInt, 2)
                 : round((float)($item['line_total'] ?? 0), 2);
             $sumLineTotals += $lineTotalDisplay;
-
-            if ($item['igst'] > 0) {
-                $igstRate = $rateBase > 0 ? ($item['igst'] / $qtyInt) / ($rateBase / 100) : 0;
-                $sgstRate = 0;
-                $cgstRate = 0;
-            } else {
-                $sgstRate = $rateBase > 0 ? ($item['sgst'] / $qtyInt) / ($rateBase / 100) : 0;
-                $cgstRate = $rateBase > 0 ? ($item['cgst'] / $qtyInt) / ($rateBase / 100) : 0;
-                $igstRate = 0;
+            if ($showDiscPriceColumn) {
+                $sumListLineTotals += round($listUnitDisplay * $qtyInt, 2);
             }
+
+            $useIgst = (float)($item['igst'] ?? 0) > 0;
+            if ($showDiscPriceColumn) {
+                $taxBreakdown = $this->posInvoiceComputeLineTaxBreakdown(
+                    $discUnitDisplay,
+                    $qtyInt,
+                    $taxRate,
+                    $useIgst
+                );
+                $sgstAmt = $taxBreakdown['sgst'];
+                $cgstAmt = $taxBreakdown['cgst'];
+                $igstAmt = $taxBreakdown['igst'];
+                $sgstRate = $taxBreakdown['sgst_rate'];
+                $cgstRate = $taxBreakdown['cgst_rate'];
+                $igstRate = $taxBreakdown['igst_rate'];
+            } else {
+                $sgstAmt = (float)($item['sgst'] ?? 0);
+                $cgstAmt = (float)($item['cgst'] ?? 0);
+                $igstAmt = (float)($item['igst'] ?? 0);
+                $unitPrices = $this->posInvoiceResolveLineUnitPretax($item, $idx, $lineItemsMeta);
+                $rateBase = $unitPrices['disc'] > 0 ? $unitPrices['disc'] : (float)($item['unit_price'] ?? 0);
+                if ($useIgst) {
+                    $igstRate = $rateBase > 0 ? ($igstAmt / $qtyInt) / ($rateBase / 100) : 0;
+                    $sgstRate = 0;
+                    $cgstRate = 0;
+                } else {
+                    $sgstRate = $rateBase > 0 ? ($sgstAmt / $qtyInt) / ($rateBase / 100) : 0;
+                    $cgstRate = $rateBase > 0 ? ($cgstAmt / $qtyInt) / ($rateBase / 100) : 0;
+                    $igstRate = 0;
+                }
+            }
+
+            $totalSgstAmt += $sgstAmt;
+            $totalCgstAmt += $cgstAmt;
+            $totalIgstAmt += $igstAmt;
+            $totalGstAmount += $sgstAmt + $cgstAmt + $igstAmt;
 
             if ($usePosItemLayout) {
                 $itemName = htmlspecialchars($item['item_name'] ?? '');
@@ -1556,11 +1724,11 @@ WHERE i.pos_flag = 1";
                         ' . $listPriceCell . $discPriceCell . '
                         <td>' . $qtyInt . '</td>
                         <td class="right">' . number_format($sgstRate, 2) . '</td>
-                        <td class="right">' . number_format($item['sgst'], 2) . '</td>
+                        <td class="right">' . number_format($sgstAmt, 2) . '</td>
                         <td class="right">' . number_format($cgstRate, 2) . '</td>
-                        <td class="right">' . number_format($item['cgst'], 2) . '</td>
+                        <td class="right">' . number_format($cgstAmt, 2) . '</td>
                         <td class="right">' . number_format($igstRate, 2) . '</td>
-                        <td class="right">' . number_format($item['igst'], 2) . '</td>
+                        <td class="right">' . number_format($igstAmt, 2) . '</td>
                         <td class="right bold">' . number_format($lineTotalDisplay, 2) . '</td>
                     </tr>
             ';
@@ -1574,11 +1742,11 @@ WHERE i.pos_flag = 1";
                         <td>' . $qtyInt . '</td>
                         <td class="right">' . number_format($item['unit_price'], 2) . '</td>
                         <td class="right">' . number_format($sgstRate, 2) . '</td>
-                        <td class="right">' . number_format($item['sgst'], 2) . '</td>
+                        <td class="right">' . number_format($sgstAmt, 2) . '</td>
                         <td class="right">' . number_format($cgstRate, 2) . '</td>
-                        <td class="right">' . number_format($item['cgst'], 2) . '</td>
+                        <td class="right">' . number_format($cgstAmt, 2) . '</td>
                         <td class="right">' . number_format($igstRate, 2) . '</td>
-                        <td class="right">' . number_format($item['igst'], 2) . '</td>
+                        <td class="right">' . number_format($igstAmt, 2) . '</td>
                         <td class="right bold">' . number_format($lineTotalDisplay, 2) . '</td>
                     </tr>
             ';
@@ -1622,15 +1790,34 @@ WHERE i.pos_flag = 1";
                 'discounts_absorbed' => true,
             ];
         }
-        if ($usePosItemLayout && $showDiscPriceColumn && $sumLineTotals > 0.001) {
-            $posDiscountMeta['subtotal_goods'] = round($sumLineTotals, 2);
-            $posDiscountMeta['grand_total'] = round($sumLineTotals, 2);
+        if ($usePosItemLayout && $showDiscPriceColumn && $sumListLineTotals > 0.001) {
+            $existingSub = round((float)($posDiscountMeta['subtotal_goods'] ?? 0), 2);
+            if ($existingSub <= 0 || abs($existingSub - $sumListLineTotals) > 0.02) {
+                $posDiscountMeta['subtotal_goods'] = round($sumListLineTotals, 2);
+            }
         }
         $summaryGrandTotal = round((float)($posDiscountMeta['grand_total'] ?? 0), 2);
+        $summarySubtotal = round((float)($posDiscountMeta['subtotal_goods'] ?? 0), 2);
+        $orderLevelDisc = $this->posInvoiceOrderLevelDiscountTotal($posDiscountMeta);
+        $summaryBase = $summarySubtotal > 0 ? $summarySubtotal : round($sumLineTotals, 2);
+        if ($orderLevelDisc > 0.001 && $summaryBase > 0) {
+            $computedGrand = max(0.0, round($summaryBase - $orderLevelDisc, 2));
+            if ($summaryGrandTotal <= 0 || abs($summaryGrandTotal - $summaryBase) < 0.02) {
+                $summaryGrandTotal = $computedGrand;
+            }
+        }
         if ($summaryGrandTotal <= 0) {
             $summaryGrandTotal = round((float)$totalAmount, 2);
         }
-        $summaryTaxAmount = round((float)($invoice['tax_amount'] ?? 0), 2);
+        if ($summaryGrandTotal <= 0 && $sumLineTotals > 0.001) {
+            $summaryGrandTotal = round($sumLineTotals, 2);
+        }
+        $summaryTaxAmount = round($totalSgstAmt + $totalCgstAmt + $totalIgstAmt, 2);
+        if ($showDiscPriceColumn && $summaryTaxAmount > 0.001) {
+            $posDiscountMeta['gst_total'] = $summaryTaxAmount;
+        } elseif ($summaryTaxAmount <= 0) {
+            $summaryTaxAmount = round((float)($invoice['tax_amount'] ?? 0), 2);
+        }
         $tableLineTotal = ($usePosItemLayout && $showDiscPriceColumn && $sumLineTotals > 0.001)
             ? round($sumLineTotals, 2)
             : round((float)$totalAmount, 2);
@@ -1718,26 +1905,19 @@ WHERE i.pos_flag = 1";
         }
 
         // Fetch customer and address information
+        require_once __DIR__ . '/../helpers/invoice/invoice_address_html.php';
+        require_once __DIR__ . '/../helpers/invoice/invoice_footer_html.php';
+        global $paymentModel;
+        $exclusiveStoresFooter = invoice_resolve_exclusive_stores_footer_html(
+            $invoice,
+            $items,
+            $commanModel,
+            !empty($invoice['pos_flag']) ? $paymentModel : null
+        );
         $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
-        $billToInfo = '';
-        $shipToInfo = '';
-
-        if ($customer) {
-            $billToInfo = '<strong>' . htmlspecialchars($customer['first_name'] . ' ' . $customer['last_name'] ?? 'N/A') . '</strong><br>';
-            $billToInfo .= htmlspecialchars($customer['address_line1'] ?? '') . '';
-            $billToInfo .= htmlspecialchars($customer['address_line2'] ?? '') . '<br>';
-            $billToInfo .= htmlspecialchars($customer['city'] ?? '') . ' ' . htmlspecialchars($customer['state'] ?? '') . ' ' . htmlspecialchars($customer['zipcode'] ?? '') . '<br>';
-            $billToInfo .= 'Tel: ' . htmlspecialchars($customer['mobile'] ?? '') . '<br>';
-        }
-        if (!empty($customer['shipping_address_line1']) && !empty($customer['shipping_address_line2'])) {
-            $shipToInfo = '<strong>' . htmlspecialchars($customer['shipping_first_name'] . ' ' . $customer['shipping_last_name'] ?? 'N/A') . '</strong><br>';
-            $shipToInfo .= htmlspecialchars($customer['shipping_address_line1'] ?? '') . '';
-            $shipToInfo .= htmlspecialchars($customer['shipping_address_line2'] ?? '') . '<br>';
-            $shipToInfo .= htmlspecialchars($customer['shipping_city'] ?? '') . ' ' . htmlspecialchars($customer['shipping_state'] ?? '') . ' ' . htmlspecialchars($customer['shipping_zipcode'] ?? '') . '<br>';
-            $shipToInfo .= 'Tel: ' . htmlspecialchars($customer['shipping_mobile'] ?? '') . '<br>';
-        } else {
-            $shipToInfo = $billToInfo; // Use same info unless stored separately
-        }
+        $addressBlocks = invoice_resolve_bill_ship_html(is_array($customer) ? $customer : null);
+        $billToInfo = $addressBlocks['bill'];
+        $shipToInfo = $addressBlocks['ship'];
         //print_r($billToInfo);
         // Load template
         if ($invoice['status'] == 'proforma') {
@@ -1770,7 +1950,17 @@ WHERE i.pos_flag = 1";
 
         // Replace placeholders
         $html = str_replace(
-            ['{{INVOICE_NUMBER}}', '{{INVOICE_DATE}}', '{{BILL_TO_INFO}}', '{{SHIP_TO_INFO}}', '{{ITEM_ROWS}}', '{{SUMMARY_ROWS}}', '{{AMOUNT_IN_WORDS}}', '{{TERM_AND_CONDITIONS}}'],
+            [
+                '{{INVOICE_NUMBER}}',
+                '{{INVOICE_DATE}}',
+                '{{BILL_TO_INFO}}',
+                '{{SHIP_TO_INFO}}',
+                '{{ITEM_ROWS}}',
+                '{{SUMMARY_ROWS}}',
+                '{{AMOUNT_IN_WORDS}}',
+                '{{TERM_AND_CONDITIONS}}',
+                '{{EXCLUSIVE_STORES_FOOTER}}',
+            ],
             [
                 htmlspecialchars($invoice['invoice_number'] ?? 'N/A'),
                 date('d M Y', strtotime($invoice['invoice_date'])),
@@ -1779,7 +1969,8 @@ WHERE i.pos_flag = 1";
                 $itemsrows,
                 $summaryrows,
                 numberToWords($totalAmount ?? 0),
-                nl2br(htmlspecialchars($invoice['terms_and_conditions'] ?? ''))
+                nl2br(htmlspecialchars($invoice['terms_and_conditions'] ?? '')),
+                $exclusiveStoresFooter,
             ],
             $temphtml
         );
@@ -1801,12 +1992,104 @@ WHERE i.pos_flag = 1";
         exit;
     }
 
+    public function updateInvoiceNumberAjax(): void
+    {
+        is_login();
+        if (!canSrEmpAccess()) {
+            vendorJsonResponse(['success' => false, 'message' => 'Access denied. Sr Emp, Top Management, or Admin access required.']);
+        }
+
+        global $invoiceModel;
+
+        $invoiceId = (int)($_POST['invoice_id'] ?? 0);
+        $newInvoiceNumber = trim((string)($_POST['new_invoice_number'] ?? ''));
+
+        vendorJsonResponse($invoiceModel->updateInvoiceNumber($invoiceId, $newInvoiceNumber));
+    }
+
+    /**
+     * Backfill POS line/discount metadata on invoices created before notes were persisted.
+     */
+    private function posInvoiceDiscountMetaNeedsRepair(array $meta, string $orderNumber): bool
+    {
+        global $ordersModel;
+
+        $orderLevelDisc = round(
+            (float)($meta['coupon_discount'] ?? 0)
+            + (float)($meta['cash_discount'] ?? 0)
+            + (float)($meta['gift_discount'] ?? 0),
+            2
+        );
+        $sub = round((float)($meta['subtotal_goods'] ?? 0), 2);
+        $grand = round((float)($meta['grand_total'] ?? 0), 2);
+
+        if ($orderLevelDisc > 0.001 && $sub > 0.001) {
+            $expectedGrand = max(0.0, round($sub - $orderLevelDisc, 2));
+            if (abs($grand - $expectedGrand) > 0.02) {
+                return true;
+            }
+        }
+
+        if ($orderNumber === '') {
+            return false;
+        }
+
+        $info = $ordersModel->getAddressInfoByOrderNumber($orderNumber);
+        $cashOnOrder = round((float)($info['custom_reduce'] ?? 0), 2);
+        if ($cashOnOrder > 0.001 && round((float)($meta['cash_discount'] ?? 0), 2) <= 0) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Backfill POS line/discount metadata on invoices created before notes were persisted.
+     */
+    public function repairPosInvoiceMetadataForOrder(int $invoiceId, string $orderNumber): bool
+    {
+        global $invoiceModel, $ordersModel;
+
+        $invoiceId = (int)$invoiceId;
+        $orderNumber = trim($orderNumber);
+        if ($invoiceId <= 0 || $orderNumber === '') {
+            return false;
+        }
+
+        $invoice = $invoiceModel->getInvoiceById($invoiceId);
+        if (!$invoice) {
+            return false;
+        }
+
+        $existingLines = $this->parsePosInvoiceLineItemsMeta($invoice['notes'] ?? null);
+        $existingDiscount = $this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null);
+        if (!empty($existingLines) && !empty($existingDiscount) && !$this->posInvoiceDiscountMetaNeedsRepair($existingDiscount, $orderNumber)) {
+            return false;
+        }
+
+        $items = $ordersModel->getOrderByOrderNumber($orderNumber);
+        if ($items === []) {
+            return false;
+        }
+
+        $info = $ordersModel->getAddressInfoByOrderNumber($orderNumber);
+        $snapshot = $this->buildPosInvoiceSnapshotFromOrder($orderNumber, $items, $info);
+        if (!is_array($snapshot)) {
+            return false;
+        }
+
+        $lineItemsMeta = $this->computePosInvoiceLineMetaFromSnapshot($items, $snapshot);
+        $this->persistPosInvoiceDiscountNotes($invoiceId, $snapshot, $lineItemsMeta);
+
+        return true;
+    }
+
     /**
      * Build and create a POS invoice from vp_orders (used by AJAX and checkout).
      */
-    public function createAutoInvoiceForOrder(string $orderNumber, string $customInvoiceNumber = ''): array
+    public function createAutoInvoiceForOrder(string $orderNumber, string $customInvoiceNumber = '', bool $forceFinal = false): array
     {
-        global $conn, $invoiceModel;
+        global $invoiceModel, $ordersModel, $paymentModel;
 
         $orderNumber = trim($orderNumber);
         if ($orderNumber === '') {
@@ -1815,55 +2098,26 @@ WHERE i.pos_flag = 1";
 
         $existing = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
         if ($existing) {
+            $invoiceId = (int)$existing['id'];
+            $repaired = $this->repairPosInvoiceMetadataForOrder($invoiceId, $orderNumber);
+
             return [
                 'success' => true,
-                'invoice_id' => (int)$existing['id'],
+                'invoice_id' => $invoiceId,
                 'invoice_number' => $existing['invoice_number'] ?? '',
+                'repaired' => $repaired,
             ];
         }
 
-        $paymentStage = 'final';
-        $stmtPay = $conn->prepare(
-            'SELECT payment_stage FROM pos_payments WHERE order_number = ? ORDER BY id DESC LIMIT 1'
-        );
-        if ($stmtPay) {
-            $stmtPay->bind_param('s', $orderNumber);
-            $stmtPay->execute();
-            $payment = $stmtPay->get_result()->fetch_assoc();
-            $stmtPay->close();
-            if (is_array($payment) && isset($payment['payment_stage'])) {
-                $paymentStage = (string)$payment['payment_stage'];
-            }
-        }
-        $status = (strtolower(trim($paymentStage)) === 'final') ? 'final' : 'proforma';
+        $paymentStage = $paymentModel->getLatestPaymentStage($orderNumber);
+        $status = $forceFinal || (strtolower(trim($paymentStage)) === 'final') ? 'final' : 'proforma';
 
-        $stmt = $conn->prepare('SELECT * FROM vp_orders WHERE order_number = ?');
-        if (!$stmt) {
-            return ['success' => false, 'message' => 'Database error loading order lines'];
-        }
-        $stmt->bind_param('s', $orderNumber);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if ($result->num_rows === 0) {
-            $stmt->close();
+        $items = $ordersModel->getOrderByOrderNumber($orderNumber);
+        if (empty($items)) {
             return ['success' => false, 'message' => 'Order not found in vp_orders'];
         }
 
-        $items = [];
-        while ($row = $result->fetch_assoc()) {
-            $items[] = $row;
-        }
-        $stmt->close();
-
-        $stmt2 = $conn->prepare('SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1');
-        if (!$stmt2) {
-            return ['success' => false, 'message' => 'Database error loading order info'];
-        }
-        $stmt2->bind_param('s', $orderNumber);
-        $stmt2->execute();
-        $info = $stmt2->get_result()->fetch_assoc();
-        $stmt2->close();
-
+        $info = $ordersModel->getAddressInfoByOrderNumber($orderNumber);
         if (empty($info['id'])) {
             return ['success' => false, 'message' => 'Order info not found'];
         }
@@ -1887,6 +2141,14 @@ WHERE i.pos_flag = 1";
         $useSnapshot = is_array($checkoutSnapshot)
             && trim((string)($checkoutSnapshot['order_number'] ?? '')) === $orderNumber;
 
+        if (!$useSnapshot) {
+            $rebuiltSnapshot = $this->buildPosInvoiceSnapshotFromOrder($orderNumber, $items, $info);
+            if (is_array($rebuiltSnapshot)) {
+                $checkoutSnapshot = $rebuiltSnapshot;
+                $useSnapshot = true;
+            }
+        }
+
         if ($useSnapshot) {
             $this->buildInvoicePostFromCheckoutSnapshot($items, $checkoutSnapshot);
         } else {
@@ -1898,7 +2160,7 @@ WHERE i.pos_flag = 1";
                 $_POST['quantity'][] = $it['quantity'];
 
                 $qty = max(1, (int)$it['quantity']);
-                $unit = ($it['finalprice'] / (1 + ($it['gst'] / 100))) / $qty;
+                $unit = pos_order_pretax_unit_price($it, 'disc');
 
                 $_POST['unit_price'][] = $unit;
                 $_POST['tax_rate'][] = $it['gst'];
@@ -1915,87 +2177,61 @@ WHERE i.pos_flag = 1";
             $_POST['total_amount'] = $_POST['subtotal'] + $_POST['tax_amount'];
         }
 
-        $posDiscountMeta = $useSnapshot ? $checkoutSnapshot : [];
         $lineItemsMeta = $useSnapshot
             ? $this->computePosInvoiceLineMetaFromSnapshot($items, $checkoutSnapshot)
             : [];
-        $result = $this->createPostInternal();
-        if (!empty($result['success']) && !empty($result['invoice_id']) && $useSnapshot && is_array($posDiscountMeta)) {
-            $posDiscountMeta['gst_total'] = round((float)($_POST['tax_amount'] ?? 0), 2);
-            $posDiscountMeta['grand_total'] = round((float)($_POST['total_amount'] ?? 0), 2);
-            if (!empty($posDiscountMeta['discounts_absorbed'])) {
-                $posDiscountMeta['subtotal_goods'] = $posDiscountMeta['grand_total'];
-            } elseif (empty($posDiscountMeta['subtotal_goods']) && $posDiscountMeta['grand_total'] > 0) {
-                $posDiscountMeta['subtotal_goods'] = $posDiscountMeta['grand_total'];
-            }
-            if (!isset($posDiscountMeta['discounts_absorbed']) || $posDiscountMeta['discounts_absorbed'] === '') {
-                $posDiscountMeta['discounts_absorbed'] = true;
-            }
-            $this->persistPosInvoiceDiscountNotes($conn, (int)$result['invoice_id'], $posDiscountMeta, $lineItemsMeta);
-        }
+        $result = $this->invoiceCreationService()->createFromPost($_POST, [
+            'source' => 'pos',
+            'discount_meta' => $useSnapshot ? $checkoutSnapshot : null,
+            'line_items_meta' => $lineItemsMeta,
+            'duplicate_order_check' => true,
+            'clear_invoice_session' => false,
+            'update_order_invoice_id' => true,
+        ]);
         unset($_SESSION['pos_checkout_invoice_snapshot']);
 
         return $result;
     }
     public function create_auto_from_order1()
     {
-        global $conn;
+        global $invoiceModel, $ordersModel, $paymentModel;
 
-        $data = json_decode(file_get_contents("php://input"), true);
-        $orderNumber = $conn->real_escape_string($data['orderid']);
-
-        // ✅ get order items
-        $items = $conn->query("
-        SELECT * FROM vp_orders 
-        WHERE order_number = '$orderNumber'
-    ");
-
-        if ($items->num_rows == 0) {
-            echo json_encode(["success" => false, "message" => "Order not found"]);
+        $data = json_decode(file_get_contents('php://input'), true);
+        $orderNumber = trim((string)($data['orderid'] ?? ''));
+        if ($orderNumber === '') {
+            echo json_encode(['success' => false, 'message' => 'Order number missing']);
             exit;
         }
 
-        $orderItems = [];
-        while ($row = $items->fetch_assoc()) {
-            $orderItems[] = $row;
+        $orderItems = $ordersModel->getOrderByOrderNumber($orderNumber);
+        if (empty($orderItems)) {
+            echo json_encode(['success' => false, 'message' => 'Order not found']);
+            exit;
         }
 
-        // ✅ get payment stage
-        $payment = $conn->query("
-        SELECT * FROM pos_payments 
-        WHERE order_number = '$orderNumber'
-        ORDER BY id DESC LIMIT 1
-    ")->fetch_assoc();
-
+        $payment = $paymentModel->findLatestByOrderNumber($orderNumber);
         $stage = $payment['payment_stage'] ?? 'final';
         $status = ($stage === 'final') ? 'final' : 'proforma';
 
-        // ✅ check existing invoice
-        $check = $conn->query("
-        SELECT id FROM vp_invoices 
-        WHERE order_number = '$orderNumber'
-    ");
-
-        if ($check->num_rows > 0) {
-            $invoiceId = $check->fetch_assoc()['id'];
-
+        $invoiceId = $invoiceModel->findInvoiceIdByOrderNumber($orderNumber);
+        if ($invoiceId > 0) {
             echo json_encode([
-                "success" => true,
-                "invoice_id" => $invoiceId
+                'success' => true,
+                'invoice_id' => $invoiceId,
             ]);
             exit;
         }
 
-        // ✅ build POST like main system
+        $info = $ordersModel->getAddressInfoByOrderNumber($orderNumber);
         $_POST = [
             'invoice_date' => date('Y-m-d'),
             'customer_id' => $orderItems[0]['customer_id'],
-            'vp_order_info_id' => $orderItems[0]['vp_order_info_id'] ?? 0,
+            'vp_order_info_id' => $info['id'] ?? ($orderItems[0]['vp_order_info_id'] ?? 0),
             'status' => $status,
             'subtotal' => 0,
             'tax_amount' => 0,
             'discount_amount' => 0,
-            'total_amount' => 0
+            'total_amount' => 0,
         ];
 
         foreach ($orderItems as $i => $item) {
@@ -2006,7 +2242,7 @@ WHERE i.pos_flag = 1";
             $_POST['hsn'][] = $item['hsn'];
             $_POST['quantity'][] = $item['quantity'];
 
-            $unit = ($item['finalprice'] / (1 + ($item['gst'] / 100))) / $item['quantity'];
+            $unit = pos_order_pretax_unit_price($item, 'disc');
 
             $_POST['unit_price'][] = $unit;
             $_POST['tax_rate'][] = $item['gst'];
@@ -2024,7 +2260,6 @@ WHERE i.pos_flag = 1";
 
         $_POST['total_amount'] = $_POST['subtotal'] + $_POST['tax_amount'];
 
-        // ✅ CALL MAIN INVOICE LOGIC 🔥
         return $this->createPost();
     }
     public function createPost()
@@ -2037,194 +2272,22 @@ WHERE i.pos_flag = 1";
 
     private function createPostInternal(): array
     {
-        global $invoiceModel, $ordersModel, $commanModel, $conn;
-        //print_r($_POST);
-        //exit;
-        // Validate form inputs
-        $invoice_date = isset($_POST['invoice_date']) ? $_POST['invoice_date'] : date('Y-m-d');
-        $customer_id = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
-        $vp_order_info_id = isset($_POST['vp_order_info_id']) ? trim($_POST['vp_order_info_id']) : '';
-        $currency = isset($_POST['currency']) ? $_POST['currency'] : [];
-        $subtotal = isset($_POST['subtotal']) ? floatval($_POST['subtotal']) : 0;
-        $tax_amount = isset($_POST['tax_amount']) ? floatval($_POST['tax_amount']) : 0;
-        $discount_amount = isset($_POST['discount_amount']) ? floatval($_POST['discount_amount']) : 0;
-        $total_amount = isset($_POST['total_amount']) ? floatval($_POST['total_amount']) : 0;
-
-        $order_numbers = isset($_POST['order_number']) && is_array($_POST['order_number']) ? $_POST['order_number'] : [];
-        $item_codes = isset($_POST['item_code']) && is_array($_POST['item_code']) ? $_POST['item_code'] : [];
-        $item_names = isset($_POST['item_name']) && is_array($_POST['item_name']) ? $_POST['item_name'] : [];
-        $hsn_codes = isset($_POST['hsn']) && is_array($_POST['hsn']) ? $_POST['hsn'] : [];
-        $quantities = isset($_POST['quantity']) && is_array($_POST['quantity']) ? $_POST['quantity'] : [];
-        $unit_prices = isset($_POST['unit_price']) && is_array($_POST['unit_price']) ? $_POST['unit_price'] : [];
-        $tax_rates = isset($_POST['tax_rate']) && is_array($_POST['tax_rate']) ? $_POST['tax_rate'] : [];
-        $cgst = isset($_POST['cgst']) && is_array($_POST['cgst']) ? $_POST['cgst'] : [];
-        $sgst = isset($_POST['sgst']) && is_array($_POST['sgst']) ? $_POST['sgst'] : [];
-        $igst = isset($_POST['igst']) && is_array($_POST['igst']) ? $_POST['igst'] : [];
-        $box_no = isset($_POST['box_no']) && is_array($_POST['box_no']) ? $_POST['box_no'] : [];
-
-        if ($customer_id <= 0 || empty($order_numbers)) {
-            return ['success' => false, 'message' => 'Invalid parameters'];
-        }
-        foreach ($order_numbers as $order_number) {
-            $existingInvoice = $invoiceModel->getActiveInvoiceForOrderNumber($order_number);
-            if ($existingInvoice) {
-                return ['success' => false, 'message' => "Invoice already exists for Order Number: $order_number"];
-            }
-        }
-        $firstCurrency = $currency[0] ?? '';
-        foreach ($currency as $curr) {
-            if ($curr !== $firstCurrency) {
-                return ['success' => false, 'message' => 'All items must have the same currency'];
-            }
-        }
-        require_once __DIR__ . '/../helpers/invoice_number_resolver.php';
-        $customInvoiceNumber = trim((string)($_POST['custom_invoice_number'] ?? ''));
-        $invoiceNumberResult = resolve_invoice_number($conn, $customInvoiceNumber);
-        if (empty($invoiceNumberResult['success'])) {
-            return ['success' => false, 'message' => $invoiceNumberResult['message'] ?? 'Invalid invoice number.'];
-        }
-        $invoice_number = (string) $invoiceNumberResult['invoice_number'];
-
-        // Create invoice header
-        $isInternational = ($firstCurrency && $firstCurrency !== 'INR') ? 1 : 0;
-        $invoiceData = [
-            'invoice_number' => $invoice_number,
-            'invoice_date' => $invoice_date,
-            'customer_id' => $customer_id,
-            'vp_order_info_id' => $vp_order_info_id,
-            'currency' => $currency[0] ?? 'INR',
-            'subtotal' => $subtotal,
-            'tax_amount' => $tax_amount,
-            'discount_amount' => $discount_amount,
-            'total_amount' => $total_amount,
-            'status' => isset($_POST['status']) ? trim($_POST['status']) : 'final',
-            'created_by' => $_SESSION['user']['id'] ?? 0,
-            'created_at' => date('Y-m-d H:i:s')
-        ];
-        if ($currency[0] && $currency[0] !== 'INR') {
-            $currencyRecord = $this->getCurrencyByCode($currency[0]);
-            if ($currencyRecord) {
-                $exchangeRate = floatval($currencyRecord['rate_export'] ?? 1);
-                $convertedAmount = $total_amount * $exchangeRate;
-                $invoiceData['converted_amount'] = $convertedAmount;
-                $invoiceData['exchange_text'] = 'Exchange Rate (' . $currencyRecord['currency_unit'] . ' to INR): ' . number_format($exchangeRate, 6);
-            }
-        } else {
-            $invoiceData['exchange_text'] = '';
-            $invoiceData['converted_amount'] = 0.00;
-        }
-        $invoiceId = $invoiceModel->createInvoice($invoiceData);
-
-        if (!$invoiceId) {
-            return ['success' => false, 'message' => 'Failed to create invoice'];
-        }
-
-        // Create invoice items
-        $itemCreated = 0;
-        $itemsFailed = [];
-        $productModel = new Product($conn);
-
-        foreach ($order_numbers as $idx => $order_number) {
-            $quantity = isset($quantities[$idx]) ? (int)$quantities[$idx] : 0;
-            $unit_price = isset($unit_prices[$idx]) ? floatval($unit_prices[$idx]) : 0;
-            $tax_rate = isset($tax_rates[$idx]) ? floatval($tax_rates[$idx]) : 0;
-
-            $amount = $quantity * $unit_price;
-            $totalTaxAmount = ($amount * $tax_rate) / 100;
-
-            // Calculate SGST/CGST/IGST (assuming 50/50 split for SGST/CGST, IGST is 0)
-            //$sgstRate = $tax_rate / 2;
-            //$cgstRate = $tax_rate / 2;
-            $sgstRate = (float)($sgst[$idx] ?? 0);
-            $cgstRate = (float)($cgst[$idx] ?? 0);
-            $igstRate = (float)($igst[$idx] ?? 0);
-            $sgstAmt = ($amount * $sgstRate) / 100;
-            $cgstAmt = ($amount * $cgstRate) / 100;
-            $igstAmt = ($amount * $igstRate) / 100;
-
-            $itemData = [
-                'invoice_id' => $invoiceId,
-                'order_number' => $order_number,
-                'item_code' => isset($item_codes[$idx]) ? trim($item_codes[$idx]) : '',
-                'item_name' => isset($item_names[$idx]) ? trim($item_names[$idx]) : '',
-                'image_url' => isset($_POST['image_url'][$idx]) ? trim($_POST['image_url'][$idx]) : '',
-                'description' => '',
-                'box_no' => isset($box_no[$idx]) ? trim($box_no[$idx]) : '',
-                'hsn' => isset($hsn_codes[$idx]) ? trim($hsn_codes[$idx]) : '',
-                'quantity' => $quantity,
-                'unit_price' => $unit_price,
-                'tax_rate' => $tax_rate,
-                'cgst' => $cgstAmt,
-                'sgst' => $sgstAmt,
-                'igst' => $igstAmt,
-                'tax_amount' => $totalTaxAmount,
-                'line_total' => $amount + $totalTaxAmount,
-                'groupname' => isset($_POST['groupname'][$idx]) ? trim($_POST['groupname'][$idx]) : ''
-            ];
-            $itemData['product_id'] = $productModel->getProductIdForInvoiceLine(
-                (string)$order_number,
-                (string)($itemData['item_code'] ?? '')
-            );
-            //print_r($itemData);
-            $result = $invoiceModel->createInvoiceItem($itemData);
-            if ($result) {
-                $itemCreated++;
-            } else {
-                $itemsFailed[] = $order_number;
-            }
-        }
-
-        require_once __DIR__ . '/../models/order/stock.php';
-        $stockModel = new Stock($conn);
-        $stockResult = $stockModel->applyInvoiceStockOnCreate((int)$invoiceId, (string)($invoiceData['status'] ?? 'final'));
-        if (empty($stockResult['success'])) {
-            return [
-                'success' => false,
-                'message' => 'Invoice saved but stock update failed: ' . ($stockResult['message'] ?? 'Unknown error'),
-                'invoice_id' => $invoiceId,
-                'invoice_number' => $invoice_number,
-                'items_created' => $itemCreated,
-                'items_failed' => $itemsFailed,
-            ];
-        }
-
-        //save international fields
-        if ($isInternational) {
-            $internationalData = [
-                'invoice_id' => $invoiceId,
-                'pre_carriage_by' => isset($_POST['pre_carriage_by']) ? trim($_POST['pre_carriage_by']) : '',
-                'port_of_loading' => isset($_POST['port_of_loading']) ? trim($_POST['port_of_loading']) : '',
-                'port_of_discharge' => isset($_POST['port_of_discharge']) ? trim($_POST['port_of_discharge']) : '',
-                'country_of_origin' => isset($_POST['country_of_origin']) ? trim($_POST['country_of_origin']) : '',
-                'country_of_final_destination' => isset($_POST['country_of_final_destination']) ? trim($_POST['country_of_final_destination']) : '',
-                'final_destination' => isset($_POST['final_destination']) ? trim($_POST['final_destination']) : '',
-                'usd_export_rate' => isset($_POST['usd_export_rate']) ? floatval($_POST['usd_export_rate']) : 0,
-                'ap_cost' => isset($_POST['ap_cost']) ? floatval($_POST['ap_cost']) : 0,
-                'freight_charge' => isset($_POST['freight_charge']) ? floatval($_POST['freight_charge']) : 0,
-                'insurance_charge' => isset($_POST['insurance_charge']) ? floatval($_POST['insurance_charge']) : 0
-            ];
-            $invoiceModel->insert_international_invoice_data($internationalData);
-        }
-        //call irisirp api to generate irn
-        //$this->generateIrnForInvoice($invoiceId);
-
-        // Update order status to invoiced
-        foreach ($order_numbers as $order_number) {
-            $ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
-        }
-
-        // Clear session
-        unset($_SESSION['invoice_items']);
-
-        return [
-            'success' => true,
-            'message' => "Invoice created with $itemCreated items",
-            'invoice_id' => $invoiceId,
-            'invoice_number' => $invoice_number,
-            'items_created' => $itemCreated,
-            'items_failed' => $itemsFailed,
-        ];
+        return $this->invoiceCreationService()->createFromPost($_POST, [
+            'source' => 'pos',
+            'duplicate_order_check' => true,
+            'clear_invoice_session' => true,
+            'update_order_invoice_id' => true,
+        ]);
     }
+
+    private function invoiceCreationService(): InvoiceCreationService
+    {
+        global $conn, $invoiceModel, $ordersModel, $commanModel;
+        require_once __DIR__ . '/../helpers/invoice/InvoiceCreationService.php';
+
+        return new InvoiceCreationService($conn, $invoiceModel, $ordersModel, $commanModel);
+    }
+
     private function getCurrencyByCode($code)
     {
         global $commanModel;

@@ -136,249 +136,75 @@ class InvoicesController
         is_login();
         global $invoiceModel, $ordersModel, $commanModel, $conn;
         header('Content-Type: application/json');
-        //print_r($_POST);
-        //exit;
-        // Validate form inputs
-        $invoice_date = isset($_POST['invoice_date']) ? $_POST['invoice_date'] : date('Y-m-d');
-        $customer_id = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
-        $vp_order_info_id = isset($_POST['vp_order_info_id']) ? trim($_POST['vp_order_info_id']) : '';
-        $currency = isset($_POST['currency']) ? $_POST['currency'] : [];
-        $subtotal = isset($_POST['subtotal']) ? floatval($_POST['subtotal']) : 0;
-        $tax_amount = isset($_POST['tax_amount']) ? floatval($_POST['tax_amount']) : 0;
-        $discount_amount = isset($_POST['discount_amount']) ? floatval($_POST['discount_amount']) : 0;
-        $total_amount = isset($_POST['total_amount']) ? floatval($_POST['total_amount']) : 0;
 
-        $order_numbers = isset($_POST['order_number']) && is_array($_POST['order_number']) ? $_POST['order_number'] : [];
-        $item_codes = isset($_POST['item_code']) && is_array($_POST['item_code']) ? $_POST['item_code'] : [];
-        $item_names = isset($_POST['item_name']) && is_array($_POST['item_name']) ? $_POST['item_name'] : [];
-        $hsn_codes = isset($_POST['hsn']) && is_array($_POST['hsn']) ? $_POST['hsn'] : [];
-        $quantities = isset($_POST['quantity']) && is_array($_POST['quantity']) ? $_POST['quantity'] : [];
-        $unit_prices = isset($_POST['unit_price']) && is_array($_POST['unit_price']) ? $_POST['unit_price'] : [];
-        $tax_rates = isset($_POST['tax_rate']) && is_array($_POST['tax_rate']) ? $_POST['tax_rate'] : [];
-        $cgst = isset($_POST['cgst']) && is_array($_POST['cgst']) ? $_POST['cgst'] : [];
-        $sgst = isset($_POST['sgst']) && is_array($_POST['sgst']) ? $_POST['sgst'] : [];
-        $igst = isset($_POST['igst']) && is_array($_POST['igst']) ? $_POST['igst'] : [];
-        $box_no = isset($_POST['box_no']) && is_array($_POST['box_no']) ? $_POST['box_no'] : [];
+        $currency = isset($_POST['currency']) && is_array($_POST['currency']) ? $_POST['currency'] : [];
+        $firstCurrency = $currency[0] ?? 'INR';
+        $orderNumbers = isset($_POST['order_number']) && is_array($_POST['order_number']) ? $_POST['order_number'] : [];
+        $isInternational = ($firstCurrency && $firstCurrency !== 'INR');
 
-        if ($customer_id <= 0 || empty($order_numbers)) {
-            echo json_encode(['success' => false, 'message' => 'Invalid parameters']);
-            exit;
-        }
-        //validate if a non-cancelled invoice already exists for same order_number
-        foreach ($order_numbers as $order_number) {
-            $existingInvoice = $invoiceModel->getActiveInvoiceForOrderNumber($order_number);
-            if ($existingInvoice) {
-                echo json_encode(['success' => false, 'message' => "Invoice already exists for Order Number: $order_number"]);
-                exit;
-            }
-        }
-        //validate currency same for all items
-        $firstCurrency = $currency[0] ?? '';
-        foreach ($currency as $curr) {
-            if ($curr !== $firstCurrency) {
-                echo json_encode(['success' => false, 'message' => 'All items must have the same currency']);
-                exit;
-            }
-        }
-        // Generate invoice number from global_settings
-        $globalSettings = $commanModel->getRecordById('global_settings', 1);
-        $invoice_prefix = is_array($globalSettings) ? (string)($globalSettings['invoice_prefix'] ?? 'INV') : 'INV';
-        $invoice_series = is_array($globalSettings) ? (int)($globalSettings['invoice_series'] ?? 0) : 0;
-        $invoice_series++;
-
-        // Update global_settings with new invoice_series
-        $commanModel->updateRecord('global_settings', ['invoice_series' => $invoice_series], ['id' => 1]);
-
-        $invoice_number = $invoice_prefix . '-' . str_pad($invoice_series, 6, '0', STR_PAD_LEFT);
-
-        // Create invoice header
-        $isInternational = ($firstCurrency && $firstCurrency !== 'INR') ? 1 : 0;
-        $invoiceData = [
-            'invoice_number' => $invoice_number,
-            'invoice_date' => $invoice_date,
-            'customer_id' => $customer_id,
-            'vp_order_info_id' => $vp_order_info_id,
-            'currency' => $currency[0] ?? 'INR',
-            'subtotal' => $subtotal,
-            'tax_amount' => $tax_amount,
-            'discount_amount' => $discount_amount,
-            'total_amount' => $total_amount,
-            'status' => isset($_POST['status']) ? trim($_POST['status']) : 'final',
-            'created_by' => $_SESSION['user']['id'] ?? 0,
-            'created_at' => date('Y-m-d H:i:s')
-        ];
-        if ($currency[0] && $currency[0] !== 'INR') {
-            $currencyRecord = $this->getCurrencyByCode($currency[0]);
-            if ($currencyRecord) {
-                $exchangeRate = floatval($currencyRecord['rate_export'] ?? 1);
-                $convertedAmount = $total_amount * $exchangeRate;
-                $invoiceData['converted_amount'] = $convertedAmount;
-                $invoiceData['exchange_text'] = 'Exchange Rate (' . $currencyRecord['currency_unit'] . ' to INR): ' . number_format($exchangeRate, 6);
-            }
-        } else {
-            $invoiceData['exchange_text'] = '';
-            $invoiceData['converted_amount'] = 0.00;
-        }
-        //pos_flag
-        $invoiceData['pos_flag'] = isset($_POST['pos_flag']) ? (int)$_POST['pos_flag'] : 0;
-        // print_r($invoiceData);
-        // exit;
-        $invoiceId = $invoiceModel->createInvoice($invoiceData);
-
-        if (!$invoiceId) {
-            echo json_encode(['success' => false, 'message' => 'Failed to create invoice']);
-            exit;
-        }
-
-        // Create invoice items
-        $itemCreated = 0;
-        $itemsFailed = [];
-        $productModel = new Product($conn);
-
-        foreach ($order_numbers as $idx => $order_number) {
-            $quantity = isset($quantities[$idx]) ? (int)$quantities[$idx] : 0;
-            $unit_price = isset($unit_prices[$idx]) ? floatval($unit_prices[$idx]) : 0;
-            $tax_rate = isset($tax_rates[$idx]) ? floatval($tax_rates[$idx]) : 0;
-
-            $amount = $quantity * $unit_price;
-            $totalTaxAmount = ($amount * $tax_rate) / 100;
-
-            // Calculate SGST/CGST/IGST (assuming 50/50 split for SGST/CGST, IGST is 0)
-            //$sgstRate = $tax_rate / 2;
-            //$cgstRate = $tax_rate / 2;
-            $sgstRate = (float)($sgst[$idx] ?? 0);
-            $cgstRate = (float)($cgst[$idx] ?? 0);
-            $igstRate = (float)($igst[$idx] ?? 0);
-            $sgstAmt = ($amount * $sgstRate) / 100;
-            $cgstAmt = ($amount * $cgstRate) / 100;
-            $igstAmt = ($amount * $igstRate) / 100;
-
-            $itemData = [
-                'invoice_id' => $invoiceId,
-                'order_number' => $order_number,
-                'item_code' => isset($item_codes[$idx]) ? trim($item_codes[$idx]) : '',
-                'item_name' => isset($item_names[$idx]) ? trim($item_names[$idx]) : '',
-                'image_url' => isset($_POST['image_url'][$idx]) ? trim($_POST['image_url'][$idx]) : '',
-                'description' => '',
-                'box_no' => isset($box_no[$idx]) ? trim($box_no[$idx]) : '',
-                'hsn' => isset($hsn_codes[$idx]) ? trim($hsn_codes[$idx]) : '',
-                'quantity' => $quantity,
-                'unit_price' => $unit_price,
-                'tax_rate' => $tax_rate,
-                'cgst' => $cgstAmt,
-                'sgst' => $sgstAmt,
-                'igst' => $igstAmt,
-                'tax_amount' => $totalTaxAmount,
-                'line_total' => $amount + $totalTaxAmount,
-                'groupname' => isset($_POST['groupname'][$idx]) ? trim($_POST['groupname'][$idx]) : ''
-            ];
-            $itemData['product_id'] = $productModel->getProductIdForInvoiceLine(
-                (string)$order_number,
-                (string)($itemData['item_code'] ?? '')
-            );
-            //print_r($itemData);
-            $result = $invoiceModel->createInvoiceItem($itemData);
-            if ($result) {
-                $itemCreated++;
-            } else {
-                $itemsFailed[] = $order_number;
-            }
-        }
-
-        // require_once __DIR__ . '/../models/order/stock.php';
-        // $stockModel = new Stock($conn);
-        // $stockResult = $stockModel->applyInvoiceStockOnCreate((int)$invoiceId, (string)($invoiceData['status'] ?? 'final'));
-        // if (empty($stockResult['success'])) {
-        //     echo json_encode([
-        //         'success' => false,
-        //         'message' => 'Invoice saved but stock update failed: ' . ($stockResult['message'] ?? 'Unknown error'),
-        //         'invoice_id' => $invoiceId,
-        //         'invoice_number' => $invoice_number,
-        //         'items_created' => $itemCreated,
-        //         'items_failed' => $itemsFailed,
-        //     ]);
-        //     exit;
-        // }
-
-        //save international fields
         if ($isInternational) {
-            
-            $firstOrderNumber = $order_numbers[0] ?? '';
+            $firstOrderNumber = $orderNumbers[0] ?? '';
             $orderAddress = $firstOrderNumber !== ''
                 ? $commanModel->get_customer_address($firstOrderNumber)
                 : null;
             $firm = $commanModel->getRecordById('firm_details', 1);
             $orderRows = [];
-            foreach ($order_numbers as $orderNumber) {
+            foreach ($orderNumbers as $orderNumber) {
                 $lines = $ordersModel->getOrderByOrderNumber($orderNumber);
                 if (is_array($lines) && !empty($lines)) {
                     $orderRows[] = $lines[0];
                 }
             }
-            $intlPost = mergeInternationalInvoiceDefaults(
+            $_POST = array_merge(
                 $_POST,
-                $orderRows,
-                is_array($orderAddress) ? $orderAddress : null,
-                is_array($firm) ? $firm : null,
-                $commanModel,
-                $conn
+                mergeInternationalInvoiceDefaults(
+                    $_POST,
+                    $orderRows,
+                    is_array($orderAddress) ? $orderAddress : null,
+                    is_array($firm) ? $firm : null,
+                    $commanModel,
+                    $conn
+                )
             );
+        }
 
-            $internationalData = [
-                'invoice_id' => $invoiceId,
-                'pre_carriage_by' => isset($intlPost['pre_carriage_by']) ? trim($intlPost['pre_carriage_by']) : '',
-                'port_of_loading' => isset($intlPost['port_of_loading']) ? trim($intlPost['port_of_loading']) : '',
-                'port_of_discharge' => isset($intlPost['port_of_discharge']) ? trim($intlPost['port_of_discharge']) : '',
-                'country_of_origin' => isset($intlPost['country_of_origin']) ? trim($intlPost['country_of_origin']) : '',
-                'country_of_final_destination' => isset($intlPost['country_of_final_destination']) ? trim($intlPost['country_of_final_destination']) : '',
-                'final_destination' => isset($intlPost['final_destination']) ? trim($intlPost['final_destination']) : '',
-                'usd_export_rate' => isset($intlPost['usd_export_rate']) ? floatval($intlPost['usd_export_rate']) : 0,
-                'ap_cost' => isset($intlPost['ap_cost']) ? floatval($intlPost['ap_cost']) : 0,
-                'freight_charge' => isset($intlPost['freight_charge']) ? floatval($intlPost['freight_charge']) : 0,
-                'insurance_charge' => isset($intlPost['insurance_charge']) ? floatval($intlPost['insurance_charge']) : 0,
-                'shipping_bill_number' => isset($intlPost['shipping_bill_number']) ? trim($intlPost['shipping_bill_number']) : '',
-                'shipping_bill_date' => isset($intlPost['shipping_bill_date']) ? trim($intlPost['shipping_bill_date']) : '',
-                'shipping_port' => isset($intlPost['shipping_port']) ? trim($intlPost['shipping_port']) : '',
-                'shipping_ref_clm' => isset($intlPost['shipping_ref_clm']) ? trim($intlPost['shipping_ref_clm']) : '',
-                'shipping_currency' => isset($intlPost['shipping_currency']) ? trim($intlPost['shipping_currency']) : '',
-                'shipping_country_code' => isset($intlPost['shipping_country_code']) ? trim($intlPost['shipping_country_code']) : '',
-                'shipping_exp_duty' => isset($intlPost['shipping_exp_duty']) ? floatval($intlPost['shipping_exp_duty']) : 0
-            ];
-            $invoiceModel->insert_international_invoice_data($internationalData);
+        $result = $this->invoiceCreationService()->createFromPost($_POST, [
+            'source' => 'order_list',
+            'duplicate_order_check' => true,
+            'clear_invoice_session' => true,
+            'update_order_invoice_id' => true,
+        ]);
 
-            // Generate Alankit IRN for international invoice
+        if (empty($result['success'])) {
+            echo json_encode($result);
+            exit;
+        }
+
+        $invoiceId = (int)($result['invoice_id'] ?? 0);
+        $irn = false;
+        $irnErrorMessage = '';
+        if ($isInternational && $invoiceId > 0) {
             $irn = $this->generateAlankitIrnForInvoice($invoiceId);
-
-            // Get error message if IRN generation failed
-            $irnErrorMessage = '';
             if (!$irn) {
                 $internationalRecord = $invoiceModel->getInternationalInvoiceByInvoiceId($invoiceId);
                 $irnErrorMessage = $internationalRecord['irn_error_message'] ?? 'Failed to generate IRN';
             }
         }
-        //call irisirp api to generate irn
-        //$this->generateIrnForInvoice($invoiceId);
 
-        // Update order status to invoiced
-        foreach ($order_numbers as $order_number) {
-            $ordersModel->updateOrderByOrderNumber($order_number, ['invoice_id' => $invoiceId]);
-        }
-
-        // Clear session
-        unset($_SESSION['invoice_items']);
-
-        echo json_encode([
-            'success' => true,
-            'message' => "Invoice created with $itemCreated items",
-            'invoice_id' => $invoiceId,
-            'invoice_number' => $invoice_number,
-            'items_created' => $itemCreated,
-            'items_failed' => $itemsFailed,
-            'irn_generated' => $irn ?? false,
-            'irn_error_message' => $irnErrorMessage ?? '',
-            'is_international' =>  $isInternational ?? false
-        ]);
+        echo json_encode(array_merge($result, [
+            'irn_generated' => $irn,
+            'irn_error_message' => $irnErrorMessage,
+            'is_international' => $isInternational,
+        ]));
         exit;
+    }
+
+    private function invoiceCreationService(): InvoiceCreationService
+    {
+        global $conn, $invoiceModel, $ordersModel, $commanModel;
+        require_once __DIR__ . '/../helpers/invoice/InvoiceCreationService.php';
+
+        return new InvoiceCreationService($conn, $invoiceModel, $ordersModel, $commanModel);
     }
 
     public function regenerateIrn()
@@ -1036,8 +862,8 @@ class InvoicesController
             }
 
             //term and conditions fetch
-            global $commanModel;
-            $firmSettings = $commanModel->getRecordById('global_settings', 1);
+            require_once __DIR__ . '/../helpers/app_settings.php';
+            $firmSettings = app_setting_global_settings();
             $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
 
             // Generate HTML for PDF
@@ -1254,26 +1080,11 @@ class InvoicesController
         ';
 
         // Fetch customer and address information
+        require_once __DIR__ . '/../helpers/invoice/invoice_address_html.php';
         $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
-        $billToInfo = '';
-        $shipToInfo = '';
-
-        if ($customer) {
-            $billToInfo = '<strong>' . htmlspecialchars($customer['first_name'] . ' ' . $customer['last_name'] ?? 'N/A') . '</strong><br>';
-            $billToInfo .= htmlspecialchars($customer['address_line1'] ?? '') . '';
-            $billToInfo .= htmlspecialchars($customer['address_line2'] ?? '') . '<br>';
-            $billToInfo .= htmlspecialchars($customer['city'] ?? '') . ' ' . htmlspecialchars($customer['state'] ?? '') . ' ' . htmlspecialchars($customer['zipcode'] ?? '') . '<br>';
-            $billToInfo .= 'Tel: ' . htmlspecialchars($customer['mobile'] ?? '') . '<br>';
-        }
-        if (!empty($customer['shipping_address_line1']) && !empty($customer['shipping_address_line2'])) {
-            $shipToInfo = '<strong>' . htmlspecialchars($customer['shipping_first_name'] . ' ' . $customer['shipping_last_name'] ?? 'N/A') . '</strong><br>';
-            $shipToInfo .= htmlspecialchars($customer['shipping_address_line1'] ?? '') . '';
-            $shipToInfo .= htmlspecialchars($customer['shipping_address_line2'] ?? '') . '<br>';
-            $shipToInfo .= htmlspecialchars($customer['shipping_city'] ?? '') . ' ' . htmlspecialchars($customer['shipping_state'] ?? '') . ' ' . htmlspecialchars($customer['shipping_zipcode'] ?? '') . '<br>';
-            $shipToInfo .= 'Tel: ' . htmlspecialchars($customer['shipping_mobile'] ?? '') . '<br>';
-        } else {
-            $shipToInfo = $billToInfo; // Use same info unless stored separately
-        }
+        $addressBlocks = invoice_resolve_bill_ship_html(is_array($customer) ? $customer : null);
+        $billToInfo = $addressBlocks['bill'];
+        $shipToInfo = $addressBlocks['ship'];
         //print_r($billToInfo);
         // Load template
         $templatePath = __DIR__ . '/../templates/invoices/tax_invoice.html';
@@ -1283,9 +1094,35 @@ class InvoicesController
 
         $temphtml = file_get_contents($templatePath);
 
+        require_once __DIR__ . '/../helpers/invoice/invoice_address_html.php';
+        require_once __DIR__ . '/../helpers/invoice/invoice_footer_html.php';
+
+        $footerPaymentModel = null;
+        if (!empty($invoice['pos_flag'])) {
+            require_once __DIR__ . '/../models/payment/Payment.php';
+            global $conn;
+            $footerPaymentModel = new Payment($conn);
+        }
+        $exclusiveStoresFooter = invoice_resolve_exclusive_stores_footer_html(
+            $invoice,
+            $items,
+            $commanModel,
+            $footerPaymentModel
+        );
+
         // Replace placeholders
         $html = str_replace(
-            ['{{INVOICE_NUMBER}}', '{{INVOICE_DATE}}', '{{BILL_TO_INFO}}', '{{SHIP_TO_INFO}}', '{{ITEM_ROWS}}', '{{SUMMARY_ROWS}}', '{{AMOUNT_IN_WORDS}}', '{{TERM_AND_CONDITIONS}}'],
+            [
+                '{{INVOICE_NUMBER}}',
+                '{{INVOICE_DATE}}',
+                '{{BILL_TO_INFO}}',
+                '{{SHIP_TO_INFO}}',
+                '{{ITEM_ROWS}}',
+                '{{SUMMARY_ROWS}}',
+                '{{AMOUNT_IN_WORDS}}',
+                '{{TERM_AND_CONDITIONS}}',
+                '{{EXCLUSIVE_STORES_FOOTER}}',
+            ],
             [
                 htmlspecialchars($invoice['invoice_number'] ?? 'N/A'),
                 date('d M Y', strtotime($invoice['invoice_date'])),
@@ -1294,7 +1131,8 @@ class InvoicesController
                 $itemsrows,
                 $summaryrows,
                 numberToWords($totalAmount ?? 0),
-                nl2br(htmlspecialchars($invoice['terms_and_conditions'] ?? ''))
+                nl2br(htmlspecialchars($invoice['terms_and_conditions'] ?? '')),
+                $exclusiveStoresFooter,
             ],
             $temphtml
         );
@@ -1370,7 +1208,8 @@ class InvoicesController
             ];
             //print_array($invoice);exit;
             // Get firm settings for terms and conditions
-            $firmSettings = $commanModel->getRecordById('global_settings', 1);
+            require_once __DIR__ . '/../helpers/app_settings.php';
+            $firmSettings = app_setting_global_settings();
             $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
 
             // Convert items to proper format for HTML generation

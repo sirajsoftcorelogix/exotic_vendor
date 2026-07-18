@@ -302,7 +302,7 @@ class OrdersController
      */
     private function importVendorOrdersFromApiPayload(array $ordersList, ?string $onlyOrderNumber = null): array
     {
-        global $ordersModel, $productModel;
+        global $ordersModel, $productModel, $conn;
 
         $statusList = $ordersModel->adminOrderStatusList('true');
         $skipIds = ['2658982', '2660434', '2662287', '469282', '2664206'];
@@ -433,6 +433,8 @@ class OrdersController
 
                 if (isset($data['success']) && $data['success'] == 1) {
                     $imported++;
+                    require_once __DIR__ . '/../helpers/BookPurchaseReplenishment.php';
+                    BookPurchaseReplenishment::tryProcessImportedOrderLine($conn, $productModel, $rdata);
                 }
 
                 $vendorRaw = trim((string)($item['vendor'] ?? ''));
@@ -870,29 +872,32 @@ class OrdersController
     {
         is_login();
         global $ordersModel, $commanModel;
-        $order_number = isset($_GET['order_number']) ? (int)$_GET['order_number'] : 0;
+        $orderRef = trim((string)($_GET['order_number'] ?? ''));
         $type = isset($_GET['type']) ? $_GET['type'] : 'inner';
-        if ($order_number > 0) {
-            $order = $ordersModel->getOrderByOrderNumber($order_number);
-            $orderremarks = $ordersModel->getRemarksByOrderNumber($order_number);
-            $fullOrderJourny = $ordersModel->getfullOrderJournyByNumber($order_number);
-            $customerdetails = $ordersModel->getCustomerNameAndEmailByOrderNumber($order_number);
-            $statusList = $commanModel->get_order_status_list();
-            $assignmentDates = [];
-            foreach ($order as $key => $orders) {
-                $order[$key]['status_log'] = $commanModel->get_order_status_log($orders['id']);
-                $assignmentDates[$orders['id']] =  $orders[$key]['status_log']['change_date'] ?? '';
-            }
-            if ($order) {
-                if ($type === 'inner')
-                    renderPartial('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks]);
-                else
-                    renderTemplate('views/orders/other_partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks, 'fullOrderJourny' => $fullOrderJourny, 'customerdetails' => $customerdetails], 'Order Details');
-            } else {
-                echo '<p>Order details not found.</p>';
-            }
-        } else {
+        if ($orderRef === '') {
             echo '<p>Invalid Order Number.</p>';
+            exit;
+        }
+
+        $order = $ordersModel->getOrderLineItemsByRef($orderRef);
+        if (!$order) {
+            echo '<p>Order details not found.</p>';
+            exit;
+        }
+
+        $resolvedOrderNumber = (string)($order[0]['order_number'] ?? $orderRef);
+        $orderremarks = $ordersModel->getRemarksByOrderNumber($resolvedOrderNumber);
+        $fullOrderJourny = $ordersModel->getfullOrderJournyByNumber($resolvedOrderNumber);
+        $customerdetails = $ordersModel->getCustomerNameAndEmailByOrderNumber($resolvedOrderNumber);
+        $statusList = $commanModel->get_order_status_list();
+        foreach ($order as $key => $orders) {
+            $order[$key]['status_log'] = $commanModel->get_order_status_log($orders['id']);
+        }
+
+        if ($type === 'inner') {
+            renderPartial('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks]);
+        } else {
+            renderTemplate('views/orders/other_partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks, 'fullOrderJourny' => $fullOrderJourny, 'customerdetails' => $customerdetails], 'Order Details');
         }
         exit;
     }

@@ -12,7 +12,9 @@
             <div>
                 <?php /* $link = base_url('index.php?page=orders&action=get_order_details_html&type=outer&order_number='.$order[0]['order_number']); */ ?>
                 <?php $link = 'index.php?page=posorders&action=get_order_details_html&type=outer&order_number=' . $order[0]['order_number']; ?>
-                <p><span class="font-bold">Order number : </span><span class=""><a href="<?php echo $link; ?>" class="text-blue-600 hover:underline" target="_blank"><?php echo $order[0]['order_number']; ?></a></span></p>
+                <p><span class="font-bold">Order number : </span><span class="inline-flex items-center gap-1">
+                    <a href="<?php echo $link; ?>" class="text-blue-600 hover:underline" target="_blank"><?php echo htmlspecialchars($order[0]['order_number']); ?></a>
+                </span></p>
                 <p><span class="font-bold">Order Date : </span><span class=""><?php echo date('d-M-Y', strtotime($order[0]['order_date'])); ?></span>
                 </p>
             </div>

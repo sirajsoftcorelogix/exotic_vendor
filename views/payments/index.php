@@ -325,6 +325,58 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         return n.toFixed(2);
     }
 
+    function escapeJsString(value) {
+        return String(value ?? '')
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/\r/g, '')
+            .replace(/\n/g, '\\n');
+    }
+
+    function escapeHtmlText(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function buildOrderNumberLinkHtml(p) {
+        const label = String(p.order_number ?? '').trim();
+        if (label === '') {
+            return '';
+        }
+
+        const href = `?page=posorders&action=get_order_details_html&type=outer&order_number=${encodeURIComponent(label)}`;
+        return `<a href="${href}" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline font-medium" title="View order details">${escapeHtmlText(label)}</a>`;
+    }
+
+    function buildInvoiceActionHtml(p) {
+        const settled = p.is_settled === true
+            || p.is_settled === 1
+            || parseFloat(p.pending_balance ?? 0) <= 0.02;
+        if (!settled) {
+            return '';
+        }
+
+        const invoiceId = parseInt(p.invoice_id, 10);
+        if (invoiceId > 0) {
+            return `
+    <a href="?page=posinvoice&action=generate_pdf&invoice_id=${invoiceId}"
+        target="_blank"
+        title="Download invoice"
+        class="flex items-center gap-1 text-emerald-700 hover:text-emerald-900 text-xs font-semibold">
+        <i class="fa-solid fa-file-pdf"></i>
+    </a>`;
+        }
+
+        return `
+    <button onclick="createInvoiceFromPayment(${p.id})"
+        title="Create invoice"
+        class="flex items-center gap-1 text-purple-600 hover:text-purple-800 text-xs font-semibold">
+        <i class="fa-solid fa-file-circle-plus"></i>
+    </button>`;
+    }
+
     function loadPayments() {
 
 
@@ -356,14 +408,15 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
 
                 data.forEach(p => {
 
-
+                    const orderNumJs = escapeJsString(p.order_number ?? '');
+                    const invoiceAction = buildInvoiceActionHtml(p);
 
                     html += `
     <tr class="border-t hover:bg-gray-50">
         <td class="p-3">${(String(p.receipt_number || '').trim() !== '')
             ? String(p.receipt_number).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
             : ('#' + p.id)}</td>
-        <td class="p-3">${p.order_number ?? ''}</td>
+        <td class="p-3">${buildOrderNumberLinkHtml(p)}</td>
         <td class="p-3">${p.payment_date ?? ''}</td>
         <td class="p-3">${p.warehouse ?? ''}</td>
         <td class="p-3">${p.order_amount ?? ''}</td>
@@ -379,7 +432,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
        <td class="p-3 flex gap-4 items-center">
 
     <!-- ADD PAYMENT -->
-    <button onclick="openAddPayment(${p.order_id}, '${p.order_number}')"
+    <button onclick="openAddPayment(${p.order_id}, '${orderNumJs}')"
         class="flex items-center gap-1 text-orange-600 hover:text-orange-800 text-xs font-semibold">
 
         <i class="fa-solid fa-credit-card"></i>
@@ -409,6 +462,8 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         <i class="fa-solid fa-file-invoice"></i>
         
     </button>
+
+    ${invoiceAction}
 
 </td>
     </tr>`;
@@ -582,30 +637,46 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
     }
     /* ================= OPEN MODAL ================= */
     function createInvoiceFromPayment(paymentId) {
-
         fetch('index.php?page=payments&action=create_from_payment', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
                 },
                 body: JSON.stringify({
                     payment_id: paymentId
                 })
             })
-            .then(res => res.json())
+            .then(async (res) => {
+                const text = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    throw new Error(text.trim().slice(0, 300) || 'Invalid server response');
+                }
+                if (!res.ok && data && data.message) {
+                    throw new Error(data.message);
+                }
+                return data;
+            })
             .then(data => {
 
                 if (!data.success) {
-                    alert(data.message);
+                    alert(data.message || 'Invoice could not be created');
                     return;
                 }
 
                 window.open(
-                    `?page=invoices&action=generate_pdf&invoice_id=${data.invoice_id}`,
+                    `?page=posinvoice&action=generate_pdf&invoice_id=${data.invoice_id}`,
                     '_blank'
                 );
 
                 loadPayments();
+            })
+            .catch((err) => {
+                alert(err.message || 'Invoice request failed');
             });
 
     }
@@ -660,6 +731,15 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                 if (!data.success) {
                     showPaymentError(data.message || "Save failed");
                     return;
+                }
+
+                if (data.invoice_id) {
+                    window.open(
+                        `?page=posinvoice&action=generate_pdf&invoice_id=${data.invoice_id}`,
+                        '_blank'
+                    );
+                } else if (data.invoice_message) {
+                    alert(data.invoice_message);
                 }
 
                 closePaymentModal();

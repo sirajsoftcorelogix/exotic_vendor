@@ -46,6 +46,9 @@ final class StockRebuildService
     /** @var array<string, mixed> */
     private $debugSqlContext = [];
 
+    /** @var string|null */
+    private $scopeSkuCollation = null;
+
     public function __construct(mysqli $conn)
     {
         $this->conn = $conn;
@@ -640,6 +643,7 @@ final class StockRebuildService
     private function createScopeTempTable(array $scopeRows): void
     {
         $this->ensureScopeTableExists();
+        $this->ensureScopeTableCollation();
         $this->clearScopeTable();
 
         if ($scopeRows === []) {
@@ -671,12 +675,13 @@ final class StockRebuildService
         }
 
         $table = self::SCOPE_TABLE;
+        $collate = $this->resolveScopeSkuCollation();
         $ddl = "CREATE TABLE IF NOT EXISTS {$table} (
-                sku VARCHAR(191) NOT NULL,
+                sku VARCHAR(191) CHARACTER SET utf8mb4 COLLATE {$collate} NOT NULL,
                 product_id INT UNSIGNED NOT NULL DEFAULT 0,
                 PRIMARY KEY (sku),
                 KEY idx_product_id (product_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE={$collate}";
 
         @$this->conn->query($ddl);
 
@@ -695,6 +700,30 @@ final class StockRebuildService
                 'manual_ddl' => $ddl,
             ]
         );
+    }
+
+    private function ensureScopeTableCollation(): void
+    {
+        if (!$this->scopeTableIsUsable()) {
+            return;
+        }
+
+        $table = self::SCOPE_TABLE;
+        $targetCollation = $this->resolveScopeSkuCollation();
+        $currentCollation = $this->lookupColumnCollation($table, 'sku');
+        if ($currentCollation === '' || strcasecmp($currentCollation, $targetCollation) === 0) {
+            return;
+        }
+
+        $sql = "ALTER TABLE {$table} MODIFY sku VARCHAR(191) CHARACTER SET utf8mb4 COLLATE {$targetCollation} NOT NULL";
+        $this->execOrFail($sql, 'preview.scope_table.collation', [
+            'phase' => 'preview',
+            'tables' => [$table],
+            'columns' => ['sku'],
+            'comparison' => 'Align _stock_rebuild_scope.sku collation with vp_stock_movements.sku',
+            'from_collation' => $currentCollation,
+            'to_collation' => $targetCollation,
+        ]);
     }
 
     private function scopeTableIsUsable(): bool
@@ -732,7 +761,7 @@ final class StockRebuildService
         $table = self::SCOPE_TABLE;
         $sql = "INSERT INTO {$table} (sku, product_id) VALUES " . implode(',', $valueRows)
             . ' ON DUPLICATE KEY UPDATE product_id = GREATEST(product_id, VALUES(product_id))';
-        $this->queryOrFail($sql, 'preview.scope_table.insert', [
+        $this->execOrFail($sql, 'preview.scope_table.insert', [
             'phase' => 'preview',
             'tables' => [$table],
             'columns' => ['sku', 'product_id'],
@@ -749,18 +778,24 @@ final class StockRebuildService
     {
         return [
             'vp_stock_movements' => $this->countMovementRowsViaScopeTable(),
-            'vp_stock' => $this->countRowsViaScopeJoin('vp_stock', 's', 's.sku = sc.sku', 'preview.count_delete_targets.vp_stock'),
+            'vp_stock' => $this->countRowsViaScopeJoin(
+                'vp_stock',
+                's',
+                $this->scopeSkuCompareSql('s.sku', 'sc.sku'),
+                'preview.count_delete_targets.vp_stock'
+            ),
         ];
     }
 
     private function countMovementRowsViaScopeTable(): int
     {
-        $sql = 'SELECT COUNT(*) AS c
+        $skuMatch = $this->scopeSkuCompareSql('sc.sku', 'sm.sku');
+        $sql = "SELECT COUNT(*) AS c
             FROM vp_stock_movements sm
             WHERE EXISTS (
                 SELECT 1 FROM _stock_rebuild_scope sc
-                WHERE sc.sku = sm.sku OR (sc.product_id > 0 AND sc.product_id = sm.product_id)
-            )';
+                WHERE {$skuMatch} OR (sc.product_id > 0 AND sc.product_id = sm.product_id)
+            )";
         $res = $this->queryOrFail($sql, 'preview.count_delete_targets.vp_stock_movements', [
             'phase' => 'preview',
             'tables' => ['vp_stock_movements', '_stock_rebuild_scope'],
@@ -795,12 +830,14 @@ final class StockRebuildService
         $allowedWarehouseIds = array_unique(array_filter([(int) $defaultWarehouseId, (int) $selectedWarehouseId]));
         $allowedList = $allowedWarehouseIds === [] ? '0' : implode(',', array_map('intval', $allowedWarehouseIds));
         $rows = [];
+        $skuJoinStock = $this->scopeSkuCompareSql('sc.sku', 's.sku');
+        $skuJoinMovements = $this->scopeSkuCompareSql('sc.sku', 'sm.sku');
 
         $queries = [
             'preview.other_warehouse_usage.vp_stock' => [
                 'sql' => "SELECT 'vp_stock' AS source_table, s.warehouse_id, COUNT(*) AS row_count
                     FROM vp_stock s
-                    INNER JOIN _stock_rebuild_scope sc ON sc.sku = s.sku
+                    INNER JOIN _stock_rebuild_scope sc ON {$skuJoinStock}
                     WHERE s.warehouse_id NOT IN ({$allowedList})
                     GROUP BY s.warehouse_id",
                 'table' => 'vp_stock',
@@ -808,7 +845,7 @@ final class StockRebuildService
             'preview.other_warehouse_usage.vp_stock_movements' => [
                 'sql' => "SELECT 'vp_stock_movements' AS source_table, sm.warehouse_id, COUNT(*) AS row_count
                     FROM vp_stock_movements sm
-                    INNER JOIN _stock_rebuild_scope sc ON sc.sku = sm.sku
+                    INNER JOIN _stock_rebuild_scope sc ON {$skuJoinMovements}
                     WHERE sm.warehouse_id NOT IN ({$allowedList})
                     GROUP BY sm.warehouse_id",
                 'table' => 'vp_stock_movements',
@@ -843,11 +880,16 @@ final class StockRebuildService
 
     private function countPreviewPhaseStatsViaScopeTable(int $defaultWarehouseId, int $selectedWarehouseId): array
     {
-        $purchaseSql = 'SELECT COUNT(DISTINCT p.id) AS headers, COUNT(*) AS lines
+        $skuJoinPurchase = $this->scopeSkuCompareSql('sc.sku', 'i.sku');
+        $skuJoinReturn = $this->scopeSkuCompareSql('sc.sku', 'dpi.sku');
+        $skuJoinTransferIn = $this->scopeSkuCompareSql('sc.sku', 'grn.sku');
+        $skuJoinTransferOut = $this->scopeSkuCompareSql('sc.sku', 'ist.sku');
+
+        $purchaseSql = "SELECT COUNT(DISTINCT p.id) AS headers, COUNT(*) AS lines
             FROM vp_direct_purchases p
             INNER JOIN vp_direct_purchase_items i ON i.direct_purchase_id = p.id
-            INNER JOIN _stock_rebuild_scope sc ON sc.sku = i.sku
-            WHERE p.warehouse_id = ' . (int) $defaultWarehouseId;
+            INNER JOIN _stock_rebuild_scope sc ON {$skuJoinPurchase}
+            WHERE p.warehouse_id = " . (int) $defaultWarehouseId;
         $purchaseRes = $this->queryOrFail($purchaseSql, 'preview.count_purchases', [
             'phase' => 'preview',
             'tables' => ['vp_direct_purchases', 'vp_direct_purchase_items', '_stock_rebuild_scope'],
@@ -857,12 +899,12 @@ final class StockRebuildService
         $purchaseRow = $purchaseRes->fetch_assoc() ?: [];
         $purchaseRes->free();
 
-        $returnSql = 'SELECT COUNT(DISTINCT r.id) AS headers, COUNT(*) AS lines
+        $returnSql = "SELECT COUNT(DISTINCT r.id) AS headers, COUNT(*) AS lines
             FROM vp_direct_purchase_returns r
             INNER JOIN vp_direct_purchase_return_items ri ON ri.direct_purchase_return_id = r.id
             INNER JOIN vp_direct_purchase_items dpi ON dpi.id = ri.direct_purchase_item_id
-            INNER JOIN _stock_rebuild_scope sc ON sc.sku = dpi.sku
-            WHERE r.warehouse_id = ' . (int) $defaultWarehouseId;
+            INNER JOIN _stock_rebuild_scope sc ON {$skuJoinReturn}
+            WHERE r.warehouse_id = " . (int) $defaultWarehouseId;
         $returnRes = $this->queryOrFail($returnSql, 'preview.count_returns', [
             'phase' => 'preview',
             'tables' => ['vp_direct_purchase_returns', 'vp_direct_purchase_items', '_stock_rebuild_scope'],
@@ -872,11 +914,11 @@ final class StockRebuildService
         $returnRow = $returnRes->fetch_assoc() ?: [];
         $returnRes->free();
 
-        $transferInSql = 'SELECT COUNT(*) AS lines
+        $transferInSql = "SELECT COUNT(*) AS lines
             FROM vp_stock_transfer st
             INNER JOIN vp_stock_transfer_grns grn ON grn.transfer_id = st.id
-            INNER JOIN _stock_rebuild_scope sc ON sc.sku = grn.sku
-            WHERE COALESCE(NULLIF(grn.location, 0), st.to_warehouse) = ' . (int) $selectedWarehouseId . '
+            INNER JOIN _stock_rebuild_scope sc ON {$skuJoinTransferIn}
+            WHERE COALESCE(NULLIF(grn.location, 0), st.to_warehouse) = " . (int) $selectedWarehouseId . '
               AND grn.qty_received > 0';
         $transferInRes = $this->queryOrFail($transferInSql, 'preview.count_transfer_in', [
             'phase' => 'preview',
@@ -887,11 +929,11 @@ final class StockRebuildService
         $transferInRow = $transferInRes->fetch_assoc() ?: [];
         $transferInRes->free();
 
-        $transferOutSql = 'SELECT COUNT(*) AS lines
+        $transferOutSql = "SELECT COUNT(*) AS lines
             FROM vp_stock_transfer st
             INNER JOIN vp_item_stock_transfer ist ON ist.transfer_order_no = st.transfer_order_no
-            INNER JOIN _stock_rebuild_scope sc ON sc.sku = ist.sku
-            WHERE st.from_warehouse = ' . (int) $selectedWarehouseId . '
+            INNER JOIN _stock_rebuild_scope sc ON {$skuJoinTransferOut}
+            WHERE st.from_warehouse = " . (int) $selectedWarehouseId . '
               AND ist.transfer_qty > 0';
         $transferOutRes = $this->queryOrFail($transferOutSql, 'preview.count_transfer_out', [
             'phase' => 'preview',
@@ -1640,7 +1682,7 @@ final class StockRebuildService
         }
 
         $sql = "DELETE FROM vp_stock_movements WHERE " . implode(' OR ', $clauses);
-        $this->queryOrFail($sql, 'execute.delete_scoped_movements', [
+        $this->execOrFail($sql, 'execute.delete_scoped_movements', [
             'phase' => 'execute',
             'tables' => ['vp_stock_movements'],
             'columns' => ['vp_stock_movements.sku', 'vp_stock_movements.product_id'],
@@ -1657,7 +1699,7 @@ final class StockRebuildService
         }
 
         $sql = "DELETE FROM vp_stock WHERE sku IN (" . $this->quoteStringsForIn($scopeSkus) . ")";
-        $this->queryOrFail($sql, 'execute.delete_scoped_vp_stock', [
+        $this->execOrFail($sql, 'execute.delete_scoped_vp_stock', [
             'phase' => 'execute',
             'tables' => ['vp_stock'],
             'columns' => ['vp_stock.sku'],
@@ -1830,6 +1872,28 @@ final class StockRebuildService
             $res->free();
         }
         @$this->conn->query('ALTER TABLE vp_products ADD COLUMN physical_stock INT NOT NULL DEFAULT 0 AFTER local_stock');
+    }
+
+    /** @param array<string, mixed> $context */
+    private function execOrFail(string $sql, string $step, array $context = []): void
+    {
+        $this->rememberSqlDebug($step, $sql, $context);
+        try {
+            $res = $this->conn->query($sql);
+            if ($res === true) {
+                return;
+            }
+            if ($res instanceof mysqli_result) {
+                $res->free();
+                return;
+            }
+
+            throw $this->sqlException($step, $sql, $context);
+        } catch (StockRebuildSqlException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw $this->sqlException($step, $sql, $context, $e);
+        }
     }
 
     /** @return mysqli_result */
@@ -2028,6 +2092,77 @@ final class StockRebuildService
         $res->free();
 
         return trim((string) ($row['collation_connection'] ?? ''));
+    }
+
+    private function resolveScopeSkuCollation(): string
+    {
+        if ($this->scopeSkuCollation !== null) {
+            return $this->scopeSkuCollation;
+        }
+
+        foreach ([['vp_stock_movements', 'sku'], ['vp_stock', 'sku'], ['vp_products', 'sku']] as $candidate) {
+            $found = $this->lookupColumnCollation((string) $candidate[0], (string) $candidate[1]);
+            if ($found !== '') {
+                $this->scopeSkuCollation = $this->sanitizeSqlCollation($found);
+
+                return $this->scopeSkuCollation;
+            }
+        }
+
+        $this->scopeSkuCollation = 'utf8mb4_general_ci';
+
+        return $this->scopeSkuCollation;
+    }
+
+    private function lookupColumnCollation(string $table, string $column): string
+    {
+        $table = trim($table);
+        $column = trim($column);
+        if ($table === '' || $column === '') {
+            return '';
+        }
+
+        $sql = 'SELECT COLLATION_NAME
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = ?
+              AND COLUMN_NAME = ?
+            LIMIT 1';
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return '';
+        }
+        $stmt->bind_param('ss', $table, $column);
+        if (!$stmt->execute()) {
+            $stmt->close();
+
+            return '';
+        }
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        if ($res) {
+            $res->free();
+        }
+        $stmt->close();
+
+        return trim((string) ($row['COLLATION_NAME'] ?? ''));
+    }
+
+    private function sanitizeSqlCollation(string $collation): string
+    {
+        $collation = strtolower(trim($collation));
+        if ($collation === '' || !preg_match('/^[a-z0-9_]+$/', $collation)) {
+            return 'utf8mb4_general_ci';
+        }
+
+        return $collation;
+    }
+
+    private function scopeSkuCompareSql(string $leftExpr, string $rightExpr): string
+    {
+        $collate = $this->resolveScopeSkuCollation();
+
+        return '(' . $leftExpr . ') COLLATE ' . $collate . ' = (' . $rightExpr . ') COLLATE ' . $collate;
     }
 
     private function normalizeSql(string $sql): string

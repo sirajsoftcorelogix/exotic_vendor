@@ -141,6 +141,279 @@ function pos_payment_resolve_session_user_id(): int
 }
 
 /**
+ * Payable order total after discounts (grand total), not raw line list prices.
+ * Priority: vp_order_info.total → pos_payments.order_amount → vp_invoices.total_amount → line subtotal minus reductions.
+ */
+function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): float
+{
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return 0.0;
+    }
+
+    $stmt = $conn->prepare('SELECT total FROM vp_order_info WHERE order_number = ? LIMIT 1');
+    if ($stmt) {
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $total = round((float)($row['total'] ?? 0), 2);
+        if ($total > 0) {
+            return $total;
+        }
+    }
+
+    $stmt = $conn->prepare(
+        'SELECT MAX(order_amount) AS order_total FROM pos_payments WHERE order_number = ? AND order_amount > 0'
+    );
+    if ($stmt) {
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $total = round((float)($row['order_total'] ?? 0), 2);
+        if ($total > 0) {
+            return $total;
+        }
+    }
+
+    $stmt = $conn->prepare(
+        'SELECT total_amount FROM vp_invoices WHERE order_number = ? ORDER BY id DESC LIMIT 1'
+    );
+    if ($stmt) {
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $total = round((float)($row['total_amount'] ?? 0), 2);
+        if ($total > 0) {
+            return $total;
+        }
+    }
+
+    $stmt = $conn->prepare(
+        'SELECT
+            IFNULL(SUM(o.finalprice * o.quantity), 0) AS subtotal,
+            IFNULL(MAX(o.custom_reduce), 0) AS custom_reduce,
+            IFNULL(MAX(oi.coupon_reduce), 0) AS coupon_reduce,
+            IFNULL(MAX(oi.giftvoucher_reduce), 0) AS gift_reduce,
+            IFNULL(MAX(oi.credit), 0) AS credit
+         FROM vp_orders o
+         LEFT JOIN vp_order_info oi ON oi.order_number = o.order_number
+         WHERE o.order_number = ?'
+    );
+    if ($stmt) {
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $subtotal = round((float)($row['subtotal'] ?? 0), 2);
+        $reductions = round(
+            (float)($row['custom_reduce'] ?? 0)
+            + (float)($row['coupon_reduce'] ?? 0)
+            + (float)($row['gift_reduce'] ?? 0)
+            + (float)($row['credit'] ?? 0),
+            2
+        );
+        if ($subtotal > 0) {
+            return max(0.0, round($subtotal - $reductions, 2));
+        }
+    }
+
+    return 0.0;
+}
+
+function pos_payment_sum_paid(mysqli $conn, string $orderNumber): float
+{
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return 0.0;
+    }
+
+    $stmt = $conn->prepare('SELECT IFNULL(SUM(payment_amount), 0) AS paid FROM pos_payments WHERE order_number = ?');
+    if (!$stmt) {
+        return 0.0;
+    }
+    $stmt->bind_param('s', $orderNumber);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return round((float)($row['paid'] ?? 0), 2);
+}
+
+function pos_payment_is_fully_paid(mysqli $conn, string $orderNumber): bool
+{
+    $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
+    if ($orderTotal <= 0) {
+        return false;
+    }
+
+    return pos_payment_sum_paid($conn, $orderNumber) + 0.02 >= $orderTotal;
+}
+
+/**
+ * Recompute order_amount / pending_amount on every pos_payments row for an order (after edits).
+ */
+function pos_payment_refresh_order_snapshots(mysqli $conn, string $orderNumber): void
+{
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return;
+    }
+
+    $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
+    if ($orderTotal <= 0) {
+        return;
+    }
+
+    $stmt = $conn->prepare('SELECT id, payment_amount FROM pos_payments WHERE order_number = ? ORDER BY id ASC');
+    if (!$stmt) {
+        return;
+    }
+    $stmt->bind_param('s', $orderNumber);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $stmt->close();
+
+    $cumulative = 0.0;
+    $upd = $conn->prepare('UPDATE pos_payments SET order_amount = ?, pending_amount = ? WHERE id = ?');
+    if (!$upd) {
+        return;
+    }
+
+    while ($row = $res->fetch_assoc()) {
+        $cumulative += round((float)($row['payment_amount'] ?? 0), 2);
+        $pending = round($orderTotal - $cumulative, 2);
+        $id = (int)($row['id'] ?? 0);
+        $upd->bind_param('ddi', $orderTotal, $pending, $id);
+        $upd->execute();
+    }
+    $upd->close();
+}
+
+/**
+ * Active (non-cancelled) invoice id for an order, if any.
+ */
+function pos_payment_find_invoice_id(mysqli $conn, string $orderNumber): int
+{
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return 0;
+    }
+
+    $stmt = $conn->prepare(
+        'SELECT i.id
+         FROM vp_invoices i
+         INNER JOIN vp_invoice_items ii ON ii.invoice_id = i.id
+         WHERE ii.order_number = ?
+           AND LOWER(TRIM(COALESCE(i.status, \'\'))) <> \'cancelled\'
+         ORDER BY i.id DESC
+         LIMIT 1'
+    );
+    if (!$stmt) {
+        return 0;
+    }
+    $stmt->bind_param('s', $orderNumber);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return (int)($row['id'] ?? 0);
+}
+
+/**
+ * When order is fully paid: finalize proforma or create a final tax invoice.
+ *
+ * @return array{success:bool,attempted:bool,fully_paid:bool,invoice_id:int,created:bool,message?:string}
+ */
+function pos_payment_finalize_invoice_for_order(mysqli $conn, string $orderNumber): array
+{
+    $orderNumber = trim($orderNumber);
+    $empty = [
+        'success' => true,
+        'attempted' => false,
+        'fully_paid' => false,
+        'invoice_id' => 0,
+        'created' => false,
+    ];
+    if ($orderNumber === '') {
+        return $empty;
+    }
+
+    if (!pos_payment_is_fully_paid($conn, $orderNumber)) {
+        return $empty;
+    }
+
+    require_once __DIR__ . '/../models/PosInvoice/invoice.php';
+    $invoiceModel = new POSInvoice($conn);
+    $existing = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
+        if ($existing) {
+            $status = strtolower(trim((string)($existing['status'] ?? '')));
+            $invoiceId = (int)($existing['id'] ?? 0);
+            if ($status === 'final') {
+                if ($invoiceId > 0) {
+                    require_once __DIR__ . '/../controllers/PosInvoiceController.php';
+                    $posInv = new PosInvoiceController();
+                    $posInv->repairPosInvoiceMetadataForOrder($invoiceId, $orderNumber);
+                }
+
+                return [
+                    'success' => true,
+                    'attempted' => true,
+                    'fully_paid' => true,
+                    'invoice_id' => $invoiceId,
+                    'created' => false,
+                ];
+            }
+        if (in_array($status, ['proforma', 'draft'], true) && $invoiceId > 0) {
+            $stmt = $conn->prepare(
+                'UPDATE vp_invoices SET status = \'final\', invoice_date = CURDATE() WHERE id = ?'
+            );
+            if ($stmt) {
+                $stmt->bind_param('i', $invoiceId);
+                $stmt->execute();
+                $stmt->close();
+            }
+
+            require_once __DIR__ . '/../controllers/PosInvoiceController.php';
+            $posInv = new PosInvoiceController();
+            $posInv->repairPosInvoiceMetadataForOrder($invoiceId, $orderNumber);
+
+            return [
+                'success' => true,
+                'attempted' => true,
+                'fully_paid' => true,
+                'invoice_id' => $invoiceId,
+                'created' => false,
+            ];
+        }
+    }
+
+    require_once __DIR__ . '/../controllers/PosInvoiceController.php';
+    $posInv = new PosInvoiceController();
+    $created = $posInv->createAutoInvoiceForOrder($orderNumber, '', true);
+    if (!empty($created['success']) && !empty($created['invoice_id'])) {
+        return [
+            'success' => true,
+            'attempted' => true,
+            'fully_paid' => true,
+            'invoice_id' => (int)$created['invoice_id'],
+            'created' => true,
+        ];
+    }
+
+    return [
+        'success' => false,
+        'attempted' => true,
+        'fully_paid' => true,
+        'invoice_id' => 0,
+        'created' => false,
+        'message' => (string)($created['message'] ?? 'Invoice could not be created.'),
+    ];
+}
+
+/**
  * Order total (vp_orders) and balance remaining after this payment is applied (pos_payments exclude new row).
  * When $orderTotalOverride is set (>0), use it instead of vp_orders (e.g. Exotic order not imported yet).
  *
@@ -157,14 +430,7 @@ function pos_payment_compute_order_snapshots(mysqli $conn, string $orderNumber, 
     if ($orderTotalOverride !== null && $orderTotalOverride > 0) {
         $orderTotal = round($orderTotalOverride, 2);
     } else {
-        $stmt = $conn->prepare('SELECT IFNULL(SUM(finalprice), 0) AS t FROM vp_orders WHERE order_number = ?');
-        if ($stmt) {
-            $stmt->bind_param('s', $orderNumber);
-            $stmt->execute();
-            $row = $stmt->get_result()->fetch_assoc();
-            $stmt->close();
-            $orderTotal = round((float)($row['t'] ?? 0), 2);
-        }
+        $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
     }
 
     $paidPrior = 0.0;

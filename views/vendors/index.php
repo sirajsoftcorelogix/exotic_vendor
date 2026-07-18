@@ -399,6 +399,11 @@
                                     <label class="text-sm font-medium text-gray-700">Alternate Phone (optional)</label>
                                     <input type="number" class="form-input w-full mt-1" name="addAltPhone" id="addAltPhone" oninput="limitToTenDigits(this)" />
                                 </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Stock Replenishment Months</label>
+                                    <input type="number" class="form-input w-full mt-1" name="stock_replenishment_months" id="add_stock_replenishment_months" min="0" step="1" placeholder="e.g. 3" />
+                                    <p class="mt-1 text-xs text-gray-500">Expected months to replenish stock for this vendor. Leave empty or 0 if not set.</p>
+                                </div>
                             </div>
                             <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div style="width: 400px;">
@@ -620,6 +625,11 @@
                                 <div>
                                     <label class="text-sm font-medium text-gray-700">Alternate Phone (optional)</label>
                                     <input type="number" class="form-input w-full mt-1" name="editAltPhone" id="editAltPhone" oninput="limitToTenDigits(this)" />
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Stock Replenishment Months</label>
+                                    <input type="number" class="form-input w-full mt-1" name="stock_replenishment_months" id="edit_stock_replenishment_months" min="0" step="1" placeholder="e.g. 3" />
+                                    <p class="mt-1 text-xs text-gray-500">Expected months to replenish stock for this vendor. Leave empty or 0 if not set.</p>
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1698,6 +1708,10 @@
             document.getElementById("editCountryCode").value = vendor.country_code;
             document.getElementById("editPhone").value = vendor.vendor_phone;
             document.getElementById("editAltPhone").value = vendor.alt_phone;
+            document.getElementById("edit_stock_replenishment_months").value =
+                vendor.stock_replenishment_months != null && vendor.stock_replenishment_months !== 0
+                    ? String(vendor.stock_replenishment_months)
+                    : '';
             document.getElementById("editGstNumber").value = vendor.gst_number;
             document.getElementById("editPanNumber").value = vendor.pan_number;
             document.getElementById("editAddress").value = vendor.address;

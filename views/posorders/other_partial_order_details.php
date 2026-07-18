@@ -25,12 +25,41 @@ foreach ($order as $items => $item):
     $total_price += $item['finalprice'] * $item['quantity'];
 endforeach;
 $currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
+$displayOrderNumber = (string)($orderremarks['order_number'] ?? ($order[0]['order_number'] ?? ''));
+$invoicePdfUrl = trim((string)($invoicePdfUrl ?? ''));
+$invoiceDisplay = is_array($invoiceDisplay ?? null) ? $invoiceDisplay : null;
+$canEditInvoiceNumber = !empty($canEditInvoiceNumber);
+$invoiceStatus = strtolower(trim((string)($invoiceDisplay['status'] ?? '')));
+$invoiceStatusBadgeClass = match ($invoiceStatus) {
+    'final' => 'bg-green-100 text-green-700',
+    'proforma' => 'bg-yellow-100 text-yellow-700',
+    'draft' => 'bg-gray-100 text-gray-700',
+    default => 'bg-slate-100 text-slate-700',
+};
+$invoiceNumberDisplay = (string)($invoiceDisplay['invoice_number'] ?? '');
+$invoiceDateDisplay = !empty($invoiceDisplay['invoice_date'])
+    ? date('d M Y', strtotime((string)$invoiceDisplay['invoice_date']))
+    : '—';
+$invoiceSubtotalDisplay = number_format((float)($invoiceDisplay['subtotal'] ?? 0), 2);
+$invoiceTaxDisplay = number_format((float)($invoiceDisplay['tax_amount'] ?? 0), 2);
+$invoiceDiscountLines = (is_array($invoiceDisplay) && is_array($invoiceDisplay['discount_lines'] ?? null))
+    ? $invoiceDisplay['discount_lines']
+    : [];
+$invoiceGoodsInclDisplay = number_format((float)($invoiceDisplay['subtotal_goods_incl'] ?? 0), 2);
+$invoiceGrandTotalDisplay = number_format((float)($invoiceDisplay['grand_total'] ?? 0), 2);
+$paymentSummary = is_array($paymentSummary ?? null) ? $paymentSummary : ['order_total' => 0, 'paid_total' => 0, 'pending' => 0, 'is_fully_paid' => false, 'payments' => []];
+$paymentRows = is_array($paymentSummary['payments'] ?? null) ? $paymentSummary['payments'] : [];
+$paymentOrderTotalDisplay = number_format((float)($paymentSummary['order_total'] ?? 0), 2);
+$paymentPaidTotalDisplay = number_format((float)($paymentSummary['paid_total'] ?? 0), 2);
+$paymentPendingDisplay = number_format((float)($paymentSummary['pending'] ?? 0), 2);
+$paymentIsFullyPaid = !empty($paymentSummary['is_fully_paid']);
+$paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurlencode($displayOrderNumber) . '&order_exact=1');
 ?>
 
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div class="flex items-center gap-3">
-            <h1 class="text-xl font-bold"><?php echo $orderremarks['order_number'] ?? ''; ?></h1>
+        <div class="flex items-center gap-2">
+            <h1 class="text-xl font-bold"><?php echo htmlspecialchars($displayOrderNumber); ?></h1>
             <!-- <span class="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white">Paid</span>
             <span class="rounded-full bg-red-500 px-3 py-1 text-xs font-semibold text-white">Canceled</span>
             <span class="rounded-full bg-yellow-500 px-3 py-1 text-xs font-semibold text-white">Refunded</span>
@@ -53,9 +82,19 @@ $currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', '
                 </label>
                 <div class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden opacity-0 invisible scale-95 transition-all duration-200 peer-checked:opacity-100 peer-checked:visible peer-checked:scale-100">
                     <div class="py-1">
-                        <a href="#" class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100">
-                            Print Invoice
-                        </a>
+                        <?php if ($invoicePdfUrl !== ''): ?>
+                            <a href="<?php echo htmlspecialchars($invoicePdfUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100">
+                                Print Invoice
+                            </a>
+                        <?php else: ?>
+                            <span class="flex items-center px-4 py-2 text-[13px] text-gray-400 cursor-not-allowed"
+                                title="No invoice exists for this order yet.">
+                                Print Invoice
+                            </span>
+                        <?php endif; ?>
                         <a href="#" class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100 border-t border-gray-50">
                             print order
                         </a>
@@ -394,9 +433,236 @@ $currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', '
             </div>
         </div>
         <div class="space-y-6">
+            <?php if ($invoiceDisplay !== null): ?>
+                <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm" id="order-invoice-details-card">
+                    <div class="flex items-center justify-between gap-3 border-b border-orange-100 bg-gradient-to-r from-orange-50 to-white px-5 py-4">
+                        <div class="flex items-center gap-2.5">
+                            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-100 text-orange-700">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                            </span>
+                            <div>
+                                <h3 class="text-sm font-bold text-gray-900">Tax Invoice</h3>
+                                <p class="text-xs text-gray-500">Generated for this order</p>
+                            </div>
+                        </div>
+                        <?php if ($invoiceStatus !== ''): ?>
+                            <span class="rounded-full px-2.5 py-1 text-xs font-semibold <?php echo $invoiceStatusBadgeClass; ?>">
+                                <?php echo htmlspecialchars(ucfirst($invoiceStatus)); ?>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="space-y-4 p-5">
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5">
+                                <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Invoice Number</p>
+                                <div class="mt-1 flex items-start justify-between gap-2">
+                                    <p id="order-invoice-number-text" class="break-all font-mono text-sm font-semibold text-gray-900 leading-snug">
+                                        <?php echo htmlspecialchars($invoiceNumberDisplay); ?>
+                                    </p>
+                                    <?php if ($canEditInvoiceNumber): ?>
+                                        <button type="button"
+                                            onclick="openInvoiceNumberEditPopup(<?php echo (int)$invoiceDisplay['id']; ?>, '<?php echo htmlspecialchars($invoiceNumberDisplay, ENT_QUOTES); ?>')"
+                                            class="inline-flex shrink-0 items-center justify-center rounded-md p-1 text-gray-400 hover:bg-white hover:text-orange-600"
+                                            title="Edit invoice number">
+                                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5">
+                                <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Invoice Date</p>
+                                <p class="mt-1 text-sm font-semibold text-gray-900"><?php echo htmlspecialchars($invoiceDateDisplay); ?></p>
+                            </div>
+                        </div>
+
+                        <div class="rounded-lg border border-gray-200 bg-white">
+                            <div class="divide-y divide-gray-100 px-4 py-1 text-sm">
+                                <?php
+                                $goodsIncl = (float)($invoiceDisplay['subtotal_goods_incl'] ?? 0);
+                                $pretaxPlusTax = (float)($invoiceDisplay['subtotal'] ?? 0) + (float)($invoiceDisplay['tax_amount'] ?? 0);
+                                if ($goodsIncl > 0 && abs($goodsIncl - $pretaxPlusTax) > 0.02):
+                                ?>
+                                    <div class="flex items-center justify-between gap-4 py-2.5">
+                                        <span class="text-gray-600">Goods Total (incl. GST)</span>
+                                        <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceGoodsInclDisplay; ?></span>
+                                    </div>
+                                <?php endif; ?>
+                                <div class="flex items-center justify-between gap-4 py-2.5">
+                                    <span class="text-gray-600">Subtotal</span>
+                                    <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceSubtotalDisplay; ?></span>
+                                </div>
+                                <div class="flex items-center justify-between gap-4 py-2.5">
+                                    <span class="text-gray-600">Tax</span>
+                                    <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceTaxDisplay; ?></span>
+                                </div>
+                                <?php if ($invoiceDiscountLines !== []): ?>
+                                    <div class="py-2">
+                                        <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Discounts</p>
+                                        <div class="mt-1 space-y-2">
+                                            <?php foreach ($invoiceDiscountLines as $discountLine):
+                                                $discountLabel = trim((string)($discountLine['label'] ?? 'Discount'));
+                                                $discountAmount = number_format((float)($discountLine['amount'] ?? 0), 2);
+                                                $discountNote = trim((string)($discountLine['note'] ?? ''));
+                                            ?>
+                                                <div class="rounded-md bg-emerald-50/70 px-2.5 py-2">
+                                                    <div class="flex items-start justify-between gap-3">
+                                                        <span class="text-gray-700"><?php echo htmlspecialchars($discountLabel); ?></span>
+                                                        <span class="shrink-0 tabular-nums font-semibold text-emerald-700">- ₹ <?php echo $discountAmount; ?></span>
+                                                    </div>
+                                                    <?php if ($discountNote !== ''): ?>
+                                                        <p class="mt-1 text-[11px] leading-snug text-gray-500"><?php echo htmlspecialchars($discountNote); ?></p>
+                                                    <?php endif; ?>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="flex items-center justify-between gap-4 py-2.5">
+                                        <span class="text-gray-600">Discount</span>
+                                        <span class="tabular-nums font-medium text-gray-500">₹ 0.00</span>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                            <div class="flex items-center justify-between gap-4 border-t border-gray-200 bg-gray-50 px-4 py-3">
+                                <span class="text-sm font-bold text-gray-900">Grand Total</span>
+                                <span class="text-base font-bold tabular-nums text-gray-900">₹ <?php echo $invoiceGrandTotalDisplay; ?></span>
+                            </div>
+                        </div>
+
+                        <?php if ($invoicePdfUrl !== ''): ?>
+                            <a href="<?php echo htmlspecialchars($invoicePdfUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="flex w-full items-center justify-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-800 transition hover:border-orange-300 hover:bg-orange-100">
+                                <svg width="16" height="16" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+                                    <path d="M2.62925 10.3889C1.64271 9.68768 1 8.54159 1 7.24672C1 5.47783 2.3 3.84375 4.25 3.52778C4.86168 2.07349 6.30934 1 7.99783 1C10.1607 1 11.9284 2.67737 12.05 4.79167C13.1978 5.29352 14 6.52522 14 7.85887C14 8.98648 13.4266 9.98004 12.5556 10.5634M7.5 14V6.77778M7.5 14L5.33333 11.8333M7.5 14L9.66667 11.8333"
+                                        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                                Download / Print Invoice
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm" id="order-payment-details-card">
+                <div class="flex items-center justify-between gap-3 border-b border-emerald-100 bg-gradient-to-r from-emerald-50 to-white px-5 py-4">
+                    <div class="flex items-center gap-2.5">
+                        <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                        </span>
+                        <div>
+                            <h3 class="text-sm font-bold text-gray-900">Payments</h3>
+                            <p class="text-xs text-gray-500"><?php echo count($paymentRows); ?> payment<?php echo count($paymentRows) === 1 ? '' : 's'; ?> recorded</p>
+                        </div>
+                    </div>
+                    <?php if ($paymentIsFullyPaid): ?>
+                        <span class="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">Fully paid</span>
+                    <?php elseif ((float)($paymentSummary['paid_total'] ?? 0) > 0): ?>
+                        <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">Partial</span>
+                    <?php else: ?>
+                        <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">Unpaid</span>
+                    <?php endif; ?>
+                </div>
+
+                <div class="space-y-4 p-5">
+                    <div class="grid grid-cols-3 gap-2 text-center">
+                        <div class="rounded-lg border border-gray-100 bg-gray-50 px-2 py-2.5">
+                            <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Order Total</p>
+                            <p class="mt-1 text-sm font-bold tabular-nums text-gray-900">₹ <?php echo $paymentOrderTotalDisplay; ?></p>
+                        </div>
+                        <div class="rounded-lg border border-emerald-100 bg-emerald-50/60 px-2 py-2.5">
+                            <p class="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Paid</p>
+                            <p class="mt-1 text-sm font-bold tabular-nums text-emerald-800">₹ <?php echo $paymentPaidTotalDisplay; ?></p>
+                        </div>
+                        <div class="rounded-lg border border-gray-100 bg-gray-50 px-2 py-2.5">
+                            <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Pending</p>
+                            <p class="mt-1 text-sm font-bold tabular-nums <?php echo (float)($paymentSummary['pending'] ?? 0) > 0.02 ? 'text-red-600' : 'text-gray-900'; ?>">₹ <?php echo $paymentPendingDisplay; ?></p>
+                        </div>
+                    </div>
+
+                    <?php if ($paymentRows === []): ?>
+                        <div class="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+                            No payments recorded for this order yet.
+                        </div>
+                    <?php else: ?>
+                        <div class="space-y-2">
+                            <?php foreach ($paymentRows as $paymentRow):
+                                $paymentId = (int)($paymentRow['id'] ?? 0);
+                                $receiptLabel = trim((string)($paymentRow['receipt_number'] ?? ''));
+                                if ($receiptLabel === '') {
+                                    $receiptLabel = '#' . $paymentId;
+                                }
+                                $paymentDateRaw = trim((string)($paymentRow['payment_date'] ?? ''));
+                                $paymentDateLabel = $paymentDateRaw !== ''
+                                    ? date('d M Y', strtotime($paymentDateRaw))
+                                    : '—';
+                                $paymentAmount = number_format((float)($paymentRow['payment_amount'] ?? 0), 2);
+                                $paymentMode = trim((string)($paymentRow['payment_mode'] ?? ''));
+                                $paymentStage = trim((string)($paymentRow['payment_stage'] ?? ''));
+                                $transactionId = trim((string)($paymentRow['transaction_id'] ?? ''));
+                                $warehouseName = trim((string)($paymentRow['warehouse'] ?? ''));
+                                $receiptUrl = base_url('?page=payments&action=receipt&id=' . $paymentId);
+                            ?>
+                                <div class="rounded-lg border border-gray-200 bg-white px-3 py-3">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div class="min-w-0">
+                                            <a href="<?php echo htmlspecialchars($receiptUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                class="text-sm font-semibold text-blue-600 hover:text-blue-800 hover:underline">
+                                                <?php echo htmlspecialchars($receiptLabel); ?>
+                                            </a>
+                                            <p class="mt-0.5 text-xs text-gray-500"><?php echo htmlspecialchars($paymentDateLabel); ?></p>
+                                        </div>
+                                        <p class="shrink-0 text-sm font-bold tabular-nums text-gray-900">₹ <?php echo $paymentAmount; ?></p>
+                                    </div>
+                                    <div class="mt-2 flex flex-wrap gap-1.5">
+                                        <?php if ($paymentMode !== ''): ?>
+                                            <span class="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700"><?php echo htmlspecialchars($paymentMode); ?></span>
+                                        <?php endif; ?>
+                                        <?php if ($paymentStage !== ''): ?>
+                                            <span class="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium capitalize text-slate-700"><?php echo htmlspecialchars(str_replace('_', ' ', $paymentStage)); ?></span>
+                                        <?php endif; ?>
+                                        <?php if ($warehouseName !== ''): ?>
+                                            <span class="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600"><?php echo htmlspecialchars($warehouseName); ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php if ($transactionId !== ''): ?>
+                                        <p class="mt-2 truncate text-[11px] text-gray-500" title="<?php echo htmlspecialchars($transactionId, ENT_QUOTES); ?>">
+                                            Txn: <?php echo htmlspecialchars($transactionId); ?>
+                                        </p>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <a href="<?php echo htmlspecialchars($paymentsListUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100">
+                        View all payments
+                    </a>
+                </div>
+            </div>
+
             <!-- Note Section -->
             <div class="rounded-lg border bg-white p-5 shadow-sm relative" id="note-container-<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>">
-                <button type="button" onclick="openNoteEditPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>','<?= htmlspecialchars($orderremarks['remarks'] ?? '', ENT_QUOTES) ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit Note">
+                <textarea id="note-remarks-source" class="hidden" aria-hidden="true"><?php echo htmlspecialchars($orderremarks['remarks'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
+                <button type="button"
+                    id="note-edit-btn"
+                    data-order-number="<?php echo htmlspecialchars($orderremarks['order_number'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+                    onclick="openNoteEditPopup()"
+                    class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors"
+                    title="Edit Note">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
@@ -408,20 +674,6 @@ $currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', '
                     </div>
                 <?php endif; ?>
             </div>
-            <!-- Conversion Summary -->
-            <?php if (!empty($orderremarks['payment_type']) || !empty($orderremarks['country'])): ?>
-                <div class="rounded-lg border bg-white p-5 shadow-sm relative">
-                    <h3 class="mb-2 text-sm font-bold text-black-700">Conversion Summary</h3>
-                    <div
-                        class="text-sm text-black-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
-                        <b>Payment Type:</b> <?php echo ($orderremarks['payment_type'] ?? 'N/A'); ?>
-                        <br>
-                        <b>Payment ID:</b> <?php echo ($orderremarks['transid'] ?? 'N/A'); ?>
-                        <br>
-                        <b>Country:</b> <?php echo ($orderremarks['country'] ?? 'N/A'); ?>
-                    </div>
-                </div>
-            <?php endif; ?>
             <!-- address Section -->
             <?php /* <div class="rounded-lg border bg-white p-5 shadow-sm relative">
                 <button type="button" onclick="openNameEmailPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit address">
@@ -575,10 +827,97 @@ $currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', '
         </div>
     </div>
 </div>
+<?php if ($canEditInvoiceNumber && $invoiceDisplay !== null): ?>
+<div id="invoiceNumberEditPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6 relative">
+        <button type="button" onclick="closeInvoiceNumberEditPopup()" class="absolute top-3 right-4 text-gray-500 hover:text-gray-800">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+
+        <h2 class="text-xl font-bold mb-4 text-gray-800">Edit Invoice Number</h2>
+
+        <form id="invoiceNumberEditForm">
+            <input type="hidden" id="edit_invoice_id" name="invoice_id">
+
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="new_invoice_number">Invoice number</label>
+            <input type="text" id="new_invoice_number" name="new_invoice_number"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                required>
+
+            <div class="mt-6 flex justify-end gap-3">
+                <button type="button" onclick="closeInvoiceNumberEditPopup()"
+                    class="rounded-full px-5 py-2.5 bg-gray-200 text-gray-800 hover:bg-gray-300">
+                    Cancel
+                </button>
+                <button type="submit"
+                    class="rounded-full bg-[#D46B08] px-10 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700">
+                    Save
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
 <script>
-    function openNoteEditPopup(orderNumber, currentRemarks) {
+    function openInvoiceNumberEditPopup(invoiceId, currentNumber) {
+        document.getElementById('edit_invoice_id').value = invoiceId;
+        document.getElementById('new_invoice_number').value = currentNumber || '';
+        document.getElementById('invoiceNumberEditPopup').classList.remove('hidden');
+        document.getElementById('new_invoice_number').focus();
+        document.getElementById('new_invoice_number').select();
+    }
+
+    function closeInvoiceNumberEditPopup() {
+        document.getElementById('invoiceNumberEditPopup')?.classList.add('hidden');
+    }
+
+    document.getElementById('invoiceNumberEditForm')?.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const invoiceId = document.getElementById('edit_invoice_id').value.trim();
+        const newInvoiceNumber = document.getElementById('new_invoice_number').value.trim();
+
+        if (!invoiceId || !newInvoiceNumber) {
+            alert('Invoice number is required.');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('invoice_id', invoiceId);
+        formData.append('new_invoice_number', newInvoiceNumber);
+
+        fetch('index.php?page=posinvoice&action=update_invoice_number_ajax', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success) {
+                    alert(data.message || 'Could not update invoice number.');
+                    return;
+                }
+
+                closeInvoiceNumberEditPopup();
+
+                const text = document.getElementById('order-invoice-number-text');
+                const updated = data.invoice_number || newInvoiceNumber;
+                if (text) {
+                    text.textContent = updated;
+                }
+            })
+            .catch(() => alert('Request failed. Please try again.'));
+    });
+
+    function openNoteEditPopup() {
+        const btn = document.getElementById('note-edit-btn');
+        const orderNumber = btn ? (btn.dataset.orderNumber || '') : '';
+        const src = document.getElementById('note-remarks-source');
+        const currentRemarks = src ? src.value : '';
+
         document.getElementById('note_order_number').value = orderNumber;
-        document.getElementById('note_remarks').value = currentRemarks || '';
+        document.getElementById('note_remarks').value = currentRemarks;
         document.getElementById('noteEditPopup').classList.remove('hidden');
     }
 
@@ -617,6 +956,11 @@ $currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', '
                         } else {
                             displayEl.innerHTML = '<em class="text-black-400">No notes from customer</em>';
                         }
+                    }
+
+                    const remarksSource = document.getElementById('note-remarks-source');
+                    if (remarksSource) {
+                        remarksSource.value = remarks;
                     }
 
                     // Optional success feedback

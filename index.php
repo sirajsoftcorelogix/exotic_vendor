@@ -649,6 +649,12 @@ switch ($page) {
             case 'stock_rebuild_guide':
                 $controller->stockRebuildGuide();
                 break;
+            case 'stock_rebuild_candidates':
+                $controller->stockRebuildCandidates();
+                break;
+            case 'stock_rebuild_refresh_batch':
+                $controller->stockRebuildRefreshBatch();
+                break;
             case 'stock_rebuild_preview':
                 $controller->stockRebuildPreview();
                 break;
@@ -1701,6 +1707,10 @@ switch ($page) {
                 $controller->printPreview();
                 break;
 
+            case 'update_invoice_number_ajax':
+                $controller->updateInvoiceNumberAjax();
+                break;
+
             default:
                 $controller->index();
                 break;
@@ -1745,6 +1755,9 @@ switch ($page) {
                 break;
             case 'update_name_email_ajax':
                 $controller->updateNameEmailAjax();
+                break;
+            case 'update_order_number_ajax':
+                $controller->updateOrderNumberAjax();
                 break;
             case 'update_import':
                 $controller->skuUpdateImportedOrders();

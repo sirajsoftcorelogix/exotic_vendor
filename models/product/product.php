@@ -271,6 +271,36 @@ class product
         return 0.0;
     }
 
+    /** India list price from vendor product/fetch — prefer variant row, then parent. */
+    public static function vendorApiPriceIndia(array $apiItem, array $fallback = []): float
+    {
+        foreach ([$apiItem, $fallback] as $row) {
+            if (!isset($row['price_india']) || $row['price_india'] === '' || $row['price_india'] === null) {
+                continue;
+            }
+            return (float) $row['price_india'];
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * Use stored size/color for UPDATE WHERE when a fuzzy catalog match exists (Import uses the same lookup).
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function resolveVpProductVariantWhereKeys(?array $existingBase, string $apiSize, string $apiColor): array
+    {
+        if (is_array($existingBase)) {
+            return [
+                trim((string) ($existingBase['size'] ?? $apiSize)),
+                trim((string) ($existingBase['color'] ?? $apiColor)),
+            ];
+        }
+
+        return [trim($apiSize), trim($apiColor)];
+    }
+
     /** Master API row: HSN is on `hscode` (or `hsn`). Same value for all variants — pass the parent object only. */
     public static function vendorApiHsn(array $masterRow): string
     {
@@ -392,6 +422,17 @@ class product
                     continue;
                 }
                 $merged = array_merge($row, $variation);
+                foreach (['price_india', 'price', 'mrp_india', 'local_stock'] as $inheritKey) {
+                    if (!array_key_exists($inheritKey, $variation)) {
+                        continue;
+                    }
+                    $variationVal = $variation[$inheritKey];
+                    if ($variationVal === null || $variationVal === '') {
+                        if (array_key_exists($inheritKey, $row)) {
+                            $merged[$inheritKey] = $row[$inheritKey];
+                        }
+                    }
+                }
                 if ($itemCode !== '') {
                     $merged['itemcode'] = $itemCode;
                 }
@@ -1373,10 +1414,13 @@ class product
         // Default: never overwrite vp_products.local_stock from API; pass preserve_local_stock => false to sync stock from API.
         $preserveLocalStock = !array_key_exists('preserve_local_stock', $options) || !empty($options['preserve_local_stock']);
         $syncPhysicalStock = !array_key_exists('sync_physical_stock', $options) || !empty($options['sync_physical_stock']);
+        $stockSyncMode = (string) ($options['stock_sync_mode'] ?? 'legacy');
+        $variantsAlreadyExpanded = !empty($options['variants_already_expanded']);
         // print_array($productData);
         // exit;
         $vendorMapSynced = 0;
         $vendorMapSkipped = 0;
+        $rowsAffected = 0;
         if (isset($productData) && is_array($productData)) {
             foreach ($productData as $product) {
                 if (!is_array($product)) {
@@ -1391,12 +1435,19 @@ class product
                 $now = date('Y-m-d H:i:s');
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
                 $existingBase = $this->findByItemCodeSizeColor($product['itemcode'], (string)($product['size'] ?? ''), (string)($product['color'] ?? ''));
-                $stmt = $this->db->prepare("UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), ''), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), ''), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ?, update_flag = 1 WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')");
+                $sku = isset($product['sku']) && !empty($product['sku']) ? $product['sku'] : $product['itemcode'];
+                $color = isset($product['color']) ? (string)$product['color'] : '';
+                $size = isset($product['size']) ? (string)$product['size'] : '';
+                $targetProductId = $this->resolveApiRefreshTargetProductId($options, (string) $sku, $size, $color);
+                if ($targetProductId > 0) {
+                    $existingById = $this->getProduct($targetProductId);
+                    if (is_array($existingById)) {
+                        $existingBase = $existingById;
+                    }
+                }
+                [$whereSize, $whereColor] = $this->resolveVpProductVariantWhereKeys($existingBase, $size, $color);
+                $stmt = $this->db->prepare($this->apiRefreshCatalogUpdateSql($targetProductId > 0));
                 if ($stmt) {
-                    // $title = isset($product['title']) ? $product['title'] : '';
-                    $sku = isset($product['sku']) && !empty($product['sku']) ? $product['sku'] : $product['itemcode'];
-                    $color = isset($product['color']) ? (string)$product['color'] : '';
-                    $size = isset($product['size']) ? (string)$product['size'] : '';
                     // $costPrice = isset($product['cost_price']) ? (float)$product['cost_price'] : 0.0;
                     // $gst = isset($product['gst']) ? (float)$product['gst'] : 0.0;
                     // $hsn = isset($product['hsn']) ? $product['hsn'] : '';
@@ -1404,10 +1455,10 @@ class product
                     $image = self::vendorApiImageStorageValue($product['image'] ?? '');
                     // $stockQuantity = isset($product['stock_quantity']) ? (int)$product['stock_quantity'] : 0;
                     $asin = isset($product['asin']) ? $product['asin'] : '';
-                    $localStock = isset($product['local_stock']) ? (int)$product['local_stock'] : 0;
-                    if ($preserveLocalStock && $existingBase && array_key_exists('local_stock', $existingBase)) {
-                        $localStock = (int)$existingBase['local_stock'];
-                    }
+                    $apiLocalStock = isset($product['local_stock']) ? (int) $product['local_stock'] : 0;
+                    $stockDecision = $this->resolveApiRefreshLocalStock($options, $existingBase, $apiLocalStock, false);
+                    $localStock = $stockDecision['local_stock'];
+                    $syncStockFromApi = $stockDecision['sync_stock'];
                     $upc = isset($product['upc']) ? $product['upc'] : '';
                     $location = isset($product['location']) ? $product['location'] : '';
                     $fba_in = isset($product['fba_in']) ? (int)$product['fba_in'] : 0;
@@ -1423,7 +1474,7 @@ class product
                     $shippingfee = isset($product['shippingfee']) ? (float)$product['shippingfee'] : 0.0;
                     $sourcingfee = isset($product['sourcingfee']) ? (float)$product['sourcingfee'] : 0.0;
                     $price = self::vendorApiUsdPrice($product);
-                    $price_india = isset($product['price_india']) ? (float)$product['price_india'] : 0.0;
+                    $price_india = self::vendorApiPriceIndia($product);
                     $mrp_india = isset($product['mrp_india']) ? (float)$product['mrp_india'] : 0.0;
                     $permanent_discount = isset($product['permanent_discount']) ? (float)$product['permanent_discount'] : 0.0;
                     $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
@@ -1463,9 +1514,8 @@ class product
                     $youtube_links = isset($product['youtube_links']) ? $product['youtube_links'] : '';
                     $sketchfab_links = isset($product['sketchfab_links']) ? $product['sketchfab_links'] : '';
                     $dimensions = isset($product['dimensions']) ? $product['dimensions'] : '';
-                    $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 8) . str_repeat('s', 4) . 'sssisiissssssssssssssiiiddiissss' . str_repeat('s', 3);
-                    $stmt->bind_param(
-                        $bt,
+                    $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 8) . str_repeat('s', 4) . 'sssisiissssssssssssssiiiddiissss';
+                    $bindValues = [
                         $asin,
                         $localStock,
                         $upc,
@@ -1524,33 +1574,54 @@ class product
                         $youtube_links,
                         $sketchfab_links,
                         $dimensions,
-                        $product['itemcode'],
-                        $size,
-                        $color
-                    );
+                    ];
+                    if ($targetProductId > 0) {
+                        $bindValues[] = $targetProductId;
+                        $bt .= 'i';
+                    } else {
+                        $bindValues[] = $product['itemcode'];
+                        $bindValues[] = $whereSize;
+                        $bindValues[] = $whereColor;
+                        $bt .= 'sss';
+                    }
+                    $stmt->bind_param($bt, ...$bindValues);
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
                     if ($this->executeVpProductsStmt($stmt)) {
-                        $updatedCount++;
-                        $this->syncBookFieldsFromVendorApiRow(
-                            (string) $product['itemcode'],
-                            (string) $size,
-                            (string) $color,
-                            $product
-                        );
-                        $this->syncPriceIndiaSuggestedFromApiRow(
-                            (string) $product['itemcode'],
-                            (string) $size,
-                            (string) $color,
-                            $product
-                        );
-                        if (!$preserveLocalStock && $syncPhysicalStock) {
-                            $this->maybeSeedPhysicalStockOnLocalStockApiUpdate(
+                        $affected = (int) $stmt->affected_rows;
+                        $didUpdate = ($targetProductId > 0 && is_array($existingBase)) || $affected > 0;
+                        if ($didUpdate) {
+                            $updatedCount++;
+                            if ($affected > 0) {
+                                $rowsAffected += $affected;
+                            }
+                            $syncItemCode = is_array($existingBase)
+                                ? trim((string) ($existingBase['item_code'] ?? $product['itemcode']))
+                                : (string) $product['itemcode'];
+                            if ($syncItemCode === '') {
+                                $syncItemCode = (string) $product['itemcode'];
+                            }
+                            $this->syncBookFieldsFromVendorApiRow(
+                                $syncItemCode,
+                                (string) $whereSize,
+                                (string) $whereColor,
+                                $product
+                            );
+                            $this->syncPriceIndiaSuggestedFromApiRow(
+                                $syncItemCode,
+                                (string) $whereSize,
+                                (string) $whereColor,
+                                $product
+                            );
+                            $this->maybeApplyApiRefreshPhysicalStock(
+                                $options,
                                 $existingBase,
                                 (string) $sku,
-                                (string) $product['itemcode'],
-                                (string) $size,
-                                (string) $color,
-                                (int) $localStock
+                                $syncItemCode,
+                                (string) $whereSize,
+                                (string) $whereColor,
+                                (int) $localStock,
+                                $syncStockFromApi,
+                                $syncPhysicalStock
                             );
                         }
                     }
@@ -1654,12 +1725,30 @@ class product
                                     (string) $color,
                                     $product
                                 );
+                                $freshRow = $this->findByItemCodeSizeColor($product['itemcode'], $size, $color);
+                                $freshStockDecision = $this->resolveApiRefreshLocalStock(
+                                    $options,
+                                    $freshRow,
+                                    $apiLocalStock,
+                                    true
+                                );
+                                $this->maybeApplyApiRefreshPhysicalStock(
+                                    $options,
+                                    is_array($freshRow) ? $freshRow : ['id' => (int) $insertId],
+                                    (string) $sku,
+                                    (string) $product['itemcode'],
+                                    (string) $size,
+                                    (string) $color,
+                                    (int) $freshStockDecision['local_stock'],
+                                    $freshStockDecision['sync_stock'],
+                                    $syncPhysicalStock
+                                );
                             }
                         }
                     }
                     $stmt->close();
                 }
-                if (isset($product['variations'])) {
+                if (!$variantsAlreadyExpanded && isset($product['variations']) && is_array($product['variations'])) {
                     foreach ($product['variations'] as $variation) {
                         if (!is_array($variation)) {
                             continue;
@@ -1673,6 +1762,7 @@ class product
                             $sku = isset($variation['sku']) && !empty($variation['sku']) ? $variation['sku'] : $product['itemcode'];
                             $color = isset($variation['color']) ? (string)$variation['color'] : '';
                             $size = isset($variation['size']) ? (string)$variation['size'] : '';
+                            [$whereSize, $whereColor] = $this->resolveVpProductVariantWhereKeys($existingBase, $size, $color);
                             // $costPrice = isset($product['cost_price']) ? (float)$product['cost_price'] : 0.0;
                             // $gst = isset($product['gst']) ? (float)$product['gst'] : 0.0;
                             // $hsn = isset($product['hsn']) ? $product['hsn'] : '';
@@ -1680,10 +1770,10 @@ class product
                             $image = self::vendorApiImageStorageValue($variation['image'] ?? ($product['image'] ?? ''));
                             // $stockQuantity = isset($product['stock_quantity']) ? (int)$product['stock_quantity'] : 0;
                             $asin = isset($variation['asin']) ? $variation['asin'] : '';
-                            $localStock = isset($variation['local_stock']) ? (int)$variation['local_stock'] : 0;
-                            if ($preserveLocalStock && $existingBase && array_key_exists('local_stock', $existingBase)) {
-                                $localStock = (int)$existingBase['local_stock'];
-                            }
+                            $apiLocalStock = isset($variation['local_stock']) ? (int) $variation['local_stock'] : 0;
+                            $stockDecision = $this->resolveApiRefreshLocalStock($options, $existingBase, $apiLocalStock, false);
+                            $localStock = $stockDecision['local_stock'];
+                            $syncStockFromApi = $stockDecision['sync_stock'];
                             $upc = isset($variation['upc']) ? $variation['upc'] : '';
                             $location = isset($variation['location']) ? $variation['location'] : '';
                             $fba_in = isset($variation['fba_in']) ? (int)$variation['fba_in'] : 0;
@@ -1699,11 +1789,11 @@ class product
                             $shippingfee = isset($product['shippingfee']) ? (float)$product['shippingfee'] : 0.0;
                             $sourcingfee = isset($product['sourcingfee']) ? (float)$product['sourcingfee'] : 0.0;
                             $price = self::vendorApiUsdPrice(array_merge($product, $variation));
-                            $price_india = isset($product['price_india']) ? (float)$product['price_india'] : 0.0;
-                            $mrp_india = isset($product['mrp_india']) ? (float)$product['mrp_india'] : 0.0;
-                            $permanent_discount = isset($product['permanent_discount']) ? (float)$product['permanent_discount'] : 0.0;
-                            $discount_global = isset($product['discount_global']) ? (float)$product['discount_global'] : 0.0;
-                            $discount_india = isset($product['discount_india']) ? (float)$product['discount_india'] : 0.0;
+                            $price_india = self::vendorApiPriceIndia($variation, $product);
+                            $mrp_india = (float) ($variation['mrp_india'] ?? $product['mrp_india'] ?? 0);
+                            $permanent_discount = (float) ($variation['permanent_discount'] ?? $product['permanent_discount'] ?? 0);
+                            $discount_global = (float) ($variation['discount_global'] ?? $product['discount_global'] ?? 0);
+                            $discount_india = (float) ($variation['discount_india'] ?? $product['discount_india'] ?? 0);
                             $hsn = self::vendorApiHsn($product);
                             $updated_at = $now;
                             $category = isset($variation['category']) ? $variation['category'] : (isset($product['category']) ? $product['category'] : '');
@@ -1808,33 +1898,34 @@ class product
                                 $sketchfab_links,
                                 $dimensions,
                                 $product['itemcode'],
-                                $size,
-                                $color
+                                $whereSize,
+                                $whereColor
                             );
                             if ($this->executeVpProductsStmt($stmt)) {
                                 $updatedCount++;
                                 $this->syncBookFieldsFromVendorApiRow(
                                     (string) $product['itemcode'],
-                                    (string) $size,
-                                    (string) $color,
-                                    $product
+                                    (string) $whereSize,
+                                    (string) $whereColor,
+                                    array_merge($product, $variation)
                                 );
                                 $this->syncPriceIndiaSuggestedFromApiRow(
                                     (string) $product['itemcode'],
-                                    (string) $size,
-                                    (string) $color,
+                                    (string) $whereSize,
+                                    (string) $whereColor,
                                     array_merge($product, $variation)
                                 );
-                                if (!$preserveLocalStock && $syncPhysicalStock) {
-                                    $this->maybeSeedPhysicalStockOnLocalStockApiUpdate(
-                                        $existingBase,
-                                        (string) $sku,
-                                        (string) $product['itemcode'],
-                                        (string) $size,
-                                        (string) $color,
-                                        (int) $localStock
-                                    );
-                                }
+                                $this->maybeApplyApiRefreshPhysicalStock(
+                                    $options,
+                                    $existingBase,
+                                    (string) $sku,
+                                    (string) $product['itemcode'],
+                                    (string) $whereSize,
+                                    (string) $whereColor,
+                                    (int) $localStock,
+                                    $syncStockFromApi,
+                                    $syncPhysicalStock
+                                );
                             }
                             if ($stmt->error) {
                                 return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
@@ -1928,13 +2019,31 @@ class product
                                             (string) $product['itemcode'],
                                             (string) $size,
                                             (string) $color,
-                                            $product
+                                            array_merge($product, $variation)
                                         );
                                         $this->syncPriceIndiaSuggestedFromApiRow(
                                             (string) $product['itemcode'],
                                             (string) $size,
                                             (string) $color,
                                             array_merge($product, $variation)
+                                        );
+                                        $freshRow = $this->findByItemCodeSizeColor($product['itemcode'], $size, $color);
+                                        $freshStockDecision = $this->resolveApiRefreshLocalStock(
+                                            $options,
+                                            $freshRow,
+                                            $apiLocalStock,
+                                            true
+                                        );
+                                        $this->maybeApplyApiRefreshPhysicalStock(
+                                            $options,
+                                            is_array($freshRow) ? $freshRow : ['id' => (int) $insertId],
+                                            (string) $sku,
+                                            (string) $product['itemcode'],
+                                            (string) $size,
+                                            (string) $color,
+                                            (int) $freshStockDecision['local_stock'],
+                                            $freshStockDecision['sync_stock'],
+                                            $syncPhysicalStock
                                         );
                                     }
                                 }
@@ -1952,12 +2061,16 @@ class product
                 }
             }
         }
+        $requireDetailUpdates = $stockSyncMode === 'user_selected' && !empty($options['detail_variant_rows']);
         return [
-            'success' => true,
+            'success' => !$requireDetailUpdates || $updatedCount > 0,
             'updated_count' => $updatedCount,
+            'rows_affected' => $rowsAffected,
             'vendor_map_synced' => $vendorMapSynced,
             'vendor_map_skipped' => $vendorMapSkipped,
-            'message' => 'Products updated successfully.',
+            'message' => $updatedCount > 0
+                ? 'Products updated successfully.'
+                : 'API data fetched but no matching product rows were updated.',
         ];
     }
 
@@ -1985,6 +2098,352 @@ class product
         }
         $this->stockMovementItemCodeColumn = $fallback;
         return $this->stockMovementItemCodeColumn;
+    }
+
+    private function hasStockMovementEntries(int $productId): bool
+    {
+        $productId = (int) $productId;
+        if ($productId <= 0) {
+            return false;
+        }
+
+        require_once __DIR__ . '/StockMovement.php';
+        $mov = $this->db->prepare('SELECT 1 FROM vp_stock_movements WHERE product_id = ? LIMIT 1');
+        if (!$mov) {
+            return false;
+        }
+        $mov->bind_param('i', $productId);
+        $mov->execute();
+        $hasMovement = (bool) $mov->get_result()->fetch_assoc();
+        $mov->close();
+
+        return $hasMovement;
+    }
+
+    /**
+     * Product detail Refresh from API stock rules (when no ledger history yet).
+     */
+    private function shouldRefreshApiSyncStock(?array $existingBase, bool $freshlyImportedInThisRun): bool
+    {
+        if ($freshlyImportedInThisRun) {
+            return true;
+        }
+        if (!$existingBase || empty($existingBase['id'])) {
+            return false;
+        }
+        if ($this->hasStockMovementEntries((int) $existingBase['id'])) {
+            return false;
+        }
+
+        $localStock = (int) ($existingBase['local_stock'] ?? 0);
+        $physicalStock = (int) ($existingBase['physical_stock'] ?? 0);
+
+        return $localStock === 0 || $physicalStock === 0;
+    }
+
+    public static function apiRefreshVariantMatchKey(string $sku, string $size, string $color): string
+    {
+        $sku = strtolower(trim($sku));
+        if ($sku !== '') {
+            return 'sku:' . $sku;
+        }
+
+        $normalize = static function (string $value): string {
+            return strtolower(preg_replace('/[\s\-_]+/', '', trim($value)) ?? '');
+        };
+
+        return 'sc:' . $normalize($size) . '|' . $normalize($color);
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function buildDetailVariantProductIdMap(array $options): array
+    {
+        $raw = $options['detail_variant_rows'] ?? [];
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        $map = [];
+        foreach ($raw as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $id = (int) ($row['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $key = self::apiRefreshVariantMatchKey(
+                (string) ($row['sku'] ?? ''),
+                (string) ($row['size'] ?? ''),
+                (string) ($row['color'] ?? '')
+            );
+            $map[$key] = $id;
+        }
+
+        return $map;
+    }
+
+    private function resolveApiRefreshTargetProductId(array $options, string $sku, string $size, string $color): int
+    {
+        $map = $this->buildDetailVariantProductIdMap($options);
+        if ($map === []) {
+            return 0;
+        }
+
+        $key = self::apiRefreshVariantMatchKey($sku, $size, $color);
+        if (isset($map[$key])) {
+            return (int) $map[$key];
+        }
+
+        if (count($map) === 1) {
+            return (int) reset($map);
+        }
+
+        return 0;
+    }
+
+    private function apiRefreshCatalogUpdateSql(bool $whereByProductId): string
+    {
+        $sql = 'UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), \'\'), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), \'\'), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ?';
+        if ($this->vpProductsHasColumn('update_flag')) {
+            $sql .= ', update_flag = 1';
+        }
+        if ($whereByProductId) {
+            return $sql . ' WHERE id = ?';
+        }
+
+        return $sql . " WHERE item_code = ? AND COALESCE(NULLIF(TRIM(size), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '') AND COALESCE(NULLIF(TRIM(color), ''), '') = COALESCE(NULLIF(TRIM(?), ''), '')";
+    }
+
+    /**
+     * @return array{local_stock: int, sync_stock: bool}
+     */
+    private function resolveApiRefreshLocalStock(
+        array $options,
+        ?array $existingBase,
+        int $apiLocalStock,
+        bool $freshlyImportedInThisRun
+    ): array {
+        $stockSyncMode = (string) ($options['stock_sync_mode'] ?? 'legacy');
+        $preserveLocalStock = !array_key_exists('preserve_local_stock', $options) || !empty($options['preserve_local_stock']);
+        $apiLocalStock = max(0, (int) $apiLocalStock);
+
+        if ($stockSyncMode === 'refresh_rules') {
+            if ($this->shouldRefreshApiSyncStock($existingBase, $freshlyImportedInThisRun)) {
+                return ['local_stock' => $apiLocalStock, 'sync_stock' => true];
+            }
+            $preserved = is_array($existingBase)
+                ? (int) ($existingBase['local_stock'] ?? $apiLocalStock)
+                : $apiLocalStock;
+
+            return ['local_stock' => $preserved, 'sync_stock' => false];
+        }
+
+        if ($stockSyncMode === 'user_selected') {
+            return ['local_stock' => $apiLocalStock, 'sync_stock' => true];
+        }
+
+        if ($preserveLocalStock && is_array($existingBase)) {
+            return [
+                'local_stock' => (int) ($existingBase['local_stock'] ?? $apiLocalStock),
+                'sync_stock' => false,
+            ];
+        }
+
+        return ['local_stock' => $apiLocalStock, 'sync_stock' => true];
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function resolvePhysicalStockSyncProductIds(array $options): array
+    {
+        $raw = $options['physical_stock_sync_product_ids'] ?? $options['stock_sync_product_ids'] ?? [];
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($raw as $pid) {
+            $pid = (int) $pid;
+            if ($pid > 0) {
+                $ids[] = $pid;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    private function isPhysicalStockSyncSelected(array $options, int $productId): bool
+    {
+        if ($productId <= 0) {
+            return false;
+        }
+
+        return in_array($productId, $this->resolvePhysicalStockSyncProductIds($options), true);
+    }
+
+    /**
+     * Align warehouse ledger + physical_stock to API local_stock (import-style target sync).
+     */
+    private function applyRefreshApiStockSync(
+        int $productId,
+        string $sku,
+        string $itemCode,
+        string $size,
+        string $color,
+        int $targetQty
+    ): void {
+        require_once __DIR__ . '/StockMovement.php';
+
+        $productId = (int) $productId;
+        $targetQty = max(0, (int) $targetQty);
+        if ($productId <= 0) {
+            return;
+        }
+
+        $warehouseId = $this->resolveDefaultWarehouseIdForStock();
+        if ($warehouseId <= 0) {
+            $warehouseId = 1;
+        }
+
+        $sku = trim($sku);
+        $itemCode = trim($itemCode);
+        if ($sku === '') {
+            $sku = $itemCode;
+        }
+        if ($sku === '' || $itemCode === '') {
+            return;
+        }
+
+        $size = trim($size);
+        $color = trim($color);
+
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            @session_start();
+        }
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+        $refType = 'API_REFRESH';
+        $refId = 'api_refresh:' . date('YmdHis');
+
+        try {
+            if (!$this->db->begin_transaction()) {
+                return;
+            }
+
+            $current = (int) StockMovement::getLastRunningStock($this->db, $sku, $warehouseId);
+            $delta = $targetQty - $current;
+
+            if ($delta > 0) {
+                $movementType = $current <= 0 ? 'OPENING_STOCK' : 'IN';
+                $movementQty = $current <= 0 ? $targetQty : $delta;
+                StockMovement::insert($this->db, [
+                    'product_id' => $productId,
+                    'sku' => $sku,
+                    'item_code' => $itemCode,
+                    'size' => $size,
+                    'color' => $color,
+                    'warehouse_id' => $warehouseId,
+                    'location' => 'API refresh',
+                    'movement_type' => $movementType,
+                    'quantity' => $movementQty,
+                    'ref_type' => $refType,
+                    'ref_id' => $refId,
+                    'reason' => 'Stock sync from API refresh',
+                    'update_by_user' => $userId,
+                    'strict_stock_check' => false,
+                ]);
+            } elseif ($delta < 0) {
+                StockMovement::insert($this->db, [
+                    'product_id' => $productId,
+                    'sku' => $sku,
+                    'item_code' => $itemCode,
+                    'size' => $size,
+                    'color' => $color,
+                    'warehouse_id' => $warehouseId,
+                    'location' => 'API refresh',
+                    'movement_type' => 'OUT',
+                    'quantity' => abs($delta),
+                    'ref_type' => $refType,
+                    'ref_id' => $refId,
+                    'reason' => 'Stock sync from API refresh',
+                    'update_by_user' => $userId,
+                    'strict_stock_check' => false,
+                ]);
+            } else {
+                StockMovement::syncProductPhysicalStock($this->db, $productId);
+            }
+
+            $updL = $this->db->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
+            if (!$updL) {
+                throw new \RuntimeException('Could not prepare local_stock update.');
+            }
+            $updL->bind_param('ii', $targetQty, $productId);
+            if (!$updL->execute()) {
+                $err = $updL->error;
+                $updL->close();
+                throw new \RuntimeException('local_stock update failed: ' . $err);
+            }
+            $updL->close();
+
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            $this->db->rollback();
+            error_log('applyRefreshApiStockSync: ' . $e->getMessage());
+        }
+    }
+
+    private function maybeApplyApiRefreshPhysicalStock(
+        array $options,
+        ?array $existingBase,
+        string $sku,
+        string $itemCode,
+        string $size,
+        string $color,
+        int $localStock,
+        bool $syncStockFromApi,
+        bool $syncPhysicalStock
+    ): void {
+        if (!$syncStockFromApi || !$syncPhysicalStock) {
+            return;
+        }
+
+        $stockSyncMode = (string) ($options['stock_sync_mode'] ?? 'legacy');
+        $productId = is_array($existingBase) ? (int) ($existingBase['id'] ?? 0) : 0;
+        if ($productId <= 0) {
+            return;
+        }
+
+        if ($stockSyncMode === 'refresh_rules' || $stockSyncMode === 'user_selected') {
+            if ($stockSyncMode === 'user_selected') {
+                $productId = is_array($existingBase) ? (int) ($existingBase['id'] ?? 0) : 0;
+                if ($productId <= 0 || !$this->isPhysicalStockSyncSelected($options, $productId)) {
+                    return;
+                }
+            }
+
+            $this->applyRefreshApiStockSync(
+                $productId,
+                $sku,
+                $itemCode,
+                $size,
+                $color,
+                $localStock
+            );
+
+            return;
+        }
+
+        $this->maybeSeedPhysicalStockOnLocalStockApiUpdate(
+            $existingBase,
+            $sku,
+            $itemCode,
+            $size,
+            $color,
+            $localStock
+        );
     }
 
     /**
@@ -4340,15 +4799,21 @@ class product
     }
     public function getVariantsByItemCode($item_code)
     {
-        $sql = "SELECT id, item_code, title, sku FROM vp_products WHERE item_code = ?";
+        $sql = "SELECT id, item_code, title, sku, size, color, local_stock, physical_stock
+                FROM vp_products
+                WHERE item_code = ?
+                ORDER BY sku ASC, id ASC";
         $stmt = $this->db->prepare($sql);
-        if (!$stmt) return [];
+        if (!$stmt) {
+            return [];
+        }
         $stmt->bind_param('s', $item_code);
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result && $result->num_rows > 0) {
             return $result->fetch_all(MYSQLI_ASSOC);
         }
+
         return [];
     }
     public function getFilteredStockHistory($filters = [], $limit = 100, $offset = 0)
@@ -4503,6 +4968,89 @@ class product
             return $row['count'];
         }
         return 0;
+    }
+
+    /**
+     * Products eligible for product-detail "Refresh stock":
+     * physical_stock = 0, at most one ledger row (by product_id or SKU),
+     * and no vp_stock rows for the product SKU.
+     *
+     * Movement count uses product_id aggregate (fast); matches most ledger rows.
+     * vp_stock check uses BINARY sku match against distinct vp_stock.skus.
+     */
+    private function stockRefreshSkuCompareSql(string $leftExpr, string $rightExpr): string
+    {
+        return 'BINARY TRIM(' . $leftExpr . ') = BINARY TRIM(' . $rightExpr . ')';
+    }
+
+    private function stockRefreshCandidateJoinSql(): string
+    {
+        return 'vp_products p
+            LEFT JOIN (
+                SELECT product_id, COUNT(*) AS movement_count
+                FROM vp_stock_movements
+                WHERE product_id > 0
+                GROUP BY product_id
+            ) mov ON mov.product_id = p.id
+            LEFT JOIN (
+                SELECT DISTINCT sku
+                FROM vp_stock
+                WHERE TRIM(COALESCE(sku, \'\')) <> \'\'
+            ) vs_has ON TRIM(COALESCE(p.sku, \'\')) <> \'\'
+                AND ' . $this->stockRefreshSkuCompareSql('vs_has.sku', 'p.sku');
+    }
+
+    private function stockRefreshCandidateWhereSql(): string
+    {
+        return 'p.is_active = 1
+              AND IFNULL(p.physical_stock, 0) = 0
+              AND IFNULL(mov.movement_count, 0) <= 1
+              AND vs_has.sku IS NULL';
+    }
+
+    public function countStockRefreshCandidates(): int
+    {
+        $sql = 'SELECT COUNT(*) AS total
+            FROM ' . $this->stockRefreshCandidateJoinSql() . '
+            WHERE ' . $this->stockRefreshCandidateWhereSql();
+
+        $res = $this->db->query($sql);
+        if (!$res) {
+            return 0;
+        }
+        $row = $res->fetch_assoc();
+        $res->free();
+
+        return (int) ($row['total'] ?? 0);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function listStockRefreshCandidates(int $limit, int $offset): array
+    {
+        $limit = max(1, min(500, $limit));
+        $offset = max(0, $offset);
+
+        $sql = 'SELECT p.id, p.sku, p.item_code, p.title, IFNULL(p.local_stock, 0) AS local_stock,
+                IFNULL(mov.movement_count, 0) AS movement_count,
+                0 AS vp_stock_count
+            FROM ' . $this->stockRefreshCandidateJoinSql() . '
+            WHERE ' . $this->stockRefreshCandidateWhereSql() . '
+            ORDER BY p.id ASC
+            LIMIT ? OFFSET ?';
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('ii', $limit, $offset);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        return is_array($rows) ? $rows : [];
     }
 
     public function getAllWarehouses()

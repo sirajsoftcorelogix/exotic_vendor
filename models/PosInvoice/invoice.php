@@ -453,4 +453,394 @@ class POSInvoice
         }
         return $invoices;
     }
+
+    private function posInvoiceNotesDiscountSumSql(): string
+    {
+        return "(
+            IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.coupon_discount')) AS DECIMAL(15,2)), 0)
+            + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.cash_discount')) AS DECIMAL(15,2)), 0)
+            + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.gift_discount')) AS DECIMAL(15,2)), 0)
+            + IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.line_discount')) AS DECIMAL(15,2)), 0)
+        )";
+    }
+
+    /**
+     * Net payable total for a POS invoice row.
+     * Invoice notes grand_total is authoritative for discounted POS checkout orders.
+     */
+    private function posInvoicePayableAmountSql(): string
+    {
+        $discountSum = $this->posInvoiceNotesDiscountSumSql();
+        $grandTotal = "NULLIF(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.grand_total')) AS DECIMAL(15,2)), 0)";
+        $subtotalGoods = "NULLIF(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.subtotal_goods')) AS DECIMAL(15,2)), 0)";
+
+        return "COALESCE(
+            {$grandTotal},
+            NULLIF(GREATEST(0, ROUND({$subtotalGoods} - {$discountSum}, 2)), 0),
+            NULLIF(GREATEST(0, ROUND(i.total_amount - {$discountSum}, 2)), 0),
+            NULLIF(GREATEST(0, ROUND(i.total_amount - IFNULL(i.discount_amount, 0), 2)), 0),
+            (
+                SELECT MAX(pp2.order_amount)
+                FROM pos_payments pp2
+                WHERE CONVERT(pp2.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+                      CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                  AND pp2.order_amount > 0
+            ),
+            NULLIF(GREATEST(0, ROUND(NULLIF(o.total, 0) - {$discountSum}, 2)), 0),
+            NULLIF(o.total, 0),
+            i.total_amount
+        )";
+    }
+
+    /**
+     * POS checkout discount total from notes, legacy column, or gross-minus-payable fallback.
+     */
+    private function posInvoiceDiscountAmountSql(string $payableSql): string
+    {
+        $discountSum = $this->posInvoiceNotesDiscountSumSql();
+        $subtotalGoods = "NULLIF(CAST(JSON_UNQUOTE(JSON_EXTRACT(i.notes, '$.pos_discounts.subtotal_goods')) AS DECIMAL(15,2)), 0)";
+
+        return "GREATEST(0, ROUND(
+            CASE
+                WHEN {$discountSum} > 0.001 THEN {$discountSum}
+                WHEN IFNULL(i.discount_amount, 0) > 0 THEN i.discount_amount
+                WHEN {$subtotalGoods} > ({$payableSql}) + 0.001 THEN GREATEST(0, ROUND({$subtotalGoods} - ({$payableSql}), 2))
+                ELSE GREATEST(0, i.total_amount - ({$payableSql}))
+            END,
+        2))";
+    }
+
+    private function posInvoicePaidAmountSql(): string
+    {
+        return "IFNULL((
+            SELECT SUM(pp.payment_amount)
+            FROM pos_payments pp
+            WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+                  CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
+        ), 0)";
+    }
+
+    /**
+     * POS invoice AJAX list with payment pending amounts.
+     *
+     * @param array<string, mixed> $filters
+     * @return array<int, array<string, mixed>>
+     */
+    public function searchPosListAjax(array $filters): array
+    {
+        $payableSql = $this->posInvoicePayableAmountSql();
+        $paidSql = $this->posInvoicePaidAmountSql();
+        $discountSql = $this->posInvoiceDiscountAmountSql($payableSql);
+
+        $sql = "
+            SELECT
+                i.id,
+                i.invoice_number,
+                i.invoice_date,
+                i.status,
+                i.total_amount,
+                i.warehouse_id,
+                o.order_number,
+                o.payment_type,
+                c.name AS customer_name,
+                COALESCE(ea.address_title, CONCAT('Warehouse #', i.warehouse_id)) AS warehouse_name,
+                ROUND({$payableSql}, 2) AS payable_amount,
+                {$discountSql} AS discount_amount,
+                {$paidSql} AS paid_amount,
+                GREATEST(0, ROUND({$payableSql} - {$paidSql}, 2)) AS pending_amount
+            FROM vp_invoices i
+            LEFT JOIN vp_order_info o ON o.id = i.vp_order_info_id
+            LEFT JOIN vp_customers c ON c.id = i.customer_id
+            LEFT JOIN exotic_address ea ON ea.id = i.warehouse_id
+            WHERE i.pos_flag = 1
+        ";
+
+        if (isset($filters['warehouse_id']) && $filters['warehouse_id'] !== null && $filters['warehouse_id'] !== '') {
+            $sql .= ' AND i.warehouse_id = ' . (int)$filters['warehouse_id'];
+        }
+
+        if (!empty($filters['order_number'])) {
+            $sql .= " AND o.order_number LIKE '%" . $this->db->real_escape_string((string)$filters['order_number']) . "%'";
+        }
+
+        if (!empty($filters['status'])) {
+            $sql .= " AND i.status = '" . $this->db->real_escape_string((string)$filters['status']) . "'";
+        }
+
+        if (!empty($filters['from_date'])) {
+            $sql .= " AND i.invoice_date >= '" . $this->db->real_escape_string((string)$filters['from_date']) . "'";
+        }
+
+        if (!empty($filters['to_date'])) {
+            $sql .= " AND i.invoice_date <= '" . $this->db->real_escape_string((string)$filters['to_date']) . "'";
+        }
+
+        if (!empty($filters['type'])) {
+            $sql .= " AND IFNULL(o.payment_type,'') = '" . $this->db->real_escape_string((string)$filters['type']) . "'";
+        }
+
+        if (!empty($filters['customer_id'])) {
+            $sql .= ' AND i.customer_id = ' . (int)$filters['customer_id'];
+        }
+
+        if (!empty($filters['amount_min'])) {
+            $sql .= ' AND ROUND(' . $payableSql . ', 2) >= ' . (float)$filters['amount_min'];
+        }
+
+        if (!empty($filters['amount_max'])) {
+            $sql .= ' AND ROUND(' . $payableSql . ', 2) <= ' . (float)$filters['amount_max'];
+        }
+
+        $sql .= ' ORDER BY i.id DESC';
+
+        $res = $this->db->query($sql);
+        if (!$res) {
+            return [];
+        }
+
+        $data = [];
+        while ($row = $res->fetch_assoc()) {
+            $data[] = $row;
+        }
+
+        return $data;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getDistinctOrderNumbersForInvoice(int $invoiceId): array
+    {
+        $stmt = $this->db->prepare(
+            "SELECT DISTINCT order_number FROM vp_invoice_items
+             WHERE invoice_id = ? AND order_number IS NOT NULL AND TRIM(order_number) != ''"
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $invoiceId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $orderNumbers = [];
+        while ($row = $res->fetch_assoc()) {
+            $on = trim((string)($row['order_number'] ?? ''));
+            if ($on !== '') {
+                $orderNumbers[] = $on;
+            }
+        }
+        $stmt->close();
+
+        return array_values(array_unique($orderNumbers));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getOrderLinesForCancelSync(string $orderNumber): array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT id, item_code, size, color FROM vp_orders WHERE order_number = ? ORDER BY id ASC'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $lines = $stmt->get_result()->fetch_all(MYSQLI_ASSOC) ?: [];
+        $stmt->close();
+
+        return $lines;
+    }
+
+    public function cancelLinkedOrderLines(string $orderNumber, int $invoiceId): int
+    {
+        $stmt = $this->db->prepare(
+            "UPDATE vp_orders SET status = 'cancelled', invoice_id = NULL WHERE order_number = ? AND invoice_id = ?"
+        );
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->bind_param('si', $orderNumber, $invoiceId);
+        $stmt->execute();
+        $affected = (int)$stmt->affected_rows;
+        $stmt->close();
+
+        return $affected;
+    }
+
+    /**
+     * Legacy preview table used by older POS invoice preview.
+     *
+     * @return mysqli_result|false
+     */
+    public function getLegacyPreviewItemsResult(int $invoiceId)
+    {
+        $invoiceId = (int)$invoiceId;
+
+        return $this->db->query(
+            'SELECT * FROM invoice_items WHERE invoice_id = ' . $invoiceId
+        );
+    }
+
+    public function findInvoiceIdByLegacyOrderNumber(string $orderNumber): int
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return 0;
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT i.id
+             FROM vp_invoices i
+             INNER JOIN vp_invoice_items ii ON ii.invoice_id = i.id
+             WHERE ii.order_number = ?
+             ORDER BY i.id DESC
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return (int)($row['id'] ?? 0);
+    }
+
+    /**
+     * @return mysqli_result|false
+     */
+    public function getLegacyInvoiceItemsResult(int $invoiceId)
+    {
+        $invoiceId = (int)$invoiceId;
+
+        return $this->db->query(
+            'SELECT * FROM invoice_items WHERE invoice_id = ' . $invoiceId
+        );
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function findInvoiceByOrderNumberColumn(string $orderNumber): ?array
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return null;
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT i.*
+             FROM vp_invoices i
+             INNER JOIN vp_invoice_items ii ON ii.invoice_id = i.id
+             WHERE ii.order_number = ?
+             ORDER BY i.id DESC
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return $row ?: null;
+    }
+
+    public function finalizeInvoiceStatus(int $invoiceId): bool
+    {
+        $stmt = $this->db->prepare(
+            "UPDATE vp_invoices SET status = 'final', invoice_date = CURDATE() WHERE id = ?"
+        );
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('i', $invoiceId);
+        $ok = $stmt->execute();
+        $stmt->close();
+
+        return (bool)$ok;
+    }
+
+    public function updateInvoiceNotes(int $invoiceId, string $notesJson): bool
+    {
+        $stmt = $this->db->prepare('UPDATE vp_invoices SET notes = ? WHERE id = ?');
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('si', $notesJson, $invoiceId);
+        $ok = $stmt->execute();
+        $stmt->close();
+
+        return (bool)$ok;
+    }
+
+    public function findInvoiceIdByOrderNumber(string $orderNumber): int
+    {
+        $existing = $this->getActiveInvoiceForOrderNumber($orderNumber);
+        if ($existing) {
+            return (int)($existing['id'] ?? 0);
+        }
+
+        return $this->findInvoiceIdByLegacyOrderNumber($orderNumber);
+    }
+
+    /**
+     * @return array{success: bool, message?: string, invoice_number?: string}
+     */
+    public function updateInvoiceNumber(int $invoiceId, string $newInvoiceNumber): array
+    {
+        $invoiceId = (int)$invoiceId;
+        $newInvoiceNumber = trim($newInvoiceNumber);
+        if ($invoiceId <= 0) {
+            return ['success' => false, 'message' => 'Invalid invoice.'];
+        }
+        if ($newInvoiceNumber === '') {
+            return ['success' => false, 'message' => 'Invoice number is required.'];
+        }
+        if (strlen($newInvoiceNumber) > 100) {
+            return ['success' => false, 'message' => 'Invoice number is too long.'];
+        }
+
+        $invoice = $this->getInvoiceById($invoiceId);
+        if (!$invoice) {
+            return ['success' => false, 'message' => 'Invoice not found.'];
+        }
+
+        $current = trim((string)($invoice['invoice_number'] ?? ''));
+        if ($current === $newInvoiceNumber) {
+            return ['success' => true, 'message' => 'No change.', 'invoice_number' => $newInvoiceNumber];
+        }
+
+        $stmt = $this->db->prepare('SELECT id FROM vp_invoices WHERE invoice_number = ? AND id <> ? LIMIT 1');
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Could not validate invoice number.'];
+        }
+        $stmt->bind_param('si', $newInvoiceNumber, $invoiceId);
+        $stmt->execute();
+        $duplicate = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if ($duplicate) {
+            return ['success' => false, 'message' => 'That invoice number is already in use.'];
+        }
+
+        $stmt = $this->db->prepare('UPDATE vp_invoices SET invoice_number = ? WHERE id = ?');
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Could not update invoice number.'];
+        }
+        $stmt->bind_param('si', $newInvoiceNumber, $invoiceId);
+        $ok = $stmt->execute();
+        $stmt->close();
+        if (!$ok) {
+            return ['success' => false, 'message' => 'Could not update invoice number.'];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Invoice number updated.',
+            'invoice_number' => $newInvoiceNumber,
+        ];
+    }
 }

@@ -909,6 +909,459 @@ class POSOrder
         }
         return null;
     }
+
+    /**
+     * Resolve vp_orders line items by order_number or numeric vp_orders.id.
+     *
+     * @return array<int, array<string, mixed>>|null
+     */
+    public function getOrderLineItemsByRef($ref): ?array
+    {
+        $ref = trim((string)$ref);
+        if ($ref === '') {
+            return null;
+        }
+
+        $rows = $this->getOrderByOrderNumber($ref);
+        if (!empty($rows)) {
+            return $rows;
+        }
+
+        if (ctype_digit($ref)) {
+            $one = $this->getOrderById((int)$ref);
+            if (!$one) {
+                return null;
+            }
+            if (!empty($one['order_number'])) {
+                $rows = $this->getOrderByOrderNumber($one['order_number']);
+                if (!empty($rows)) {
+                    return $rows;
+                }
+            }
+
+            return [$one];
+        }
+
+        return null;
+    }
+
+    /**
+     * Tables/columns that store the business order_number string (updated on rename).
+     *
+     * Not included (by design):
+     * - vp_order_status_log — uses order_id (vp_orders.id), not order_number
+     * - vp_order_journey_log — existing rows are not rewritten; append rename audit via logOrderNumberChange()
+     * - vp_invoices — header links via vp_order_info_id; optional order_number column updated when present
+     * - notifications / saved_searches — free-text or filter URLs, not transactional FKs
+     *
+     * @return array<string, string> table => column
+     */
+    private function getOrderNumberRenameTargets(): array
+    {
+        return [
+            'vp_orders' => 'order_number',
+            'vp_order_info' => 'order_number',
+            'pos_payments' => 'order_number',
+            'vp_invoice_items' => 'order_number',
+            'vp_po_items' => 'order_number',
+            'vp_dispatch_details' => 'order_number',
+            'vp_picklist_items' => 'order_number',
+            'courier_shipments' => 'order_number',
+            'vp_invoices' => 'order_number',
+        ];
+    }
+
+    /**
+     * @return string[]
+     */
+    private function getJourneyLogDetailColumns(): array
+    {
+        $columns = [];
+        foreach (['remarks', 'note', 'notes', 'description'] as $column) {
+            if ($this->tableHasColumn('vp_order_journey_log', $column)) {
+                $columns[] = $column;
+            }
+        }
+
+        return $columns;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function findPriorOrderNumbersForJourney(string $currentOrderNumber, array $seen = []): array
+    {
+        $currentOrderNumber = trim($currentOrderNumber);
+        if ($currentOrderNumber === '' || isset($seen[$currentOrderNumber])) {
+            return [];
+        }
+        $seen[$currentOrderNumber] = true;
+
+        if (!$this->tableHasColumn('vp_order_journey_log', 'order_number')
+            || !$this->tableHasColumn('vp_order_journey_log', 'status')) {
+            return [];
+        }
+
+        $selectColumns = array_merge(['status'], $this->getJourneyLogDetailColumns());
+        $sql = 'SELECT ' . implode(', ', $selectColumns) . '
+             FROM vp_order_journey_log
+             WHERE order_number = ?
+               AND (
+                    status = \'order_number_changed\'
+                    OR status LIKE \'Order number changed from % to %\'
+               )';
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('s', $currentOrderNumber);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $stmt->close();
+
+        $priors = [];
+        while ($row = $res->fetch_assoc()) {
+            $parsed = $this->parseOrderNumberChangeDetail((string)($row['status'] ?? ''), $row);
+            if (!$parsed) {
+                continue;
+            }
+            $oldOrderNumber = $parsed['old'];
+            $newOrderNumber = $parsed['new'];
+            if ($newOrderNumber !== $currentOrderNumber || $oldOrderNumber === '' || $oldOrderNumber === $currentOrderNumber) {
+                continue;
+            }
+            $priors[] = $oldOrderNumber;
+            foreach ($this->findPriorOrderNumbersForJourney($oldOrderNumber, $seen) as $prior) {
+                $priors[] = $prior;
+            }
+        }
+
+        return array_values(array_unique($priors));
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array{old:string,new:string}|null
+     */
+    private function parseOrderNumberChangeDetail(string $status, array $row): ?array
+    {
+        $text = trim($status);
+        foreach (['remarks', 'note', 'notes', 'description'] as $col) {
+            $candidate = trim((string)($row[$col] ?? ''));
+            if ($candidate !== '') {
+                $text = $candidate;
+                break;
+            }
+        }
+
+        if (!preg_match('/Order number changed from (.+) to (.+)/u', $text, $matches)) {
+            return null;
+        }
+
+        return [
+            'old' => trim($matches[1]),
+            'new' => trim($matches[2]),
+        ];
+    }
+
+    private function logOrderNumberChange(string $oldOrderNumber, string $newOrderNumber): void
+    {
+        if (!$this->tableHasColumn('vp_order_journey_log', 'order_number')) {
+            return;
+        }
+
+        $detail = 'Order number changed from ' . $oldOrderNumber . ' to ' . $newOrderNumber;
+        $row = [
+            'order_number' => $newOrderNumber,
+        ];
+
+        if ($this->tableHasColumn('vp_order_journey_log', 'status')) {
+            $statusType = strtolower((string)$this->getColumnType('vp_order_journey_log', 'status'));
+            if (strpos($statusType, 'enum(') === 0) {
+                $row['status'] = $this->pickEnumValue(
+                    $statusType,
+                    ['order_number_changed', 'updated', 'note', 'pending', 'confirmed']
+                ) ?? 'pending';
+            } else {
+                $row['status'] = $detail;
+            }
+        }
+
+        foreach (['remarks', 'note', 'notes', 'description'] as $col) {
+            if ($this->tableHasColumn('vp_order_journey_log', $col)) {
+                $row[$col] = $detail;
+                break;
+            }
+        }
+
+        if ($this->tableHasColumn('vp_order_journey_log', 'changed_by')) {
+            $row['changed_by'] = $this->resolveJourneyChangedByValue();
+        }
+
+        foreach (['created_on', 'created_at'] as $col) {
+            if ($this->tableHasColumn('vp_order_journey_log', $col)) {
+                $row[$col] = date('Y-m-d H:i:s');
+                break;
+            }
+        }
+
+        $this->insertDynamicRow('vp_order_journey_log', $row);
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function insertDynamicRow(string $table, array $row): void
+    {
+        $table = preg_replace('/[^a-z0-9_]/i', '', $table);
+        if ($table === '' || empty($row)) {
+            return;
+        }
+
+        $columns = [];
+        $placeholders = [];
+        $types = '';
+        $values = [];
+
+        foreach ($row as $column => $value) {
+            $column = preg_replace('/[^a-z0-9_]/i', '', (string)$column);
+            if ($column === '' || !$this->tableHasColumn($table, $column)) {
+                continue;
+            }
+            $columns[] = '`' . $column . '`';
+            $placeholders[] = '?';
+            if (is_int($value)) {
+                $types .= 'i';
+            } elseif (is_float($value)) {
+                $types .= 'd';
+            } else {
+                $types .= 's';
+            }
+            $values[] = $value;
+        }
+
+        if (empty($columns)) {
+            return;
+        }
+
+        $sql = 'INSERT INTO `' . $table . '` (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ')';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            throw new \RuntimeException('Could not prepare journey log insert.');
+        }
+
+        $stmt->bind_param($types, ...$values);
+        if (!$stmt->execute()) {
+            $err = $stmt->error;
+            $stmt->close();
+            throw new \RuntimeException($err ?: 'Could not insert journey log row.');
+        }
+        $stmt->close();
+    }
+
+    /** @return int|string */
+    private function resolveJourneyChangedByValue()
+    {
+        $columnType = strtolower((string)$this->getColumnType('vp_order_journey_log', 'changed_by'));
+        $userId = (int)($_SESSION['user']['id'] ?? 0);
+        if ($userId > 0 && (strpos($columnType, 'int') !== false || strpos($columnType, 'bigint') !== false)) {
+            return $userId;
+        }
+
+        $userName = trim((string)($_SESSION['user']['name'] ?? $_SESSION['user']['email'] ?? 'System'));
+
+        return $userName !== '' ? $userName : 'System';
+    }
+
+    /**
+     * @param string[] $preferred
+     */
+    private function pickEnumValue(string $enumType, array $preferred): ?string
+    {
+        if (!preg_match("/^enum\\((.*)\\)$/i", $enumType, $matches)) {
+            return null;
+        }
+        $raw = str_getcsv($matches[1], ',', "'");
+        $allowed = [];
+        foreach ($raw as $value) {
+            $value = trim((string)$value);
+            if ($value !== '') {
+                $allowed[] = $value;
+            }
+        }
+        foreach ($preferred as $candidate) {
+            if (in_array($candidate, $allowed, true)) {
+                return $candidate;
+            }
+        }
+
+        return $allowed[0] ?? null;
+    }
+
+    private function getColumnType(string $table, string $column): ?string
+    {
+        $table = preg_replace('/[^a-z0-9_]/i', '', $table);
+        $column = preg_replace('/[^a-z0-9_]/i', '', $column);
+        if ($table === '' || $column === '') {
+            return null;
+        }
+
+        static $cache = [];
+        $cacheKey = $table . '.' . $column . '.type';
+        if (array_key_exists($cacheKey, $cache)) {
+            return $cache[$cacheKey];
+        }
+
+        $sql = 'SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?
+                LIMIT 1';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('ss', $table, $column);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+        $cache[$cacheKey] = isset($row['COLUMN_TYPE']) ? (string)$row['COLUMN_TYPE'] : null;
+
+        return $cache[$cacheKey];
+    }
+
+    /** @var array<string, bool> */
+    private static $columnExistsCache = [];
+
+    private function tableHasColumn(string $table, string $column): bool
+    {
+        $table = preg_replace('/[^a-z0-9_]/i', '', $table);
+        $column = preg_replace('/[^a-z0-9_]/i', '', $column);
+        if ($table === '' || $column === '') {
+            return false;
+        }
+
+        $cacheKey = $table . '.' . $column;
+        if (array_key_exists($cacheKey, self::$columnExistsCache)) {
+            return self::$columnExistsCache[$cacheKey];
+        }
+
+        $sql = 'SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?
+                LIMIT 1';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            self::$columnExistsCache[$cacheKey] = false;
+            return false;
+        }
+        $stmt->bind_param('ss', $table, $column);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $exists = $res && $res->num_rows > 0;
+        $stmt->close();
+
+        self::$columnExistsCache[$cacheKey] = $exists;
+
+        return $exists;
+    }
+
+    /**
+     * Rename order_number across related POS order tables.
+     *
+     * @return array{success:bool,message:string,order_number?:string,updated?:array<int,array{table:string,column:string,rows:int}>}
+     */
+    public function renameOrderNumber(string $oldOrderNumber, string $newOrderNumber): array
+    {
+        $oldOrderNumber = trim($oldOrderNumber);
+        $newOrderNumber = trim($newOrderNumber);
+
+        if ($oldOrderNumber === '' || $newOrderNumber === '') {
+            return ['success' => false, 'message' => 'Order numbers are required.'];
+        }
+        if ($oldOrderNumber === $newOrderNumber) {
+            return ['success' => true, 'message' => 'No change.', 'order_number' => $newOrderNumber, 'updated' => []];
+        }
+
+        $existing = $this->getOrderByOrderNumber($oldOrderNumber);
+        if (empty($existing)) {
+            return ['success' => false, 'message' => 'Order not found.'];
+        }
+
+        $conflict = $this->getOrderByOrderNumber($newOrderNumber);
+        if (!empty($conflict)) {
+            return ['success' => false, 'message' => 'Order number already in use.'];
+        }
+
+        $updated = [];
+        $ordersUpdated = false;
+        $this->db->begin_transaction();
+        try {
+            foreach ($this->getOrderNumberRenameTargets() as $table => $column) {
+                if (!$this->tableHasColumn($table, $column)) {
+                    continue;
+                }
+
+                $sql = "UPDATE `{$table}` SET `{$column}` = ? WHERE `{$column}` = ?";
+                $stmt = $this->db->prepare($sql);
+                if (!$stmt) {
+                    throw new \RuntimeException('Database prepare failed for ' . $table . '.');
+                }
+                $stmt->bind_param('ss', $newOrderNumber, $oldOrderNumber);
+                if (!$stmt->execute()) {
+                    $err = $stmt->error;
+                    $stmt->close();
+                    throw new \RuntimeException($err ?: 'Database update failed for ' . $table . '.');
+                }
+                $rows = $stmt->affected_rows;
+                $stmt->close();
+
+                if ($table === 'vp_orders' && $rows > 0) {
+                    $ordersUpdated = true;
+                }
+
+                if ($rows > 0) {
+                    $updated[] = [
+                        'table' => $table,
+                        'column' => $column,
+                        'rows' => $rows,
+                    ];
+                }
+            }
+
+            if (!$ordersUpdated) {
+                throw new \RuntimeException('No order rows were updated.');
+            }
+
+            try {
+                $this->logOrderNumberChange($oldOrderNumber, $newOrderNumber);
+                $updated[] = [
+                    'table' => 'vp_order_journey_log',
+                    'column' => 'audit',
+                    'rows' => 1,
+                ];
+            } catch (\Throwable $logError) {
+                // Do not fail the rename if only the journey audit insert fails.
+                error_log('Order number rename journey log failed: ' . $logError->getMessage());
+            }
+
+            $this->db->commit();
+
+            return [
+                'success' => true,
+                'message' => 'Order number updated.',
+                'order_number' => $newOrderNumber,
+                'updated' => $updated,
+            ];
+        } catch (\Throwable $e) {
+            $this->db->rollback();
+
+            return [
+                'success' => false,
+                'message' => 'Could not update order number: ' . $e->getMessage(),
+            ];
+        }
+    }
+
     function getRemarksByOrderNumber($order_number)
     {
         $sql = "SELECT * FROM vp_order_info WHERE order_number = ?";
@@ -924,15 +1377,36 @@ class POSOrder
     }
     function getfullOrderJournyByNumber($order_number)
     {
-        $sql = "SELECT * FROM vp_order_journey_log WHERE order_number = ? ORDER BY created_on ASC";
-        $stmt = $this->db->prepare($sql);
-        $stmt->bind_param('s', $order_number);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $journey = [];
-        while ($row = $result->fetch_assoc()) {
-            $journey[] = $row;
+        $order_number = trim((string)$order_number);
+        if ($order_number === '') {
+            return [];
         }
+
+        $orderNumbers = array_values(array_unique(array_merge(
+            [$order_number],
+            $this->findPriorOrderNumbersForJourney($order_number)
+        )));
+
+        $journey = [];
+        foreach ($orderNumbers as $number) {
+            $sql = 'SELECT * FROM vp_order_journey_log WHERE order_number = ? ORDER BY created_on ASC';
+            $stmt = $this->db->prepare($sql);
+            if (!$stmt) {
+                continue;
+            }
+            $stmt->bind_param('s', $number);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            while ($row = $result->fetch_assoc()) {
+                $journey[] = $row;
+            }
+            $stmt->close();
+        }
+
+        usort($journey, static function (array $a, array $b): int {
+            return strtotime((string)($a['created_on'] ?? '')) <=> strtotime((string)($b['created_on'] ?? ''));
+        });
+
         return $journey;
     }
     function getCustomerNameAndEmailByOrderNumber($order_number)
