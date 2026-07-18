@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../invoice_number_resolver.php';
 require_once __DIR__ . '/pos_order_pricing.php';
+require_once __DIR__ . '/invoice_gst.php';
 
 class InvoiceRequestBuilder
 {
@@ -64,6 +65,9 @@ class InvoiceRequestBuilder
         array $options = []
     ): array {
         $lines = [];
+        $useIgst = array_key_exists('use_igst', $options)
+            ? !empty($options['use_igst'])
+            : false;
         foreach ($orderItems as $order) {
             $qty = max(1, (int)($order['quantity'] ?? 1));
             $gst = (float)($order['gst'] ?? 0);
@@ -71,8 +75,7 @@ class InvoiceRequestBuilder
 
             $amount = $unitPretax * $qty;
             $taxAmount = ($amount * $gst) / 100;
-            $cgstRate = $gst / 2;
-            $sgstRate = $gst / 2;
+            $gstRates = invoice_gst_component_rates($gst, $useIgst);
 
             $lines[] = [
                 'order_number' => (string)($order['order_number'] ?? ''),
@@ -82,9 +85,9 @@ class InvoiceRequestBuilder
                 'quantity' => $qty,
                 'unit_price' => round($unitPretax, 4),
                 'tax_rate' => $gst,
-                'cgst_rate' => $cgstRate,
-                'sgst_rate' => $sgstRate,
-                'igst_rate' => 0.0,
+                'cgst_rate' => $gstRates['cgst_rate'],
+                'sgst_rate' => $gstRates['sgst_rate'],
+                'igst_rate' => $gstRates['igst_rate'],
                 'box_no' => (string)($order['box_no'] ?? ''),
                 'currency' => (string)($order['currency'] ?? 'INR'),
                 'image_url' => (string)($order['image'] ?? ''),

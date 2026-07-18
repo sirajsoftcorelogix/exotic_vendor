@@ -1877,6 +1877,13 @@ class DispatchController {
 
                 require_once __DIR__ . '/../helpers/invoice/InvoiceRequestBuilder.php';
                 require_once __DIR__ . '/../helpers/invoice/InvoiceCreationService.php';
+                require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
+                require_once __DIR__ . '/../helpers/app_settings.php';
+
+                $orderInfo = $vp_order_info_id > 0
+                    ? ($commanModel->getRecordById('vp_order_info', $vp_order_info_id) ?? null)
+                    : null;
+                $useIgst = invoice_order_info_uses_igst(is_array($orderInfo) ? $orderInfo : null, app_setting_firm_details());
 
                 $customInvoiceNumber = trim((string) ($orderData['custom_invoice_number'] ?? ''));
                 $invoiceRequest = InvoiceRequestBuilder::fromOrderLines(
@@ -1897,6 +1904,7 @@ class DispatchController {
                         'update_order_invoice_id' => true,
                         'update_order_by' => 'vp_order_id',
                         'pos_flag' => 0,
+                        'use_igst' => $useIgst,
                     ]
                 );
 

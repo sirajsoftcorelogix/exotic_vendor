@@ -274,6 +274,9 @@ class InvoiceCreationService
                 'coupon_display_name' => trim((string)($discountMeta['coupon_display_name'] ?? '')),
             ],
         ];
+        if (array_key_exists('apply_export_gst', $discountMeta)) {
+            $payload['pos_discounts']['apply_export_gst'] = !empty($discountMeta['apply_export_gst']) ? 1 : 0;
+        }
         if ($lineItemsMeta !== []) {
             $payload['line_items'] = $lineItemsMeta;
         }

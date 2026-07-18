@@ -4664,6 +4664,7 @@ class POSRegisterController
             'custom_discount_mode' => trim((string)($payload['custom_discount_mode'] ?? '')),
             'custom_discount_value' => round((float)($payload['custom_discount_value'] ?? 0), 2),
             'coupon_display_name' => trim((string)($payload['coupon_display_name'] ?? '')),
+            'apply_export_gst' => !empty($payload['apply_export_gst']) ? 1 : 0,
         ];
         $invoiceMeta = $this->finalizePosReceiptInvoice($conn, $orderNumber, $paymentStage, $compliance, $customInvoiceNumber);
         $fulfillmentStatusMeta = $this->syncPosCheckoutOrderFulfillmentStatus(

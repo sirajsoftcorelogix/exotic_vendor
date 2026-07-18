@@ -932,6 +932,9 @@ class InvoicesController
         $totalCgstAmt = 0;
         $totalIgstAmt = 0;
 
+        require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
+        $resolvedUseIgst = invoice_resolve_uses_igst_for_invoice($invoice, $commanModel);
+
         // Build item rows
         foreach ($items as $idx => $item) {
             // $amount = $item['quantity'] * $item['unit_price'];
@@ -944,29 +947,42 @@ class InvoicesController
             $totalQuantity += $item['quantity'];
             $totalGstAmount += $item['tax_amount'];
 
-            // // Determine tax type (simplified - assuming SGST/CGST for domestic, IGST for other)
-            // $sgstRate = $item['tax_rate'] / 2;
-            // $cgstRate = $item['tax_rate'] / 2;
-            // $igstRate = 0;
-            // $sgstAmt = ($amount * $sgstRate) / 100;
-            // $cgstAmt = ($amount * $cgstRate) / 100;
-            // $igstAmt = 0;
+            $qtyInt = max(1, (int)($item['quantity'] ?? 1));
+            $taxRate = (float)($item['tax_rate'] ?? 0);
+            $unitPrice = (float)($item['unit_price'] ?? 0);
 
-            // $totalSgstAmt += $sgstAmt;
-            // $totalCgstAmt += $cgstAmt;
-            // $totalIgstAmt += $igstAmt;
-            $totalSgstAmt += $item['sgst'];
-            $totalCgstAmt += $item['cgst'];
-            $totalIgstAmt += $item['igst'];
-            if ($item['igst'] > 0) {
-                $igstRate = ($item['igst'] / $item['quantity']) / ($item['unit_price'] / 100);
+            if ($resolvedUseIgst !== null) {
+                $taxBreakdown = invoice_compute_tax_breakdown_from_pretax(
+                    $unitPrice,
+                    $qtyInt,
+                    $taxRate,
+                    $resolvedUseIgst
+                );
+                $sgstAmt = $taxBreakdown['sgst'];
+                $cgstAmt = $taxBreakdown['cgst'];
+                $igstAmt = $taxBreakdown['igst'];
+                $sgstRate = $taxBreakdown['sgst_rate'];
+                $cgstRate = $taxBreakdown['cgst_rate'];
+                $igstRate = $taxBreakdown['igst_rate'];
+            } elseif ((float)($item['igst'] ?? 0) > 0) {
+                $sgstAmt = 0.0;
+                $cgstAmt = 0.0;
+                $igstAmt = (float)$item['igst'];
+                $igstRate = $unitPrice > 0 ? ($igstAmt / $qtyInt) / ($unitPrice / 100) : 0;
                 $sgstRate = 0;
                 $cgstRate = 0;
             } else {
-                $sgstRate = ($item['sgst'] / $item['quantity']) / ($item['unit_price'] / 100);
-                $cgstRate = ($item['cgst'] / $item['quantity']) / ($item['unit_price'] / 100);
+                $sgstAmt = (float)$item['sgst'];
+                $cgstAmt = (float)$item['cgst'];
+                $igstAmt = 0.0;
+                $sgstRate = $unitPrice > 0 ? ($sgstAmt / $qtyInt) / ($unitPrice / 100) : 0;
+                $cgstRate = $unitPrice > 0 ? ($cgstAmt / $qtyInt) / ($unitPrice / 100) : 0;
                 $igstRate = 0;
             }
+
+            $totalSgstAmt += $sgstAmt;
+            $totalCgstAmt += $cgstAmt;
+            $totalIgstAmt += $igstAmt;
             $itemsrows .= '
                     <tr>
                         <td>' . ($idx + 1) . '</td>
@@ -976,11 +992,11 @@ class InvoicesController
                         <td>' . $item['quantity'] . '</td>
                         <td class="right">' . number_format($item['unit_price'], 2) . '</td>
                         <td class="right">' . number_format($sgstRate, 2) . '</td>
-                        <td class="right">' . number_format($item['sgst'], 2) . '</td>
+                        <td class="right">' . number_format($sgstAmt, 2) . '</td>
                         <td class="right">' . number_format($cgstRate, 2) . '</td>
-                        <td class="right">' . number_format($item['cgst'], 2) . '</td>
+                        <td class="right">' . number_format($cgstAmt, 2) . '</td>
                         <td class="right">' . number_format($igstRate, 2) . '</td>
-                        <td class="right">' . number_format($item['igst'], 2) . '</td>
+                        <td class="right">' . number_format($igstAmt, 2) . '</td>
                         <td class="right bold">' . number_format($item['line_total'], 2) . '</td>
                     </tr>
             ';
@@ -1391,7 +1407,7 @@ class InvoicesController
             }
 
             // ===== GET ADDRESS INFO =====
-            $sql2 = "SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1";
+            $sql2 = "SELECT * FROM vp_order_info WHERE order_number = ? LIMIT 1";
             $stmt2 = $conn->prepare($sql2);
             $stmt2->bind_param("s", $orderNumber);
             $stmt2->execute();
@@ -1401,6 +1417,10 @@ class InvoicesController
                 echo json_encode(['success' => false, 'message' => 'Order address not found']);
                 exit;
             }
+
+            require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
+            require_once __DIR__ . '/../helpers/app_settings.php';
+            $useIgst = invoice_order_info_uses_igst($info, app_setting_firm_details());
 
             // ===== BUILD POST LIKE MANUAL CREATE =====
             $_POST = [
@@ -1427,9 +1447,10 @@ class InvoicesController
                 $_POST['unit_price'][] = $unit;
                 $_POST['tax_rate'][] = $it['gst'];
 
-                $_POST['cgst'][] = $it['gst'] / 2;
-                $_POST['sgst'][] = $it['gst'] / 2;
-                $_POST['igst'][] = 0;
+                $gstRates = invoice_gst_component_rates((float)$it['gst'], $useIgst);
+                $_POST['cgst'][] = $gstRates['cgst_rate'];
+                $_POST['sgst'][] = $gstRates['sgst_rate'];
+                $_POST['igst'][] = $gstRates['igst_rate'];
 
                 $_POST['box_no'][] = '';
 
