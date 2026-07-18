@@ -178,10 +178,55 @@
             </table>
         </div>
 
+        <div id="posSalesStoreDetail" class="mt-6 hidden">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <div>
+                    <h2 id="posSalesStoreDetailTitle" class="text-base font-semibold text-gray-900">Store detail</h2>
+                    <p class="text-xs text-gray-500 mt-0.5">Daily breakdown by invoice date for the selected store.</p>
+                </div>
+                <button type="button" id="posSalesStoreDetailCloseBtn" onclick="closeStoreDetail()"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                    <i class="fas fa-times text-[10px]" aria-hidden="true"></i>
+                    Close detail
+                </button>
+            </div>
+
+            <div class="bg-white rounded-xl border overflow-hidden">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-100 text-xs">
+                        <tr>
+                            <th class="p-3 text-left">Invoice date</th>
+                            <th class="p-3 text-right">Invoices</th>
+                            <th class="p-3 text-right">Net sales</th>
+                            <th class="p-3 text-right">Discounts</th>
+                            <th class="p-3 text-right">Collected</th>
+                            <th class="p-3 text-right">Pending</th>
+                            <th class="p-3 text-right">Gross</th>
+                            <th class="p-3 text-right">Avg ticket</th>
+                            <th class="p-3 text-left">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="posSalesStoreDetailTable">
+                        <tr>
+                            <td colspan="9" class="p-6 text-center text-gray-400">Select a store to view daily breakdown.</td>
+                        </tr>
+                    </tbody>
+                    <tfoot id="posSalesStoreDetailTotals" class="bg-orange-50/70 border-t-2 border-orange-200 text-sm font-semibold hidden">
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
     </main>
 </div>
 
 <script>
+    const POS_SALES_SESSION_WAREHOUSE_ID = <?= (int) ($session_warehouse_id ?? 0) ?>;
+    const POS_SALES_SESSION_WAREHOUSE_NAME = <?= json_encode((string) ($session_warehouse_name ?? ''), JSON_UNESCAPED_UNICODE) ?>;
+    const POS_SALES_CAN_CHANGE_WAREHOUSE = <?= !empty($can_change_warehouse) ? 'true' : 'false' ?>;
+
+    let activeStoreDetailId = null;
+    let activeStoreDetailName = '';
     document.addEventListener('DOMContentLoaded', function () {
         const form = document.getElementById('posSalesFiltersForm');
         if (form) {
@@ -246,10 +291,11 @@
         if (warehouseEl) {
             warehouseEl.value = '';
         }
+        closeStoreDetail();
         loadSalesSummary();
     }
 
-    function buildPosSalesFilterQuery(action) {
+    function buildPosSalesFilterQuery(action, extraParams) {
         const params = new URLSearchParams({
             page: 'posinvoice',
             action: action,
@@ -265,15 +311,23 @@
             params.set('warehouse_id', warehouseEl.value);
         }
 
+        if (extraParams && typeof extraParams === 'object') {
+            Object.keys(extraParams).forEach(function (key) {
+                if (extraParams[key] !== undefined && extraParams[key] !== null && String(extraParams[key]) !== '') {
+                    params.set(key, String(extraParams[key]));
+                }
+            });
+        }
+
         return '?' + params.toString();
     }
 
-    function buildInvoiceListingUrl(warehouseId) {
+    function buildInvoiceListingUrl(warehouseId, summaryDate) {
         const params = new URLSearchParams({
             page: 'posinvoice',
             action: 'list',
-            from_date: document.getElementById('from_date').value,
-            to_date: document.getElementById('to_date').value,
+            from_date: summaryDate || document.getElementById('from_date').value,
+            to_date: summaryDate || document.getElementById('to_date').value,
             type: document.getElementById('type').value,
             discount_applied: document.getElementById('discount_applied').value,
             status: document.getElementById('status').value,
@@ -284,6 +338,167 @@
         }
 
         return '?' + params.toString();
+    }
+
+    function closeStoreDetail() {
+        activeStoreDetailId = null;
+        activeStoreDetailName = '';
+        const panel = document.getElementById('posSalesStoreDetail');
+        if (panel) {
+            panel.classList.add('hidden');
+        }
+    }
+
+    function openStoreDetail(warehouseId, warehouseName) {
+        const wid = Number(warehouseId) || 0;
+        if (wid <= 0) {
+            return;
+        }
+
+        activeStoreDetailId = wid;
+        activeStoreDetailName = warehouseName || ('Warehouse #' + wid);
+
+        const panel = document.getElementById('posSalesStoreDetail');
+        const title = document.getElementById('posSalesStoreDetailTitle');
+        if (title) {
+            title.textContent = activeStoreDetailName;
+        }
+        if (panel) {
+            panel.classList.remove('hidden');
+        }
+
+        loadStoreDetail();
+    }
+
+    function renderSalesMetricRow(cells, isTotal) {
+        const rowClass = isTotal ? 'bg-orange-50/70 font-semibold' : 'border-t hover:bg-gray-50';
+        return `
+            <tr class="${rowClass}">
+                ${cells}
+            </tr>`;
+    }
+
+    function renderSalesSummaryRow(row, isTotal) {
+        const storeName = row.warehouse_name || (isTotal ? 'TOTAL' : '—');
+        const warehouseId = row.warehouse_id || '';
+        const storeCell = isTotal
+            ? `<td class="p-3">${storeName}</td>`
+            : `<td class="p-3">
+                <button type="button" onclick="openStoreDetail(${warehouseId}, ${JSON.stringify(String(storeName))})"
+                    class="text-left font-medium text-orange-700 hover:text-orange-900 hover:underline">
+                    ${storeName}
+                </button>
+            </td>`;
+        const actionCell = isTotal ? '' : `
+            <div class="flex flex-wrap items-center gap-3">
+                <button type="button" onclick="openStoreDetail(${warehouseId}, ${JSON.stringify(String(storeName))})"
+                    class="inline-flex items-center gap-1 text-orange-700 hover:text-orange-900 text-xs font-semibold"
+                    title="View daily breakdown for this store">
+                    <i class="fas fa-chart-line text-[10px]" aria-hidden="true"></i>
+                    Detail
+                </button>
+                <a href="${buildInvoiceListingUrl(warehouseId)}"
+                   class="inline-flex items-center gap-1 text-gray-600 hover:text-gray-900 text-xs font-semibold"
+                   title="View invoices for this store">
+                    <i class="fas fa-list-ul text-[10px]" aria-hidden="true"></i>
+                    Invoices
+                </a>
+            </div>`;
+
+        return renderSalesMetricRow(`
+                ${storeCell}
+                <td class="p-3 text-right tabular-nums">${formatCount(row.invoice_count)}</td>
+                <td class="p-3 text-right tabular-nums">₹ ${formatMoney(row.net_sales)}</td>
+                <td class="p-3 text-right tabular-nums text-amber-700">₹ ${formatMoney(row.discount_total)}</td>
+                <td class="p-3 text-right tabular-nums text-green-700">₹ ${formatMoney(row.collected_total)}</td>
+                <td class="p-3 text-right tabular-nums text-red-600">₹ ${formatMoney(row.pending_total)}</td>
+                <td class="p-3 text-right tabular-nums text-gray-700">₹ ${formatMoney(row.gross_total)}</td>
+                <td class="p-3 text-right tabular-nums">₹ ${formatMoney(row.avg_ticket)}</td>
+                <td class="p-3">${actionCell}</td>`, isTotal);
+    }
+
+    function renderStoreDetailRow(row, warehouseId, isTotal) {
+        const label = isTotal ? 'TOTAL' : (row.summary_date || '—');
+        const actionCell = isTotal ? '' : `
+            <a href="${buildInvoiceListingUrl(warehouseId, row.summary_date)}"
+               class="inline-flex items-center gap-1 text-orange-700 hover:text-orange-900 text-xs font-semibold"
+               title="View invoices for this date">
+                <i class="fas fa-list-ul text-[10px]" aria-hidden="true"></i>
+                Invoices
+            </a>`;
+
+        return renderSalesMetricRow(`
+                <td class="p-3">${label}</td>
+                <td class="p-3 text-right tabular-nums">${formatCount(row.invoice_count)}</td>
+                <td class="p-3 text-right tabular-nums">₹ ${formatMoney(row.net_sales)}</td>
+                <td class="p-3 text-right tabular-nums text-amber-700">₹ ${formatMoney(row.discount_total)}</td>
+                <td class="p-3 text-right tabular-nums text-green-700">₹ ${formatMoney(row.collected_total)}</td>
+                <td class="p-3 text-right tabular-nums text-red-600">₹ ${formatMoney(row.pending_total)}</td>
+                <td class="p-3 text-right tabular-nums text-gray-700">₹ ${formatMoney(row.gross_total)}</td>
+                <td class="p-3 text-right tabular-nums">₹ ${formatMoney(row.avg_ticket)}</td>
+                <td class="p-3">${actionCell}</td>`, isTotal);
+    }
+
+    function loadStoreDetail() {
+        const tbody = document.getElementById('posSalesStoreDetailTable');
+        const tfoot = document.getElementById('posSalesStoreDetailTotals');
+        const warehouseId = activeStoreDetailId || (POS_SALES_CAN_CHANGE_WAREHOUSE ? 0 : POS_SALES_SESSION_WAREHOUSE_ID);
+
+        if (!warehouseId) {
+            return;
+        }
+
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Loading store detail…</td></tr>';
+        }
+        if (tfoot) {
+            tfoot.innerHTML = '';
+            tfoot.classList.add('hidden');
+        }
+
+        fetch(buildPosSalesFilterQuery('sales_store_detail_ajax', { detail_warehouse_id: warehouseId }), { credentials: 'same-origin' })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (data.success === false && data.message) {
+                    if (tbody) {
+                        tbody.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-red-500">' + data.message + '</td></tr>';
+                    }
+                    return;
+                }
+
+                const rows = Array.isArray(data.rows) ? data.rows : [];
+                const totals = data.totals || {};
+                const wid = Number(data.warehouse_id || warehouseId) || warehouseId;
+                const title = document.getElementById('posSalesStoreDetailTitle');
+                if (title) {
+                    title.textContent = data.warehouse_name || activeStoreDetailName || ('Warehouse #' + wid);
+                }
+
+                if (!tbody) {
+                    return;
+                }
+
+                if (rows.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-gray-400">No daily sales match the current filters.</td></tr>';
+                    return;
+                }
+
+                let html = '';
+                rows.forEach(function (row) {
+                    html += renderStoreDetailRow(row, wid, false);
+                });
+                tbody.innerHTML = html;
+
+                if (tfoot) {
+                    tfoot.innerHTML = renderStoreDetailRow(Object.assign({}, totals, { summary_date: 'TOTAL' }), wid, true);
+                    tfoot.classList.remove('hidden');
+                }
+            })
+            .catch(function () {
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-red-500">Could not load store detail. Please try again.</td></tr>';
+                }
+            });
     }
 
     function updatePosSalesResultSummary(storeCount, loading) {
@@ -298,32 +513,6 @@
         const n = Number(storeCount) || 0;
         const label = n === 1 ? 'store' : 'stores';
         el.innerHTML = '<span class="font-medium text-gray-900">' + n.toLocaleString() + '</span> ' + label;
-    }
-
-    function renderSalesSummaryRow(row, isTotal) {
-        const storeName = row.warehouse_name || (isTotal ? 'TOTAL' : '—');
-        const warehouseId = row.warehouse_id || '';
-        const rowClass = isTotal ? 'bg-orange-50/70 font-semibold' : 'border-t hover:bg-gray-50';
-        const actionCell = isTotal ? '' : `
-            <a href="${buildInvoiceListingUrl(warehouseId)}"
-               class="inline-flex items-center gap-1 text-orange-700 hover:text-orange-900 text-xs font-semibold"
-               title="View invoices for this store">
-                <i class="fas fa-list-ul text-[10px]" aria-hidden="true"></i>
-                Invoices
-            </a>`;
-
-        return `
-            <tr class="${rowClass}">
-                <td class="p-3">${storeName}</td>
-                <td class="p-3 text-right tabular-nums">${formatCount(row.invoice_count)}</td>
-                <td class="p-3 text-right tabular-nums">₹ ${formatMoney(row.net_sales)}</td>
-                <td class="p-3 text-right tabular-nums text-amber-700">₹ ${formatMoney(row.discount_total)}</td>
-                <td class="p-3 text-right tabular-nums text-green-700">₹ ${formatMoney(row.collected_total)}</td>
-                <td class="p-3 text-right tabular-nums text-red-600">₹ ${formatMoney(row.pending_total)}</td>
-                <td class="p-3 text-right tabular-nums text-gray-700">₹ ${formatMoney(row.gross_total)}</td>
-                <td class="p-3 text-right tabular-nums">₹ ${formatMoney(row.avg_ticket)}</td>
-                <td class="p-3">${actionCell}</td>
-            </tr>`;
     }
 
     function loadSalesSummary() {
@@ -341,6 +530,8 @@
             tfoot.classList.add('hidden');
         }
 
+        const previousDetailId = activeStoreDetailId;
+
         fetch(buildPosSalesFilterQuery('sales_summary_ajax'), { credentials: 'same-origin' })
             .then(function (res) { return res.json(); })
             .then(function (data) {
@@ -355,6 +546,7 @@
 
                 if (rows.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="9" class="p-6 text-center text-gray-400">No sales match the current filters.</td></tr>';
+                    closeStoreDetail();
                     return;
                 }
 
@@ -367,6 +559,21 @@
                 if (tfoot) {
                     tfoot.innerHTML = renderSalesSummaryRow(Object.assign({}, totals, { warehouse_name: 'TOTAL' }), true);
                     tfoot.classList.remove('hidden');
+                }
+
+                if (rows.length === 1) {
+                    openStoreDetail(rows[0].warehouse_id, rows[0].warehouse_name);
+                } else if (previousDetailId) {
+                    const stillVisible = rows.some(function (row) {
+                        return Number(row.warehouse_id) === Number(previousDetailId);
+                    });
+                    if (stillVisible) {
+                        openStoreDetail(previousDetailId, activeStoreDetailName);
+                    } else {
+                        closeStoreDetail();
+                    }
+                } else {
+                    closeStoreDetail();
                 }
             })
             .catch(function () {

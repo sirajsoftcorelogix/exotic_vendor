@@ -276,6 +276,66 @@ class PosInvoiceController
         exit;
     }
 
+    /** @return array<string, mixed>|null */
+    private function resolvePosSalesStoreDetailFiltersFromRequest(): ?array
+    {
+        $filters = $this->resolvePosInvoiceListFiltersFromRequest();
+        $detailWarehouseId = (int) ($_GET['detail_warehouse_id'] ?? 0);
+
+        if ($this->isPosInvoiceAdminUser()) {
+            if ($detailWarehouseId <= 0) {
+                $detailWarehouseId = (int) ($filters['warehouse_id'] ?? 0);
+            }
+        } else {
+            $detailWarehouseId = $this->getSessionWarehouseId();
+        }
+
+        if ($detailWarehouseId <= 0) {
+            return null;
+        }
+
+        if (!$this->isPosInvoiceAdminUser() && $detailWarehouseId !== $this->getSessionWarehouseId()) {
+            return null;
+        }
+
+        $filters['warehouse_id'] = $detailWarehouseId;
+
+        return $filters;
+    }
+
+    public function sales_store_detail_ajax(): void
+    {
+        global $invoiceModel;
+
+        is_login();
+
+        $filters = $this->resolvePosSalesStoreDetailFiltersFromRequest();
+        if ($filters === null) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(403);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Store not accessible.',
+                'rows' => [],
+                'totals' => [
+                    'invoice_count' => 0,
+                    'net_sales' => 0.0,
+                    'discount_total' => 0.0,
+                    'collected_total' => 0.0,
+                    'pending_total' => 0.0,
+                    'gross_total' => 0.0,
+                    'avg_ticket' => 0.0,
+                ],
+                'warehouse_id' => 0,
+                'warehouse_name' => '',
+            ]);
+            exit;
+        }
+
+        echo json_encode($invoiceModel->searchPosSalesSummaryByDate($filters));
+        exit;
+    }
+
     public function export_sales_summary(): void
     {
         global $invoiceModel;
