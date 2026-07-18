@@ -194,3 +194,31 @@ function resolveOrderListPublisherFilter(array $get): string
 {
     return !empty($get['publisher']) ? normalizeOrderFilterSearchText($get['publisher']) : '';
 }
+
+/** vp_orders.store_name holds exotic_address.id for POS / store-origin orders. */
+function orderListHasStoreNameSql(string $ordersAlias = 'vp_orders'): string
+{
+    return "{$ordersAlias}.store_name IS NOT NULL"
+        . " AND TRIM(CAST({$ordersAlias}.store_name AS CHAR)) <> ''"
+        . " AND LOWER(TRIM(CAST({$ordersAlias}.store_name AS CHAR))) <> 'null'"
+        . " AND CAST({$ordersAlias}.store_name AS UNSIGNED) > 0";
+}
+
+function orderListExoticAddressJoinSql(string $ordersAlias = 'vp_orders'): string
+{
+    $hasStore = orderListHasStoreNameSql($ordersAlias);
+
+    return " LEFT JOIN exotic_address ea_store ON ea_store.id = CAST({$ordersAlias}.store_name AS UNSIGNED)"
+        . " AND {$hasStore}";
+}
+
+/** Order list Staff Name: store address when store_name is set, else PO staff user name. */
+function orderListStaffNameSelectSql(string $usersAlias = 'vp_users', string $ordersAlias = 'vp_orders'): string
+{
+    $hasStore = orderListHasStoreNameSql($ordersAlias);
+
+    return 'CASE'
+        . " WHEN {$hasStore} THEN COALESCE(NULLIF(TRIM(ea_store.display_name), ''), NULLIF(TRIM(ea_store.address_title), ''), CAST({$ordersAlias}.store_name AS CHAR))"
+        . " ELSE {$usersAlias}.name"
+        . ' END AS staff_name';
+}
