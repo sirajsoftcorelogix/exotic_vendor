@@ -16,57 +16,143 @@
 
     <main class="mx-auto max-w-[1500px] px-4 py-5">
 
-        <div class="bg-white rounded-xl border p-4 mb-4">
+        <style>
+            #pos-invoice-filters > summary { list-style: none; }
+            #pos-invoice-filters > summary::-webkit-details-marker { display: none; }
+            #pos-invoice-filters[open] > summary { border-bottom: 1px solid rgba(254, 215, 170, 0.85); }
+            #pos-invoice-filters:not([open]) .pif-label-open { display: none; }
+            #pos-invoice-filters[open] .pif-label-closed { display: none; }
+            #pos-invoice-filters[open] .pif-chevron { transform: rotate(180deg); }
+            .pi-filter-input {
+                width: 100%;
+                padding: 0.625rem 0.75rem;
+                border: 1px solid #d1d5db;
+                border-radius: 0.5rem;
+                font-size: 0.875rem;
+                color: #111827;
+                background: #fff;
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+                transition: border-color 0.15s ease, box-shadow 0.15s ease;
+            }
+            .pi-filter-input:focus {
+                outline: none;
+                border-color: #ea580c;
+                box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.18);
+            }
+            .pi-filter-input::placeholder { color: #9ca3af; }
+            #pos-invoice-filters .select2-container--default .select2-selection--single {
+                min-height: 42px;
+                border-color: #d1d5db;
+                border-radius: 0.5rem;
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            }
+            #pos-invoice-filters .select2-container--default .select2-selection--single .select2-selection__rendered {
+                line-height: 40px;
+                padding-left: 0.75rem;
+                font-size: 0.875rem;
+                color: #111827;
+            }
+            #pos-invoice-filters .select2-container--default .select2-selection--single .select2-selection__arrow {
+                height: 40px;
+            }
+        </style>
 
-            <div class="grid grid-cols-6 gap-3 text-xs">
+        <details id="pos-invoice-filters" class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden mb-4 ring-1 ring-gray-900/[0.03]" open>
+            <summary class="px-5 py-4 bg-gradient-to-r from-orange-50/60 via-gray-50/90 to-gray-50/90 flex items-center justify-between gap-4 cursor-pointer">
+                <div class="flex items-center gap-3 min-w-0">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-orange-700 shadow-sm border border-orange-100">
+                        <i class="fas fa-filter text-sm" aria-hidden="true"></i>
+                    </span>
+                    <div class="min-w-0">
+                        <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
+                        <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Invoice date, order, customer, payment type, amount range, and status.</p>
+                    </div>
+                </div>
+                <span class="shrink-0 inline-flex items-center gap-2 text-xs font-semibold text-orange-800">
+                    <span id="posInvoiceActiveFilterCount" class="hidden rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-900"></span>
+                    <span class="pif-label-closed">Show</span>
+                    <span class="pif-label-open">Hide</span>
+                    <i class="pif-chevron fas fa-chevron-down text-[10px] transition-transform duration-200" aria-hidden="true"></i>
+                </span>
+            </summary>
 
-                <input type="date" id="from_date" class="border rounded px-2 py-2">
-                <input type="date" id="to_date" class="border rounded px-2 py-2">
-                <input type="text" id="order_number" placeholder="Order Number" class="border rounded px-2 py-2">
-                <select id="type" class="border rounded px-2 py-2">
-                    <option value="">Type</option>
-                    <option value="offline">Offline</option>
-                    <option value="cod">Cash</option>
-                    <option value="razorpay">Razorpay</option>
-                    <option value="bank_transfer">Bank</option>
-                </select>
-                <select id="customer_id"
-                    name="customer_id"
-                    class="w-full border rounded-lg px-3 py-2 text-sm">
+            <form id="posInvoiceFiltersForm" class="p-5" autocomplete="off">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-4">
+                    <div>
+                        <label for="from_date" class="block text-xs font-semibold text-gray-600 mb-1">Invoice from</label>
+                        <input type="date" id="from_date" class="pi-filter-input">
+                    </div>
+                    <div>
+                        <label for="to_date" class="block text-xs font-semibold text-gray-600 mb-1">Invoice to</label>
+                        <input type="date" id="to_date" class="pi-filter-input">
+                    </div>
+                    <div>
+                        <label for="order_number" class="block text-xs font-semibold text-gray-600 mb-1">Order number</label>
+                        <input type="text" id="order_number" class="pi-filter-input" placeholder="Search order number">
+                    </div>
+                    <div>
+                        <label for="type" class="block text-xs font-semibold text-gray-600 mb-1">Payment type</label>
+                        <select id="type" class="pi-filter-input">
+                            <option value="">All payment types</option>
+                            <option value="offline">Offline</option>
+                            <option value="cod">Cash</option>
+                            <option value="razorpay">Razorpay</option>
+                            <option value="bank_transfer">Bank transfer</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label for="customer_id" class="block text-xs font-semibold text-gray-600 mb-1">Customer</label>
+                        <select id="customer_id" name="customer_id" class="w-full">
+                            <option value="">All customers</option>
+                            <?php foreach ($customers as $c): ?>
+                                <option value="<?= $c['id'] ?>"
+                                    data-name="<?= htmlspecialchars($c['name']) ?>"
+                                    data-phone="<?= htmlspecialchars($c['phone']) ?>"
+                                    data-email="<?= htmlspecialchars($c['email']) ?>">
+                                    <?= htmlspecialchars($c['name']) ?> | <?= $c['phone'] ?> | <?= $c['email'] ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="amount_min" class="block text-xs font-semibold text-gray-600 mb-1">Amount min (net payable)</label>
+                        <input type="number" id="amount_min" class="pi-filter-input" placeholder="0.00" min="0" step="0.01">
+                    </div>
+                    <div>
+                        <label for="amount_max" class="block text-xs font-semibold text-gray-600 mb-1">Amount max (net payable)</label>
+                        <input type="number" id="amount_max" class="pi-filter-input" placeholder="0.00" min="0" step="0.01">
+                    </div>
+                    <div>
+                        <label for="status" class="block text-xs font-semibold text-gray-600 mb-1">Invoice status</label>
+                        <select id="status" class="pi-filter-input">
+                            <option value="">All statuses</option>
+                            <option value="draft">Draft</option>
+                            <option value="proforma">Proforma</option>
+                            <option value="final">Final</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                </div>
 
-                    <option value="">Walk-in Customer</option>
+                <div class="mt-5 flex flex-wrap items-center gap-3">
+                    <button type="submit" id="posInvoiceSearchBtn"
+                        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 transition shadow-sm">
+                        <i class="fas fa-search text-xs opacity-90" aria-hidden="true"></i>
+                        Apply filters
+                    </button>
+                    <button type="button" onclick="resetPosInvoiceFilters()"
+                        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition">
+                        <i class="fas fa-rotate-left text-xs opacity-80" aria-hidden="true"></i>
+                        Reset
+                    </button>
+                </div>
+            </form>
+        </details>
 
-                    <?php foreach ($customers as $c): ?>
-                        <option value="<?= $c['id'] ?>"
-                            data-name="<?= htmlspecialchars($c['name']) ?>"
-                            data-phone="<?= htmlspecialchars($c['phone']) ?>"
-                            data-email="<?= htmlspecialchars($c['email']) ?>">
-                            <?= htmlspecialchars($c['name']) ?> | <?= $c['phone'] ?> | <?= $c['email'] ?>
-                        </option>
-                    <?php endforeach; ?>
-
-                </select>
-                <!-- <input type="text" id="customer" placeholder="Customer" class="border rounded px-2 py-2"> -->
-
-                <input type="number" id="amount_min" placeholder="Min Amount" class="border rounded px-2 py-2">
-                <input type="number" id="amount_max" placeholder="Max Amount" class="border rounded px-2 py-2">
-                <select id="status" class="border rounded px-2 py-2">
-                    <option value="">All</option>
-                    <option value="draft">Draft</option>
-                    <option value="proforma">Proforma</option>
-                    <option value="final">Final</option>
-                    <option value="cancelled">Cancelled</option>
-                </select>
-
-                <button onclick="loadInvoices()" class="bg-orange-600 text-white rounded px-3">
-                    Search
-                </button>
-
-            </div>
-
-        </div>
-
-        <div class="flex justify-end mb-3">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <p id="posInvoiceResultSummary" class="text-sm text-gray-600">
+                <span class="font-medium text-gray-900">—</span> invoices
+            </p>
             <button type="button" id="exportInvoicesBtn" onclick="exportInvoicesToExcel()"
                 class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100">
                 <i class="fas fa-file-excel text-xs" aria-hidden="true"></i>
@@ -135,12 +221,18 @@
     $(document).ready(function() {
 
         $('#customer_id').select2({
-            placeholder: "Search Customer",
+            placeholder: "Search customer",
             allowClear: true,
             width: '100%',
+            dropdownParent: $('#pos-invoice-filters'),
 
             templateResult: formatCustomer,
             templateSelection: formatCustomerSelection
+        });
+
+        $('#posInvoiceFiltersForm').on('submit', function (e) {
+            e.preventDefault();
+            loadInvoices();
         });
 
     });
@@ -215,6 +307,66 @@
                 <div style="font-size:11px;color:#6b7280">${escapeHtml(location)}</div>
             </div>
         `;
+    }
+
+    function updatePosInvoiceFilterSummary() {
+        const fields = [
+            { id: 'from_date', type: 'value' },
+            { id: 'to_date', type: 'value' },
+            { id: 'order_number', type: 'value' },
+            { id: 'type', type: 'value' },
+            { id: 'customer_id', type: 'value' },
+            { id: 'amount_min', type: 'value' },
+            { id: 'amount_max', type: 'value' },
+            { id: 'status', type: 'value' },
+        ];
+
+        let activeCount = 0;
+        fields.forEach(function (field) {
+            const el = document.getElementById(field.id);
+            if (!el) return;
+            const val = String(el.value || '').trim();
+            if (val !== '') {
+                activeCount++;
+            }
+        });
+
+        const badge = document.getElementById('posInvoiceActiveFilterCount');
+        if (badge) {
+            if (activeCount > 0) {
+                badge.textContent = activeCount + ' active';
+                badge.classList.remove('hidden');
+            } else {
+                badge.textContent = '';
+                badge.classList.add('hidden');
+            }
+        }
+    }
+
+    function updatePosInvoiceResultSummary(count, loading) {
+        const el = document.getElementById('posInvoiceResultSummary');
+        if (!el) return;
+
+        if (loading) {
+            el.innerHTML = '<span class="text-gray-500">Loading invoices…</span>';
+            return;
+        }
+
+        const n = Number(count) || 0;
+        const label = n === 1 ? 'invoice' : 'invoices';
+        el.innerHTML = '<span class="font-medium text-gray-900">' + n.toLocaleString() + '</span> ' + label;
+    }
+
+    function resetPosInvoiceFilters() {
+        document.getElementById('from_date').value = '';
+        document.getElementById('to_date').value = '';
+        document.getElementById('order_number').value = '';
+        document.getElementById('type').value = '';
+        document.getElementById('amount_min').value = '';
+        document.getElementById('amount_max').value = '';
+        document.getElementById('status').value = '';
+        $('#customer_id').val(null).trigger('change');
+        loadInvoices();
     }
 
     function buildPosInvoiceFilterQuery(action) {
@@ -295,12 +447,24 @@
     }
 
     function loadInvoices() {
+        updatePosInvoiceFilterSummary();
+        updatePosInvoiceResultSummary(0, true);
+
+        const tbody = document.getElementById('invoiceTable');
+        if (tbody) {
+            tbody.innerHTML = `<tr>
+<td colspan="12" class="p-6 text-center text-gray-400">
+<i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>Loading…
+</td>
+</tr>`;
+        }
 
         let url = buildPosInvoiceFilterQuery('list_ajax');
 
         fetch(url)
             .then(res => res.json())
             .then(data => {
+                updatePosInvoiceResultSummary(Array.isArray(data) ? data.length : 0, false);
 
                 let html = '';
 
@@ -387,8 +551,20 @@ ${deleteBtn}
 </tr>`;
                 });
 
-                invoiceTable.innerHTML = html;
+                if (tbody) {
+                    tbody.innerHTML = html;
+                }
 
+            })
+            .catch(function () {
+                updatePosInvoiceResultSummary(0, false);
+                if (tbody) {
+                    tbody.innerHTML = `<tr>
+<td colspan="12" class="p-6 text-center text-red-500">
+Could not load invoices. Please try again.
+</td>
+</tr>`;
+                }
             });
     }
 
