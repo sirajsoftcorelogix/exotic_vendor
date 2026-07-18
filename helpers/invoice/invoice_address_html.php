@@ -32,13 +32,20 @@ function invoice_resolve_bill_ship_html(?array $orderInfo, $conn = null): array
     return ['bill' => $bill, 'ship' => $ship];
 }
 
+function invoice_pdf_body_text_inline_style(): string
+{
+    return 'font-family: DejaVu Sans, Arial, sans-serif; font-size: 16px; line-height: 1.4; color: #000;';
+}
+
 function invoice_wrap_invoice_address_html(string $html): string
 {
     if ($html === '') {
         return '';
     }
 
-    return '<div class="invoice-text">' . $html . '</div>';
+    return '<div class="invoice-text" style="' . invoice_pdf_body_text_inline_style() . ' text-align:left;">'
+        . $html
+        . '</div>';
 }
 
 function invoice_append_invoice_address_line(string $addressHtml, string $lineHtml): string

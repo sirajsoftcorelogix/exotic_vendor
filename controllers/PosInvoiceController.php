@@ -1368,15 +1368,17 @@ class PosInvoiceController
         bool $isGrand = false,
         int $colCount = 13
     ): string {
+        require_once __DIR__ . '/../helpers/invoice/invoice_address_html.php';
+
         $colCount = max(3, $colCount);
         $labelSpan = $colCount - 2;
         $noteHtml = $note !== ''
-            ? '<br><span class="invoice-summary-note">' . htmlspecialchars($note) . '</span>'
+            ? '<br><span class="invoice-summary-note" style="' . invoice_pdf_body_text_inline_style() . ' font-weight:normal;color:#555;">' . htmlspecialchars($note) . '</span>'
             : '';
         $bg = $isGrand ? '#f0f0f0' : '#f9f9f9';
         $rowClass = $isGrand ? 'invoice-summary-grand' : '';
         $borderTop = $isGrand ? 'border-top:2px solid #000;' : '';
-        $cellStyle = 'text-align:right;padding:8px 10px;border:1px solid #ddd;';
+        $cellStyle = 'text-align:right;padding:8px 10px;border:1px solid #ddd;' . invoice_pdf_body_text_inline_style();
 
         return '
                     <tr class="' . $rowClass . '" style="background:' . $bg . ';' . $borderTop . '">
