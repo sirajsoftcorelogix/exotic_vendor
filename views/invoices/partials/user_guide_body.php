@@ -36,7 +36,6 @@
             <li><a href="#pos-listing" class="text-orange-700 hover:text-orange-900 font-medium">POS invoice listing</a></li>
             <li><a href="#overseas" class="text-orange-700 hover:text-orange-900 font-medium">Overseas customers</a></li>
             <li><a href="#high-value-compliance" class="text-orange-700 hover:text-orange-900 font-medium">PAN &amp; passport (high value)</a></li>
-            <li><a href="#fix-old" class="text-orange-700 hover:text-orange-900 font-medium">Fixing old invoices</a></li>
             <li><a href="#settings" class="text-orange-700 hover:text-orange-900 font-medium">App settings</a></li>
             <li><a href="#faq" class="text-orange-700 hover:text-orange-900 font-medium">FAQ</a></li>
         </ul>
@@ -54,7 +53,6 @@
             <p class="font-semibold m-0 mb-1"><i class="fas fa-info-circle text-sky-600 mr-1" aria-hidden="true"></i> Good to know</p>
             <ul class="m-0 pl-5 space-y-1">
                 <li>PDF files are <strong>not stored</strong> on the server — each download builds a fresh PDF from current data.</li>
-                <li>Re-downloading a PDF after a system update often fixes display issues <strong>without recreating</strong> the invoice.</li>
                 <li>Only <strong>one active invoice</strong> per order (cancelled invoices don’t count).</li>
             </ul>
         </div>
@@ -287,22 +285,6 @@
         <p class="text-sm text-gray-600">Details are saved on the customer record and noted on the invoice for compliance. Manual invoice create from the order list does not run this same POS checkout panel.</p>
     </section>
 
-    <section id="fix-old" class="mb-10">
-        <h2 class="text-xl font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4">Fixing old invoices</h2>
-        <div class="not-prose rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-sm text-emerald-950 mb-4">
-            <p class="font-semibold m-0 mb-1"><i class="fas fa-check-circle text-emerald-600 mr-1" aria-hidden="true"></i> PDF display fixes (IGST, layout, labels)</p>
-            <p class="m-0">Usually <strong>re-download the PDF</strong> — no need to recreate the invoice. The system recalculates tax from the customer address when generating the PDF.</p>
-        </div>
-        <div class="not-prose rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-950">
-            <p class="font-semibold m-0 mb-1"><i class="fas fa-exclamation-triangle text-amber-600 mr-1" aria-hidden="true"></i> When you must recreate or fix database</p>
-            <ul class="m-0 pl-5 space-y-1">
-                <li>An <strong>e-invoice / IRN</strong> was already filed with wrong tax split</li>
-                <li><strong>GSTR export</strong> needs corrected stored line items (not just PDF)</li>
-            </ul>
-            <p class="mt-2 mb-0">Contact your administrator or development team for database corrections.</p>
-        </div>
-    </section>
-
     <section id="settings" class="mb-10">
         <h2 class="text-xl font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4">App settings</h2>
         <p>For reliable GST and invoice headers, configure in <strong>App Settings → Firm Details</strong>:</p>
@@ -317,14 +299,6 @@
 
     <section id="faq" class="mb-10">
         <h2 class="text-xl font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4">FAQ</h2>
-        <details class="not-prose mb-3 rounded-lg border border-gray-200 bg-white p-4">
-            <summary class="font-semibold cursor-pointer text-gray-900">Why does inter-state invoice show IGST on re-download but showed CGST+SGST before?</summary>
-            <p class="mt-3 text-sm text-gray-600 mb-0">Older invoices stored a same-state tax split. PDF generation now recalculates from billing/shipping state. Re-download to get the correct IGST display.</p>
-        </details>
-        <details class="not-prose mb-3 rounded-lg border border-gray-200 bg-white p-4">
-            <summary class="font-semibold cursor-pointer text-gray-900">Grand total is correct but tax columns look wrong on an old PDF file I saved.</summary>
-            <p class="mt-3 text-sm text-gray-600 mb-0">Saved PDFs are snapshots. Download again from the portal for the latest layout and tax split.</p>
-        </details>
         <details class="not-prose mb-3 rounded-lg border border-gray-200 bg-white p-4">
             <summary class="font-semibold cursor-pointer text-gray-900">Invoice not created after partial payment.</summary>
             <p class="mt-3 text-sm text-gray-600 mb-0">Partial payment creates a <strong>proforma</strong> invoice. A final tax invoice is issued when payment is complete (or via Payments → create from payment).</p>
