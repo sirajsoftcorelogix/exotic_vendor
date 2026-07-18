@@ -803,33 +803,9 @@ class PosInvoiceController
         float $taxRate,
         bool $useIgst
     ): array {
-        $lineIncl = round($discUnitIncl * $qty, 2);
-        $pretaxExtended = round($this->posInvoiceInclToPretax($discUnitIncl, $taxRate) * $qty, 2);
-        $taxTotal = round($lineIncl - $pretaxExtended, 2);
+        require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
 
-        if ($useIgst) {
-            return [
-                'sgst' => 0.0,
-                'cgst' => 0.0,
-                'igst' => $taxTotal,
-                'sgst_rate' => 0.0,
-                'cgst_rate' => 0.0,
-                'igst_rate' => round($taxRate, 2),
-            ];
-        }
-
-        $sgst = round($taxTotal / 2, 2);
-        $cgst = round($taxTotal - $sgst, 2);
-        $halfRate = round($taxRate / 2, 2);
-
-        return [
-            'sgst' => $sgst,
-            'cgst' => $cgst,
-            'igst' => 0.0,
-            'sgst_rate' => $halfRate,
-            'cgst_rate' => $halfRate,
-            'igst_rate' => 0.0,
-        ];
+        return invoice_compute_tax_breakdown_from_incl_unit($discUnitIncl, $qty, $taxRate, $useIgst);
     }
 
     private function posInvoiceOrderLevelDiscountTotal(array $posDiscountMeta): float
@@ -1194,8 +1170,10 @@ class PosInvoiceController
      * @param list<array<string, mixed>> $orderItems
      * @param array<string, mixed> $snapshot
      */
-    private function buildInvoicePostFromCheckoutSnapshot(array $orderItems, array $snapshot): void
+    private function buildInvoicePostFromCheckoutSnapshot(array $orderItems, array $snapshot, ?array $orderInfo = null): void
     {
+        require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
+        $applyExportGst = $snapshot['apply_export_gst'] ?? null;
         $linePrices = is_array($snapshot['line_prices'] ?? null) ? $snapshot['line_prices'] : [];
         $priceMap = [];
         foreach ($linePrices as $lp) {
@@ -1291,9 +1269,16 @@ class PosInvoiceController
             $gstRate = $line['gstRate'];
             $inclLine = round((float)$line['inclLine'], 2);
             $inclUnit = $qty >= 1 ? $inclLine / $qty : $inclLine;
-            $pretaxUnit = $gstRate > 0 ? $inclUnit / (1 + ($gstRate / 100)) : $inclUnit;
+            $gstPlan = invoice_resolve_gst_component_plan($orderInfo, $gstRate, $applyExportGst);
+            $applyGst = invoice_should_apply_gst($orderInfo, $applyExportGst);
+            if ($applyGst && $gstRate > 0) {
+                $pretaxUnit = $inclUnit / (1 + ($gstRate / 100));
+            } else {
+                $pretaxUnit = $inclUnit;
+            }
             $pretaxLine = round($pretaxUnit * $qty, 2);
-            $taxLine = round($inclLine - $pretaxLine, 2);
+            $taxLine = $applyGst ? round($inclLine - $pretaxLine, 2) : 0.0;
+            $lineTaxRate = $applyGst ? $gstRate : 0.0;
 
             $_POST['order_number'][] = $it['order_number'];
             $_POST['item_code'][] = $it['item_code'];
@@ -1301,10 +1286,10 @@ class PosInvoiceController
             $_POST['hsn'][] = $it['hsn'];
             $_POST['quantity'][] = $qty;
             $_POST['unit_price'][] = round($pretaxUnit, 4);
-            $_POST['tax_rate'][] = $gstRate;
-            $_POST['cgst'][] = $gstRate / 2;
-            $_POST['sgst'][] = $gstRate / 2;
-            $_POST['igst'][] = 0;
+            $_POST['tax_rate'][] = $lineTaxRate;
+            $_POST['cgst'][] = $gstPlan['cgst_rate'];
+            $_POST['sgst'][] = $gstPlan['sgst_rate'];
+            $_POST['igst'][] = $gstPlan['igst_rate'];
             $_POST['box_no'][] = '';
             $_POST['currency'][] = $it['currency'];
 
@@ -1349,6 +1334,9 @@ class PosInvoiceController
                 'coupon_display_name' => trim((string)($discountMeta['coupon_display_name'] ?? '')),
             ],
         ];
+        if (array_key_exists('apply_export_gst', $discountMeta)) {
+            $payload['pos_discounts']['apply_export_gst'] = !empty($discountMeta['apply_export_gst']) ? 1 : 0;
+        }
         if (count($lineItemsMeta) > 0) {
             $payload['line_items'] = $lineItemsMeta;
         }
@@ -1647,6 +1635,10 @@ class PosInvoiceController
             ? $posTableColCount
             : 13;
 
+        require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
+        $resolvedUseIgst = invoice_resolve_uses_igst_for_invoice($invoice, $commanModel);
+        $applyGstForInvoice = invoice_should_apply_gst_for_invoice($invoice, $commanModel, $posDiscountMeta);
+
         // Build item rows
         foreach ($items as $idx => $item) {
             $qtyInt = $this->posInvoiceFormatQty($item['quantity'] ?? 1);
@@ -1668,10 +1660,35 @@ class PosInvoiceController
                 $sumListLineTotals += round($listUnitDisplay * $qtyInt, 2);
             }
 
-            $useIgst = (float)($item['igst'] ?? 0) > 0;
-            if ($showDiscPriceColumn) {
+            $useIgst = !$applyGstForInvoice
+                ? false
+                : ($resolvedUseIgst !== null
+                    ? $resolvedUseIgst
+                    : ((float)($item['igst'] ?? 0) > 0));
+            if (!$applyGstForInvoice) {
+                $sgstAmt = 0.0;
+                $cgstAmt = 0.0;
+                $igstAmt = 0.0;
+                $sgstRate = 0.0;
+                $cgstRate = 0.0;
+                $igstRate = 0.0;
+            } elseif ($showDiscPriceColumn) {
                 $taxBreakdown = $this->posInvoiceComputeLineTaxBreakdown(
                     $discUnitDisplay,
+                    $qtyInt,
+                    $taxRate,
+                    $useIgst
+                );
+                $sgstAmt = $taxBreakdown['sgst'];
+                $cgstAmt = $taxBreakdown['cgst'];
+                $igstAmt = $taxBreakdown['igst'];
+                $sgstRate = $taxBreakdown['sgst_rate'];
+                $cgstRate = $taxBreakdown['cgst_rate'];
+                $igstRate = $taxBreakdown['igst_rate'];
+            } elseif ($resolvedUseIgst !== null) {
+                $unitPretax = (float)($item['unit_price'] ?? 0);
+                $taxBreakdown = invoice_compute_tax_breakdown_from_pretax(
+                    $unitPretax,
                     $qtyInt,
                     $taxRate,
                     $useIgst
@@ -2152,8 +2169,10 @@ class PosInvoiceController
         }
 
         if ($useSnapshot) {
-            $this->buildInvoicePostFromCheckoutSnapshot($items, $checkoutSnapshot);
+            $this->buildInvoicePostFromCheckoutSnapshot($items, $checkoutSnapshot, $info);
         } else {
+            require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
+            $applyExportGst = null;
             foreach ($items as $it) {
                 $_POST['order_number'][] = $it['order_number'];
                 $_POST['item_code'][] = $it['item_code'];
@@ -2166,9 +2185,10 @@ class PosInvoiceController
 
                 $_POST['unit_price'][] = $unit;
                 $_POST['tax_rate'][] = $it['gst'];
-                $_POST['cgst'][] = $it['gst'] / 2;
-                $_POST['sgst'][] = $it['gst'] / 2;
-                $_POST['igst'][] = 0;
+                $gstPlan = invoice_resolve_gst_component_plan($info, (float)$it['gst'], $applyExportGst);
+                $_POST['cgst'][] = $gstPlan['cgst_rate'];
+                $_POST['sgst'][] = $gstPlan['sgst_rate'];
+                $_POST['igst'][] = $gstPlan['igst_rate'];
                 $_POST['box_no'][] = '';
                 $_POST['currency'][] = $it['currency'];
 
@@ -2225,6 +2245,7 @@ class PosInvoiceController
         }
 
         $info = $ordersModel->getAddressInfoByOrderNumber($orderNumber);
+        require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
         $_POST = [
             'invoice_date' => date('Y-m-d'),
             'customer_id' => $orderItems[0]['customer_id'],
@@ -2249,9 +2270,10 @@ class PosInvoiceController
             $_POST['unit_price'][] = $unit;
             $_POST['tax_rate'][] = $item['gst'];
 
-            $_POST['cgst'][] = $item['gst'] / 2;
-            $_POST['sgst'][] = $item['gst'] / 2;
-            $_POST['igst'][] = 0;
+            $gstPlan = invoice_resolve_gst_component_plan(is_array($info) ? $info : null, (float)$item['gst'], null);
+            $_POST['cgst'][] = $gstPlan['cgst_rate'];
+            $_POST['sgst'][] = $gstPlan['sgst_rate'];
+            $_POST['igst'][] = $gstPlan['igst_rate'];
 
             $_POST['box_no'][] = '';
             $_POST['currency'][] = $item['currency'];
