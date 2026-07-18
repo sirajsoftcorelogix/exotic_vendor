@@ -480,6 +480,18 @@
             }
 
             const blob = await res.blob();
+            if (!blob || blob.size < 4) {
+                alert('Export failed. The downloaded file was empty.');
+                return;
+            }
+
+            const headerBytes = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
+            const looksLikeZip = headerBytes[0] === 0x50 && headerBytes[1] === 0x4b;
+            if (!looksLikeZip) {
+                alert('Export failed. The server did not return a valid Excel file.');
+                return;
+            }
+
             let filename = 'pos_invoices.xlsx';
             const disposition = res.headers.get('content-disposition') || '';
             const match = disposition.match(/filename=\"?([^\";]+)\"?/i);
