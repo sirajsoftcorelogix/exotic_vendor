@@ -760,6 +760,147 @@ class POSInvoice
         ];
     }
 
+    /**
+     * Full store-level sales summary: overview + breakdowns (not invoice rows).
+     *
+     * @param array<string, mixed> $filters warehouse_id required
+     * @return array<string, mixed>
+     */
+    public function searchPosSalesStoreDetailSummary(array $filters): array
+    {
+        $warehouseId = (int) ($filters['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            return [
+                'warehouse_id' => 0,
+                'warehouse_name' => '',
+                'overview' => $this->emptyPosSalesSummaryTotals(),
+                'by_payment_type' => ['rows' => [], 'totals' => $this->emptyPosSalesSummaryTotals()],
+                'by_status' => ['rows' => [], 'totals' => $this->emptyPosSalesSummaryTotals()],
+                'by_discount' => ['rows' => [], 'totals' => $this->emptyPosSalesSummaryTotals()],
+                'by_date' => ['rows' => [], 'totals' => $this->emptyPosSalesSummaryTotals()],
+            ];
+        }
+
+        $filters['warehouse_id'] = $warehouseId;
+        $byDate = $this->searchPosSalesSummaryByDate($filters);
+
+        return [
+            'warehouse_id' => $warehouseId,
+            'warehouse_name' => (string) ($byDate['warehouse_name'] ?? ('Warehouse #' . $warehouseId)),
+            'overview' => $byDate['totals'] ?? $this->emptyPosSalesSummaryTotals(),
+            'by_payment_type' => $this->searchPosSalesSummaryGrouped($filters, 'payment_type'),
+            'by_status' => $this->searchPosSalesSummaryGrouped($filters, 'status'),
+            'by_discount' => $this->searchPosSalesSummaryGrouped($filters, 'discount'),
+            'by_date' => [
+                'rows' => $byDate['rows'] ?? [],
+                'totals' => $byDate['totals'] ?? $this->emptyPosSalesSummaryTotals(),
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array{rows: array<int, array<string, mixed>>, totals: array<string, float|int>}
+     */
+    private function searchPosSalesSummaryGrouped(array $filters, string $dimension): array
+    {
+        $warehouseId = (int) ($filters['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            return ['rows' => [], 'totals' => $this->emptyPosSalesSummaryTotals()];
+        }
+
+        $payableSql = $this->posInvoicePayableAmountSql();
+        $paidSql = $this->posInvoicePaidAmountSql();
+        $discountSql = $this->posInvoiceDiscountAmountSql($payableSql);
+        $pendingExpr = "GREATEST(0, ROUND({$payableSql} - {$paidSql}, 2))";
+
+        $groupExpr = match ($dimension) {
+            'payment_type' => "IFNULL(o.payment_type, '')",
+            'status' => "IFNULL(i.status, '')",
+            'discount' => "CASE WHEN ({$discountSql}) > 0.001 THEN '1' ELSE '0' END",
+            default => "''",
+        };
+
+        $orderBy = match ($dimension) {
+            'payment_type' => 'group_key ASC',
+            'status' => 'group_key ASC',
+            'discount' => "group_key DESC",
+            default => 'group_key ASC',
+        };
+
+        $sql = "
+            SELECT
+                {$groupExpr} AS group_key,
+                COUNT(*) AS invoice_count,
+                ROUND(SUM({$payableSql}), 2) AS net_sales,
+                ROUND(SUM({$discountSql}), 2) AS discount_total,
+                ROUND(SUM({$paidSql}), 2) AS collected_total,
+                ROUND(SUM({$pendingExpr}), 2) AS pending_total,
+                ROUND(SUM(i.total_amount), 2) AS gross_total
+            FROM vp_invoices i
+            LEFT JOIN vp_order_info o ON o.id = i.vp_order_info_id
+            WHERE i.pos_flag = 1
+        ";
+
+        $this->appendPosInvoiceListFiltersSql($sql, $filters, $payableSql, $discountSql);
+
+        $sql .= "
+            GROUP BY group_key
+            ORDER BY {$orderBy}
+        ";
+
+        $res = $this->db->query($sql);
+        if (!$res) {
+            return ['rows' => [], 'totals' => $this->emptyPosSalesSummaryTotals()];
+        }
+
+        return $this->mapPosSalesAggregateRows($res);
+    }
+
+    /**
+     * @return array{rows: array<int, array<string, mixed>>, totals: array<string, float|int>}
+     */
+    private function mapPosSalesAggregateRows(\mysqli_result $res): array
+    {
+        $rows = [];
+        $totals = $this->emptyPosSalesSummaryTotals();
+
+        while ($row = $res->fetch_assoc()) {
+            $invoiceCount = (int) ($row['invoice_count'] ?? 0);
+            $netSales = round((float) ($row['net_sales'] ?? 0), 2);
+            $mapped = [
+                'group_key' => (string) ($row['group_key'] ?? ''),
+                'invoice_count' => $invoiceCount,
+                'net_sales' => $netSales,
+                'discount_total' => round((float) ($row['discount_total'] ?? 0), 2),
+                'collected_total' => round((float) ($row['collected_total'] ?? 0), 2),
+                'pending_total' => round((float) ($row['pending_total'] ?? 0), 2),
+                'gross_total' => round((float) ($row['gross_total'] ?? 0), 2),
+                'avg_ticket' => $invoiceCount > 0 ? round($netSales / $invoiceCount, 2) : 0.0,
+            ];
+            $rows[] = $mapped;
+
+            $totals['invoice_count'] += $invoiceCount;
+            $totals['net_sales'] += $mapped['net_sales'];
+            $totals['discount_total'] += $mapped['discount_total'];
+            $totals['collected_total'] += $mapped['collected_total'];
+            $totals['pending_total'] += $mapped['pending_total'];
+            $totals['gross_total'] += $mapped['gross_total'];
+        }
+
+        foreach (['net_sales', 'discount_total', 'collected_total', 'pending_total', 'gross_total'] as $key) {
+            $totals[$key] = round((float) $totals[$key], 2);
+        }
+        $totals['avg_ticket'] = $totals['invoice_count'] > 0
+            ? round($totals['net_sales'] / $totals['invoice_count'], 2)
+            : 0.0;
+
+        return [
+            'rows' => $rows,
+            'totals' => $totals,
+        ];
+    }
+
     /** @return array<string, float|int> */
     private function emptyPosSalesSummaryTotals(): array
     {

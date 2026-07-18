@@ -332,8 +332,46 @@ class PosInvoiceController
             exit;
         }
 
-        echo json_encode($invoiceModel->searchPosSalesSummaryByDate($filters));
+        echo json_encode($this->formatPosSalesStoreDetailSummaryForJson(
+            $invoiceModel->searchPosSalesStoreDetailSummary($filters)
+        ));
         exit;
+    }
+
+    /** @param array<string, mixed> $summary @return array<string, mixed> */
+    private function formatPosSalesStoreDetailSummaryForJson(array $summary): array
+    {
+        if (!empty($summary['by_payment_type']['rows']) && is_array($summary['by_payment_type']['rows'])) {
+            foreach ($summary['by_payment_type']['rows'] as &$row) {
+                $label = $this->formatPosInvoicePaymentTypeLabel($row['group_key'] ?? '');
+                $row['group_label'] = $label !== '' ? $label : 'Unknown';
+            }
+            unset($row);
+        }
+
+        if (!empty($summary['by_status']['rows']) && is_array($summary['by_status']['rows'])) {
+            foreach ($summary['by_status']['rows'] as &$row) {
+                $status = ucfirst(strtolower(trim((string) ($row['group_key'] ?? ''))));
+                $row['group_label'] = $status !== '' ? $status : 'Unknown';
+            }
+            unset($row);
+        }
+
+        if (!empty($summary['by_discount']['rows']) && is_array($summary['by_discount']['rows'])) {
+            foreach ($summary['by_discount']['rows'] as &$row) {
+                $row['group_label'] = ((string) ($row['group_key'] ?? '') === '1') ? 'With discount' : 'Without discount';
+            }
+            unset($row);
+        }
+
+        if (!empty($summary['by_date']['rows']) && is_array($summary['by_date']['rows'])) {
+            foreach ($summary['by_date']['rows'] as &$row) {
+                $row['group_label'] = (string) ($row['summary_date'] ?? '');
+            }
+            unset($row);
+        }
+
+        return $summary;
     }
 
     public function sales_store_detail(): void
