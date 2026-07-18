@@ -239,6 +239,152 @@ class PosInvoiceController
         }
         exit;
     }
+
+    public function sales_summary(): void
+    {
+        global $usersModel;
+
+        is_login();
+
+        $isAdminUser = $this->isPosInvoiceAdminUser();
+        $sessionWarehouseId = $this->getSessionWarehouseId();
+        $sessionWarehouseName = '';
+
+        if (!$isAdminUser && $sessionWarehouseId > 0) {
+            $warehouse = $usersModel->getWarehouseById($sessionWarehouseId);
+            $sessionWarehouseName = trim((string) ($warehouse['address_title'] ?? ''));
+            if ($sessionWarehouseName === '') {
+                $sessionWarehouseName = 'Warehouse #' . $sessionWarehouseId;
+            }
+        }
+
+        renderTemplate('views/posinvoice/sales_summary.php', [
+            'warehouses' => $isAdminUser ? $usersModel->getAllWarehouses() : [],
+            'can_change_warehouse' => $isAdminUser,
+            'session_warehouse_id' => $sessionWarehouseId,
+            'session_warehouse_name' => $sessionWarehouseName,
+        ], 'POS Sales Summary');
+    }
+
+    public function sales_summary_ajax(): void
+    {
+        global $invoiceModel;
+
+        is_login();
+
+        echo json_encode($invoiceModel->searchPosSalesSummaryByStore($this->resolvePosInvoiceListFiltersFromRequest()));
+        exit;
+    }
+
+    public function export_sales_summary(): void
+    {
+        global $invoiceModel;
+
+        is_login();
+
+        $summary = $invoiceModel->searchPosSalesSummaryByStore($this->resolvePosInvoiceListFiltersFromRequest());
+        $rows = $summary['rows'] ?? [];
+        if ($rows === []) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(422);
+            echo json_encode(['success' => false, 'message' => 'No sales match the current filters.']);
+            exit;
+        }
+
+        require_once 'vendor/autoload.php';
+
+        try {
+            $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('POS Sales Summary');
+
+            $headers = [
+                'Store / Warehouse',
+                'Invoices',
+                'Net Sales',
+                'Discounts',
+                'Collected',
+                'Pending',
+                'Gross',
+                'Avg Ticket',
+            ];
+            $sheet->fromArray($headers, null, 'A1');
+
+            $headerRange = 'A1:H1';
+            $sheet->getStyle($headerRange)->getFont()->setBold(true);
+            $sheet->getStyle($headerRange)->getFill()
+                ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                ->getStartColor()->setARGB('FFF3F4F6');
+
+            $rowNum = 2;
+            foreach ($rows as $row) {
+                $sheet->fromArray([
+                    (string) ($row['warehouse_name'] ?? ''),
+                    (int) ($row['invoice_count'] ?? 0),
+                    round((float) ($row['net_sales'] ?? 0), 2),
+                    round((float) ($row['discount_total'] ?? 0), 2),
+                    round((float) ($row['collected_total'] ?? 0), 2),
+                    round((float) ($row['pending_total'] ?? 0), 2),
+                    round((float) ($row['gross_total'] ?? 0), 2),
+                    round((float) ($row['avg_ticket'] ?? 0), 2),
+                ], null, 'A' . $rowNum);
+                $rowNum++;
+            }
+
+            $totals = $summary['totals'] ?? [];
+            $sheet->fromArray([
+                'TOTAL',
+                (int) ($totals['invoice_count'] ?? 0),
+                round((float) ($totals['net_sales'] ?? 0), 2),
+                round((float) ($totals['discount_total'] ?? 0), 2),
+                round((float) ($totals['collected_total'] ?? 0), 2),
+                round((float) ($totals['pending_total'] ?? 0), 2),
+                round((float) ($totals['gross_total'] ?? 0), 2),
+                round((float) ($totals['avg_ticket'] ?? 0), 2),
+            ], null, 'A' . $rowNum);
+
+            $lastRow = $rowNum;
+            $moneyFormat = '#,##0.00';
+            $sheet->getStyle('C2:H' . $lastRow)->getNumberFormat()->setFormatCode($moneyFormat);
+            $sheet->getStyle('A' . $lastRow . ':H' . $lastRow)->getFont()->setBold(true);
+
+            foreach (range('A', 'H') as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
+
+            $filename = 'pos_sales_summary_' . date('Y-m-d_His') . '.xlsx';
+
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            if (headers_sent()) {
+                throw new \RuntimeException('Export response headers were already sent.');
+            }
+
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Content-Transfer-Encoding: binary');
+            header('Cache-Control: max-age=0');
+            header('Pragma: public');
+
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save('php://output');
+        } catch (\Throwable $e) {
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Could not generate Excel file. Please try again.',
+            ]);
+        }
+        exit;
+    }
+
     /* ===============================
        DELETE
     =============================== */
