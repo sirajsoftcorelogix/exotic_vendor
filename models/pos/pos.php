@@ -26,6 +26,33 @@ class pos
         return "COALESCE(NULLIF({$tableAlias}.price_india, 0), 0)";
     }
 
+    /**
+     * Book products add flat sourcing + shipping fees on top of GST-inclusive Price India (POS display).
+     */
+    private function sqlPosBookFeesExpr(string $tableAlias = 'p'): string
+    {
+        $itemtype = "LOWER(TRIM(IFNULL({$tableAlias}.itemtype, '')))";
+        $groupname = "LOWER(TRIM(IFNULL({$tableAlias}.groupname, '')))";
+        $isBook = "(
+            {$itemtype} = 'book'
+            OR {$groupname} IN ('book', '-8')
+            OR ({$groupname} <> '' AND {$groupname} <> '0' AND {$groupname} LIKE '%book%')
+        )";
+
+        return "CASE WHEN {$isBook}
+            THEN (COALESCE({$tableAlias}.sourcingfee, 0) + COALESCE({$tableAlias}.shippingfee, 0))
+            ELSE 0 END";
+    }
+
+    /** GST-inclusive POS list/preview unit price (India base + book fees when applicable). */
+    private function sqlPosDisplaySellPriceExpr(string $tableAlias = 'p'): string
+    {
+        $baseSell = $this->sqlPosIndiaSellBaseExpr($tableAlias);
+        $bookFees = $this->sqlPosBookFeesExpr($tableAlias);
+
+        return "(({$baseSell} * (1 + IFNULL({$tableAlias}.gst, 0) / 100)) + {$bookFees})";
+    }
+
     // old method (still usable if needed somewhere else)
     public function getProducts()
     {
@@ -92,9 +119,9 @@ class pos
             $types .= "sss";
         }
 
-        // List price: India base × (1 + GST%) — do not use global itemprice (USD) when India price is empty.
+        // List price: GST-inclusive Price India; books also include sourcing + shipping fees.
         $baseSell = $this->sqlPosIndiaSellBaseExpr('p');
-        $sellPriceExpr = "({$baseSell} * (1 + IFNULL(p.gst, 0) / 100))";
+        $sellPriceExpr = $this->sqlPosDisplaySellPriceExpr('p');
         if ($minPrice !== '') {
             $where .= " AND {$sellPriceExpr} >= ? ";
             $params[] = $minPrice;
@@ -193,8 +220,11 @@ class pos
         p.length_unit,
         p.cost_price,
         p.item_level,
+        p.itemtype,
         p.price_india,
         p.gst,
+        p.sourcingfee,
+        p.shippingfee,
         sm.running_stock AS stock_qty,
         sm.location AS warehouse_location,
         {$sellPriceExpr} AS price
