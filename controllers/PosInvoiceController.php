@@ -1572,7 +1572,7 @@ class PosInvoiceController
 
     private function generateInvoiceHtml($invoice, $items, $type = '')
     {
-        global $commanModel, $invoiceModel;
+        global $commanModel, $invoiceModel, $conn;
 
         $orderNumberForRepair = '';
         if (!empty($items[0]['order_number'])) {
@@ -1934,7 +1934,7 @@ class PosInvoiceController
             !empty($invoice['pos_flag']) ? $paymentModel : null
         );
         $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
-        $addressBlocks = invoice_resolve_bill_ship_html(is_array($customer) ? $customer : null);
+        $addressBlocks = invoice_resolve_bill_ship_html(is_array($customer) ? $customer : null, $conn ?? null);
         $billToInfo = $addressBlocks['bill'];
         $shipToInfo = $addressBlocks['ship'];
         //print_r($billToInfo);
