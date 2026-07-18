@@ -1364,6 +1364,193 @@ class product
     }
 
     /**
+     * After direct purchase vendor modify: pull product/fetch and update vp_products.
+     * Purchased variant(s): all catalog fields incl. local_stock; physical_stock unchanged.
+     * Other variants on same item_code: all fields except local_stock and physical_stock.
+     *
+     * @param list<array{item_code:string,sku?:string,size?:string,color?:string}> $purchasedVariants
+     * @return array{success:bool,message:string,updated_count?:int,failures?:list<string>}
+     */
+    public function refreshDirectPurchaseCatalogFromVendorApi(array $purchasedVariants): array
+    {
+        $groups = $this->groupDirectPurchasePurchasedVariants($purchasedVariants);
+        if ($groups === []) {
+            return ['success' => true, 'message' => 'Nothing to refresh.', 'updated_count' => 0];
+        }
+
+        $failures = [];
+        $updatedTotal = 0;
+        $bulkConnection = $this->beginBulkProductUpdateConnection();
+        try {
+            foreach ($groups as $group) {
+                $itemCode = (string) ($group['item_code'] ?? '');
+                if ($itemCode === '') {
+                    continue;
+                }
+
+                $payload = $this->fetchVendorProductApiPayload($itemCode);
+                if (!$payload) {
+                    $failures[] = $itemCode . ' — product/fetch failed';
+                    continue;
+                }
+
+                $apiRows = self::expandVendorProductFetchVariants(
+                    self::normalizeVendorProductFetchItems($payload)
+                );
+                if ($apiRows === []) {
+                    $failures[] = $itemCode . ' — no product rows in API response';
+                    continue;
+                }
+
+                [$purchasedRows, $siblingRows] = $this->partitionVendorFetchRowsForDirectPurchase(
+                    $apiRows,
+                    (array) ($group['match_keys'] ?? [])
+                );
+
+                if ($purchasedRows !== []) {
+                    $purchasedResult = $this->updateProductFromApi($purchasedRows, [
+                        'preserve_local_stock' => false,
+                        'sync_physical_stock' => false,
+                        'variants_already_expanded' => true,
+                    ]);
+                    if (!is_array($purchasedResult) || empty($purchasedResult['success'])) {
+                        $failures[] = $itemCode . ' — purchased variant refresh failed: '
+                            . trim((string) ($purchasedResult['message'] ?? 'unknown error'));
+                        continue;
+                    }
+                    $updatedTotal += (int) ($purchasedResult['updated_count'] ?? 0);
+                }
+
+                if ($siblingRows !== []) {
+                    $siblingResult = $this->updateProductFromApi($siblingRows, [
+                        'preserve_local_stock' => true,
+                        'sync_physical_stock' => false,
+                        'variants_already_expanded' => true,
+                    ]);
+                    if (!is_array($siblingResult) || empty($siblingResult['success'])) {
+                        $failures[] = $itemCode . ' — sibling variant refresh failed: '
+                            . trim((string) ($siblingResult['message'] ?? 'unknown error'));
+                        continue;
+                    }
+                    $updatedTotal += (int) ($siblingResult['updated_count'] ?? 0);
+                }
+            }
+        } finally {
+            $this->endBulkProductUpdateConnection($bulkConnection);
+        }
+
+        if ($failures !== []) {
+            $shown = array_slice($failures, 0, 3);
+            $suffix = count($failures) > 3 ? ' (and ' . (count($failures) - 3) . ' more)' : '';
+
+            return [
+                'success' => false,
+                'message' => implode('; ', $shown) . $suffix,
+                'updated_count' => $updatedTotal,
+                'failures' => $failures,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Catalog refreshed from vendor API.',
+            'updated_count' => $updatedTotal,
+        ];
+    }
+
+    /**
+     * @param list<array{item_code:string,sku?:string,size?:string,color?:string}> $purchasedVariants
+     * @return list<array{item_code:string,match_keys:array<string, true>}>
+     */
+    private function groupDirectPurchasePurchasedVariants(array $purchasedVariants): array
+    {
+        $groups = [];
+        foreach ($purchasedVariants as $variant) {
+            if (!is_array($variant)) {
+                continue;
+            }
+            $itemCode = trim((string) ($variant['item_code'] ?? ''));
+            if ($itemCode === '') {
+                continue;
+            }
+            $groupKey = strtolower($itemCode);
+            if (!isset($groups[$groupKey])) {
+                $groups[$groupKey] = [
+                    'item_code' => $itemCode,
+                    'match_keys' => [],
+                ];
+            }
+            foreach ($this->directPurchasePurchasedVariantMatchKeys($variant) as $matchKey) {
+                $groups[$groupKey]['match_keys'][$matchKey] = true;
+            }
+        }
+
+        return array_values($groups);
+    }
+
+    /**
+     * @param array{item_code?:string,sku?:string,size?:string,color?:string} $variant
+     * @return list<string>
+     */
+    private function directPurchasePurchasedVariantMatchKeys(array $variant): array
+    {
+        $itemCode = trim((string) ($variant['item_code'] ?? ''));
+        $sku = trim((string) ($variant['sku'] ?? ''));
+        $size = trim((string) ($variant['size'] ?? ''));
+        $color = trim((string) ($variant['color'] ?? ''));
+
+        $keys = [];
+        if ($sku !== '') {
+            $keys[] = self::apiRefreshVariantMatchKey($sku, $size, $color);
+        }
+        if ($itemCode !== '') {
+            $keys[] = self::apiRefreshVariantMatchKey($itemCode, $size, $color);
+        }
+
+        return array_values(array_unique($keys));
+    }
+
+    /**
+     * @param list<array<string, mixed>> $apiRows
+     * @param array<string, true> $purchasedMatchKeys
+     * @return array{0:list<array<string, mixed>>, 1:list<array<string, mixed>>}
+     */
+    private function partitionVendorFetchRowsForDirectPurchase(array $apiRows, array $purchasedMatchKeys): array
+    {
+        $purchasedRows = [];
+        $siblingRows = [];
+
+        foreach ($apiRows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $matchKey = $this->vendorFetchRowMatchKey($row);
+            if ($matchKey !== '' && isset($purchasedMatchKeys[$matchKey])) {
+                $purchasedRows[] = $row;
+                continue;
+            }
+            $siblingRows[] = $row;
+        }
+
+        return [$purchasedRows, $siblingRows];
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function vendorFetchRowMatchKey(array $row): string
+    {
+        $itemCode = trim((string) ($row['itemcode'] ?? $row['item_code'] ?? ''));
+        $sku = trim((string) ($row['sku'] ?? ''));
+
+        return self::apiRefreshVariantMatchKey(
+            $sku !== '' ? $sku : $itemCode,
+            (string) ($row['size'] ?? ''),
+            (string) ($row['color'] ?? '')
+        );
+    }
+
+    /**
      * Push local_stock_delta to product/modify, then refresh local_stock from product/fetch.
      */
     public function applyLocalStockDeltaAndRefreshFromVendorApi(
