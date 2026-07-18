@@ -22,11 +22,43 @@ function invoice_resolve_bill_ship_html(?array $orderInfo, $conn = null): array
     if ($ship !== '') {
         $placeOfSupply = invoice_resolve_place_of_supply_display_state($orderInfo);
         if ($placeOfSupply !== '') {
-            $ship .= 'Place of Supply: ' . htmlspecialchars($placeOfSupply) . '<br>';
+            $ship = invoice_append_invoice_address_line(
+                $ship,
+                'Place of Supply: ' . htmlspecialchars($placeOfSupply)
+            );
         }
     }
 
     return ['bill' => $bill, 'ship' => $ship];
+}
+
+function invoice_wrap_invoice_address_html(string $html): string
+{
+    if ($html === '') {
+        return '';
+    }
+
+    return '<div class="invoice-text">' . $html . '</div>';
+}
+
+function invoice_append_invoice_address_line(string $addressHtml, string $lineHtml): string
+{
+    if ($addressHtml === '') {
+        return invoice_wrap_invoice_address_html($lineHtml);
+    }
+
+    $lineHtml = trim($lineHtml);
+    if ($lineHtml === '') {
+        return $addressHtml;
+    }
+
+    $append = $lineHtml . '<br>';
+
+    if (preg_match('/<\/div>\s*$/', $addressHtml)) {
+        return preg_replace('/<\/div>\s*$/', $append . '</div>', $addressHtml, 1);
+    }
+
+    return $addressHtml . $append;
 }
 
 function invoice_order_info_has_shipping(array $orderInfo): bool
@@ -100,7 +132,7 @@ function invoice_format_order_info_address_html(array $orderInfo, string $type, 
         $html .= 'Tel: ' . htmlspecialchars($phone) . '<br>';
     }
 
-    return $html;
+    return invoice_wrap_invoice_address_html($html);
 }
 
 /**
