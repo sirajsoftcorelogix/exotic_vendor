@@ -1671,6 +1671,10 @@ switch ($page) {
                 $controller->list_ajax();
                 break;
 
+            case 'export_excel':
+                $controller->export_excel();
+                break;
+
             case 'delete':
                 $controller->delete();
                 break;
