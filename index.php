@@ -1675,6 +1675,18 @@ switch ($page) {
                 $controller->export_excel();
                 break;
 
+            case 'sales_summary':
+                $controller->sales_summary();
+                break;
+
+            case 'sales_summary_ajax':
+                $controller->sales_summary_ajax();
+                break;
+
+            case 'export_sales_summary':
+                $controller->export_sales_summary();
+                break;
+
             case 'delete':
                 $controller->delete();
                 break;

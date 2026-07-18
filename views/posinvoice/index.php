@@ -3,14 +3,22 @@
     <header class="border-b bg-white">
         <div class="mx-auto flex max-w-[1500px] items-center justify-between gap-3 px-4 py-3">
             <h1 class="text-lg font-semibold">POS Invoice Listing</h1>
-            <a href="?page=posinvoice&action=user_guide"
+            <div class="flex flex-wrap items-center gap-2">
+                <a href="?page=posinvoice&action=sales_summary"
+                   class="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-white px-3 py-2 text-xs font-semibold text-orange-800 hover:bg-orange-50"
+                   title="View POS sales summary by store">
+                    <i class="fas fa-chart-column text-xs" aria-hidden="true"></i>
+                    Sales summary
+                </a>
+                <a href="?page=posinvoice&action=user_guide"
                target="_blank"
                rel="noopener noreferrer"
                class="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-800 hover:bg-orange-100"
                title="Open invoice module user guide">
                 <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
                 User guide
-            </a>
+                </a>
+            </div>
         </div>
     </header>
 

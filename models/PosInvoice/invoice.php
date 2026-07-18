@@ -559,53 +559,7 @@ class POSInvoice
             WHERE i.pos_flag = 1
         ";
 
-        if (isset($filters['warehouse_id']) && $filters['warehouse_id'] !== null && $filters['warehouse_id'] !== '') {
-            $sql .= ' AND i.warehouse_id = ' . (int)$filters['warehouse_id'];
-        }
-
-        if (!empty($filters['order_number'])) {
-            $sql .= " AND o.order_number LIKE '%" . $this->db->real_escape_string((string)$filters['order_number']) . "%'";
-        }
-
-        if (!empty($filters['invoice_number'])) {
-            $sql .= " AND i.invoice_number LIKE '%" . $this->db->real_escape_string((string)$filters['invoice_number']) . "%'";
-        }
-
-        if (!empty($filters['status'])) {
-            $sql .= " AND i.status = '" . $this->db->real_escape_string((string)$filters['status']) . "'";
-        }
-
-        if (!empty($filters['from_date'])) {
-            $sql .= " AND i.invoice_date >= '" . $this->db->real_escape_string((string)$filters['from_date']) . "'";
-        }
-
-        if (!empty($filters['to_date'])) {
-            $sql .= " AND i.invoice_date <= '" . $this->db->real_escape_string((string)$filters['to_date']) . "'";
-        }
-
-        if (!empty($filters['type'])) {
-            $sql .= " AND IFNULL(o.payment_type,'') = '" . $this->db->real_escape_string((string)$filters['type']) . "'";
-        }
-
-        if (!empty($filters['customer_id'])) {
-            $sql .= ' AND i.customer_id = ' . (int)$filters['customer_id'];
-        }
-
-        if (!empty($filters['amount_min'])) {
-            $sql .= ' AND ROUND(' . $payableSql . ', 2) >= ' . (float)$filters['amount_min'];
-        }
-
-        if (!empty($filters['amount_max'])) {
-            $sql .= ' AND ROUND(' . $payableSql . ', 2) <= ' . (float)$filters['amount_max'];
-        }
-
-        if (isset($filters['discount_applied']) && $filters['discount_applied'] !== '') {
-            if ((string) $filters['discount_applied'] === '1') {
-                $sql .= " AND ({$discountSql}) > 0.001";
-            } elseif ((string) $filters['discount_applied'] === '0') {
-                $sql .= " AND ({$discountSql}) <= 0.001";
-            }
-        }
+        $this->appendPosInvoiceListFiltersSql($sql, $filters, $payableSql, $discountSql);
 
         $sql .= ' ORDER BY i.id DESC';
 
@@ -620,6 +574,153 @@ class POSInvoice
         }
 
         return $data;
+    }
+
+    /**
+     * POS sales totals grouped by store / warehouse.
+     *
+     * @param array<string, mixed> $filters
+     * @return array{rows: array<int, array<string, mixed>>, totals: array<string, float|int>}
+     */
+    public function searchPosSalesSummaryByStore(array $filters): array
+    {
+        $payableSql = $this->posInvoicePayableAmountSql();
+        $paidSql = $this->posInvoicePaidAmountSql();
+        $discountSql = $this->posInvoiceDiscountAmountSql($payableSql);
+        $pendingExpr = "GREATEST(0, ROUND({$payableSql} - {$paidSql}, 2))";
+
+        $sql = "
+            SELECT
+                i.warehouse_id,
+                COALESCE(ea.address_title, CONCAT('Warehouse #', i.warehouse_id)) AS warehouse_name,
+                COUNT(*) AS invoice_count,
+                ROUND(SUM({$payableSql}), 2) AS net_sales,
+                ROUND(SUM({$discountSql}), 2) AS discount_total,
+                ROUND(SUM({$paidSql}), 2) AS collected_total,
+                ROUND(SUM({$pendingExpr}), 2) AS pending_total,
+                ROUND(SUM(i.total_amount), 2) AS gross_total
+            FROM vp_invoices i
+            LEFT JOIN vp_order_info o ON o.id = i.vp_order_info_id
+            LEFT JOIN exotic_address ea ON ea.id = i.warehouse_id
+            WHERE i.pos_flag = 1
+        ";
+
+        $this->appendPosInvoiceListFiltersSql($sql, $filters, $payableSql, $discountSql);
+
+        $sql .= "
+            GROUP BY i.warehouse_id, warehouse_name
+            ORDER BY warehouse_name ASC
+        ";
+
+        $res = $this->db->query($sql);
+        if (!$res) {
+            return [
+                'rows' => [],
+                'totals' => $this->emptyPosSalesSummaryTotals(),
+            ];
+        }
+
+        $rows = [];
+        $totals = $this->emptyPosSalesSummaryTotals();
+        while ($row = $res->fetch_assoc()) {
+            $invoiceCount = (int) ($row['invoice_count'] ?? 0);
+            $netSales = round((float) ($row['net_sales'] ?? 0), 2);
+            $row['invoice_count'] = $invoiceCount;
+            $row['net_sales'] = $netSales;
+            $row['discount_total'] = round((float) ($row['discount_total'] ?? 0), 2);
+            $row['collected_total'] = round((float) ($row['collected_total'] ?? 0), 2);
+            $row['pending_total'] = round((float) ($row['pending_total'] ?? 0), 2);
+            $row['gross_total'] = round((float) ($row['gross_total'] ?? 0), 2);
+            $row['avg_ticket'] = $invoiceCount > 0 ? round($netSales / $invoiceCount, 2) : 0.0;
+            $rows[] = $row;
+
+            $totals['invoice_count'] += $invoiceCount;
+            $totals['net_sales'] += $row['net_sales'];
+            $totals['discount_total'] += $row['discount_total'];
+            $totals['collected_total'] += $row['collected_total'];
+            $totals['pending_total'] += $row['pending_total'];
+            $totals['gross_total'] += $row['gross_total'];
+        }
+
+        foreach (['net_sales', 'discount_total', 'collected_total', 'pending_total', 'gross_total'] as $key) {
+            $totals[$key] = round((float) $totals[$key], 2);
+        }
+        $totals['avg_ticket'] = $totals['invoice_count'] > 0
+            ? round($totals['net_sales'] / $totals['invoice_count'], 2)
+            : 0.0;
+
+        return [
+            'rows' => $rows,
+            'totals' => $totals,
+        ];
+    }
+
+    /** @return array<string, float|int> */
+    private function emptyPosSalesSummaryTotals(): array
+    {
+        return [
+            'invoice_count' => 0,
+            'net_sales' => 0.0,
+            'discount_total' => 0.0,
+            'collected_total' => 0.0,
+            'pending_total' => 0.0,
+            'gross_total' => 0.0,
+            'avg_ticket' => 0.0,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     */
+    private function appendPosInvoiceListFiltersSql(string &$sql, array $filters, string $payableSql, string $discountSql): void
+    {
+        if (isset($filters['warehouse_id']) && $filters['warehouse_id'] !== null && $filters['warehouse_id'] !== '') {
+            $sql .= ' AND i.warehouse_id = ' . (int) $filters['warehouse_id'];
+        }
+
+        if (!empty($filters['order_number'])) {
+            $sql .= " AND o.order_number LIKE '%" . $this->db->real_escape_string((string) $filters['order_number']) . "%'";
+        }
+
+        if (!empty($filters['invoice_number'])) {
+            $sql .= " AND i.invoice_number LIKE '%" . $this->db->real_escape_string((string) $filters['invoice_number']) . "%'";
+        }
+
+        if (!empty($filters['status'])) {
+            $sql .= " AND i.status = '" . $this->db->real_escape_string((string) $filters['status']) . "'";
+        }
+
+        if (!empty($filters['from_date'])) {
+            $sql .= " AND i.invoice_date >= '" . $this->db->real_escape_string((string) $filters['from_date']) . "'";
+        }
+
+        if (!empty($filters['to_date'])) {
+            $sql .= " AND i.invoice_date <= '" . $this->db->real_escape_string((string) $filters['to_date']) . "'";
+        }
+
+        if (!empty($filters['type'])) {
+            $sql .= " AND IFNULL(o.payment_type,'') = '" . $this->db->real_escape_string((string) $filters['type']) . "'";
+        }
+
+        if (!empty($filters['customer_id'])) {
+            $sql .= ' AND i.customer_id = ' . (int) $filters['customer_id'];
+        }
+
+        if (!empty($filters['amount_min'])) {
+            $sql .= ' AND ROUND(' . $payableSql . ', 2) >= ' . (float) $filters['amount_min'];
+        }
+
+        if (!empty($filters['amount_max'])) {
+            $sql .= ' AND ROUND(' . $payableSql . ', 2) <= ' . (float) $filters['amount_max'];
+        }
+
+        if (isset($filters['discount_applied']) && $filters['discount_applied'] !== '') {
+            if ((string) $filters['discount_applied'] === '1') {
+                $sql .= " AND ({$discountSql}) > 0.001";
+            } elseif ((string) $filters['discount_applied'] === '0') {
+                $sql .= " AND ({$discountSql}) <= 0.001";
+            }
+        }
     }
 
     /**
