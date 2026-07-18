@@ -61,13 +61,9 @@ class PosInvoiceController
     /* ===============================
        AJAX LIST
     =============================== */
-    public function list_ajax()
+    /** @return array<string, mixed> */
+    private function resolvePosInvoiceListFiltersFromRequest(): array
     {
-        global $invoiceModel;
-
-        is_login();
-
-        $isAdminUser = $this->isPosInvoiceAdminUser();
         $filters = [
             'order_number' => $_GET['order_number'] ?? '',
             'status' => $_GET['status'] ?? '',
@@ -80,11 +76,129 @@ class PosInvoiceController
             'warehouse_id' => null,
         ];
 
-        if (!$isAdminUser) {
+        if (!$this->isPosInvoiceAdminUser()) {
             $filters['warehouse_id'] = $this->getSessionWarehouseId();
         }
 
-        echo json_encode($invoiceModel->searchPosListAjax($filters));
+        return $filters;
+    }
+
+    private function formatPosInvoicePaymentTypeLabel(?string $paymentType): string
+    {
+        $key = strtolower(trim((string) $paymentType));
+
+        return match ($key) {
+            'offline' => 'Offline',
+            'cod' => 'Cash',
+            'razorpay' => 'Razorpay',
+            'bank_transfer' => 'Bank',
+            default => $key !== '' ? ucfirst(str_replace('_', ' ', $key)) : '',
+        };
+    }
+
+    public function list_ajax()
+    {
+        global $invoiceModel;
+
+        is_login();
+
+        echo json_encode($invoiceModel->searchPosListAjax($this->resolvePosInvoiceListFiltersFromRequest()));
+        exit;
+    }
+
+    public function export_excel(): void
+    {
+        global $invoiceModel;
+
+        is_login();
+
+        $rows = $invoiceModel->searchPosListAjax($this->resolvePosInvoiceListFiltersFromRequest());
+        if ($rows === []) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(422);
+            echo json_encode(['success' => false, 'message' => 'No invoices match the current filters.']);
+            exit;
+        }
+
+        if (count($rows) > 5000) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(422);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Too many invoices (' . count($rows) . '). Narrow the date range or filters (max 5,000 rows).',
+            ]);
+            exit;
+        }
+
+        require_once 'vendor/autoload.php';
+
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('POS Invoices');
+
+        $headers = [
+            'ID',
+            'Invoice Date',
+            'Order Number',
+            'Invoice Number',
+            'Store / Warehouse',
+            'Customer',
+            'Customer State',
+            'Customer Country',
+            'Payment Type',
+            'Amount (Net Payable)',
+            'Discount',
+            'Paid',
+            'Pending',
+            'Gross Amount',
+            'Status',
+        ];
+        $sheet->fromArray($headers, null, 'A1');
+
+        $headerRange = 'A1:O1';
+        $sheet->getStyle($headerRange)->getFont()->setBold(true);
+        $sheet->getStyle($headerRange)->getFill()
+            ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+            ->getStartColor()->setARGB('FFF3F4F6');
+
+        $rowNum = 2;
+        foreach ($rows as $row) {
+            $sheet->fromArray([
+                (int) ($row['id'] ?? 0),
+                (string) ($row['invoice_date'] ?? ''),
+                (string) ($row['order_number'] ?? ''),
+                (string) ($row['invoice_number'] ?? ''),
+                (string) ($row['warehouse_name'] ?? ''),
+                (string) ($row['customer_name'] ?? ''),
+                (string) ($row['customer_billing_state'] ?? ''),
+                (string) ($row['customer_billing_country'] ?? ''),
+                $this->formatPosInvoicePaymentTypeLabel($row['payment_type'] ?? ''),
+                round((float) ($row['payable_amount'] ?? 0), 2),
+                round((float) ($row['discount_amount'] ?? 0), 2),
+                round((float) ($row['paid_amount'] ?? 0), 2),
+                round((float) ($row['pending_amount'] ?? 0), 2),
+                round((float) ($row['total_amount'] ?? 0), 2),
+                ucfirst(strtolower(trim((string) ($row['status'] ?? '')))),
+            ], null, 'A' . $rowNum);
+            $rowNum++;
+        }
+
+        $lastRow = max(2, $rowNum - 1);
+        $moneyRange = 'J2:N' . $lastRow;
+        $sheet->getStyle($moneyRange)->getNumberFormat()->setFormatCode('#,##0.00');
+        $sheet->getStyle('B2:B' . $lastRow)->getNumberFormat()->setFormatCode('yyyy-mm-dd');
+
+        foreach (range('A', 'O') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        $filename = 'pos_invoices_' . date('Y-m-d_His') . '.xlsx';
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: max-age=0');
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save('php://output');
         exit;
     }
     /* ===============================

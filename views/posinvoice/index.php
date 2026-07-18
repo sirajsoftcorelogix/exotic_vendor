@@ -62,6 +62,12 @@
                     Search
                 </button>
 
+                <button type="button" id="exportInvoicesBtn" onclick="exportInvoicesToExcel()"
+                    class="inline-flex items-center justify-center gap-1.5 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-emerald-800 hover:bg-emerald-100">
+                    <i class="fas fa-file-excel text-xs" aria-hidden="true"></i>
+                    <span id="exportInvoicesBtnLabel">Export to Excel</span>
+                </button>
+
             </div>
 
         </div>
@@ -209,16 +215,86 @@
         `;
     }
 
+    function buildPosInvoiceFilterQuery(action) {
+        const params = new URLSearchParams({
+            page: 'posinvoice',
+            action: action,
+            from_date: document.getElementById('from_date').value,
+            to_date: document.getElementById('to_date').value,
+            order_number: document.getElementById('order_number').value,
+            type: document.getElementById('type').value,
+            customer_id: document.getElementById('customer_id').value,
+            amount_min: document.getElementById('amount_min').value,
+            amount_max: document.getElementById('amount_max').value,
+            status: document.getElementById('status').value,
+        });
+
+        return '?' + params.toString();
+    }
+
+    async function exportInvoicesToExcel() {
+        const btn = document.getElementById('exportInvoicesBtn');
+        const label = document.getElementById('exportInvoicesBtnLabel');
+        if (!btn || btn.disabled) {
+            return;
+        }
+
+        const oldLabel = label ? label.textContent : 'Export to Excel';
+        btn.disabled = true;
+        if (label) {
+            label.textContent = 'Exporting…';
+        }
+
+        try {
+            const res = await fetch(buildPosInvoiceFilterQuery('export_excel'), { credentials: 'same-origin' });
+            const contentType = (res.headers.get('content-type') || '').toLowerCase();
+
+            if (contentType.includes('application/json')) {
+                let message = 'Export failed.';
+                try {
+                    const data = await res.json();
+                    message = data.message || message;
+                } catch (err) {
+                    /* keep default message */
+                }
+                alert(message);
+                return;
+            }
+
+            if (!res.ok) {
+                alert('Export failed. Please try again.');
+                return;
+            }
+
+            const blob = await res.blob();
+            let filename = 'pos_invoices.xlsx';
+            const disposition = res.headers.get('content-disposition') || '';
+            const match = disposition.match(/filename=\"?([^\";]+)\"?/i);
+            if (match && match[1]) {
+                filename = match[1];
+            }
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            alert((err && err.message) ? err.message : 'Export failed.');
+        } finally {
+            btn.disabled = false;
+            if (label) {
+                label.textContent = oldLabel;
+            }
+        }
+    }
+
     function loadInvoices() {
 
-        let url = `?page=posinvoice&action=list_ajax&from_date=${document.getElementById('from_date').value}
-&to_date=${document.getElementById('to_date').value}
-&order_number=${document.getElementById('order_number').value}
-&type=${document.getElementById('type').value}
-&customer_id=${document.getElementById('customer_id').value}
-&amount_min=${document.getElementById('amount_min').value}
-&amount_max=${document.getElementById('amount_max').value}
-&status=${document.getElementById('status').value}`;
+        let url = buildPosInvoiceFilterQuery('list_ajax');
 
         fetch(url)
             .then(res => res.json())
