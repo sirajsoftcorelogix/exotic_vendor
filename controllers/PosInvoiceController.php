@@ -41,14 +41,17 @@ class PosInvoiceController
     =============================== */
     public function index()
     {
-        global $conn;
+        global $conn, $usersModel;
 
         $customerModel = new Customer($conn);
 
         $customers = $customerModel->getAllCustomers(1000, 0, []);
+        $isAdminUser = $this->isPosInvoiceAdminUser();
 
         renderTemplate('views/posinvoice/index.php', [
-            'customers' => $customers
+            'customers' => $customers,
+            'warehouses' => $isAdminUser ? $usersModel->getAllWarehouses() : [],
+            'can_change_warehouse' => $isAdminUser,
         ]);
     }
 
@@ -67,7 +70,6 @@ class PosInvoiceController
         $filters = [
             'order_number' => $_GET['order_number'] ?? '',
             'invoice_number' => $_GET['invoice_number'] ?? '',
-            'store_name' => $_GET['store_name'] ?? '',
             'status' => $_GET['status'] ?? '',
             'from_date' => $_GET['from_date'] ?? '',
             'to_date' => $_GET['to_date'] ?? '',
@@ -79,7 +81,12 @@ class PosInvoiceController
             'warehouse_id' => null,
         ];
 
-        if (!$this->isPosInvoiceAdminUser()) {
+        if ($this->isPosInvoiceAdminUser()) {
+            $selectedWarehouseId = trim((string) ($_GET['warehouse_id'] ?? ''));
+            if ($selectedWarehouseId !== '' && (int) $selectedWarehouseId > 0) {
+                $filters['warehouse_id'] = (int) $selectedWarehouseId;
+            }
+        } else {
             $filters['warehouse_id'] = $this->getSessionWarehouseId();
         }
 

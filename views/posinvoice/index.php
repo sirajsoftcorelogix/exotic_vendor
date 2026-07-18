@@ -94,10 +94,24 @@
                         <label for="invoice_number" class="block text-xs font-semibold text-gray-600 mb-1">Invoice number</label>
                         <input type="text" id="invoice_number" class="pi-filter-input" placeholder="Search invoice number">
                     </div>
+                    <?php if (!empty($can_change_warehouse)): ?>
                     <div>
-                        <label for="store_name" class="block text-xs font-semibold text-gray-600 mb-1">Store name</label>
-                        <input type="text" id="store_name" class="pi-filter-input" placeholder="Search store / warehouse">
+                        <label for="warehouse_id" class="block text-xs font-semibold text-gray-600 mb-1">Store name</label>
+                        <select id="warehouse_id" class="pi-filter-input">
+                            <option value="">All stores</option>
+                            <?php foreach ($warehouses as $wh): ?>
+                                <?php
+                                $wid = (int) ($wh['id'] ?? 0);
+                                $storeLabel = trim((string) ($wh['address_title'] ?? ''));
+                                if ($storeLabel === '') {
+                                    $storeLabel = 'Warehouse #' . $wid;
+                                }
+                                ?>
+                                <option value="<?= $wid ?>"><?= htmlspecialchars($storeLabel) ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
+                    <?php endif; ?>
                     <div>
                         <label for="type" class="block text-xs font-semibold text-gray-600 mb-1">Payment type</label>
                         <select id="type" class="pi-filter-input">
@@ -344,7 +358,7 @@
             { id: 'to_date', type: 'value' },
             { id: 'order_number', type: 'value' },
             { id: 'invoice_number', type: 'value' },
-            { id: 'store_name', type: 'value' },
+            { id: 'warehouse_id', type: 'value' },
             { id: 'type', type: 'value' },
             { id: 'customer_id', type: 'value' },
             { id: 'amount_min', type: 'value' },
@@ -394,7 +408,10 @@
         document.getElementById('to_date').value = '';
         document.getElementById('order_number').value = '';
         document.getElementById('invoice_number').value = '';
-        document.getElementById('store_name').value = '';
+        const warehouseEl = document.getElementById('warehouse_id');
+        if (warehouseEl) {
+            warehouseEl.value = '';
+        }
         document.getElementById('type').value = '';
         document.getElementById('amount_min').value = '';
         document.getElementById('amount_max').value = '';
@@ -412,7 +429,6 @@
             to_date: document.getElementById('to_date').value,
             order_number: document.getElementById('order_number').value,
             invoice_number: document.getElementById('invoice_number').value,
-            store_name: document.getElementById('store_name').value,
             type: document.getElementById('type').value,
             customer_id: document.getElementById('customer_id').value,
             amount_min: document.getElementById('amount_min').value,
@@ -420,6 +436,11 @@
             discount_applied: document.getElementById('discount_applied').value,
             status: document.getElementById('status').value,
         });
+
+        const warehouseEl = document.getElementById('warehouse_id');
+        if (warehouseEl && warehouseEl.value) {
+            params.set('warehouse_id', warehouseEl.value);
+        }
 
         return '?' + params.toString();
     }

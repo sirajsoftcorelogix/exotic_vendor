@@ -571,15 +571,6 @@ class POSInvoice
             $sql .= " AND i.invoice_number LIKE '%" . $this->db->real_escape_string((string)$filters['invoice_number']) . "%'";
         }
 
-        if (!empty($filters['store_name'])) {
-            $storeTerm = $this->db->real_escape_string((string) $filters['store_name']);
-            $sql .= " AND (
-                ea.address_title LIKE '%{$storeTerm}%'
-                OR ea.display_name LIKE '%{$storeTerm}%'
-                OR ea.address LIKE '%{$storeTerm}%'
-            )";
-        }
-
         if (!empty($filters['status'])) {
             $sql .= " AND i.status = '" . $this->db->real_escape_string((string)$filters['status']) . "'";
         }
