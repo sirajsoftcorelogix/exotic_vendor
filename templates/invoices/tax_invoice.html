@@ -30,9 +30,13 @@
     }
 
     .company-details {
+        margin-top: 6px;
+    }
+
+    .invoice-text {
+        font-family: DejaVu Sans, Arial, sans-serif;
         font-size: 16px;
         line-height: 1.4;
-        margin-top: 6px;
     }
 
     .invoice-title {
@@ -119,7 +123,7 @@
     <tr >
         <td width="60%" class="mt-25">
             <div class="company">EXOTIC INDIA ART PVT LTD</div>
-            <div class="company-details">
+            <div class="company-details invoice-text">
                 {{EXCLUSIVE_STORES_HEADER}}<br>
                 GST ID: 07AADCE1400C1ZJ<br>
                 PAN: AADCE1400C
@@ -184,7 +188,7 @@
 </table>
 <table class="items ">
     <tr>
-        <td class="mt-25" style="text-align: left; padding:20px ;">
+        <td class="mt-25 invoice-text" style="text-align: left; padding:20px ;">
             <b>Amount in Words:</b><br>
             {{AMOUNT_IN_WORDS}} ONLY
             <br>
@@ -195,12 +199,12 @@
 
 <table class="items">
     <tr>
-        <td style="width:50%; text-align:left; padding-left: 20px; ">            
+        <td class="invoice-text" style="width:50%; text-align:left; padding-left: 20px; ">            
             
             <b>Terms & Conditions:</b><br>
             {{TERM_AND_CONDITIONS}}
         </td>
-        <td style="width:50%; text-align:center; vertical-align:top; padding:20px;">
+        <td class="invoice-text" style="width:50%; text-align:center; vertical-align:top; padding:20px;">
             For EXOTIC INDIA ART PVT LTD<br><br><br><br>
             Authorised Signatory
         </td>
