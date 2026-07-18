@@ -35,6 +35,7 @@
             <li><a href="#pdf-layout" class="text-orange-700 hover:text-orange-900 font-medium">What’s on the PDF</a></li>
             <li><a href="#pos-listing" class="text-orange-700 hover:text-orange-900 font-medium">POS invoice listing</a></li>
             <li><a href="#overseas" class="text-orange-700 hover:text-orange-900 font-medium">Overseas customers</a></li>
+            <li><a href="#high-value-compliance" class="text-orange-700 hover:text-orange-900 font-medium">PAN &amp; passport (high value)</a></li>
             <li><a href="#fix-old" class="text-orange-700 hover:text-orange-900 font-medium">Fixing old invoices</a></li>
             <li><a href="#settings" class="text-orange-700 hover:text-orange-900 font-medium">App settings</a></li>
             <li><a href="#faq" class="text-orange-700 hover:text-orange-900 font-medium">FAQ</a></li>
@@ -233,6 +234,59 @@
         <p>On manual invoice create, use the <strong>Apply GST</strong> checkbox for non-Indian addresses.</p>
     </section>
 
+    <section id="high-value-compliance" class="mb-10">
+        <h2 class="text-xl font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4">PAN &amp; passport — when required</h2>
+        <p>These fields apply at <strong>POS checkout</strong> when confirming the customer address (before the order completes and the invoice is created). They are <strong>not</strong> asked on every invoice — only when the transaction meets the high-value rule below.</p>
+
+        <div class="not-prose my-4 rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-950">
+            <p class="font-semibold m-0 mb-2"><i class="fas fa-exclamation-circle text-amber-600 mr-1" aria-hidden="true"></i> When the compliance panel appears</p>
+            <p class="m-0">When the order total is <strong>₹2,00,000 or more</strong> (or the limit set in App Settings → <strong>High value transaction limit</strong>), the amber panel <strong>High Value Transaction – Compliance Required</strong> is shown on the POS billing step.</p>
+        </div>
+
+        <p><strong>Note:</strong> <em>Passport Number</em> refers to the customer’s travel document — not your login password.</p>
+
+        <h3 class="text-lg font-semibold text-gray-800 mt-6">If customer enters a valid GSTIN</h3>
+        <ul>
+            <li><strong>PAN is not required separately</strong> — PAN is derived automatically from the GSTIN for B2B handling.</li>
+            <li>Passport and country of residence are not required in this case.</li>
+        </ul>
+
+        <h3 class="text-lg font-semibold text-gray-800 mt-6">If high value and <strong>no GSTIN</strong> — by residency</h3>
+        <div class="not-prose overflow-x-auto">
+            <table class="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                <thead class="bg-gray-100 text-left">
+                    <tr>
+                        <th class="p-3 font-semibold">Customer type</th>
+                        <th class="p-3 font-semibold">Required</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 bg-white">
+                    <tr>
+                        <td class="p-3 font-medium">Indian Resident</td>
+                        <td class="p-3"><strong>PAN</strong> (10 characters, e.g. ABCDE1234F)</td>
+                    </tr>
+                    <tr>
+                        <td class="p-3 font-medium">NRI</td>
+                        <td class="p-3"><strong>PAN</strong> <em>or</em> <strong>Passport Number</strong> + <strong>Country of Residence</strong></td>
+                    </tr>
+                    <tr>
+                        <td class="p-3 font-medium">Foreign National</td>
+                        <td class="p-3"><strong>Passport Number</strong> + <strong>Country of Residence</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h3 class="text-lg font-semibold text-gray-800 mt-6">Optional &amp; other rules</h3>
+        <ul>
+            <li><strong>Aadhaar</strong> — optional (12 digits) when the compliance panel is shown.</li>
+            <li><strong>Below the high-value limit</strong> — PAN and passport are not required for checkout.</li>
+            <li><strong>Cash ₹2,00,000+</strong> (or limit): a separate <strong>Section 269ST</strong> cash warning must be acknowledged if paying by cash — this is independent of PAN/passport.</li>
+        </ul>
+
+        <p class="text-sm text-gray-600">Details are saved on the customer record and noted on the invoice for compliance. Manual invoice create from the order list does not run this same POS checkout panel.</p>
+    </section>
+
     <section id="fix-old" class="mb-10">
         <h2 class="text-xl font-bold text-gray-900 border-b border-gray-200 pb-2 mb-4">Fixing old invoices</h2>
         <div class="not-prose rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-sm text-emerald-950 mb-4">
@@ -255,6 +309,7 @@
         <ul>
             <li><strong>Firm state</strong> — e.g. <code>Delhi</code> (used for IGST vs CGST/SGST)</li>
             <li><strong>Firm GSTIN</strong>, address, PAN</li>
+            <li><strong>High value transaction limit</strong> — default <code>200000</code> (₹2,00,000); triggers PAN/passport compliance at POS checkout</li>
             <li><strong>Invoice prefix / series</strong> — auto numbering</li>
             <li><strong>Terms and conditions</strong> — shown on PDF when set</li>
         </ul>
@@ -273,6 +328,10 @@
         <details class="not-prose mb-3 rounded-lg border border-gray-200 bg-white p-4">
             <summary class="font-semibold cursor-pointer text-gray-900">Invoice not created after partial payment.</summary>
             <p class="mt-3 text-sm text-gray-600 mb-0">Partial payment creates a <strong>proforma</strong> invoice. A final tax invoice is issued when payment is complete (or via Payments → create from payment).</p>
+        </details>
+        <details class="not-prose mb-3 rounded-lg border border-gray-200 bg-white p-4">
+            <summary class="font-semibold cursor-pointer text-gray-900">Checkout blocked — PAN or passport required.</summary>
+            <p class="mt-3 text-sm text-gray-600 mb-0">Order total is at or above the high value limit (default ₹2,00,000). Enter GSTIN (PAN auto-derived), or complete PAN/passport fields per residency type in the compliance panel on the POS billing step.</p>
         </details>
         <details class="not-prose mb-3 rounded-lg border border-gray-200 bg-white p-4">
             <summary class="font-semibold cursor-pointer text-gray-900">“Invoice already exists for this order”.</summary>
