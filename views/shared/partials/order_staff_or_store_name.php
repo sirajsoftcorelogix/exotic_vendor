@@ -5,9 +5,9 @@ $value = htmlspecialchars((string) ($order['staff_name'] ?? 'N/A'), ENT_QUOTES, 
 $labelClass = 'heading-typography';
 $valueClass = 'data-typography';
 if ($usesStoreName) {
-    $labelClass .= ' inline-flex items-center rounded-md bg-violet-600 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow-md ring-2 ring-violet-400';
-    $valueClass .= ' inline-flex items-center rounded-md border-2 border-violet-500 bg-violet-100 px-2 py-1 text-sm font-bold text-violet-950 shadow-sm';
+    $labelClass .= ' inline-flex items-center rounded-full border border-violet-300 bg-[#5c4d99] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-200';
+    $valueClass .= ' inline-flex items-center rounded-full border border-[#5c4d99] bg-[#f0ebff] px-2.5 py-0.5 text-sm font-normal text-gray-900';
 }
 ?>
 <span class="<?= $labelClass ?>"><?= $label ?></span>
-<p>: <span class="<?= $valueClass ?>"><?= $value ?></span></p>
+<p class="<?= $usesStoreName ? 'flex items-center gap-1.5' : '' ?>">: <span class="<?= $valueClass ?>"><?= $value ?></span></p>
