@@ -235,8 +235,37 @@
                 loadSalesSummary();
             });
         }
+
+        const summaryTable = document.getElementById('posSalesSummaryTable');
+        if (summaryTable) {
+            summaryTable.addEventListener('click', function (event) {
+                const trigger = event.target.closest('[data-store-detail-trigger]');
+                if (!trigger) {
+                    return;
+                }
+                event.preventDefault();
+                openStoreDetail(
+                    trigger.getAttribute('data-warehouse-id'),
+                    trigger.getAttribute('data-warehouse-name') || ''
+                );
+            });
+        }
+
         loadSalesSummary();
     });
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function escapeAttr(value) {
+        return escapeHtml(value);
+    }
 
     function formatMoney(value) {
         const n = parseFloat(value);
@@ -365,6 +394,7 @@
         }
         if (panel) {
             panel.classList.remove('hidden');
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
         loadStoreDetail();
@@ -380,18 +410,21 @@
 
     function renderSalesSummaryRow(row, isTotal) {
         const storeName = row.warehouse_name || (isTotal ? 'TOTAL' : '—');
-        const warehouseId = row.warehouse_id || '';
+        const warehouseId = Number(row.warehouse_id) || 0;
+        const storeDetailAttrs = warehouseId > 0
+            ? ` data-store-detail-trigger="1" data-warehouse-id="${warehouseId}" data-warehouse-name="${escapeAttr(storeName)}"`
+            : '';
         const storeCell = isTotal
-            ? `<td class="p-3">${storeName}</td>`
+            ? `<td class="p-3">${escapeHtml(storeName)}</td>`
             : `<td class="p-3">
-                <button type="button" onclick="openStoreDetail(${warehouseId}, ${JSON.stringify(String(storeName))})"
+                <button type="button"${storeDetailAttrs}
                     class="text-left font-medium text-orange-700 hover:text-orange-900 hover:underline">
-                    ${storeName}
+                    ${escapeHtml(storeName)}
                 </button>
             </td>`;
         const actionCell = isTotal ? '' : `
             <div class="flex flex-wrap items-center gap-3">
-                <button type="button" onclick="openStoreDetail(${warehouseId}, ${JSON.stringify(String(storeName))})"
+                <button type="button"${storeDetailAttrs}
                     class="inline-flex items-center gap-1 text-orange-700 hover:text-orange-900 text-xs font-semibold"
                     title="View daily breakdown for this store">
                     <i class="fas fa-chart-line text-[10px]" aria-hidden="true"></i>
