@@ -43,7 +43,7 @@ global $domain, $root_path, $page, $action, $conn;
 <!-- Header Component -->
 <!-- Updated with bottom border -->
 
-<?php include 'views/layouts/left_menu.php'; ?>
+<?php include_once 'views/layouts/left_menu.php'; ?>
 <div class="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0">
 	<?php require_once 'header.php'; ?>
 	<!-- End Top Navbar -->

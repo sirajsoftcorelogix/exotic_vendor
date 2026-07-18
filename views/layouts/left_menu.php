@@ -27,6 +27,79 @@
       <nav id="main-nav" class="flex-1 overflow-y-auto p-4">
             <!-- Navigation Links -->
             <?php
+                  if (!function_exists('sortMenu')) {
+                        function sortMenu(&$menu) {
+                              uasort($menu, function($a, $b) {
+                                    return $a['sort_order'] <=> $b['sort_order'];
+                              });
+
+                              foreach ($menu as &$item) {
+                                    if (!empty($item['children'])) {
+                                          sortMenu($item['children']);
+                                    }
+                              }
+                        }
+                  }
+
+                  if (!function_exists('renderMenu')) {
+                        function renderMenu($menu, $currentPage = '', $currentAction = '')
+                        {
+                              $active = '';
+                              $cnt = 1;
+                              $active = ($currentPage == 'dashboard' && $currentAction == 'dashboard')
+                                    ? 'active'
+                                    : '';
+                              echo '<ul class="mt-1">';
+                              echo '<li>';
+                              echo '<a href="index.php?page=dashboard&action=dashboard"
+                        class="nav-link text-gray-800 ' . $active . '">';
+                              echo '<div class="content-wrapper"><i class="fas fa-shield-alt mr-2"></i>&nbsp;&nbsp;';
+                              echo '<span>Dashboard</span></div>';
+                              echo '</a>';
+                              echo '</li>';
+                              echo '</ul>';
+                              foreach ($menu as $item) {
+                                    if($cnt == 1 && $item['slug'] == 'dashboard' && $item['action'] == 'dashboard') {
+                                          $active = ($currentPage == 'dashboard' && $currentAction == 'dashboard')
+                                                ? 'active'
+                                                : '';
+                                          echo '<ul class="mt-1">';
+                                          echo '<li>';
+                                          echo '<a href="index.php?page=dashboard&action=dashboard"
+                                    class="nav-link text-gray-800 ' . $active . '">';
+                                          echo '<div class="content-wrapper"><i class="fas fa-shield-alt mr-2"></i>&nbsp;&nbsp;';
+                                          echo '<span>Dashboard</span></div>';
+                                          echo '</a>';
+                                          echo '</li>';
+                                          echo '</ul>';
+                                          $cnt++;
+                                          continue;
+                                    }
+                                    echo '<div>';
+                                    echo '<h3 class="px-3 py-2 text-gray-700">'
+                                          . htmlspecialchars($item['name'])
+                                          . '</h3>';
+                                    echo '<ul class="mt-1">';
+                                    if (!empty($item['children'])) {
+                                          foreach ($item['children'] as $child) {
+                                                $active = ($currentPage == $child['slug'] && $currentAction == $child['action'])
+                                                      ? 'active'
+                                                      : '';
+                                                echo '<li>';
+                                                echo '<a href="index.php?page=' . $child['slug'] . '&action=' . $child['action'] . '"
+                                    class="nav-link text-gray-800 ' . $active . '">';
+                                                echo '<div class="content-wrapper">' . trim($child['icon']) . '</i>&nbsp;&nbsp;';
+                                                echo '<span>' . htmlspecialchars($child['name']) . '</span></div>';
+                                                echo '</a>';
+                                                echo '</li>';
+                                          }
+                                    }
+                                    echo '</ul>';
+                                    echo '</div>';
+                              }
+                        }
+                  }
+
                   is_login();
                   $userRoleId = (int)$_SESSION["user"]["role_id"];
                   global $conn;
@@ -153,85 +226,6 @@
             ?>
       </nav>
 </aside>
-<?php
-// Sort children based on sort_order
-function sortMenu(&$menu) {
-    uasort($menu, function($a, $b) {
-        return $a['sort_order'] <=> $b['sort_order'];
-    });
-
-    foreach ($menu as &$item) {
-        if (!empty($item['children'])) {
-            sortMenu($item['children']);
-        }
-    }
-}
-function renderMenu($menu, $currentPage = '', $currentAction = '')
-{ 
-      $active = '';
-      $cnt = 1;
-      $active = ($currentPage == 'dashboard' && $currentAction == 'dashboard') 
-                              ? 'active' 
-                              : '';
-      echo '<ul class="mt-1">';
-      echo '<li>';
-      echo '<a href="index.php?page=dashboard&action=dashboard" 
-                        class="nav-link text-gray-800 ' . $active . '">';
-            // icon
-      echo '<div class="content-wrapper"><i class="fas fa-shield-alt mr-2"></i>&nbsp;&nbsp;';
-      // name
-      echo '<span>Dashboard</span></div>';
-      echo '</a>';
-      echo '</li>';
-      echo '</ul>';
-      foreach ($menu as $item) {
-		if($cnt == 1 && $item['slug'] == 'dashboard' && $item['action'] == 'dashboard') {
-                  $active = ($currentPage == 'dashboard' && $currentAction == 'dashboard') 
-                              ? 'active' 
-                              : '';
-                  echo '<ul class="mt-1">';
-                  echo '<li>';
-                  echo '<a href="index.php?page=dashboard&action=dashboard" 
-                                    class="nav-link text-gray-800 ' . $active . '">';
-                        // icon
-                  echo '<div class="content-wrapper"><i class="fas fa-shield-alt mr-2"></i>&nbsp;&nbsp;';
-                  // name
-                  echo '<span>Dashboard</span></div>';
-                  echo '</a>';
-                  echo '</li>';
-                  echo '</ul>';
-                  $cnt++;
-                  continue; // Skip the first item (Dashboard)
-            }
-            // Parent category title
-            echo '<div>';
-            echo '<h3 class="px-3 py-2 text-gray-700">'
-                        . htmlspecialchars($item['name'])
-                  . '</h3>';
-            echo '<ul class="mt-1">';
-            // If parent has children
-            if (!empty($item['children'])) {
-                  foreach ($item['children'] as $child) {
-
-                        $active = ($currentPage == $child['slug'] && $currentAction == $child['action']) 
-                                          ? 'active' 
-                                          : '';
-                        echo '<li>';
-                        echo '<a href="index.php?page=' . $child['slug'] . '&action=' . $child['action'] . '" 
-                                    class="nav-link text-gray-800 ' . $active . '">';
-                        // icon
-                        echo '<div class="content-wrapper">' . trim($child['icon']) . '</i>&nbsp;&nbsp;';
-                        // name
-                        echo '<span>' . htmlspecialchars($child['name']) . '</span></div>';
-                        echo '</a>';
-                        echo '</li>';
-                  }
-            }
-            echo '</ul>';
-            echo '</div>';
-      }
-}
-?>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const menuToggle = document.getElementById('menu-toggle');
