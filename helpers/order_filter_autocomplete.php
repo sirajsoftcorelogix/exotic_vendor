@@ -222,3 +222,17 @@ function orderListStaffNameSelectSql(string $usersAlias = 'vp_users', string $or
         . " ELSE {$usersAlias}.name"
         . ' END AS staff_name';
 }
+
+/** Whether order list row should show Store Name instead of Staff Name (matches orderListHasStoreNameSql). */
+function orderListUsesStoreName(array $row): bool
+{
+    if (!array_key_exists('store_name', $row) || $row['store_name'] === null) {
+        return false;
+    }
+    $raw = trim((string) $row['store_name']);
+    if ($raw === '' || strtolower($raw) === 'null') {
+        return false;
+    }
+
+    return (int) $raw > 0;
+}
