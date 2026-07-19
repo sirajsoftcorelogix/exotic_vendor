@@ -510,7 +510,7 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                                         <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceTaxDisplay; ?></span>
                                     </div>
                                     <div class="flex items-center justify-between gap-4 border-t border-gray-200 bg-gray-50 px-4 py-3 -mx-4 mt-1">
-                                        <span class="text-sm font-bold text-gray-900">GRAND Total</span>
+                                        <span class="text-sm font-bold text-gray-900">Net chargeable amount</span>
                                         <span class="text-base font-bold tabular-nums text-gray-900">₹ <?php echo $invoiceGrandTotalDisplay; ?></span>
                                     </div>
                                 </div>

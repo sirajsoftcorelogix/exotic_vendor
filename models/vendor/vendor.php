@@ -270,11 +270,14 @@ class vendor
         $stockReplenishmentMonths = trim((string)($data['stock_replenishment_months'] ?? '')) === ''
             ? 0
             : max(0, (int)$data['stock_replenishment_months']);
+        $discount = trim((string)($data['discount'] ?? '')) === ''
+            ? 0.0
+            : max(0.0, (float)$data['discount']);
 
-        $sql = "INSERT INTO vp_vendors (vendor_code, vendor_name, contact_name, vendor_email, country_code, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, agent_id, is_active, groupname, stock_replenishment_months) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_vendors (vendor_code, vendor_name, contact_name, vendor_email, country_code, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, agent_id, is_active, groupname, stock_replenishment_months, discount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param(
-            'ssssssssssssssssiiissi',
+            'ssssssssssssssssiiissid',
             $vendorCode,
             $data['addVendorName'],
             $data['addContactPerson'],
@@ -296,7 +299,8 @@ class vendor
             $data['addTeamMember'],
             $data['addStatus'],
             $groupnameValue,
-            $stockReplenishmentMonths
+            $stockReplenishmentMonths,
+            $discount
         );
         if ($stmt->execute()) {
             // Get the last inserted vendor id
@@ -358,11 +362,14 @@ class vendor
         $stockReplenishmentMonths = trim((string)($data['stock_replenishment_months'] ?? '')) === ''
             ? 0
             : max(0, (int)$data['stock_replenishment_months']);
+        $discount = trim((string)($data['discount'] ?? '')) === ''
+            ? 0.0
+            : max(0.0, (float)$data['discount']);
 
-        $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, country_code = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, agent_id = ?, is_active = ?, groupname = ?, stock_replenishment_months = ? WHERE id = ?";
+        $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, country_code = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, agent_id = ?, is_active = ?, groupname = ?, stock_replenishment_months = ?, discount = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param(
-            'sssssssssssssssiiissii',
+            'sssssssssssssssiiissidi',
             $data['editVendorName'],
             $data['editContactPerson'],
             $data['editEmail'],
@@ -384,6 +391,7 @@ class vendor
             $data['editStatus'],
             $groupnameValue,
             $stockReplenishmentMonths,
+            $discount,
             $id
         );
         if ($stmt->execute()) {

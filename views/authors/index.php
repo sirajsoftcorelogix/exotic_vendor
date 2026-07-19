@@ -59,7 +59,7 @@ $queryBase = [
                 </span>
                 <div class="min-w-0">
                     <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
-                    <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Find authors by name, remote author id, and active status.</p>
+                    <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Find authors by name, id, contact, phone, city, or state.</p>
                 </div>
             </div>
         </div>
@@ -69,7 +69,7 @@ $queryBase = [
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4">
                 <div class="sm:col-span-2">
                     <label class="block text-xs font-semibold text-gray-600 mb-1">Search</label>
-                    <input type="text" name="search_text" placeholder="Search by author name or id"
+                    <input type="text" name="search_text" placeholder="Search by author name, id, contact, or phone"
                         class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition"
                         value="<?php echo $searchValue; ?>" autocomplete="off">
                 </div>
@@ -117,6 +117,10 @@ $queryBase = [
                         <th class="px-5 py-3.5 whitespace-nowrap">#</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Author ID</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Author Name</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Contact</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Phone</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">City</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">State</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Status</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Updated</th>
                         <th class="px-5 py-3.5 whitespace-nowrap text-right">Action</th>
@@ -130,11 +134,35 @@ $queryBase = [
                             $id = (int)($author['author_id'] ?? 0);
                             $name = (string)($author['author'] ?? '');
                             $active = (int)($author['is_active'] ?? 0) === 1;
+                            $contactName = (string)($author['contact_name'] ?? '');
+                            $phone = (string)($author['author_phone'] ?? '');
+                            $city = (string)($author['city'] ?? '');
+                            $state = (string)($author['state'] ?? '');
+                            $authorPayload = [
+                                'author_id' => $id,
+                                'author' => $name,
+                                'contact_name' => $contactName,
+                                'author_email' => (string)($author['author_email'] ?? ''),
+                                'country_code' => (string)($author['country_code'] ?? ''),
+                                'author_phone' => $phone,
+                                'alt_phone' => (string)($author['alt_phone'] ?? ''),
+                                'address' => (string)($author['address'] ?? ''),
+                                'city' => $city,
+                                'state' => $state,
+                                'country' => (string)($author['country'] ?? ''),
+                                'postal_code' => (string)($author['postal_code'] ?? ''),
+                                'webpage' => (int)($author['webpage'] ?? 0),
+                                'is_active' => $active ? 1 : 0,
+                            ];
                             ?>
                             <tr class="hover:bg-amber-50/40 transition-colors">
                                 <td class="px-5 py-4 text-sm text-gray-700"><?php echo ++$counter; ?></td>
                                 <td class="px-5 py-4 text-sm font-medium text-gray-800"><?php echo $id; ?></td>
                                 <td class="px-5 py-4 text-sm font-semibold text-gray-900"><?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($contactName, ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($phone, ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($city, ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($state, ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm">
                                     <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold <?php echo $active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200'; ?>">
                                         <?php echo $active ? 'Active' : 'Inactive'; ?>
@@ -143,7 +171,7 @@ $queryBase = [
                                 <td class="px-5 py-4 text-sm text-gray-600"><?php echo htmlspecialchars((string)($author['updated_at'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm text-right whitespace-nowrap">
                                     <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                                        onclick='openAuthorModal(<?php echo json_encode(['author_id' => $id, 'author' => $name, 'is_active' => $active ? 1 : 0], JSON_HEX_APOS | JSON_HEX_QUOT); ?>)'>
+                                        onclick='openAuthorModal(<?php echo json_encode($authorPayload, JSON_HEX_APOS | JSON_HEX_QUOT); ?>)'>
                                         Edit
                                     </button>
                                     <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50"
@@ -159,7 +187,7 @@ $queryBase = [
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="6" class="px-5 py-12 text-center text-sm text-gray-500">No authors found.</td>
+                            <td colspan="10" class="px-5 py-12 text-center text-sm text-gray-500">No authors found.</td>
                         </tr>
                     <?php endif; ?>
                     </tbody>
@@ -189,36 +217,128 @@ $queryBase = [
     </div>
 </div>
 
-<div id="authorModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4">
-    <div class="w-full max-w-lg rounded-2xl bg-white shadow-xl">
-        <div class="flex items-center justify-between border-b px-6 py-4">
+<div id="authorModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4 py-6">
+    <div class="w-full max-w-3xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col">
+        <div class="flex items-center justify-between border-b px-6 py-4 shrink-0">
             <h2 id="authorModalTitle" class="text-lg font-semibold text-gray-900">Add Author</h2>
             <button type="button" onclick="closeAuthorModal()" class="text-gray-400 hover:text-gray-700">✕</button>
         </div>
-        <form id="authorForm" class="space-y-4 px-6 py-5">
+        <form id="authorForm" class="overflow-y-auto px-6 py-5 space-y-5">
             <input type="hidden" name="author_id" id="author_id">
+
             <div>
-                <label class="mb-1 block text-sm font-semibold text-gray-700">Author Name</label>
-                <input type="text" name="author" id="author_name" required
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
-                <span id="authorNameMsg" class="text-sm text-red-500"></span>
+                <h3 class="text-sm font-bold text-gray-800 mb-3">Basic Information</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Author Name</label>
+                        <input type="text" name="author" id="author_name" required
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                        <span id="authorNameMsg" class="text-sm text-red-500"></span>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Status</label>
+                        <select name="is_active" id="author_is_active"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                            <option value="1">Active</option>
+                            <option value="0">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                        <input type="checkbox" name="webpage" id="author_webpage" value="1"
+                            class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                        <span>Allow webpage on Exotic India</span>
+                    </label>
+                    <p class="mt-1 text-xs text-gray-500">Maps to the <code>webpage</code> parameter (0 or 1) on the vendor API.</p>
+                </div>
             </div>
+
             <div>
-                <label class="mb-1 block text-sm font-semibold text-gray-700">Status</label>
-                <select name="is_active" id="author_is_active"
-                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
-                    <option value="1">Active</option>
-                    <option value="0">Inactive</option>
-                </select>
+                <h3 class="text-sm font-bold text-gray-800 mb-3">Contact Details</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Contact Person</label>
+                        <input type="text" name="contact_name" id="author_contact_name"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Email</label>
+                        <input type="email" name="author_email" id="author_email"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Country Code</label>
+                        <select name="country_code" id="author_country_code"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                            <option value="">Select Code</option>
+                            <?php foreach ($countryList as $cl): ?>
+                                <option value="<?php echo htmlspecialchars((string)($cl['phone_code'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" <?php echo (($cl['name'] ?? '') === 'India') ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars((string)($cl['name'] ?? ''), ENT_QUOTES, 'UTF-8') . ' (+' . (string)($cl['phone_code'] ?? '') . ')'; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Phone</label>
+                        <input type="number" name="author_phone" id="author_phone" oninput="limitAuthorPhoneDigits(this)"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Alternate Phone (optional)</label>
+                        <input type="number" name="alt_phone" id="author_alt_phone" oninput="limitAuthorPhoneDigits(this)"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                    </div>
+                </div>
             </div>
+
             <div>
-                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                    <input type="checkbox" name="webpage" id="author_webpage" value="1"
-                        class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
-                    <span>Allow webpage on Exotic India</span>
-                </label>
-                <p class="mt-1 text-xs text-gray-500">Maps to the <code>webpage</code> parameter (0 or 1) on the vendor API.</p>
+                <h3 class="text-sm font-bold text-gray-800 mb-3">Address</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Address</label>
+                        <input type="text" name="address" id="author_address"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">City</label>
+                            <input type="text" name="city" id="author_city"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">State</label>
+                            <span id="authorStateBlock">
+                                <select name="state" id="author_state"
+                                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                                    <?php foreach ($stateList as $item): ?>
+                                        <option value="<?php echo htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                                            <?php echo htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </span>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Country</label>
+                            <select name="country" id="author_country" onchange="fetchAuthorStates(this.value);"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                                <?php foreach ($countryList as $item): ?>
+                                    <option value="<?php echo htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" <?php echo (($item['name'] ?? '') === 'India') ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Zip Code</label>
+                            <input type="text" name="postal_code" id="author_postal_code"
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                        </div>
+                    </div>
+                </div>
             </div>
+
             <div class="flex justify-end gap-3 border-t pt-4">
                 <button type="button" onclick="closeAuthorModal()" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
                 <button type="submit" id="authorSaveBtn" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Save Author</button>
@@ -229,6 +349,62 @@ $queryBase = [
 
 <script>
 let authorNameExists = false;
+
+function limitAuthorPhoneDigits(input) {
+    if (!input) return;
+    if (input.value.length > 10) {
+        input.value = input.value.slice(0, 10);
+    }
+}
+
+function setAuthorStateControl(countryName, stateValue) {
+    const block = document.getElementById('authorStateBlock');
+    if (!block) return;
+
+    if (countryName !== 'India') {
+        block.innerHTML = '<input type="text" name="state" id="author_state" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none" />';
+        const input = document.getElementById('author_state');
+        if (input) input.value = stateValue || '';
+        return;
+    }
+
+    fetch('index.php?page=vendors&action=getStates', { credentials: 'same-origin' })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            const states = Array.isArray(data) ? data : [];
+            const select = document.createElement('select');
+            select.id = 'author_state';
+            select.name = 'state';
+            select.className = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none';
+            states.forEach(function (state) {
+                const option = document.createElement('option');
+                option.value = state.name;
+                option.textContent = state.name;
+                if (stateValue && state.name === stateValue) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+            block.innerHTML = '';
+            block.appendChild(select);
+        })
+        .catch(function (err) { console.error('State fetch error:', err); });
+}
+
+function fetchAuthorStates(countryName) {
+    setAuthorStateControl(countryName, '');
+}
+
+function setSelectValueByTextOrValue(selectEl, value) {
+    if (!selectEl || value == null || value === '') return;
+    const normalized = String(value);
+    for (let i = 0; i < selectEl.options.length; i++) {
+        if (selectEl.options[i].value === normalized || selectEl.options[i].text === normalized) {
+            selectEl.selectedIndex = i;
+            return;
+        }
+    }
+}
 
 function bindCreatorNameDuplicateCheck(inputEl, msgEl, page, existsFlagSetter, excludeIdGetter, duplicateMessage) {
     if (!inputEl || !msgEl) return;
@@ -277,6 +453,22 @@ function openAuthorModal(author) {
     document.getElementById('author_name').value = author.author || '';
     document.getElementById('author_is_active').value = author.is_active != null ? String(author.is_active) : '1';
     document.getElementById('author_webpage').checked = author.webpage === 1 || author.webpage === '1';
+    document.getElementById('author_contact_name').value = author.contact_name || '';
+    document.getElementById('author_email').value = author.author_email || '';
+    setSelectValueByTextOrValue(document.getElementById('author_country_code'), author.country_code || '');
+    document.getElementById('author_phone').value = author.author_phone || '';
+    document.getElementById('author_alt_phone').value = author.alt_phone || '';
+    document.getElementById('author_address').value = author.address || '';
+    document.getElementById('author_city').value = author.city || '';
+    document.getElementById('author_postal_code').value = author.postal_code || '';
+
+    const countrySelect = document.getElementById('author_country');
+    const countryValue = author.country || 'India';
+    if (countrySelect) {
+        setSelectValueByTextOrValue(countrySelect, countryValue);
+    }
+    setAuthorStateControl(countryValue, author.state || '');
+
     document.getElementById('authorModal').classList.remove('hidden');
     document.getElementById('authorModal').classList.add('flex');
     setTimeout(function () { document.getElementById('author_name').focus(); }, 50);

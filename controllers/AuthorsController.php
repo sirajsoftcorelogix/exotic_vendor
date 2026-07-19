@@ -1,14 +1,20 @@
 <?php
 require_once 'models/author/Author.php';
+require_once 'models/country/country.php';
+require_once 'models/country/state.php';
 require_once __DIR__ . '/../helpers/vendor_external_api.php';
 
 class AuthorsController
 {
     private Author $authorModel;
+    private Country $countryModel;
+    private State $stateModel;
 
     public function __construct(mysqli $conn)
     {
         $this->authorModel = new Author($conn);
+        $this->countryModel = new Country($conn);
+        $this->stateModel = new State($conn);
     }
 
     public function index(): void
@@ -22,6 +28,8 @@ class AuthorsController
         $limit = in_array($limit, [10, 20, 50, 100], true) ? $limit : 20;
 
         $listing = $this->authorModel->getAuthors($pageNo, $limit, $search, $status);
+        $countryList = $this->countryModel->getAllCountries();
+        $stateList = $this->stateModel->getAllStates(105);
         renderTemplate('views/authors/index.php', [
             'authors' => $listing['authors'],
             'search' => $search,
@@ -30,6 +38,8 @@ class AuthorsController
             'totalPages' => $listing['totalPages'],
             'totalRecords' => $listing['totalRecords'],
             'limit' => $listing['limit'],
+            'countryList' => $countryList['countries'] ?? [],
+            'stateList' => $stateList['states'] ?? [],
         ], 'Manage Authors');
     }
 
@@ -46,7 +56,8 @@ class AuthorsController
         $id = trim((string)($_POST['author_id'] ?? '')) !== '' ? (int)$_POST['author_id'] : null;
         $name = trim((string)($_POST['author'] ?? ''));
         $isActive = (int)($_POST['is_active'] ?? 1);
-        $webpage = (string)($_POST['webpage'] ?? '0') === '1' ? '1' : '0';
+        $extra = $this->authorModel->normalizeAuthorFormData($_POST);
+        $webpage = $extra['webpage'];
 
         if ($name === '') {
             echo json_encode(['success' => false, 'message' => 'Author name is required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
@@ -73,7 +84,7 @@ class AuthorsController
                 exit;
             }
 
-            $result = $this->authorModel->saveAuthor($id, $name, $isActive);
+            $result = $this->authorModel->saveAuthor($id, $name, $isActive, $extra);
             if ($result['success']) {
                 $result['message'] = 'Author saved on Exotic India and locally.';
             }
@@ -93,7 +104,7 @@ class AuthorsController
             exit;
         }
 
-        $result = $this->authorModel->insertAuthor($remoteId, $name, $isActive);
+        $result = $this->authorModel->insertAuthor($remoteId, $name, $isActive, $extra);
         if ($result['success']) {
             $result['message'] = 'Author created on Exotic India and saved locally.';
         }
