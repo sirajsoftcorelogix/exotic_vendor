@@ -385,7 +385,7 @@ $queryBase = [
 <div id="publisherBankDetailModal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/50 px-4 py-6">
     <div class="w-full max-w-xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col">
         <div class="flex items-center justify-between border-b px-6 py-4 shrink-0">
-            <h2 class="text-lg font-semibold text-gray-900">Add / Edit Bank Details</h2>
+            <h2 class="text-lg font-semibold text-gray-900">Add / Edit Publisher Bank Details</h2>
             <button type="button" onclick="closePublisherBankDetailModal()" class="text-gray-400 hover:text-gray-700">✕</button>
         </div>
         <form id="publisherBankDetailForm" class="overflow-y-auto px-6 py-5 space-y-4">
