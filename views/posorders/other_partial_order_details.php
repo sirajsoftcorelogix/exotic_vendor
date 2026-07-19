@@ -160,11 +160,12 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                             <input type="checkbox" class="h-5 w-5 rounded border-gray-300">
                             <div class="flex flex-1 items-start gap-5 rounded-2xl border border-gray-200 p-4">
                                 <div class="h-32 w-32 flex-shrink-0 overflow-hidden rounded-xl border border-gray-100">
-                                    <img src="<?php echo htmlspecialchars((string)($item['image'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
-                                        class="h-full w-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                    <?php $imageUrl = (string)($item['image'] ?? ''); ?>
+                                    <img src="<?php echo htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                        class="h-full w-full object-cover cursor-pointer hover:opacity-90 transition-opacity pos-order-detail-enlarge"
                                         alt="product"
                                         title="Click to enlarge"
-                                        onclick="event.stopPropagation(); openImagePopup(<?php echo json_encode($item['image'] ?? ''); ?>)">
+                                        data-full-image="<?php echo htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'); ?>">
                                 </div>
 
                                 <div class="flex-1">
@@ -1128,6 +1129,18 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             closeImagePopup();
+        }
+    });
+
+    document.addEventListener('click', function(e) {
+        const thumb = e.target.closest('.pos-order-detail-enlarge');
+        if (!thumb) {
+            return;
+        }
+        e.stopPropagation();
+        const imageUrl = thumb.getAttribute('data-full-image') || thumb.getAttribute('src') || '';
+        if (imageUrl) {
+            openImagePopup(imageUrl);
         }
     });
 </script>

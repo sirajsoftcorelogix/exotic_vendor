@@ -1728,6 +1728,25 @@
         document.getElementById('imagePopup').classList.remove('hidden');
     }
 
+    function initOrderDetailImageEnlarge(root) {
+        const scope = root || document;
+        scope.querySelectorAll('.pos-order-detail-enlarge').forEach(function(thumb) {
+            if (thumb.__enlargeBound) {
+                return;
+            }
+            thumb.__enlargeBound = true;
+            thumb.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const imageUrl = thumb.getAttribute('data-full-image') || thumb.getAttribute('src') || '';
+                if (imageUrl) {
+                    openImagePopup(imageUrl);
+                }
+            });
+        });
+    }
+
+    initOrderDetailImageEnlarge(document);
+
     // Key for localStorage
     const STORAGE_KEY = 'selected_po_orders';
 
@@ -2247,6 +2266,9 @@
                         // Initialize accordion triggers inside the newly injected content so they work.
                         if (typeof initAccordionTriggers === 'function') {
                             initAccordionTriggers(modalContentDiv);
+                        }
+                        if (typeof initOrderDetailImageEnlarge === 'function') {
+                            initOrderDetailImageEnlarge(modalContentDiv);
                         }
                     })
                     .catch(error => {
