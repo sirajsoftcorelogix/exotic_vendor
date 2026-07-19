@@ -189,6 +189,24 @@ function vendor_external_api_allows_local_save(array $api): bool
 }
 
 /**
+ * Normalize vendormodify "no changes detected" (and similar) to success for callers + UI.
+ */
+function vendor_external_api_normalize_for_local_save(array $api): array
+{
+    if (!vendor_external_api_allows_local_save($api)) {
+        return $api;
+    }
+
+    $api['success'] = true;
+    $message = (string) ($api['message'] ?? '');
+    if ($message === '' || vendor_external_api_message_indicates_no_changes($message)) {
+        $api['message'] = 'Remote vendor already up to date.';
+    }
+
+    return $api;
+}
+
+/**
  * vendorcreate returns vendor_id for both new vendors and existing duplicate names.
  */
 function vendor_external_api_response_is_failure(array $data): bool
@@ -379,7 +397,7 @@ function vendor_external_api_modify(array $postData): array
         ]);
     }
 
-    return vendor_external_api_post('vendormodify', $postData);
+    return vendor_external_api_normalize_for_local_save(vendor_external_api_post('vendormodify', $postData));
 }
 
 /**
@@ -452,10 +470,10 @@ function vendor_external_api_sync_catalog(string $name, string $groupsCsv, strin
     if ($remoteVendorId !== null && trim($remoteVendorId) !== '') {
         $payload['vendor_id'] = trim($remoteVendorId);
 
-        return vendor_external_api_modify($payload);
+        return vendor_external_api_normalize_for_local_save(vendor_external_api_modify($payload));
     }
 
-    return vendor_external_api_create($payload);
+    return vendor_external_api_normalize_for_local_save(vendor_external_api_create($payload));
 }
 
 /**
@@ -472,8 +490,8 @@ function vendor_external_api_sync_creator(string $vendorType, string $name, stri
     if ($remoteId !== null && $remoteId > 0) {
         $payload['vendor_id'] = (string) $remoteId;
 
-        return vendor_external_api_modify($payload);
+        return vendor_external_api_normalize_for_local_save(vendor_external_api_modify($payload));
     }
 
-    return vendor_external_api_create($payload);
+    return vendor_external_api_normalize_for_local_save(vendor_external_api_create($payload));
 }

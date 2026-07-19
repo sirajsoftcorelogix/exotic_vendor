@@ -963,6 +963,30 @@
         }
     }
 
+    function vendorApiMessageIsNoChanges(message) {
+        const msg = String(message || '').trim().toLowerCase().replace(/\.$/, '');
+        return msg === 'no changes detected';
+    }
+
+    function isVendorApiResponseOk(apiData) {
+        if (!apiData || typeof apiData !== 'object') {
+            return true;
+        }
+        if (apiData.success === true) {
+            return true;
+        }
+        if (vendorApiMessageIsNoChanges(apiData.message)) {
+            return true;
+        }
+        if (apiData.data && vendorApiMessageIsNoChanges(apiData.data.message)) {
+            return true;
+        }
+        if (apiData.response && vendorApiMessageIsNoChanges(apiData.response.message)) {
+            return true;
+        }
+        return false;
+    }
+
     function parseVendorApiResponse(data) {
         let apiSuccess = true;
         let apiErrorMessage = '';
@@ -972,7 +996,7 @@
         }
         try {
             const apiData = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
-            apiSuccess = !!(apiData && apiData.success === true);
+            apiSuccess = isVendorApiResponseOk(apiData);
             if (!apiSuccess && apiData && apiData.message) {
                 apiErrorMessage = String(apiData.message);
             }
