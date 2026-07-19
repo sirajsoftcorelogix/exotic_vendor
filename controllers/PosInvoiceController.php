@@ -2069,6 +2069,9 @@ class PosInvoiceController
         if ($summaryGrandTotal <= 0 && $sumLineTotals > 0.001) {
             $summaryGrandTotal = round($sumLineTotals, 2);
         }
+        if ($sumLineTotals > 0.001) {
+            $summaryGrandTotal = round($sumLineTotals, 2);
+        }
         $summaryTaxAmount = round($totalSgstAmt + $totalCgstAmt + $totalIgstAmt, 2);
         if ($showDiscPriceColumn && $summaryTaxAmount > 0.001) {
             $posDiscountMeta['gst_total'] = $summaryTaxAmount;
