@@ -1043,11 +1043,6 @@ class PosOrdersController
             is_array($orderInfo) ? $orderInfo : null,
             $commanModel
         );
-        $checkoutSummary = pos_order_build_checkout_display_summary(
-            $order,
-            is_array($orderremarks) ? $orderremarks : null,
-            $commanModel
-        );
 
         if ($type === 'inner') {
             renderPartial('views/posorders/partial_order_details.php', [
@@ -1067,7 +1062,6 @@ class PosOrdersController
                 'canEditInvoiceNumber' => canSrEmpAccess(),
                 'paymentSummary' => $paymentSummary,
                 'linePricingByLineId' => $linePricingByLineId,
-                'checkoutSummary' => $checkoutSummary,
             ], 'Order Details');
         }
         exit;
