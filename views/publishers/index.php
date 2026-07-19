@@ -112,8 +112,8 @@ $queryBase = [
                     Total publishers: <span class="font-semibold text-gray-900"><?php echo number_format($totalRecords); ?></span>
                 </div>
             </div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full text-left">
+            <div class="overflow-x-auto overflow-y-visible">
+                <table id="publisher-list-table" class="min-w-full text-left">
                     <thead>
                     <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
                         <th class="px-5 py-3.5 whitespace-nowrap">#</th>
@@ -179,12 +179,12 @@ $queryBase = [
                                 <td class="px-5 py-4 text-sm text-gray-600"><?php echo htmlspecialchars((string)($publisher['update_at'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm whitespace-nowrap font-medium">
                                     <div class="menu-wrapper">
-                                        <button type="button" class="menu-button" onclick="toggleMenu(this)" aria-label="Publisher actions">&#x22EE;</button>
+                                        <button type="button" class="menu-button" aria-label="Publisher actions">&#x22EE;</button>
                                         <ul class="menu-popup text-left">
-                                            <li onclick='openPublisherModal(<?php echo json_encode($publisherPayload, JSON_HEX_APOS | JSON_HEX_QUOT); ?>)'><i class="fa-solid fa-pencil"></i> Edit</li>
-                                            <li onclick="setPublisherStatus(<?php echo $id; ?>, <?php echo $active ? 0 : 1; ?>)"><i class="fa-solid fa-power-off"></i> <?php echo $active ? 'Deactivate' : 'Activate'; ?></li>
-                                            <li onclick="openPublisherBankDtlsModal(<?php echo $id; ?>)"><i class="fa-solid fa-building-columns"></i> Bank Details</li>
-                                            <li class="text-red-700" onclick="deletePublisher(<?php echo $id; ?>)"><i class="fa-solid fa-trash"></i> Delete</li>
+                                            <li data-action="edit" data-publisher="<?php echo htmlspecialchars(json_encode($publisherPayload), ENT_QUOTES, 'UTF-8'); ?>"><i class="fa-solid fa-pencil"></i> Edit</li>
+                                            <li data-action="status" data-id="<?php echo $id; ?>" data-active="<?php echo $active ? 0 : 1; ?>"><i class="fa-solid fa-power-off"></i> <?php echo $active ? 'Deactivate' : 'Activate'; ?></li>
+                                            <li data-action="bank" data-id="<?php echo $id; ?>"><i class="fa-solid fa-building-columns"></i> Bank Details</li>
+                                            <li class="text-red-700" data-action="delete" data-id="<?php echo $id; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
                                         </ul>
                                     </div>
                                 </td>
@@ -686,45 +686,51 @@ function openPublisherBankDtlsModal(id) {
     if (typeof closeAllMenus === 'function') {
         closeAllMenus();
     }
+
+    const modal = document.getElementById('publisherBankDetailModal');
+    const msgBox = document.getElementById('publisherBankDetailMsg');
+    if (!modal) {
+        return;
+    }
+
+    document.getElementById('publisher_bank_publisher_id').value = String(id);
+    ['publisher_account_name', 'publisher_account_number', 'publisher_ifsc_code', 'publisher_bank_name', 'publisher_branch_name'].forEach(function (fieldId) {
+        const el = document.getElementById(fieldId);
+        if (el) el.value = '';
+    });
+    if (msgBox) {
+        msgBox.textContent = '';
+        msgBox.classList.add('hidden');
+    }
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
     fetch('index.php?page=publishers&action=getBankDetails&id=' + encodeURIComponent(String(id)), { credentials: 'same-origin' })
         .then(function (res) { return res.json(); })
         .then(function (bankdtls) {
-            if (bankdtls.status === 'error' || (bankdtls.success === false && bankdtls.message)) {
-                showPublisherAlert(bankdtls.message || 'Could not load bank details.', false);
+            if (!bankdtls || typeof bankdtls !== 'object') {
+                showPublisherBankDetailAlert('Could not load bank details.', false);
                 return;
             }
-
-            document.getElementById('publisher_bank_publisher_id').value = String(id);
-            const fields = {
-                publisher_account_name: '',
-                publisher_account_number: '',
-                publisher_ifsc_code: '',
-                publisher_bank_name: '',
-                publisher_branch_name: ''
-            };
-            if (bankdtls && bankdtls.account_name) {
-                fields.publisher_account_name = bankdtls.account_name || '';
-                fields.publisher_account_number = bankdtls.account_number || '';
-                fields.publisher_ifsc_code = bankdtls.ifsc_code || '';
-                fields.publisher_bank_name = bankdtls.bank_name || '';
-                fields.publisher_branch_name = bankdtls.branch_name || '';
+            if (bankdtls.status === 'error') {
+                showPublisherBankDetailAlert(bankdtls.message || 'Could not load bank details.', false);
+                return;
             }
-            Object.keys(fields).forEach(function (fieldId) {
-                const el = document.getElementById(fieldId);
-                if (el) el.value = fields[fieldId];
-            });
-
-            const msgBox = document.getElementById('publisherBankDetailMsg');
-            if (msgBox) {
-                msgBox.textContent = '';
-                msgBox.classList.add('hidden');
+            if (bankdtls.success === false && bankdtls.message) {
+                showPublisherBankDetailAlert(bankdtls.message, false);
+                return;
             }
-
-            document.getElementById('publisherBankDetailModal').classList.remove('hidden');
-            document.getElementById('publisherBankDetailModal').classList.add('flex');
+            if (bankdtls.account_name) {
+                document.getElementById('publisher_account_name').value = bankdtls.account_name || '';
+                document.getElementById('publisher_account_number').value = bankdtls.account_number || '';
+                document.getElementById('publisher_ifsc_code').value = bankdtls.ifsc_code || '';
+                document.getElementById('publisher_bank_name').value = bankdtls.bank_name || '';
+                document.getElementById('publisher_branch_name').value = bankdtls.branch_name || '';
+            }
         })
         .catch(function () {
-            showPublisherAlert('Could not load bank details.', false);
+            showPublisherBankDetailAlert('Could not load bank details.', false);
         });
 }
 
@@ -768,23 +774,48 @@ document.getElementById('publisherBankDetailForm')?.addEventListener('submit', f
         });
 });
 
-function toggleMenu(button) {
-    const popup = button.nextElementSibling;
-    if (!popup) return;
-    popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
-    document.querySelectorAll('.menu-popup').forEach(function (menu) {
-        if (menu !== popup) menu.style.display = 'none';
-    });
+function handlePublisherMenuAction(item) {
+    if (!item) return;
+    const action = item.getAttribute('data-action');
+    if (!action) return;
+
+    if (typeof closeAllMenus === 'function') {
+        closeAllMenus();
+    }
+
+    if (action === 'edit') {
+        const payloadRaw = item.getAttribute('data-publisher') || '{}';
+        try {
+            openPublisherModal(JSON.parse(payloadRaw));
+        } catch (err) {
+            showPublisherAlert('Could not open publisher editor.', false);
+        }
+        return;
+    }
+
+    const id = parseInt(item.getAttribute('data-id') || '0', 10);
+    if (!id) return;
+
+    if (action === 'status') {
+        setPublisherStatus(id, parseInt(item.getAttribute('data-active') || '0', 10));
+        return;
+    }
+    if (action === 'bank') {
+        openPublisherBankDtlsModal(id);
+        return;
+    }
+    if (action === 'delete') {
+        deletePublisher(id);
+    }
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    const menuButtons = document.querySelectorAll('.menu-button');
+    const menuButtons = document.querySelectorAll('#publisher-list-table .menu-button, .menu-wrapper .menu-button');
     window.currentOpenMenu = null;
     const menuMargin = 8;
 
     window.closeAllMenus = function () {
         if (window.currentOpenMenu) {
-            window.currentOpenMenu.classList.add('hidden');
             window.currentOpenMenu.classList.remove('active');
             window.currentOpenMenu.removeAttribute('style');
             window.currentOpenMenu = null;
@@ -795,9 +826,22 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     document.addEventListener('click', function (e) {
-        if (window.currentOpenMenu && !window.currentOpenMenu.contains(e.target)) {
-            closeAllMenus();
+        if (e.target.closest('.menu-button') || e.target.closest('.menu-popup')) {
+            return;
         }
+        closeAllMenus();
+    });
+
+    document.querySelectorAll('.menu-popup').forEach(function (menu) {
+        menu.addEventListener('click', function (e) {
+            const item = e.target.closest('li[data-action]');
+            if (!item || !menu.contains(item)) {
+                return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+            handlePublisherMenuAction(item);
+        });
     });
 
     menuButtons.forEach(function (button) {
@@ -812,7 +856,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             if (!isActive) {
-                dropdown.classList.remove('hidden');
                 dropdown.style.display = 'block';
                 const buttonRect = button.getBoundingClientRect();
                 const dropdownWidth = dropdown.offsetWidth;
