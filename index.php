@@ -143,6 +143,12 @@ switch ($page) {
             case 'syncFromAdmin':
                 $controller->syncFromAdmin();
                 break;
+            case 'getBankDetails':
+                $controller->getBankDetails();
+                break;
+            case 'bankDetails':
+                $controller->addBankDetails();
+                break;
             default:
                 $controller->index();
                 break;

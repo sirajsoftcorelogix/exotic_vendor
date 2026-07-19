@@ -214,6 +214,62 @@ class PublishersController
         exit;
     }
 
+    public function getBankDetails(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $id = (int)($_GET['id'] ?? 0);
+        if ($id <= 0) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid publisher ID.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $bankDetails = $this->publisherModel->getBankDetailsById($id);
+        if (is_array($bankDetails) && isset($bankDetails['success']) && $bankDetails['success'] === false) {
+            echo json_encode($bankDetails, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+        if (!empty($bankDetails) && is_array($bankDetails)) {
+            echo json_encode($bankDetails, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        echo json_encode(['status' => 'success', 'message' => ''], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    public function addBankDetails(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+            exit;
+        }
+
+        $data = $_POST;
+        $data['bdStatus'] = 1;
+        $publisherId = isset($data['publisher_id']) ? (int)$data['publisher_id'] : 0;
+        if ($publisherId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid publisher ID.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $existing = $this->publisherModel->getBankDetailsById($publisherId);
+        if (is_array($existing) && isset($existing['success']) && $existing['success'] === false) {
+            echo json_encode($existing, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $result = $existing
+            ? $this->publisherModel->updateBankDetails($data)
+            : $this->publisherModel->saveBankDetails($data);
+        echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
     public function syncFromAdmin(): void
     {
         is_login();
