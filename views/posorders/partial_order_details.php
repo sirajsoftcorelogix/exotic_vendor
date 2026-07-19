@@ -29,7 +29,11 @@
         //print_array($order);
         $countries = country_array();
         //print_array($countries);
-        foreach ($order as $items => $item): ?>
+        foreach ($order as $items => $item):
+            $currencyCode = strtoupper(trim($item['currency'] ?? 'INR'));
+            $currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
+            $lineCurrencySymbol = $currencyIcons[$currencyCode] ?? ($currencyCode !== '' ? $currencyCode . ' ' : '₹');
+        ?>
             <!-- Accordion Item 1 -->
             <div>
                 <div class="accordion-trigger cursor-pointer border-b pb-4">
@@ -67,6 +71,15 @@
                             </div>
                             <p class="item-meta mt-0">Item Code: <?php echo $item['item_code']; ?></p>
                             <p class="item-meta mt-0">Quantity: <?php echo $item['quantity']; ?></p>
+                            <?php
+                            $linePricing = ($linePricingByLineId ?? [])[(int)($item['id'] ?? 0)] ?? null;
+                            if (is_array($linePricing)) {
+                                renderPartial('views/posorders/partials/line_item_pricing.php', [
+                                    'linePricing' => $linePricing,
+                                    'currencySymbol' => $lineCurrencySymbol,
+                                ]);
+                            }
+                            ?>
                             <div class="flex justify-between items-center mt-3">
                                 <div class="status-box flex items-center justify-center">
                                     <span class="status-text"><?php echo $statusList[$item['status']] ?? 'Unknown'; ?></span>
