@@ -4,7 +4,7 @@ class Publisher
 {
     private mysqli $conn;
 
-    private const LIST_COLUMNS = 'id, publishers_id, publishers, contact_name, publisher_email, country_code, publisher_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_months, is_active, create_at, update_at';
+    private const LIST_COLUMNS = 'id, publishers_id, publishers, contact_name, publisher_email, country_code, publisher_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_months, discount, is_active, create_at, update_at';
 
     public function __construct(mysqli $conn)
     {
@@ -33,6 +33,9 @@ class Publisher
             'stock_replenishment_months' => trim((string)($data['stock_replenishment_months'] ?? '')) === ''
                 ? 0
                 : max(0, (int)$data['stock_replenishment_months']),
+            'discount' => trim((string)($data['discount'] ?? '')) === ''
+                ? 0.0
+                : max(0.0, (float)$data['discount']),
         ];
     }
 
@@ -241,15 +244,16 @@ class Publisher
         }
 
         $stmt = $this->conn->prepare(
-            'UPDATE vp_publishers SET publishers = ?, contact_name = ?, publisher_email = ?, country_code = ?, publisher_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, stock_replenishment_months = ?, is_active = ? WHERE id = ?'
+            'UPDATE vp_publishers SET publishers = ?, contact_name = ?, publisher_email = ?, country_code = ?, publisher_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, stock_replenishment_months = ?, discount = ?, is_active = ? WHERE id = ?'
         );
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
         }
         $webpage = (int)$fields['webpage'];
         $stockReplenishmentMonths = (int)$fields['stock_replenishment_months'];
+        $discount = (float)$fields['discount'];
         $stmt->bind_param(
-            'sssssssssssssiiii',
+            'sssssssssssssiddi',
             $name,
             $fields['contact_name'],
             $fields['publisher_email'],
@@ -265,6 +269,7 @@ class Publisher
             $fields['postal_code'],
             $webpage,
             $stockReplenishmentMonths,
+            $discount,
             $isActive,
             $id
         );
@@ -312,15 +317,16 @@ class Publisher
         }
 
         $stmt = $this->conn->prepare(
-            'INSERT INTO vp_publishers (publishers_id, publishers, contact_name, publisher_email, country_code, publisher_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_months, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO vp_publishers (publishers_id, publishers, contact_name, publisher_email, country_code, publisher_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_months, discount, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
         }
         $webpage = (int)$fields['webpage'];
         $stockReplenishmentMonths = (int)$fields['stock_replenishment_months'];
+        $discount = (float)$fields['discount'];
         $stmt->bind_param(
-            'isssssssssssssiii',
+            'issssssssssssssidi',
             $publishersId,
             $name,
             $fields['contact_name'],
@@ -337,6 +343,7 @@ class Publisher
             $fields['postal_code'],
             $webpage,
             $stockReplenishmentMonths,
+            $discount,
             $isActive
         );
 

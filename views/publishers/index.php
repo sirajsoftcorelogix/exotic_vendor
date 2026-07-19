@@ -159,6 +159,7 @@ $queryBase = [
                                 'postal_code' => (string)($publisher['postal_code'] ?? ''),
                                 'webpage' => (int)($publisher['webpage'] ?? 0),
                                 'stock_replenishment_months' => (int)($publisher['stock_replenishment_months'] ?? 0),
+                                'discount' => (float)($publisher['discount'] ?? 0),
                                 'is_active' => $active ? 1 : 0,
                             ];
                             ?>
@@ -256,6 +257,13 @@ $queryBase = [
                             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none"
                             placeholder="e.g. 30">
                         <p class="mt-1 text-xs text-gray-500">Expected months to replenish stock for this publisher. Leave empty or 0 if not set.</p>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Discount (%)</label>
+                        <input type="number" name="discount" id="publisher_discount" min="0" step="0.01"
+                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none"
+                            placeholder="e.g. 10">
+                        <p class="mt-1 text-xs text-gray-500">Default discount percentage for this publisher. Leave empty or 0 if not set.</p>
                     </div>
                 </div>
                 <div class="mt-3">
@@ -496,6 +504,10 @@ function openPublisherModal(publisher) {
     document.getElementById('publisher_stock_replenishment_months').value =
         publisher.stock_replenishment_months != null && publisher.stock_replenishment_months !== 0
             ? String(publisher.stock_replenishment_months)
+            : '';
+    document.getElementById('publisher_discount').value =
+        publisher.discount != null && publisher.discount !== 0
+            ? String(publisher.discount)
             : '';
 
     const countrySelect = document.getElementById('publisher_country');

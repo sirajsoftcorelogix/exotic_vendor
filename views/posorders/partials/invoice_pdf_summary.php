@@ -16,6 +16,9 @@ $currencySymbol = (string)($currencySymbol ?? '₹');
     <div class="divide-y divide-gray-100 px-4 py-1 text-sm">
         <?php foreach ($summaryRows as $summaryRow):
             $label = trim((string)($summaryRow['label'] ?? ''));
+            if ($label === 'GRAND Total') {
+                $label = 'Net chargeable amount';
+            }
             $amount = number_format((float)($summaryRow['amount'] ?? 0), 2);
             $note = trim((string)($summaryRow['note'] ?? ''));
             $isGrand = !empty($summaryRow['is_grand']);
