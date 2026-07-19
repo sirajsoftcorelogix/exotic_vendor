@@ -204,6 +204,7 @@ function pos_invoice_build_amount_summary_rows(
 function pos_invoice_resolve_pdf_summary_inputs(array $invoice, float $lineTotalSum = 0.0): array
 {
     require_once __DIR__ . '/pos_order_pricing.php';
+    require_once __DIR__ . '/pos_invoice_line_calculation.php';
 
     $posMeta = pos_invoice_parse_discount_meta($invoice['notes'] ?? null);
     if ($posMeta === [] && !empty($invoice['pos_flag'])) {
@@ -217,15 +218,13 @@ function pos_invoice_resolve_pdf_summary_inputs(array $invoice, float $lineTotal
 
     $summaryGrandTotal = round((float)($posMeta['grand_total'] ?? 0), 2);
     $summarySubtotal = round((float)($posMeta['subtotal_goods'] ?? 0), 2);
-    $orderLevelDisc = round(
-        (float)($posMeta['coupon_discount'] ?? 0)
-        + (float)($posMeta['cash_discount'] ?? 0)
-        + (float)($posMeta['gift_discount'] ?? 0),
-        2
-    );
     $invoiceInclusive = round((float)($invoice['subtotal'] ?? 0) + (float)($invoice['tax_amount'] ?? 0), 2);
+    $orderLevelDisc = pos_invoice_order_level_discount_total($posMeta);
+    $excelGrandTotal = pos_invoice_expected_grand_total($posMeta, $lineTotalSum);
     $summaryBase = $summarySubtotal > 0 ? $summarySubtotal : $invoiceInclusive;
     if ($orderLevelDisc > 0.001 && $summaryBase > 0) {
+        $summaryGrandTotal = $excelGrandTotal;
+    } elseif ($summaryGrandTotal <= 0 || abs($summaryGrandTotal - $summaryBase) < 0.02) {
         $computedGrand = max(0.0, round($summaryBase - $orderLevelDisc, 2));
         if ($summaryGrandTotal <= 0 || abs($summaryGrandTotal - $summaryBase) < 0.02) {
             $summaryGrandTotal = $computedGrand;
@@ -234,8 +233,10 @@ function pos_invoice_resolve_pdf_summary_inputs(array $invoice, float $lineTotal
     if ($summaryGrandTotal <= 0) {
         $summaryGrandTotal = round((float)($invoice['total_amount'] ?? 0), 2);
     }
-    if ($lineTotalSum > 0.001) {
+    if ($lineTotalSum > 0.001 && abs($lineTotalSum - $excelGrandTotal) <= 0.05) {
         $summaryGrandTotal = round($lineTotalSum, 2);
+    } elseif ($excelGrandTotal > 0 && $orderLevelDisc > 0.001) {
+        $summaryGrandTotal = $excelGrandTotal;
     }
 
     $summaryTaxAmount = round((float)($posMeta['gst_total'] ?? 0), 2);
