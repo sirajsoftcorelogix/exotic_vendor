@@ -42,11 +42,11 @@ $invoiceDateDisplay = !empty($invoiceDisplay['invoice_date'])
     : '—';
 $invoiceSubtotalDisplay = number_format((float)($invoiceDisplay['subtotal'] ?? 0), 2);
 $invoiceTaxDisplay = number_format((float)($invoiceDisplay['tax_amount'] ?? 0), 2);
-$invoiceDiscountLines = (is_array($invoiceDisplay) && is_array($invoiceDisplay['discount_lines'] ?? null))
-    ? $invoiceDisplay['discount_lines']
+$invoiceSummaryRows = (is_array($invoiceDisplay) && is_array($invoiceDisplay['summary_rows'] ?? null))
+    ? $invoiceDisplay['summary_rows']
     : [];
 $invoiceGoodsInclDisplay = number_format((float)($invoiceDisplay['subtotal_goods_incl'] ?? 0), 2);
-$invoiceGrandTotalDisplay = number_format((float)($invoiceDisplay['grand_total'] ?? 0), 2);
+$invoiceGrandTotalDisplay = number_format((float)($invoiceDisplay['pdf_grand_total'] ?? $invoiceDisplay['grand_total'] ?? 0), 2);
 $paymentSummary = is_array($paymentSummary ?? null) ? $paymentSummary : ['order_total' => 0, 'paid_total' => 0, 'pending' => 0, 'is_fully_paid' => false, 'payments' => []];
 $paymentRows = is_array($paymentSummary['payments'] ?? null) ? $paymentSummary['payments'] : [];
 $paymentOrderTotalDisplay = number_format((float)($paymentSummary['order_total'] ?? 0), 2);
@@ -196,6 +196,15 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                                                     <?php echo str_pad($item['quantity'], 2, '0', STR_PAD_LEFT); ?>
                                                 </span>
                                             </div>
+                                            <?php
+                                            $linePricing = $linePricingByLineId[(int)($item['id'] ?? 0)] ?? null;
+                                            if (is_array($linePricing)) {
+                                                renderPartial('views/posorders/partials/line_item_pricing.php', [
+                                                    'linePricing' => $linePricing,
+                                                    'currencySymbol' => $currencysymbol,
+                                                ]);
+                                            }
+                                            ?>
                                         </div>
                                         <div class="flex items-center gap-12">
                                             <div class="flex items-center gap-2 text-[13px] text-black-500">
@@ -484,59 +493,29 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                             </div>
                         </div>
 
-                        <div class="rounded-lg border border-gray-200 bg-white">
-                            <div class="divide-y divide-gray-100 px-4 py-1 text-sm">
-                                <?php
-                                $goodsIncl = (float)($invoiceDisplay['subtotal_goods_incl'] ?? 0);
-                                $pretaxPlusTax = (float)($invoiceDisplay['subtotal'] ?? 0) + (float)($invoiceDisplay['tax_amount'] ?? 0);
-                                if ($goodsIncl > 0 && abs($goodsIncl - $pretaxPlusTax) > 0.02):
-                                ?>
+                        <?php if ($invoiceSummaryRows !== []): ?>
+                            <?php renderPartial('views/posorders/partials/invoice_pdf_summary.php', [
+                                'summaryRows' => $invoiceSummaryRows,
+                                'currencySymbol' => '₹',
+                            ]); ?>
+                        <?php else: ?>
+                            <div class="rounded-lg border border-gray-200 bg-white">
+                                <div class="divide-y divide-gray-100 px-4 py-1 text-sm">
                                     <div class="flex items-center justify-between gap-4 py-2.5">
-                                        <span class="text-gray-600">Goods Total (incl. GST)</span>
-                                        <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceGoodsInclDisplay; ?></span>
+                                        <span class="text-gray-600">Subtotal</span>
+                                        <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceSubtotalDisplay; ?></span>
                                     </div>
-                                <?php endif; ?>
-                                <div class="flex items-center justify-between gap-4 py-2.5">
-                                    <span class="text-gray-600">Subtotal</span>
-                                    <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceSubtotalDisplay; ?></span>
-                                </div>
-                                <div class="flex items-center justify-between gap-4 py-2.5">
-                                    <span class="text-gray-600">Tax</span>
-                                    <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceTaxDisplay; ?></span>
-                                </div>
-                                <?php if ($invoiceDiscountLines !== []): ?>
-                                    <div class="py-2">
-                                        <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Discounts</p>
-                                        <div class="mt-1 space-y-2">
-                                            <?php foreach ($invoiceDiscountLines as $discountLine):
-                                                $discountLabel = trim((string)($discountLine['label'] ?? 'Discount'));
-                                                $discountAmount = number_format((float)($discountLine['amount'] ?? 0), 2);
-                                                $discountNote = trim((string)($discountLine['note'] ?? ''));
-                                            ?>
-                                                <div class="rounded-md bg-emerald-50/70 px-2.5 py-2">
-                                                    <div class="flex items-start justify-between gap-3">
-                                                        <span class="text-gray-700"><?php echo htmlspecialchars($discountLabel); ?></span>
-                                                        <span class="shrink-0 tabular-nums font-semibold text-emerald-700">- ₹ <?php echo $discountAmount; ?></span>
-                                                    </div>
-                                                    <?php if ($discountNote !== ''): ?>
-                                                        <p class="mt-1 text-[11px] leading-snug text-gray-500"><?php echo htmlspecialchars($discountNote); ?></p>
-                                                    <?php endif; ?>
-                                                </div>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    </div>
-                                <?php else: ?>
                                     <div class="flex items-center justify-between gap-4 py-2.5">
-                                        <span class="text-gray-600">Discount</span>
-                                        <span class="tabular-nums font-medium text-gray-500">₹ 0.00</span>
+                                        <span class="text-gray-600">Tax</span>
+                                        <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceTaxDisplay; ?></span>
                                     </div>
-                                <?php endif; ?>
+                                    <div class="flex items-center justify-between gap-4 border-t border-gray-200 bg-gray-50 px-4 py-3 -mx-4 mt-1">
+                                        <span class="text-sm font-bold text-gray-900">GRAND Total</span>
+                                        <span class="text-base font-bold tabular-nums text-gray-900">₹ <?php echo $invoiceGrandTotalDisplay; ?></span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="flex items-center justify-between gap-4 border-t border-gray-200 bg-gray-50 px-4 py-3">
-                                <span class="text-sm font-bold text-gray-900">Grand Total</span>
-                                <span class="text-base font-bold tabular-nums text-gray-900">₹ <?php echo $invoiceGrandTotalDisplay; ?></span>
-                            </div>
-                        </div>
+                        <?php endif; ?>
 
                         <?php if ($invoicePdfUrl !== ''): ?>
                             <a href="<?php echo htmlspecialchars($invoicePdfUrl, ENT_QUOTES, 'UTF-8'); ?>"

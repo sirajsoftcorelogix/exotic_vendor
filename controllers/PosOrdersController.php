@@ -805,6 +805,21 @@ class PosOrdersController
             }
         }
 
+        require_once __DIR__ . '/../helpers/invoice/pos_invoice_amount_summary.php';
+        $pdfSummaryInputs = pos_invoice_resolve_pdf_summary_inputs($invoice);
+        $summaryRows = pos_invoice_build_amount_summary_rows(
+            $pdfSummaryInputs['pos_meta'],
+            $pdfSummaryInputs['grand_total'],
+            $pdfSummaryInputs['tax_amount']
+        );
+        $pdfGrandTotal = $pdfSummaryInputs['grand_total'];
+        if ($summaryRows !== []) {
+            $lastRow = $summaryRows[count($summaryRows) - 1];
+            if (!empty($lastRow['is_grand'])) {
+                $pdfGrandTotal = round((float)($lastRow['amount'] ?? $pdfGrandTotal), 2);
+            }
+        }
+
         return [
             'id' => (int)$invoice['id'],
             'invoice_number' => (string)($invoice['invoice_number'] ?? ''),
@@ -818,6 +833,8 @@ class PosOrdersController
             'discount_lines' => $discountLines,
             'discounts_absorbed' => is_array($posDiscounts) && !empty($posDiscounts['discounts_absorbed']),
             'grand_total' => $grandTotal,
+            'pdf_grand_total' => $pdfGrandTotal,
+            'summary_rows' => $summaryRows,
             'status' => (string)($invoice['status'] ?? ''),
         ];
     }
@@ -1011,11 +1028,20 @@ class PosOrdersController
         $invoicePdfUrl = $invoiceId > 0 ? pos_invoice_pdf_url($invoiceId) : '';
         $invoiceDisplay = $this->buildOrderInvoiceDisplaySummary($activeInvoice, $resolvedOrderNumber);
         $paymentSummary = $this->buildOrderPaymentSummary($resolvedOrderNumber, is_array($orderremarks) ? $orderremarks : null);
+        $orderInfo = $ordersModel->getAddressInfoByOrderNumber($resolvedOrderNumber);
+        require_once __DIR__ . '/../helpers/invoice/pos_order_pricing.php';
+        $linePricingByLineId = pos_order_build_line_display_pricing_map(
+            $order,
+            is_array($activeInvoice) ? $activeInvoice : null,
+            is_array($orderInfo) ? $orderInfo : null,
+            $commanModel
+        );
 
         if ($type === 'inner') {
             renderPartial('views/posorders/partial_order_details.php', [
                 'order' => $order,
                 'statusList' => $statusList,
+                'linePricingByLineId' => $linePricingByLineId,
             ]);
         } else {
             renderTemplate('views/posorders/other_partial_order_details.php', [
@@ -1028,6 +1054,7 @@ class PosOrdersController
                 'invoicePdfUrl' => $invoicePdfUrl,
                 'canEditInvoiceNumber' => canSrEmpAccess(),
                 'paymentSummary' => $paymentSummary,
+                'linePricingByLineId' => $linePricingByLineId,
             ], 'Order Details');
         }
         exit;
