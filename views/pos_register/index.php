@@ -963,6 +963,30 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   </div>
 </div>
 
+<!-- OVERSEAS GST CONFIRMATION (non-India customers) -->
+<div id="overseasGstModal" class="fixed inset-0 z-[10002] hidden">
+  <div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
+  <div class="relative mx-auto mt-[14vh] w-[95%] max-w-lg rounded-2xl bg-white shadow-2xl">
+    <div class="border-b px-5 py-4">
+      <h2 class="text-base font-semibold text-slate-800">Apply GST on this invoice?</h2>
+      <p class="mt-1 text-xs text-slate-500">Customer delivery country is outside India. Export orders are usually zero-rated.</p>
+    </div>
+    <div class="space-y-3 p-5">
+      <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+        Delivery country: <strong id="overseasGstCountryLabel">—</strong>
+      </div>
+      <p class="text-xs leading-relaxed text-slate-600">
+        Choose <strong>No GST</strong> for a typical zero-rated export invoice, or <strong>Apply GST</strong> if IGST must be charged on this export.
+      </p>
+    </div>
+    <div class="flex flex-wrap justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3 rounded-b-2xl">
+      <button type="button" id="overseasGstBackBtn" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Back</button>
+      <button type="button" id="overseasGstNoBtn" class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">No GST (export)</button>
+      <button type="button" id="overseasGstYesBtn" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Yes, apply GST</button>
+    </div>
+  </div>
+</div>
+
 <!-- DISCOUNT MODAL -->
 <div id="discountModal" class="fixed inset-0 z-[9999] hidden">
 
@@ -1547,6 +1571,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   }
 
   var pendingAddressPayloadForCheckout = null;
+  var pendingCheckoutPayloadForGst = null;
 
   function syncDeliveryStatusOptionStyles() {
     document.querySelectorAll("#deliveryStatusModal .delivery-status-option").forEach(function(label) {
@@ -1698,6 +1723,67 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   function isPosIndiaCountry(code) {
     var c = String(code || "").trim().toUpperCase();
     return c === "IN" || c === "IND" || c === "INDIA";
+  }
+
+  function resolvePosCountryFromPayloadValue(raw, selectId) {
+    var selectEl = selectId ? document.getElementById(selectId) : null;
+    return normalizePosCountryCode(raw, selectEl);
+  }
+
+  function resolvePosPlaceOfSupplyCountry(payload) {
+    if (!payload || typeof payload !== "object") {
+      return "IN";
+    }
+    var hasShipping = String(payload.confirm_saddress1 || "").trim() !== "";
+    if (hasShipping) {
+      return resolvePosCountryFromPayloadValue(payload.confirm_scountry || "IN", "confirm_scountry");
+    }
+    return resolvePosCountryFromPayloadValue(payload.confirm_country || "IN", "confirm_country");
+  }
+
+  function posCountryDisplayName(code) {
+    var normalized = String(code || "").trim().toUpperCase();
+    var selectEl = document.getElementById("confirm_scountry") || document.getElementById("confirm_country");
+    if (selectEl) {
+      var i;
+      for (i = 0; i < selectEl.options.length; i++) {
+        if (String(selectEl.options[i].value || "").toUpperCase() === normalized) {
+          return selectEl.options[i].text || normalized;
+        }
+      }
+    }
+    return normalized || "—";
+  }
+
+  function needsOverseasGstConfirmation(payload) {
+    return !isPosIndiaCountry(resolvePosPlaceOfSupplyCountry(payload));
+  }
+
+  function openOverseasGstModal(payload) {
+    pendingCheckoutPayloadForGst = payload;
+    var label = document.getElementById("overseasGstCountryLabel");
+    if (label) {
+      label.textContent = posCountryDisplayName(resolvePosPlaceOfSupplyCountry(payload));
+    }
+    document.getElementById("overseasGstModal").classList.remove("hidden");
+  }
+
+  function closeOverseasGstModal() {
+    pendingCheckoutPayloadForGst = null;
+    document.getElementById("overseasGstModal").classList.add("hidden");
+  }
+
+  function submitCheckoutWithExportGst(applyGst) {
+    if (!pendingCheckoutPayloadForGst) {
+      showToast("Checkout details missing — please try again.", "red");
+      return;
+    }
+    var payload = Object.assign({}, pendingCheckoutPayloadForGst, {
+      apply_export_gst: applyGst ? "1" : "0"
+    });
+    closeOverseasGstModal();
+    closeDeliveryStatusModal();
+    createOrderNow(payload);
   }
 
   function isPosStateDropdownCountry(code) {
@@ -2665,6 +2751,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           return;
         }
         var payload = Object.assign({}, pendingAddressPayloadForCheckout, { pos_delivery_status: status });
+        if (needsOverseasGstConfirmation(payload)) {
+          openOverseasGstModal(payload);
+          return;
+        }
         
         // Add E-way bill data if checked
         if (generateEwb) {
@@ -2689,6 +2779,25 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         }
         
         createOrderNow(payload);
+      });
+    }
+
+    var overseasGstBackBtn = document.getElementById("overseasGstBackBtn");
+    if (overseasGstBackBtn) {
+      overseasGstBackBtn.addEventListener("click", function() {
+        closeOverseasGstModal();
+      });
+    }
+    var overseasGstNoBtn = document.getElementById("overseasGstNoBtn");
+    if (overseasGstNoBtn) {
+      overseasGstNoBtn.addEventListener("click", function() {
+        submitCheckoutWithExportGst(false);
+      });
+    }
+    var overseasGstYesBtn = document.getElementById("overseasGstYesBtn");
+    if (overseasGstYesBtn) {
+      overseasGstYesBtn.addEventListener("click", function() {
+        submitCheckoutWithExportGst(true);
       });
     }
 

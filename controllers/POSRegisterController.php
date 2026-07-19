@@ -2571,6 +2571,45 @@ class POSRegisterController
         return round($base * (1 + $pct / 100), 2);
     }
 
+    private function posRowIsBookProduct(array $dbRow, array $apiData = []): bool
+    {
+        if (!class_exists('product', false)) {
+            require_once __DIR__ . '/../models/product/product.php';
+        }
+
+        return product::isBookProduct(array_merge($apiData, $dbRow));
+    }
+
+    /** Flat book fees (INR) stored on vp_products — added after GST-inclusive Price India. */
+    private function posBookProductFees(array $dbRow): float
+    {
+        return max(0.0, (float)($dbRow['sourcingfee'] ?? 0)) + max(0.0, (float)($dbRow['shippingfee'] ?? 0));
+    }
+
+    /**
+     * POS grid + product modal unit price: GST-inclusive Price India; books add sourcing + shipping fees.
+     */
+    private function computePosDisplayUnitPrice(
+        array $apiData,
+        array $dbRow,
+        ?array $gstApiOverride = null,
+        ?float $baseExGst = null
+    ): float {
+        if ($baseExGst === null) {
+            $baseExGst = $this->mergePosProductSellingBaseExGst($apiData, $dbRow);
+        }
+        if ($baseExGst <= 0) {
+            return 0.0;
+        }
+        $gstApi = $gstApiOverride ?? $apiData;
+        $inclusive = $this->applyGstInclusiveToUnitPrice($baseExGst, $dbRow, $gstApi);
+        if (!$this->posRowIsBookProduct($dbRow, $apiData)) {
+            return $inclusive;
+        }
+
+        return round($inclusive + $this->posBookProductFees($dbRow), 2);
+    }
+
     /** First positive amount from named keys on an API payload (same keys used elsewhere for catalog sync). */
     private function pickPositivePriceFromApiArray(array $data): float
     {
@@ -2651,7 +2690,7 @@ class POSRegisterController
     private function stripPosProductListInternalFields(array $rows): array
     {
         foreach ($rows as &$row) {
-            unset($row['price_india'], $row['gst']);
+            unset($row['price_india'], $row['gst'], $row['itemtype'], $row['sourcingfee'], $row['shippingfee']);
         }
         unset($row);
 
@@ -2711,11 +2750,10 @@ class POSRegisterController
                     continue;
                 }
                 $dbRow = $rows[$i];
-                $base = $this->mergePosProductSellingBaseExGst($apiData, $dbRow);
-                if ($base <= 0) {
+                $rows[$i]['price'] = $this->computePosDisplayUnitPrice($apiData, $dbRow);
+                if ((float)($rows[$i]['price'] ?? 0) <= 0) {
                     continue;
                 }
-                $rows[$i]['price'] = $this->applyGstInclusiveToUnitPrice($base, $dbRow, $apiData);
             }
         }
 
@@ -3186,6 +3224,7 @@ class POSRegisterController
             $stmt = $conn->prepare(
                 'SELECT id, item_code, sku, title, image, material, size, color, hsn, gst,
                         price_india, itemprice, finalprice, mrp_india,
+                        groupname, itemtype, sourcingfee, shippingfee,
                         product_weight, product_weight_unit,
                         prod_height, prod_width, prod_length, length_unit, item_level
                  FROM vp_products WHERE is_active = 1
@@ -3218,7 +3257,7 @@ class POSRegisterController
         }
 
         $data2 = null;
-        $sellingPrice = $this->mergePosProductSellingBaseExGst($data, $dbRow);
+        $sellingBaseExGst = $this->mergePosProductSellingBaseExGst($data, $dbRow);
         $variantDiffers = ($dbItemCode !== '' && strcasecmp($dbItemCode, $code) !== 0);
         // One base item_code fetch when variant response is missing image, price, MRP, or GST (avoids 2–3 sequential /product/code calls).
         if ($variantDiffers) {
@@ -3226,7 +3265,7 @@ class POSRegisterController
             $gstFromVariant = $this->resolveGstPercentAsNumber($data, $dbRow);
             $needBaseFetch =
                 ($imageResolved === '')
-                || ($sellingPrice <= 0)
+                || ($sellingBaseExGst <= 0)
                 || ($mrpFromVariant <= 0)
                 || ($gstFromVariant <= 0);
             if ($needBaseFetch) {
@@ -3238,10 +3277,10 @@ class POSRegisterController
                         $imageResolved = $imgBase;
                     }
                 }
-                if ($sellingPrice <= 0) {
+                if ($sellingBaseExGst <= 0) {
                     $altSell = $this->mergePosProductSellingBaseExGst($data2, $dbRow);
                     if ($altSell > 0) {
-                        $sellingPrice = $altSell;
+                        $sellingBaseExGst = $altSell;
                     }
                 }
             }
@@ -3255,7 +3294,7 @@ class POSRegisterController
         if ($this->resolveGstPercentAsNumber($data, $dbRow) <= 0 && $data2 !== null) {
             $gstApiForSell = $data2;
         }
-        $sellingPrice = $this->applyGstInclusiveToUnitPrice($sellingPrice, $dbRow, $gstApiForSell);
+        $sellingPrice = $this->computePosDisplayUnitPrice($data, $dbRow, $gstApiForSell, $sellingBaseExGst);
 
         $dimApi = $this->cleanValue($data['dimensions'] ?? '');
         $dbH = isset($dbRow['prod_height']) ? trim((string)$dbRow['prod_height']) : '';
@@ -4827,6 +4866,7 @@ class POSRegisterController
             'custom_discount_mode' => trim((string)($payload['custom_discount_mode'] ?? '')),
             'custom_discount_value' => round((float)($payload['custom_discount_value'] ?? 0), 2),
             'coupon_display_name' => trim((string)($payload['coupon_display_name'] ?? '')),
+            'apply_export_gst' => !empty($payload['apply_export_gst']) ? 1 : 0,
         ];
         $invoiceMeta = $this->finalizePosReceiptInvoice($conn, $orderNumber, $paymentStage, $compliance, $customInvoiceNumber);
         

@@ -41,29 +41,35 @@ class PosInvoiceController
     =============================== */
     public function index()
     {
-        global $conn;
+        global $conn, $usersModel;
 
         $customerModel = new Customer($conn);
 
         $customers = $customerModel->getAllCustomers(1000, 0, []);
+        $isAdminUser = $this->isPosInvoiceAdminUser();
 
         renderTemplate('views/posinvoice/index.php', [
-            'customers' => $customers
+            'customers' => $customers,
+            'warehouses' => $isAdminUser ? $usersModel->getAllWarehouses() : [],
+            'can_change_warehouse' => $isAdminUser,
         ]);
+    }
+
+    public function userGuide()
+    {
+        is_login();
+        renderTemplate('views/posinvoice/user_guide.php', [], 'Invoice Module — User Guide');
     }
 
     /* ===============================
        AJAX LIST
     =============================== */
-    public function list_ajax()
+    /** @return array<string, mixed> */
+    private function resolvePosInvoiceListFiltersFromRequest(): array
     {
-        global $invoiceModel;
-
-        is_login();
-
-        $isAdminUser = $this->isPosInvoiceAdminUser();
         $filters = [
             'order_number' => $_GET['order_number'] ?? '',
+            'invoice_number' => $_GET['invoice_number'] ?? '',
             'status' => $_GET['status'] ?? '',
             'from_date' => $_GET['from_date'] ?? '',
             'to_date' => $_GET['to_date'] ?? '',
@@ -71,16 +77,444 @@ class PosInvoiceController
             'customer_id' => $_GET['customer_id'] ?? '',
             'amount_min' => $_GET['amount_min'] ?? '',
             'amount_max' => $_GET['amount_max'] ?? '',
+            'discount_applied' => $_GET['discount_applied'] ?? '',
             'warehouse_id' => null,
         ];
 
-        if (!$isAdminUser) {
+        if ($this->isPosInvoiceAdminUser()) {
+            $selectedWarehouseId = trim((string) ($_GET['warehouse_id'] ?? ''));
+            if ($selectedWarehouseId !== '' && (int) $selectedWarehouseId > 0) {
+                $filters['warehouse_id'] = (int) $selectedWarehouseId;
+            }
+        } else {
             $filters['warehouse_id'] = $this->getSessionWarehouseId();
         }
 
-        echo json_encode($invoiceModel->searchPosListAjax($filters));
+        return $filters;
+    }
+
+    private function formatPosInvoicePaymentTypeLabel(?string $paymentType): string
+    {
+        $key = strtolower(trim((string) $paymentType));
+
+        return match ($key) {
+            'offline' => 'Offline',
+            'cod' => 'Cash',
+            'razorpay' => 'Razorpay',
+            'bank_transfer' => 'Bank',
+            default => $key !== '' ? ucfirst(str_replace('_', ' ', $key)) : '',
+        };
+    }
+
+    public function list_ajax()
+    {
+        global $invoiceModel;
+
+        is_login();
+
+        echo json_encode($invoiceModel->searchPosListAjax($this->resolvePosInvoiceListFiltersFromRequest()));
         exit;
     }
+
+    public function export_excel(): void
+    {
+        global $invoiceModel;
+
+        is_login();
+
+        $rows = $invoiceModel->searchPosListAjax($this->resolvePosInvoiceListFiltersFromRequest());
+        if ($rows === []) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(422);
+            echo json_encode(['success' => false, 'message' => 'No invoices match the current filters.']);
+            exit;
+        }
+
+        if (count($rows) > 5000) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(422);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Too many invoices (' . count($rows) . '). Narrow the date range or filters (max 5,000 rows).',
+            ]);
+            exit;
+        }
+
+        require_once 'vendor/autoload.php';
+
+        try {
+            $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('POS Invoices');
+
+            $headers = [
+                'ID',
+                'Invoice Date',
+                'Order Number',
+                'Invoice Number',
+                'Store / Warehouse',
+                'Customer',
+                'Customer State',
+                'Customer Country',
+                'Payment Type',
+                'Amount (Net Payable)',
+                'Discount Applied',
+                'Discount',
+                'Paid',
+                'Pending',
+                'Gross Amount',
+                'Status',
+            ];
+            $sheet->fromArray($headers, null, 'A1');
+
+            $headerRange = 'A1:P1';
+            $sheet->getStyle($headerRange)->getFont()->setBold(true);
+            $sheet->getStyle($headerRange)->getFill()
+                ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                ->getStartColor()->setARGB('FFF3F4F6');
+
+            $rowNum = 2;
+            foreach ($rows as $row) {
+                $discountAmount = round((float) ($row['discount_amount'] ?? 0), 2);
+                $sheet->fromArray([
+                    (int) ($row['id'] ?? 0),
+                    (string) ($row['invoice_date'] ?? ''),
+                    (string) ($row['order_number'] ?? ''),
+                    (string) ($row['invoice_number'] ?? ''),
+                    (string) ($row['warehouse_name'] ?? ''),
+                    (string) ($row['customer_name'] ?? ''),
+                    (string) ($row['customer_billing_state'] ?? ''),
+                    (string) ($row['customer_billing_country'] ?? ''),
+                    $this->formatPosInvoicePaymentTypeLabel($row['payment_type'] ?? ''),
+                    round((float) ($row['payable_amount'] ?? 0), 2),
+                    $discountAmount > 0.001 ? 'Yes' : 'No',
+                    $discountAmount,
+                    round((float) ($row['paid_amount'] ?? 0), 2),
+                    round((float) ($row['pending_amount'] ?? 0), 2),
+                    round((float) ($row['total_amount'] ?? 0), 2),
+                    ucfirst(strtolower(trim((string) ($row['status'] ?? '')))),
+                ], null, 'A' . $rowNum);
+                $rowNum++;
+            }
+
+            $lastRow = max(2, $rowNum - 1);
+            $moneyFormat = '#,##0.00';
+            $sheet->getStyle('J2:J' . $lastRow)->getNumberFormat()->setFormatCode($moneyFormat);
+            $sheet->getStyle('L2:O' . $lastRow)->getNumberFormat()->setFormatCode($moneyFormat);
+            $sheet->getStyle('B2:B' . $lastRow)->getNumberFormat()->setFormatCode('yyyy-mm-dd');
+
+            foreach (range('A', 'P') as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
+
+            $filename = 'pos_invoices_' . date('Y-m-d_His') . '.xlsx';
+
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            if (headers_sent()) {
+                throw new \RuntimeException('Export response headers were already sent.');
+            }
+
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Content-Transfer-Encoding: binary');
+            header('Cache-Control: max-age=0');
+            header('Pragma: public');
+
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save('php://output');
+        } catch (\Throwable $e) {
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Could not generate Excel file. Please try again.',
+            ]);
+        }
+        exit;
+    }
+
+    public function sales_summary(): void
+    {
+        global $usersModel;
+
+        is_login();
+
+        $isAdminUser = $this->isPosInvoiceAdminUser();
+        $sessionWarehouseId = $this->getSessionWarehouseId();
+        $sessionWarehouseName = '';
+
+        if (!$isAdminUser && $sessionWarehouseId > 0) {
+            $warehouse = $usersModel->getWarehouseById($sessionWarehouseId);
+            $sessionWarehouseName = trim((string) ($warehouse['address_title'] ?? ''));
+            if ($sessionWarehouseName === '') {
+                $sessionWarehouseName = 'Warehouse #' . $sessionWarehouseId;
+            }
+        }
+
+        renderTemplate('views/posinvoice/sales_summary.php', [
+            'warehouses' => $isAdminUser ? $usersModel->getAllWarehouses() : [],
+            'can_change_warehouse' => $isAdminUser,
+            'session_warehouse_id' => $sessionWarehouseId,
+            'session_warehouse_name' => $sessionWarehouseName,
+        ], 'POS Sales Summary');
+    }
+
+    public function sales_summary_ajax(): void
+    {
+        global $invoiceModel;
+
+        is_login();
+
+        echo json_encode($invoiceModel->searchPosSalesSummaryByStore($this->resolvePosInvoiceListFiltersFromRequest()));
+        exit;
+    }
+
+    /** @return array<string, mixed>|null */
+    private function resolvePosSalesStoreDetailFiltersFromRequest(): ?array
+    {
+        $filters = $this->resolvePosInvoiceListFiltersFromRequest();
+        $detailWarehouseId = (int) ($_GET['detail_warehouse_id'] ?? 0);
+
+        if ($this->isPosInvoiceAdminUser()) {
+            if ($detailWarehouseId <= 0) {
+                $detailWarehouseId = (int) ($filters['warehouse_id'] ?? 0);
+            }
+        } else {
+            $detailWarehouseId = $this->getSessionWarehouseId();
+        }
+
+        if ($detailWarehouseId <= 0) {
+            return null;
+        }
+
+        if (!$this->isPosInvoiceAdminUser() && $detailWarehouseId !== $this->getSessionWarehouseId()) {
+            return null;
+        }
+
+        $filters['warehouse_id'] = $detailWarehouseId;
+
+        return $filters;
+    }
+
+    public function sales_store_detail_ajax(): void
+    {
+        global $invoiceModel;
+
+        is_login();
+
+        $filters = $this->resolvePosSalesStoreDetailFiltersFromRequest();
+        if ($filters === null) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(403);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Store not accessible.',
+                'rows' => [],
+                'totals' => [
+                    'invoice_count' => 0,
+                    'net_sales' => 0.0,
+                    'discount_total' => 0.0,
+                    'collected_total' => 0.0,
+                    'pending_total' => 0.0,
+                    'gross_total' => 0.0,
+                    'avg_ticket' => 0.0,
+                ],
+                'warehouse_id' => 0,
+                'warehouse_name' => '',
+            ]);
+            exit;
+        }
+
+        echo json_encode($this->formatPosSalesStoreDetailSummaryForJson(
+            $invoiceModel->searchPosSalesStoreDetailSummary($filters)
+        ));
+        exit;
+    }
+
+    /** @param array<string, mixed> $summary @return array<string, mixed> */
+    private function formatPosSalesStoreDetailSummaryForJson(array $summary): array
+    {
+        if (!empty($summary['by_payment_type']['rows']) && is_array($summary['by_payment_type']['rows'])) {
+            foreach ($summary['by_payment_type']['rows'] as &$row) {
+                $label = $this->formatPosInvoicePaymentTypeLabel($row['group_key'] ?? '');
+                $row['group_label'] = $label !== '' ? $label : 'Unknown';
+            }
+            unset($row);
+        }
+
+        if (!empty($summary['by_status']['rows']) && is_array($summary['by_status']['rows'])) {
+            foreach ($summary['by_status']['rows'] as &$row) {
+                $status = ucfirst(strtolower(trim((string) ($row['group_key'] ?? ''))));
+                $row['group_label'] = $status !== '' ? $status : 'Unknown';
+            }
+            unset($row);
+        }
+
+        if (!empty($summary['by_discount']['rows']) && is_array($summary['by_discount']['rows'])) {
+            foreach ($summary['by_discount']['rows'] as &$row) {
+                $row['group_label'] = ((string) ($row['group_key'] ?? '') === '1') ? 'With discount' : 'Without discount';
+            }
+            unset($row);
+        }
+
+        if (!empty($summary['by_date']['rows']) && is_array($summary['by_date']['rows'])) {
+            foreach ($summary['by_date']['rows'] as &$row) {
+                $row['group_label'] = (string) ($row['summary_date'] ?? '');
+            }
+            unset($row);
+        }
+
+        return $summary;
+    }
+
+    public function sales_store_detail(): void
+    {
+        global $usersModel;
+
+        is_login();
+
+        $filters = $this->resolvePosSalesStoreDetailFiltersFromRequest();
+        if ($filters === null) {
+            header('Location: index.php?page=posinvoice&action=sales_summary');
+            exit;
+        }
+
+        $warehouseId = (int) $filters['warehouse_id'];
+        $warehouse = $usersModel->getWarehouseById($warehouseId);
+        $warehouseName = trim((string) ($warehouse['address_title'] ?? ''));
+        if ($warehouseName === '') {
+            $warehouseName = 'Warehouse #' . $warehouseId;
+        }
+
+        renderTemplate('views/posinvoice/sales_store_detail.php', [
+            'warehouse_id' => $warehouseId,
+            'warehouse_name' => $warehouseName,
+            'initial_filters' => [
+                'from_date' => $_GET['from_date'] ?? '',
+                'to_date' => $_GET['to_date'] ?? '',
+                'type' => $_GET['type'] ?? '',
+                'discount_applied' => $_GET['discount_applied'] ?? '',
+                'status' => $_GET['status'] ?? '',
+            ],
+        ], 'POS Sales — ' . $warehouseName);
+    }
+
+    public function export_sales_summary(): void
+    {
+        global $invoiceModel;
+
+        is_login();
+
+        $summary = $invoiceModel->searchPosSalesSummaryByStore($this->resolvePosInvoiceListFiltersFromRequest());
+        $rows = $summary['rows'] ?? [];
+        if ($rows === []) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(422);
+            echo json_encode(['success' => false, 'message' => 'No sales match the current filters.']);
+            exit;
+        }
+
+        require_once 'vendor/autoload.php';
+
+        try {
+            $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('POS Sales Summary');
+
+            $headers = [
+                'Store / Warehouse',
+                'Invoices',
+                'Net Sales',
+                'Discounts',
+                'Collected',
+                'Pending',
+                'Gross',
+                'Avg Ticket',
+            ];
+            $sheet->fromArray($headers, null, 'A1');
+
+            $headerRange = 'A1:H1';
+            $sheet->getStyle($headerRange)->getFont()->setBold(true);
+            $sheet->getStyle($headerRange)->getFill()
+                ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                ->getStartColor()->setARGB('FFF3F4F6');
+
+            $rowNum = 2;
+            foreach ($rows as $row) {
+                $sheet->fromArray([
+                    (string) ($row['warehouse_name'] ?? ''),
+                    (int) ($row['invoice_count'] ?? 0),
+                    round((float) ($row['net_sales'] ?? 0), 2),
+                    round((float) ($row['discount_total'] ?? 0), 2),
+                    round((float) ($row['collected_total'] ?? 0), 2),
+                    round((float) ($row['pending_total'] ?? 0), 2),
+                    round((float) ($row['gross_total'] ?? 0), 2),
+                    round((float) ($row['avg_ticket'] ?? 0), 2),
+                ], null, 'A' . $rowNum);
+                $rowNum++;
+            }
+
+            $totals = $summary['totals'] ?? [];
+            $sheet->fromArray([
+                'TOTAL',
+                (int) ($totals['invoice_count'] ?? 0),
+                round((float) ($totals['net_sales'] ?? 0), 2),
+                round((float) ($totals['discount_total'] ?? 0), 2),
+                round((float) ($totals['collected_total'] ?? 0), 2),
+                round((float) ($totals['pending_total'] ?? 0), 2),
+                round((float) ($totals['gross_total'] ?? 0), 2),
+                round((float) ($totals['avg_ticket'] ?? 0), 2),
+            ], null, 'A' . $rowNum);
+
+            $lastRow = $rowNum;
+            $moneyFormat = '#,##0.00';
+            $sheet->getStyle('C2:H' . $lastRow)->getNumberFormat()->setFormatCode($moneyFormat);
+            $sheet->getStyle('A' . $lastRow . ':H' . $lastRow)->getFont()->setBold(true);
+
+            foreach (range('A', 'H') as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
+
+            $filename = 'pos_sales_summary_' . date('Y-m-d_His') . '.xlsx';
+
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            if (headers_sent()) {
+                throw new \RuntimeException('Export response headers were already sent.');
+            }
+
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Content-Transfer-Encoding: binary');
+            header('Cache-Control: max-age=0');
+            header('Pragma: public');
+
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save('php://output');
+        } catch (\Throwable $e) {
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Could not generate Excel file. Please try again.',
+            ]);
+        }
+        exit;
+    }
+
     /* ===============================
        DELETE
     =============================== */
@@ -803,33 +1237,9 @@ class PosInvoiceController
         float $taxRate,
         bool $useIgst
     ): array {
-        $lineIncl = round($discUnitIncl * $qty, 2);
-        $pretaxExtended = round($this->posInvoiceInclToPretax($discUnitIncl, $taxRate) * $qty, 2);
-        $taxTotal = round($lineIncl - $pretaxExtended, 2);
+        require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
 
-        if ($useIgst) {
-            return [
-                'sgst' => 0.0,
-                'cgst' => 0.0,
-                'igst' => $taxTotal,
-                'sgst_rate' => 0.0,
-                'cgst_rate' => 0.0,
-                'igst_rate' => round($taxRate, 2),
-            ];
-        }
-
-        $sgst = round($taxTotal / 2, 2);
-        $cgst = round($taxTotal - $sgst, 2);
-        $halfRate = round($taxRate / 2, 2);
-
-        return [
-            'sgst' => $sgst,
-            'cgst' => $cgst,
-            'igst' => 0.0,
-            'sgst_rate' => $halfRate,
-            'cgst_rate' => $halfRate,
-            'igst_rate' => 0.0,
-        ];
+        return invoice_compute_tax_breakdown_from_incl_unit($discUnitIncl, $qty, $taxRate, $useIgst);
     }
 
     private function posInvoiceOrderLevelDiscountTotal(array $posDiscountMeta): float
@@ -1194,8 +1604,10 @@ class PosInvoiceController
      * @param list<array<string, mixed>> $orderItems
      * @param array<string, mixed> $snapshot
      */
-    private function buildInvoicePostFromCheckoutSnapshot(array $orderItems, array $snapshot): void
+    private function buildInvoicePostFromCheckoutSnapshot(array $orderItems, array $snapshot, ?array $orderInfo = null): void
     {
+        require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
+        $applyExportGst = $snapshot['apply_export_gst'] ?? null;
         $linePrices = is_array($snapshot['line_prices'] ?? null) ? $snapshot['line_prices'] : [];
         $priceMap = [];
         foreach ($linePrices as $lp) {
@@ -1291,9 +1703,16 @@ class PosInvoiceController
             $gstRate = $line['gstRate'];
             $inclLine = round((float)$line['inclLine'], 2);
             $inclUnit = $qty >= 1 ? $inclLine / $qty : $inclLine;
-            $pretaxUnit = $gstRate > 0 ? $inclUnit / (1 + ($gstRate / 100)) : $inclUnit;
+            $gstPlan = invoice_resolve_gst_component_plan($orderInfo, $gstRate, $applyExportGst);
+            $applyGst = invoice_should_apply_gst($orderInfo, $applyExportGst);
+            if ($applyGst && $gstRate > 0) {
+                $pretaxUnit = $inclUnit / (1 + ($gstRate / 100));
+            } else {
+                $pretaxUnit = $inclUnit;
+            }
             $pretaxLine = round($pretaxUnit * $qty, 2);
-            $taxLine = round($inclLine - $pretaxLine, 2);
+            $taxLine = $applyGst ? round($inclLine - $pretaxLine, 2) : 0.0;
+            $lineTaxRate = $applyGst ? $gstRate : 0.0;
 
             $_POST['order_number'][] = $it['order_number'];
             $_POST['item_code'][] = $it['item_code'];
@@ -1301,10 +1720,10 @@ class PosInvoiceController
             $_POST['hsn'][] = $it['hsn'];
             $_POST['quantity'][] = $qty;
             $_POST['unit_price'][] = round($pretaxUnit, 4);
-            $_POST['tax_rate'][] = $gstRate;
-            $_POST['cgst'][] = $gstRate / 2;
-            $_POST['sgst'][] = $gstRate / 2;
-            $_POST['igst'][] = 0;
+            $_POST['tax_rate'][] = $lineTaxRate;
+            $_POST['cgst'][] = $gstPlan['cgst_rate'];
+            $_POST['sgst'][] = $gstPlan['sgst_rate'];
+            $_POST['igst'][] = $gstPlan['igst_rate'];
             $_POST['box_no'][] = '';
             $_POST['currency'][] = $it['currency'];
 
@@ -1349,6 +1768,9 @@ class PosInvoiceController
                 'coupon_display_name' => trim((string)($discountMeta['coupon_display_name'] ?? '')),
             ],
         ];
+        if (array_key_exists('apply_export_gst', $discountMeta)) {
+            $payload['pos_discounts']['apply_export_gst'] = !empty($discountMeta['apply_export_gst']) ? 1 : 0;
+        }
         if (count($lineItemsMeta) > 0) {
             $payload['line_items'] = $lineItemsMeta;
         }
@@ -1378,24 +1800,26 @@ class PosInvoiceController
         float $amount,
         string $note = '',
         bool $isGrand = false,
-        int $colCount = 13,
-        bool $largeFont = false
+        int $colCount = 13
     ): string {
+        require_once __DIR__ . '/../helpers/invoice/invoice_address_html.php';
+
         $colCount = max(3, $colCount);
         $labelSpan = $colCount - 2;
         $noteHtml = $note !== ''
-            ? '<br><span style="font-size:11px;font-weight:normal;color:#555;">' . htmlspecialchars($note) . '</span>'
+            ? '<br><span class="invoice-summary-note" style="' . invoice_pdf_body_text_inline_style() . ' font-weight:normal;color:#555;">' . htmlspecialchars($note) . '</span>'
             : '';
         $bg = $isGrand ? '#f0f0f0' : '#f9f9f9';
-        $weight = $largeFont ? 'font-weight:bold;font-size:14px;' : 'font-weight:bold;';
+        $rowClass = $isGrand ? 'invoice-summary-grand' : '';
         $borderTop = $isGrand ? 'border-top:2px solid #000;' : '';
+        $cellStyle = 'text-align:right;padding:8px 10px;border:1px solid #ddd;' . invoice_pdf_body_text_inline_style();
 
         return '
-                    <tr style="background:' . $bg . ';' . $borderTop . '">
-                        <td colspan="' . $labelSpan . '" class="right" style="text-align:right;padding:8px 10px;border:1px solid #ddd;">'
-                            . '<span style="' . $weight . '">' . htmlspecialchars($label) . '</span>' . $noteHtml .
+                    <tr class="' . $rowClass . '" style="background:' . $bg . ';' . $borderTop . '">
+                        <td colspan="' . $labelSpan . '" class="right invoice-text" style="' . $cellStyle . '">'
+                            . htmlspecialchars($label) . $noteHtml .
                         '</td>
-                        <td colspan="2" class="right" style="text-align:right;padding:8px 10px;border:1px solid #ddd;' . $weight . '">'
+                        <td colspan="2" class="right invoice-text" style="' . $cellStyle . '">'
                             . number_format($amount, 2) .
                         '</td>
                     </tr>';
@@ -1483,12 +1907,11 @@ class PosInvoiceController
             }
 
             $rows .= $this->posInvoiceSummaryLabelRow(
-                'Sub total (incl. GST)',
+                'Total Before Discount (incl. GST)',
                 $subInclGst,
                 '',
                 false,
-                $colCount,
-                true
+                $colCount
             );
             if ($lineDisc > 0.001) {
                 $rows .= $this->posInvoiceSummaryLabelRow(
@@ -1541,12 +1964,11 @@ class PosInvoiceController
         }
 
         $rows .= $this->posInvoiceSummaryLabelRow(
-            'Sub total (incl. GST)',
+            'Total Before Discount (incl. GST)',
             $subInclGst,
             '',
             false,
-            $colCount,
-            true
+            $colCount
         );
         if ($line > 0.001) {
             $rows .= $this->posInvoiceSummaryLabelRow('Line Discount', $line, '', false, $colCount);
@@ -1584,7 +2006,7 @@ class PosInvoiceController
 
     private function generateInvoiceHtml($invoice, $items, $type = '')
     {
-        global $commanModel, $invoiceModel;
+        global $commanModel, $invoiceModel, $conn;
 
         $orderNumberForRepair = '';
         if (!empty($items[0]['order_number'])) {
@@ -1647,6 +2069,10 @@ class PosInvoiceController
             ? $posTableColCount
             : 13;
 
+        require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
+        $resolvedUseIgst = invoice_resolve_uses_igst_for_invoice($invoice, $commanModel);
+        $applyGstForInvoice = invoice_should_apply_gst_for_invoice($invoice, $commanModel, $posDiscountMeta);
+
         // Build item rows
         foreach ($items as $idx => $item) {
             $qtyInt = $this->posInvoiceFormatQty($item['quantity'] ?? 1);
@@ -1668,10 +2094,35 @@ class PosInvoiceController
                 $sumListLineTotals += round($listUnitDisplay * $qtyInt, 2);
             }
 
-            $useIgst = (float)($item['igst'] ?? 0) > 0;
-            if ($showDiscPriceColumn) {
+            $useIgst = !$applyGstForInvoice
+                ? false
+                : ($resolvedUseIgst !== null
+                    ? $resolvedUseIgst
+                    : ((float)($item['igst'] ?? 0) > 0));
+            if (!$applyGstForInvoice) {
+                $sgstAmt = 0.0;
+                $cgstAmt = 0.0;
+                $igstAmt = 0.0;
+                $sgstRate = 0.0;
+                $cgstRate = 0.0;
+                $igstRate = 0.0;
+            } elseif ($showDiscPriceColumn) {
                 $taxBreakdown = $this->posInvoiceComputeLineTaxBreakdown(
                     $discUnitDisplay,
+                    $qtyInt,
+                    $taxRate,
+                    $useIgst
+                );
+                $sgstAmt = $taxBreakdown['sgst'];
+                $cgstAmt = $taxBreakdown['cgst'];
+                $igstAmt = $taxBreakdown['igst'];
+                $sgstRate = $taxBreakdown['sgst_rate'];
+                $cgstRate = $taxBreakdown['cgst_rate'];
+                $igstRate = $taxBreakdown['igst_rate'];
+            } elseif ($resolvedUseIgst !== null) {
+                $unitPretax = (float)($item['unit_price'] ?? 0);
+                $taxBreakdown = invoice_compute_tax_breakdown_from_pretax(
+                    $unitPretax,
                     $qtyInt,
                     $taxRate,
                     $useIgst
@@ -1713,15 +2164,16 @@ class PosInvoiceController
                         . htmlspecialchars($hsnCode) . '</span>';
                 }
                 $listPriceCell = '<td class="right">' . number_format($listUnitDisplay, 2) . '</td>';
-                $discPriceCell = $showDiscPriceColumn
-                    ? '<td class="right">' . number_format($discUnitDisplay, 2) . '</td>'
+                $taxableUnitDisplay = round($this->posInvoiceInclToPretax($discUnitDisplay, $taxRate), 2);
+                $taxableValueCell = $showDiscPriceColumn
+                    ? '<td class="right">' . number_format($taxableUnitDisplay, 2) . '</td>'
                     : '';
                 $itemsrows .= '
                     <tr>
                         <td>' . ($idx + 1) . '</td>
                         <td>' . htmlspecialchars($item['box_no'] ?? '') . '</td>
                         <td class="desc">' . $descHtml . '</td>
-                        ' . $listPriceCell . $discPriceCell . '
+                        ' . $listPriceCell . $taxableValueCell . '
                         <td>' . $qtyInt . '</td>
                         <td class="right">' . number_format($sgstRate, 2) . '</td>
                         <td class="right">' . number_format($sgstAmt, 2) . '</td>
@@ -1907,15 +2359,16 @@ class PosInvoiceController
         // Fetch customer and address information
         require_once __DIR__ . '/../helpers/invoice/invoice_address_html.php';
         require_once __DIR__ . '/../helpers/invoice/invoice_footer_html.php';
+        require_once __DIR__ . '/../helpers/invoice/invoice_terms_html.php';
         global $paymentModel;
-        $exclusiveStoresFooter = invoice_resolve_exclusive_stores_footer_html(
+        $exclusiveStoresHeader = invoice_resolve_exclusive_stores_footer_html(
             $invoice,
             $items,
             $commanModel,
             !empty($invoice['pos_flag']) ? $paymentModel : null
         );
         $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
-        $addressBlocks = invoice_resolve_bill_ship_html(is_array($customer) ? $customer : null);
+        $addressBlocks = invoice_resolve_bill_ship_html(is_array($customer) ? $customer : null, $conn ?? null);
         $billToInfo = $addressBlocks['bill'];
         $shipToInfo = $addressBlocks['ship'];
         //print_r($billToInfo);
@@ -1935,7 +2388,7 @@ class PosInvoiceController
             if ($showDiscPriceColumn) {
                 $temphtml = str_replace(
                     "<th>HSN</th>\n        <th>Qty</th>\n        <th>Price</th>",
-                    "<th>List Price</th>\n        <th>Disc. Price</th>\n        <th>Qty</th>",
+                    "<th>List Price</th>\n        <th>Taxable Value</th>\n        <th>Qty</th>",
                     $temphtml
                 );
             } else {
@@ -1958,8 +2411,8 @@ class PosInvoiceController
                 '{{ITEM_ROWS}}',
                 '{{SUMMARY_ROWS}}',
                 '{{AMOUNT_IN_WORDS}}',
-                '{{TERM_AND_CONDITIONS}}',
-                '{{EXCLUSIVE_STORES_FOOTER}}',
+                '{{TERMS_AND_CONDITIONS_BLOCK}}',
+                '{{EXCLUSIVE_STORES_HEADER}}',
             ],
             [
                 htmlspecialchars($invoice['invoice_number'] ?? 'N/A'),
@@ -1969,8 +2422,8 @@ class PosInvoiceController
                 $itemsrows,
                 $summaryrows,
                 numberToWords($totalAmount ?? 0),
-                nl2br(htmlspecialchars($invoice['terms_and_conditions'] ?? '')),
-                $exclusiveStoresFooter,
+                invoice_format_terms_and_conditions_block($invoice['terms_and_conditions'] ?? ''),
+                $exclusiveStoresHeader,
             ],
             $temphtml
         );
@@ -2150,8 +2603,10 @@ class PosInvoiceController
         }
 
         if ($useSnapshot) {
-            $this->buildInvoicePostFromCheckoutSnapshot($items, $checkoutSnapshot);
+            $this->buildInvoicePostFromCheckoutSnapshot($items, $checkoutSnapshot, $info);
         } else {
+            require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
+            $applyExportGst = null;
             foreach ($items as $it) {
                 $_POST['order_number'][] = $it['order_number'];
                 $_POST['item_code'][] = $it['item_code'];
@@ -2164,9 +2619,10 @@ class PosInvoiceController
 
                 $_POST['unit_price'][] = $unit;
                 $_POST['tax_rate'][] = $it['gst'];
-                $_POST['cgst'][] = $it['gst'] / 2;
-                $_POST['sgst'][] = $it['gst'] / 2;
-                $_POST['igst'][] = 0;
+                $gstPlan = invoice_resolve_gst_component_plan($info, (float)$it['gst'], $applyExportGst);
+                $_POST['cgst'][] = $gstPlan['cgst_rate'];
+                $_POST['sgst'][] = $gstPlan['sgst_rate'];
+                $_POST['igst'][] = $gstPlan['igst_rate'];
                 $_POST['box_no'][] = '';
                 $_POST['currency'][] = $it['currency'];
 
@@ -2223,6 +2679,7 @@ class PosInvoiceController
         }
 
         $info = $ordersModel->getAddressInfoByOrderNumber($orderNumber);
+        require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
         $_POST = [
             'invoice_date' => date('Y-m-d'),
             'customer_id' => $orderItems[0]['customer_id'],
@@ -2247,9 +2704,10 @@ class PosInvoiceController
             $_POST['unit_price'][] = $unit;
             $_POST['tax_rate'][] = $item['gst'];
 
-            $_POST['cgst'][] = $item['gst'] / 2;
-            $_POST['sgst'][] = $item['gst'] / 2;
-            $_POST['igst'][] = 0;
+            $gstPlan = invoice_resolve_gst_component_plan(is_array($info) ? $info : null, (float)$item['gst'], null);
+            $_POST['cgst'][] = $gstPlan['cgst_rate'];
+            $_POST['sgst'][] = $gstPlan['sgst_rate'];
+            $_POST['igst'][] = $gstPlan['igst_rate'];
 
             $_POST['box_no'][] = '';
             $_POST['currency'][] = $item['currency'];

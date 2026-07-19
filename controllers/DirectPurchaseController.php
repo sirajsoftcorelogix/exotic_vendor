@@ -939,9 +939,15 @@ class DirectPurchaseController
 
         $directPurchaseModel->markItemVendorQtySynced($itemId);
 
+        $catalogNote = '';
+        $refreshResult = $productModel->refreshDirectPurchaseCatalogFromVendorApi([$variant]);
+        if (empty($refreshResult['success'])) {
+            $catalogNote = ' ' . trim((string) ($refreshResult['message'] ?? 'Catalog refresh failed.'));
+        }
+
         echo json_encode([
             'success' => true,
-            'message' => 'Qty synced to vendor API.',
+            'message' => 'Qty synced to vendor API.' . $catalogNote,
             'vendor_qty_synced' => 1,
             'local_stock_delta' => $stockDelta,
         ], JSON_UNESCAPED_UNICODE);
@@ -1817,14 +1823,47 @@ class DirectPurchaseController
             }
         }
 
+        $catalogNote = $this->refreshDirectPurchaseCatalogAfterVendorSync(
+            $productModel,
+            array_values($currentByVariant),
+            array_values($previousByVariant)
+        );
+
         if ($failures === []) {
-            return '';
+            return $catalogNote;
         }
 
         $shown = array_slice($failures, 0, 3);
         $suffix = count($failures) > 3 ? ' (and ' . (count($failures) - 3) . ' more)' : '';
 
-        return 'Vendor product update issue: ' . implode('; ', $shown) . $suffix . '.';
+        return 'Vendor product update issue: ' . implode('; ', $shown) . $suffix . '.' . $catalogNote;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $currentVariants
+     * @param list<array<string, mixed>> $previousVariants
+     */
+    private function refreshDirectPurchaseCatalogAfterVendorSync(
+        product $productModel,
+        array $currentVariants,
+        array $previousVariants
+    ): string {
+        $variants = $currentVariants !== [] ? $currentVariants : $previousVariants;
+        if ($variants === []) {
+            return '';
+        }
+
+        $refreshResult = $productModel->refreshDirectPurchaseCatalogFromVendorApi($variants);
+        if (!empty($refreshResult['success'])) {
+            return '';
+        }
+
+        $message = trim((string) ($refreshResult['message'] ?? 'Catalog refresh failed.'));
+        if ($message === '') {
+            return '';
+        }
+
+        return ' Catalog refresh issue: ' . $message . '.';
     }
 
     /**

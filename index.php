@@ -1671,6 +1671,30 @@ switch ($page) {
                 $controller->list_ajax();
                 break;
 
+            case 'export_excel':
+                $controller->export_excel();
+                break;
+
+            case 'sales_summary':
+                $controller->sales_summary();
+                break;
+
+            case 'sales_summary_ajax':
+                $controller->sales_summary_ajax();
+                break;
+
+            case 'sales_store_detail_ajax':
+                $controller->sales_store_detail_ajax();
+                break;
+
+            case 'sales_store_detail':
+                $controller->sales_store_detail();
+                break;
+
+            case 'export_sales_summary':
+                $controller->export_sales_summary();
+                break;
+
             case 'delete':
                 $controller->delete();
                 break;
@@ -1709,6 +1733,10 @@ switch ($page) {
 
             case 'update_invoice_number_ajax':
                 $controller->updateInvoiceNumberAjax();
+                break;
+
+            case 'user_guide':
+                $controller->userGuide();
                 break;
 
             default:

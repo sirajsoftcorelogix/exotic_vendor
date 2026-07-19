@@ -29,6 +29,30 @@
         font-size: 18px;
     }
 
+    .company-details {
+        margin-top: 6px;
+    }
+
+    .invoice-text,
+    .items td.invoice-text,
+    .bill-ship .invoice-text {
+        font-family: DejaVu Sans, Arial, sans-serif;
+        font-size: 16px;
+        line-height: 1.4;
+        color: #000;
+    }
+
+    .invoice-summary-note {
+        font-family: DejaVu Sans, Arial, sans-serif;
+        font-size: 16px;
+        font-weight: normal;
+        color: #555;
+    }
+
+    .invoice-summary-grand td {
+        font-weight: bold;
+    }
+
     .invoice-title {
         text-align: right;
         font-size: 26px;
@@ -62,6 +86,10 @@
         margin-bottom: 5px;
     }
 
+    .bill-ship .invoice-text strong {
+        font-weight: bold;
+    }
+
     .items th,
     .items td {
         border: 1px solid #000;
@@ -91,6 +119,28 @@
     .mt-25 {
         margin-top: 25px;
     }
+
+    .invoice-notes {
+        margin-top: 8px;
+    }
+
+    .invoice-notes td {
+        padding: 6px 8px;
+        text-align: left;
+        vertical-align: top;
+    }
+
+    .items.invoice-notes td {
+        text-align: left;
+    }
+
+    .invoice-notes .signatory {
+        text-align: center;
+    }
+
+    .items.invoice-notes td.signatory {
+        text-align: center;
+    }
 </style>
 </head>
 
@@ -113,8 +163,11 @@
     <tr >
         <td width="60%" class="mt-25">
             <div class="company">EXOTIC INDIA ART PVT LTD</div>
-            GST ID: 07AADCE1400C1ZJ<br>
-            PAN: AADCE1400C
+            <div class="company-details invoice-text">
+                {{EXCLUSIVE_STORES_HEADER}}<br>
+                GST ID: 07AADCE1400C1ZJ<br>
+                PAN: AADCE1400C
+            </div>
         </td>
         <td width="40%" style="text-align: right;">
             <div class="invoice-title">PROFORMA</div>
@@ -173,26 +226,22 @@
     <!-- SUMMARY ROWS -->
     {{SUMMARY_ROWS}}
 </table>
-<table class="items ">
+<table class="items invoice-notes">
     <tr>
-        <td class="mt-25" style="text-align: left; padding:20px ;">
+        <td class="invoice-text" style="text-align: left;">
             <b>Amount in Words:</b><br>
             {{AMOUNT_IN_WORDS}} ONLY
-            <br>
         </td>
-        
     </tr>
 </table>
 
-<table class="items">
+<table class="items invoice-notes">
     <tr>
-        <td style="width:50%; text-align:left; padding-left: 20px; ">            
-            
-            <b>Terms & Conditions:</b><br>
-            {{TERM_AND_CONDITIONS}}
+        <td class="invoice-text" style="width:50%;">
+            {{TERMS_AND_CONDITIONS_BLOCK}}
         </td>
-        <td style="width:50%; text-align:center; vertical-align:top; padding:20px;">
-            For EXOTIC INDIA ART PVT LTD<br><br><br><br>
+        <td class="invoice-text signatory" style="width:50%;">
+            For EXOTIC INDIA ART PVT LTD<br><br>
             Authorised Signatory
         </td>
     </tr>
@@ -201,11 +250,10 @@
 <table style="width:100%; border-collapse:collapse; margin-top:40px; font-size:12px; text-align:center; position: fixed; bottom: 0; left: 0; right: 0; background-color: #fff; padding-top: 10px; border-top: 1px solid #000;">
     <tr>
         <td width="30%"><img src="images/po_logo.png" alt="EXOTIC INDIA ART PVT LTD" style="height: 20px; width: auto; margin-left: 5px; margin-top: 20px;"></td>
-        <td width="35%" style="text-align: left;"><b>Head Office</b><br>
+        <td width="70%" style="text-align: left;"><b>Head Office</b><br>
             A-16/1, Wazirpur Industrial Estate
             Delhi 110052, India   
          </td>
-        <td width="35%" style="text-align: left;">{{EXCLUSIVE_STORES_FOOTER}}</td>
     </tr>
 </table>
 </body>

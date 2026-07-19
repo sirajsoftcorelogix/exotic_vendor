@@ -543,6 +543,8 @@ class POSInvoice
                 o.order_number,
                 o.payment_type,
                 c.name AS customer_name,
+                o.state AS customer_billing_state,
+                COALESCE(cnt.name, o.country) AS customer_billing_country,
                 COALESCE(ea.address_title, CONCAT('Warehouse #', i.warehouse_id)) AS warehouse_name,
                 ROUND({$payableSql}, 2) AS payable_amount,
                 {$discountSql} AS discount_amount,
@@ -551,45 +553,13 @@ class POSInvoice
             FROM vp_invoices i
             LEFT JOIN vp_order_info o ON o.id = i.vp_order_info_id
             LEFT JOIN vp_customers c ON c.id = i.customer_id
+            LEFT JOIN countries cnt ON CONVERT(UPPER(cnt.country_code) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                = CONVERT(UPPER(o.country) USING utf8mb4) COLLATE utf8mb4_unicode_ci
             LEFT JOIN exotic_address ea ON ea.id = i.warehouse_id
             WHERE i.pos_flag = 1
         ";
 
-        if (isset($filters['warehouse_id']) && $filters['warehouse_id'] !== null && $filters['warehouse_id'] !== '') {
-            $sql .= ' AND i.warehouse_id = ' . (int)$filters['warehouse_id'];
-        }
-
-        if (!empty($filters['order_number'])) {
-            $sql .= " AND o.order_number LIKE '%" . $this->db->real_escape_string((string)$filters['order_number']) . "%'";
-        }
-
-        if (!empty($filters['status'])) {
-            $sql .= " AND i.status = '" . $this->db->real_escape_string((string)$filters['status']) . "'";
-        }
-
-        if (!empty($filters['from_date'])) {
-            $sql .= " AND i.invoice_date >= '" . $this->db->real_escape_string((string)$filters['from_date']) . "'";
-        }
-
-        if (!empty($filters['to_date'])) {
-            $sql .= " AND i.invoice_date <= '" . $this->db->real_escape_string((string)$filters['to_date']) . "'";
-        }
-
-        if (!empty($filters['type'])) {
-            $sql .= " AND IFNULL(o.payment_type,'') = '" . $this->db->real_escape_string((string)$filters['type']) . "'";
-        }
-
-        if (!empty($filters['customer_id'])) {
-            $sql .= ' AND i.customer_id = ' . (int)$filters['customer_id'];
-        }
-
-        if (!empty($filters['amount_min'])) {
-            $sql .= ' AND ROUND(' . $payableSql . ', 2) >= ' . (float)$filters['amount_min'];
-        }
-
-        if (!empty($filters['amount_max'])) {
-            $sql .= ' AND ROUND(' . $payableSql . ', 2) <= ' . (float)$filters['amount_max'];
-        }
+        $this->appendPosInvoiceListFiltersSql($sql, $filters, $payableSql, $discountSql);
 
         $sql .= ' ORDER BY i.id DESC';
 
@@ -604,6 +574,399 @@ class POSInvoice
         }
 
         return $data;
+    }
+
+    /**
+     * POS sales totals grouped by store / warehouse.
+     *
+     * @param array<string, mixed> $filters
+     * @return array{rows: array<int, array<string, mixed>>, totals: array<string, float|int>}
+     */
+    public function searchPosSalesSummaryByStore(array $filters): array
+    {
+        $payableSql = $this->posInvoicePayableAmountSql();
+        $paidSql = $this->posInvoicePaidAmountSql();
+        $discountSql = $this->posInvoiceDiscountAmountSql($payableSql);
+        $pendingExpr = "GREATEST(0, ROUND({$payableSql} - {$paidSql}, 2))";
+
+        $sql = "
+            SELECT
+                i.warehouse_id,
+                COALESCE(ea.address_title, CONCAT('Warehouse #', i.warehouse_id)) AS warehouse_name,
+                COUNT(*) AS invoice_count,
+                ROUND(SUM({$payableSql}), 2) AS net_sales,
+                ROUND(SUM({$discountSql}), 2) AS discount_total,
+                ROUND(SUM({$paidSql}), 2) AS collected_total,
+                ROUND(SUM({$pendingExpr}), 2) AS pending_total,
+                ROUND(SUM(i.total_amount), 2) AS gross_total
+            FROM vp_invoices i
+            LEFT JOIN vp_order_info o ON o.id = i.vp_order_info_id
+            LEFT JOIN exotic_address ea ON ea.id = i.warehouse_id
+            WHERE i.pos_flag = 1
+        ";
+
+        $this->appendPosInvoiceListFiltersSql($sql, $filters, $payableSql, $discountSql);
+
+        $sql .= "
+            GROUP BY i.warehouse_id, warehouse_name
+            ORDER BY warehouse_name ASC
+        ";
+
+        $res = $this->db->query($sql);
+        if (!$res) {
+            return [
+                'rows' => [],
+                'totals' => $this->emptyPosSalesSummaryTotals(),
+            ];
+        }
+
+        $rows = [];
+        $totals = $this->emptyPosSalesSummaryTotals();
+        while ($row = $res->fetch_assoc()) {
+            $invoiceCount = (int) ($row['invoice_count'] ?? 0);
+            $netSales = round((float) ($row['net_sales'] ?? 0), 2);
+            $row['invoice_count'] = $invoiceCount;
+            $row['net_sales'] = $netSales;
+            $row['discount_total'] = round((float) ($row['discount_total'] ?? 0), 2);
+            $row['collected_total'] = round((float) ($row['collected_total'] ?? 0), 2);
+            $row['pending_total'] = round((float) ($row['pending_total'] ?? 0), 2);
+            $row['gross_total'] = round((float) ($row['gross_total'] ?? 0), 2);
+            $row['avg_ticket'] = $invoiceCount > 0 ? round($netSales / $invoiceCount, 2) : 0.0;
+            $rows[] = $row;
+
+            $totals['invoice_count'] += $invoiceCount;
+            $totals['net_sales'] += $row['net_sales'];
+            $totals['discount_total'] += $row['discount_total'];
+            $totals['collected_total'] += $row['collected_total'];
+            $totals['pending_total'] += $row['pending_total'];
+            $totals['gross_total'] += $row['gross_total'];
+        }
+
+        foreach (['net_sales', 'discount_total', 'collected_total', 'pending_total', 'gross_total'] as $key) {
+            $totals[$key] = round((float) $totals[$key], 2);
+        }
+        $totals['avg_ticket'] = $totals['invoice_count'] > 0
+            ? round($totals['net_sales'] / $totals['invoice_count'], 2)
+            : 0.0;
+
+        return [
+            'rows' => $rows,
+            'totals' => $totals,
+        ];
+    }
+
+    /**
+     * POS sales totals for one store, grouped by invoice date.
+     *
+     * @param array<string, mixed> $filters warehouse_id required
+     * @return array{rows: array<int, array<string, mixed>>, totals: array<string, float|int>, warehouse_id: int, warehouse_name: string}
+     */
+    public function searchPosSalesSummaryByDate(array $filters): array
+    {
+        $warehouseId = (int) ($filters['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            return [
+                'rows' => [],
+                'totals' => $this->emptyPosSalesSummaryTotals(),
+                'warehouse_id' => 0,
+                'warehouse_name' => '',
+            ];
+        }
+
+        $filters['warehouse_id'] = $warehouseId;
+
+        $payableSql = $this->posInvoicePayableAmountSql();
+        $paidSql = $this->posInvoicePaidAmountSql();
+        $discountSql = $this->posInvoiceDiscountAmountSql($payableSql);
+        $pendingExpr = "GREATEST(0, ROUND({$payableSql} - {$paidSql}, 2))";
+
+        $sql = "
+            SELECT
+                i.invoice_date AS summary_date,
+                COALESCE(ea.address_title, CONCAT('Warehouse #', i.warehouse_id)) AS warehouse_name,
+                COUNT(*) AS invoice_count,
+                ROUND(SUM({$payableSql}), 2) AS net_sales,
+                ROUND(SUM({$discountSql}), 2) AS discount_total,
+                ROUND(SUM({$paidSql}), 2) AS collected_total,
+                ROUND(SUM({$pendingExpr}), 2) AS pending_total,
+                ROUND(SUM(i.total_amount), 2) AS gross_total
+            FROM vp_invoices i
+            LEFT JOIN vp_order_info o ON o.id = i.vp_order_info_id
+            LEFT JOIN exotic_address ea ON ea.id = i.warehouse_id
+            WHERE i.pos_flag = 1
+        ";
+
+        $this->appendPosInvoiceListFiltersSql($sql, $filters, $payableSql, $discountSql);
+
+        $sql .= "
+            GROUP BY i.invoice_date, warehouse_name
+            ORDER BY i.invoice_date DESC
+        ";
+
+        $res = $this->db->query($sql);
+        if (!$res) {
+            return [
+                'rows' => [],
+                'totals' => $this->emptyPosSalesSummaryTotals(),
+                'warehouse_id' => $warehouseId,
+                'warehouse_name' => '',
+            ];
+        }
+
+        $rows = [];
+        $totals = $this->emptyPosSalesSummaryTotals();
+        $warehouseName = '';
+        while ($row = $res->fetch_assoc()) {
+            if ($warehouseName === '') {
+                $warehouseName = trim((string) ($row['warehouse_name'] ?? ''));
+            }
+
+            $invoiceCount = (int) ($row['invoice_count'] ?? 0);
+            $netSales = round((float) ($row['net_sales'] ?? 0), 2);
+            $row['summary_date'] = (string) ($row['summary_date'] ?? '');
+            $row['invoice_count'] = $invoiceCount;
+            $row['net_sales'] = $netSales;
+            $row['discount_total'] = round((float) ($row['discount_total'] ?? 0), 2);
+            $row['collected_total'] = round((float) ($row['collected_total'] ?? 0), 2);
+            $row['pending_total'] = round((float) ($row['pending_total'] ?? 0), 2);
+            $row['gross_total'] = round((float) ($row['gross_total'] ?? 0), 2);
+            $row['avg_ticket'] = $invoiceCount > 0 ? round($netSales / $invoiceCount, 2) : 0.0;
+            $rows[] = $row;
+
+            $totals['invoice_count'] += $invoiceCount;
+            $totals['net_sales'] += $row['net_sales'];
+            $totals['discount_total'] += $row['discount_total'];
+            $totals['collected_total'] += $row['collected_total'];
+            $totals['pending_total'] += $row['pending_total'];
+            $totals['gross_total'] += $row['gross_total'];
+        }
+
+        foreach (['net_sales', 'discount_total', 'collected_total', 'pending_total', 'gross_total'] as $key) {
+            $totals[$key] = round((float) $totals[$key], 2);
+        }
+        $totals['avg_ticket'] = $totals['invoice_count'] > 0
+            ? round($totals['net_sales'] / $totals['invoice_count'], 2)
+            : 0.0;
+
+        if ($warehouseName === '') {
+            $warehouseName = 'Warehouse #' . $warehouseId;
+        }
+
+        return [
+            'rows' => $rows,
+            'totals' => $totals,
+            'warehouse_id' => $warehouseId,
+            'warehouse_name' => $warehouseName,
+        ];
+    }
+
+    /**
+     * Full store-level sales summary: overview + breakdowns (not invoice rows).
+     *
+     * @param array<string, mixed> $filters warehouse_id required
+     * @return array<string, mixed>
+     */
+    public function searchPosSalesStoreDetailSummary(array $filters): array
+    {
+        $warehouseId = (int) ($filters['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            return [
+                'warehouse_id' => 0,
+                'warehouse_name' => '',
+                'overview' => $this->emptyPosSalesSummaryTotals(),
+                'by_payment_type' => ['rows' => [], 'totals' => $this->emptyPosSalesSummaryTotals()],
+                'by_status' => ['rows' => [], 'totals' => $this->emptyPosSalesSummaryTotals()],
+                'by_discount' => ['rows' => [], 'totals' => $this->emptyPosSalesSummaryTotals()],
+                'by_date' => ['rows' => [], 'totals' => $this->emptyPosSalesSummaryTotals()],
+            ];
+        }
+
+        $filters['warehouse_id'] = $warehouseId;
+        $byDate = $this->searchPosSalesSummaryByDate($filters);
+
+        return [
+            'warehouse_id' => $warehouseId,
+            'warehouse_name' => (string) ($byDate['warehouse_name'] ?? ('Warehouse #' . $warehouseId)),
+            'overview' => $byDate['totals'] ?? $this->emptyPosSalesSummaryTotals(),
+            'by_payment_type' => $this->searchPosSalesSummaryGrouped($filters, 'payment_type'),
+            'by_status' => $this->searchPosSalesSummaryGrouped($filters, 'status'),
+            'by_discount' => $this->searchPosSalesSummaryGrouped($filters, 'discount'),
+            'by_date' => [
+                'rows' => $byDate['rows'] ?? [],
+                'totals' => $byDate['totals'] ?? $this->emptyPosSalesSummaryTotals(),
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array{rows: array<int, array<string, mixed>>, totals: array<string, float|int>}
+     */
+    private function searchPosSalesSummaryGrouped(array $filters, string $dimension): array
+    {
+        $warehouseId = (int) ($filters['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            return ['rows' => [], 'totals' => $this->emptyPosSalesSummaryTotals()];
+        }
+
+        $payableSql = $this->posInvoicePayableAmountSql();
+        $paidSql = $this->posInvoicePaidAmountSql();
+        $discountSql = $this->posInvoiceDiscountAmountSql($payableSql);
+        $pendingExpr = "GREATEST(0, ROUND({$payableSql} - {$paidSql}, 2))";
+
+        $groupExpr = match ($dimension) {
+            'payment_type' => "IFNULL(o.payment_type, '')",
+            'status' => "IFNULL(i.status, '')",
+            'discount' => "CASE WHEN ({$discountSql}) > 0.001 THEN '1' ELSE '0' END",
+            default => "''",
+        };
+
+        $orderBy = match ($dimension) {
+            'payment_type' => 'group_key ASC',
+            'status' => 'group_key ASC',
+            'discount' => "group_key DESC",
+            default => 'group_key ASC',
+        };
+
+        $sql = "
+            SELECT
+                {$groupExpr} AS group_key,
+                COUNT(*) AS invoice_count,
+                ROUND(SUM({$payableSql}), 2) AS net_sales,
+                ROUND(SUM({$discountSql}), 2) AS discount_total,
+                ROUND(SUM({$paidSql}), 2) AS collected_total,
+                ROUND(SUM({$pendingExpr}), 2) AS pending_total,
+                ROUND(SUM(i.total_amount), 2) AS gross_total
+            FROM vp_invoices i
+            LEFT JOIN vp_order_info o ON o.id = i.vp_order_info_id
+            WHERE i.pos_flag = 1
+        ";
+
+        $this->appendPosInvoiceListFiltersSql($sql, $filters, $payableSql, $discountSql);
+
+        $sql .= "
+            GROUP BY group_key
+            ORDER BY {$orderBy}
+        ";
+
+        $res = $this->db->query($sql);
+        if (!$res) {
+            return ['rows' => [], 'totals' => $this->emptyPosSalesSummaryTotals()];
+        }
+
+        return $this->mapPosSalesAggregateRows($res);
+    }
+
+    /**
+     * @return array{rows: array<int, array<string, mixed>>, totals: array<string, float|int>}
+     */
+    private function mapPosSalesAggregateRows(\mysqli_result $res): array
+    {
+        $rows = [];
+        $totals = $this->emptyPosSalesSummaryTotals();
+
+        while ($row = $res->fetch_assoc()) {
+            $invoiceCount = (int) ($row['invoice_count'] ?? 0);
+            $netSales = round((float) ($row['net_sales'] ?? 0), 2);
+            $mapped = [
+                'group_key' => (string) ($row['group_key'] ?? ''),
+                'invoice_count' => $invoiceCount,
+                'net_sales' => $netSales,
+                'discount_total' => round((float) ($row['discount_total'] ?? 0), 2),
+                'collected_total' => round((float) ($row['collected_total'] ?? 0), 2),
+                'pending_total' => round((float) ($row['pending_total'] ?? 0), 2),
+                'gross_total' => round((float) ($row['gross_total'] ?? 0), 2),
+                'avg_ticket' => $invoiceCount > 0 ? round($netSales / $invoiceCount, 2) : 0.0,
+            ];
+            $rows[] = $mapped;
+
+            $totals['invoice_count'] += $invoiceCount;
+            $totals['net_sales'] += $mapped['net_sales'];
+            $totals['discount_total'] += $mapped['discount_total'];
+            $totals['collected_total'] += $mapped['collected_total'];
+            $totals['pending_total'] += $mapped['pending_total'];
+            $totals['gross_total'] += $mapped['gross_total'];
+        }
+
+        foreach (['net_sales', 'discount_total', 'collected_total', 'pending_total', 'gross_total'] as $key) {
+            $totals[$key] = round((float) $totals[$key], 2);
+        }
+        $totals['avg_ticket'] = $totals['invoice_count'] > 0
+            ? round($totals['net_sales'] / $totals['invoice_count'], 2)
+            : 0.0;
+
+        return [
+            'rows' => $rows,
+            'totals' => $totals,
+        ];
+    }
+
+    /** @return array<string, float|int> */
+    private function emptyPosSalesSummaryTotals(): array
+    {
+        return [
+            'invoice_count' => 0,
+            'net_sales' => 0.0,
+            'discount_total' => 0.0,
+            'collected_total' => 0.0,
+            'pending_total' => 0.0,
+            'gross_total' => 0.0,
+            'avg_ticket' => 0.0,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     */
+    private function appendPosInvoiceListFiltersSql(string &$sql, array $filters, string $payableSql, string $discountSql): void
+    {
+        if (isset($filters['warehouse_id']) && $filters['warehouse_id'] !== null && $filters['warehouse_id'] !== '') {
+            $sql .= ' AND i.warehouse_id = ' . (int) $filters['warehouse_id'];
+        }
+
+        if (!empty($filters['order_number'])) {
+            $sql .= " AND o.order_number LIKE '%" . $this->db->real_escape_string((string) $filters['order_number']) . "%'";
+        }
+
+        if (!empty($filters['invoice_number'])) {
+            $sql .= " AND i.invoice_number LIKE '%" . $this->db->real_escape_string((string) $filters['invoice_number']) . "%'";
+        }
+
+        if (!empty($filters['status'])) {
+            $sql .= " AND i.status = '" . $this->db->real_escape_string((string) $filters['status']) . "'";
+        }
+
+        if (!empty($filters['from_date'])) {
+            $sql .= " AND i.invoice_date >= '" . $this->db->real_escape_string((string) $filters['from_date']) . "'";
+        }
+
+        if (!empty($filters['to_date'])) {
+            $sql .= " AND i.invoice_date <= '" . $this->db->real_escape_string((string) $filters['to_date']) . "'";
+        }
+
+        if (!empty($filters['type'])) {
+            $sql .= " AND IFNULL(o.payment_type,'') = '" . $this->db->real_escape_string((string) $filters['type']) . "'";
+        }
+
+        if (!empty($filters['customer_id'])) {
+            $sql .= ' AND i.customer_id = ' . (int) $filters['customer_id'];
+        }
+
+        if (!empty($filters['amount_min'])) {
+            $sql .= ' AND ROUND(' . $payableSql . ', 2) >= ' . (float) $filters['amount_min'];
+        }
+
+        if (!empty($filters['amount_max'])) {
+            $sql .= ' AND ROUND(' . $payableSql . ', 2) <= ' . (float) $filters['amount_max'];
+        }
+
+        if (isset($filters['discount_applied']) && $filters['discount_applied'] !== '') {
+            if ((string) $filters['discount_applied'] === '1') {
+                $sql .= " AND ({$discountSql}) > 0.001";
+            } elseif ((string) $filters['discount_applied'] === '0') {
+                $sql .= " AND ({$discountSql}) <= 0.001";
+            }
+        }
     }
 
     /**

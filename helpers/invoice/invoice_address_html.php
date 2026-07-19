@@ -3,22 +3,69 @@
 /**
  * Format vp_order_info billing / shipping blocks for invoice PDF templates.
  *
+ * @param mixed $conn Optional mysqli for GST state-code lookup from states table.
  * @return array{bill: string, ship: string}
  */
-function invoice_resolve_bill_ship_html(?array $orderInfo): array
+function invoice_resolve_bill_ship_html(?array $orderInfo, $conn = null): array
 {
     if (!$orderInfo) {
         return ['bill' => '', 'ship' => ''];
     }
 
-    $bill = invoice_format_order_info_address_html($orderInfo, 'billing');
-    $ship = invoice_format_order_info_address_html($orderInfo, 'shipping');
+    $bill = invoice_format_order_info_address_html($orderInfo, 'billing', $conn);
+    $ship = invoice_format_order_info_address_html($orderInfo, 'shipping', $conn);
 
     if (!invoice_order_info_has_shipping($orderInfo)) {
         $ship = $bill;
     }
 
+    if ($ship !== '') {
+        $placeOfSupply = invoice_resolve_place_of_supply_display_state($orderInfo);
+        if ($placeOfSupply !== '') {
+            $ship = invoice_append_invoice_address_line(
+                $ship,
+                'Place of Supply: ' . htmlspecialchars($placeOfSupply)
+            );
+        }
+    }
+
     return ['bill' => $bill, 'ship' => $ship];
+}
+
+function invoice_pdf_body_text_inline_style(): string
+{
+    return 'font-family: DejaVu Sans, Arial, sans-serif; font-size: 16px; line-height: 1.4; color: #000;';
+}
+
+function invoice_wrap_invoice_address_html(string $html): string
+{
+    if ($html === '') {
+        return '';
+    }
+
+    return '<div class="invoice-text" style="' . invoice_pdf_body_text_inline_style() . ' text-align:left;">'
+        . $html
+        . '</div>';
+}
+
+function invoice_append_invoice_address_line(string $addressHtml, string $lineHtml): string
+{
+    if ($addressHtml === '') {
+        return invoice_wrap_invoice_address_html($lineHtml);
+    }
+
+    $lineHtml = trim($lineHtml);
+    if ($lineHtml === '') {
+        return $addressHtml;
+    }
+
+    $append = $lineHtml . '<br>';
+
+    if (preg_match('/<\/div>\s*$/', $addressHtml)) {
+        return preg_replace('/<\/div>\s*$/', $append . '</div>', $addressHtml, 1);
+    }
+
+    return $addressHtml . $append;
 }
 
 function invoice_order_info_has_shipping(array $orderInfo): bool
@@ -37,7 +84,7 @@ function invoice_order_info_has_shipping(array $orderInfo): bool
     return false;
 }
 
-function invoice_format_order_info_address_html(array $orderInfo, string $type): string
+function invoice_format_order_info_address_html(array $orderInfo, string $type, $conn = null): string
 {
     $isShipping = $type === 'shipping';
     $prefix = $isShipping ? 'shipping_' : '';
@@ -79,6 +126,10 @@ function invoice_format_order_info_address_html(array $orderInfo, string $type):
     $html .= '<br>';
     $html .= htmlspecialchars(trim($city . ' ' . $state . ' ' . $zip)) . '<br>';
     if (!$isShipping) {
+        $gstStateCode = invoice_resolve_billing_gst_state_code($orderInfo, $conn);
+        if ($gstStateCode !== '') {
+            $html .= 'State Code: ' . htmlspecialchars($gstStateCode) . '<br>';
+        }
         $gstin = trim((string)($orderInfo['gstin'] ?? ''));
         if ($gstin !== '') {
             $html .= 'GSTIN: ' . htmlspecialchars($gstin) . '<br>';
@@ -88,5 +139,58 @@ function invoice_format_order_info_address_html(array $orderInfo, string $type):
         $html .= 'Tel: ' . htmlspecialchars($phone) . '<br>';
     }
 
-    return $html;
+    return invoice_wrap_invoice_address_html($html);
+}
+
+/**
+ * Place of supply state for Ship To block (shipping state when present, else billing state).
+ */
+function invoice_resolve_place_of_supply_display_state(array $orderInfo): string
+{
+    if (invoice_order_info_has_shipping($orderInfo)) {
+        $shippingState = trim((string)($orderInfo['shipping_state'] ?? ''));
+        if ($shippingState !== '') {
+            return $shippingState;
+        }
+    }
+
+    return trim((string)($orderInfo['state'] ?? ''));
+}
+
+/**
+ * GST numeric state code for Bill To block (India only).
+ */
+function invoice_resolve_billing_gst_state_code(array $orderInfo, $conn = null): string
+{
+    require_once __DIR__ . '/invoice_gst.php';
+
+    $country = invoice_normalize_country_code($orderInfo['country'] ?? 'IN');
+    if ($country !== 'IN') {
+        if (invoice_order_info_is_overseas($orderInfo)) {
+            return '96';
+        }
+
+        return '';
+    }
+
+    $storedCode = trim((string)($orderInfo['state_code'] ?? ''));
+    if (preg_match('/^\d{2}$/', $storedCode)) {
+        return $storedCode;
+    }
+
+    $stateName = trim((string)($orderInfo['state'] ?? ''));
+    if ($conn instanceof mysqli) {
+        require_once __DIR__ . '/../../models/country/state.php';
+        $stateModel = new State($conn);
+        $resolved = $stateModel->resolveGstStateCode(
+            $stateName,
+            $storedCode !== '' ? $storedCode : '',
+            105
+        );
+        if ($resolved !== null && $resolved !== '') {
+            return $resolved;
+        }
+    }
+
+    return '';
 }

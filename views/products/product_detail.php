@@ -1642,15 +1642,15 @@
         </div>
         <div class="min-w-0">
           <h3 class="text-base font-semibold text-gray-900">Refresh Product From API</h3>
-          <p class="mt-1 text-sm text-gray-600 leading-relaxed">
-            All variants for this item code will refresh catalog fields and <strong>local stock</strong> from the API. Check a variant only if its <strong>physical stock</strong> should also sync from the API.
+          <p class="mt-1 text-sm text-gray-600 leading-relaxed" id="refreshStockChoiceIntro">
+            Catalog fields (including Price India), local stock, and other API values will refresh for this item. Check the row only if <strong>physical stock</strong> should also sync from the API.
           </p>
         </div>
       </div>
     </div>
     <div class="px-5 py-4 overflow-y-auto flex-1">
-      <div class="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900 mb-4">
-        Catalog fields and local stock always update from the API. Each row shows current local stock and the API value. Leave unchecked to keep <strong>physical stock</strong> unchanged; check to sync physical stock (and warehouse ledger) from the API.
+      <div class="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900 mb-4" id="refreshStockChoiceHelp">
+        Catalog fields, Price India, and local stock always update from the vendor API. Leave the checkbox unchecked to keep <strong>physical stock</strong> unchanged; check it to sync physical stock (and warehouse ledger) from the API.
       </div>
       <div id="refreshStockVariantList" class="space-y-2"></div>
     </div>
@@ -1699,6 +1699,7 @@
         'color' => (string) ($variantRow['color'] ?? ''),
         'local_stock' => (int) ($variantRow['local_stock'] ?? 0),
         'physical_stock' => (int) ($variantRow['physical_stock'] ?? 0),
+        'price_india' => (float) ($variantRow['price_india'] ?? 0),
       ];
     }
     if ($refreshStockVariantRows === [] && $currentProductIdForRefresh > 0) {
@@ -1709,6 +1710,7 @@
         'color' => (string) ($products['color'] ?? ''),
         'local_stock' => (int) ($products['local_stock'] ?? 0),
         'physical_stock' => (int) ($products['physical_stock'] ?? 0),
+        'price_india' => (float) ($products['price_india'] ?? 0),
       ];
     }
     echo json_encode(
@@ -2005,21 +2007,39 @@
     return Math.max(0, Math.round(num));
   }
 
-  function buildApiLocalStockMap(apiPayloadRoot) {
+  function parseApiFloatValue(raw) {
+    if (raw === null || raw === undefined || raw === '') {
+      return null;
+    }
+    var num = parseFloat(String(raw));
+    return isNaN(num) ? null : num;
+  }
+
+  function buildApiRefreshPreviewMap(apiPayloadRoot) {
     var map = {};
     var rows = expandVendorProductFetchVariantsClient(
       normalizeVendorProductFetchItemsClient(apiPayloadRoot)
     );
     rows.forEach(function (row) {
-      var stock = parseApiLocalStockValue(row);
-      if (stock === null) {
-        return;
-      }
-      map[refreshVariantMatchKey({
+      var key = refreshVariantMatchKey({
         sku: row.sku || '',
         size: row.size || '',
         color: row.color || ''
-      })] = stock;
+      });
+      map[key] = {
+        local_stock: parseApiLocalStockValue(row),
+        price_india: parseApiFloatValue(row.price_india),
+        price_usd: parseApiFloatValue(row.price || row.usd)
+      };
+    });
+    return map;
+  }
+
+  function buildApiLocalStockMap(apiPayloadRoot) {
+    var preview = buildApiRefreshPreviewMap(apiPayloadRoot);
+    var map = {};
+    Object.keys(preview).forEach(function (key) {
+      map[key] = preview[key].local_stock;
     });
     return map;
   }
@@ -2041,7 +2061,7 @@
     if (!data || !data.success) {
       throw new Error((data && data.message) ? data.message : 'Could not load API stock preview.');
     }
-    return buildApiLocalStockMap(data.payload || data);
+    return buildApiRefreshPreviewMap(data.payload || data);
   }
 
   function formatRefreshVariantLabel(row) {
@@ -2056,12 +2076,12 @@
     return parts.join(' · ');
   }
 
-  function buildRefreshStockVariantList(currentProductId, apiLocalStockMap) {
+  function buildRefreshStockVariantList(currentProductId, apiPreviewMap) {
     var listEl = document.getElementById('refreshStockVariantList');
     if (!listEl) return;
 
     var rows = Array.isArray(refreshStockVariantChoices.variants) ? refreshStockVariantChoices.variants.slice() : [];
-    apiLocalStockMap = apiLocalStockMap || {};
+    apiPreviewMap = apiPreviewMap || {};
     rows.sort(function (a, b) {
       if (Number(a.id) === Number(currentProductId)) return -1;
       if (Number(b.id) === Number(currentProductId)) return 1;
@@ -2070,7 +2090,7 @@
 
     listEl.innerHTML = '';
     if (rows.length === 0) {
-      listEl.innerHTML = '<p class="text-sm text-gray-500">No variants found for this item code.</p>';
+      listEl.innerHTML = '<p class="text-sm text-gray-500">No product row found for this item code.</p>';
       return;
     }
 
@@ -2079,13 +2099,22 @@
       var label = formatRefreshVariantLabel(row);
       var oldLocal = Number(row.local_stock || 0);
       var physical = Number(row.physical_stock || 0);
-      var apiLocal = apiLocalStockMap[refreshVariantMatchKey(row)];
-      var apiLocalText = (apiLocal === null || apiLocal === undefined)
+      var oldPriceIndia = Number(row.price_india || 0);
+      var preview = apiPreviewMap[refreshVariantMatchKey(row)] || {};
+      var apiLocal = preview.local_stock;
+      var apiPriceIndia = preview.price_india;
+      var apiLocalText = (apiLocal === null || apiLocal === undefined) ? '—' : String(apiLocal);
+      var apiPriceIndiaText = (apiPriceIndia === null || apiPriceIndia === undefined)
         ? '—'
-        : String(apiLocal);
+        : Number(apiPriceIndia).toFixed(2);
       var localChanged = apiLocal !== null && apiLocal !== undefined && Number(apiLocal) !== oldLocal;
+      var priceChanged = apiPriceIndia !== null && apiPriceIndia !== undefined
+        && Math.abs(Number(apiPriceIndia) - oldPriceIndia) > 0.009;
       var stockHint =
-        '<span class="block">Local stock: <span class="font-medium text-gray-800">' + oldLocal + '</span>'
+        '<span class="block">Price India: <span class="font-medium text-gray-800">₹' + oldPriceIndia.toFixed(2) + '</span>'
+        + ' → <span class="font-semibold ' + (priceChanged ? 'text-amber-700' : 'text-gray-800') + '">₹' + apiPriceIndiaText + '</span>'
+        + ' <span class="text-gray-400">(API, always updated)</span></span>'
+        + '<span class="block mt-0.5">Local stock: <span class="font-medium text-gray-800">' + oldLocal + '</span>'
         + ' → <span class="font-semibold ' + (localChanged ? 'text-amber-700' : 'text-gray-800') + '">' + apiLocalText + '</span>'
         + ' <span class="text-gray-400">(API, always updated)</span></span>'
         + '<span class="block mt-0.5">Physical stock (current): <span class="font-medium text-gray-800">' + physical + '</span>'
@@ -2125,15 +2154,15 @@
     }
     confirmBtn.disabled = true;
 
-    var apiLocalStockMap = {};
+    var apiPreviewMap = {};
     var apiLoadError = '';
     try {
-      apiLocalStockMap = await fetchApiLocalStockMapForItemCode(itemCode);
+      apiPreviewMap = await fetchApiLocalStockMapForItemCode(itemCode);
     } catch (e) {
-      apiLoadError = (e && e.message) ? e.message : 'Could not load API stock preview.';
+      apiLoadError = (e && e.message) ? e.message : 'Could not load API preview.';
     }
 
-    buildRefreshStockVariantList(currentProductId, apiLocalStockMap);
+    buildRefreshStockVariantList(currentProductId, apiPreviewMap);
     if (apiLoadError && listEl) {
       var warn = document.createElement('p');
       warn.className = 'mt-3 text-xs text-amber-700 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2';
@@ -2254,6 +2283,7 @@
     var requestBody = {
       itemCode: itemCode,
       refresh_from_detail: true,
+      current_product_id: parseInt(String(refreshStockVariantChoices.current_product_id || '0'), 10),
       detail_variant_rows: Array.isArray(refreshStockVariantChoices.variants) ? refreshStockVariantChoices.variants : [],
       physical_stock_sync_product_ids: Array.isArray(stockChoice.physicalStockSyncProductIds) ? stockChoice.physicalStockSyncProductIds : []
     };

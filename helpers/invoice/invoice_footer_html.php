@@ -1,7 +1,8 @@
 <?php
 
 /**
- * Exclusive Stores footer from exotic_address (DB only).
+ * Warehouse address from exotic_address (DB only).
+ * Rendered in the invoice header below the company name.
  *
  * @param array<string, mixed> $invoice
  * @param list<array<string, mixed>> $items
@@ -27,17 +28,18 @@ function invoice_resolve_exclusive_stores_footer_html(
     $warehouse = $commanModel->get_exotic_address_for_footer($warehouseId);
     $body = '';
     if (is_array($warehouse)) {
-        foreach (['address', 'display_name', 'address_title'] as $field) {
-            $body = trim((string)($warehouse[$field] ?? ''));
-            if ($body !== '') {
-                break;
-            }
-        }
+        $body = trim((string)($warehouse['address'] ?? ''));
     }
 
     if ($body === '') {
-        return '<b>Exclusive Stores</b>';
+        return '';
     }
 
-    return '<b>Exclusive Stores</b><br>' . nl2br(htmlspecialchars($body, ENT_QUOTES, 'UTF-8'));
+    $body = preg_replace('/^Exclusive Stores\s*\R?/i', '', $body);
+    $body = trim($body);
+    if ($body === '') {
+        return '';
+    }
+
+    return nl2br(htmlspecialchars($body, ENT_QUOTES, 'UTF-8'));
 }

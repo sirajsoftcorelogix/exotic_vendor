@@ -782,6 +782,10 @@ class ProductsController
         if (is_array($postPayload) && isset($postPayload['detail_variant_rows']) && is_array($postPayload['detail_variant_rows'])) {
             $detailVariantRows = $postPayload['detail_variant_rows'];
         }
+        $currentProductId = 0;
+        if (is_array($postPayload)) {
+            $currentProductId = (int) ($postPayload['current_product_id'] ?? 0);
+        }
         if ($useRefreshFromDetail) {
             $productRows = product::expandVendorProductFetchVariants($productRows);
             $externalApi['normalized_rows'] = $productRows;
@@ -796,6 +800,7 @@ class ProductsController
                     'physical_stock_sync_product_ids' => $physicalStockSyncProductIds,
                     'stock_sync_product_ids' => $physicalStockSyncProductIds,
                     'detail_variant_rows' => $detailVariantRows,
+                    'current_product_id' => $currentProductId,
                 ]);
             } else {
                 $updateResult = $productModel->updateProductFromApi($productRows, ['preserve_local_stock' => !$updateLocalStock]);
@@ -810,6 +815,7 @@ class ProductsController
         $updateResult['physical_stock_sync_product_ids'] = $physicalStockSyncProductIds;
         $updateResult['variants_expanded'] = $useRefreshFromDetail;
         $updateResult['stock_sync_product_ids'] = $physicalStockSyncProductIds;
+        $updateResult['current_product_id'] = $currentProductId;
         $updateResult['external_api'] = $externalApi;
         $this->stopJsonApiErrorCapture();
         echo json_encode(
