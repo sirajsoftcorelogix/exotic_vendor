@@ -177,23 +177,16 @@ $queryBase = [
                                     </span>
                                 </td>
                                 <td class="px-5 py-4 text-sm text-gray-600"><?php echo htmlspecialchars((string)($publisher['update_at'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td class="px-5 py-4 text-sm text-right whitespace-nowrap">
-                                    <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                                        onclick='openPublisherModal(<?php echo json_encode($publisherPayload, JSON_HEX_APOS | JSON_HEX_QUOT); ?>)'>
-                                        Edit
-                                    </button>
-                                    <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50"
-                                        onclick="setPublisherStatus(<?php echo $id; ?>, <?php echo $active ? 0 : 1; ?>)">
-                                        <?php echo $active ? 'Deactivate' : 'Activate'; ?>
-                                    </button>
-                                    <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50"
-                                        onclick="openPublisherBankDtlsModal(<?php echo $id; ?>)">
-                                        Bank Details
-                                    </button>
-                                    <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
-                                        onclick="deletePublisher(<?php echo $id; ?>)">
-                                        Delete
-                                    </button>
+                                <td class="px-5 py-4 text-sm whitespace-nowrap font-medium">
+                                    <div class="menu-wrapper">
+                                        <button type="button" class="menu-button" onclick="toggleMenu(this)" aria-label="Publisher actions">&#x22EE;</button>
+                                        <ul class="menu-popup text-left">
+                                            <li onclick='openPublisherModal(<?php echo json_encode($publisherPayload, JSON_HEX_APOS | JSON_HEX_QUOT); ?>)'><i class="fa-solid fa-pencil"></i> Edit</li>
+                                            <li onclick="setPublisherStatus(<?php echo $id; ?>, <?php echo $active ? 0 : 1; ?>)"><i class="fa-solid fa-power-off"></i> <?php echo $active ? 'Deactivate' : 'Activate'; ?></li>
+                                            <li onclick="openPublisherBankDtlsModal(<?php echo $id; ?>)"><i class="fa-solid fa-building-columns"></i> Bank Details</li>
+                                            <li class="text-red-700" onclick="deletePublisher(<?php echo $id; ?>)"><i class="fa-solid fa-trash"></i> Delete</li>
+                                        </ul>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -530,6 +523,9 @@ function showPublisherAlert(message, success) {
 }
 
 function openPublisherModal(publisher) {
+    if (typeof closeAllMenus === 'function') {
+        closeAllMenus();
+    }
     publisher = publisher || {};
     publisherNameExists = false;
     const publisherNameMsg = document.getElementById('publisherNameMsg');
@@ -629,6 +625,9 @@ document.getElementById('publisherForm')?.addEventListener('submit', function (e
 });
 
 function setPublisherStatus(id, isActive) {
+    if (typeof closeAllMenus === 'function') {
+        closeAllMenus();
+    }
     const form = new FormData();
     form.append('id', id);
     form.append('is_active', isActive);
@@ -641,6 +640,9 @@ function setPublisherStatus(id, isActive) {
 }
 
 function deletePublisher(id) {
+    if (typeof closeAllMenus === 'function') {
+        closeAllMenus();
+    }
     if (!confirm('Delete this publisher on Exotic India and locally? This cannot be undone.')) return;
     const form = new FormData();
     form.append('id', id);
@@ -681,6 +683,9 @@ function showPublisherBankDetailAlert(message, success) {
 }
 
 function openPublisherBankDtlsModal(id) {
+    if (typeof closeAllMenus === 'function') {
+        closeAllMenus();
+    }
     fetch('index.php?page=publishers&action=getBankDetails&id=' + encodeURIComponent(String(id)), { credentials: 'same-origin' })
         .then(function (res) { return res.json(); })
         .then(function (bankdtls) {
@@ -761,5 +766,80 @@ document.getElementById('publisherBankDetailForm')?.addEventListener('submit', f
                 btn.textContent = oldLabel;
             }
         });
+});
+
+function toggleMenu(button) {
+    const popup = button.nextElementSibling;
+    if (!popup) return;
+    popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
+    document.querySelectorAll('.menu-popup').forEach(function (menu) {
+        if (menu !== popup) menu.style.display = 'none';
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const menuButtons = document.querySelectorAll('.menu-button');
+    window.currentOpenMenu = null;
+    const menuMargin = 8;
+
+    window.closeAllMenus = function () {
+        if (window.currentOpenMenu) {
+            window.currentOpenMenu.classList.add('hidden');
+            window.currentOpenMenu.classList.remove('active');
+            window.currentOpenMenu.removeAttribute('style');
+            window.currentOpenMenu = null;
+        }
+        document.querySelectorAll('.menu-popup').forEach(function (menu) {
+            menu.style.display = 'none';
+        });
+    };
+
+    document.addEventListener('click', function (e) {
+        if (window.currentOpenMenu && !window.currentOpenMenu.contains(e.target)) {
+            closeAllMenus();
+        }
+    });
+
+    menuButtons.forEach(function (button) {
+        button.addEventListener('click', function (event) {
+            event.stopPropagation();
+            const dropdown = button.nextElementSibling;
+            if (!dropdown) return;
+
+            const isActive = dropdown.classList.contains('active');
+            if (window.currentOpenMenu && window.currentOpenMenu !== dropdown) {
+                closeAllMenus();
+            }
+
+            if (!isActive) {
+                dropdown.classList.remove('hidden');
+                dropdown.style.display = 'block';
+                const buttonRect = button.getBoundingClientRect();
+                const dropdownWidth = dropdown.offsetWidth;
+                const dropdownHeight = dropdown.offsetHeight;
+                const viewportHeight = window.innerHeight;
+                const viewportWidth = window.innerWidth;
+
+                dropdown.style.position = 'fixed';
+                dropdown.style.top = '';
+                dropdown.style.left = '';
+                if (buttonRect.bottom + dropdownHeight + menuMargin < viewportHeight) {
+                    dropdown.style.top = (buttonRect.bottom + menuMargin) + 'px';
+                } else {
+                    dropdown.style.top = (buttonRect.top - dropdownHeight - menuMargin) + 'px';
+                }
+                if (buttonRect.left + dropdownWidth < viewportWidth) {
+                    dropdown.style.left = buttonRect.left + 'px';
+                } else {
+                    dropdown.style.left = (buttonRect.left - dropdownWidth + buttonRect.width) + 'px';
+                }
+
+                dropdown.classList.add('active');
+                window.currentOpenMenu = dropdown;
+            } else {
+                closeAllMenus();
+            }
+        });
+    });
 });
 </script>
