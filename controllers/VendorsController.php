@@ -73,7 +73,7 @@ class VendorsController {
             }
             if ($id > 0) {
                 $api = $this->syncVendorToExternalApi($id, $data, true);
-                if (!$api['success']) {
+                if (!vendor_external_api_allows_local_save($api)) {
                     echo json_encode([
                         'success' => false,
                         'message' => $api['message'] ?? 'Exotic India vendor modify failed.',

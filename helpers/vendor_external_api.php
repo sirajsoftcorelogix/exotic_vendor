@@ -146,6 +146,49 @@ function vendor_external_api_extract_vendor_id(array $data): int
 }
 
 /**
+ * vendormodify returns success=false when submitted fields already match remote (HTTP 200).
+ */
+function vendor_external_api_message_indicates_no_changes(string $message): bool
+{
+    $msg = strtolower(trim($message));
+    $msg = rtrim($msg, '.');
+
+    return $msg === 'no changes detected';
+}
+
+function vendor_external_api_is_no_changes_response(array $data): bool
+{
+    foreach (['message', 'reason'] as $key) {
+        if (isset($data[$key]) && vendor_external_api_message_indicates_no_changes((string) $data[$key])) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * True when local save should proceed after an Exotic India sync attempt (incl. "no changes detected").
+ */
+function vendor_external_api_allows_local_save(array $api): bool
+{
+    if (!empty($api['success'])) {
+        return true;
+    }
+    if (vendor_external_api_is_no_changes_response($api)) {
+        return true;
+    }
+    if (is_array($api['data'] ?? null) && vendor_external_api_is_no_changes_response($api['data'])) {
+        return true;
+    }
+    if (is_array($api['response'] ?? null) && vendor_external_api_is_no_changes_response($api['response'])) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
  * vendorcreate returns vendor_id for both new vendors and existing duplicate names.
  */
 function vendor_external_api_response_is_failure(array $data): bool
@@ -249,6 +292,21 @@ function vendor_external_api_post(string $action, array $postData): array
             'message' => $msg,
             'http_code' => $httpCode,
             'vendor_id' => $vendorId,
+            'data' => $data,
+            'raw' => (string) $raw,
+        ]);
+    }
+
+    if ($action === 'vendormodify'
+        && vendor_external_api_response_is_failure($data)
+        && vendor_external_api_is_no_changes_response($data)) {
+        $existingVendorId = (int) preg_replace('/\D/', '', (string) ($postData['vendor_id'] ?? ''));
+
+        return vendor_external_api_attach_debug($action, $postData, [
+            'success' => true,
+            'message' => 'Remote vendor already up to date.',
+            'http_code' => $httpCode,
+            'vendor_id' => $vendorId > 0 ? $vendorId : ($existingVendorId > 0 ? $existingVendorId : null),
             'data' => $data,
             'raw' => (string) $raw,
         ]);
