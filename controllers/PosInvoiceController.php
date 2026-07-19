@@ -1119,27 +1119,22 @@ class PosInvoiceController
 
         $orderLevelDisc = $this->posInvoiceOrderLevelDiscountTotal($snapshot);
         if ($orderLevelDisc > 0.001 && $rows !== []) {
-            $shareItems = array_map(
+            require_once __DIR__ . '/../helpers/invoice/pos_invoice_line_calculation.php';
+            $calcInput = array_map(
                 static fn(array $row): array => [
-                    'line_total' => round((float)$row['disc_incl_unit'] * (float)$row['qty'], 2),
+                    'list_incl_unit' => (float)$row['list_incl_unit'],
+                    'disc_incl_unit' => (float)$row['disc_incl_unit'],
+                    'qty' => (float)$row['qty'],
                 ],
                 $rows
             );
-            $shares = $this->posInvoiceProportionalDiscountShares($shareItems, $orderLevelDisc);
+            $adjusted = pos_invoice_apply_list_price_order_discount($calcInput, $orderLevelDisc);
             foreach ($rows as $index => &$row) {
-                if ($row['list_incl_unit'] > $row['disc_incl_unit'] + 0.02) {
+                if (!isset($adjusted[$index])) {
                     continue;
                 }
-                $share = (float)($shares[$index] ?? 0);
-                if ($share <= 0.001) {
-                    continue;
-                }
-                $listingIncl = max((float)$row['list_incl_unit'], (float)$row['disc_incl_unit']);
-                $row['list_incl_unit'] = $listingIncl;
-                $row['disc_incl_unit'] = max(
-                    0.0,
-                    round($listingIncl - ($share / max(1, (float)$row['qty'])), 4)
-                );
+                $row['list_incl_unit'] = (float)$adjusted[$index]['list_incl_unit'];
+                $row['disc_incl_unit'] = (float)$adjusted[$index]['disc_incl_unit'];
             }
             unset($row);
         }
@@ -1244,12 +1239,9 @@ class PosInvoiceController
 
     private function posInvoiceOrderLevelDiscountTotal(array $posDiscountMeta): float
     {
-        return round(
-            (float)($posDiscountMeta['coupon_discount'] ?? 0)
-            + (float)($posDiscountMeta['cash_discount'] ?? 0)
-            + (float)($posDiscountMeta['gift_discount'] ?? 0),
-            2
-        );
+        require_once __DIR__ . '/../helpers/invoice/pos_invoice_line_calculation.php';
+
+        return pos_invoice_order_level_discount_total($posDiscountMeta);
     }
 
     private function posInvoiceInclToPretax(float $inclUnit, float $gstRate): float
@@ -1343,6 +1335,19 @@ class PosInvoiceController
     }
 
     /**
+     * Split a discount across lines by proportional extended amounts (index => amount).
+     *
+     * @param array<int|numeric-string, float> $extendedByIndex
+     * @return array<int|numeric-string, float>
+     */
+    private function posInvoiceProportionalDiscountSharesByExtendedAmounts(array $extendedByIndex, float $totalDiscount): array
+    {
+        require_once __DIR__ . '/../helpers/invoice/pos_invoice_line_calculation.php';
+
+        return pos_invoice_proportional_discount_shares($extendedByIndex, $totalDiscount);
+    }
+
+    /**
      * Split an order-level discount across lines by line-total ratio.
      *
      * @param list<array<string, mixed>> $items each row needs line_total
@@ -1354,24 +1359,12 @@ class PosInvoiceController
             return [];
         }
 
-        $extendedSum = $this->posInvoiceLineExtendedSum($items);
-        if ($extendedSum <= 0.001) {
-            return [];
-        }
-
-        $shares = [];
-        $remaining = $totalDiscount;
-        $lastIndex = count($items) - 1;
+        $extendedByIndex = [];
         foreach ($items as $index => $item) {
-            $lineExtended = round((float)($item['line_total'] ?? 0), 2);
-            $share = $index === $lastIndex
-                ? round($remaining, 2)
-                : round(($totalDiscount * $lineExtended) / $extendedSum, 2);
-            $remaining = round($remaining - $share, 2);
-            $shares[$index] = $share;
+            $extendedByIndex[$index] = round((float)($item['line_total'] ?? 0), 2);
         }
 
-        return $shares;
+        return $this->posInvoiceProportionalDiscountSharesByExtendedAmounts($extendedByIndex, $totalDiscount);
     }
 
     /**
@@ -1387,34 +1380,66 @@ class PosInvoiceController
             return;
         }
 
-        $subtotalGoods = round((float)($posMeta['subtotal_goods'] ?? 0), 2);
-        $extendedSum = $this->posInvoiceLineExtendedSum($items);
-        $shares = $this->posInvoiceProportionalDiscountShares($items, $totalDiscount);
+        $listUnitsByIndex = [];
+        foreach ($items as $index => $item) {
+            $taxRate = (float)($item['tax_rate'] ?? 0);
+            $meta = $this->posInvoiceLineMetaForItem($item, $index, $lineItemsMeta);
+            $listIncl = is_array($meta) ? (float)($meta['list_unit_incl'] ?? 0) : 0.0;
+            if ($listIncl <= 0) {
+                $pretax = $this->posInvoiceResolveLineUnitPretax($item, $index, $lineItemsMeta);
+                $listIncl = $this->posInvoiceUnitIncl($pretax['list'], $taxRate);
+            }
+            if ($listIncl <= 0) {
+                $listIncl = pos_order_inclusive_unit_price($item, 'list');
+            }
+            if ($listIncl <= 0) {
+                continue;
+            }
+
+            $listUnitsByIndex[$index] = round($listIncl, 2);
+        }
+
+        if ($listUnitsByIndex === []) {
+            return;
+        }
+
+        require_once __DIR__ . '/../helpers/invoice/pos_invoice_line_calculation.php';
+        $calcInput = [];
+        foreach ($items as $index => $item) {
+            $listIncl = (float)($listUnitsByIndex[$index] ?? 0);
+            if ($listIncl <= 0) {
+                continue;
+            }
+            $calcInput[$index] = [
+                'list_incl_unit' => $listIncl,
+                'disc_incl_unit' => 0.0,
+                'qty' => max(1, (float)($item['quantity'] ?? 1)),
+            ];
+        }
+        $adjusted = pos_invoice_apply_list_price_order_discount(array_values($calcInput), $totalDiscount);
+        $adjustedByIndex = [];
+        $calcKeys = array_keys($calcInput);
+        foreach ($adjusted as $i => $row) {
+            $adjustedByIndex[$calcKeys[$i]] = $row;
+        }
 
         foreach ($items as $index => $item) {
-            $share = (float)($shares[$index] ?? 0);
-            if ($share <= 0.001) {
+            $adjustedRow = $adjustedByIndex[$index] ?? null;
+            if (!is_array($adjustedRow)) {
                 continue;
             }
 
-            $qty = max(1, (float)($item['quantity'] ?? 1));
-            $sharePerUnit = $share / $qty;
+            $listIncl = (float)($adjustedRow['list_incl_unit'] ?? 0);
+            $discIncl = (float)($adjustedRow['disc_incl_unit'] ?? 0);
+            if ($listIncl <= 0) {
+                continue;
+            }
+
             $meta = $this->posInvoiceLineMetaForItem($item, $index, $lineItemsMeta);
-            $listInclMeta = is_array($meta) ? (float)($meta['list_unit_incl'] ?? 0) : 0.0;
-            $discInclMeta = is_array($meta) ? (float)($meta['discounted_unit_incl'] ?? 0) : 0.0;
-            $listingIncl = $this->posInvoiceListingInclFromSubtotalRatio(
-                $item,
-                $subtotalGoods,
-                $extendedSum,
-                is_array($meta) ? $meta : null
-            );
-
-            if ($this->posInvoiceLineHasCatalogDiscountMeta($listInclMeta, $discInclMeta, $listingIncl, $sharePerUnit)
-                || $this->posInvoiceOrderDiscountAlreadyApplied($listInclMeta, $discInclMeta, $listingIncl, $sharePerUnit)) {
-                continue;
-            }
-
-            $prices = $this->posInvoiceOrderDiscountLinePrices($listingIncl, $sharePerUnit);
+            $prices = [
+                'list' => round($listIncl, 2),
+                'disc' => round($discIncl, 2),
+            ];
             $gstRate = (float)($item['tax_rate'] ?? 0);
             $entry = [
                 'list_unit_pretax' => $this->posInvoiceInclToPretax($prices['list'], $gstRate),
@@ -1532,9 +1557,9 @@ class PosInvoiceController
             $grandTotal = max(0.0, round($discSubtotal - $couponDiscount - $cashDiscount - $giftDiscount - $credit, 2));
         }
 
-        $subtotalGoods = round($discSubtotal, 2);
-        if ($subtotalGoods <= 0 && $listSubtotal > 0) {
-            $subtotalGoods = round($listSubtotal, 2);
+        $subtotalGoods = round($listSubtotal, 2);
+        if ($subtotalGoods <= 0) {
+            $subtotalGoods = round($discSubtotal, 2);
         }
         if ($subtotalGoods <= 0 && $grandTotal > 0) {
             $subtotalGoods = $grandTotal;
@@ -1825,7 +1850,14 @@ class PosInvoiceController
             $discountMetaEmpty = empty($parsedDiscount);
             $discountMetaStale = !$discountMetaEmpty
                 && $this->posInvoiceDiscountMetaNeedsRepair($parsedDiscount, $orderNumberForRepair);
-            if ($notesEmpty || $lineMetaEmpty || $discountMetaEmpty || $discountMetaStale) {
+            require_once __DIR__ . '/../helpers/invoice/pos_invoice_line_calculation.php';
+            $lineMetaStale = !$lineMetaEmpty
+                && !empty($parsedDiscount)
+                && pos_invoice_line_meta_needs_repair(
+                    $this->parsePosInvoiceLineItemsMeta($invoice['notes'] ?? null),
+                    $parsedDiscount
+                );
+            if ($notesEmpty || $lineMetaEmpty || $discountMetaEmpty || $discountMetaStale || $lineMetaStale) {
                 if ($this->repairPosInvoiceMetadataForOrder($invoiceId, $orderNumberForRepair)) {
                     $reloaded = $invoiceModel->getInvoiceById($invoiceId);
                     if (is_array($reloaded)) {
@@ -2066,10 +2098,13 @@ class PosInvoiceController
         if ($summaryGrandTotal <= 0) {
             $summaryGrandTotal = round((float)$totalAmount, 2);
         }
-        if ($summaryGrandTotal <= 0 && $sumLineTotals > 0.001) {
+        require_once __DIR__ . '/../helpers/invoice/pos_invoice_line_calculation.php';
+        $excelGrandTotal = pos_invoice_expected_grand_total($posDiscountMeta, $sumListLineTotals);
+        if ($orderLevelDisc > 0.001 && $summarySubtotal > 0.001) {
+            $summaryGrandTotal = $excelGrandTotal;
+        } elseif ($summaryGrandTotal <= 0 && $sumLineTotals > 0.001) {
             $summaryGrandTotal = round($sumLineTotals, 2);
-        }
-        if ($sumLineTotals > 0.001) {
+        } elseif ($sumLineTotals > 0.001 && abs($sumLineTotals - $excelGrandTotal) <= 0.05) {
             $summaryGrandTotal = round($sumLineTotals, 2);
         }
         $summaryTaxAmount = round($totalSgstAmt + $totalCgstAmt + $totalIgstAmt, 2);
@@ -2324,7 +2359,13 @@ class PosInvoiceController
 
         $existingLines = $this->parsePosInvoiceLineItemsMeta($invoice['notes'] ?? null);
         $existingDiscount = $this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null);
-        if (!empty($existingLines) && !empty($existingDiscount) && !$this->posInvoiceDiscountMetaNeedsRepair($existingDiscount, $orderNumber)) {
+        require_once __DIR__ . '/../helpers/invoice/pos_invoice_line_calculation.php';
+        if (
+            !empty($existingLines)
+            && !empty($existingDiscount)
+            && !$this->posInvoiceDiscountMetaNeedsRepair($existingDiscount, $orderNumber)
+            && !pos_invoice_line_meta_needs_repair($existingLines, $existingDiscount)
+        ) {
             return false;
         }
 

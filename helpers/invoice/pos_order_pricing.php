@@ -209,6 +209,36 @@ function pos_order_build_line_display_pricing_map(array $orderLines, ?array $inv
         : null;
     $useIgst = $resolvedUseIgst ?? invoice_order_info_uses_igst($orderInfo, null, $commanModel);
 
+    require_once __DIR__ . '/pos_invoice_line_calculation.php';
+    $orderLevelDisc = pos_invoice_order_level_discount_total($posDiscountMeta);
+    $excelAdjusted = [];
+    if ($orderLevelDisc > 0.001) {
+        $calcInput = [];
+        foreach ($orderLines as $index => $orderRow) {
+            if (!is_array($orderRow)) {
+                continue;
+            }
+            $meta = pos_order_line_meta_for_item($orderRow, (int)$index, $lineItemsMeta);
+            $listOverride = is_array($meta) ? (float)($meta['list_unit_incl'] ?? 0) : 0.0;
+            $listUnit = $listOverride > 0 ? $listOverride : pos_order_inclusive_unit_price($orderRow, 'list');
+            if ($listUnit <= 0) {
+                continue;
+            }
+            $calcInput[$index] = [
+                'list_incl_unit' => $listUnit,
+                'disc_incl_unit' => 0.0,
+                'qty' => max(1, (int)($orderRow['quantity'] ?? 1)),
+            ];
+        }
+        if ($calcInput !== []) {
+            $adjustedRows = pos_invoice_apply_list_price_order_discount(array_values($calcInput), $orderLevelDisc);
+            $calcKeys = array_keys($calcInput);
+            foreach ($adjustedRows as $i => $row) {
+                $excelAdjusted[$calcKeys[$i]] = $row;
+            }
+        }
+    }
+
     $pricingByLineId = [];
     foreach ($orderLines as $index => $orderRow) {
         if (!is_array($orderRow)) {
@@ -218,6 +248,10 @@ function pos_order_build_line_display_pricing_map(array $orderLines, ?array $inv
         $meta = pos_order_line_meta_for_item($orderRow, (int)$index, $lineItemsMeta);
         $listOverride = is_array($meta) ? (float)($meta['list_unit_incl'] ?? 0) : 0.0;
         $discOverride = is_array($meta) ? (float)($meta['discounted_unit_incl'] ?? 0) : 0.0;
+        if (isset($excelAdjusted[$index])) {
+            $listOverride = (float)($excelAdjusted[$index]['list_incl_unit'] ?? $listOverride);
+            $discOverride = (float)($excelAdjusted[$index]['disc_incl_unit'] ?? $discOverride);
+        }
 
         $lineId = (int)($orderRow['id'] ?? 0);
         if ($lineId <= 0) {
