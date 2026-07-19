@@ -196,15 +196,6 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                                                     <?php echo str_pad($item['quantity'], 2, '0', STR_PAD_LEFT); ?>
                                                 </span>
                                             </div>
-                                            <?php
-                                            $linePricing = $linePricingByLineId[(int)($item['id'] ?? 0)] ?? null;
-                                            if (is_array($linePricing)) {
-                                                renderPartial('views/posorders/partials/line_item_pricing.php', [
-                                                    'linePricing' => $linePricing,
-                                                    'currencySymbol' => $currencysymbol,
-                                                ]);
-                                            }
-                                            ?>
                                         </div>
                                         <div class="flex items-center gap-12">
                                             <div class="flex items-center gap-2 text-[13px] text-black-500">
@@ -220,6 +211,15 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                                             </div>
                                         </div>
                                     </div>
+                                    <?php
+                                    $linePricing = $linePricingByLineId[(int)($item['id'] ?? 0)] ?? null;
+                                    if (is_array($linePricing)) {
+                                        renderPartial('views/posorders/partials/line_item_pricing.php', [
+                                            'linePricing' => $linePricing,
+                                            'currencySymbol' => $currencysymbol,
+                                        ]);
+                                    }
+                                    ?>
                                 </div>
                             </div>
                         </div>
