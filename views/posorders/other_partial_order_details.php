@@ -160,8 +160,11 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                             <input type="checkbox" class="h-5 w-5 rounded border-gray-300">
                             <div class="flex flex-1 items-start gap-5 rounded-2xl border border-gray-200 p-4">
                                 <div class="h-32 w-32 flex-shrink-0 overflow-hidden rounded-xl border border-gray-100">
-                                    <img src="<?php echo $item['image']; ?>" class="h-full w-full object-cover"
-                                        alt="product">
+                                    <img src="<?php echo htmlspecialchars((string)($item['image'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                        class="h-full w-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                        alt="product"
+                                        title="Click to enlarge"
+                                        onclick="event.stopPropagation(); openImagePopup(<?php echo json_encode($item['image'] ?? ''); ?>)">
                                 </div>
 
                                 <div class="flex-1">
@@ -1098,4 +1101,39 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
             trigger.addEventListener('click', handler);
         });
     });
+
+    function openImagePopup(imageUrl) {
+        const popup = document.getElementById('imagePopup');
+        const img = document.getElementById('popupImage');
+        if (!popup || !img || !imageUrl) {
+            return;
+        }
+        img.src = imageUrl;
+        popup.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeImagePopup() {
+        const popup = document.getElementById('imagePopup');
+        const img = document.getElementById('popupImage');
+        if (popup) {
+            popup.classList.add('hidden');
+        }
+        if (img) {
+            img.src = '';
+        }
+        document.body.style.overflow = '';
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeImagePopup();
+        }
+    });
 </script>
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[100]" onclick="closeImagePopup()">
+    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
+        <button type="button" onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm" aria-label="Close">✕</button>
+        <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
+    </div>
+</div>
