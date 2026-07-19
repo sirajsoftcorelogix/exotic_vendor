@@ -1662,6 +1662,8 @@ switch ($page) {
                 $controller->index();
                 break;
         }
+        break;
+
     case 'posinvoice':
 
         require_once 'controllers/PosInvoiceController.php';
