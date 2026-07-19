@@ -806,7 +806,14 @@ class PosOrdersController
         }
 
         require_once __DIR__ . '/../helpers/invoice/pos_invoice_amount_summary.php';
-        $pdfSummaryInputs = pos_invoice_resolve_pdf_summary_inputs($invoice);
+        require_once __DIR__ . '/../models/PosInvoice/invoice.php';
+        $posInvoiceModelForSummary = new POSInvoice($conn);
+        $invoiceItemsForSummary = $posInvoiceModelForSummary->getInvoiceItems((int)($invoice['id'] ?? 0));
+        $invoiceLineTotalSum = 0.0;
+        foreach ($invoiceItemsForSummary as $invoiceItemRow) {
+            $invoiceLineTotalSum += round((float)($invoiceItemRow['line_total'] ?? 0), 2);
+        }
+        $pdfSummaryInputs = pos_invoice_resolve_pdf_summary_inputs($invoice, $invoiceLineTotalSum);
         $summaryRows = pos_invoice_build_amount_summary_rows(
             $pdfSummaryInputs['pos_meta'],
             $pdfSummaryInputs['grand_total'],

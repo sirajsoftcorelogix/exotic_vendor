@@ -78,9 +78,7 @@ function pos_invoice_build_amount_summary_rows(
         }
         if ($orderLevelDisc > 0.001 && $subInclGst > 0) {
             $computedGrand = max(0.0, round($subInclGst - $orderLevelDisc, 2));
-            if (abs($grandTotal - $subInclGst) < 0.02 || $grandTotal <= 0) {
-                $grandTotal = $computedGrand;
-            }
+            $grandTotal = $computedGrand;
         }
 
         $rows[] = [
@@ -203,7 +201,7 @@ function pos_invoice_build_amount_summary_rows(
  *   tax_amount: float
  * }
  */
-function pos_invoice_resolve_pdf_summary_inputs(array $invoice): array
+function pos_invoice_resolve_pdf_summary_inputs(array $invoice, float $lineTotalSum = 0.0): array
 {
     require_once __DIR__ . '/pos_order_pricing.php';
 
@@ -235,6 +233,9 @@ function pos_invoice_resolve_pdf_summary_inputs(array $invoice): array
     }
     if ($summaryGrandTotal <= 0) {
         $summaryGrandTotal = round((float)($invoice['total_amount'] ?? 0), 2);
+    }
+    if ($lineTotalSum > 0.001) {
+        $summaryGrandTotal = round($lineTotalSum, 2);
     }
 
     $summaryTaxAmount = round((float)($posMeta['gst_total'] ?? 0), 2);

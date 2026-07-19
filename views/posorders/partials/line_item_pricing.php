@@ -33,7 +33,7 @@ $formatAmount = static function (float $amount) use ($currencySymbol): string {
             </div>
         <?php endif; ?>
         <div class="flex items-center justify-between gap-4 sm:col-span-2 border-t border-gray-200 pt-4 mt-1">
-            <span class="font-semibold text-gray-800">Chargeable value</span>
+            <span class="font-semibold text-gray-800">Net chargeable amount</span>
             <span class="tabular-nums text-[15px] font-bold text-gray-900"><?php echo $formatAmount((float)($linePricing['chargeable_value'] ?? 0)); ?></span>
         </div>
     </div>
