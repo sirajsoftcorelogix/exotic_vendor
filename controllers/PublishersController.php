@@ -79,7 +79,7 @@ class PublishersController
         if ($id && $id > 0) {
             $remoteId = (int) ($existing['publishers_id'] ?? 0);
             $api = vendor_external_api_sync_creator('publisher', $name, $webpage, $remoteId > 0 ? $remoteId : null);
-            if (!$api['success']) {
+            if (!vendor_external_api_allows_local_save($api)) {
                 echo json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
                 exit;
             }
