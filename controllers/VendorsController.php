@@ -72,16 +72,26 @@ class VendorsController {
                 exit;
             }
             if ($id > 0) {
+                $api = $this->syncVendorToExternalApi($id, $data, true);
+                if (!$api['success']) {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => $api['message'] ?? 'Exotic India vendor modify failed.',
+                        'api_response' => json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+                    ]);
+                    exit;
+                }
                 $result = $vendorsModel->updateVendor($id, $data);
                 if (isset($result['success']) && $result['success'] === true) {
-                    $result['api_response'] = $this->syncVendorToExternalApi($id, $data, true);
+                    $result['api_response'] = json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
                 }
             } else {
                 $result = $vendorsModel->addVendor($data);
                 if (isset($result['success']) && $result['success'] === true) {
                     $localVendorId = (int) ($result['inserted_id'] ?? 0);
                     if ($localVendorId > 0) {
-                        $result['api_response'] = $this->syncVendorToExternalApi($localVendorId, $data, false);
+                        $api = $this->syncVendorToExternalApi($localVendorId, $data, false);
+                        $result['api_response'] = json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
                     }
                 }
             }
@@ -132,17 +142,17 @@ class VendorsController {
     }
 
     /**
-     * After local save, sync to Exotic India:
-     * - vendorcreate when vp_vendors.vendor_id is empty (add or edit)
-     * - vendormodify only when vp_vendors.vendor_id exists (edit with linked vendor)
+     * Sync to Exotic India vendor-api/product:
+     * - vendormodify when vp_vendors.vendor_id is linked (edit)
+     * - vendorcreate when remote vendor_id is missing (add or legacy edit)
      */
-    private function syncVendorToExternalApi(int $localVendorId, array $data, bool $isEdit): string
+    private function syncVendorToExternalApi(int $localVendorId, array $data, bool $isEdit): array
     {
         global $vendorsModel;
 
         $vendor = $vendorsModel->getVendorById($localVendorId);
         if (!$vendor) {
-            return json_encode(['success' => false, 'message' => 'Vendor not found for API sync.']);
+            return ['success' => false, 'message' => 'Vendor not found for API sync.'];
         }
 
         $groups = $this->normalizeVendorGroupsCsv($isEdit ? ($data['editGroupname'] ?? '') : ($data['groupname'] ?? ''));
@@ -155,82 +165,21 @@ class VendorsController {
             : trim((string) ($data['addVendorName'] ?? ''));
 
         $webpageKey = $isEdit ? 'editWebpage' : 'addWebpage';
-        $postData = [
-            'name' => $name,
-            'groupname' => $groups,
-            'vendor_type' => $this->resolveVendorTypeFromGroups($groups),
-            'webpage' => (isset($data[$webpageKey]) && (string) $data[$webpageKey] === '1') ? '1' : '0',
-        ];
-
+        $webpage = (isset($data[$webpageKey]) && (string) $data[$webpageKey] === '1') ? '1' : '0';
         $remoteVendorId = $this->getRemoteVendorId($vendor);
-
-        if ($remoteVendorId !== '') {
-            $postData['vendor_id'] = $remoteVendorId;
-            $api = vendor_external_api_modify($postData);
-
-            return json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-        }
-
-        $api = vendor_external_api_create($postData);
-        if (!empty($api['success']) && !empty($api['vendor_id'])) {
+        $api = vendor_external_api_sync_catalog($name, $groups, $webpage, $remoteVendorId !== '' ? $remoteVendorId : null);
+        if ($api['success'] && $remoteVendorId === '' && !empty($api['vendor_id'])) {
             $vendorsModel->updateVendorRemoteId($localVendorId, (string) $api['vendor_id']);
         }
 
-        return json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-    }
-
-    private function resolveVendorTypeFromGroups(string $groupsCsv): string
-    {
-        $first = trim((string)explode(',', $groupsCsv)[0]);
-        if ($first === '') {
-            return '';
-        }
-        $key = strtolower($first);
-        $map = [
-            'sculptures' => 'vendor_sculptures',
-            'sculpture' => 'vendor_sculptures',
-            'statues' => 'vendor_statues',
-            'homeandliving' => 'vendor_homeandliving',
-            'paintings' => 'vendor_paintings',
-            'textiles' => 'vendor_textiles',
-            'jewelry' => 'vendor_jewelry',
-            'book' => 'vendor_book',
-        ];
-        return $map[$key] ?? ('vendor_' . $key);
+        return $api;
     }
 
     public function modifyVendorExternal(array $postData): string
     {
-        if (empty($postData['vendor_id'])) {
-            return json_encode(['success' => false, 'message' => 'vendor_id is required for vendormodify']);
-        }
+        $api = vendor_external_api_modify(is_array($postData) ? $postData : []);
 
-        $apiUrl = 'https://www.exoticindia.com/vendor-api/product/vendormodify';
-        $headers = [
-            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-            'x-adminapitest: 1',
-            'Content-Type: application/x-www-form-urlencoded'
-        ];
-
-        $ch = curl_init($apiUrl);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-
-        $apiResponse = curl_exec($ch);
-        $apiError = curl_error($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($apiResponse === false) {
-            error_log('Vendor modify API call failed: ' . $apiError);
-            return json_encode(['success' => false, 'message' => 'Vendor modify API call failed', 'error' => $apiError]);
-        }
-
-        error_log('Vendor modify API response: HTTP ' . $httpCode);
-        return (string)$apiResponse;
+        return json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
     public function deleteVendorExternal($vendorId){
         $vendorId = trim((string)$vendorId);

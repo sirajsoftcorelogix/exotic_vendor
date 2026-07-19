@@ -63,7 +63,13 @@ class PublishersController
             exit;
         }
 
-        if ($this->publisherModel->publisherNameExists($name, ($id && $id > 0) ? $id : null)) {
+        $existing = ($id && $id > 0) ? $this->publisherModel->getPublisherById($id) : null;
+        if ($id && !$existing) {
+            echo json_encode(['success' => false, 'message' => 'Publisher not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        if ($this->publisherModel->isDuplicatePublisherName($name, $id)) {
             echo json_encode(['success' => false, 'message' => 'Publisher name already exists'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
@@ -71,34 +77,18 @@ class PublishersController
         $webpage = $extra['webpage'];
 
         if ($id && $id > 0) {
-            $existing = $this->publisherModel->getPublisherById($id);
-            if (!$existing) {
-                echo json_encode(['success' => false, 'message' => 'Publisher not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                exit;
-            }
-
             $remoteId = (int) ($existing['publishers_id'] ?? 0);
-            if ($remoteId > 0) {
-                $api = vendor_external_api_modify(
-                    vendor_external_api_modify_creator_payload((string) $remoteId, 'publisher', $name, $webpage)
-                );
-            } else {
-                $api = vendor_external_api_create(vendor_external_api_creator_payload('publisher', $name, $webpage));
-                if ($api['success']) {
-                    $remoteId = (int) ($api['vendor_id'] ?? 0);
-                    if ($remoteId > 0) {
-                        $link = $this->publisherModel->updatePublisherRemoteId($id, $remoteId);
-                        if (!$link['success']) {
-                            echo json_encode($link, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                            exit;
-                        }
-                    }
-                }
-            }
-
+            $api = vendor_external_api_sync_creator('publisher', $name, $webpage, $remoteId > 0 ? $remoteId : null);
             if (!$api['success']) {
                 echo json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
                 exit;
+            }
+            if ($remoteId <= 0 && !empty($api['vendor_id'])) {
+                $link = $this->publisherModel->updatePublisherRemoteId($id, (int) $api['vendor_id']);
+                if (!$link['success']) {
+                    echo json_encode($link, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                    exit;
+                }
             }
 
             $result = $this->publisherModel->savePublisher($id, $name, $isActive, $extra);
@@ -109,7 +99,7 @@ class PublishersController
             exit;
         }
 
-        $api = vendor_external_api_create(vendor_external_api_creator_payload('publisher', $name, $webpage));
+        $api = vendor_external_api_sync_creator('publisher', $name, $webpage, null);
         if (!$api['success']) {
             echo json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;

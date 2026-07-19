@@ -426,8 +426,10 @@ $queryBase = [
     </div>
 </div>
 
+<script src="<?php echo base_url('assets/js/creator_form.js'); ?>"></script>
 <script>
 let publisherNameExists = false;
+let publisherEditOriginalName = '';
 
 function limitPublisherPhoneDigits(input) {
     if (!input) return;
@@ -485,35 +487,6 @@ function setSelectValueByTextOrValue(selectEl, value) {
     }
 }
 
-function bindCreatorNameDuplicateCheck(inputEl, msgEl, page, existsFlagSetter, excludeIdGetter, duplicateMessage) {
-    if (!inputEl || !msgEl) return;
-    inputEl.addEventListener('keyup', function () {
-        const value = inputEl.value.trim();
-        if (value.length < 2) {
-            existsFlagSetter(false);
-            msgEl.textContent = '';
-            return;
-        }
-        const excludeId = excludeIdGetter ? excludeIdGetter() : 0;
-        let url = 'index.php?page=' + page + '&action=checkName&name=' + encodeURIComponent(value);
-        if (excludeId && parseInt(excludeId, 10) > 0) {
-            url += '&excludeId=' + encodeURIComponent(String(excludeId));
-        }
-        fetch(url, { credentials: 'same-origin' })
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-                if (data.exists) {
-                    msgEl.textContent = duplicateMessage;
-                    existsFlagSetter(true);
-                } else {
-                    msgEl.textContent = '';
-                    existsFlagSetter(false);
-                }
-            })
-            .catch(function (err) { console.error('Duplicate check error:', err); });
-    });
-}
-
 function showPublisherAlert(message, success) {
     const box = document.getElementById('publisherAlert');
     if (!box) return;
@@ -528,6 +501,7 @@ function openPublisherModal(publisher) {
     }
     publisher = publisher || {};
     publisherNameExists = false;
+    publisherEditOriginalName = publisher.id ? String(publisher.publishers || '').trim() : '';
     const publisherNameMsg = document.getElementById('publisherNameMsg');
     if (publisherNameMsg) publisherNameMsg.textContent = '';
     document.getElementById('publisherModalTitle').textContent = publisher.id ? 'Edit Publisher' : 'Add Publisher';
@@ -583,18 +557,29 @@ document.getElementById('openPublisherModalBtn')?.addEventListener('click', func
     openPublisherModal();
 });
 
-bindCreatorNameDuplicateCheck(
-    document.getElementById('publisher_name'),
-    document.getElementById('publisherNameMsg'),
-    'publishers',
-    function (v) { publisherNameExists = v; },
-    function () { return document.getElementById('publisher_id') ? document.getElementById('publisher_id').value : 0; },
-    'Publisher name already exists'
-);
+CreatorFormUtils.bindNameDuplicateCheck({
+    inputEl: document.getElementById('publisher_name'),
+    msgEl: document.getElementById('publisherNameMsg'),
+    page: 'publishers',
+    setExists: function (v) { publisherNameExists = v; },
+    getExcludeId: function () { return document.getElementById('publisher_id') ? document.getElementById('publisher_id').value : 0; },
+    duplicateMessage: 'Publisher name already exists',
+    isUnchanged: function () {
+        return CreatorFormUtils.isEditNameUnchanged(
+            function () { return document.getElementById('publisher_id')?.value; },
+            function () { return document.getElementById('publisher_name')?.value; },
+            publisherEditOriginalName
+        );
+    }
+});
 
 document.getElementById('publisherForm')?.addEventListener('submit', function (e) {
     e.preventDefault();
-    if (publisherNameExists) {
+    if (publisherNameExists && !CreatorFormUtils.isEditNameUnchanged(
+        function () { return document.getElementById('publisher_id')?.value; },
+        function () { return document.getElementById('publisher_name')?.value; },
+        publisherEditOriginalName
+    )) {
         showPublisherAlert('Publisher name already exists', false);
         return;
     }
