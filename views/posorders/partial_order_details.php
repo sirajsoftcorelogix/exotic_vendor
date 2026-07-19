@@ -35,10 +35,11 @@
                 <div class="accordion-trigger cursor-pointer border-b pb-4">
                     <div class="flex items-start space-x-4">
                         <div class="flex-shrink-0 w-36 h-36">
-                            <img src="<?php echo htmlspecialchars((string)($item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'), ENT_QUOTES, 'UTF-8'); ?>" alt="Product Image"
-                                class="max-w-full max-h-full object-contain rounded-lg object-cover flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+                            <?php $imageUrl = (string)($item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'); ?>
+                            <img src="<?php echo htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Product Image"
+                                class="max-w-full max-h-full object-contain rounded-lg object-cover flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity pos-order-detail-enlarge"
                                 title="Click to enlarge"
-                                onclick="event.stopPropagation(); if (typeof openImagePopup === 'function') { openImagePopup(<?php echo json_encode($item['image'] ?? ''); ?>); }">
+                                data-full-image="<?php echo htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'); ?>">
                         </div>
                         <div class="flex-grow">
                             <div>
