@@ -29,7 +29,7 @@ $queryBase = [
                     Author <span class="text-amber-800">Listing</span>
                 </h1>
                 <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
-                    Manage author names for inbounding book metadata. Add, edit, and delete sync with Exotic India.
+                    Manage author names for inbounding book metadata. Add, edit, and delete sync with Exotic India (<code class="text-xs bg-amber-50 px-1 rounded">vendorcreate</code>, <code class="text-xs bg-amber-50 px-1 rounded">vendormodify</code>, <code class="text-xs bg-amber-50 px-1 rounded">vendordelete</code>).
                 </p>
             </div>
             <div class="flex shrink-0 lg:pl-4 lg:self-center gap-3 flex-wrap">
@@ -347,8 +347,10 @@ $queryBase = [
     </div>
 </div>
 
+<script src="<?php echo base_url('assets/js/creator_form.js'); ?>"></script>
 <script>
 let authorNameExists = false;
+let authorEditOriginalName = '';
 
 function limitAuthorPhoneDigits(input) {
     if (!input) return;
@@ -406,35 +408,6 @@ function setSelectValueByTextOrValue(selectEl, value) {
     }
 }
 
-function bindCreatorNameDuplicateCheck(inputEl, msgEl, page, existsFlagSetter, excludeIdGetter, duplicateMessage) {
-    if (!inputEl || !msgEl) return;
-    inputEl.addEventListener('keyup', function () {
-        const value = inputEl.value.trim();
-        if (value.length < 2) {
-            existsFlagSetter(false);
-            msgEl.textContent = '';
-            return;
-        }
-        const excludeId = excludeIdGetter ? excludeIdGetter() : 0;
-        let url = 'index.php?page=' + page + '&action=checkName&name=' + encodeURIComponent(value);
-        if (excludeId && parseInt(excludeId, 10) > 0) {
-            url += '&excludeId=' + encodeURIComponent(String(excludeId));
-        }
-        fetch(url, { credentials: 'same-origin' })
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-                if (data.exists) {
-                    msgEl.textContent = duplicateMessage;
-                    existsFlagSetter(true);
-                } else {
-                    msgEl.textContent = '';
-                    existsFlagSetter(false);
-                }
-            })
-            .catch(function (err) { console.error('Duplicate check error:', err); });
-    });
-}
-
 function showAuthorAlert(message, success) {
     const box = document.getElementById('authorAlert');
     if (!box) return;
@@ -446,10 +419,11 @@ function showAuthorAlert(message, success) {
 function openAuthorModal(author) {
     author = author || {};
     authorNameExists = false;
+    authorEditOriginalName = author.author_id ? String(author.author || '').trim() : '';
     const authorNameMsg = document.getElementById('authorNameMsg');
     if (authorNameMsg) authorNameMsg.textContent = '';
     document.getElementById('authorModalTitle').textContent = author.author_id ? 'Edit Author' : 'Add Author';
-    document.getElementById('author_id').value = author.author_id || '';
+    document.getElementById('author_id').value = author.author_id != null && author.author_id !== '' ? String(author.author_id) : '';
     document.getElementById('author_name').value = author.author || '';
     document.getElementById('author_is_active').value = author.is_active != null ? String(author.is_active) : '1';
     document.getElementById('author_webpage').checked = author.webpage === 1 || author.webpage === '1';
@@ -491,18 +465,29 @@ document.getElementById('openAuthorModalBtn')?.addEventListener('click', functio
     openAuthorModal();
 });
 
-bindCreatorNameDuplicateCheck(
-    document.getElementById('author_name'),
-    document.getElementById('authorNameMsg'),
-    'authors',
-    function (v) { authorNameExists = v; },
-    function () { return document.getElementById('author_id') ? document.getElementById('author_id').value : 0; },
-    'Author name already exists'
-);
+CreatorFormUtils.bindNameDuplicateCheck({
+    inputEl: document.getElementById('author_name'),
+    msgEl: document.getElementById('authorNameMsg'),
+    page: 'authors',
+    setExists: function (v) { authorNameExists = v; },
+    getExcludeId: function () { return document.getElementById('author_id') ? document.getElementById('author_id').value : 0; },
+    duplicateMessage: 'Author name already exists',
+    isUnchanged: function () {
+        return CreatorFormUtils.isEditNameUnchanged(
+            function () { return document.getElementById('author_id')?.value; },
+            function () { return document.getElementById('author_name')?.value; },
+            authorEditOriginalName
+        );
+    }
+});
 
 document.getElementById('authorForm')?.addEventListener('submit', function (e) {
     e.preventDefault();
-    if (authorNameExists) {
+    if (authorNameExists && !CreatorFormUtils.isEditNameUnchanged(
+        function () { return document.getElementById('author_id')?.value; },
+        function () { return document.getElementById('author_name')?.value; },
+        authorEditOriginalName
+    )) {
         showAuthorAlert('Author name already exists', false);
         return;
     }

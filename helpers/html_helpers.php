@@ -16,6 +16,11 @@ if (!function_exists('vendorJsonResponse')) {
     }
 }
 
+function namesEqualCi(string $left, string $right): bool
+{
+    return mb_strtolower(trim($left), 'UTF-8') === mb_strtolower(trim($right), 'UTF-8');
+}
+
 function is_login()
 {
 	global $domain;

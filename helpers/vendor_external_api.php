@@ -349,28 +349,73 @@ function vendor_external_api_delete(string $vendorId): array
 }
 
 /**
- * POST body for author/publisher vendorcreate.
+ * Map first group slug to Exotic India vendor_type for vendorcreate / vendormodify.
  */
-function vendor_external_api_creator_payload(string $vendorType, string $name, string $webpage = '0'): array
+function vendor_external_api_resolve_vendor_type_from_groups(string $groupsCsv): string
+{
+    $first = trim((string) explode(',', $groupsCsv)[0]);
+    if ($first === '') {
+        return '';
+    }
+    $key = strtolower($first);
+    $map = [
+        'sculptures' => 'vendor_sculptures',
+        'sculpture' => 'vendor_sculptures',
+        'statues' => 'vendor_statues',
+        'homeandliving' => 'vendor_homeandliving',
+        'paintings' => 'vendor_paintings',
+        'textiles' => 'vendor_textiles',
+        'jewelry' => 'vendor_jewelry',
+        'book' => 'vendor_book',
+    ];
+
+    return $map[$key] ?? ('vendor_' . $key);
+}
+
+/**
+ * POST body for catalog vendor vendorcreate / vendormodify (without vendor_id).
+ */
+function vendor_external_api_vendor_sync_payload(string $name, string $groupsCsv, string $webpage = '0'): array
 {
     return [
         'name' => trim($name),
-        'groupname' => 'book',
-        'vendor_type' => $vendorType,
+        'groupname' => trim($groupsCsv),
+        'vendor_type' => vendor_external_api_resolve_vendor_type_from_groups($groupsCsv),
         'webpage' => ((string) $webpage === '1') ? '1' : '0',
     ];
 }
 
 /**
- * POST body for author/publisher vendormodify.
+ * vendorcreate or vendormodify for catalog vendors.
  */
-function vendor_external_api_modify_creator_payload(string $vendorId, string $vendorType, string $name, string $webpage = '0'): array
+function vendor_external_api_sync_catalog(string $name, string $groupsCsv, string $webpage, ?string $remoteVendorId = null): array
 {
-    return [
-        'vendor_id' => trim($vendorId),
+    $payload = vendor_external_api_vendor_sync_payload($name, $groupsCsv, $webpage);
+    if ($remoteVendorId !== null && trim($remoteVendorId) !== '') {
+        $payload['vendor_id'] = trim($remoteVendorId);
+
+        return vendor_external_api_modify($payload);
+    }
+
+    return vendor_external_api_create($payload);
+}
+
+/**
+ * vendorcreate or vendormodify for author / publisher (book group).
+ */
+function vendor_external_api_sync_creator(string $vendorType, string $name, string $webpage, ?int $remoteId = null): array
+{
+    $payload = [
         'name' => trim($name),
         'groupname' => 'book',
         'vendor_type' => $vendorType,
         'webpage' => ((string) $webpage === '1') ? '1' : '0',
     ];
+    if ($remoteId !== null && $remoteId > 0) {
+        $payload['vendor_id'] = (string) $remoteId;
+
+        return vendor_external_api_modify($payload);
+    }
+
+    return vendor_external_api_create($payload);
 }

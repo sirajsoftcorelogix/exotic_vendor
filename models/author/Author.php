@@ -196,7 +196,24 @@ class Author
 
     public function checkAuthorName(string $name, ?int $excludeAuthorId = null): array
     {
-        return ['exists' => $this->authorNameExists($name, $excludeAuthorId)];
+        return ['exists' => $this->isDuplicateAuthorName($name, $excludeAuthorId)];
+    }
+
+    public function isDuplicateAuthorName(string $name, ?int $excludeAuthorId = null): bool
+    {
+        if ($excludeAuthorId !== null && $excludeAuthorId > 0) {
+            $existing = $this->getAuthorById($excludeAuthorId);
+            if ($existing && namesEqualCi($name, (string)($existing['author'] ?? ''))) {
+                return false;
+            }
+        }
+
+        return $this->authorNameExists($name, $excludeAuthorId);
+    }
+
+    private function authorFieldValuesEqual(string $left, string $right): bool
+    {
+        return trim($left) === trim($right);
     }
 
     public function saveAuthor(?int $id, string $name, int $isActive, array $extra = []): array
@@ -212,13 +229,31 @@ class Author
             return ['success' => false, 'message' => 'Author id is required for update.'];
         }
 
-        if ($this->authorNameExists($name, $id)) {
+        $existing = $this->getAuthorById($id);
+        if (!$existing) {
+            return ['success' => false, 'message' => 'Author not found.'];
+        }
+
+        if (!namesEqualCi($name, (string)($existing['author'] ?? ''))
+            && $this->authorNameExists($name, $id)) {
             return ['success' => false, 'message' => 'Author name already exists'];
         }
 
+        $phoneToCheck = $fields['author_phone'];
+        if ($this->authorFieldValuesEqual($phoneToCheck, (string)($existing['author_phone'] ?? ''))) {
+            $phoneToCheck = null;
+        }
+        $emailToCheck = $fields['author_email'];
+        if ($this->authorFieldValuesEqual(
+            mb_strtolower($emailToCheck, 'UTF-8'),
+            mb_strtolower((string)($existing['author_email'] ?? ''), 'UTF-8')
+        )) {
+            $emailToCheck = null;
+        }
+
         $duplicate = $this->validateAuthorUniqueness(
-            $fields['author_phone'],
-            $fields['author_email'],
+            $phoneToCheck,
+            $emailToCheck,
             $id
         );
         if ($duplicate !== null) {

@@ -212,7 +212,19 @@ class Publisher
 
     public function checkPublisherName(string $name, ?int $excludeLocalId = null): array
     {
-        return ['exists' => $this->publisherNameExists($name, $excludeLocalId)];
+        return ['exists' => $this->isDuplicatePublisherName($name, $excludeLocalId)];
+    }
+
+    public function isDuplicatePublisherName(string $name, ?int $excludeLocalId = null): bool
+    {
+        if ($excludeLocalId !== null && $excludeLocalId > 0) {
+            $existing = $this->getPublisherById($excludeLocalId);
+            if ($existing && namesEqualCi($name, (string)($existing['publishers'] ?? ''))) {
+                return false;
+            }
+        }
+
+        return $this->publisherNameExists($name, $excludeLocalId);
     }
 
     public function savePublisher(?int $id, string $name, int $isActive, array $extra = []): array
@@ -228,7 +240,13 @@ class Publisher
             return ['success' => false, 'message' => 'Publisher id is required for update.'];
         }
 
-        if ($this->publisherNameExists($name, $id)) {
+        $existing = $this->getPublisherById($id);
+        if (!$existing) {
+            return ['success' => false, 'message' => 'Publisher not found.'];
+        }
+
+        if (!namesEqualCi($name, (string)($existing['publishers'] ?? ''))
+            && $this->publisherNameExists($name, $id)) {
             return ['success' => false, 'message' => 'Publisher name already exists'];
         }
 

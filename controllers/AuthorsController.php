@@ -64,21 +64,19 @@ class AuthorsController
             exit;
         }
 
-        if ($this->authorModel->authorNameExists($name, ($id && $id > 0) ? $id : null)) {
+        $existing = ($id && $id > 0) ? $this->authorModel->getAuthorById($id) : null;
+        if ($id && !$existing) {
+            echo json_encode(['success' => false, 'message' => 'Author not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        if ($this->authorModel->isDuplicateAuthorName($name, $id)) {
             echo json_encode(['success' => false, 'message' => 'Author name already exists'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
 
         if ($id && $id > 0) {
-            $existing = $this->authorModel->getAuthorById($id);
-            if (!$existing) {
-                echo json_encode(['success' => false, 'message' => 'Author not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                exit;
-            }
-
-            $api = vendor_external_api_modify(
-                vendor_external_api_modify_creator_payload((string) $id, 'author', $name, $webpage)
-            );
+            $api = vendor_external_api_sync_creator('author', $name, $webpage, $id);
             if (!$api['success']) {
                 echo json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
                 exit;
@@ -92,7 +90,7 @@ class AuthorsController
             exit;
         }
 
-        $api = vendor_external_api_create(vendor_external_api_creator_payload('author', $name, $webpage));
+        $api = vendor_external_api_sync_creator('author', $name, $webpage, null);
         if (!$api['success']) {
             echo json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
