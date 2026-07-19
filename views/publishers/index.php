@@ -186,6 +186,10 @@ $queryBase = [
                                         onclick="setPublisherStatus(<?php echo $id; ?>, <?php echo $active ? 0 : 1; ?>)">
                                         <?php echo $active ? 'Deactivate' : 'Activate'; ?>
                                     </button>
+                                    <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50"
+                                        onclick="openPublisherBankDtlsModal(<?php echo $id; ?>)">
+                                        Bank Details
+                                    </button>
                                     <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
                                         onclick="deletePublisher(<?php echo $id; ?>)">
                                         Delete
@@ -380,6 +384,50 @@ $queryBase = [
             <div class="flex justify-end gap-3 border-t pt-4">
                 <button type="button" onclick="closePublisherModal()" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
                 <button type="submit" id="publisherSaveBtn" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Save Publisher</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="publisherBankDetailModal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/50 px-4 py-6">
+    <div class="w-full max-w-xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col">
+        <div class="flex items-center justify-between border-b px-6 py-4 shrink-0">
+            <h2 class="text-lg font-semibold text-gray-900">Add / Edit Bank Details</h2>
+            <button type="button" onclick="closePublisherBankDetailModal()" class="text-gray-400 hover:text-gray-700">✕</button>
+        </div>
+        <form id="publisherBankDetailForm" class="overflow-y-auto px-6 py-5 space-y-4">
+            <input type="hidden" name="publisher_id" id="publisher_bank_publisher_id" value="">
+            <div id="publisherBankDetailMsg" class="hidden rounded-lg border px-4 py-3 text-sm font-medium"></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="mb-1 block text-sm font-semibold text-gray-700">Account Name <span class="text-red-500">*</span></label>
+                    <input type="text" name="account_name" id="publisher_account_name" required
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                </div>
+                <div>
+                    <label class="mb-1 block text-sm font-semibold text-gray-700">Account Number <span class="text-red-500">*</span></label>
+                    <input type="text" name="account_number" id="publisher_account_number" required
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                </div>
+                <div>
+                    <label class="mb-1 block text-sm font-semibold text-gray-700">Bank Name <span class="text-red-500">*</span></label>
+                    <input type="text" name="bank_name" id="publisher_bank_name" required
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                </div>
+                <div>
+                    <label class="mb-1 block text-sm font-semibold text-gray-700">Branch Name</label>
+                    <input type="text" name="branch_name" id="publisher_branch_name"
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="mb-1 block text-sm font-semibold text-gray-700">IFSC Code <span class="text-red-500">*</span></label>
+                    <input type="text" name="ifsc_code" id="publisher_ifsc_code" required
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 border-t pt-4">
+                <button type="button" onclick="closePublisherBankDetailModal()" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button type="submit" id="publisherBankSaveBtn" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Save Bank Details</button>
             </div>
         </form>
     </div>
@@ -622,5 +670,96 @@ document.getElementById('syncPublishersBtn')?.addEventListener('click', function
         btn.disabled = false;
         btn.innerHTML = oldHtml;
     });
+});
+
+function showPublisherBankDetailAlert(message, success) {
+    const box = document.getElementById('publisherBankDetailMsg');
+    if (!box) return;
+    box.textContent = message || '';
+    box.classList.remove('hidden', 'border-green-200', 'bg-green-50', 'text-green-700', 'border-red-200', 'bg-red-50', 'text-red-700');
+    box.classList.add(success ? 'border-green-200' : 'border-red-200', success ? 'bg-green-50' : 'bg-red-50', success ? 'text-green-700' : 'text-red-700');
+}
+
+function openPublisherBankDtlsModal(id) {
+    fetch('index.php?page=publishers&action=getBankDetails&id=' + encodeURIComponent(String(id)), { credentials: 'same-origin' })
+        .then(function (res) { return res.json(); })
+        .then(function (bankdtls) {
+            if (bankdtls.status === 'error' || (bankdtls.success === false && bankdtls.message)) {
+                showPublisherAlert(bankdtls.message || 'Could not load bank details.', false);
+                return;
+            }
+
+            document.getElementById('publisher_bank_publisher_id').value = String(id);
+            const fields = {
+                publisher_account_name: '',
+                publisher_account_number: '',
+                publisher_ifsc_code: '',
+                publisher_bank_name: '',
+                publisher_branch_name: ''
+            };
+            if (bankdtls && bankdtls.account_name) {
+                fields.publisher_account_name = bankdtls.account_name || '';
+                fields.publisher_account_number = bankdtls.account_number || '';
+                fields.publisher_ifsc_code = bankdtls.ifsc_code || '';
+                fields.publisher_bank_name = bankdtls.bank_name || '';
+                fields.publisher_branch_name = bankdtls.branch_name || '';
+            }
+            Object.keys(fields).forEach(function (fieldId) {
+                const el = document.getElementById(fieldId);
+                if (el) el.value = fields[fieldId];
+            });
+
+            const msgBox = document.getElementById('publisherBankDetailMsg');
+            if (msgBox) {
+                msgBox.textContent = '';
+                msgBox.classList.add('hidden');
+            }
+
+            document.getElementById('publisherBankDetailModal').classList.remove('hidden');
+            document.getElementById('publisherBankDetailModal').classList.add('flex');
+        })
+        .catch(function () {
+            showPublisherAlert('Could not load bank details.', false);
+        });
+}
+
+function closePublisherBankDetailModal() {
+    document.getElementById('publisherBankDetailModal').classList.add('hidden');
+    document.getElementById('publisherBankDetailModal').classList.remove('flex');
+}
+
+document.getElementById('publisherBankDetailForm')?.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const form = new FormData(this);
+    const btn = document.getElementById('publisherBankSaveBtn');
+    const oldLabel = btn ? btn.textContent : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+    }
+    fetch('index.php?page=publishers&action=bankDetails', {
+        method: 'POST',
+        credentials: 'same-origin',
+        body: new URLSearchParams(form).toString(),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            showPublisherBankDetailAlert(data.message || (data.success ? 'Bank details saved.' : 'Could not save bank details.'), !!data.success);
+            if (data.success) {
+                setTimeout(function () {
+                    closePublisherBankDetailModal();
+                }, 900);
+            }
+        })
+        .catch(function () {
+            showPublisherBankDetailAlert('Could not save bank details.', false);
+        })
+        .finally(function () {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = oldLabel;
+            }
+        });
 });
 </script>
