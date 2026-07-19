@@ -272,7 +272,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
 
     <div class="absolute inset-0 bg-black/40"></div>
 
-    <div class="relative mx-auto mt-40 w-[90%] max-w-md bg-white rounded-2xl shadow-xl">
+    <div class="relative z-10 mx-auto mt-40 w-[90%] max-w-md bg-white rounded-2xl shadow-xl">
 
         <div class="p-6 text-center">
             <h3 class="text-lg font-semibold mb-2">Confirm Delete</h3>
@@ -466,7 +466,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
     </button>
 
     <!-- DELETE -->
-    <button onclick="openDeleteModal(${p.id}, '?page=payments&action=delete', 'Delete this payment ?')"
+    <button onclick="openDeleteModal(${p.id}, 'index.php?page=payments&action=delete', 'Delete this payment ?')"
         class="flex items-center gap-1 text-red-600 hover:text-red-800 text-xs font-semibold">
 
         <i class="fa-solid fa-trash"></i>
@@ -509,6 +509,10 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
     }
 
     function confirmDelete() {
+        if (!deleteId || !deleteUrl) {
+            alert('Nothing selected to delete.');
+            return;
+        }
 
         let form = new FormData();
         form.append("id", deleteId);
@@ -517,18 +521,27 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                 method: "POST",
                 body: form
             })
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error('Delete request failed');
+                }
+                return res.json();
+            })
             .then(data => {
-
                 if (data.success) {
                     closeDeleteModal();
-                    loadPayments(); // reload table
+                    loadPayments();
+                    if (typeof showGlobalToast === 'function') {
+                        showGlobalToast('Payment deleted', 'success');
+                    }
                 } else {
-                    alert(data.message || "Delete failed");
+                    alert(data.message || 'Delete failed');
                 }
-
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Delete failed. Please try again.');
             });
-
     }
     async function editPayment(id) {
 
@@ -590,7 +603,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         let form = new FormData();
         form.append("id", id);
 
-        let res = await fetch(`?page=payments&action=delete`, {
+        let res = await fetch('index.php?page=payments&action=delete', {
             method: "POST",
             body: form
         });
@@ -598,10 +611,14 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         let data = await res.json();
 
         if (data.success) {
-            alert("Deleted");
             loadPayments();
+            if (typeof showGlobalToast === 'function') {
+                showGlobalToast('Payment deleted', 'success');
+            } else {
+                alert('Deleted');
+            }
         } else {
-            alert("Delete failed");
+            alert(data.message || 'Delete failed');
         }
 
     }

@@ -72,13 +72,26 @@ class PaymentsController
     ==========================*/
     public function delete()
     {
-        $id = (int)($_POST['id'] ?? 0);
-        $this->paymentModel->deleteById($id);
+        is_login();
 
-        echo json_encode([
-            'success' => true,
-        ]);
-        exit;
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id <= 0) {
+            vendorJsonResponse(['success' => false, 'message' => 'Payment id missing']);
+        }
+
+        $orderNumber = $this->paymentModel->getOrderNumberByPaymentId($id);
+        if ($orderNumber === '') {
+            vendorJsonResponse(['success' => false, 'message' => 'Payment not found']);
+        }
+
+        if (!$this->paymentModel->deleteById($id)) {
+            vendorJsonResponse(['success' => false, 'message' => 'Could not delete payment']);
+        }
+
+        global $conn;
+        pos_payment_refresh_order_snapshots($conn, $orderNumber);
+
+        vendorJsonResponse(['success' => true]);
     }
 
     /* =========================

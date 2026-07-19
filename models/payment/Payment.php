@@ -281,15 +281,20 @@ WHERE 1=1
 
     public function deleteById(int $id): bool
     {
+        if ($id <= 0) {
+            return false;
+        }
+
         $stmt = $this->db->prepare('DELETE FROM pos_payments WHERE id = ?');
         if (!$stmt) {
             return false;
         }
         $stmt->bind_param('i', $id);
         $ok = $stmt->execute();
+        $deleted = $ok && $stmt->affected_rows > 0;
         $stmt->close();
 
-        return (bool)$ok;
+        return $deleted;
     }
 
     /**
