@@ -53,6 +53,33 @@ $paymentOrderTotalDisplay = number_format((float)($paymentSummary['order_total']
 $paymentPaidTotalDisplay = number_format((float)($paymentSummary['paid_total'] ?? 0), 2);
 $paymentPendingDisplay = number_format((float)($paymentSummary['pending'] ?? 0), 2);
 $paymentIsFullyPaid = !empty($paymentSummary['is_fully_paid']);
+$checkoutSummary = is_array($checkoutSummary ?? null) ? $checkoutSummary : [
+    'item_count' => count($order),
+    'subtotal_before_discount_incl' => 0.0,
+    'line_discount' => 0.0,
+    'coupon_reduce' => 0.0,
+    'coupon_label' => '',
+    'custom_reduce' => 0.0,
+    'custom_note' => '',
+    'giftvoucher_reduce' => 0.0,
+    'giftvoucher_label' => '',
+    'credit' => 0.0,
+    'tax_amount' => 0.0,
+    'total' => (float)($paymentSummary['order_total'] ?? 0),
+];
+$checkoutItemCount = (int)($checkoutSummary['item_count'] ?? count($order));
+$checkoutSubtotalIncl = (float)($checkoutSummary['subtotal_before_discount_incl'] ?? 0);
+$checkoutLineDiscount = (float)($checkoutSummary['line_discount'] ?? 0);
+$checkoutCouponReduce = (float)($checkoutSummary['coupon_reduce'] ?? 0);
+$checkoutCouponLabel = (string)($checkoutSummary['coupon_label'] ?? '');
+$checkoutCustomReduce = (float)($checkoutSummary['custom_reduce'] ?? 0);
+$checkoutCustomNote = (string)($checkoutSummary['custom_note'] ?? '');
+$checkoutGiftReduce = (float)($checkoutSummary['giftvoucher_reduce'] ?? 0);
+$checkoutGiftLabel = (string)($checkoutSummary['giftvoucher_label'] ?? '');
+$checkoutCredit = (float)($checkoutSummary['credit'] ?? 0);
+$checkoutTaxAmount = (float)($checkoutSummary['tax_amount'] ?? 0);
+$checkoutTotal = (float)($checkoutSummary['total'] ?? 0);
+$checkoutPaidTotal = (float)($paymentSummary['paid_total'] ?? 0);
 $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurlencode($displayOrderNumber) . '&order_exact=1');
 ?>
 
@@ -283,36 +310,8 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                     <?php endforeach; ?>
                 </div>
                 <?php
-                /*
-                        $tax_rate = 0.05;
-                        $coupon_reduce      = floatval($orderremarks['coupon_reduce']      ?? 0);
-                        $giftvoucher_reduce = floatval($orderremarks['giftvoucher_reduce'] ?? 0);
-                        $credit             = floatval($orderremarks['credit']             ?? 0);
-                        $all_reductions = $coupon_reduce + $giftvoucher_reduce + $credit;
-                        $final_paid = floatval($orderremarks['total'] ?? 0);
-                        $amount_before_tax = $final_paid / (1 + $tax_rate);
-                        $tax_amount = $final_paid - $amount_before_tax;
-                        $subtotal_before_discounts = $amount_before_tax + $all_reductions;
-                    */
-                $custom_reduce      = floatval($orderremarks['custom_reduce']      ?? 0);
-                $coupon_reduce      = floatval($orderremarks['coupon_reduce']      ?? 0);
-                $giftvoucher_reduce = floatval($orderremarks['giftvoucher_reduce'] ?? 0);
-                $credit             = floatval($orderremarks['credit']             ?? 0);
-                $all_reductions = $custom_reduce + $coupon_reduce + $giftvoucher_reduce + $credit;
-                $final_paid = floatval($orderremarks['total'] ?? 0);
-                $tax_amount = 0.0;
-                foreach ($order as $item) {
-                    $qty        = (int)($item['quantity'] ?? 1);
-                    $unit_price = floatval($item['finalprice'] ?? 0);   // ← Pre-GST unit price
-                    $gst_percent = floatval($item['gst'] ?? 0);         // ← GST percentage from DB
-                    $line_total_excl_gst = $unit_price * $qty;
-                    $line_gst_amount     = $line_total_excl_gst * ($gst_percent / 100);
-                    $tax_amount += $line_gst_amount;
-                }
-                $tax_amount = round($tax_amount, 2);   // clean money value
-                // Derive remaining values (keeps everything 100% consistent with final_paid)
-                $amount_before_tax       = $final_paid - $tax_amount;
-                $subtotal_before_discounts = $amount_before_tax + $all_reductions;
+                $checkoutCurrencyCode = strtoupper(trim((string)($order[0]['currency'] ?? 'INR')));
+                $currencysymbol = $currencyIcons[$checkoutCurrencyCode] ?? '₹';
                 ?>
                 <div class="mt-6 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
                     <!-- <div class="mb-5">
@@ -330,49 +329,66 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                         <div class="p-6 space-y-5">
                             <div class="grid grid-cols-12 items-start text-sm">
                                 <div class="col-span-3 font-bold text-black-800">Subtotal</div>
-                                <div class="col-span-6 text-black-500"><?php echo count($order); ?> items</div>
+                                <div class="col-span-6 text-black-500"><?php echo $checkoutItemCount; ?> items</div>
                                 <div class="col-span-3 text-right font-bold text-black-900">
-                                    <?php echo $currencysymbol; ?><?php echo number_format($subtotal_before_discounts, 2); ?>
+                                    <?php echo $currencysymbol; ?><?php echo number_format($checkoutSubtotalIncl, 2); ?>
                                 </div>
                             </div>
+                            <?php if ($checkoutLineDiscount > 0.001): ?>
+                                <div class="grid grid-cols-12 items-start text-sm text-green-700">
+                                    <div class="col-span-3 font-medium">Line Discount</div>
+                                    <div class="col-span-6 text-gray-600"></div>
+                                    <div class="col-span-3 text-right font-medium">
+                                        -<?php echo $currencysymbol; ?><?php echo number_format($checkoutLineDiscount, 2); ?>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                             <!-- Individual discount rows -->
-                            <?php if ($all_reductions > 0): ?>
-                                <?php if ($coupon_reduce > 0 && !empty($orderremarks['coupon'])): ?>
+                            <?php if ($checkoutCouponReduce > 0.001 || $checkoutGiftReduce > 0.001 || $checkoutCustomReduce > 0.001 || $checkoutCredit > 0.001): ?>
+                                <?php if ($checkoutCouponReduce > 0.001 && $checkoutCouponLabel !== ''): ?>
                                     <div class="grid grid-cols-12 items-start text-sm text-green-700">
                                         <div class="col-span-3 font-medium">Coupon </div>
                                         <div class="col-span-6 text-gray-600">
-                                            <?php echo htmlspecialchars($orderremarks['coupon']); ?></div>
+                                            <?php echo htmlspecialchars($checkoutCouponLabel); ?></div>
                                         <div class="col-span-3 text-right font-medium">
-                                            -<?php echo $currencysymbol; ?><?php echo number_format($coupon_reduce, 2); ?>
+                                            -<?php echo $currencysymbol; ?><?php echo number_format($checkoutCouponReduce, 2); ?>
                                         </div>
                                     </div>
                                 <?php endif; ?>
-                                <?php if ($giftvoucher_reduce > 0 && !empty($orderremarks['giftvoucher'])): ?>
+                                <?php if ($checkoutGiftReduce > 0.001 && $checkoutGiftLabel !== ''): ?>
                                     <div class="grid grid-cols-12 items-start text-sm text-green-700">
                                         <div class="col-span-3 font-medium">Gift Voucher </div>
                                         <div class="col-span-6 text-gray-600">
-                                            <?php echo htmlspecialchars($orderremarks['giftvoucher']); ?></div>
+                                            <?php echo htmlspecialchars($checkoutGiftLabel); ?></div>
                                         <div class="col-span-3 text-right font-medium">
-                                            -<?php echo $currencysymbol; ?><?php echo number_format($giftvoucher_reduce, 2); ?>
+                                            -<?php echo $currencysymbol; ?><?php echo number_format($checkoutGiftReduce, 2); ?>
                                         </div>
                                     </div>
                                 <?php endif; ?>
-                                <?php if ($custom_reduce > 0 && !empty($orderremarks['custom_note'])): ?>
+                                <?php if ($checkoutCustomReduce > 0.001 && $checkoutCustomNote !== ''): ?>
                                     <div class="grid grid-cols-12 items-start text-sm text-green-700">
                                         <div class="col-span-3 font-medium">Custom Note </div>
                                         <div class="col-span-6 text-gray-600">
-                                            <?php echo htmlspecialchars($orderremarks['custom_note']); ?></div>
+                                            <?php echo htmlspecialchars($checkoutCustomNote); ?></div>
                                         <div class="col-span-3 text-right font-medium">
-                                            -<?php echo $currencysymbol; ?><?php echo number_format($custom_reduce, 2); ?>
+                                            -<?php echo $currencysymbol; ?><?php echo number_format($checkoutCustomReduce, 2); ?>
+                                        </div>
+                                    </div>
+                                <?php elseif ($checkoutCustomReduce > 0.001): ?>
+                                    <div class="grid grid-cols-12 items-start text-sm text-green-700">
+                                        <div class="col-span-3 font-medium">Custom Discount</div>
+                                        <div class="col-span-6 text-gray-600"></div>
+                                        <div class="col-span-3 text-right font-medium">
+                                            -<?php echo $currencysymbol; ?><?php echo number_format($checkoutCustomReduce, 2); ?>
                                         </div>
                                     </div>
                                 <?php endif; ?>
-                                <?php if ($credit > 0): ?>
+                                <?php if ($checkoutCredit > 0.001): ?>
                                     <div class="grid grid-cols-12 items-start text-sm text-green-700">
                                         <div class="col-span-3 font-medium">Credit / Wallet</div>
                                         <div class="col-span-6 text-gray-600"></div>
                                         <div class="col-span-3 text-right font-medium">
-                                            -<?php echo $currencysymbol; ?><?php echo number_format($credit, 2); ?>
+                                            -<?php echo $currencysymbol; ?><?php echo number_format($checkoutCredit, 2); ?>
                                         </div>
                                     </div>
                                 <?php endif; ?>
@@ -382,7 +398,7 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                                 <div class="col-span-3 font-bold text-black-800">Taxes</div>
                                 <div class="col-span-6 text-black-500">SGST + CGST</div>
                                 <div class="col-span-3 text-right font-bold text-black-900">
-                                    <?php echo $currencysymbol; ?><?php echo number_format($tax_amount, 2); ?>
+                                    <?php echo $currencysymbol; ?><?php echo number_format($checkoutTaxAmount, 2); ?>
                                 </div>
                             </div>
                             <!-- Final Total -->
@@ -390,14 +406,14 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                                 <div class="col-span-3 font-bold text-black-800">Total</div>
                                 <div class="col-span-6"></div>
                                 <div class="col-span-3 text-right font-bold text-black-900 text-lg">
-                                    <?php echo $currencysymbol; ?><?php echo number_format($final_paid, 2); ?>
+                                    <?php echo $currencysymbol; ?><?php echo number_format($checkoutTotal, 2); ?>
                                 </div>
                             </div>
                         </div>
                         <div class="bg-[#F9FAFB] border-t border-gray-200 p-6 flex justify-between items-center">
                             <span class="text-sm font-bold text-black-800">Paid</span>
                             <span class="text-sm font-bold text-black-900">
-                                <?php echo $currencysymbol; ?><?php echo number_format($final_paid, 2); ?>
+                                <?php echo $currencysymbol; ?><?php echo number_format($checkoutPaidTotal, 2); ?>
                             </span>
                         </div>
                     </div>
