@@ -245,6 +245,7 @@ WHERE 1=1
         if ($resolvedOrderAmount > 0) {
             $row['order_amount'] = $resolvedOrderAmount;
         }
+        $row['order_number'] = trim((string)($row['order_number'] ?? ''));
         $row['invoice_id'] = (int)($row['invoice_id'] ?? 0);
         $row['is_settled'] = round((float)($row['pending_balance'] ?? 0), 2) <= 0.02;
         unset($row['order_grand_total'], $row['order_line_subtotal']);

@@ -340,8 +340,26 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
             .replace(/"/g, '&quot;');
     }
 
-    function buildOrderNumberLinkHtml(p) {
-        const label = String(p.order_number ?? '').trim();
+    function normalizePaymentOrderNumber(value) {
+        if (value == null) {
+            return '';
+        }
+        if (typeof value === 'string') {
+            return value.trim();
+        }
+        if (typeof value === 'number' && !Number.isNaN(value)) {
+            return String(value);
+        }
+        if (typeof value === 'object') {
+            if (value.order_number != null) {
+                return normalizePaymentOrderNumber(value.order_number);
+            }
+        }
+        return '';
+    }
+
+    function buildOrderNumberLinkHtml(orderNumber) {
+        const label = normalizePaymentOrderNumber(orderNumber);
         if (label === '') {
             return '';
         }
@@ -408,7 +426,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
 
                 data.forEach(p => {
 
-                    const orderNumJs = escapeJsString(p.order_number ?? '');
+                    const orderNumJs = escapeJsString(normalizePaymentOrderNumber(p.order_number));
                     const invoiceAction = buildInvoiceActionHtml(p);
 
                     html += `
@@ -416,7 +434,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         <td class="p-3">${(String(p.receipt_number || '').trim() !== '')
             ? String(p.receipt_number).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
             : ('#' + p.id)}</td>
-        <td class="p-3">${buildOrderNumberLinkHtml(p)}</td>
+        <td class="p-3">${buildOrderNumberLinkHtml(p.order_number)}</td>
         <td class="p-3">${p.payment_date ?? ''}</td>
         <td class="p-3">${p.warehouse ?? ''}</td>
         <td class="p-3">${p.order_amount ?? ''}</td>
@@ -533,7 +551,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         document.getElementById("edit_payment_id").value = p.id;
         document.getElementById("payment_order_id").value = p.order_id;
 
-        document.getElementById("payment_order_label").innerText = p.order_number;
+        document.getElementById("payment_order_label").innerText = normalizePaymentOrderNumber(p.order_number);
 
         // ⭐ KEEP ORIGINAL PAYMENT AMOUNT
         document.getElementById("payment_amount").value = (p.payment_amount != null && p.payment_amount !== '') ? p.payment_amount : (p.amount ?? '');
@@ -545,7 +563,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         document.getElementById("payment_date").value = p.payment_date;
 
         // ⭐ NOW LOAD PENDING
-        fetch(`?page=payments&action=get_payment_summary&order_number=${p.order_number}`)
+        fetch(`?page=payments&action=get_payment_summary&order_number=${encodeURIComponent(normalizePaymentOrderNumber(p.order_number))}`)
             .then(res => res.json())
             .then(sum => {
 
