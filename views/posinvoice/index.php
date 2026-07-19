@@ -334,6 +334,16 @@
             .replace(/'/g, '&#39;');
     }
 
+    function buildOrderNumberLinkHtml(orderNumber) {
+        const label = String(orderNumber ?? '').trim();
+        if (label === '') {
+            return '';
+        }
+
+        const href = `?page=posorders&action=get_order_details_html&type=outer&order_number=${encodeURIComponent(label)}`;
+        return `<a href="${href}" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline font-medium" title="View order details">${escapeHtml(label)}</a>`;
+    }
+
     function formatCustomerCell(invoice) {
         const name = escapeHtml(invoice.customer_name ?? '');
         const state = String(invoice.customer_billing_state ?? '').trim();
@@ -609,7 +619,7 @@ stroke-linejoin="round"/>
 
 <td class="p-3">${i.id ?? ''}</td>
 <td class="p-3">${i.invoice_date ?? ''}</td>
-<td class="p-3">${i.order_number ?? ''}</td>
+<td class="p-3">${buildOrderNumberLinkHtml(i.order_number)}</td>
 <td class="p-3">${invoiceCell}</td>
 <td class="p-3 text-gray-700">${i.warehouse_name ?? ''}</td>
 <td class="p-3">${formatCustomerCell(i)}</td>
