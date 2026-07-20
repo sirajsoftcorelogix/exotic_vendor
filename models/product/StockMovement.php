@@ -457,6 +457,54 @@ final class StockMovement
     }
 
     /**
+     * Keep vp_stock.current_stock aligned with the latest warehouse running_stock from the ledger.
+     */
+    public static function syncVpStockFromRunningStock(
+        \mysqli $conn,
+        string $sku,
+        int $warehouseId,
+        float $runningStock,
+        int $lastTransId = 0
+    ): void {
+        $sku = trim($sku);
+        if ($sku === '' || $warehouseId <= 0) {
+            return;
+        }
+
+        $selectStock = $conn->prepare('SELECT id FROM vp_stock WHERE sku = ? AND warehouse_id = ? LIMIT 1');
+        if (!$selectStock) {
+            return;
+        }
+        $selectStock->bind_param('si', $sku, $warehouseId);
+        $selectStock->execute();
+        $row = $selectStock->get_result()->fetch_assoc();
+        $selectStock->close();
+
+        if ($row) {
+            $stockId = (int) ($row['id'] ?? 0);
+            $updateStock = $conn->prepare('UPDATE vp_stock SET current_stock = ?, last_trans_id = ? WHERE id = ?');
+            if (!$updateStock) {
+                return;
+            }
+            $updateStock->bind_param('dii', $runningStock, $lastTransId, $stockId);
+            $updateStock->execute();
+            $updateStock->close();
+
+            return;
+        }
+
+        $insertStock = $conn->prepare(
+            'INSERT INTO vp_stock (sku, warehouse_id, current_stock, last_trans_id) VALUES (?, ?, ?, ?)'
+        );
+        if (!$insertStock) {
+            return;
+        }
+        $insertStock->bind_param('sidi', $sku, $warehouseId, $runningStock, $lastTransId);
+        $insertStock->execute();
+        $insertStock->close();
+    }
+
+    /**
      * Sync vp_products.physical_stock from the movement ledger (+ in-transit).
      * Optional only_if_uninitialized: skip when product already has physical_stock or movements
      * (used to block local-stock-only flows from altering warehouse stock).
