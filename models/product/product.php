@@ -5037,13 +5037,15 @@ class product
     }
 
     /**
+     * Sales returns sync Exotic via order/modify (returned status), not product/modify local_stock_delta.
+     *
      * @param array<string, mixed> $data
      */
     private function shouldSyncLocalStockDeltaForMovement(array $data): bool
     {
         $refTypeUpper = strtoupper(trim((string) ($data['ref_type'] ?? 'MANUAL')));
 
-        return in_array($refTypeUpper, ['MANUAL', 'SALES_RETURN', 'SALES_RETURN_CANCEL'], true);
+        return $refTypeUpper === 'MANUAL';
     }
     public function updateProductNotes($product_id, $notes)
     {
