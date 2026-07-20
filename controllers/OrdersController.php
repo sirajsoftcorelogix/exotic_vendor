@@ -17,6 +17,27 @@ global $domain;
 class OrdersController
 {
 
+    private function clearBufferedHttpOutput(): void
+    {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function sendRefreshOrderJson(array $payload, int $httpCode = 200): void
+    {
+        $this->clearBufferedHttpOutput();
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code($httpCode);
+        }
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
     public function index()
     {
         is_login();
@@ -2837,6 +2858,13 @@ class OrdersController
             }
 
             $res = $ordersModel->upsertRefreshedOrderLine($rdata, $updateStatus);
+            if (!is_array($res)) {
+                $res = [
+                    'success' => false,
+                    'message' => 'Upsert returned an invalid response.',
+                    'action' => 'failed',
+                ];
+            }
             $results[] = $res;
 
             $action = (string)($res['action'] ?? '');
@@ -2906,45 +2934,52 @@ class OrdersController
     public function refreshOrderPreviewAjax(): void
     {
         $this->assertCanRefreshOrdersFromVendor();
-        header('Content-Type: application/json; charset=utf-8');
-
-        $payload = $this->readRefreshOrderJsonPayload();
-        $orderNumber = $this->extractRefreshOrderNumber($payload);
-
-        echo json_encode(
-            $this->buildRefreshOrderPreviewData($orderNumber),
-            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
-        );
-        exit;
+        try {
+            $payload = $this->readRefreshOrderJsonPayload();
+            $orderNumber = $this->extractRefreshOrderNumber($payload);
+            $this->sendRefreshOrderJson($this->buildRefreshOrderPreviewData($orderNumber));
+        } catch (\Throwable $e) {
+            error_log('[refresh_order_preview] ' . $e->getMessage());
+            $this->sendRefreshOrderJson([
+                'success' => false,
+                'message' => 'Preview failed: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     public function refreshOrderApplyAjax(): void
     {
         $this->assertCanRefreshOrdersFromVendor();
-        header('Content-Type: application/json; charset=utf-8');
+        try {
+            $payload = $this->readRefreshOrderJsonPayload();
+            $orderNumber = $this->extractRefreshOrderNumber($payload);
+            $updateStatus = $this->extractRefreshUpdateStatusFlag($payload);
 
-        $payload = $this->readRefreshOrderJsonPayload();
-        $orderNumber = $this->extractRefreshOrderNumber($payload);
-        $updateStatus = $this->extractRefreshUpdateStatusFlag($payload);
+            if ($orderNumber === '') {
+                $this->sendRefreshOrderJson([
+                    'success' => false,
+                    'message' => 'Order number is required. Pass order_number in the JSON body, form POST, or query string (e.g. &order_number=1234567890).',
+                    'inserted' => 0,
+                    'updated' => 0,
+                    'failed' => 0,
+                    'total' => 0,
+                    'results' => [],
+                ], 400);
+            }
 
-        if ($orderNumber === '') {
-            echo json_encode([
+            $this->sendRefreshOrderJson($this->applyRefreshOrderFromVendor($orderNumber, $updateStatus));
+        } catch (\Throwable $e) {
+            error_log('[refresh_order_apply] ' . $e->getMessage());
+            $this->sendRefreshOrderJson([
                 'success' => false,
-                'message' => 'Order number is required. Pass order_number in the JSON body, form POST, or query string (e.g. &order_number=1234567890).',
+                'message' => 'Refresh failed: ' . $e->getMessage(),
                 'inserted' => 0,
                 'updated' => 0,
                 'failed' => 0,
                 'total' => 0,
                 'results' => [],
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
+            ], 500);
         }
-
-        echo json_encode(
-            $this->applyRefreshOrderFromVendor($orderNumber, $updateStatus),
-            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
-        );
-        exit;
     }
     
 }
