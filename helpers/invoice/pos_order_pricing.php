@@ -240,6 +240,7 @@ function pos_order_build_line_display_pricing_map(array $orderLines, ?array $inv
     }
 
     $pricingByLineId = [];
+    $pendingLines = [];
     foreach ($orderLines as $index => $orderRow) {
         if (!is_array($orderRow)) {
             continue;
@@ -265,10 +266,34 @@ function pos_order_build_line_display_pricing_map(array $orderLines, ?array $inv
             'disc_incl_unit' => $discOverride > 0 ? $discOverride : null,
         ]);
 
-        $pricingByLineId[$lineId] = pos_order_enrich_line_display_pricing($orderRow, $pricing, [
-            'apply_gst' => $applyGst,
-            'use_igst' => $useIgst,
-        ]);
+        $pendingLines[$lineId] = [
+            'order_row' => $orderRow,
+            'pricing' => $pricing,
+        ];
+    }
+
+    $orderCustomReduce = pos_order_resolve_order_custom_reduce($orderLines, $orderInfo);
+    $orderWideComponents = pos_order_build_order_wide_pricing_components($pendingLines, $applyGst);
+    $orderWideComponents = pos_order_apply_proportional_custom_reduce($orderWideComponents, $orderCustomReduce);
+    $orderTaxResult = pos_order_compute_order_component_tax_rows($orderWideComponents, $applyGst);
+    $orderWideComponents = $orderTaxResult['components'];
+    $componentsByLineId = [];
+    foreach ($orderWideComponents as $component) {
+        $componentLineId = (int)($component['line_id'] ?? 0);
+        $componentsByLineId[$componentLineId][] = $component;
+    }
+
+    foreach ($pendingLines as $lineId => $pendingLine) {
+        $pricingByLineId[$lineId] = pos_order_enrich_line_display_pricing(
+            $pendingLine['order_row'],
+            $pendingLine['pricing'],
+            [
+                'apply_gst' => $applyGst,
+                'use_igst' => $useIgst,
+                'pricing_components' => $componentsByLineId[$lineId] ?? [],
+                'order_custom_reduce' => $orderCustomReduce,
+            ]
+        );
     }
 
     return $pricingByLineId;
@@ -333,6 +358,92 @@ function pos_order_build_pricing_components(array $orderRow, float $baseListIncl
     }
 
     return $components;
+}
+
+/**
+ * Order-level custom_reduce (stored once per order, duplicated on line rows in some imports).
+ *
+ * @param list<array<string, mixed>> $orderLines
+ */
+function pos_order_resolve_order_custom_reduce(array $orderLines, ?array $orderInfo = null): float
+{
+    if (is_array($orderInfo)) {
+        $fromInfo = round((float)($orderInfo['custom_reduce'] ?? 0), 2);
+        if ($fromInfo > 0) {
+            return $fromInfo;
+        }
+    }
+
+    $max = 0.0;
+    foreach ($orderLines as $orderRow) {
+        if (!is_array($orderRow)) {
+            continue;
+        }
+        $max = max($max, round((float)($orderRow['custom_reduce'] ?? 0), 2));
+    }
+
+    return $max;
+}
+
+/**
+ * Flatten all order lines (base + addons) into one pool for order-wide discount allocation.
+ *
+ * @param array<int, array{order_row: array<string, mixed>, pricing: array<string, mixed>}> $pendingLines
+ * @return list<array<string, mixed>>
+ */
+function pos_order_build_order_wide_pricing_components(array $pendingLines, bool $applyGst): array
+{
+    $allComponents = [];
+    foreach ($pendingLines as $lineId => $pendingLine) {
+        $orderRow = $pendingLine['order_row'];
+        $baseListIncl = pos_order_line_list_price_incl($orderRow);
+        $gstRate = $applyGst ? (float)($orderRow['gst'] ?? 0) : 0.0;
+        foreach (pos_order_build_pricing_components($orderRow, $baseListIncl) as $component) {
+            $component['line_id'] = (int)$lineId;
+            $component['gst_rate'] = $gstRate;
+            $allComponents[] = $component;
+        }
+    }
+
+    return $allComponents;
+}
+
+/**
+ * @param list<array<string, mixed>> $components
+ * @return array{taxable_value: float, total_gst: float, components: list<array<string, mixed>>}
+ */
+function pos_order_compute_order_component_tax_rows(array $components, bool $applyGst): array
+{
+    $totalTaxable = 0.0;
+    $totalGst = 0.0;
+    $result = [];
+
+    foreach ($components as $component) {
+        $row = $component;
+        $discIncl = round((float)($row['discounted_incl'] ?? 0), 2);
+        $gstRate = max(0.0, (float)($row['gst_rate'] ?? 0));
+
+        if ($applyGst && $gstRate > 0 && $discIncl > 0) {
+            $taxable = round($discIncl / (1 + ($gstRate / 100)), 2);
+            $gst = round($discIncl - $taxable, 2);
+        } else {
+            $taxable = $discIncl;
+            $gst = 0.0;
+        }
+
+        $row['taxable_value'] = $taxable;
+        $row['total_gst'] = $gst;
+        $row['line_total'] = $discIncl;
+        $result[] = $row;
+        $totalTaxable += $taxable;
+        $totalGst += $gst;
+    }
+
+    return [
+        'taxable_value' => round($totalTaxable, 2),
+        'total_gst' => round($totalGst, 2),
+        'components' => $result,
+    ];
 }
 
 /**
@@ -422,32 +533,55 @@ function pos_order_compute_component_tax_rows(array $components, float $gstRate,
  *
  * @param array<string, mixed> $orderRow
  * @param array<string, mixed> $pricing
- * @param array{apply_gst?: bool, use_igst?: bool} $options
+ * @param array{apply_gst?: bool, use_igst?: bool, pricing_components?: list<array<string, mixed>>, order_custom_reduce?: float} $options
  * @return array<string, mixed>
  */
 function pos_order_enrich_line_display_pricing(array $orderRow, array $pricing, array $options = []): array
 {
     $addonRows = pos_order_line_addon_rows($orderRow);
     $addonsTotal = pos_order_line_addons_total($orderRow);
-    $customReduce = max(0.0, round((float)($orderRow['custom_reduce'] ?? 0), 2));
     $baseListIncl = pos_order_line_list_price_incl($orderRow);
 
     $applyGst = !array_key_exists('apply_gst', $options) || !empty($options['apply_gst']);
     $gstRate = $applyGst ? (float)($orderRow['gst'] ?? 0) : 0.0;
+    $prebuiltComponents = is_array($options['pricing_components'] ?? null) ? $options['pricing_components'] : null;
+    $orderCustomReduce = max(0.0, round((float)($options['order_custom_reduce'] ?? 0), 2));
 
-    $components = pos_order_build_pricing_components($orderRow, $baseListIncl);
-    $components = pos_order_apply_proportional_custom_reduce($components, $customReduce);
-    $taxResult = pos_order_compute_component_tax_rows($components, $gstRate, $applyGst);
-    $components = $taxResult['components'];
+    if ($prebuiltComponents !== null) {
+        $components = $prebuiltComponents;
+        $taxableValue = 0.0;
+        $totalGst = 0.0;
+        foreach ($components as $component) {
+            $taxableValue += (float)($component['taxable_value'] ?? 0);
+            $totalGst += (float)($component['total_gst'] ?? 0);
+        }
+        $taxResult = [
+            'taxable_value' => round($taxableValue, 2),
+            'total_gst' => round($totalGst, 2),
+            'components' => $components,
+        ];
+    } else {
+        $customReduce = $orderCustomReduce > 0
+            ? $orderCustomReduce
+            : max(0.0, round((float)($orderRow['custom_reduce'] ?? 0), 2));
+        $components = pos_order_build_pricing_components($orderRow, $baseListIncl);
+        $components = pos_order_apply_proportional_custom_reduce($components, $customReduce);
+        $taxResult = pos_order_compute_component_tax_rows($components, $gstRate, $applyGst);
+        $components = $taxResult['components'];
+        $orderCustomReduce = $customReduce;
+    }
 
     $grossIncl = 0.0;
     $netChargeable = 0.0;
+    $lineDiscountAllocated = 0.0;
     foreach ($components as $component) {
         $grossIncl += (float)($component['list_incl'] ?? 0);
         $netChargeable += (float)($component['discounted_incl'] ?? 0);
+        $lineDiscountAllocated += (float)($component['discount_value'] ?? 0);
     }
     $grossIncl = round($grossIncl, 2);
     $netChargeable = round($netChargeable, 2);
+    $lineDiscountAllocated = round($lineDiscountAllocated, 2);
 
     $enrichedAddonRows = [];
     foreach ($addonRows as $addon) {
@@ -469,7 +603,8 @@ function pos_order_enrich_line_display_pricing(array $orderRow, array $pricing, 
     $pricing['base_discounted_incl'] = (float)($components[0]['discounted_incl'] ?? $baseListIncl);
     $pricing['addon_rows'] = $enrichedAddonRows;
     $pricing['addons_total'] = $addonsTotal;
-    $pricing['custom_reduce'] = $customReduce;
+    $pricing['custom_reduce'] = $lineDiscountAllocated;
+    $pricing['order_custom_reduce'] = $orderCustomReduce;
     $pricing['gross_incl'] = $grossIncl;
     $pricing['chargeable_value'] = $netChargeable;
     $pricing['list_price_incl'] = pos_order_line_list_price_incl($orderRow);
@@ -517,15 +652,18 @@ function pos_order_aggregate_line_pricing_summary(array $linePricingByLineId, ?a
         $grossIncl += (float)($pricing['gross_incl'] ?? 0);
         $totalGst += (float)($pricing['total_gst'] ?? 0);
         $netChargeable += (float)($pricing['chargeable_value'] ?? 0);
-        $customReduce = max($customReduce, (float)($pricing['custom_reduce'] ?? 0));
+        $customReduce += (float)($pricing['custom_reduce'] ?? 0);
     }
 
     if (!$hasGross) {
         return null;
     }
 
-    if ($customReduce <= 0 && is_array($orderInfo)) {
-        $customReduce = round((float)($orderInfo['custom_reduce'] ?? 0), 2);
+    if (is_array($orderInfo)) {
+        $fromInfo = round((float)($orderInfo['custom_reduce'] ?? 0), 2);
+        if ($fromInfo > 0) {
+            $customReduce = $fromInfo;
+        }
     }
 
     return [
@@ -616,8 +754,12 @@ function pos_order_build_summary_rows_from_line_pricing(array $aggregate, array 
 /**
  * @param array<int, array<string, mixed>> $linePricingByLineId
  */
-function pos_order_line_pricing_should_override_invoice_summary(array $linePricingByLineId): bool
+function pos_order_line_pricing_should_override_invoice_summary(array $linePricingByLineId, ?array $orderInfo = null): bool
 {
+    if (is_array($orderInfo) && ((float)($orderInfo['custom_reduce'] ?? 0)) > 0.001) {
+        return true;
+    }
+
     foreach ($linePricingByLineId as $pricing) {
         if (!is_array($pricing)) {
             continue;

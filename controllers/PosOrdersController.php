@@ -1090,7 +1090,7 @@ class PosOrdersController
             $commanModel
         );
 
-        if (is_array($invoiceDisplay) && pos_order_line_pricing_should_override_invoice_summary($linePricingByLineId)) {
+        if (is_array($invoiceDisplay) && pos_order_line_pricing_should_override_invoice_summary($linePricingByLineId, is_array($orderInfo) ? $orderInfo : null)) {
             $pricingAggregate = pos_order_aggregate_line_pricing_summary(
                 $linePricingByLineId,
                 is_array($orderInfo) ? $orderInfo : null
