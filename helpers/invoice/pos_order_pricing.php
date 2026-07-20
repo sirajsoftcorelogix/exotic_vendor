@@ -258,15 +258,104 @@ function pos_order_build_line_display_pricing_map(array $orderLines, ?array $inv
             $lineId = (int)$index;
         }
 
-        $pricingByLineId[$lineId] = pos_order_line_display_pricing($orderRow, [
+        $pricing = pos_order_line_display_pricing($orderRow, [
             'use_igst' => $useIgst,
             'apply_gst' => $applyGst,
             'list_incl_unit' => $listOverride > 0 ? $listOverride : null,
             'disc_incl_unit' => $discOverride > 0 ? $discOverride : null,
         ]);
+
+        $pricingByLineId[$lineId] = pos_order_enrich_line_display_pricing($orderRow, $pricing, [
+            'apply_gst' => $applyGst,
+            'use_igst' => $useIgst,
+        ]);
     }
 
     return $pricingByLineId;
+}
+
+/**
+ * @return list<array{name: string, unit_incl: float, line_incl: float}>
+ */
+function pos_order_line_addon_rows(array $orderRow): array
+{
+    require_once __DIR__ . '/../../models/order/order.php';
+
+    $qty = max(1, (int)($orderRow['quantity'] ?? 1));
+    $parsed = Order::parseVendorOrderLineAddonsList($orderRow['addons'] ?? null);
+    $rows = [];
+    foreach ($parsed as $addon) {
+        $unit = (float)($addon['price'] ?? 0);
+        $rows[] = [
+            'name' => (string)($addon['name'] ?? ''),
+            'unit_incl' => round($unit, 2),
+            'line_incl' => round($unit * $qty, 2),
+        ];
+    }
+
+    return $rows;
+}
+
+function pos_order_line_addons_total(array $orderRow): float
+{
+    $total = 0.0;
+    foreach (pos_order_line_addon_rows($orderRow) as $row) {
+        $total += (float)($row['line_incl'] ?? 0);
+    }
+
+    return round($total, 2);
+}
+
+/**
+ * Add addon totals and order custom_reduce to line pricing (GST-inclusive API amounts).
+ *
+ * @param array<string, mixed> $orderRow
+ * @param array<string, mixed> $pricing
+ * @param array{apply_gst?: bool, use_igst?: bool} $options
+ * @return array<string, mixed>
+ */
+function pos_order_enrich_line_display_pricing(array $orderRow, array $pricing, array $options = []): array
+{
+    $qty = max(1, (int)($orderRow['quantity'] ?? 1));
+    $addonRows = pos_order_line_addon_rows($orderRow);
+    $addonsTotal = pos_order_line_addons_total($orderRow);
+    $customReduce = max(0.0, round((float)($orderRow['custom_reduce'] ?? 0), 2));
+
+    $baseChargeable = round((float)($pricing['chargeable_value'] ?? 0), 2);
+    $grossIncl = round($baseChargeable + $addonsTotal, 2);
+    $netChargeable = max(0.0, round($grossIncl - $customReduce, 2));
+
+    $applyGst = !array_key_exists('apply_gst', $options) || !empty($options['apply_gst']);
+    $useIgst = !empty($options['use_igst']);
+    $gstRate = $applyGst ? (float)($orderRow['gst'] ?? 0) : 0.0;
+
+    if ($applyGst && $gstRate > 0 && $netChargeable > 0) {
+        $netUnit = $netChargeable / $qty;
+        $taxableUnit = round($netUnit / (1 + ($gstRate / 100)), 2);
+        $taxableValue = round($taxableUnit * $qty, 2);
+        require_once __DIR__ . '/invoice_gst.php';
+        $taxBreakdown = invoice_compute_tax_breakdown_from_incl_unit($netUnit, $qty, $gstRate, $useIgst);
+        $totalGst = round(
+            (float)($taxBreakdown['sgst'] ?? 0)
+            + (float)($taxBreakdown['cgst'] ?? 0)
+            + (float)($taxBreakdown['igst'] ?? 0),
+            2
+        );
+    } else {
+        $taxableValue = $netChargeable;
+        $totalGst = 0.0;
+    }
+
+    $pricing['base_chargeable'] = $baseChargeable;
+    $pricing['addon_rows'] = $addonRows;
+    $pricing['addons_total'] = $addonsTotal;
+    $pricing['custom_reduce'] = $customReduce;
+    $pricing['gross_incl'] = $grossIncl;
+    $pricing['chargeable_value'] = $netChargeable;
+    $pricing['taxable_value'] = $taxableValue;
+    $pricing['total_gst'] = $totalGst;
+
+    return $pricing;
 }
 
 function pos_order_format_pricing_amount(float $amount): string
