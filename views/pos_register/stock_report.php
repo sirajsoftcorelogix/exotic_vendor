@@ -143,6 +143,14 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
       <div id="stockReportGroupFilters" class="mt-5 border-t border-gray-100 pt-5">
         <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Group-specific filters</p>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-4">
+          <?php
+            $stockReportAutocompleteUrls = [
+              'author' => base_url('?page=orders&action=search_filter_authors&q='),
+              'artist' => base_url('?page=orders&action=search_filter_authors&q='),
+              'publisher' => base_url('?page=orders&action=search_filter_publishers&q='),
+              'material' => base_url('?page=orders&action=search_filter_materials&q='),
+            ];
+          ?>
           <?php foreach ($groupFilterFields as $fieldKey => $fieldDef): ?>
             <?php
               $fieldGroups = $fieldDef['groups'] ?? [];
@@ -153,8 +161,10 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
               $labelMapJson = htmlspecialchars(json_encode($labelMap, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
               $placeholder = htmlspecialchars((string)($fieldDef['placeholder'] ?? ''), ENT_QUOTES, 'UTF-8');
               $inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition';
+              $autocompleteType = (string)($fieldDef['autocomplete'] ?? '');
+              $autocompleteUrl = $stockReportAutocompleteUrls[$autocompleteType] ?? '';
             ?>
-            <?php if (($fieldDef['autocomplete'] ?? '') === 'author'): ?>
+            <?php if ($autocompleteUrl !== ''): ?>
               <div
                 class="stock-report-group-field hidden"
                 data-stock-report-field="<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>"
@@ -167,24 +177,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
                   'field_label' => $defaultLabel,
                   'field_placeholder' => (string)($fieldDef['placeholder'] ?? ''),
                   'field_value' => $filters[$fieldKey] ?? '',
-                  'search_url' => base_url('?page=orders&action=search_filter_authors&q='),
-                  'input_class' => $inputClass,
-                ]); ?>
-              </div>
-            <?php elseif (($fieldDef['autocomplete'] ?? '') === 'publisher'): ?>
-              <div
-                class="stock-report-group-field hidden"
-                data-stock-report-field="<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>"
-                data-stock-report-groups="<?= $fieldGroupsJson ?>"
-                data-stock-report-labels="<?= $labelMapJson ?>"
-                data-stock-report-default-label="<?= htmlspecialchars($defaultLabel, ENT_QUOTES, 'UTF-8') ?>">
-                <?php renderPartial('views/shared/partials/order_filter_autocomplete_field.php', [
-                  'field_id' => 'stock_report_' . $fieldKey,
-                  'field_name' => $fieldKey,
-                  'field_label' => $defaultLabel,
-                  'field_placeholder' => (string)($fieldDef['placeholder'] ?? ''),
-                  'field_value' => $filters[$fieldKey] ?? '',
-                  'search_url' => base_url('?page=orders&action=search_filter_publishers&q='),
+                  'search_url' => $autocompleteUrl,
                   'input_class' => $inputClass,
                 ]); ?>
               </div>

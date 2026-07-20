@@ -348,6 +348,9 @@ switch ($page) {
             case 'search_filter_publishers':
                 $controller->searchFilterPublishers();
                 break;
+            case 'search_filter_materials':
+                $controller->searchFilterMaterials();
+                break;
             default:
                 $controller->index();
                 break;

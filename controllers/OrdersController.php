@@ -2329,6 +2329,14 @@ class OrdersController
         orderFilterAutocompleteJson($conn, 'publisher', (string) ($_GET['q'] ?? $_GET['query'] ?? ''));
     }
 
+    public function searchFilterMaterials()
+    {
+        is_login();
+        global $conn;
+        require_once 'helpers/order_filter_autocomplete.php';
+        orderFilterAutocompleteJson($conn, 'material', (string) ($_GET['q'] ?? $_GET['query'] ?? ''));
+    }
+
     public function getFilteredOrderIds()
     {
         is_login();
