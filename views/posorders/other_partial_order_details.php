@@ -62,6 +62,11 @@ if ($invoiceIdForReturn <= 0) {
 if ($invoiceIdForReturn > 0) {
     $salesReturnUrl .= '&invoice_id=' . $invoiceIdForReturn;
 }
+$proformaPrintUrl = ($invoiceStatus === 'proforma' && $invoiceIdForReturn > 0)
+    ? pos_invoice_print_url($invoiceIdForReturn)
+    : '';
+$canPrintProforma = $proformaPrintUrl !== '';
+$canPrintTaxInvoice = $invoicePdfUrl !== '' && $invoiceStatus === 'final';
 ?>
 
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
@@ -94,18 +99,31 @@ if ($invoiceIdForReturn > 0) {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                     </svg>
                 </label>
-                <div class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden opacity-0 invisible scale-95 transition-all duration-200 peer-checked:opacity-100 peer-checked:visible peer-checked:scale-100">
+                <div class="absolute right-0 mt-2 w-52 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden opacity-0 invisible scale-95 transition-all duration-200 peer-checked:opacity-100 peer-checked:visible peer-checked:scale-100">
                     <div class="py-1">
-                        <?php if ($invoicePdfUrl !== ''): ?>
-                            <a href="<?php echo htmlspecialchars($invoicePdfUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                        <?php if ($canPrintProforma): ?>
+                            <a href="<?php echo htmlspecialchars($proformaPrintUrl, ENT_QUOTES, 'UTF-8'); ?>"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100">
-                                Print Invoice
+                                Print Proforma
                             </a>
                         <?php else: ?>
                             <span class="flex items-center px-4 py-2 text-[13px] text-gray-400 cursor-not-allowed"
-                                title="No invoice exists for this order yet.">
+                                title="<?php echo $invoiceStatus === 'final' ? 'This order has a final tax invoice.' : 'Proforma invoice is created after partial payment.'; ?>">
+                                Print Proforma
+                            </span>
+                        <?php endif; ?>
+                        <?php if ($canPrintTaxInvoice): ?>
+                            <a href="<?php echo htmlspecialchars($invoicePdfUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100 border-t border-gray-50">
+                                Print Invoice
+                            </a>
+                        <?php else: ?>
+                            <span class="flex items-center px-4 py-2 text-[13px] text-gray-400 cursor-not-allowed border-t border-gray-50"
+                                title="<?php echo $invoiceStatus === 'proforma' ? 'Tax invoice is available after payment in full.' : 'No invoice exists for this order yet.'; ?>">
                                 Print Invoice
                             </span>
                         <?php endif; ?>
