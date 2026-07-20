@@ -622,6 +622,15 @@ class product
                 $search .= "AND vp_products.marketplace like '%" . $mp . "%'";
             }
         }
+        if (!empty($filters['author']) || !empty($filters['publisher'])) {
+            require_once dirname(__DIR__, 2) . '/helpers/order_filter_autocomplete.php';
+            if (!empty($filters['author'])) {
+                appendProductListAuthorFilterSql($search, $this->db, (string) $filters['author']);
+            }
+            if (!empty($filters['publisher'])) {
+                appendProductListPublisherFilterSql($search, $this->db, (string) $filters['publisher']);
+            }
+        }
 
         $search .= " AND LOWER(TRIM(IFNULL(vp_products.item_level, ''))) <> 'parent' ";
 
@@ -690,6 +699,15 @@ class product
                 $search .= "AND vp_products.marketplace_vendor like '%" . $mp . "%'";
             } elseif ($this->vpProductsHasColumn('marketplace')) {
                 $search .= "AND vp_products.marketplace like '%" . $mp . "%'";
+            }
+        }
+        if (!empty($filters['author']) || !empty($filters['publisher'])) {
+            require_once dirname(__DIR__, 2) . '/helpers/order_filter_autocomplete.php';
+            if (!empty($filters['author'])) {
+                appendProductListAuthorFilterSql($search, $this->db, (string) $filters['author']);
+            }
+            if (!empty($filters['publisher'])) {
+                appendProductListPublisherFilterSql($search, $this->db, (string) $filters['publisher']);
             }
         }
         $search .= " AND LOWER(TRIM(IFNULL(vp_products.item_level, ''))) <> 'parent' ";
