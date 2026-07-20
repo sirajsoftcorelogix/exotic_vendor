@@ -52,6 +52,18 @@ $odSectionHead = static function (string $label): void {
                             <p class="text-xs text-gray-500 truncate"><?php echo htmlspecialchars((string)($item['groupname'] ?? '')); ?> / <?php echo htmlspecialchars((string)($item['subcategories'] ?? '')); ?></p>
                             <h3 class="item-title text-sm sm:text-[15px] leading-snug mt-0.5 line-clamp-3"><?php echo htmlspecialchars((string)($item['title'] ?? '')); ?></h3>
                             <p class="item-meta mt-1">Code: <?php echo htmlspecialchars((string)($item['item_code'] ?? '')); ?> · Qty <?php echo htmlspecialchars((string)($item['quantity'] ?? '')); ?></p>
+                            <?php
+                            $currencyCode = strtoupper(trim($item['currency'] ?? 'INR'));
+                            $currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
+                            $lineCurrencySymbol = $currencyIcons[$currencyCode] ?? ($currencyCode !== '' ? $currencyCode . ' ' : '₹');
+                            $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
+                            if ($lineAddons !== []) {
+                                renderPartial('views/shared/partials/order_line_addons_list.php', [
+                                    'addons' => $lineAddons,
+                                    'currencySymbol' => $lineCurrencySymbol,
+                                ]);
+                            }
+                            ?>
                             <div class="flex flex-wrap gap-2 items-center mt-2.5">
                                 <div class="status-box flex items-center justify-center px-2">
                                     <span class="status-text text-xs"><?php echo htmlspecialchars((string)($statusList[$item['status']] ?? 'Unknown')); ?></span>
@@ -125,13 +137,23 @@ $odSectionHead = static function (string $label): void {
                         </div>
 
                         <?php
-                        $options = json_decode($item['options'] ?? '[]', true);
-                        $optStr = is_array($options) ? implode(', ', $options) : '';
+                        $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
                         ?>
                         <div class="rounded-xl border border-amber-200/90 bg-gradient-to-b from-amber-50/90 to-amber-50/40 shadow-sm overflow-hidden ring-1 ring-amber-900/[0.06]">
                             <?php $odSectionHead('Addons'); ?>
                             <div class="px-3 sm:px-4 pb-4 pt-3">
-                                <p class="section-value text-gray-900 leading-relaxed"><?php echo htmlspecialchars($optStr !== '' ? $optStr : '—'); ?></p>
+                                <?php if ($lineAddons !== []): ?>
+                                    <?php renderPartial('views/shared/partials/order_line_addons_list.php', [
+                                        'addons' => $lineAddons,
+                                        'currencySymbol' => $lineCurrencySymbol,
+                                        'layout' => 'stacked',
+                                    ]); ?>
+                                <?php else:
+                                    $options = json_decode($item['options'] ?? '[]', true);
+                                    $optStr = is_array($options) ? implode(', ', $options) : '';
+                                    ?>
+                                    <p class="section-value text-gray-900 leading-relaxed"><?php echo htmlspecialchars($optStr !== '' ? $optStr : '—'); ?></p>
+                                <?php endif; ?>
                             </div>
                         </div>
 

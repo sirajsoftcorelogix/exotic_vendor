@@ -233,6 +233,16 @@ $proformaPrintDisabledReason = $canPrintProforma
                                                     <?php echo str_pad($item['quantity'], 2, '0', STR_PAD_LEFT); ?>
                                                 </span>
                                             </div>
+                                            <?php
+                                            $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
+                                            if ($lineAddons !== []) {
+                                                renderPartial('views/shared/partials/order_line_addons_list.php', [
+                                                    'addons' => $lineAddons,
+                                                    'currencySymbol' => $currencysymbol,
+                                                    'layout' => 'stacked',
+                                                ]);
+                                            }
+                                            ?>
                                         </div>
                                         <div class="flex items-center gap-12">
                                             <div class="flex items-center gap-2 text-[13px] text-black-500">
@@ -262,15 +272,25 @@ $proformaPrintDisabledReason = $canPrintProforma
                         </div>
                         <div class="accordion-content-details max-h-0 overflow-hidden transition-all duration-300 ease-in-out [&:has(>input:checked)]:max-h-[1200px] bg-gray-50">
                             <div class="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
-                                <p class="flex flex-wrap items-center gap-2">
-                                    <span class="section-title font-bold text-gray-700 text-sm italic">Addons : </span>
-                                    <span class="section-value text-green-700 font-semibold text-sm bg-green-50 px-2.5 py-1 rounded-lg border border-green-100">
-                                        <?php
-                                        $options = json_decode($item['options'], true);
-                                        echo !empty($options) ? implode(', ', $options) : 'None';
-                                        ?>
-                                    </span>
-                                </p>
+                                <?php
+                                $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
+                                if ($lineAddons !== []) {
+                                    renderPartial('views/shared/partials/order_line_addons_list.php', [
+                                        'addons' => $lineAddons,
+                                        'currencySymbol' => $currencysymbol,
+                                        'layout' => 'stacked',
+                                    ]);
+                                } else {
+                                    $options = json_decode($item['options'] ?? '[]', true);
+                                    $optStr = is_array($options) ? implode(', ', $options) : '';
+                                    ?>
+                                    <p class="flex flex-wrap items-center gap-2">
+                                        <span class="section-title font-bold text-gray-700 text-sm italic">Addons : </span>
+                                        <span class="section-value text-green-700 font-semibold text-sm bg-green-50 px-2.5 py-1 rounded-lg border border-green-100">
+                                            <?php echo htmlspecialchars($optStr !== '' ? $optStr : 'None'); ?>
+                                        </span>
+                                    </p>
+                                <?php } ?>
                             </div>
                             <div class="py-6 bg-white border-t border-b border-gray-100">
                                 <div class="overflow-x-auto pb-4 px-4">

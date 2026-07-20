@@ -174,6 +174,20 @@ function renderPartial($viewFile, $data = [])
 	include $viewFile;
 }
 
+/**
+ * @return list<array{name: string, price: float}>
+ */
+function order_line_addons_for_display($raw): array
+{
+	static $loaded = false;
+	if (!$loaded) {
+		require_once __DIR__ . '/../models/order/order.php';
+		$loaded = true;
+	}
+
+	return Order::parseVendorOrderLineAddonsList($raw);
+}
+
 // Generates a sortable table header link
 function sort_link($column, $label, $sort_by = 'id', $sort_order = 'asc', $page = '', $search = '', $action = '')
 {
