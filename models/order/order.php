@@ -52,48 +52,8 @@ class Order
         return $this->sanitizeOrderImportFields($data);
     }
 
-    /** @var array<string, string|null> */
-    private array $vpOrdersColumnTypeCache = [];
-
-    private function getVpOrdersColumnType(string $column): ?string
-    {
-        if (array_key_exists($column, $this->vpOrdersColumnTypeCache)) {
-            return $this->vpOrdersColumnTypeCache[$column];
-        }
-
-        $type = null;
-        $stmt = $this->db->prepare('SHOW COLUMNS FROM vp_orders LIKE ?');
-        if ($stmt) {
-            $stmt->bind_param('s', $column);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            if ($res && ($row = $res->fetch_assoc())) {
-                $type = strtolower((string)($row['Type'] ?? ''));
-            }
-            $stmt->close();
-        }
-
-        $this->vpOrdersColumnTypeCache[$column] = $type;
-
-        return $type;
-    }
-
-    private function vpOrdersColumnIsNumeric(string $column): bool
-    {
-        $type = $this->getVpOrdersColumnType($column);
-        if ($type === null || $type === '') {
-            return false;
-        }
-
-        return str_contains($type, 'int')
-            || str_contains($type, 'decimal')
-            || str_contains($type, 'float')
-            || str_contains($type, 'double')
-            || str_contains($type, 'numeric');
-    }
-
     /**
-     * Sanitize string/numeric hybrid fields before INSERT/UPDATE (warehouse bins, store ids, etc.).
+     * Sanitize string fields to match vp_orders column types (see production schema).
      */
     private function sanitizeOrderImportFields(array $data): array
     {
@@ -103,23 +63,18 @@ class Order
             }
         }
 
+        // location: varchar(255) NOT NULL — warehouse bin codes e.g. B7D3, 38201T
         if (array_key_exists('location', $data)) {
-            $location = trim((string) ($data['location'] ?? ''));
-            if ($location === '') {
-                $data['location'] = $this->vpOrdersColumnIsNumeric('location') ? 0 : '';
-            } elseif ($this->vpOrdersColumnIsNumeric('location')) {
-                $data['location'] = is_numeric($location) ? (float) $location : 0;
-            } else {
-                $data['location'] = $location;
-            }
+            $data['location'] = trim((string) ($data['location'] ?? ''));
         }
 
+        // store_name: varchar(11) NULL
         if (array_key_exists('store_name', $data)) {
             $storeName = trim((string) ($data['store_name'] ?? ''));
             if ($storeName === '' || strcasecmp($storeName, 'null') === 0) {
-                $data['store_name'] = $this->vpOrdersColumnIsNumeric('store_name') ? 0 : null;
-            } elseif ($this->vpOrdersColumnIsNumeric('store_name')) {
-                $data['store_name'] = is_numeric($storeName) ? (int) $storeName : 0;
+                $data['store_name'] = null;
+            } elseif (strlen($storeName) > 11) {
+                $data['store_name'] = substr($storeName, 0, 11);
             } else {
                 $data['store_name'] = $storeName;
             }
@@ -130,12 +85,7 @@ class Order
         }
 
         if (array_key_exists('backorder_delay', $data)) {
-            $delay = trim((string) ($data['backorder_delay'] ?? ''));
-            if ($delay !== '' && $this->vpOrdersColumnIsNumeric('backorder_delay')) {
-                $data['backorder_delay'] = is_numeric($delay) ? (int) $delay : 0;
-            } else {
-                $data['backorder_delay'] = $delay;
-            }
+            $data['backorder_delay'] = trim((string) ($data['backorder_delay'] ?? ''));
         }
 
         return $data;
