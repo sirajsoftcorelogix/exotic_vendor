@@ -464,8 +464,15 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
   role="dialog"
   aria-modal="true"
   aria-labelledby="stockReportExportProgressTitle">
-  <div class="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl">
-    <div class="flex items-start gap-3">
+  <div class="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl">
+    <button
+      type="button"
+      id="stockReportExportCloseBtn"
+      class="absolute top-4 right-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+      aria-label="Close">
+      <span class="text-xl leading-none">&times;</span>
+    </button>
+    <div class="flex items-start gap-3 pr-8">
       <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
         <i id="stockReportExportProgressIcon" class="fas fa-file-excel fa-spin text-sm" aria-hidden="true"></i>
       </span>
@@ -945,6 +952,21 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     modal.classList.remove('flex');
   }
 
+  function closeStockReportExportModal() {
+    if (stockReportExportRunning && !stockReportExportPaused) {
+      stopStockReportExport();
+    }
+
+    hideStockReportExportProgressModal();
+    setStockReportBulkUiLocked(false);
+
+    const exportBtn = document.getElementById('stockReportExportBtn');
+    const exportBtnLabel = exportBtn ? exportBtn.querySelector('span') : null;
+    if (exportBtnLabel && !stockReportExportRunning) {
+      exportBtnLabel.textContent = 'Export to Excel';
+    }
+  }
+
   function updateStockReportExportProgress(state) {
     const total = Math.max(0, Number(state.total || 0));
     const processed = Math.max(0, Number(state.processed || 0));
@@ -1017,6 +1039,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     const startBtn = document.getElementById('stockReportExportStartBtn');
     const stopBtn = document.getElementById('stockReportExportStopBtn');
     const resumeBtn = document.getElementById('stockReportExportResumeBtn');
+    const closeBtn = document.getElementById('stockReportExportCloseBtn');
     const mode = state.controlsMode
       || (state.done ? 'done' : (state.paused ? 'paused' : (state.idle ? 'idle' : 'running')));
 
@@ -1032,6 +1055,10 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     if (resumeBtn) {
       resumeBtn.classList.toggle('hidden', mode !== 'paused');
       resumeBtn.disabled = !!state.busy || !stockReportExportSnapshot;
+    }
+    if (closeBtn) {
+      closeBtn.classList.toggle('hidden', mode === 'done');
+      closeBtn.disabled = !!state.busy;
     }
   }
 
@@ -1615,6 +1642,22 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     if (exportResumeBtn) {
       exportResumeBtn.addEventListener('click', () => {
         resumeStockReportExport();
+      });
+    }
+
+    const exportCloseBtn = document.getElementById('stockReportExportCloseBtn');
+    if (exportCloseBtn) {
+      exportCloseBtn.addEventListener('click', () => {
+        closeStockReportExportModal();
+      });
+    }
+
+    const exportProgressModal = document.getElementById('stockReportExportProgressModal');
+    if (exportProgressModal) {
+      exportProgressModal.addEventListener('click', (event) => {
+        if (event.target === exportProgressModal) {
+          closeStockReportExportModal();
+        }
       });
     }
 
