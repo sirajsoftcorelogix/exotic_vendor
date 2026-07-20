@@ -615,11 +615,13 @@ stroke-linejoin="round"/>
 
                     const orderNum = (i.order_number || '').trim();
                     const returnBtn = (!isCancelled && orderNum) ? `
-<a href="?page=sales_returns&action=create&order_number=${encodeURIComponent(orderNum)}&invoice_id=${i.id}"
-   class="inline-flex items-center text-orange-700 hover:text-orange-900 text-xs font-semibold"
-   title="Create sales return">
+<button type="button"
+   data-sales-return-create
+   data-sales-return-url="?page=sales_returns&action=create&order_number=${encodeURIComponent(orderNum)}&invoice_id=${i.id}"
+   data-order-number="${escapeHtml(orderNum)}"
+   class="inline-flex items-center text-orange-700 hover:text-orange-900 text-xs font-semibold border-0 bg-transparent cursor-pointer p-0">
     Return
-</a>` : '';
+</button>` : '';
 
                     const deleteBtn = isCancelled ? '' : `
   <button onclick="openDeleteModal(${i.id}, '?page=posinvoice&action=delete', 'Delete this invoice?')"

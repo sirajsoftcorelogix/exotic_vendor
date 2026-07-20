@@ -257,5 +257,6 @@ function htmlspecialchars(str) {
         .replace(/'/g, '&#039;');
 }
 </script>
+<script src="assets/js/sales_return_confirm.js"></script>
 </body>
 </html>

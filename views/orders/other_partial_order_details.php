@@ -26,6 +26,11 @@ foreach ($order as $items => $item):
 endforeach;
 $currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
 $displayOrderNumber = (string)($orderremarks['order_number'] ?? ($order[0]['order_number'] ?? ''));
+$salesReturnUrl = base_url('?page=sales_returns&action=create&order_number=' . rawurlencode($displayOrderNumber));
+$invoiceIdForReturn = (int)($order[0]['invoice_id'] ?? 0);
+if ($invoiceIdForReturn > 0) {
+    $salesReturnUrl .= '&invoice_id=' . $invoiceIdForReturn;
+}
 ?>
 
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
@@ -42,8 +47,13 @@ $displayOrderNumber = (string)($orderremarks['order_number'] ?? ($order[0]['orde
 
         <div class="flex items-center gap-2">
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Restock</button>
-            <a href="<?= htmlspecialchars(base_url('?page=sales_returns&action=create&order_number=' . rawurlencode($displayOrderNumber)), ENT_QUOTES, 'UTF-8') ?>"
-                class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50 inline-block">Return</a>
+            <button type="button"
+                data-sales-return-create
+                data-sales-return-url="<?= htmlspecialchars($salesReturnUrl, ENT_QUOTES, 'UTF-8') ?>"
+                data-order-number="<?= htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8') ?>"
+                class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">
+                Return
+            </button>
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Edit</button>
             <div class="relative inline-block text-left">
                 <input type="checkbox" id="dropdown-toggle" class="peer hidden">
