@@ -1427,6 +1427,9 @@ switch ($page) {
             case 'stock-report-export-finish':
                 $controller->stockReportExportFinish();
                 break;
+            case 'stock-report-export-cancel':
+                $controller->stockReportExportCancel();
+                break;
 
             case 'add-customer':
                 $controller->add_customer();
