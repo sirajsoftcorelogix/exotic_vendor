@@ -1090,6 +1090,23 @@ class PosOrdersController
             $commanModel
         );
 
+        if (is_array($invoiceDisplay) && pos_order_line_pricing_should_override_invoice_summary($linePricingByLineId)) {
+            $pricingAggregate = pos_order_aggregate_line_pricing_summary(
+                $linePricingByLineId,
+                is_array($orderInfo) ? $orderInfo : null
+            );
+            if (is_array($pricingAggregate)) {
+                $posMeta = is_array($activeInvoice)
+                    ? pos_invoice_parse_discount_meta($activeInvoice['notes'] ?? null)
+                    : [];
+                $invoiceDisplay['summary_rows'] = pos_order_build_summary_rows_from_line_pricing($pricingAggregate, $posMeta);
+                $invoiceDisplay['pdf_grand_total'] = $pricingAggregate['net_chargeable'];
+                $invoiceDisplay['grand_total'] = $pricingAggregate['net_chargeable'];
+                $invoiceDisplay['subtotal_goods_incl'] = $pricingAggregate['gross_incl'];
+                $invoiceDisplay['tax_amount'] = $pricingAggregate['total_gst'];
+            }
+        }
+
         if ($type === 'inner') {
             renderPartial('views/posorders/partial_order_details.php', [
                 'order' => $order,
