@@ -1671,7 +1671,7 @@ class POSRegisterController
             }
         }
 
-        return parseStockReportFiltersFromPayload($payload, $reportWh);
+        return $this->parseStockReportFiltersFromPayload($payload, $reportWh);
     }
 
     /** @param array<string, mixed> $payload */
