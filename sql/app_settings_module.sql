@@ -102,6 +102,8 @@ WHERE setting_key = 'stock_replenishment_lookback_days';
 
 DELETE FROM app_settings
 WHERE setting_key NOT IN (
+    'firm_name',
+    'gstin',
     'stock_replenishment_months',
     'stock_replenishment_book_price_cutoff',
     'invoice_prefix',
@@ -111,6 +113,8 @@ WHERE setting_key NOT IN (
 );
 
 INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES
+('firm_name', 'EXOTIC INDIA ART PVT LTD'),
+('gstin', '07AADCE1400C1ZJ'),
 ('stock_replenishment_months', '1'),
 ('stock_replenishment_book_price_cutoff', '0'),
 ('invoice_prefix', 'inv/2025-26/'),

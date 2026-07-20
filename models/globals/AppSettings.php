@@ -259,11 +259,17 @@ class AppSettings
 
     public function getFirmDetailsRow(): array
     {
+        $gstin = (string) $this->get('gstin', '');
+        if ($gstin === '') {
+            $gstin = (string) $this->get('firm_gst', '');
+        }
+
         return [
             'id' => 1,
             'firm_name' => (string) $this->get('firm_name', ''),
             'pan' => (string) $this->get('firm_pan', ''),
-            'gst' => (string) $this->get('firm_gst', ''),
+            'gst' => $gstin,
+            'gstin' => $gstin,
             'address' => (string) $this->get('firm_address', ''),
             'phone' => (string) $this->get('firm_phone', ''),
             'city' => (string) $this->get('firm_city', ''),
