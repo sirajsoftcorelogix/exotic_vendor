@@ -530,35 +530,164 @@ class SalesReturn
         }
     }
 
-    public function updateOrderReturnStatus(string $orderNumber): void
+    /**
+     * Mark order line(s) as returned locally and on Exotic India when a sales return is saved.
+     *
+     * @param array<int, int> $orderRowIdsFromReturn Order row ids included in this return document
+     * @return array{local_updated:int,api_called:int,api_failed:int,message:string}
+     */
+    public function updateOrderReturnStatus(string $orderNumber, array $orderRowIdsFromReturn = [], int $userId = 0): array
     {
         $orderNumber = trim($orderNumber);
+        $result = [
+            'local_updated' => 0,
+            'api_called' => 0,
+            'api_failed' => 0,
+            'message' => '',
+        ];
+
         if ($orderNumber === '') {
-            return;
+            $result['message'] = 'Missing order number.';
+            return $result;
         }
 
+        require_once __DIR__ . '/../comman/tables.php';
+        require_once __DIR__ . '/../posorder/order.php';
+
         $orderModel = new POSOrder($this->conn);
+        $commanModel = new Tables($this->conn);
         $orderRows = $orderModel->getOrderByOrderNumber($orderNumber);
         if (empty($orderRows)) {
-            return;
+            $result['message'] = 'Order not found.';
+            return $result;
+        }
+
+        $rowsById = [];
+        foreach ($orderRows as $row) {
+            $rowsById[(int) ($row['id'] ?? 0)] = $row;
         }
 
         $returnedByOrderRow = $this->sumReturnedQtyByOrderRow($orderNumber);
+        $orderRowIdsFromReturn = array_values(array_unique(array_filter(array_map('intval', $orderRowIdsFromReturn), static function (int $id): bool {
+            return $id > 0;
+        })));
 
-        foreach ($orderRows as $row) {
-            $orderRowId = (int) ($row['id'] ?? 0);
+        $targetRowIds = $orderRowIdsFromReturn;
+        foreach ($rowsById as $orderRowId => $row) {
+            if ($orderRowId <= 0) {
+                continue;
+            }
             $soldQty = (float) ($row['quantity'] ?? 0);
             $returnedQty = (float) ($returnedByOrderRow[$orderRowId] ?? 0);
             if ($soldQty > 0 && $returnedQty >= $soldQty - 0.0001) {
+                $targetRowIds[] = $orderRowId;
+            }
+        }
+
+        $targetRowIds = array_values(array_unique(array_filter($targetRowIds, static function (int $id): bool {
+            return $id > 0;
+        })));
+
+        if ($targetRowIds === []) {
+            $result['message'] = 'No order lines to mark returned.';
+            return $result;
+        }
+
+        $statusRow = $commanModel->getExoticIndiaOrderStatusCode('returned');
+        $adminId = (int) ($statusRow['admin_id'] ?? 0);
+        if ($adminId <= 0) {
+            // Exotic India API maps returned → admin_id 6 (see getExoticIndiaOrderStatusMap in html_helpers.php).
+            $adminId = 6;
+        }
+        $changeDate = date('Y-m-d H:i:s');
+        $orderRowIdsFromReturnLookup = array_fill_keys($orderRowIdsFromReturn, true);
+
+        foreach ($targetRowIds as $orderRowId) {
+            $line = $rowsById[$orderRowId] ?? null;
+            if (!$line) {
+                continue;
+            }
+
+            $inThisReturn = isset($orderRowIdsFromReturnLookup[$orderRowId]);
+            $currentStatus = strtolower(trim((string) ($line['status'] ?? '')));
+            if ($currentStatus === 'returned' && !$inThisReturn) {
+                continue;
+            }
+
+            if ($currentStatus !== 'returned') {
                 $stmt = $this->conn->prepare('UPDATE vp_orders SET status = ? WHERE id = ?');
                 if ($stmt) {
                     $status = 'returned';
                     $stmt->bind_param('si', $status, $orderRowId);
-                    $stmt->execute();
+                    if ($stmt->execute() && $stmt->affected_rows > 0) {
+                        $result['local_updated']++;
+                    }
                     $stmt->close();
                 }
             }
+
+            $itemCode = trim((string) ($line['item_code'] ?? ''));
+            $apiRes = null;
+            if ($itemCode === '') {
+                $result['api_failed']++;
+                error_log('[Sales return status API] Order ' . $orderNumber . ' item ' . $orderRowId . ': missing item_code');
+            } else {
+                $apiRes = $commanModel->updateExoticIndiaOrderStatus([
+                    'orderid' => $orderNumber,
+                    'level' => 'item',
+                    'order_status' => $adminId,
+                    'itemcode' => $itemCode,
+                    'size' => trim((string) ($line['size'] ?? '')),
+                    'color' => trim((string) ($line['color'] ?? '')),
+                ]);
+                $result['api_called']++;
+                if (empty($apiRes['success'])) {
+                    $result['api_failed']++;
+                    error_log('[Sales return status API] Order ' . $orderNumber . ' item ' . $orderRowId . ': ' . (string) ($apiRes['message'] ?? 'failed'));
+                }
+            }
+
+            $apiResponseLog = '';
+            if (is_array($apiRes)) {
+                $apiResponseLog = json_encode([
+                    'success' => !empty($apiRes['success']),
+                    'http_code' => (int) ($apiRes['http_code'] ?? 0),
+                    'message' => (string) ($apiRes['message'] ?? ''),
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?: '';
+            } elseif ($itemCode === '') {
+                $apiResponseLog = json_encode([
+                    'success' => false,
+                    'http_code' => 0,
+                    'message' => 'Missing item_code for Exotic order/modify API',
+                ], JSON_UNESCAPED_UNICODE) ?: '';
+            }
+
+            try {
+                $commanModel->add_order_status_log([
+                    'order_id' => $orderRowId,
+                    'status' => 'Status: returned (sales return)',
+                    'changed_by' => $userId,
+                    'api_response' => $apiResponseLog,
+                    'change_date' => $changeDate,
+                ]);
+            } catch (\Throwable $logEx) {
+                error_log('[Sales return status log] order ' . $orderRowId . ': ' . $logEx->getMessage());
+            }
         }
+
+        if ($result['local_updated'] <= 0 && $result['api_called'] <= 0 && $result['api_failed'] <= 0) {
+            $result['message'] = 'Order lines were already marked returned.';
+        } elseif ($result['api_failed'] > 0 && $result['local_updated'] > 0) {
+            $result['message'] = 'Order marked returned locally; Exotic order/modify API failed for ' . $result['api_failed'] . ' item(s).';
+        } elseif ($result['api_failed'] > 0) {
+            $result['message'] = 'Exotic order/modify API failed for ' . $result['api_failed'] . ' item(s).';
+        } elseif ($result['api_called'] > 0) {
+            $result['message'] = 'Order line(s) marked returned locally and synced to Exotic India.';
+        } else {
+            $result['message'] = 'Order line(s) marked returned locally.';
+        }
+
+        return $result;
     }
 
     /**

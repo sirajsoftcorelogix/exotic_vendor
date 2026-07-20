@@ -213,7 +213,17 @@ class SalesReturnController
             $stockModel = new Stock($conn);
             $stockResult = $stockModel->applySalesReturnStockIn($returnId, $warehouseId);
             $salesReturnModel->updateStockAppliedFlags($returnId, $stockResult);
-            $salesReturnModel->updateOrderReturnStatus($orderNumber);
+
+            $returnedOrderRowIds = array_values(array_unique(array_filter(array_map(static function (array $line): int {
+                return (int) ($line['order_row_id'] ?? 0);
+            }, $validation['normalized_lines']), static function (int $id): bool {
+                return $id > 0;
+            })));
+            $orderStatusMeta = $salesReturnModel->updateOrderReturnStatus(
+                $orderNumber,
+                $returnedOrderRowIds,
+                (int) ($_SESSION['user']['id'] ?? 0)
+            );
 
             $returnRow = $salesReturnModel->getById($returnId);
             $returnNumber = (string) ($returnRow['return_number'] ?? ('#' . $returnId));
@@ -227,8 +237,23 @@ class SalesReturnController
             if ($skipped > 0) {
                 $msg .= ' ' . $skipped . ' line(s) had no prior stock OUT (status updated only).';
             }
+            $localUpdated = (int) ($orderStatusMeta['local_updated'] ?? 0);
+            $apiCalled = (int) ($orderStatusMeta['api_called'] ?? 0);
+            $apiFailed = (int) ($orderStatusMeta['api_failed'] ?? 0);
+            $statusMessage = trim((string) ($orderStatusMeta['message'] ?? ''));
 
-            $_SESSION['sales_return_flash'] = ['type' => 'success', 'text' => $msg];
+            if ($statusMessage !== '') {
+                $msg .= ' ' . $statusMessage;
+            } elseif ($localUpdated > 0) {
+                $msg .= ' Order line(s) marked returned.';
+            }
+
+            $flashType = ($apiFailed > 0 && $apiCalled > 0) ? 'error' : 'success';
+            if ($apiFailed > 0 && $localUpdated <= 0 && $apiCalled <= 0) {
+                $flashType = 'error';
+            }
+
+            $_SESSION['sales_return_flash'] = ['type' => $flashType, 'text' => $msg];
             header('Location: ?page=sales_returns&action=view&id=' . $returnId);
             exit;
         } catch (Throwable $e) {
