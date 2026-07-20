@@ -78,19 +78,21 @@ function getStockReportGroupFilterFieldDefinitions(): array
         ],
         'material' => [
             'label' => 'Material',
-            'placeholder' => 'Material',
+            'placeholder' => 'Search material by name…',
             'groups' => ['textiles', 'jewelry', 'paintings', 'sculptures', 'homeandliving'],
+            'autocomplete' => 'material',
         ],
         'author' => [
-            'label' => 'Artist / Author',
-            'placeholder' => 'Artist or author name',
-            'labels' => [
-                'book' => 'Author',
-                'paintings' => 'Artist',
-                'sculptures' => 'Artist',
-            ],
-            'groups' => ['book', 'paintings', 'sculptures'],
+            'label' => 'Author',
+            'placeholder' => 'Search author by name…',
+            'groups' => ['book'],
             'autocomplete' => 'author',
+        ],
+        'artist' => [
+            'label' => 'Artist',
+            'placeholder' => 'Search artist by name…',
+            'groups' => ['paintings', 'sculptures'],
+            'autocomplete' => 'artist',
         ],
         'publisher' => [
             'label' => 'Publisher',
@@ -157,14 +159,20 @@ function parseStockReportFiltersFromRequest(array $get, int $warehouseId): array
         'warehouse_id' => $warehouseId,
     ];
 
-    foreach (['size', 'color', 'material', 'isbn', 'language'] as $key) {
+    foreach (['size', 'color', 'isbn', 'language'] as $key) {
         if (in_array($key, $allowedKeys, true)) {
             $filters[$key] = trim((string) ($get[$key] ?? ''));
         }
     }
 
+    if (in_array('material', $allowedKeys, true)) {
+        $filters['material'] = resolveProductListMaterialFilter($get);
+    }
     if (in_array('author', $allowedKeys, true)) {
         $filters['author'] = resolveProductListAuthorFilter($get);
+    }
+    if (in_array('artist', $allowedKeys, true)) {
+        $filters['artist'] = resolveProductListArtistFilter($get);
     }
     if (in_array('publisher', $allowedKeys, true)) {
         $filters['publisher'] = resolveProductListPublisherFilter($get);
@@ -219,7 +227,6 @@ function appendStockReportExtraFiltersSql(
     $likeColumns = [
         'size' => 'size',
         'color' => 'color',
-        'material' => 'material',
         'isbn' => 'isbn',
         'language' => 'language',
     ];
@@ -237,9 +244,21 @@ function appendStockReportExtraFiltersSql(
         $types .= 's';
     }
 
+    if (in_array('material', $allowedKeys, true)) {
+        $material = normalizeOrderFilterSearchText((string) ($filters['material'] ?? ''));
+        if ($material !== '') {
+            $where .= ' AND IFNULL(p.material, \'\') LIKE ? ';
+            $params[] = '%' . $material . '%';
+            $types .= 's';
+        }
+    }
+
     $authorPublisherSql = '';
     if (in_array('author', $allowedKeys, true) && !empty($filters['author'])) {
         appendProductListAuthorFilterSql($authorPublisherSql, $db, (string) $filters['author']);
+    }
+    if (in_array('artist', $allowedKeys, true) && !empty($filters['artist'])) {
+        appendProductListAuthorFilterSql($authorPublisherSql, $db, (string) $filters['artist']);
     }
     if (in_array('publisher', $allowedKeys, true) && !empty($filters['publisher'])) {
         appendProductListPublisherFilterSql($authorPublisherSql, $db, (string) $filters['publisher']);
