@@ -4988,13 +4988,29 @@ class product
                 throw new Exception('Product not found');
             }
 
-            StockMovement::insert($this->db, $data);
+            $movement = StockMovement::insert($this->db, $data);
+
+            $refTypeUpper = strtoupper(trim((string) ($data['ref_type'] ?? '')));
+            if (in_array($refTypeUpper, ['SALES_RETURN', 'SALES_RETURN_CANCEL'], true)) {
+                $sku = trim((string) ($data['sku'] ?? ''));
+                $warehouseId = (int) ($data['warehouse_id'] ?? 0);
+                $lastTransId = (int) ($movement['movement_id'] ?? 0);
+                if ($sku !== '' && $warehouseId > 0) {
+                    StockMovement::syncVpStockFromRunningStock(
+                        $this->db,
+                        $sku,
+                        $warehouseId,
+                        (float) ($movement['running_stock'] ?? 0),
+                        $lastTransId
+                    );
+                }
+            }
 
             $this->db->commit();
 
             $result = ['success' => true, 'message' => 'Stock updated and history recorded.'];
 
-            if (strtoupper(trim((string) ($data['ref_type'] ?? 'MANUAL'))) === 'MANUAL') {
+            if ($this->shouldSyncLocalStockDeltaForMovement($data)) {
                 $movementType = strtoupper(trim((string) ($data['movement_type'] ?? 'OUT')));
                 $qty = (int) ($data['quantity'] ?? 0);
                 $delta = in_array($movementType, ['IN', 'TRANSFER_IN', 'OPENING_STOCK'], true) ? $qty : -$qty;
@@ -5018,6 +5034,16 @@ class product
             $this->db->rollback();
             return ['success' => false, 'message' => $e->getMessage()];
         }
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function shouldSyncLocalStockDeltaForMovement(array $data): bool
+    {
+        $refTypeUpper = strtoupper(trim((string) ($data['ref_type'] ?? 'MANUAL')));
+
+        return in_array($refTypeUpper, ['MANUAL', 'SALES_RETURN', 'SALES_RETURN_CANCEL'], true);
     }
     public function updateProductNotes($product_id, $notes)
     {
