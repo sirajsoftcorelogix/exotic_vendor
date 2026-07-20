@@ -651,7 +651,6 @@ class Order
             'marketplace_vendor',
             'quantity',
             'options',
-            'addons',
             'gst',
             'hsn',
             'local_stock',
@@ -687,8 +686,11 @@ class Order
             'sourcingfee',
             'customer_id',
             'store_name',
-            'custom_reduce'
+            'custom_reduce',
         ];
+        if ($this->vpOrdersHasAddonsColumn()) {
+            array_splice($InsertFields, array_search('options', $InsertFields, true) + 1, 0, ['addons']);
+        }
 
         // Build SQL query
         $columns = implode(', ', $InsertFields);
@@ -1241,18 +1243,39 @@ class Order
     {
         $sql = "SELECT * FROM vp_order_status WHERE admin_id != 0 ORDER BY id ASC";
         $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
         $stmt->execute();
         $result = $stmt->get_result();
-        if ($result && $result->num_rows > 0) {
-            $result->fetch_all(MYSQLI_ASSOC);
-        }
-        //array list with slug as key
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
         $statusList = [];
-        foreach ($result as $row) {
+        foreach ($rows as $row) {
             $statusList[$row['admin_id']] = $row['slug'];
         }
+
         return $statusList;
     }
+
+    private ?bool $vpOrdersHasAddonsColumn = null;
+
+    public function vpOrdersHasAddonsColumn(): bool
+    {
+        if ($this->vpOrdersHasAddonsColumn !== null) {
+            return $this->vpOrdersHasAddonsColumn;
+        }
+        $has = false;
+        $res = $this->db->query("SHOW COLUMNS FROM vp_orders LIKE 'addons'");
+        if ($res && $res->num_rows > 0) {
+            $has = true;
+            $res->free();
+        }
+        $this->vpOrdersHasAddonsColumn = $has;
+
+        return $has;
+    }
+
     function updateImportedOrder($data)
     {
         // Validate inputs
@@ -1261,12 +1284,18 @@ class Order
         }
 
         $data = $this->normalizeOrderNumericFields($data);
+        if (!isset($data['updated_at']) || trim((string)$data['updated_at']) === '') {
+            $data['updated_at'] = date('Y-m-d H:i:s');
+        }
+
+        $includeAddons = $this->vpOrdersHasAddonsColumn();
+        $addonsSql = $includeAddons ? 'addons = ?, ' : '';
 
         // Prepare SQL statement
         $sql = "UPDATE vp_orders SET 
                 shipping_country = ?, title = ?, description = ?, size = ?, color = ?, 
                 groupname = ?, subcategories = ?, currency = ?, itemprice = ?, finalprice = ?, 
-                image = ?, marketplace_vendor = ?, quantity = ?, options = ?, addons = ?, gst = ?, hsn = ?, 
+                image = ?, marketplace_vendor = ?, quantity = ?, options = ?, {$addonsSql}gst = ?, hsn = ?, 
                 local_stock = ?, cost_price = ?, location = ?, order_date = ?, processed_time = ?,
                 numsold = ?, product_weight = ?, product_weight_unit = ?,
                 prod_height = ?, prod_width = ?, prod_length = ?, length_unit = ?,
@@ -1297,7 +1326,11 @@ class Order
             $data['marketplace_vendor'],
             $data['quantity'],
             json_encode($data['options']),
-            $data['addons'] ?? null,
+        ];
+        if ($includeAddons) {
+            $values[] = $data['addons'] ?? null;
+        }
+        $values = array_merge($values, [
             $data['gst'],
             $data['hsn'],
             $data['local_stock'],
@@ -1328,8 +1361,8 @@ class Order
             $data['esd'],
             $data['updated_at'],
             $data['order_number'],
-            $data['item_code']
-        ];
+            $data['item_code'],
+        ]);
 
         // Build types string dynamically based on actual PHP types
         $types = '';
@@ -1383,7 +1416,8 @@ class Order
         if ($orderNumber === '') {
             return [];
         }
-        $sql = 'SELECT id, order_number, item_code, sku, title, quantity, status, addons, size, color
+        $addonCol = $this->vpOrdersHasAddonsColumn() ? ', addons' : '';
+        $sql = 'SELECT id, order_number, item_code, sku, title, quantity, status' . $addonCol . ', size, color
                 FROM vp_orders WHERE order_number = ? ORDER BY id ASC';
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
@@ -1467,12 +1501,26 @@ class Order
         if ($exists) {
             $data['updated_at'] = date('Y-m-d H:i:s');
             $result = $this->updateImportedOrder($data);
+            if (!is_array($result)) {
+                return [
+                    'success' => false,
+                    'message' => 'Update did not return a valid response.',
+                    'action' => 'failed',
+                ];
+            }
             $result['action'] = 'updated';
 
             return $result;
         }
 
         $result = $this->insertOrder($data);
+        if (!is_array($result)) {
+            return [
+                'success' => false,
+                'message' => 'Insert did not return a valid response.',
+                'action' => 'failed',
+            ];
+        }
         $result['action'] = !empty($result['success']) ? 'inserted' : 'failed';
 
         return $result;

@@ -2284,6 +2284,18 @@
             .replace(/"/g, '&quot;');
     }
 
+    function parseRefreshOrderJsonResponse(res) {
+        return res.text().then(function (text) {
+            var cleaned = String(text || '').replace(/^\uFEFF/, '').trim();
+            try {
+                return JSON.parse(cleaned);
+            } catch (e) {
+                var snippet = cleaned.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 280);
+                throw new Error(snippet || 'Server returned non-JSON response.');
+            }
+        });
+    }
+
     function openRefreshOrderModal(orderNumber) {
         orderNumber = String(orderNumber || '').trim();
         if (!orderNumber) {
@@ -2309,7 +2321,7 @@
             headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
             body: JSON.stringify({ order_number: orderNumber })
         })
-            .then(function (res) { return res.json(); })
+            .then(parseRefreshOrderJsonResponse)
             .then(function (data) {
                 document.getElementById('refreshOrderLoading').classList.add('hidden');
                 if (!data || !data.success) {
@@ -2370,7 +2382,7 @@
                 update_status: updateStatus ? '1' : '0'
             })
         })
-            .then(function (res) { return res.json(); })
+            .then(parseRefreshOrderJsonResponse)
             .then(function (data) {
                 btn.disabled = false;
                 btn.textContent = 'Refresh order';
