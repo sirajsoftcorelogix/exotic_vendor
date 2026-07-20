@@ -25,28 +25,14 @@ $showComponentBreakdown = count($pricingComponents) > 0 && ($customReduce > 0.00
                 <thead class="text-[11px] uppercase tracking-wide text-gray-500">
                     <tr>
                         <th class="pb-2 pr-3 font-semibold">Item</th>
-                        <th class="pb-2 pr-3 font-semibold text-right">List price</th>
-                        <th class="pb-2 pr-3 font-semibold text-right">Discount</th>
-                        <th class="pb-2 pr-3 font-semibold text-right">After discount</th>
-                        <th class="pb-2 pr-3 font-semibold text-right">Taxable</th>
-                        <th class="pb-2 font-semibold text-right">GST</th>
+                        <th class="pb-2 font-semibold text-right">List price</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200">
                     <?php foreach ($pricingComponents as $component): ?>
                         <tr>
                             <td class="py-2 pr-3 align-top text-gray-800"><?php echo htmlspecialchars((string)($component['name'] ?? '')); ?></td>
-                            <td class="py-2 pr-3 align-top text-right tabular-nums"><?php echo $formatAmount((float)($component['list_incl'] ?? 0)); ?></td>
-                            <td class="py-2 pr-3 align-top text-right tabular-nums text-emerald-700">
-                                <?php if (((float)($component['discount_value'] ?? 0)) > 0.001): ?>
-                                    - <?php echo $formatAmount((float)($component['discount_value'] ?? 0)); ?>
-                                <?php else: ?>
-                                    —
-                                <?php endif; ?>
-                            </td>
-                            <td class="py-2 pr-3 align-top text-right tabular-nums"><?php echo $formatAmount((float)($component['discounted_incl'] ?? 0)); ?></td>
-                            <td class="py-2 pr-3 align-top text-right tabular-nums"><?php echo $formatAmount((float)($component['taxable_value'] ?? 0)); ?></td>
-                            <td class="py-2 align-top text-right tabular-nums"><?php echo $formatAmount((float)($component['total_gst'] ?? 0)); ?></td>
+                            <td class="py-2 align-top text-right tabular-nums"><?php echo $formatAmount((float)($component['list_incl'] ?? 0)); ?></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -80,15 +66,7 @@ $showComponentBreakdown = count($pricingComponents) > 0 && ($customReduce > 0.00
     <?php endif; ?>
 
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-3 mt-3 border-t border-gray-200 pt-3">
-        <div class="flex items-center justify-between gap-4 py-1">
-            <span class="text-gray-600">Taxable value</span>
-            <span class="tabular-nums font-medium text-gray-900"><?php echo $formatAmount((float)($linePricing['taxable_value'] ?? 0)); ?></span>
-        </div>
-        <div class="flex items-center justify-between gap-4 py-1">
-            <span class="text-gray-600">Total GST</span>
-            <span class="tabular-nums font-medium text-gray-900"><?php echo $formatAmount((float)($linePricing['total_gst'] ?? 0)); ?></span>
-        </div>
-        <div class="flex items-center justify-between gap-4 sm:col-span-2 border-t border-gray-200 pt-4 mt-1">
+        <div class="flex items-center justify-between gap-4 sm:col-span-2">
             <span class="font-semibold text-gray-800">Net chargeable amount</span>
             <span class="tabular-nums text-[15px] font-bold text-gray-900"><?php echo $formatAmount((float)($linePricing['chargeable_value'] ?? 0)); ?></span>
         </div>
