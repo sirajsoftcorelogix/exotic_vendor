@@ -2337,6 +2337,14 @@ class OrdersController
         orderFilterAutocompleteJson($conn, 'material', (string) ($_GET['q'] ?? $_GET['query'] ?? ''));
     }
 
+    public function searchFilterLanguages()
+    {
+        is_login();
+        global $conn;
+        require_once 'helpers/order_filter_autocomplete.php';
+        orderFilterAutocompleteJson($conn, 'language', (string) ($_GET['q'] ?? $_GET['query'] ?? ''));
+    }
+
     public function getFilteredOrderIds()
     {
         is_login();

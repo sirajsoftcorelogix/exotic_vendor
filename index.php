@@ -351,6 +351,9 @@ switch ($page) {
             case 'search_filter_materials':
                 $controller->searchFilterMaterials();
                 break;
+            case 'search_filter_languages':
+                $controller->searchFilterLanguages();
+                break;
             default:
                 $controller->index();
                 break;

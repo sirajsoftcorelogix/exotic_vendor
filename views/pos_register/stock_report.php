@@ -149,6 +149,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
               'artist' => base_url('?page=orders&action=search_filter_authors&q='),
               'publisher' => base_url('?page=orders&action=search_filter_publishers&q='),
               'material' => base_url('?page=orders&action=search_filter_materials&q='),
+              'language' => base_url('?page=orders&action=search_filter_languages&q='),
             ];
           ?>
           <?php foreach ($groupFilterFields as $fieldKey => $fieldDef): ?>

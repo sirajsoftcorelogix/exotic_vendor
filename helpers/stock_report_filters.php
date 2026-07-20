@@ -107,8 +107,9 @@ function getStockReportGroupFilterFieldDefinitions(): array
         ],
         'language' => [
             'label' => 'Language',
-            'placeholder' => 'Language',
+            'placeholder' => 'Search language by name…',
             'groups' => ['book'],
+            'autocomplete' => 'language',
         ],
     ];
 }
@@ -159,7 +160,7 @@ function parseStockReportFiltersFromRequest(array $get, int $warehouseId): array
         'warehouse_id' => $warehouseId,
     ];
 
-    foreach (['size', 'color', 'isbn', 'language'] as $key) {
+    foreach (['size', 'color', 'isbn'] as $key) {
         if (in_array($key, $allowedKeys, true)) {
             $filters[$key] = trim((string) ($get[$key] ?? ''));
         }
@@ -167,6 +168,9 @@ function parseStockReportFiltersFromRequest(array $get, int $warehouseId): array
 
     if (in_array('material', $allowedKeys, true)) {
         $filters['material'] = resolveProductListMaterialFilter($get);
+    }
+    if (in_array('language', $allowedKeys, true)) {
+        $filters['language'] = resolveProductListLanguageFilter($get);
     }
     if (in_array('author', $allowedKeys, true)) {
         $filters['author'] = resolveProductListAuthorFilter($get);
@@ -228,7 +232,6 @@ function appendStockReportExtraFiltersSql(
         'size' => 'size',
         'color' => 'color',
         'isbn' => 'isbn',
-        'language' => 'language',
     ];
 
     foreach ($likeColumns as $filterKey => $column) {
@@ -249,6 +252,15 @@ function appendStockReportExtraFiltersSql(
         if ($material !== '') {
             $where .= ' AND IFNULL(p.material, \'\') LIKE ? ';
             $params[] = '%' . $material . '%';
+            $types .= 's';
+        }
+    }
+
+    if (in_array('language', $allowedKeys, true)) {
+        $language = normalizeOrderFilterSearchText((string) ($filters['language'] ?? ''));
+        if ($language !== '') {
+            $where .= ' AND IFNULL(p.language, \'\') LIKE ? ';
+            $params[] = '%' . $language . '%';
             $types .= 's';
         }
     }
