@@ -142,6 +142,49 @@ class Order
     }
 
     /**
+     * Decode vp_orders.addons JSON for display: list of name + price rows.
+     *
+     * @param mixed $raw
+     * @return list<array{name: string, price: float}>
+     */
+    public static function parseVendorOrderLineAddonsList($raw): array
+    {
+        if ($raw === null || $raw === '' || $raw === [] || $raw === 0 || $raw === '0') {
+            return [];
+        }
+
+        if (is_string($raw)) {
+            $trimmed = trim($raw);
+            if ($trimmed === '' || $trimmed === '0') {
+                return [];
+            }
+            $decoded = json_decode($trimmed, true);
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
+                return [];
+            }
+            $raw = $decoded;
+        }
+
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        $rows = [];
+        foreach ($raw as $name => $price) {
+            $label = trim((string) $name);
+            if ($label === '') {
+                continue;
+            }
+            $rows[] = [
+                'name' => $label,
+                'price' => is_numeric($price) ? (float) $price : 0.0,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
      * Sort order list: primary sort column, then order_number (groups line items), then id.
      * No extra subquery/join — uses indexed vp_orders columns only.
      */

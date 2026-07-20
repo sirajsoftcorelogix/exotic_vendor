@@ -72,6 +72,15 @@
                             <p class="item-meta mt-0">Item Code: <?php echo $item['item_code']; ?></p>
                             <p class="item-meta mt-0">Quantity: <?php echo $item['quantity']; ?></p>
                             <?php
+                            $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
+                            if ($lineAddons !== []) {
+                                renderPartial('views/shared/partials/order_line_addons_list.php', [
+                                    'addons' => $lineAddons,
+                                    'currencySymbol' => $lineCurrencySymbol,
+                                ]);
+                            }
+                            ?>
+                            <?php
                             $linePricing = ($linePricingByLineId ?? [])[(int)($item['id'] ?? 0)] ?? null;
                             if (is_array($linePricing)) {
                                 renderPartial('views/posorders/partials/line_item_pricing.php', [
@@ -177,9 +186,20 @@
                     </div>
                     <div class="bg-green-200 p-4 rounded-lg grid grid-cols-2 gap-x-8">
                         <div>
-                            <p><span class="section-title">Addons : </span><span class="section-value"><?php $options = json_decode($item['options'], true);
-                                                                                                        echo implode(', ', $options); ?></span>
-                            </p>
+                            <?php
+                            $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
+                            if ($lineAddons !== []) {
+                                renderPartial('views/shared/partials/order_line_addons_list.php', [
+                                    'addons' => $lineAddons,
+                                    'currencySymbol' => $lineCurrencySymbol,
+                                    'layout' => 'stacked',
+                                ]);
+                            } else {
+                                $options = json_decode($item['options'] ?? '[]', true);
+                                $optStr = is_array($options) ? implode(', ', $options) : '';
+                                ?>
+                                <p><span class="section-title">Addons : </span><span class="section-value"><?php echo htmlspecialchars($optStr !== '' ? $optStr : '—'); ?></span></p>
+                            <?php } ?>
                         </div>
                     </div>
                     <!-- Stock -->
