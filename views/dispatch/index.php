@@ -524,6 +524,11 @@
                       }
                     ?>
                     <a href="<?php echo htmlspecialchars($salesReturnHref, ENT_QUOTES, 'UTF-8'); ?>"
+                       data-sales-return-create
+                       data-sales-return-url="<?php echo htmlspecialchars($salesReturnHref, ENT_QUOTES, 'UTF-8'); ?>"
+                       <?php if (!empty($orderNumbers)): ?>
+                       data-order-number="<?php echo htmlspecialchars((string) array_key_first($orderNumbers), ENT_QUOTES, 'UTF-8'); ?>"
+                       <?php endif; ?>
                        class="block px-4 py-2 text-orange-700 hover:bg-orange-50 font-medium">Sales return</a>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelInvoiceAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Invoice</button>
                     <?php endif; ?>
