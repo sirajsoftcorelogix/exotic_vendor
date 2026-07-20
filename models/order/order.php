@@ -49,6 +49,95 @@ class Order
             $data[$field] = is_numeric($data[$field] ?? null) ? (int) $data[$field] : 0;
         }
 
+        return $this->sanitizeOrderImportFields($data);
+    }
+
+    /** @var array<string, string|null> */
+    private array $vpOrdersColumnTypeCache = [];
+
+    private function getVpOrdersColumnType(string $column): ?string
+    {
+        if (array_key_exists($column, $this->vpOrdersColumnTypeCache)) {
+            return $this->vpOrdersColumnTypeCache[$column];
+        }
+
+        $type = null;
+        $stmt = $this->db->prepare('SHOW COLUMNS FROM vp_orders LIKE ?');
+        if ($stmt) {
+            $stmt->bind_param('s', $column);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res && ($row = $res->fetch_assoc())) {
+                $type = strtolower((string)($row['Type'] ?? ''));
+            }
+            $stmt->close();
+        }
+
+        $this->vpOrdersColumnTypeCache[$column] = $type;
+
+        return $type;
+    }
+
+    private function vpOrdersColumnIsNumeric(string $column): bool
+    {
+        $type = $this->getVpOrdersColumnType($column);
+        if ($type === null || $type === '') {
+            return false;
+        }
+
+        return str_contains($type, 'int')
+            || str_contains($type, 'decimal')
+            || str_contains($type, 'float')
+            || str_contains($type, 'double')
+            || str_contains($type, 'numeric');
+    }
+
+    /**
+     * Sanitize string/numeric hybrid fields before INSERT/UPDATE (warehouse bins, store ids, etc.).
+     */
+    private function sanitizeOrderImportFields(array $data): array
+    {
+        foreach (['order_number', 'item_code', 'sku'] as $field) {
+            if (array_key_exists($field, $data) && $data[$field] !== null && $data[$field] !== '') {
+                $data[$field] = (string) $data[$field];
+            }
+        }
+
+        if (array_key_exists('location', $data)) {
+            $location = trim((string) ($data['location'] ?? ''));
+            if ($location === '') {
+                $data['location'] = $this->vpOrdersColumnIsNumeric('location') ? 0 : '';
+            } elseif ($this->vpOrdersColumnIsNumeric('location')) {
+                $data['location'] = is_numeric($location) ? (float) $location : 0;
+            } else {
+                $data['location'] = $location;
+            }
+        }
+
+        if (array_key_exists('store_name', $data)) {
+            $storeName = trim((string) ($data['store_name'] ?? ''));
+            if ($storeName === '' || strcasecmp($storeName, 'null') === 0) {
+                $data['store_name'] = $this->vpOrdersColumnIsNumeric('store_name') ? 0 : null;
+            } elseif ($this->vpOrdersColumnIsNumeric('store_name')) {
+                $data['store_name'] = is_numeric($storeName) ? (int) $storeName : 0;
+            } else {
+                $data['store_name'] = $storeName;
+            }
+        }
+
+        if (array_key_exists('hsn', $data)) {
+            $data['hsn'] = trim((string) ($data['hsn'] ?? ''));
+        }
+
+        if (array_key_exists('backorder_delay', $data)) {
+            $delay = trim((string) ($data['backorder_delay'] ?? ''));
+            if ($delay !== '' && $this->vpOrdersColumnIsNumeric('backorder_delay')) {
+                $data['backorder_delay'] = is_numeric($delay) ? (int) $delay : 0;
+            } else {
+                $data['backorder_delay'] = $delay;
+            }
+        }
+
         return $data;
     }
 
@@ -616,10 +705,10 @@ class Order
             }
         }
 
-        // ✅ Check for duplicate combination
-        $checkSql = "SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? AND sku = ? LIMIT 1";
+        // Check for duplicate combination (same key as bulk update / refresh upsert)
+        $checkSql = 'SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? LIMIT 1';
         $checkStmt = $this->db->prepare($checkSql);
-        $checkStmt->bind_param('sss', $data['order_number'], $data['item_code'], $data['sku']);
+        $checkStmt->bind_param('ss', $data['order_number'], $data['item_code']);
         $checkStmt->execute();
         $checkStmt->bind_result($count);
         $checkStmt->fetch();
@@ -740,8 +829,14 @@ class Order
         //$this->db->set_charset('utf8mb4');
 
         // After execute
-        if (!$stmt->execute()) {
-            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        try {
+            if (!$stmt->execute()) {
+                return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+            }
+        } catch (\Throwable $e) {
+            $stmt->close();
+
+            return ['success' => false, 'message' => 'Database error: ' . $e->getMessage()];
         }
         $insertId = $this->db->insert_id; // ✅ use db object, not stmt
         $stmt->close();
@@ -1392,8 +1487,14 @@ class Order
         //echo $ref . "\n";
         //}
         //print_r($stmt);
-        if (!$stmt->execute()) {
-            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        try {
+            if (!$stmt->execute()) {
+                return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+            }
+        } catch (\Throwable $e) {
+            $stmt->close();
+
+            return ['success' => false, 'message' => 'Database error: ' . $e->getMessage()];
         }
         $affected = $stmt->affected_rows;
         $stmt->close();
@@ -1449,6 +1550,33 @@ class Order
     }
 
     /**
+     * Match imported lines the same way bulk update does (order_number + item_code).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findOrderLineByOrderNumberAndItemCode(string $orderNumber, string $itemCode): ?array
+    {
+        $orderNumber = trim($orderNumber);
+        $itemCode = trim($itemCode);
+        if ($orderNumber === '' || $itemCode === '') {
+            return null;
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT id, order_number, item_code, sku, status FROM vp_orders WHERE order_number = ? AND item_code = ? LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('ss', $orderNumber, $itemCode);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return is_array($row) ? $row : null;
+    }
+
+    /**
      * @return array<string, string> slug => title
      */
     public function orderStatusSlugTitleMap(): array
@@ -1482,20 +1610,10 @@ class Order
             return ['success' => false, 'message' => 'Order number and item code are required.', 'action' => 'none'];
         }
 
-        $exists = $this->orderLineExists($orderNumber, $itemCode, $sku);
-        if ($exists && !$updateStatus) {
-            $stmt = $this->db->prepare(
-                'SELECT status FROM vp_orders WHERE order_number = ? AND item_code = ? AND sku = ? LIMIT 1'
-            );
-            if ($stmt) {
-                $stmt->bind_param('sss', $orderNumber, $itemCode, $sku);
-                $stmt->execute();
-                $row = $stmt->get_result()->fetch_assoc();
-                $stmt->close();
-                if (is_array($row) && isset($row['status'])) {
-                    $data['status'] = $row['status'];
-                }
-            }
+        $existingLine = $this->findOrderLineByOrderNumberAndItemCode($orderNumber, $itemCode);
+        $exists = $existingLine !== null;
+        if ($exists && !$updateStatus && isset($existingLine['status'])) {
+            $data['status'] = $existingLine['status'];
         }
 
         if ($exists) {
