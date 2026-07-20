@@ -2303,7 +2303,7 @@
         document.getElementById('refreshOrderLinesBody').innerHTML = '';
         document.getElementById('refreshOrderModal').classList.remove('hidden');
 
-        fetch('index.php?page=orders&action=refresh_order_preview', {
+        fetch('index.php?page=orders&action=refresh_order_preview&order_number=' + encodeURIComponent(orderNumber), {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -2361,7 +2361,7 @@
         btn.disabled = true;
         btn.textContent = 'Refreshing…';
 
-        fetch('index.php?page=orders&action=refresh_order_apply', {
+        fetch('index.php?page=orders&action=refresh_order_apply&order_number=' + encodeURIComponent(refreshOrderModalNumber), {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
