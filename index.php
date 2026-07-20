@@ -1810,6 +1810,9 @@ switch ($page) {
             case 'get_order_details_html':
                 $controller->getOrderDetailsHTML();
                 break;
+            case 'print_proforma':
+                $controller->printProforma();
+                break;
             case 'get_order_details_for_dispatch':
                 $controller->getOrderDetailsForDispatch();
                 break;

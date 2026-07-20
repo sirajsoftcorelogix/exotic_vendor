@@ -99,6 +99,17 @@ function pos_invoice_print_url(int $invoiceId, bool $autoPrint = true): string
 	return $url;
 }
 
+/** Print proforma preview from order details (no invoice DB row). */
+function pos_order_proforma_print_url(string $orderNumber): string
+{
+	$orderNumber = trim($orderNumber);
+	if ($orderNumber === '') {
+		return '';
+	}
+
+	return base_url('?page=posorders&action=print_proforma&order_number=' . rawurlencode($orderNumber));
+}
+
 /** Inbound book shipping fee (INR): MAX(min, billable_kg × rate). Constants in init.php. */
 function book_shipping_fee_inr($weightKg): float
 {

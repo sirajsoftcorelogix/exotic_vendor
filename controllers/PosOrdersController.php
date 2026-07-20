@@ -989,6 +989,48 @@ class PosOrdersController
         ];
     }
 
+    /**
+     * @param array<string, mixed>|null $activeInvoice
+     * @param array{is_fully_paid?:bool} $paymentSummary
+     *
+     * @return array{url:string,can_print:bool}
+     */
+    private function resolveProformaPrintAction(string $orderNumber, ?array $activeInvoice, array $paymentSummary): array
+    {
+        if (!empty($paymentSummary['is_fully_paid'])) {
+            return ['url' => '', 'can_print' => false];
+        }
+
+        $invoiceId = is_array($activeInvoice) ? (int)($activeInvoice['id'] ?? 0) : 0;
+        $status = is_array($activeInvoice)
+            ? strtolower(trim((string)($activeInvoice['status'] ?? '')))
+            : '';
+
+        if ($invoiceId > 0 && $status === 'final') {
+            return ['url' => '', 'can_print' => false];
+        }
+
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return ['url' => '', 'can_print' => false];
+        }
+
+        return [
+            'url' => pos_order_proforma_print_url($orderNumber),
+            'can_print' => true,
+        ];
+    }
+
+    /**
+     * Render proforma print preview from order details (no invoice DB row).
+     */
+    public function printProforma(): void
+    {
+        require_once __DIR__ . '/PosInvoiceController.php';
+        $posInv = new PosInvoiceController();
+        $posInv->printProformaPreviewFromOrder();
+    }
+
     public function getOrderDetailsHTML()
     {
         is_login();
@@ -1035,6 +1077,7 @@ class PosOrdersController
         $invoicePdfUrl = $invoiceId > 0 ? pos_invoice_pdf_url($invoiceId) : '';
         $invoiceDisplay = $this->buildOrderInvoiceDisplaySummary($activeInvoice, $resolvedOrderNumber);
         $paymentSummary = $this->buildOrderPaymentSummary($resolvedOrderNumber, is_array($orderremarks) ? $orderremarks : null);
+        $proformaPrintAction = $this->resolveProformaPrintAction($resolvedOrderNumber, $activeInvoice, $paymentSummary);
         $orderInfo = $ordersModel->getAddressInfoByOrderNumber($resolvedOrderNumber);
         require_once __DIR__ . '/../helpers/invoice/pos_order_pricing.php';
         $linePricingByLineId = pos_order_build_line_display_pricing_map(
@@ -1059,6 +1102,8 @@ class PosOrdersController
                 'customerdetails' => $customerdetails,
                 'invoiceDisplay' => $invoiceDisplay,
                 'invoicePdfUrl' => $invoicePdfUrl,
+                'proformaPrintUrl' => (string)($proformaPrintAction['url'] ?? ''),
+                'canPrintProforma' => !empty($proformaPrintAction['can_print']),
                 'canEditInvoiceNumber' => canSrEmpAccess(),
                 'paymentSummary' => $paymentSummary,
                 'linePricingByLineId' => $linePricingByLineId,
