@@ -307,7 +307,118 @@ function pos_order_line_addons_total(array $orderRow): float
 }
 
 /**
- * Add addon totals and order custom_reduce to line pricing (GST-inclusive API amounts).
+ * Build base + addon list-price components (GST-inclusive, before custom_reduce).
+ *
+ * @return list<array{type: string, name: string, list_incl: float}>
+ */
+function pos_order_build_pricing_components(array $orderRow, float $baseListIncl): array
+{
+    $baseName = trim((string)($orderRow['title'] ?? ''));
+    if ($baseName === '') {
+        $baseName = 'Base item';
+    }
+
+    $components = [[
+        'type' => 'base',
+        'name' => $baseName,
+        'list_incl' => round($baseListIncl, 2),
+    ]];
+
+    foreach (pos_order_line_addon_rows($orderRow) as $addon) {
+        $components[] = [
+            'type' => 'addon',
+            'name' => (string)($addon['name'] ?? ''),
+            'list_incl' => round((float)($addon['line_incl'] ?? 0), 2),
+        ];
+    }
+
+    return $components;
+}
+
+/**
+ * Allocate fixed custom_reduce proportionally by list price (matches POS spreadsheet).
+ *
+ * @param list<array{type: string, name: string, list_incl: float}> $components
+ * @return list<array<string, float|string>>
+ */
+function pos_order_apply_proportional_custom_reduce(array $components, float $customReduce): array
+{
+    $totalList = 0.0;
+    foreach ($components as $component) {
+        $totalList += (float)($component['list_incl'] ?? 0);
+    }
+    $totalList = round($totalList, 2);
+    $customReduce = max(0.0, round($customReduce, 2));
+
+    if ($totalList <= 0.0) {
+        return $components;
+    }
+
+    $allocated = 0.0;
+    $count = count($components);
+    $result = [];
+
+    foreach ($components as $index => $component) {
+        $listIncl = round((float)($component['list_incl'] ?? 0), 2);
+        $row = $component;
+        $row['discount_pct'] = round(100 * $listIncl / $totalList, 4);
+
+        if ($customReduce <= 0.0) {
+            $row['discount_value'] = 0.0;
+        } elseif ($index === $count - 1) {
+            $row['discount_value'] = round($customReduce - $allocated, 2);
+        } else {
+            $row['discount_value'] = round($customReduce * ($listIncl / $totalList), 2);
+            $allocated += (float)$row['discount_value'];
+        }
+
+        $row['discounted_incl'] = round($listIncl - (float)$row['discount_value'], 2);
+        $result[] = $row;
+    }
+
+    return $result;
+}
+
+/**
+ * @param list<array<string, float|string>> $components
+ * @return array{taxable_value: float, total_gst: float, components: list<array<string, float|string>>}
+ */
+function pos_order_compute_component_tax_rows(array $components, float $gstRate, bool $applyGst): array
+{
+    $totalTaxable = 0.0;
+    $totalGst = 0.0;
+    $gstRate = max(0.0, $gstRate);
+    $result = [];
+
+    foreach ($components as $component) {
+        $row = $component;
+        $discIncl = round((float)($row['discounted_incl'] ?? 0), 2);
+
+        if ($applyGst && $gstRate > 0 && $discIncl > 0) {
+            $taxable = round($discIncl / (1 + ($gstRate / 100)), 2);
+            $gst = round($discIncl - $taxable, 2);
+        } else {
+            $taxable = $discIncl;
+            $gst = 0.0;
+        }
+
+        $row['taxable_value'] = $taxable;
+        $row['total_gst'] = $gst;
+        $row['line_total'] = $discIncl;
+        $result[] = $row;
+        $totalTaxable += $taxable;
+        $totalGst += $gst;
+    }
+
+    return [
+        'taxable_value' => round($totalTaxable, 2),
+        'total_gst' => round($totalGst, 2),
+        'components' => $result,
+    ];
+}
+
+/**
+ * Add addon totals and proportionally allocated custom_reduce (GST-inclusive API amounts).
  *
  * @param array<string, mixed> $orderRow
  * @param array<string, mixed> $pricing
@@ -316,44 +427,54 @@ function pos_order_line_addons_total(array $orderRow): float
  */
 function pos_order_enrich_line_display_pricing(array $orderRow, array $pricing, array $options = []): array
 {
-    $qty = max(1, (int)($orderRow['quantity'] ?? 1));
     $addonRows = pos_order_line_addon_rows($orderRow);
     $addonsTotal = pos_order_line_addons_total($orderRow);
     $customReduce = max(0.0, round((float)($orderRow['custom_reduce'] ?? 0), 2));
-
-    $baseChargeable = round((float)($pricing['chargeable_value'] ?? 0), 2);
-    $grossIncl = round($baseChargeable + $addonsTotal, 2);
-    $netChargeable = max(0.0, round($grossIncl - $customReduce, 2));
+    $baseListIncl = round((float)($pricing['chargeable_value'] ?? 0), 2);
 
     $applyGst = !array_key_exists('apply_gst', $options) || !empty($options['apply_gst']);
-    $useIgst = !empty($options['use_igst']);
     $gstRate = $applyGst ? (float)($orderRow['gst'] ?? 0) : 0.0;
 
-    if ($applyGst && $gstRate > 0 && $netChargeable > 0) {
-        $netUnit = $netChargeable / $qty;
-        $taxableUnit = round($netUnit / (1 + ($gstRate / 100)), 2);
-        $taxableValue = round($taxableUnit * $qty, 2);
-        require_once __DIR__ . '/invoice_gst.php';
-        $taxBreakdown = invoice_compute_tax_breakdown_from_incl_unit($netUnit, $qty, $gstRate, $useIgst);
-        $totalGst = round(
-            (float)($taxBreakdown['sgst'] ?? 0)
-            + (float)($taxBreakdown['cgst'] ?? 0)
-            + (float)($taxBreakdown['igst'] ?? 0),
-            2
-        );
-    } else {
-        $taxableValue = $netChargeable;
-        $totalGst = 0.0;
+    $components = pos_order_build_pricing_components($orderRow, $baseListIncl);
+    $components = pos_order_apply_proportional_custom_reduce($components, $customReduce);
+    $taxResult = pos_order_compute_component_tax_rows($components, $gstRate, $applyGst);
+    $components = $taxResult['components'];
+
+    $grossIncl = 0.0;
+    $netChargeable = 0.0;
+    foreach ($components as $component) {
+        $grossIncl += (float)($component['list_incl'] ?? 0);
+        $netChargeable += (float)($component['discounted_incl'] ?? 0);
+    }
+    $grossIncl = round($grossIncl, 2);
+    $netChargeable = round($netChargeable, 2);
+
+    $enrichedAddonRows = [];
+    foreach ($addonRows as $addon) {
+        $match = null;
+        foreach ($components as $component) {
+            if (($component['type'] ?? '') === 'addon' && (string)($component['name'] ?? '') === (string)($addon['name'] ?? '')) {
+                $match = $component;
+                break;
+            }
+        }
+        $enrichedAddonRows[] = array_merge($addon, [
+            'discount_value' => (float)($match['discount_value'] ?? 0),
+            'discounted_incl' => (float)($match['discounted_incl'] ?? ($addon['line_incl'] ?? 0)),
+        ]);
     }
 
-    $pricing['base_chargeable'] = $baseChargeable;
-    $pricing['addon_rows'] = $addonRows;
+    $pricing['base_chargeable'] = $baseListIncl;
+    $pricing['base_discount_value'] = (float)($components[0]['discount_value'] ?? 0);
+    $pricing['base_discounted_incl'] = (float)($components[0]['discounted_incl'] ?? $baseListIncl);
+    $pricing['addon_rows'] = $enrichedAddonRows;
     $pricing['addons_total'] = $addonsTotal;
     $pricing['custom_reduce'] = $customReduce;
     $pricing['gross_incl'] = $grossIncl;
     $pricing['chargeable_value'] = $netChargeable;
-    $pricing['taxable_value'] = $taxableValue;
-    $pricing['total_gst'] = $totalGst;
+    $pricing['taxable_value'] = $taxResult['taxable_value'];
+    $pricing['total_gst'] = $taxResult['total_gst'];
+    $pricing['pricing_components'] = $components;
 
     return $pricing;
 }

@@ -11,50 +11,75 @@ $formatAmount = static function (float $amount) use ($currencySymbol): string {
     return $currencySymbol . ' ' . pos_order_format_pricing_amount($amount);
 };
 
-$addonRows = is_array($linePricing['addon_rows'] ?? null) ? $linePricing['addon_rows'] : [];
-$addonsTotal = (float)($linePricing['addons_total'] ?? 0);
+$pricingComponents = is_array($linePricing['pricing_components'] ?? null) ? $linePricing['pricing_components'] : [];
 $customReduce = (float)($linePricing['custom_reduce'] ?? 0);
-$baseChargeable = (float)($linePricing['base_chargeable'] ?? ($linePricing['chargeable_value'] ?? 0));
-$grossIncl = (float)($linePricing['gross_incl'] ?? $baseChargeable);
-$showExtended = $addonsTotal > 0.001 || $customReduce > 0.001;
+$grossIncl = (float)($linePricing['gross_incl'] ?? 0);
+$showComponentBreakdown = count($pricingComponents) > 0 && ($customReduce > 0.001 || count($pricingComponents) > 1);
 ?>
 <div class="mt-5 rounded-xl border border-gray-200 bg-gray-50 px-4 py-4 text-[13px]">
     <p class="mb-4 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Line pricing</p>
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-3">
-        <div class="flex items-center justify-between gap-4 py-1">
-            <span class="text-gray-600">Listing price (unit)</span>
-            <span class="tabular-nums font-medium text-gray-900"><?php echo $formatAmount((float)($linePricing['listing_price_unit'] ?? 0)); ?></span>
+
+    <?php if ($showComponentBreakdown): ?>
+        <div class="mb-4 overflow-x-auto">
+            <table class="min-w-full text-left text-[12px]">
+                <thead class="text-[11px] uppercase tracking-wide text-gray-500">
+                    <tr>
+                        <th class="pb-2 pr-3 font-semibold">Item</th>
+                        <th class="pb-2 pr-3 font-semibold text-right">List price</th>
+                        <th class="pb-2 pr-3 font-semibold text-right">Discount</th>
+                        <th class="pb-2 pr-3 font-semibold text-right">After discount</th>
+                        <th class="pb-2 pr-3 font-semibold text-right">Taxable</th>
+                        <th class="pb-2 font-semibold text-right">GST</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    <?php foreach ($pricingComponents as $component): ?>
+                        <tr>
+                            <td class="py-2 pr-3 align-top text-gray-800"><?php echo htmlspecialchars((string)($component['name'] ?? '')); ?></td>
+                            <td class="py-2 pr-3 align-top text-right tabular-nums"><?php echo $formatAmount((float)($component['list_incl'] ?? 0)); ?></td>
+                            <td class="py-2 pr-3 align-top text-right tabular-nums text-emerald-700">
+                                <?php if (((float)($component['discount_value'] ?? 0)) > 0.001): ?>
+                                    - <?php echo $formatAmount((float)($component['discount_value'] ?? 0)); ?>
+                                <?php else: ?>
+                                    —
+                                <?php endif; ?>
+                            </td>
+                            <td class="py-2 pr-3 align-top text-right tabular-nums"><?php echo $formatAmount((float)($component['discounted_incl'] ?? 0)); ?></td>
+                            <td class="py-2 pr-3 align-top text-right tabular-nums"><?php echo $formatAmount((float)($component['taxable_value'] ?? 0)); ?></td>
+                            <td class="py-2 align-top text-right tabular-nums"><?php echo $formatAmount((float)($component['total_gst'] ?? 0)); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
-        <?php if ($showExtended): ?>
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-x-8 border-t border-gray-200 pt-3">
             <div class="flex items-center justify-between gap-4 py-1">
-                <span class="text-gray-600">Base item total</span>
-                <span class="tabular-nums font-medium text-gray-900"><?php echo $formatAmount($baseChargeable); ?></span>
-            </div>
-        <?php endif; ?>
-        <?php foreach ($addonRows as $addonRow): ?>
-            <div class="flex items-center justify-between gap-4 py-1 sm:col-span-2">
-                <span class="text-gray-600">Addon · <?php echo htmlspecialchars((string)($addonRow['name'] ?? '')); ?></span>
-                <span class="tabular-nums font-medium text-gray-900"><?php echo $formatAmount((float)($addonRow['line_incl'] ?? 0)); ?></span>
-            </div>
-        <?php endforeach; ?>
-        <?php if ($addonsTotal > 0.001): ?>
-            <div class="flex items-center justify-between gap-4 py-1 sm:col-span-2">
-                <span class="text-gray-600">Subtotal incl. addons</span>
+                <span class="text-gray-600">Total before discount (incl. GST)</span>
                 <span class="tabular-nums font-medium text-gray-900"><?php echo $formatAmount($grossIncl); ?></span>
             </div>
-        <?php endif; ?>
-        <?php if (((float)($linePricing['discount_amount'] ?? 0)) > 0.001): ?>
+            <?php if ($customReduce > 0.001): ?>
+                <div class="flex items-center justify-between gap-4 py-1">
+                    <span class="text-gray-600">Fixed discount (custom reduce)</span>
+                    <span class="tabular-nums font-semibold text-emerald-700">- <?php echo $formatAmount($customReduce); ?></span>
+                </div>
+            <?php endif; ?>
+        </div>
+    <?php else: ?>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-3">
             <div class="flex items-center justify-between gap-4 py-1">
-                <span class="text-gray-600">List discount</span>
-                <span class="tabular-nums font-semibold text-emerald-700">- <?php echo $formatAmount((float)($linePricing['discount_amount'] ?? 0)); ?></span>
+                <span class="text-gray-600">Listing price (unit)</span>
+                <span class="tabular-nums font-medium text-gray-900"><?php echo $formatAmount((float)($linePricing['listing_price_unit'] ?? 0)); ?></span>
             </div>
-        <?php endif; ?>
-        <?php if ($customReduce > 0.001): ?>
-            <div class="flex items-center justify-between gap-4 py-1">
-                <span class="text-gray-600">Custom reduce</span>
-                <span class="tabular-nums font-semibold text-emerald-700">- <?php echo $formatAmount($customReduce); ?></span>
-            </div>
-        <?php endif; ?>
+            <?php if (((float)($linePricing['discount_amount'] ?? 0)) > 0.001): ?>
+                <div class="flex items-center justify-between gap-4 py-1">
+                    <span class="text-gray-600">List discount</span>
+                    <span class="tabular-nums font-semibold text-emerald-700">- <?php echo $formatAmount((float)($linePricing['discount_amount'] ?? 0)); ?></span>
+                </div>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-3 mt-3 border-t border-gray-200 pt-3">
         <div class="flex items-center justify-between gap-4 py-1">
             <span class="text-gray-600">Taxable value</span>
             <span class="tabular-nums font-medium text-gray-900"><?php echo $formatAmount((float)($linePricing['taxable_value'] ?? 0)); ?></span>
