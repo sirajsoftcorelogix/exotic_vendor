@@ -2467,10 +2467,64 @@ class OrdersController
      */
     private function readRefreshOrderJsonPayload(): array
     {
-        $raw = (string)file_get_contents('php://input');
-        $decoded = json_decode($raw, true);
+        $payload = [];
 
-        return is_array($decoded) ? $decoded : $_POST;
+        $raw = (string)file_get_contents('php://input');
+        if ($raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $payload = $decoded;
+            }
+        }
+
+        if ($payload === [] && !empty($_POST) && is_array($_POST)) {
+            $payload = $_POST;
+        }
+
+        foreach (['order_number', 'orderid', 'update_status'] as $key) {
+            if (!array_key_exists($key, $payload) || trim((string)$payload[$key]) === '') {
+                if (isset($_GET[$key]) && trim((string)$_GET[$key]) !== '') {
+                    $payload[$key] = $_GET[$key];
+                }
+            }
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function extractRefreshOrderNumber(array $payload): string
+    {
+        foreach ([
+            $payload['order_number'] ?? null,
+            $payload['orderid'] ?? null,
+            $_GET['order_number'] ?? null,
+            $_GET['orderid'] ?? null,
+            $_POST['order_number'] ?? null,
+            $_POST['orderid'] ?? null,
+        ] as $candidate) {
+            $n = trim((string)$candidate);
+            if ($n !== '') {
+                return $n;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function extractRefreshUpdateStatusFlag(array $payload): bool
+    {
+        $raw = $payload['update_status'] ?? $_GET['update_status'] ?? $_POST['update_status'] ?? null;
+        if ($raw === null || $raw === '') {
+            return false;
+        }
+
+        return in_array(strtolower(trim((string)$raw)), ['1', 'true', 'yes', 'on'], true);
     }
 
     private static function vendorOrderLineMatchKey(string $itemCode, string $sku): string
@@ -2855,7 +2909,7 @@ class OrdersController
         header('Content-Type: application/json; charset=utf-8');
 
         $payload = $this->readRefreshOrderJsonPayload();
-        $orderNumber = trim((string)($payload['order_number'] ?? $payload['orderid'] ?? ''));
+        $orderNumber = $this->extractRefreshOrderNumber($payload);
 
         echo json_encode(
             $this->buildRefreshOrderPreviewData($orderNumber),
@@ -2870,9 +2924,21 @@ class OrdersController
         header('Content-Type: application/json; charset=utf-8');
 
         $payload = $this->readRefreshOrderJsonPayload();
-        $orderNumber = trim((string)($payload['order_number'] ?? $payload['orderid'] ?? ''));
-        $updateStatus = !empty($payload['update_status'])
-            && in_array((string)$payload['update_status'], ['1', 'true', 'yes', 'on'], true);
+        $orderNumber = $this->extractRefreshOrderNumber($payload);
+        $updateStatus = $this->extractRefreshUpdateStatusFlag($payload);
+
+        if ($orderNumber === '') {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Order number is required. Pass order_number in the JSON body, form POST, or query string (e.g. &order_number=1234567890).',
+                'inserted' => 0,
+                'updated' => 0,
+                'failed' => 0,
+                'total' => 0,
+                'results' => [],
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
 
         echo json_encode(
             $this->applyRefreshOrderFromVendor($orderNumber, $updateStatus),
