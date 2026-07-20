@@ -44,6 +44,9 @@ class CustomerController {
         if (isset($_GET['search']) && !empty(trim($_GET['search']))) {
             $filters['search'] = trim($_GET['search']);
         }
+        if (isset($_GET['order_number']) && !empty(trim($_GET['order_number']))) {
+            $filters['order_number'] = trim($_GET['order_number']);
+        }
         if (isset($_GET['state']) && !empty(trim($_GET['state']))) {
             $filters['state'] = trim($_GET['state']);
         }
@@ -59,9 +62,8 @@ class CustomerController {
             $warehouseName = $wh['address_title'] ?? ('Warehouse #' . $warehouseId);
         }
 
-        $search = isset($filters['search']) ? trim((string)$filters['search']) : '';
-        $customers = $customerModel->getAllCustomersWithPurchaseStats($search, $limit, $offset);
-        $total_records = $customerModel->countAllCustomersWithPurchaseStats($search);
+        $customers = $customerModel->getAllCustomersWithPurchaseStats($filters, $limit, $offset);
+        $total_records = $customerModel->countAllCustomersWithPurchaseStats($filters);
 
         $flash = $_SESSION['customer_pos_list_flash'] ?? null;
         unset($_SESSION['customer_pos_list_flash']);

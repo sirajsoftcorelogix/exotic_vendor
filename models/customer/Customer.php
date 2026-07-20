@@ -576,19 +576,48 @@ class Customer
         return $this->upsertPosCustomerDetailsFromPost($customerId, $post);
     }
 
-    /** All customers with purchase totals across all orders (customer list). */
-    public function getAllCustomersWithPurchaseStats(string $search, int $limit, int $offset): array
+    /**
+     * Build WHERE clauses for customer list filters (name/email/phone, order number).
+     *
+     * @return array{where:string,params:array<int,mixed>,types:string}
+     */
+    private function buildCustomerListFilterClauses(array $filters): array
     {
-        $search = trim($search);
+        $where = [];
         $params = [];
         $types = '';
-        $searchSql = '';
+
+        $search = trim((string)($filters['search'] ?? ''));
         if ($search !== '') {
             $term = '%' . $search . '%';
-            $searchSql = ' WHERE (vc.name LIKE ? OR vc.email LIKE ? OR vc.phone LIKE ?) ';
-            $params = [$term, $term, $term];
-            $types = 'sss';
+            $where[] = '(vc.name LIKE ? OR vc.email LIKE ? OR vc.phone LIKE ?)';
+            array_push($params, $term, $term, $term);
+            $types .= 'sss';
         }
+
+        $orderNumber = trim((string)($filters['order_number'] ?? ''));
+        if ($orderNumber !== '') {
+            $where[] = 'EXISTS (
+                SELECT 1 FROM vp_orders o_f
+                WHERE o_f.customer_id = vc.id AND o_f.order_number LIKE ?
+            )';
+            $params[] = '%' . $orderNumber . '%';
+            $types .= 's';
+        }
+
+        return [
+            'where' => !empty($where) ? ' WHERE ' . implode(' AND ', $where) : '',
+            'params' => $params,
+            'types' => $types,
+        ];
+    }
+
+    /** All customers with purchase totals across all orders (customer list). */
+    public function getAllCustomersWithPurchaseStats(array $filters, int $limit, int $offset): array
+    {
+        $filterClauses = $this->buildCustomerListFilterClauses($filters);
+        $params = $filterClauses['params'];
+        $types = $filterClauses['types'];
 
         $sql = "SELECT 
                     vc.id,
@@ -601,7 +630,7 @@ class Customer
                     COUNT(DISTINCT o.order_number) AS order_count
                 FROM vp_customers vc
                 LEFT JOIN vp_orders o ON o.customer_id = vc.id
-                $searchSql
+                {$filterClauses['where']}
                 GROUP BY vc.id, vc.name, vc.email, vc.phone
                 ORDER BY vc.id DESC
                 LIMIT ? OFFSET ?";
@@ -623,25 +652,15 @@ class Customer
         return $rows;
     }
 
-    public function countAllCustomersWithPurchaseStats(string $search): int
+    public function countAllCustomersWithPurchaseStats(array $filters): int
     {
-        $search = trim($search);
-        $params = [];
-        $types = '';
-        $searchSql = '';
-        if ($search !== '') {
-            $term = '%' . $search . '%';
-            $searchSql = ' WHERE (vc.name LIKE ? OR vc.email LIKE ? OR vc.phone LIKE ?) ';
-            $params = [$term, $term, $term];
-            $types = 'sss';
-        }
+        $filterClauses = $this->buildCustomerListFilterClauses($filters);
+        $params = $filterClauses['params'];
+        $types = $filterClauses['types'];
 
-        $sql = "SELECT COUNT(*) AS c FROM (
-                    SELECT vc.id
-                    FROM vp_customers vc
-                    $searchSql
-                    GROUP BY vc.id
-                ) t";
+        $sql = "SELECT COUNT(*) AS c
+                FROM vp_customers vc
+                {$filterClauses['where']}";
 
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
