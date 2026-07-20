@@ -569,7 +569,7 @@ class POSRegisterController
      * Handle E-way bill and IRN generation for POS checkout
      * Calls DomesticEwbIrnService after invoice is created
      */
-    private function handlePosEwbGeneration(mysqli $conn, int $invoiceId, array $payload): void
+    private function handlePosEwbGeneration(mysqli $conn, int $invoiceId, array $payload, int $orderNumber): void
     {
         try {
             echo "POS EWB: Starting E-way bill generation for invoice $invoiceId\n";
@@ -592,11 +592,11 @@ class POSRegisterController
 
             // Get invoice items
             $itemsStmt = $conn->prepare("
-                SELECT ii.id, ii.vp_products_id, ii.hsn, ii.item_name, ii.quantity, ii.unit, ii.unit_price,
+                SELECT ii.id, ii.product_id, ii.hsn, ii.item_name, ii.quantity, ii.unit_price,
                        ii.tax_rate, ii.tax_amount, vp.item_code, vp.sku
-                FROM vp_invoices_items ii
-                LEFT JOIN vp_products vp ON ii.vp_products_id = vp.id
-                WHERE ii.vp_invoices_id = ?
+                FROM vp_invoice_items ii
+                LEFT JOIN vp_products vp ON ii.product_id = vp.id
+                WHERE ii.invoice_id = ?
             ");
             if (!$itemsStmt) {
                 error_log("POS EWB: Failed to prepare items query: " . $conn->error);
@@ -617,13 +617,13 @@ class POSRegisterController
             }
 
             // Get customer details
-            $custId = (int)($invoice['vp_customers_id'] ?? 0);
-            $custStmt = $conn->prepare("SELECT * FROM vp_customers WHERE id = ?");
+            $custId = (int)($invoice['customer_id'] ?? 0);
+            $custStmt = $conn->prepare("SELECT * FROM vp_order_info WHERE customer_id = ? AND order_number = ?");
             if (!$custStmt) {
                 error_log("POS EWB: Failed to prepare customer query: " . $conn->error);
                 return;
-            }
-            $custStmt->bind_param("i", $custId);
+            }            
+            $custStmt->bind_param("ii", $custId, $orderNumber);
             $custStmt->execute();
             $customer = $custStmt->get_result()->fetch_assoc();
             $custStmt->close();
@@ -714,7 +714,7 @@ class POSRegisterController
                 error_log("POS EWB: Missing Alankit API credentials in config.php");
                 return;
             }
-
+            echo "POS EWB: Alankit API credentials loaded successfully.\n";
             $ewbService = new DomesticEwbIrnService($conn, $alankitConfig);
             $result = $ewbService->generateIrnAndEwb($invoiceId, $invoice, $items, $customer, $firm, $ewbData);
 
@@ -4872,7 +4872,7 @@ class POSRegisterController
         
         // Generate IRN and E-way bill if requested
         if (!empty($payload['generate_ewb']) && $payload['generate_ewb'] === '1' && !empty($invoiceMeta['invoice_id'])) {
-            $this->handlePosEwbGeneration($conn, (int)$invoiceMeta['invoice_id'], $payload);
+            $this->handlePosEwbGeneration($conn, (int)$invoiceMeta['invoice_id'], $payload, $orderNumber);
         }
         
         $fulfillmentStatusMeta = $this->syncPosCheckoutOrderFulfillmentStatus(

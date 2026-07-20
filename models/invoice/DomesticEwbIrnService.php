@@ -60,7 +60,7 @@ class DomesticEwbIrnService {
                 error_log("Alankit IRN: " . $this->lastError);
                 return ['status' => false, 'message' => $this->lastError];
             }
-            
+            echo "Domestic EWB: Alankit API credentials loaded successfully.\n";
             $alankitClient = new AlankitIrnNew(
                 $this->alankitConfig['username'],
                 $this->alankitConfig['password'],
@@ -81,6 +81,7 @@ class DomesticEwbIrnService {
             
             // Step 1: Prepare IRN payload from invoice data (includes EwbDtls if vehicle data provided)
             $irnPayload = $this->prepareIrnPayload($invoice, $items, $customer, $firm, $ewbData);
+            print_r($irnPayload); // Debug: Show prepared payload
             error_log("Domestic EWB: Prepared IRN payload for invoice #$invoiceId");
             
             // Step 2: Authenticate and get access token
@@ -92,7 +93,7 @@ class DomesticEwbIrnService {
                 $this->lastError = $result['errors'][0];
                 return $result;
             }
-            
+            echo "Domestic EWB: Authentication successful, received access token\n";
             $accessToken = $authResponse['token'];
             $encryptedSek = $authResponse['sek'] ?? null;
             
@@ -349,7 +350,7 @@ class DomesticEwbIrnService {
         }
         $payloadJson = $payload ? json_encode($payload) : null;
         $responseJson = $response ? json_encode($response) : null;
-        $stmt->bind_param("sssssl", $status, $error, $payloadJson, $responseJson, $irn, $invoiceId);
+        $stmt->bind_param("sssssi", $status, $error, $payloadJson, $responseJson, $irn, $invoiceId);
         return $stmt->execute();
     }
     
