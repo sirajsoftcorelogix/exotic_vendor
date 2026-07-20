@@ -486,6 +486,26 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         Processing in small batches to avoid timeouts. Please keep this page open.
       </p>
     </div>
+    <div class="mt-6 flex flex-wrap items-center justify-end gap-2">
+      <button
+        type="button"
+        id="stockReportExportStopBtn"
+        class="hidden inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+        Stop
+      </button>
+      <button
+        type="button"
+        id="stockReportExportResumeBtn"
+        class="hidden inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+        Resume
+      </button>
+      <button
+        type="button"
+        id="stockReportExportStartBtn"
+        class="inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+        Start export
+      </button>
+    </div>
   </div>
 </div>
 
@@ -554,6 +574,12 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
   let stockReportOtpTimer = null;
   let stockReportOtpRemaining = 0;
   let stockReportPendingRefreshIds = [];
+  let stockReportExportPaused = false;
+  let stockReportExportRunning = false;
+  let stockReportExportAbortController = null;
+  let stockReportExportCurrentId = null;
+  let stockReportExportSnapshot = null;
+  let stockReportExportLastProgress = null;
 
   function chunkStockReportIds(ids, size) {
     const chunks = [];
@@ -932,11 +958,32 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     const statsEl = document.getElementById('stockReportExportProgressStats');
     const hintEl = document.getElementById('stockReportExportProgressHint');
     const iconEl = document.getElementById('stockReportExportProgressIcon');
+    const titleEl = document.getElementById('stockReportExportProgressTitle');
+
+    if (titleEl) {
+      if (state.done) {
+        titleEl.textContent = 'Export complete';
+      } else if (state.paused) {
+        titleEl.textContent = 'Export paused';
+      } else if (state.idle) {
+        titleEl.textContent = 'Export stock report';
+      } else {
+        titleEl.textContent = 'Exporting stock report';
+      }
+    }
 
     if (textEl) {
-      textEl.textContent = state.done
-        ? 'Export complete. Download starting…'
-        : ('Prepared ' + processed + ' of ' + total + ' row(s)');
+      if (state.paused) {
+        textEl.textContent = 'Export paused — ' + processed + ' of ' + total + ' row(s) prepared';
+      } else if (state.done) {
+        textEl.textContent = 'Export complete. Download starting…';
+      } else if (state.idle) {
+        textEl.textContent = total > 0
+          ? ('Ready to export ' + total + ' row(s) with current filters')
+          : 'Ready to export with current filters';
+      } else {
+        textEl.textContent = 'Prepared ' + processed + ' of ' + total + ' row(s)';
+      }
     }
     if (barEl) barEl.style.width = percent + '%';
     if (batchEl) {
@@ -949,11 +996,166 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     if (iconEl) {
       iconEl.classList.toggle('fa-spin', !!state.spinning);
       iconEl.classList.toggle('fa-check', !state.spinning && state.done);
-      iconEl.classList.toggle('fa-file-excel', !!state.spinning || !state.done);
+      iconEl.classList.toggle('fa-pause', !!state.paused);
+      iconEl.classList.toggle('fa-file-excel', !state.done && !state.paused);
+    }
+
+    if (state.total >= 0 || state.idle || state.paused) {
+      stockReportExportLastProgress = {
+        total,
+        processed,
+        batchNo,
+        batchTotal,
+        hint: state.hint || '',
+      };
+    }
+
+    setStockReportExportControls(state);
+  }
+
+  function setStockReportExportControls(state) {
+    const startBtn = document.getElementById('stockReportExportStartBtn');
+    const stopBtn = document.getElementById('stockReportExportStopBtn');
+    const resumeBtn = document.getElementById('stockReportExportResumeBtn');
+    const mode = state.controlsMode
+      || (state.done ? 'done' : (state.paused ? 'paused' : (state.idle ? 'idle' : 'running')));
+
+    if (startBtn) {
+      startBtn.classList.toggle('hidden', mode !== 'idle' && mode !== 'paused');
+      startBtn.disabled = !!state.busy;
+      startBtn.textContent = mode === 'paused' ? 'Start over' : 'Start export';
+    }
+    if (stopBtn) {
+      stopBtn.classList.toggle('hidden', mode !== 'running');
+      stopBtn.disabled = !!state.busy;
+    }
+    if (resumeBtn) {
+      resumeBtn.classList.toggle('hidden', mode !== 'paused');
+      resumeBtn.disabled = !!state.busy || !stockReportExportSnapshot;
     }
   }
 
-  async function runStockReportExportBatched() {
+  function resetStockReportExportState() {
+    stockReportExportPaused = false;
+    stockReportExportRunning = false;
+    stockReportExportAbortController = null;
+    stockReportExportCurrentId = null;
+    stockReportExportSnapshot = null;
+    stockReportExportLastProgress = null;
+    setStockReportExportControls({ controlsMode: 'idle', idle: true, total: STOCK_REPORT_TOTAL_ROWS, processed: 0, batchNo: 0, batchTotal: 0 });
+  }
+
+  async function cleanupStockReportExportOnServer(exportId) {
+    if (!exportId) return;
+    try {
+      await fetch('index.php?page=pos_register&action=stock-report-export-cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ export_id: exportId }),
+      });
+    } catch (cleanupErr) {
+      /* ignore cleanup errors */
+    }
+  }
+
+  function openStockReportExportModal() {
+    showStockReportExportProgressModal();
+
+    const hasPausedExport = stockReportExportSnapshot && stockReportExportSnapshot.exportId;
+    const progress = stockReportExportLastProgress || {
+      total: STOCK_REPORT_TOTAL_ROWS,
+      processed: hasPausedExport ? (stockReportExportSnapshot.processedRows || 0) : 0,
+      batchNo: hasPausedExport ? (stockReportExportSnapshot.batchNo || 0) : 0,
+      batchTotal: hasPausedExport ? (stockReportExportSnapshot.totalBatches || 0) : 0,
+      hint: hasPausedExport
+        ? 'Export paused. Resume to continue or start over for a fresh export.'
+        : 'Click Start export to begin. You can stop and resume at any time.',
+    };
+
+    updateStockReportExportProgress({
+      total: progress.total || STOCK_REPORT_TOTAL_ROWS,
+      processed: progress.processed || 0,
+      batchNo: progress.batchNo || 0,
+      batchTotal: progress.batchTotal || 0,
+      spinning: false,
+      done: false,
+      idle: !hasPausedExport,
+      paused: !!hasPausedExport,
+      hint: progress.hint,
+      controlsMode: hasPausedExport ? 'paused' : 'idle',
+    });
+  }
+
+  function stopStockReportExport() {
+    if (!stockReportExportRunning || stockReportExportPaused) return;
+    stockReportExportPaused = true;
+    stockReportExportRunning = false;
+
+    if (stockReportExportAbortController) {
+      stockReportExportAbortController.abort();
+    }
+
+    const exportBtn = document.getElementById('stockReportExportBtn');
+    const exportBtnLabel = exportBtn ? exportBtn.querySelector('span') : null;
+    if (exportBtnLabel) exportBtnLabel.textContent = 'Export to Excel';
+
+    if (!stockReportExportCurrentId) {
+      stockReportExportPaused = false;
+      setStockReportBulkUiLocked(false);
+      updateStockReportExportProgress({
+        total: STOCK_REPORT_TOTAL_ROWS,
+        processed: 0,
+        batchNo: 0,
+        batchTotal: 0,
+        spinning: false,
+        done: false,
+        idle: true,
+        hint: 'Export stopped before it started. Click Start export to try again.',
+        controlsMode: 'idle',
+      });
+      return;
+    }
+
+    const progress = stockReportExportLastProgress || {};
+    stockReportExportSnapshot = {
+      exportId: stockReportExportCurrentId,
+      totalRows: Number(progress.total || STOCK_REPORT_TOTAL_ROWS),
+      totalBatches: Number(progress.batchTotal || 0),
+      processedRows: Number(progress.processed || 0),
+      batchNo: Number(progress.batchNo || 0),
+    };
+
+    setStockReportBulkUiLocked(false);
+
+    updateStockReportExportProgress({
+      total: Number(progress.total || STOCK_REPORT_TOTAL_ROWS),
+      processed: Number(progress.processed || 0),
+      batchNo: Number(progress.batchNo || 0),
+      batchTotal: Number(progress.batchTotal || 0),
+      spinning: false,
+      done: false,
+      paused: true,
+      hint: 'Export paused. Click Resume to continue or Start over to begin again.',
+      controlsMode: 'paused',
+    });
+  }
+
+  async function startStockReportExport() {
+    if (stockReportExportRunning) return;
+
+    const previousExportId = stockReportExportCurrentId
+      || (stockReportExportSnapshot && stockReportExportSnapshot.exportId)
+      || null;
+
+    stockReportExportPaused = false;
+    stockReportExportRunning = true;
+    stockReportExportSnapshot = null;
+
+    if (previousExportId) {
+      await cleanupStockReportExportOnServer(previousExportId);
+    }
+    stockReportExportCurrentId = null;
+
     showStockReportExportProgressModal();
     setStockReportBulkUiLocked(true);
 
@@ -969,116 +1171,220 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
       spinning: true,
       done: false,
       hint: 'Initializing export with current filters…',
+      controlsMode: 'running',
     });
 
     try {
+      stockReportExportAbortController = new AbortController();
       const initRes = await fetch('index.php?page=pos_register&action=stock-report-export-init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify(STOCK_REPORT_FILTERS),
+        signal: stockReportExportAbortController.signal,
       });
+      if (stockReportExportPaused) return;
+
       const initData = await initRes.json();
       if (!initData || !initData.success) {
         throw new Error((initData && initData.message) ? initData.message : 'Could not start export.');
       }
 
       const exportId = initData.export_id;
-      const totalRows = Number(initData.total_rows || 0);
-      const totalBatches = Number(initData.total_batches || 0);
-      let processedRows = 0;
-      let batchNo = 0;
-      let done = false;
+      stockReportExportCurrentId = exportId;
+      stockReportExportSnapshot = {
+        exportId,
+        totalRows: Number(initData.total_rows || 0),
+        totalBatches: Number(initData.total_batches || 0),
+        processedRows: 0,
+        batchNo: 0,
+      };
 
-      while (!done) {
-        batchNo++;
-        updateStockReportExportProgress({
-          total: totalRows,
-          processed: processedRows,
-          batchNo,
-          batchTotal: totalBatches,
-          spinning: true,
-          done: false,
-          hint: 'Fetching batch ' + batchNo + ' of ' + totalBatches + '…',
-        });
-
-        const batchRes = await fetch('index.php?page=pos_register&action=stock-report-export-batch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ export_id: exportId }),
-        });
-        const batchData = await batchRes.json();
-        if (!batchData || !batchData.success) {
-          throw new Error((batchData && batchData.message) ? batchData.message : 'Export batch failed.');
-        }
-
-        processedRows = Number(batchData.processed_rows || processedRows);
-        done = !!batchData.done;
-
-        updateStockReportExportProgress({
-          total: totalRows,
-          processed: processedRows,
-          batchNo: Number(batchData.batch_no || batchNo),
-          batchTotal: totalBatches,
-          spinning: !done,
-          done,
-          hint: done ? 'Building Excel file…' : ('Completed batch ' + batchNo + '. Starting next batch…'),
-        });
-      }
-
-      updateStockReportExportProgress({
-        total: totalRows,
-        processed: processedRows,
-        batchNo: totalBatches,
-        batchTotal: totalBatches,
-        spinning: false,
-        done: true,
-        hint: 'Download starting…',
-      });
-
-      const finishRes = await fetch('index.php?page=pos_register&action=stock-report-export-finish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json' },
-        body: JSON.stringify({ export_id: exportId }),
-      });
-
-      const contentType = finishRes.headers.get('Content-Type') || '';
-      if (!finishRes.ok || contentType.indexOf('application/json') >= 0) {
-        let errMsg = 'Could not download Excel file.';
-        try {
-          const errData = await finishRes.json();
-          if (errData && errData.message) errMsg = errData.message;
-        } catch (parseErr) {
-          /* ignore */
-        }
-        throw new Error(errMsg);
-      }
-
-      const blob = await finishRes.blob();
-      const disposition = finishRes.headers.get('Content-Disposition') || '';
-      let filename = 'stock_report.xlsx';
-      const match = disposition.match(/filename="?([^";]+)"?/i);
-      if (match && match[1]) filename = match[1];
-
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-
-      window.setTimeout(() => {
-        hideStockReportExportProgressModal();
-        setStockReportBulkUiLocked(false);
-        if (exportBtnLabel) exportBtnLabel.textContent = 'Export to Excel';
-      }, 800);
+      await processStockReportExportBatches();
     } catch (err) {
+      if (stockReportExportPaused || (err && err.name === 'AbortError')) {
+        return;
+      }
       hideStockReportExportProgressModal();
       window.alert(err && err.message ? err.message : 'Export failed.');
       setStockReportBulkUiLocked(false);
       if (exportBtnLabel) exportBtnLabel.textContent = 'Export to Excel';
+      resetStockReportExportState();
+    } finally {
+      stockReportExportRunning = false;
     }
+  }
+
+  async function resumeStockReportExport() {
+    if (stockReportExportRunning || !stockReportExportSnapshot || !stockReportExportSnapshot.exportId) return;
+
+    stockReportExportPaused = false;
+    stockReportExportRunning = true;
+    stockReportExportCurrentId = stockReportExportSnapshot.exportId;
+
+    setStockReportBulkUiLocked(true);
+
+    const exportBtn = document.getElementById('stockReportExportBtn');
+    const exportBtnLabel = exportBtn ? exportBtn.querySelector('span') : null;
+    if (exportBtnLabel) exportBtnLabel.textContent = 'Exporting…';
+
+    const snapshot = stockReportExportSnapshot;
+    updateStockReportExportProgress({
+      total: snapshot.totalRows,
+      processed: snapshot.processedRows,
+      batchNo: snapshot.batchNo,
+      batchTotal: snapshot.totalBatches,
+      spinning: true,
+      done: false,
+      hint: 'Resuming export from batch ' + (snapshot.batchNo + 1) + '…',
+      controlsMode: 'running',
+    });
+
+    try {
+      await processStockReportExportBatches();
+    } catch (err) {
+      if (stockReportExportPaused || (err && err.name === 'AbortError')) {
+        return;
+      }
+      hideStockReportExportProgressModal();
+      window.alert(err && err.message ? err.message : 'Export failed.');
+      setStockReportBulkUiLocked(false);
+      if (exportBtnLabel) exportBtnLabel.textContent = 'Export to Excel';
+      resetStockReportExportState();
+    } finally {
+      stockReportExportRunning = false;
+    }
+  }
+
+  async function processStockReportExportBatches() {
+    const snapshot = stockReportExportSnapshot;
+    if (!snapshot || !snapshot.exportId) {
+      throw new Error('Export session not found.');
+    }
+
+    const exportId = snapshot.exportId;
+    let totalRows = Number(snapshot.totalRows || 0);
+    let totalBatches = Number(snapshot.totalBatches || 0);
+    let processedRows = Number(snapshot.processedRows || 0);
+    let batchNo = Number(snapshot.batchNo || 0);
+    let done = false;
+
+    while (!done) {
+      if (stockReportExportPaused) return;
+
+      batchNo++;
+      updateStockReportExportProgress({
+        total: totalRows,
+        processed: processedRows,
+        batchNo,
+        batchTotal: totalBatches,
+        spinning: true,
+        done: false,
+        hint: 'Fetching batch ' + batchNo + ' of ' + totalBatches + '…',
+        controlsMode: 'running',
+      });
+
+      stockReportExportAbortController = new AbortController();
+      const batchRes = await fetch('index.php?page=pos_register&action=stock-report-export-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ export_id: exportId }),
+        signal: stockReportExportAbortController.signal,
+      });
+      if (stockReportExportPaused) return;
+
+      const batchData = await batchRes.json();
+      if (!batchData || !batchData.success) {
+        throw new Error((batchData && batchData.message) ? batchData.message : 'Export batch failed.');
+      }
+
+      processedRows = Number(batchData.processed_rows || processedRows);
+      batchNo = Number(batchData.batch_no || batchNo);
+      done = !!batchData.done;
+
+      stockReportExportSnapshot = {
+        exportId,
+        totalRows,
+        totalBatches,
+        processedRows,
+        batchNo,
+      };
+
+      updateStockReportExportProgress({
+        total: totalRows,
+        processed: processedRows,
+        batchNo,
+        batchTotal: totalBatches,
+        spinning: !done,
+        done,
+        hint: done ? 'Building Excel file…' : ('Completed batch ' + batchNo + '. Starting next batch…'),
+        controlsMode: 'running',
+      });
+    }
+
+    if (stockReportExportPaused) return;
+
+    updateStockReportExportProgress({
+      total: totalRows,
+      processed: processedRows,
+      batchNo: totalBatches,
+      batchTotal: totalBatches,
+      spinning: false,
+      done: true,
+      hint: 'Download starting…',
+      controlsMode: 'done',
+    });
+
+    await downloadStockReportExportFile(exportId);
+  }
+
+  async function downloadStockReportExportFile(exportId) {
+    stockReportExportAbortController = new AbortController();
+    const finishRes = await fetch('index.php?page=pos_register&action=stock-report-export-finish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json' },
+      body: JSON.stringify({ export_id: exportId }),
+      signal: stockReportExportAbortController.signal,
+    });
+    if (stockReportExportPaused) return;
+
+    const contentType = finishRes.headers.get('Content-Type') || '';
+    if (!finishRes.ok || contentType.indexOf('application/json') >= 0) {
+      let errMsg = 'Could not download Excel file.';
+      try {
+        const errData = await finishRes.json();
+        if (errData && errData.message) errMsg = errData.message;
+      } catch (parseErr) {
+        /* ignore */
+      }
+      throw new Error(errMsg);
+    }
+
+    const blob = await finishRes.blob();
+    if (stockReportExportPaused) return;
+
+    const disposition = finishRes.headers.get('Content-Disposition') || '';
+    let filename = 'stock_report.xlsx';
+    const match = disposition.match(/filename="?([^";]+)"?/i);
+    if (match && match[1]) filename = match[1];
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+
+    const exportBtn = document.getElementById('stockReportExportBtn');
+    const exportBtnLabel = exportBtn ? exportBtn.querySelector('span') : null;
+
+    window.setTimeout(() => {
+      hideStockReportExportProgressModal();
+      setStockReportBulkUiLocked(false);
+      if (exportBtnLabel) exportBtnLabel.textContent = 'Export to Excel';
+      resetStockReportExportState();
+    }, 800);
   }
 
   async function verifyStockReportActionOtp(otp) {
@@ -1287,7 +1593,28 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     if (exportBtn) {
       exportBtn.addEventListener('click', () => {
         if (STOCK_REPORT_TOTAL_ROWS <= 0) return;
-        runStockReportExportBatched();
+        openStockReportExportModal();
+      });
+    }
+
+    const exportStartBtn = document.getElementById('stockReportExportStartBtn');
+    if (exportStartBtn) {
+      exportStartBtn.addEventListener('click', () => {
+        startStockReportExport();
+      });
+    }
+
+    const exportStopBtn = document.getElementById('stockReportExportStopBtn');
+    if (exportStopBtn) {
+      exportStopBtn.addEventListener('click', () => {
+        stopStockReportExport();
+      });
+    }
+
+    const exportResumeBtn = document.getElementById('stockReportExportResumeBtn');
+    if (exportResumeBtn) {
+      exportResumeBtn.addEventListener('click', () => {
+        resumeStockReportExport();
       });
     }
 

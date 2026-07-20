@@ -1650,6 +1650,40 @@ class POSRegisterController
         exit;
     }
 
+    /**
+     * Cancel an in-progress stock report export and remove temp files from session.
+     */
+    public function stockReportExportCancel(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $exportId = trim((string) ($payload['export_id'] ?? ''));
+        if ($exportId === '') {
+            echo json_encode(['success' => true, 'message' => 'Export cancelled.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $job = $this->loadStockReportExportJob($exportId);
+        if ($job) {
+            $this->cleanupStockReportExportJob($exportId);
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Export cancelled.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
     /** @param array<string, mixed> $payload @return array<string, mixed> */
     private function resolveStockReportFiltersFromPayload(array $payload): array
     {
