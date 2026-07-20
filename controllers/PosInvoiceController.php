@@ -1713,6 +1713,16 @@ class PosInvoiceController
         int $index,
         array $lineItemsMeta
     ): array {
+        $pdfDiscIncl = (float)($item['pdf_disc_unit_incl'] ?? 0);
+        if ($pdfDiscIncl > 0) {
+            $pdfListIncl = (float)($item['pdf_list_unit_incl'] ?? 0);
+
+            return [
+                'list' => round($pdfListIncl > 0 ? $pdfListIncl : $pdfDiscIncl, 2),
+                'disc' => round($pdfDiscIncl, 2),
+            ];
+        }
+
         $meta = $this->posInvoiceLineMetaForItem($item, $index, $lineItemsMeta);
         $taxRate = (float)($item['tax_rate'] ?? 0);
         $qtyInt = $this->posInvoiceFormatQty($item['quantity'] ?? 1);
@@ -2079,12 +2089,37 @@ class PosInvoiceController
 
     private function generateInvoiceHtml($invoice, $items, $type = '')
     {
-        global $commanModel, $invoiceModel, $conn;
+        global $commanModel, $invoiceModel, $conn, $ordersModel;
 
         $orderNumberForRepair = '';
         if (!empty($items[0]['order_number'])) {
             $orderNumberForRepair = trim((string)$items[0]['order_number']);
         }
+        $orderLines = [];
+        $orderInfo = null;
+        $pricingMapForPdf = [];
+        if ($orderNumberForRepair !== '' && isset($ordersModel)) {
+            $orderLines = $ordersModel->getOrderByOrderNumber($orderNumberForRepair);
+            $orderInfo = $ordersModel->getAddressInfoByOrderNumber($orderNumberForRepair);
+            if ($orderLines !== []) {
+                require_once __DIR__ . '/../helpers/invoice/pos_order_pricing.php';
+                require_once __DIR__ . '/../helpers/invoice/pos_invoice_pdf_items.php';
+                $pricingMapForPdf = pos_order_build_line_display_pricing_map(
+                    $orderLines,
+                    is_array($invoice) ? $invoice : null,
+                    is_array($orderInfo) ? $orderInfo : null,
+                    $commanModel
+                );
+                $items = pos_invoice_expand_items_with_addons(
+                    $items,
+                    $orderLines,
+                    is_array($invoice) ? $invoice : null,
+                    is_array($orderInfo) ? $orderInfo : null,
+                    $commanModel
+                );
+            }
+        }
+
         $invoiceId = (int)($invoice['id'] ?? 0);
         if ($invoiceId > 0 && $orderNumberForRepair !== '') {
             $notesEmpty = trim((string)($invoice['notes'] ?? '')) === '';
@@ -2125,7 +2160,14 @@ class PosInvoiceController
         $sumListLineTotals = 0.0;
         $lineItemsMeta = $this->parsePosInvoiceLineItemsMeta($invoice['notes'] ?? null);
         $posDiscountMeta = $this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null);
-        if (!empty($posDiscountMeta)) {
+        if ($pricingMapForPdf !== []) {
+            $posDiscountMeta = pos_invoice_apply_pricing_aggregate_to_pos_meta(
+                is_array($posDiscountMeta) ? $posDiscountMeta : [],
+                $pricingMapForPdf,
+                is_array($orderInfo) ? $orderInfo : null
+            );
+        }
+        if (!empty($posDiscountMeta) && $pricingMapForPdf === []) {
             $this->applyPosOrderLevelDiscountToLineMeta($lineItemsMeta, $items, $posDiscountMeta);
         }
         $usePosItemLayout = !empty($lineItemsMeta) || !empty($invoice['pos_flag']);
