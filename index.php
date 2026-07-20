@@ -267,6 +267,12 @@ switch ($page) {
             case 'import_orders':
                 $controller->importOrders();
                 break;
+            case 'refresh_order_preview':
+                $controller->refreshOrderPreviewAjax();
+                break;
+            case 'refresh_order_apply':
+                $controller->refreshOrderApplyAjax();
+                break;
             case 'update_status':
                 $controller->updateStatus();
                 break;

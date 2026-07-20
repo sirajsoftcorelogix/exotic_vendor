@@ -53,6 +53,56 @@ class Order
     }
 
     /**
+     * Normalize Exotic vendor order/fetch cart line `addons` for vp_orders.addons (JSON text).
+     *
+     * API shape: object map of addon label => price in INR, e.g. {"Add on Frame": 12995}
+     *
+     * @param mixed $raw
+     */
+    public static function normalizeVendorOrderLineAddons($raw): ?string
+    {
+        if ($raw === null || $raw === '' || $raw === [] || $raw === 0 || $raw === '0') {
+            return null;
+        }
+
+        if (is_string($raw)) {
+            $trimmed = trim($raw);
+            if ($trimmed === '' || $trimmed === '0') {
+                return null;
+            }
+            $decoded = json_decode($trimmed, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                return self::normalizeVendorOrderLineAddons($decoded);
+            }
+
+            return $trimmed;
+        }
+
+        if (!is_array($raw)) {
+            return null;
+        }
+
+        $out = [];
+        foreach ($raw as $name => $price) {
+            $label = trim((string) $name);
+            if ($label === '') {
+                continue;
+            }
+            if (is_numeric($price)) {
+                $out[$label] = (float) $price;
+            } elseif ($price !== null && $price !== '') {
+                $out[$label] = $price;
+            }
+        }
+
+        if ($out === []) {
+            return null;
+        }
+
+        return json_encode($out, JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
      * Sort order list: primary sort column, then order_number (groups line items), then id.
      * No extra subquery/join — uses indexed vp_orders columns only.
      */
@@ -601,6 +651,7 @@ class Order
             'marketplace_vendor',
             'quantity',
             'options',
+            'addons',
             'gst',
             'hsn',
             'local_stock',
@@ -1215,7 +1266,7 @@ class Order
         $sql = "UPDATE vp_orders SET 
                 shipping_country = ?, title = ?, description = ?, size = ?, color = ?, 
                 groupname = ?, subcategories = ?, currency = ?, itemprice = ?, finalprice = ?, 
-                image = ?, marketplace_vendor = ?, quantity = ?, options = ?, gst = ?, hsn = ?, 
+                image = ?, marketplace_vendor = ?, quantity = ?, options = ?, addons = ?, gst = ?, hsn = ?, 
                 local_stock = ?, cost_price = ?, location = ?, order_date = ?, processed_time = ?,
                 numsold = ?, product_weight = ?, product_weight_unit = ?,
                 prod_height = ?, prod_width = ?, prod_length = ?, length_unit = ?,
@@ -1246,6 +1297,7 @@ class Order
             $data['marketplace_vendor'],
             $data['quantity'],
             json_encode($data['options']),
+            $data['addons'] ?? null,
             $data['gst'],
             $data['hsn'],
             $data['local_stock'],
@@ -1307,12 +1359,123 @@ class Order
         //echo $ref . "\n";
         //}
         //print_r($stmt);
-        //comment the below line after execution on 09-06-2024
-        // if ($stmt->execute()) {
-        //     return ['success' => true, 'message' => 'Order updated successfully.', 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'item_code' => $data['item_code']];
-        // } else {
-        //     return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
-        // }
+        if (!$stmt->execute()) {
+            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        }
+        $affected = $stmt->affected_rows;
+        $stmt->close();
+
+        return [
+            'success' => true,
+            'message' => 'Order updated successfully.',
+            'affected_rows' => $affected,
+            'order_number' => $data['order_number'],
+            'item_code' => $data['item_code'],
+        ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function getOrderLinesByOrderNumber(string $orderNumber): array
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return [];
+        }
+        $sql = 'SELECT id, order_number, item_code, sku, title, quantity, status, addons, size, color
+                FROM vp_orders WHERE order_number = ? ORDER BY id ASC';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        return is_array($rows) ? $rows : [];
+    }
+
+    public function orderLineExists(string $orderNumber, string $itemCode, string $sku): bool
+    {
+        $checkSql = 'SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? AND sku = ? LIMIT 1';
+        $checkStmt = $this->db->prepare($checkSql);
+        if (!$checkStmt) {
+            return false;
+        }
+        $checkStmt->bind_param('sss', $orderNumber, $itemCode, $sku);
+        $checkStmt->execute();
+        $checkStmt->bind_result($count);
+        $checkStmt->fetch();
+        $checkStmt->close();
+
+        return (int)($count ?? 0) > 0;
+    }
+
+    /**
+     * @return array<string, string> slug => title
+     */
+    public function orderStatusSlugTitleMap(): array
+    {
+        $map = [];
+        $res = $this->db->query('SELECT slug, title FROM vp_order_status WHERE slug IS NOT NULL AND slug != ""');
+        if (!$res) {
+            return $map;
+        }
+        while ($row = $res->fetch_assoc()) {
+            $slug = trim((string)($row['slug'] ?? ''));
+            if ($slug !== '') {
+                $map[$slug] = trim((string)($row['title'] ?? $slug));
+            }
+        }
+        $res->free();
+
+        return $map;
+    }
+
+    /**
+     * Insert new line or update existing row from vendor refresh.
+     */
+    public function upsertRefreshedOrderLine(array $data, bool $updateStatus): array
+    {
+        $orderNumber = trim((string)($data['order_number'] ?? ''));
+        $itemCode = trim((string)($data['item_code'] ?? ''));
+        $sku = trim((string)($data['sku'] ?? ''));
+
+        if ($orderNumber === '' || $itemCode === '') {
+            return ['success' => false, 'message' => 'Order number and item code are required.', 'action' => 'none'];
+        }
+
+        $exists = $this->orderLineExists($orderNumber, $itemCode, $sku);
+        if ($exists && !$updateStatus) {
+            $stmt = $this->db->prepare(
+                'SELECT status FROM vp_orders WHERE order_number = ? AND item_code = ? AND sku = ? LIMIT 1'
+            );
+            if ($stmt) {
+                $stmt->bind_param('sss', $orderNumber, $itemCode, $sku);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if (is_array($row) && isset($row['status'])) {
+                    $data['status'] = $row['status'];
+                }
+            }
+        }
+
+        if ($exists) {
+            $data['updated_at'] = date('Y-m-d H:i:s');
+            $result = $this->updateImportedOrder($data);
+            $result['action'] = 'updated';
+
+            return $result;
+        }
+
+        $result = $this->insertOrder($data);
+        $result['action'] = !empty($result['success']) ? 'inserted' : 'failed';
+
+        return $result;
     }
     function skuUpdateImportedOrder($data)
     {
