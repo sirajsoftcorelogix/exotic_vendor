@@ -1,7 +1,14 @@
 <div class="container mx-auto px-4 py-8">
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-3xl font-bold">Customer Invoices</h1>
-        <a href="<?php echo base_url('?page=invoices&action=create'); ?>" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700">+ Create Invoice</a>
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="<?php echo base_url('?page=sales_returns&action=index'); ?>"
+               class="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-white px-4 py-2 text-sm font-semibold text-orange-800 hover:bg-orange-50">
+                <i class="fas fa-rotate-left text-xs" aria-hidden="true"></i>
+                Sales returns
+            </a>
+            <a href="<?php echo base_url('?page=invoices&action=create'); ?>" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700">+ Create Invoice</a>
+        </div>
     </div>
 
     <!-- Invoices Table -->
@@ -38,6 +45,8 @@
                     <?php if (strtolower(trim((string)($invoice['status'] ?? ''))) === 'cancelled'): ?>
                         <span class="text-gray-500">—</span>
                     <?php else: ?>
+                    <a href="<?php echo base_url('?page=sales_returns&action=create&invoice_id=' . (int) $invoice['id']); ?>"
+                       class="text-orange-700 hover:text-orange-900 font-medium">Return</a>
                     <a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>" target="_blank" class="text-indigo-600 hover:text-indigo-900">Download</a>
                     <?php endif; ?>
                 </td>

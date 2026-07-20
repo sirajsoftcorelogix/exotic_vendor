@@ -6,6 +6,13 @@
     
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-3xl font-bold">Customer Invoices</h1>
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="<?php echo base_url('?page=sales_returns&action=index'); ?>"
+               class="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-white px-4 py-2 text-sm font-semibold text-orange-800 hover:bg-orange-50">
+                <i class="fas fa-rotate-left text-xs" aria-hidden="true"></i>
+                Sales returns
+            </a>
+        </div>
         <!-- <a href="<?php //echo base_url('?page=invoices&action=create'); ?>" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700">+ Create Invoice</a> -->
     </div>
     
@@ -504,6 +511,20 @@
                     <?php endif; ?>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="updateStatusAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Update Status</button>
                     <?php if (strtolower(trim((string)($invoice['status'] ?? ''))) !== 'cancelled'): ?>
+                    <?php
+                      $salesReturnHref = base_url('?page=sales_returns&action=create&invoice_id=' . (int) $invoice['id']);
+                      if (!empty($orderNumbers)) {
+                          $firstOrderNum = (string) array_key_first($orderNumbers);
+                          if ($firstOrderNum !== '') {
+                              $salesReturnHref = base_url(
+                                  '?page=sales_returns&action=create&order_number=' . rawurlencode($firstOrderNum)
+                                  . '&invoice_id=' . (int) $invoice['id']
+                              );
+                          }
+                      }
+                    ?>
+                    <a href="<?php echo htmlspecialchars($salesReturnHref, ENT_QUOTES, 'UTF-8'); ?>"
+                       class="block px-4 py-2 text-orange-700 hover:bg-orange-50 font-medium">Sales return</a>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelInvoiceAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Invoice</button>
                     <?php endif; ?>
                   </div>
