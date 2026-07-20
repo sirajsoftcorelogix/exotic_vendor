@@ -62,11 +62,16 @@ if ($invoiceIdForReturn <= 0) {
 if ($invoiceIdForReturn > 0) {
     $salesReturnUrl .= '&invoice_id=' . $invoiceIdForReturn;
 }
-$proformaPrintUrl = ($invoiceStatus === 'proforma' && $invoiceIdForReturn > 0)
-    ? pos_invoice_print_url($invoiceIdForReturn)
-    : '';
-$canPrintProforma = $proformaPrintUrl !== '';
+$proformaPrintUrl = trim((string)($proformaPrintUrl ?? ''));
+$canPrintProforma = !empty($canPrintProforma);
 $canPrintTaxInvoice = $invoicePdfUrl !== '' && $invoiceStatus === 'final';
+$proformaPrintDisabledReason = $canPrintProforma
+    ? ''
+    : ($paymentIsFullyPaid
+        ? 'Order is fully paid; use Print Invoice.'
+        : ($invoiceStatus === 'final'
+            ? 'This order has a final tax invoice.'
+            : 'Proforma is available when payment is pending.'));
 ?>
 
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
@@ -110,7 +115,7 @@ $canPrintTaxInvoice = $invoicePdfUrl !== '' && $invoiceStatus === 'final';
                             </a>
                         <?php else: ?>
                             <span class="flex items-center px-4 py-2 text-[13px] text-gray-400 cursor-not-allowed"
-                                title="<?php echo $invoiceStatus === 'final' ? 'This order has a final tax invoice.' : 'Proforma invoice is created after partial payment.'; ?>">
+                                title="<?php echo htmlspecialchars($proformaPrintDisabledReason, ENT_QUOTES, 'UTF-8'); ?>">
                                 Print Proforma
                             </span>
                         <?php endif; ?>

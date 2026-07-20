@@ -965,6 +965,248 @@ class PosInvoiceController
     }
 
     /**
+     * Printable proforma from order lines only (no vp_invoices row).
+     */
+    public function printProformaPreviewFromOrder(): void
+    {
+        is_login();
+        global $conn;
+
+        $orderNumber = trim((string)($_GET['order_number'] ?? ''));
+        if ($orderNumber === '') {
+            http_response_code(400);
+            echo '<p>Invalid order number.</p>';
+            exit;
+        }
+
+        require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+        if ($conn instanceof mysqli && pos_payment_is_fully_paid($conn, $orderNumber)) {
+            http_response_code(400);
+            echo '<p>Order is fully paid. Use Print Invoice for the tax invoice.</p>';
+            exit;
+        }
+
+        $preview = $this->buildProformaPreviewFromOrder($orderNumber);
+        if (empty($preview['success'])) {
+            http_response_code(404);
+            echo '<p>' . htmlspecialchars((string)($preview['message'] ?? 'Could not build proforma.')) . '</p>';
+            exit;
+        }
+
+        require_once __DIR__ . '/../helpers/app_settings.php';
+        $firmSettings = app_setting_global_settings();
+        $invoice = $preview['invoice'];
+        $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
+
+        $invoiceHtml = $this->generateInvoiceHtml($invoice, $preview['items'], 'proforma');
+        $label = (string)($preview['label'] ?? $orderNumber);
+
+        renderTemplateClean('views/posinvoice/print_preview.php', [
+            'invoice_html' => $invoiceHtml,
+            'invoice_number' => $label,
+            'invoice_pdf_url' => '',
+        ], 'Proforma - ' . $label);
+    }
+
+    /**
+     * @return array{success:bool,message?:string,invoice?:array<string,mixed>,items?:list<array<string,mixed>>,label?:string}
+     */
+    private function buildProformaPreviewFromOrder(string $orderNumber): array
+    {
+        global $ordersModel;
+
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return ['success' => false, 'message' => 'Order number missing'];
+        }
+
+        $items = $ordersModel->getOrderByOrderNumber($orderNumber);
+        if ($items === []) {
+            return ['success' => false, 'message' => 'Order not found'];
+        }
+
+        $info = $ordersModel->getAddressInfoByOrderNumber($orderNumber);
+        if (empty($info['id'])) {
+            return ['success' => false, 'message' => 'Order info not found'];
+        }
+
+        $savedPost = $_POST;
+        $_POST = [
+            'invoice_date' => date('Y-m-d'),
+            'customer_id' => (int)($items[0]['customer_id'] ?? 0),
+            'vp_order_info_id' => (int)$info['id'],
+            'status' => 'proforma',
+            'subtotal' => 0.0,
+            'tax_amount' => 0.0,
+            'discount_amount' => 0.0,
+            'total_amount' => 0.0,
+            'pos_flag' => 1,
+        ];
+
+        $snapshot = $this->buildPosInvoiceSnapshotFromOrder($orderNumber, $items, $info);
+        $lineItemsMeta = [];
+        if (is_array($snapshot)) {
+            $this->buildInvoicePostFromCheckoutSnapshot($items, $snapshot, $info);
+            $lineItemsMeta = $this->computePosInvoiceLineMetaFromSnapshot($items, $snapshot);
+        } else {
+            require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
+            $applyExportGst = null;
+            foreach ($items as $it) {
+                $_POST['order_number'][] = $it['order_number'];
+                $_POST['item_code'][] = $it['item_code'];
+                $_POST['item_name'][] = $it['title'];
+                $_POST['hsn'][] = $it['hsn'];
+                $_POST['quantity'][] = $it['quantity'];
+
+                $qty = max(1, (int)$it['quantity']);
+                $unit = pos_order_pretax_unit_price($it, 'disc');
+
+                $_POST['unit_price'][] = $unit;
+                $_POST['tax_rate'][] = $it['gst'];
+                $gstPlan = invoice_resolve_gst_component_plan($info, (float)$it['gst'], $applyExportGst);
+                $_POST['cgst'][] = $gstPlan['cgst_rate'];
+                $_POST['sgst'][] = $gstPlan['sgst_rate'];
+                $_POST['igst'][] = $gstPlan['igst_rate'];
+                $_POST['box_no'][] = '';
+                $_POST['currency'][] = $it['currency'];
+
+                $_POST['subtotal'] += $unit * $qty;
+                $_POST['tax_amount'] += ($unit * $qty) * ((float)$it['gst'] / 100);
+            }
+
+            $_POST['total_amount'] = (float)$_POST['subtotal'] + (float)$_POST['tax_amount'];
+        }
+
+        $discountMeta = is_array($snapshot) ? $snapshot : [
+            'subtotal_goods' => round((float)$_POST['total_amount'], 2),
+            'gst_total' => round((float)$_POST['tax_amount'], 2),
+            'grand_total' => round((float)$_POST['total_amount'], 2),
+            'coupon_discount' => 0.0,
+            'cash_discount' => 0.0,
+            'gift_discount' => 0.0,
+            'line_discount' => 0.0,
+            'discounts_absorbed' => true,
+        ];
+
+        $notesJson = $this->encodePosInvoiceNotesPayload($discountMeta, $lineItemsMeta);
+        $previewItems = $this->buildPreviewItemsFromPostArrays($_POST);
+
+        $subtotal = round((float)($_POST['subtotal'] ?? 0), 2);
+        $taxAmount = round((float)($_POST['tax_amount'] ?? 0), 2);
+        $totalAmount = round((float)($_POST['total_amount'] ?? 0), 2);
+        $discountAmount = round((float)($_POST['discount_amount'] ?? 0), 2);
+        $_POST = $savedPost;
+
+        if ($previewItems === []) {
+            return ['success' => false, 'message' => 'No billable items found for this order'];
+        }
+
+        return [
+            'success' => true,
+            'label' => 'PROFORMA / ' . $orderNumber,
+            'invoice' => [
+                'id' => 0,
+                'invoice_number' => 'PROFORMA / ' . $orderNumber,
+                'invoice_date' => date('Y-m-d'),
+                'status' => 'proforma',
+                'vp_order_info_id' => (int)$info['id'],
+                'customer_id' => (int)($items[0]['customer_id'] ?? 0),
+                'subtotal' => $subtotal,
+                'tax_amount' => $taxAmount,
+                'total_amount' => $totalAmount,
+                'discount_amount' => $discountAmount,
+                'pos_flag' => 1,
+                'notes' => $notesJson,
+            ],
+            'items' => $previewItems,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $discountMeta
+     * @param list<array<string, mixed>> $lineItemsMeta
+     */
+    private function encodePosInvoiceNotesPayload(array $discountMeta, array $lineItemsMeta = []): string
+    {
+        $payload = [
+            'pos_discounts' => [
+                'subtotal_goods' => round((float)($discountMeta['subtotal_goods'] ?? 0), 2),
+                'gst_total' => round((float)($discountMeta['gst_total'] ?? 0), 2),
+                'coupon_discount' => round((float)($discountMeta['coupon_discount'] ?? 0), 2),
+                'cash_discount' => round((float)($discountMeta['cash_discount'] ?? 0), 2),
+                'gift_discount' => round((float)($discountMeta['gift_discount'] ?? 0), 2),
+                'line_discount' => round((float)($discountMeta['line_discount'] ?? 0), 2),
+                'grand_total' => round((float)($discountMeta['grand_total'] ?? 0), 2),
+                'discounts_absorbed' => !empty($discountMeta['discounts_absorbed']),
+                'custom_discount_mode' => trim((string)($discountMeta['custom_discount_mode'] ?? '')),
+                'custom_discount_value' => round((float)($discountMeta['custom_discount_value'] ?? 0), 2),
+                'coupon_display_name' => trim((string)($discountMeta['coupon_display_name'] ?? '')),
+            ],
+        ];
+        if (array_key_exists('apply_export_gst', $discountMeta)) {
+            $payload['pos_discounts']['apply_export_gst'] = !empty($discountMeta['apply_export_gst']) ? 1 : 0;
+        }
+        if ($lineItemsMeta !== []) {
+            $payload['line_items'] = $lineItemsMeta;
+        }
+
+        return json_encode($payload, JSON_UNESCAPED_UNICODE) ?: '';
+    }
+
+    /**
+     * @param array<string, mixed> $post
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function buildPreviewItemsFromPostArrays(array $post): array
+    {
+        $orderNumbers = isset($post['order_number']) && is_array($post['order_number']) ? $post['order_number'] : [];
+        $count = count($orderNumbers);
+        if ($count === 0) {
+            return [];
+        }
+
+        $items = [];
+        for ($i = 0; $i < $count; $i++) {
+            $qty = max(1, (int)($post['quantity'][$i] ?? 1));
+            $unitPretax = (float)($post['unit_price'][$i] ?? 0);
+            $taxRate = (float)($post['tax_rate'][$i] ?? 0);
+            $amount = $unitPretax * $qty;
+            $cgstRate = (float)($post['cgst'][$i] ?? 0);
+            $sgstRate = (float)($post['sgst'][$i] ?? 0);
+            $igstRate = (float)($post['igst'][$i] ?? 0);
+
+            if ($igstRate > 0) {
+                $igstAmt = ($amount * $igstRate) / 100;
+                $sgstAmt = 0.0;
+                $cgstAmt = 0.0;
+            } else {
+                $sgstAmt = ($amount * $sgstRate) / 100;
+                $cgstAmt = ($amount * $cgstRate) / 100;
+                $igstAmt = 0.0;
+            }
+
+            $items[] = [
+                'order_number' => (string)($post['order_number'][$i] ?? ''),
+                'item_code' => (string)($post['item_code'][$i] ?? ''),
+                'item_name' => (string)($post['item_name'][$i] ?? ''),
+                'hsn' => (string)($post['hsn'][$i] ?? ''),
+                'quantity' => $qty,
+                'unit_price' => $unitPretax,
+                'tax_rate' => $taxRate,
+                'sgst' => round($sgstAmt, 2),
+                'cgst' => round($cgstAmt, 2),
+                'igst' => round($igstAmt, 2),
+                'box_no' => (string)($post['box_no'][$i] ?? ''),
+                'currency' => (string)($post['currency'][$i] ?? 'INR'),
+                'line_total' => round($amount + $sgstAmt + $cgstAmt + $igstAmt, 2),
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
      * Printable tax invoice in a new browser tab (preview + window.print).
      */
     public function printPreview(): void
