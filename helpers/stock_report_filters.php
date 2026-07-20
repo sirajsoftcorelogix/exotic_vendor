@@ -301,3 +301,158 @@ function stockReportFiltersForExportPayload(array $filters): array
 
     return $payload;
 }
+
+/**
+ * Manage listing (products list) — same group-specific filters as stock report.
+ *
+ * @param array<string, mixed> $get
+ * @return array<string, mixed>
+ */
+function parseProductListExtraFiltersFromRequest(array $get, string $itemGroup): array
+{
+    $itemGroup = trim($itemGroup);
+    $allowedKeys = stockReportAllowedExtraFilterKeys($itemGroup);
+    $extra = [];
+
+    foreach (['size', 'color', 'isbn'] as $key) {
+        if (in_array($key, $allowedKeys, true)) {
+            $value = trim((string) ($get[$key] ?? ''));
+            if ($value !== '') {
+                $extra[$key] = $value;
+            }
+        }
+    }
+
+    if (in_array('material', $allowedKeys, true)) {
+        $material = resolveProductListMaterialFilter($get);
+        if ($material !== '') {
+            $extra['material'] = $material;
+        }
+    }
+    if (in_array('language', $allowedKeys, true)) {
+        $language = resolveProductListLanguageFilter($get);
+        if ($language !== '') {
+            $extra['language'] = $language;
+        }
+    }
+    if (in_array('author', $allowedKeys, true)) {
+        $author = resolveProductListAuthorFilter($get);
+        if ($author !== '') {
+            $extra['author'] = $author;
+        }
+    }
+    if (in_array('artist', $allowedKeys, true)) {
+        $artist = resolveProductListArtistFilter($get);
+        if ($artist !== '') {
+            $extra['artist'] = $artist;
+        }
+    }
+    if (in_array('publisher', $allowedKeys, true)) {
+        $publisher = resolveProductListPublisherFilter($get);
+        if ($publisher !== '') {
+            $extra['publisher'] = $publisher;
+        }
+    }
+
+    return $extra;
+}
+
+/**
+ * @param array<string, mixed> $filters
+ */
+function appendProductListStockStatusFiltersSql(string &$search, array $filters): void
+{
+    appendStockReportQuantityStatusSql(
+        $search,
+        'vp_products.physical_stock',
+        (string) ($filters['physical_stock_status'] ?? 'all')
+    );
+    appendStockReportQuantityStatusSql(
+        $search,
+        'vp_products.local_stock',
+        (string) ($filters['local_stock_status'] ?? 'all')
+    );
+}
+
+/**
+ * @param array<string, mixed> $filters
+ */
+function appendProductListExtraFiltersSql(string &$search, mysqli $db, array $filters): void
+{
+    $itemGroup = trim((string) ($filters['groupname'] ?? ''));
+    $allowedKeys = stockReportAllowedExtraFilterKeys($itemGroup);
+
+    $likeColumns = [
+        'size' => 'size',
+        'color' => 'color',
+        'isbn' => 'isbn',
+    ];
+
+    foreach ($likeColumns as $filterKey => $column) {
+        if (!in_array($filterKey, $allowedKeys, true)) {
+            continue;
+        }
+        $value = normalizeOrderFilterSearchText((string) ($filters[$filterKey] ?? ''));
+        if ($value === '') {
+            continue;
+        }
+        $escaped = $db->real_escape_string($value);
+        $search .= " AND vp_products.{$column} LIKE '%{$escaped}%'";
+    }
+
+    if (in_array('material', $allowedKeys, true)) {
+        $material = normalizeOrderFilterSearchText((string) ($filters['material'] ?? ''));
+        if ($material !== '') {
+            $escaped = $db->real_escape_string($material);
+            $search .= " AND IFNULL(vp_products.material, '') LIKE '%{$escaped}%'";
+        }
+    }
+
+    if (in_array('language', $allowedKeys, true)) {
+        $language = normalizeOrderFilterSearchText((string) ($filters['language'] ?? ''));
+        if ($language !== '') {
+            $escaped = $db->real_escape_string($language);
+            $search .= " AND IFNULL(vp_products.language, '') LIKE '%{$escaped}%'";
+        }
+    }
+
+    if (!empty($filters['author']) && in_array('author', $allowedKeys, true)) {
+        appendProductListAuthorFilterSql($search, $db, (string) $filters['author']);
+    }
+    if (!empty($filters['artist']) && in_array('artist', $allowedKeys, true)) {
+        appendProductListAuthorFilterSql($search, $db, (string) $filters['artist']);
+    }
+    if (!empty($filters['publisher']) && in_array('publisher', $allowedKeys, true)) {
+        appendProductListPublisherFilterSql($search, $db, (string) $filters['publisher']);
+    }
+}
+
+/** @param array<string, mixed> $get */
+function productListFiltersPanelOpen(array $get): bool
+{
+    foreach (['item_code', 'item_name', 'vendor_name', 'sku', 'marketplace', 'size', 'color', 'isbn', 'material', 'language', 'author', 'artist', 'publisher'] as $key) {
+        if (trim((string) ($get[$key] ?? '')) !== '') {
+            return true;
+        }
+    }
+
+    if (trim((string) ($get['item_group'] ?? '')) !== '') {
+        return true;
+    }
+
+    $stockStatuses = parseStockReportStockStatusFilters($get);
+    if (($stockStatuses['physical_stock_status'] ?? 'all') !== 'all') {
+        return true;
+    }
+    if (($stockStatuses['local_stock_status'] ?? 'all') !== 'all') {
+        return true;
+    }
+
+    foreach (['low_stock', 'permanently_available', 'local_stock'] as $key) {
+        if (isset($get[$key]) && (string) $get[$key] !== '') {
+            return true;
+        }
+    }
+
+    return false;
+}

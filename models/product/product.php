@@ -593,14 +593,6 @@ class product
             $v = $this->db->real_escape_string((string) $filters['sku']);
             $search .= "AND vp_products.sku like '%" . $v . "%'";
         }
-        if (!empty($filters['size'])) {
-            $v = $this->db->real_escape_string((string) $filters['size']);
-            $search .= "AND vp_products.size like '%" . $v . "%'";
-        }
-        if (!empty($filters['color'])) {
-            $v = $this->db->real_escape_string((string) $filters['color']);
-            $search .= "AND vp_products.color like '%" . $v . "%'";
-        }
         if (isset($filters['local_stock']) && $filters['local_stock'] !== '') {
             $search .= "AND vp_products.local_stock = " . (int)$filters['local_stock'];
         }
@@ -622,15 +614,9 @@ class product
                 $search .= "AND vp_products.marketplace like '%" . $mp . "%'";
             }
         }
-        if (!empty($filters['author']) || !empty($filters['publisher'])) {
-            require_once dirname(__DIR__, 2) . '/helpers/order_filter_autocomplete.php';
-            if (!empty($filters['author'])) {
-                appendProductListAuthorFilterSql($search, $this->db, (string) $filters['author']);
-            }
-            if (!empty($filters['publisher'])) {
-                appendProductListPublisherFilterSql($search, $this->db, (string) $filters['publisher']);
-            }
-        }
+        require_once dirname(__DIR__, 2) . '/helpers/stock_report_filters.php';
+        appendProductListStockStatusFiltersSql($search, $filters);
+        appendProductListExtraFiltersSql($search, $this->db, $filters);
 
         $search .= " AND LOWER(TRIM(IFNULL(vp_products.item_level, ''))) <> 'parent' ";
 
@@ -672,14 +658,6 @@ class product
             $v = $this->db->real_escape_string((string) $filters['sku']);
             $search .= "AND vp_products.sku like '%" . $v . "%'";
         }
-        if (!empty($filters['size'])) {
-            $v = $this->db->real_escape_string((string) $filters['size']);
-            $search .= "AND vp_products.size like '%" . $v . "%'";
-        }
-        if (!empty($filters['color'])) {
-            $v = $this->db->real_escape_string((string) $filters['color']);
-            $search .= "AND vp_products.color like '%" . $v . "%'";
-        }
         if (isset($filters['local_stock']) && $filters['local_stock'] !== '') {
             $search .= "AND vp_products.local_stock = " . (int)$filters['local_stock'];
         }
@@ -701,15 +679,9 @@ class product
                 $search .= "AND vp_products.marketplace like '%" . $mp . "%'";
             }
         }
-        if (!empty($filters['author']) || !empty($filters['publisher'])) {
-            require_once dirname(__DIR__, 2) . '/helpers/order_filter_autocomplete.php';
-            if (!empty($filters['author'])) {
-                appendProductListAuthorFilterSql($search, $this->db, (string) $filters['author']);
-            }
-            if (!empty($filters['publisher'])) {
-                appendProductListPublisherFilterSql($search, $this->db, (string) $filters['publisher']);
-            }
-        }
+        require_once dirname(__DIR__, 2) . '/helpers/stock_report_filters.php';
+        appendProductListStockStatusFiltersSql($search, $filters);
+        appendProductListExtraFiltersSql($search, $this->db, $filters);
         $search .= " AND LOWER(TRIM(IFNULL(vp_products.item_level, ''))) <> 'parent' ";
         $stmt = $this->db->prepare("SELECT COUNT(*) AS cnt FROM vp_products WHERE 1=1 $search");
         if ($stmt === false) {
