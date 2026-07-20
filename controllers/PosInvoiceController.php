@@ -2129,6 +2129,8 @@ class PosInvoiceController
             $this->applyPosOrderLevelDiscountToLineMeta($lineItemsMeta, $items, $posDiscountMeta);
         }
         $usePosItemLayout = !empty($lineItemsMeta) || !empty($invoice['pos_flag']);
+        $isProformaInvoice = strtolower(trim((string)($invoice['status'] ?? ''))) === 'proforma';
+        $usePosItemRowLayout = $usePosItemLayout && !$isProformaInvoice;
         $showDiscPriceColumn = false;
         $posTableColCount = 13;
         if ($usePosItemLayout && (($invoice['status'] ?? '') !== 'proforma')) {
@@ -2235,7 +2237,7 @@ class PosInvoiceController
             $totalIgstAmt += $igstAmt;
             $totalGstAmount += $sgstAmt + $cgstAmt + $igstAmt;
 
-            if ($usePosItemLayout) {
+            if ($usePosItemRowLayout) {
                 $itemName = htmlspecialchars($item['item_name'] ?? '');
                 $hsnCode = trim((string)($item['hsn'] ?? ''));
                 $descHtml = $itemName;
@@ -2265,6 +2267,10 @@ class PosInvoiceController
                     </tr>
             ';
             } else {
+            $unitPriceDisplay = (float)($item['unit_price'] ?? 0);
+            if ($isProformaInvoice && !empty($invoice['pos_flag']) && $discUnitDisplay > 0) {
+                $unitPriceDisplay = $discUnitDisplay;
+            }
             $itemsrows .= '
                     <tr>
                         <td>' . ($idx + 1) . '</td>
@@ -2272,7 +2278,7 @@ class PosInvoiceController
                         <td class="desc">' . htmlspecialchars($item['item_name'] ?? '') . '</td>
                         <td>' . htmlspecialchars($item['hsn'] ?? '') . '</td>
                         <td>' . $qtyInt . '</td>
-                        <td class="right">' . number_format($item['unit_price'], 2) . '</td>
+                        <td class="right">' . number_format($unitPriceDisplay, 2) . '</td>
                         <td class="right">' . number_format($sgstRate, 2) . '</td>
                         <td class="right">' . number_format($sgstAmt, 2) . '</td>
                         <td class="right">' . number_format($cgstRate, 2) . '</td>
@@ -2287,11 +2293,12 @@ class PosInvoiceController
         if (count($items) < 3) {
             // Add empty rows to maintain table height
             $rowsToAdd = 3 - count($items);
-            $emptyPriceCells = $showDiscPriceColumn
-                ? '<td>&nbsp;</td><td>&nbsp;</td>'
-                : '<td>&nbsp;</td>';
             for ($i = 0; $i < $rowsToAdd; $i++) {
-                $itemsrows .= '
+                if ($usePosItemRowLayout) {
+                    $emptyPriceCells = $showDiscPriceColumn
+                        ? '<td>&nbsp;</td><td>&nbsp;</td>'
+                        : '<td>&nbsp;</td>';
+                    $itemsrows .= '
                     <tr>
                         <td>&nbsp;</td>
                         <td>&nbsp;</td>
@@ -2307,6 +2314,25 @@ class PosInvoiceController
                         <td class="right bold">&nbsp;</td>
                     </tr>
             ';
+                } else {
+                    $itemsrows .= '
+                    <tr>
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td class="desc">&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td class="right">&nbsp;</td>
+                        <td class="right">&nbsp;</td>
+                        <td class="right">&nbsp;</td>
+                        <td class="right">&nbsp;</td>
+                        <td class="right">&nbsp;</td>
+                        <td class="right">&nbsp;</td>
+                        <td class="right">&nbsp;</td>
+                        <td class="right">&nbsp;</td>
+                        <td class="right bold">&nbsp;</td>
+                    </tr>
+            ';
+                }
             }
         }
         // Build summary rows with tax totals
@@ -2322,7 +2348,7 @@ class PosInvoiceController
                 'discounts_absorbed' => true,
             ];
         }
-        if ($usePosItemLayout && $showDiscPriceColumn && $sumListLineTotals > 0.001) {
+        if ($usePosItemRowLayout && $showDiscPriceColumn && $sumListLineTotals > 0.001) {
             $existingSub = round((float)($posDiscountMeta['subtotal_goods'] ?? 0), 2);
             if ($existingSub <= 0 || abs($existingSub - $sumListLineTotals) > 0.02) {
                 $posDiscountMeta['subtotal_goods'] = round($sumListLineTotals, 2);
@@ -2356,12 +2382,12 @@ class PosInvoiceController
         } elseif ($summaryTaxAmount <= 0) {
             $summaryTaxAmount = round((float)($invoice['tax_amount'] ?? 0), 2);
         }
-        $tableLineTotal = ($usePosItemLayout && $showDiscPriceColumn && $sumLineTotals > 0.001)
+        $tableLineTotal = ($usePosItemRowLayout && $showDiscPriceColumn && $sumLineTotals > 0.001)
             ? round($sumLineTotals, 2)
             : round((float)$totalAmount, 2);
 
         // Add row for tax amount totals (below each SGST/CGST/IGST column)
-        $posTotalDiscEmpty = ($usePosItemLayout && $showDiscPriceColumn)
+        $posTotalDiscEmpty = ($usePosItemRowLayout && $showDiscPriceColumn)
             ? '<td></td>'
             : '';
         $summaryrows .= '
