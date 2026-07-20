@@ -22,7 +22,13 @@ $total_price = 0;
 $currency = '';
 
 foreach ($order as $items => $item):
-    $total_price += $item['finalprice'] * $item['quantity'];
+    $lineId = (int)($item['id'] ?? 0);
+    $linePricingRow = ($linePricingByLineId ?? [])[$lineId] ?? null;
+    if (is_array($linePricingRow)) {
+        $total_price += (float)($linePricingRow['chargeable_value'] ?? 0);
+    } else {
+        $total_price += (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
+    }
 endforeach;
 $currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
 $displayOrderNumber = (string)($orderremarks['order_number'] ?? ($order[0]['order_number'] ?? ''));
@@ -192,6 +198,13 @@ $proformaPrintDisabledReason = $canPrintProforma
                         } else {
                             $currencysymbol = $currencyCode . ' ';
                         }
+                        $linePricing = ($linePricingByLineId ?? [])[(int)($item['id'] ?? 0)] ?? null;
+                        $netLineAmount = is_array($linePricing)
+                            ? (float)($linePricing['chargeable_value'] ?? 0)
+                            : (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
+                        $hasExtendedPricing = is_array($linePricing)
+                            && (((float)($linePricing['addons_total'] ?? 0)) > 0.001 || ((float)($linePricing['custom_reduce'] ?? 0)) > 0.001);
+                        $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
                     ?>
                         <div class="flex items-center gap-4 accordion-trigger">
                             <input type="checkbox" class="h-5 w-5 rounded border-gray-300">
@@ -233,33 +246,39 @@ $proformaPrintDisabledReason = $canPrintProforma
                                                     <?php echo str_pad($item['quantity'], 2, '0', STR_PAD_LEFT); ?>
                                                 </span>
                                             </div>
-                                            <?php
-                                            $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
-                                            if ($lineAddons !== []) {
-                                                renderPartial('views/shared/partials/order_line_addons_list.php', [
-                                                    'addons' => $lineAddons,
-                                                    'currencySymbol' => $currencysymbol,
-                                                    'layout' => 'stacked',
-                                                ]);
-                                            }
-                                            ?>
+                                            <?php if ($lineAddons !== []): ?>
+                                                <?php foreach ($lineAddons as $addonRow): ?>
+                                                    <p>
+                                                        <span class="inline-block font-bold text-black">Addon</span>
+                                                        <span class="text-black">:</span>
+                                                        <span class="ml-2 text-black-700"><?php echo htmlspecialchars((string)($addonRow['name'] ?? '')); ?></span>
+                                                        <span class="ml-2 tabular-nums text-black-600"><?php echo $currencysymbol . number_format((float)($addonRow['price'] ?? 0), 2); ?></span>
+                                                    </p>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
                                         </div>
                                         <div class="flex items-center gap-12">
-                                            <div class="flex items-center gap-2 text-[13px] text-black-500">
-                                                <span><?php echo $currencysymbol; ?><?php echo $item['finalprice']; ?> x</span>
-                                                <span class="rounded bg-gray-100 px-2 py-0.5 text-black-700"><?php echo $item['quantity']; ?></span>
-                                            </div>
+                                            <?php if ($hasExtendedPricing): ?>
+                                                <div class="text-right text-[13px] text-black-500">
+                                                    <p class="text-[11px] uppercase tracking-wide text-gray-500">Net total</p>
+                                                    <p class="tabular-nums font-bold text-[14px] text-black-900"><?php echo $currencysymbol . number_format($netLineAmount, 2); ?></p>
+                                                </div>
+                                            <?php else: ?>
+                                                <div class="flex items-center gap-2 text-[13px] text-black-500">
+                                                    <span><?php echo $currencysymbol; ?><?php echo $item['finalprice']; ?> x</span>
+                                                    <span class="rounded bg-gray-100 px-2 py-0.5 text-black-700"><?php echo $item['quantity']; ?></span>
+                                                </div>
 
-                                            <div class="w-20 text-right text-[14px] font-bold text-black-900">
-                                                <?php echo $currencysymbol; ?><?php echo $item['finalprice'] * $item['quantity']; ?>
-                                            </div>
+                                                <div class="w-20 text-right text-[14px] font-bold text-black-900 tabular-nums">
+                                                    <?php echo $currencysymbol . number_format($netLineAmount, 2); ?>
+                                                </div>
+                                            <?php endif; ?>
                                             <div class="flex-shrink-0">
                                                 <span class="rounded-full bg-green-600 px-3 py-1 text-[11px] font-semibold text-white whitespace-nowrap"><?php echo ucwords(str_replace('_', ' ', $item['status'])); ?></span>
                                             </div>
                                         </div>
                                     </div>
                                     <?php
-                                    $linePricing = $linePricingByLineId[(int)($item['id'] ?? 0)] ?? null;
                                     if (is_array($linePricing)) {
                                         renderPartial('views/posorders/partials/line_item_pricing.php', [
                                             'linePricing' => $linePricing,
@@ -271,27 +290,6 @@ $proformaPrintDisabledReason = $canPrintProforma
                             </div>
                         </div>
                         <div class="accordion-content-details max-h-0 overflow-hidden transition-all duration-300 ease-in-out [&:has(>input:checked)]:max-h-[1200px] bg-gray-50">
-                            <div class="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
-                                <?php
-                                $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
-                                if ($lineAddons !== []) {
-                                    renderPartial('views/shared/partials/order_line_addons_list.php', [
-                                        'addons' => $lineAddons,
-                                        'currencySymbol' => $currencysymbol,
-                                        'layout' => 'stacked',
-                                    ]);
-                                } else {
-                                    $options = json_decode($item['options'] ?? '[]', true);
-                                    $optStr = is_array($options) ? implode(', ', $options) : '';
-                                    ?>
-                                    <p class="flex flex-wrap items-center gap-2">
-                                        <span class="section-title font-bold text-gray-700 text-sm italic">Addons : </span>
-                                        <span class="section-value text-green-700 font-semibold text-sm bg-green-50 px-2.5 py-1 rounded-lg border border-green-100">
-                                            <?php echo htmlspecialchars($optStr !== '' ? $optStr : 'None'); ?>
-                                        </span>
-                                    </p>
-                                <?php } ?>
-                            </div>
                             <div class="py-6 bg-white border-t border-b border-gray-100">
                                 <div class="overflow-x-auto pb-4 px-4">
                                     <div class="relative flex items-start min-w-max">

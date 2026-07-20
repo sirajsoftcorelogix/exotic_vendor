@@ -3,7 +3,13 @@
     $total_price = 0;
     $courrency = '';
     foreach ($order as $items => $item):
-        $total_price += $item['finalprice'] * $item['quantity'];
+        $lineId = (int)($item['id'] ?? 0);
+        $linePricingRow = ($linePricingByLineId ?? [])[$lineId] ?? null;
+        if (is_array($linePricingRow)) {
+            $total_price += (float)($linePricingRow['chargeable_value'] ?? 0);
+        } else {
+            $total_price += (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
+        }
         $currency = $item['currency'];
     endforeach;
     ?>
@@ -73,13 +79,13 @@
                             <p class="item-meta mt-0">Quantity: <?php echo $item['quantity']; ?></p>
                             <?php
                             $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
-                            if ($lineAddons !== []) {
-                                renderPartial('views/shared/partials/order_line_addons_list.php', [
-                                    'addons' => $lineAddons,
-                                    'currencySymbol' => $lineCurrencySymbol,
-                                ]);
-                            }
-                            ?>
+                            foreach ($lineAddons as $addonRow):
+                                ?>
+                                <p class="item-meta mt-0">
+                                    Addon: <?php echo htmlspecialchars((string)($addonRow['name'] ?? '')); ?>
+                                    · <?php echo htmlspecialchars($lineCurrencySymbol . number_format((float)($addonRow['price'] ?? 0), 2)); ?>
+                                </p>
+                            <?php endforeach; ?>
                             <?php
                             $linePricing = ($linePricingByLineId ?? [])[(int)($item['id'] ?? 0)] ?? null;
                             if (is_array($linePricing)) {
@@ -186,20 +192,16 @@
                     </div>
                     <div class="bg-green-200 p-4 rounded-lg grid grid-cols-2 gap-x-8">
                         <div>
-                            <?php
-                            $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
-                            if ($lineAddons !== []) {
-                                renderPartial('views/shared/partials/order_line_addons_list.php', [
-                                    'addons' => $lineAddons,
-                                    'currencySymbol' => $lineCurrencySymbol,
-                                    'layout' => 'stacked',
-                                ]);
-                            } else {
+                            <?php if ($lineAddons !== []): ?>
+                                <?php foreach ($lineAddons as $addonRow): ?>
+                                    <p><span class="section-title"><?php echo htmlspecialchars((string)($addonRow['name'] ?? '')); ?> : </span><span class="section-value tabular-nums"><?php echo htmlspecialchars($lineCurrencySymbol . number_format((float)($addonRow['price'] ?? 0), 2)); ?></span></p>
+                                <?php endforeach; ?>
+                            <?php else:
                                 $options = json_decode($item['options'] ?? '[]', true);
                                 $optStr = is_array($options) ? implode(', ', $options) : '';
                                 ?>
                                 <p><span class="section-title">Addons : </span><span class="section-value"><?php echo htmlspecialchars($optStr !== '' ? $optStr : '—'); ?></span></p>
-                            <?php } ?>
+                            <?php endif; ?>
                         </div>
                     </div>
                     <!-- Stock -->
