@@ -195,6 +195,43 @@ function searchOrderFilterMaterials(mysqli $conn, string $query): array
     }, $rows);
 }
 
+/**
+ * @return array<int, array{id:int|string, name:string}>
+ */
+function searchOrderFilterLanguages(mysqli $conn, string $query): array
+{
+    $query = trim($query);
+    if (strlen($query) < orderFilterAutocompleteMinLength()) {
+        return [];
+    }
+
+    $like = '%' . $query . '%';
+    $numericId = ctype_digit($query) ? (int) $query : 0;
+    $stmt = $conn->prepare(
+        'SELECT id, language_name AS name
+         FROM book_languages
+         WHERE active = 1 AND (language_name LIKE ? OR iso LIKE ? OR id = ?)
+         ORDER BY language_name
+         LIMIT 20'
+    );
+    if (!$stmt) {
+        return [];
+    }
+
+    $stmt->bind_param('ssi', $like, $like, $numericId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+    $stmt->close();
+
+    return array_map(static function (array $row): array {
+        return [
+            'id' => (int) ($row['id'] ?? 0),
+            'name' => (string) ($row['name'] ?? ''),
+        ];
+    }, $rows);
+}
+
 function orderFilterAutocompleteJson(mysqli $conn, string $type, string $query): void
 {
     $results = match ($type) {
@@ -202,6 +239,7 @@ function orderFilterAutocompleteJson(mysqli $conn, string $type, string $query):
         'author' => searchOrderFilterAuthors($conn, $query),
         'publisher' => searchOrderFilterPublishers($conn, $query),
         'material' => searchOrderFilterMaterials($conn, $query),
+        'language' => searchOrderFilterLanguages($conn, $query),
         default => [],
     };
 
@@ -251,6 +289,11 @@ function resolveProductListMaterialFilter(array $get): string
 function resolveProductListArtistFilter(array $get): string
 {
     return !empty($get['artist']) ? normalizeOrderFilterSearchText($get['artist']) : '';
+}
+
+function resolveProductListLanguageFilter(array $get): string
+{
+    return !empty($get['language']) ? normalizeOrderFilterSearchText($get['language']) : '';
 }
 
 function appendProductListAuthorFilterSql(string &$search, mysqli $db, string $author): void
