@@ -100,9 +100,12 @@ class PosInvoiceController
 
         return match ($key) {
             'offline' => 'Offline',
-            'cod' => 'Cash',
+            'cash', 'cod' => 'Cash',
+            'upi' => 'UPI',
             'razorpay' => 'Razorpay',
-            'bank_transfer' => 'Bank',
+            'bank_transfer' => 'Bank transfer',
+            'pos_machine' => 'POS machine',
+            'cheque' => 'Cheque',
             default => $key !== '' ? ucfirst(str_replace('_', ' ', $key)) : '',
         };
     }
