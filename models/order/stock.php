@@ -341,6 +341,8 @@ class Stock {
         $wh = (int)($_SESSION['warehouse_id'] ?? 0);
         if ($refTypeResolved === 'INVOICE' || $refTypeResolved === 'INVOICE_CANCEL') {
             $wh = $this->resolveWarehouseIdForInvoice((int)$refIdStr);
+        } elseif ($refTypeResolved === 'SALES_RETURN' || $refTypeResolved === 'SALES_RETURN_CANCEL') {
+            $wh = $this->resolveWarehouseIdForSalesReturn((int)$refIdStr);
         }
         $location = $wh > 0 ? $this->warehouseLocationLabel($wh) : '';
         $reason = 'Stock movement';
@@ -350,6 +352,10 @@ class Stock {
             $reason = 'Order ' . $refIdStr;
         } elseif ($movementTypeNormalized === 'IN' && $refTypeResolved === 'INVOICE_CANCEL') {
             $reason = 'Invoice cancelled / dispatch cancelled #' . $refIdStr;
+        } elseif ($movementTypeNormalized === 'IN' && $refTypeResolved === 'SALES_RETURN') {
+            $reason = 'Sales return #' . $refIdStr;
+        } elseif ($movementTypeNormalized === 'OUT' && $refTypeResolved === 'SALES_RETURN_CANCEL') {
+            $reason = 'Sales return cancelled #' . $refIdStr;
         }
 
         $data = [
@@ -435,6 +441,304 @@ class Stock {
 
     public function reduceStock($item_id, $quantity, $reference_id = 0, $ref_type = 'ORDER') {
         return $this->addStockMovement($item_id, $quantity, 'OUT', $reference_id, $ref_type);
+    }
+
+    /**
+     * Restore stock for a finalized sales return (partial qty per line).
+     *
+     * @return array{success:bool,message:string,applied_lines:int,skipped_lines:int,line_results:array<int,array<string,mixed>>}
+     */
+    public function applySalesReturnStockIn(int $salesReturnId, int $warehouseId): array
+    {
+        $salesReturnId = (int) $salesReturnId;
+        if ($salesReturnId <= 0) {
+            return ['success' => false, 'message' => 'Invalid sales return id', 'applied_lines' => 0, 'skipped_lines' => 0, 'line_results' => []];
+        }
+
+        $header = $this->fetchSalesReturnHeader($salesReturnId);
+        if (!$header) {
+            return ['success' => false, 'message' => 'Sales return not found', 'applied_lines' => 0, 'skipped_lines' => 0, 'line_results' => []];
+        }
+
+        $invoiceId = (int) ($header['invoice_id'] ?? 0);
+        $orderNumber = trim((string) ($header['order_number'] ?? ''));
+        if ($warehouseId <= 0) {
+            $warehouseId = (int) ($header['warehouse_id'] ?? 0);
+        }
+
+        $lines = $this->fetchSalesReturnItems($salesReturnId);
+        $productModel = new product($this->conn);
+        $refStr = (string) $salesReturnId;
+        $applied = 0;
+        $skipped = 0;
+        $errors = [];
+        $lineResults = [];
+
+        $dupStmt = $this->conn->prepare(
+            "SELECT id FROM vp_stock_movements
+             WHERE ref_type = 'SALES_RETURN' AND ref_id = ? AND product_id = ?
+             LIMIT 1"
+        );
+
+        foreach ($lines as $line) {
+            $itemId = (int) ($line['id'] ?? 0);
+            $returnQty = (int) round((float) ($line['return_qty'] ?? 0));
+            if ($returnQty <= 0) {
+                continue;
+            }
+
+            if ((float) ($line['stock_applied_qty'] ?? 0) > 0) {
+                $skipped++;
+                $lineResults[] = ['item_id' => $itemId, 'applied_qty' => 0, 'skipped' => true, 'message' => 'Already applied'];
+                continue;
+            }
+
+            $prodId = (int) ($line['product_id'] ?? 0);
+            if ($prodId <= 0) {
+                $prodId = (int) $productModel->getProductIdForInvoiceLine(
+                    $orderNumber,
+                    (string) ($line['item_code'] ?? ''),
+                    (string) ($line['size'] ?? ''),
+                    (string) ($line['color'] ?? '')
+                );
+            }
+
+            if ($prodId <= 0) {
+                $skipped++;
+                $lineResults[] = ['item_id' => $itemId, 'applied_qty' => 0, 'skipped' => true, 'message' => 'Product not resolved'];
+                continue;
+            }
+
+            if ($dupStmt) {
+                $dupStmt->bind_param('si', $refStr, $prodId);
+                $dupStmt->execute();
+                $dupRes = $dupStmt->get_result();
+                if ($dupRes && $dupRes->num_rows > 0) {
+                    $skipped++;
+                    $lineResults[] = ['item_id' => $itemId, 'applied_qty' => 0, 'skipped' => true, 'message' => 'Already applied'];
+                    continue;
+                }
+            }
+
+            if (!$this->hasPriorInvoiceStockOut($prodId, $invoiceId, $orderNumber)) {
+                $skipped++;
+                $lineResults[] = ['item_id' => $itemId, 'applied_qty' => 0, 'skipped' => true, 'message' => 'No prior stock OUT'];
+                continue;
+            }
+
+            $remainingOut = $this->getRemainingReturnableStockQty($prodId, $invoiceId, $orderNumber);
+            if ($remainingOut <= 0) {
+                $skipped++;
+                $lineResults[] = ['item_id' => $itemId, 'applied_qty' => 0, 'skipped' => true, 'message' => 'No returnable stock remaining'];
+                continue;
+            }
+
+            $qtyToApply = min($returnQty, $remainingOut);
+            $res = $this->addStockMovement($prodId, $qtyToApply, 'IN', $salesReturnId, 'SALES_RETURN');
+            if (empty($res['success'])) {
+                $errors[] = 'Product ' . $prodId . ': ' . ($res['message'] ?? 'error');
+                $lineResults[] = ['item_id' => $itemId, 'applied_qty' => 0, 'skipped' => true, 'message' => $res['message'] ?? 'error'];
+            } else {
+                $applied++;
+                $lineResults[] = ['item_id' => $itemId, 'applied_qty' => $qtyToApply, 'skipped' => false, 'message' => 'Stock IN applied'];
+            }
+        }
+
+        if ($dupStmt) {
+            $dupStmt->close();
+        }
+
+        if ($errors !== []) {
+            return [
+                'success' => false,
+                'message' => implode('; ', $errors),
+                'applied_lines' => $applied,
+                'skipped_lines' => $skipped,
+                'line_results' => $lineResults,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => $applied > 0 ? 'Stock restored for sales return' : 'Return saved; no stock movements applied',
+            'applied_lines' => $applied,
+            'skipped_lines' => $skipped,
+            'line_results' => $lineResults,
+        ];
+    }
+
+    /**
+     * Reverse stock IN from a cancelled sales return.
+     */
+    public function reverseSalesReturnStock(int $salesReturnId, int $warehouseId): array
+    {
+        $salesReturnId = (int) $salesReturnId;
+        if ($salesReturnId <= 0) {
+            return ['success' => false, 'message' => 'Invalid sales return id'];
+        }
+
+        $stmt = $this->conn->prepare(
+            "SELECT product_id, SUM(quantity) AS qty
+             FROM vp_stock_movements
+             WHERE ref_type = 'SALES_RETURN' AND ref_id = ? AND movement_type = 'IN'
+             GROUP BY product_id"
+        );
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed'];
+        }
+        $refStr = (string) $salesReturnId;
+        $stmt->bind_param('s', $refStr);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $errors = [];
+        $applied = 0;
+        while ($row = $res->fetch_assoc()) {
+            $prodId = (int) ($row['product_id'] ?? 0);
+            $qty = (int) round((float) ($row['qty'] ?? 0));
+            if ($prodId <= 0 || $qty <= 0) {
+                continue;
+            }
+            $out = $this->addStockMovement($prodId, $qty, 'OUT', $salesReturnId, 'SALES_RETURN_CANCEL');
+            if (empty($out['success'])) {
+                $errors[] = 'Product ' . $prodId . ': ' . ($out['message'] ?? 'error');
+            } else {
+                $applied++;
+            }
+        }
+        $stmt->close();
+
+        if ($errors !== []) {
+            return ['success' => false, 'message' => implode('; ', $errors), 'applied' => $applied];
+        }
+
+        return ['success' => true, 'message' => 'Sales return stock reversed', 'applied' => $applied];
+    }
+
+    private function resolveWarehouseIdForSalesReturn(int $salesReturnId): int
+    {
+        if ($salesReturnId <= 0) {
+            return (int) ($_SESSION['warehouse_id'] ?? 0);
+        }
+        $stmt = $this->conn->prepare('SELECT warehouse_id FROM vp_sales_returns WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return (int) ($_SESSION['warehouse_id'] ?? 0);
+        }
+        $stmt->bind_param('i', $salesReturnId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if ($row && (int) ($row['warehouse_id'] ?? 0) > 0) {
+            return (int) $row['warehouse_id'];
+        }
+
+        return (int) ($_SESSION['warehouse_id'] ?? 0);
+    }
+
+    /**
+     * Remaining qty that can be returned IN for product/order (OUT minus prior return IN).
+     */
+    private function getRemainingReturnableStockQty(int $productId, int $invoiceId, string $orderNumber): int
+    {
+        $productId = (int) $productId;
+        if ($productId <= 0) {
+            return 0;
+        }
+
+        $orderNumber = trim($orderNumber);
+        $invoiceRef = (string) $invoiceId;
+        $outQty = 0;
+
+        $stmt = $this->conn->prepare(
+            "SELECT COALESCE(SUM(quantity), 0) AS sq FROM vp_stock_movements
+             WHERE product_id = ? AND movement_type = 'OUT'
+             AND (
+                 (ref_type = 'INVOICE' AND ref_id = ?)
+                 OR (ref_type = 'ORDER' AND ref_id = ?)
+             )"
+        );
+        if ($stmt) {
+            $stmt->bind_param('iss', $productId, $invoiceRef, $orderNumber);
+            $stmt->execute();
+            $outQty = (int) round((float) ($stmt->get_result()->fetch_assoc()['sq'] ?? 0));
+            $stmt->close();
+        }
+
+        $cancelIn = 0;
+        if ($invoiceId > 0) {
+            $stmt = $this->conn->prepare(
+                "SELECT COALESCE(SUM(quantity), 0) AS sq FROM vp_stock_movements
+                 WHERE product_id = ? AND movement_type = 'IN'
+                 AND ref_type = 'INVOICE_CANCEL' AND ref_id = ?"
+            );
+            if ($stmt) {
+                $stmt->bind_param('is', $productId, $invoiceRef);
+                $stmt->execute();
+                $cancelIn = (int) round((float) ($stmt->get_result()->fetch_assoc()['sq'] ?? 0));
+                $stmt->close();
+            }
+        }
+
+        $returnIn = 0;
+        if ($orderNumber !== '') {
+            $stmt = $this->conn->prepare(
+                "SELECT COALESCE(SUM(sm.quantity), 0) AS sq
+                 FROM vp_stock_movements sm
+                 INNER JOIN vp_sales_returns sr ON sr.id = CAST(sm.ref_id AS UNSIGNED)
+                 WHERE sm.product_id = ? AND sm.movement_type = 'IN'
+                 AND sm.ref_type = 'SALES_RETURN' AND sr.order_number = ?
+                 AND sr.status = 'finalized'"
+            );
+            if ($stmt) {
+                $stmt->bind_param('is', $productId, $orderNumber);
+                $stmt->execute();
+                $returnIn = (int) round((float) ($stmt->get_result()->fetch_assoc()['sq'] ?? 0));
+                $stmt->close();
+            }
+        }
+
+        return max(0, $outQty - $cancelIn - $returnIn);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function fetchSalesReturnHeader(int $salesReturnId): ?array
+    {
+        $stmt = $this->conn->prepare('SELECT * FROM vp_sales_returns WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('i', $salesReturnId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return $row ?: null;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function fetchSalesReturnItems(int $salesReturnId): array
+    {
+        $stmt = $this->conn->prepare(
+            'SELECT * FROM vp_sales_return_items WHERE sales_return_id = ? ORDER BY sort_order ASC, id ASC'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $salesReturnId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $rows = [];
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $rows[] = $row;
+            }
+        }
+        $stmt->close();
+
+        return $rows;
     }
 }
 
