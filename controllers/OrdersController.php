@@ -572,7 +572,26 @@ class OrdersController
             return ['ok' => false, 'orders' => [], 'error' => 'No order data from vendor API'];
         }
 
-        return ['ok' => true, 'orders' => $decoded['orders'], 'error' => ''];
+        return ['ok' => true, 'orders' => $this->normalizeVendorOrdersList($decoded['orders']), 'error' => ''];
+    }
+
+    /**
+     * Vendor API returns orders as a list or as an object keyed by order id.
+     *
+     * @param array<int|string, array<string, mixed>> $orders
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeVendorOrdersList(array $orders): array
+    {
+        if ($orders === []) {
+            return [];
+        }
+
+        if (array_is_list($orders)) {
+            return $orders;
+        }
+
+        return array_values($orders);
     }
 
     /**
@@ -2548,9 +2567,11 @@ class OrdersController
         return in_array(strtolower(trim((string)$raw)), ['1', 'true', 'yes', 'on'], true);
     }
 
-    private static function vendorOrderLineMatchKey(string $itemCode, string $sku): string
+    private static function vendorOrderLineMatchKey(string $itemCode, string $sku = ''): string
     {
-        return strtolower(trim($itemCode) . '|' . trim($sku));
+        unset($sku);
+
+        return strtolower(trim($itemCode));
     }
 
     /**
@@ -2648,7 +2669,7 @@ class OrdersController
             'gst' => $item['gst'] ?? '',
             'hsn' => $item['hscode'] ?? '',
             'local_stock' => is_numeric($item['local_stock'] ?? null) ? (float)$item['local_stock'] : 0.0,
-            'cost_price' => $item['cp'] ?? 0.0,
+            'cost_price' => is_numeric($item['cp'] ?? null) ? (float)$item['cp'] : 0.0,
             'location' => $item['location'] ?? '',
             'order_date' => date('Y-m-d H:i:s', $order['processed_time'] ?? time()),
             'processed_time' => $order['processed_time'] ?? 0,
@@ -2852,12 +2873,22 @@ class OrdersController
             if (!is_array($item)) {
                 continue;
             }
-            $rdata = $this->mapVendorApiItemToOrderRow($vendorOrder, $item, $statusList, $customerId);
-            if (strtoupper((string)($vendorOrder['payment_type'] ?? '')) === 'COD' && (float)($item['itemprice'] ?? 0) >= 5000) {
-                $rdata['agent_id'] = 31;
-            }
+            try {
+                $rdata = $this->mapVendorApiItemToOrderRow($vendorOrder, $item, $statusList, $customerId);
+                if (strtoupper((string)($vendorOrder['payment_type'] ?? '')) === 'COD' && (float)($item['itemprice'] ?? 0) >= 5000) {
+                    $rdata['agent_id'] = 31;
+                }
 
-            $res = $ordersModel->upsertRefreshedOrderLine($rdata, $updateStatus);
+                $res = $ordersModel->upsertRefreshedOrderLine($rdata, $updateStatus);
+            } catch (\Throwable $e) {
+                $res = [
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                    'action' => 'failed',
+                    'item_code' => trim((string)($item['itemcode'] ?? '')),
+                    'sku' => trim((string)($item['sku'] ?? '')),
+                ];
+            }
             if (!is_array($res)) {
                 $res = [
                     'success' => false,
