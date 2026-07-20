@@ -492,3 +492,140 @@ function pos_order_line_list_price_incl(array $orderRow): float
 {
     return pos_order_inclusive_line_total($orderRow, 'disc');
 }
+
+/**
+ * @param array<int, array<string, mixed>> $linePricingByLineId
+ * @return array{gross_incl: float, custom_reduce: float, total_gst: float, net_chargeable: float}|null
+ */
+function pos_order_aggregate_line_pricing_summary(array $linePricingByLineId, ?array $orderInfo = null): ?array
+{
+    if ($linePricingByLineId === []) {
+        return null;
+    }
+
+    $grossIncl = 0.0;
+    $totalGst = 0.0;
+    $netChargeable = 0.0;
+    $customReduce = 0.0;
+    $hasGross = false;
+
+    foreach ($linePricingByLineId as $pricing) {
+        if (!is_array($pricing) || !array_key_exists('gross_incl', $pricing)) {
+            continue;
+        }
+        $hasGross = true;
+        $grossIncl += (float)($pricing['gross_incl'] ?? 0);
+        $totalGst += (float)($pricing['total_gst'] ?? 0);
+        $netChargeable += (float)($pricing['chargeable_value'] ?? 0);
+        $customReduce = max($customReduce, (float)($pricing['custom_reduce'] ?? 0));
+    }
+
+    if (!$hasGross) {
+        return null;
+    }
+
+    if ($customReduce <= 0 && is_array($orderInfo)) {
+        $customReduce = round((float)($orderInfo['custom_reduce'] ?? 0), 2);
+    }
+
+    return [
+        'gross_incl' => round($grossIncl, 2),
+        'custom_reduce' => round($customReduce, 2),
+        'total_gst' => round($totalGst, 2),
+        'net_chargeable' => round($netChargeable, 2),
+    ];
+}
+
+/**
+ * Summary rows for order-details sidebar (matches line pricing breakdown).
+ *
+ * @param array{gross_incl: float, custom_reduce: float, total_gst: float, net_chargeable: float} $aggregate
+ * @param array<string, mixed> $posMeta
+ * @return list<array{label: string, amount: float, note: string, is_grand: bool}>
+ */
+function pos_order_build_summary_rows_from_line_pricing(array $aggregate, array $posMeta = []): array
+{
+    require_once __DIR__ . '/pos_invoice_amount_summary.php';
+
+    $absorbedNote = '(included in line totals)';
+    $rows = [[
+        'label' => 'Total Before Discount (incl. GST)',
+        'amount' => (float)$aggregate['gross_incl'],
+        'note' => '',
+        'is_grand' => false,
+    ]];
+
+    $cash = (float)$aggregate['custom_reduce'];
+    if ($cash <= 0.001) {
+        $cash = round((float)($posMeta['cash_discount'] ?? 0), 2);
+    }
+    if ($cash > 0.001) {
+        $metaForLabel = $posMeta;
+        if (trim((string)($metaForLabel['custom_discount_mode'] ?? '')) === '') {
+            $metaForLabel['custom_discount_mode'] = 'fixed';
+            $metaForLabel['custom_discount_value'] = $cash;
+        }
+        $rows[] = [
+            'label' => pos_invoice_custom_discount_label($metaForLabel),
+            'amount' => $cash,
+            'note' => '',
+            'is_grand' => false,
+        ];
+    }
+
+    $coupon = round((float)($posMeta['coupon_discount'] ?? 0), 2);
+    if ($coupon > 0.001) {
+        $rows[] = [
+            'label' => pos_invoice_coupon_label($posMeta),
+            'amount' => $coupon,
+            'note' => '',
+            'is_grand' => false,
+        ];
+    }
+
+    $gift = round((float)($posMeta['gift_discount'] ?? 0), 2);
+    if ($gift > 0.001) {
+        $rows[] = [
+            'label' => 'Gift Voucher',
+            'amount' => $gift,
+            'note' => '',
+            'is_grand' => false,
+        ];
+    }
+
+    $gst = (float)$aggregate['total_gst'];
+    if ($gst > 0.001) {
+        $rows[] = [
+            'label' => 'Total GST',
+            'amount' => $gst,
+            'note' => $absorbedNote,
+            'is_grand' => false,
+        ];
+    }
+
+    $rows[] = [
+        'label' => 'GRAND Total',
+        'amount' => (float)$aggregate['net_chargeable'],
+        'note' => '',
+        'is_grand' => true,
+    ];
+
+    return $rows;
+}
+
+/**
+ * @param array<int, array<string, mixed>> $linePricingByLineId
+ */
+function pos_order_line_pricing_should_override_invoice_summary(array $linePricingByLineId): bool
+{
+    foreach ($linePricingByLineId as $pricing) {
+        if (!is_array($pricing)) {
+            continue;
+        }
+        if (((float)($pricing['addons_total'] ?? 0)) > 0.001 || ((float)($pricing['custom_reduce'] ?? 0)) > 0.001) {
+            return true;
+        }
+    }
+
+    return false;
+}
