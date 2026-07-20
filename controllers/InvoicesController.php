@@ -5,6 +5,7 @@ require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
 require_once 'models/product/product.php';
 require_once __DIR__ . '/../helpers/international_invoice_defaults.php';
+require_once __DIR__ . '/../helpers/app_settings.php';
 
 $invoiceModel = new Invoice($conn);
 $ordersModel = new Order($conn);
@@ -103,7 +104,7 @@ class InvoicesController
             $data['data'][$key]['unit_price'] = number_format($unitPriceBeforeGst, 2, '.', '');
         }
         //firm info
-        $data['firm'] = $commanModel->getRecordById('firm_details', 1);
+        $data['firm'] = app_setting_firm_details();
         //$data['customer_address'] = $commanModel->get_customer_address(isset($data['data'][0]['order_number']) ? $data['data'][0]['order_number'] : 0);
         //address info
         $data['exotic_address'] = $commanModel->get_exotic_address();
@@ -147,7 +148,7 @@ class InvoicesController
             $orderAddress = $firstOrderNumber !== ''
                 ? $commanModel->get_customer_address($firstOrderNumber)
                 : null;
-            $firm = $commanModel->getRecordById('firm_details', 1);
+            $firm = app_setting_firm_details();
             $orderRows = [];
             foreach ($orderNumbers as $orderNumber) {
                 $lines = $ordersModel->getOrderByOrderNumber($orderNumber);
@@ -340,7 +341,7 @@ class InvoicesController
 
             // Get customer and firm details
             $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
-            $firm = $commanModel->getRecordById('firm_details', 1);
+            $firm = app_setting_firm_details();
 
             if (!$customer || !$firm) {
                 error_log("Alankit IRN: Missing customer or firm details for invoice #$invoiceId");
@@ -507,7 +508,7 @@ class InvoicesController
 
             // Get customer and firm details
             $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
-            $firm = $commanModel->getRecordById('firm_details', 1);
+            $firm = app_setting_firm_details();
 
             if (!$customer || !$firm) {
                 error_log("Alankit IRN: Missing customer or firm details for invoice #$invoiceId");

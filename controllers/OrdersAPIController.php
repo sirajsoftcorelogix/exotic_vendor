@@ -652,12 +652,8 @@ class OrdersAPIController
         }
 
         try {
-            //exotic_address
-            $exoticAddressSql = "SELECT * FROM firm_details LIMIT 1";
-            $exoticAddressStmt = $GLOBALS['conn']->prepare($exoticAddressSql);
-            $exoticAddressStmt->execute();
-            $exoticAddressResult = $exoticAddressStmt->get_result();
-            $firmDetail = $exoticAddressResult->fetch_assoc();
+            require_once __DIR__ . '/../helpers/app_settings.php';
+            $firmDetail = app_setting_firm_details();
 
             $whereClauses = [];
             if (!empty($startDate) && !empty($endDate)) {

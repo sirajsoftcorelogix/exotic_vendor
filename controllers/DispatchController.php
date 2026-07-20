@@ -11,6 +11,7 @@ require_once __DIR__ . '/../helpers/courier/bluedart_rate_helpers.php';
 require_once __DIR__ . '/../helpers/dispatch_delivery_dates.php';
 require_once __DIR__ . '/../helpers/dispatch_courier_identity.php';
 require_once __DIR__ . '/../helpers/exotic_india_shipment_api.php';
+require_once __DIR__ . '/../helpers/app_settings.php';
 require_once __DIR__ . '/../models/courier/CourierShipment.php';
 require_once __DIR__ . '/../models/order/stock.php';
 $commanModel = new Tables($conn);
@@ -264,7 +265,7 @@ class DispatchController {
             }
 
             // Build Shiprocket payload per requested format
-            $firm = $commanModel->getRecordById('firm_details', 1) ?? [];
+            $firm = app_setting_firm_details() ?? [];
             $address = $commanModel->getDispatchAddress($invoice['vp_order_info_id'] ?? 0) ?? ($invoice['address'] ?? []);
             $destCountry = normalizeCountryIso2(
                 $address['shipping_country'] ?? $address['country'] ?? 'IN',
@@ -704,7 +705,7 @@ class DispatchController {
             if ($invoice_id) {
                 $invoice = $invoiceModel->getInvoiceById($invoice_id);
                 $invoice['items'] = $invoiceModel->getInvoiceItems($invoice_id);
-                $invoice['firm_details'] = $commanModel->getRecordById('firm_details', 1);
+                $invoice['firm_details'] = app_setting_firm_details();
                 $invoice['exotic_address'] = $commanModel->get_exotic_address();
                 $pickup = $dispatchModel->pickupLocations();
                 $invoice['pickup_locations'] = $pickup['data']['shipping_address'] ?? [];
@@ -2053,7 +2054,7 @@ class DispatchController {
                         $orderInfo = $ordersModel->getRemarksByOrderNumber($order_number);
                         $address = is_array($orderInfo) ? $orderInfo : [];
                     }
-                    $firm = $commanModel->getRecordById('firm_details', 1) ?? [];
+                    $firm = app_setting_firm_details() ?? [];
                     
                     // Find original box data from input
                     $boxData = null;
@@ -2640,7 +2641,7 @@ class DispatchController {
             }
             
             // Get pickup postcode from the actual Shiprocket pickup location when possible.
-            $firm = $commanModel->getRecordById('firm_details', 1);
+            $firm = app_setting_firm_details();
             $requestedPickupLocation = $this->resolveDefaultShiprocketPickupLocation($firm, $input['pickup_location'] ?? null);
             $pickupResolution = $this->resolveShiprocketPickupPostcode($dispatchModel, is_array($firm) ? $firm : [], $requestedPickupLocation);
             $pickup_postcode = $pickupResolution['postcode'] ?? null;
@@ -2904,7 +2905,7 @@ class DispatchController {
                 exit;
             }
 
-            $firm = $commanModel->getRecordById('firm_details', 1);
+            $firm = app_setting_firm_details();
             $requestedPickupLocation = $this->resolveDefaultShiprocketPickupLocation($firm, $input['pickup_location'] ?? null);
 
             $orderInfo = $ordersModel->getRemarksByOrderNumber($order_number);
@@ -3045,7 +3046,7 @@ class DispatchController {
             $address = is_array($orderInfo) ? $orderInfo : [];
         }
 
-        $firm = $commanModel->getRecordById('firm_details', 1) ?? [];
+        $firm = app_setting_firm_details() ?? [];
         $invoiceItems = $invoiceModel->getInvoiceItems($invoiceId);
         $boxItemIds = array_filter(array_map('trim', explode(',', (string)($dispatchRecord['box_items'] ?? ''))));
 
