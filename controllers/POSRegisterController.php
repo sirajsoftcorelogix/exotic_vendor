@@ -1150,6 +1150,7 @@ class POSRegisterController
     {
         is_login();
         require_once 'models/user/user.php';
+        require_once 'helpers/stock_report_filters.php';
         global $conn;
         $usersModel = new User($conn);
 
@@ -1174,14 +1175,7 @@ class POSRegisterController
             $warehouseName = $warehouse['address_title'] ?? 'No Warehouse';
         }
 
-        $filters = [
-            'search' => $_GET['search'] ?? '',
-            'category' => $_GET['category'] ?? 'allProducts',
-            'stock_status' => $_GET['stock_status'] ?? 'all',
-            'limit' => $_GET['limit'] ?? 200,
-            'page_no' => isset($_GET['page_no']) ? max(1, (int)$_GET['page_no']) : 1,
-            'warehouse_id' => $reportWh,
-        ];
+        $filters = parseStockReportFiltersFromRequest($_GET, $reportWh);
 
         $categories = ['allProducts' => 'All Products'] + getCategories();
         $totalRows = $this->pos->getStockReportCount($filters);
@@ -1199,6 +1193,7 @@ class POSRegisterController
             'warehouse_name' => $warehouseName,
             'categories' => $categories,
             'filters' => $filters,
+            'group_filter_fields' => getStockReportGroupFilterFieldDefinitions(),
             'rows' => $rows,
             'page_no' => $pageNo,
             'limit' => $limit,
@@ -1676,14 +1671,19 @@ class POSRegisterController
             }
         }
 
-        return [
-            'search' => trim((string) ($payload['search'] ?? '')),
-            'category' => trim((string) ($payload['category'] ?? 'allProducts')),
-            'stock_status' => trim((string) ($payload['stock_status'] ?? 'all')),
-            'warehouse_id' => $reportWh,
-            'limit' => self::STOCK_REPORT_EXPORT_BATCH_SIZE,
-            'page_no' => 1,
-        ];
+        return parseStockReportFiltersFromPayload($payload, $reportWh);
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function parseStockReportFiltersFromPayload(array $payload, int $reportWh): array
+    {
+        require_once 'helpers/stock_report_filters.php';
+
+        $filters = parseStockReportFiltersFromRequest($payload, $reportWh);
+        $filters['limit'] = self::STOCK_REPORT_EXPORT_BATCH_SIZE;
+        $filters['page_no'] = 1;
+
+        return $filters;
     }
 
     /** @return array<string, mixed>|null */
@@ -1739,7 +1739,7 @@ class POSRegisterController
 
         fputcsv($handle, [
             'SKU',
-            'Category',
+            'Group Name',
             'Location',
             'Stock Qty',
         ]);

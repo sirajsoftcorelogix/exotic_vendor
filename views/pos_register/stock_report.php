@@ -1,9 +1,8 @@
 <?php
-$filtersPanelOpen =
-  trim((string)($filters['search'] ?? '')) !== ''
-  || (($filters['category'] ?? 'allProducts') !== 'allProducts')
-  || (($filters['stock_status'] ?? 'all') !== 'all')
-  || (!empty($can_change_warehouse) && (int)($filters['warehouse_id'] ?? 0) > 0);
+require_once __DIR__ . '/../../helpers/stock_report_filters.php';
+$filtersPanelOpen = stockReportFiltersPanelOpen($filters ?? [], !empty($can_change_warehouse));
+$selectedCategory = (string)($filters['category'] ?? 'allProducts');
+$groupFilterFields = is_array($group_filter_fields ?? null) ? $group_filter_fields : getStockReportGroupFilterFieldDefinitions();
 $rowCount = is_array($rows ?? null) ? count($rows) : 0;
 $pageNo = max(1, (int)($page_no ?? ($filters['page_no'] ?? 1)));
 $limit = max(1, (int)($limit ?? ($filters['limit'] ?? 200)));
@@ -28,7 +27,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         </div>
         <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">Stock report</h1>
         <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
-          Monitor warehouse stock by SKU, category, and status using the same list workspace style as direct purchase.
+          Monitor warehouse stock by SKU, group, and status using the same list workspace style as direct purchase.
         </p>
       </div>
       <div class="flex shrink-0 lg:pl-4 lg:self-center gap-2">
@@ -60,7 +59,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         </span>
         <div class="min-w-0">
           <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
-          <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Warehouse, keyword, category, stock status, and rows limit.</p>
+          <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Warehouse, keyword, group name, physical/local stock status, group-specific fields, and rows limit.</p>
         </div>
       </div>
       <span class="shrink-0 inline-flex items-center gap-2 text-xs font-semibold text-amber-800">
@@ -101,10 +100,10 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-gray-600 mb-1">Category</label>
-          <select name="category" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+          <label for="stock_report_group_name" class="block text-xs font-semibold text-gray-600 mb-1">Group Name</label>
+          <select id="stock_report_group_name" name="category" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
             <?php foreach (($categories ?? []) as $slug => $label): ?>
-              <option value="<?= htmlspecialchars($slug) ?>" <?= (($filters['category'] ?? 'allProducts') === $slug) ? 'selected' : '' ?>>
+              <option value="<?= htmlspecialchars($slug) ?>" <?= ($selectedCategory === $slug) ? 'selected' : '' ?>>
                 <?= htmlspecialchars($label) ?>
               </option>
             <?php endforeach; ?>
@@ -112,12 +111,22 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-gray-600 mb-1">Stock status</label>
-          <select name="stock_status" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
-            <option value="all" <?= (($filters['stock_status'] ?? 'all') === 'all') ? 'selected' : '' ?>>All stock</option>
-            <option value="out" <?= (($filters['stock_status'] ?? 'all') === 'out') ? 'selected' : '' ?>>Out of stock</option>
-            <option value="low" <?= (($filters['stock_status'] ?? 'all') === 'low') ? 'selected' : '' ?>>Low stock (1-5)</option>
-            <option value="in" <?= (($filters['stock_status'] ?? 'all') === 'in') ? 'selected' : '' ?>>In stock</option>
+          <label for="stock_report_physical_stock_status" class="block text-xs font-semibold text-gray-600 mb-1">Physical stock</label>
+          <select id="stock_report_physical_stock_status" name="physical_stock_status" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+            <option value="all" <?= (($filters['physical_stock_status'] ?? 'all') === 'all') ? 'selected' : '' ?>>All</option>
+            <option value="out" <?= (($filters['physical_stock_status'] ?? 'all') === 'out') ? 'selected' : '' ?>>Out of stock (0)</option>
+            <option value="low" <?= (($filters['physical_stock_status'] ?? 'all') === 'low') ? 'selected' : '' ?>>Low stock (1-5)</option>
+            <option value="in" <?= (($filters['physical_stock_status'] ?? 'all') === 'in') ? 'selected' : '' ?>>In stock</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="stock_report_local_stock_status" class="block text-xs font-semibold text-gray-600 mb-1">Local stock</label>
+          <select id="stock_report_local_stock_status" name="local_stock_status" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+            <option value="all" <?= (($filters['local_stock_status'] ?? 'all') === 'all') ? 'selected' : '' ?>>All</option>
+            <option value="out" <?= (($filters['local_stock_status'] ?? 'all') === 'out') ? 'selected' : '' ?>>Out of stock (0)</option>
+            <option value="low" <?= (($filters['local_stock_status'] ?? 'all') === 'low') ? 'selected' : '' ?>>Low stock (1-5)</option>
+            <option value="in" <?= (($filters['local_stock_status'] ?? 'all') === 'in') ? 'selected' : '' ?>>In stock</option>
           </select>
         </div>
 
@@ -129,6 +138,80 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
             <?php endforeach; ?>
           </select>
         </div>
+      </div>
+
+      <div id="stockReportGroupFilters" class="mt-5 border-t border-gray-100 pt-5">
+        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Group-specific filters</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-4">
+          <?php foreach ($groupFilterFields as $fieldKey => $fieldDef): ?>
+            <?php
+              $fieldGroups = $fieldDef['groups'] ?? [];
+              $fieldGroupsJson = htmlspecialchars(json_encode(array_values($fieldGroups), JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+              $fieldValue = htmlspecialchars((string)($filters[$fieldKey] ?? ''), ENT_QUOTES, 'UTF-8');
+              $defaultLabel = (string)($fieldDef['label'] ?? ucfirst($fieldKey));
+              $labelMap = is_array($fieldDef['labels'] ?? null) ? $fieldDef['labels'] : [];
+              $labelMapJson = htmlspecialchars(json_encode($labelMap, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+              $placeholder = htmlspecialchars((string)($fieldDef['placeholder'] ?? ''), ENT_QUOTES, 'UTF-8');
+              $inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition';
+            ?>
+            <?php if (($fieldDef['autocomplete'] ?? '') === 'author'): ?>
+              <div
+                class="stock-report-group-field hidden"
+                data-stock-report-field="<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>"
+                data-stock-report-groups="<?= $fieldGroupsJson ?>"
+                data-stock-report-labels="<?= $labelMapJson ?>"
+                data-stock-report-default-label="<?= htmlspecialchars($defaultLabel, ENT_QUOTES, 'UTF-8') ?>">
+                <?php renderPartial('views/shared/partials/order_filter_autocomplete_field.php', [
+                  'field_id' => 'stock_report_' . $fieldKey,
+                  'field_name' => $fieldKey,
+                  'field_label' => $defaultLabel,
+                  'field_placeholder' => (string)($fieldDef['placeholder'] ?? ''),
+                  'field_value' => $filters[$fieldKey] ?? '',
+                  'search_url' => base_url('?page=orders&action=search_filter_authors&q='),
+                  'input_class' => $inputClass,
+                ]); ?>
+              </div>
+            <?php elseif (($fieldDef['autocomplete'] ?? '') === 'publisher'): ?>
+              <div
+                class="stock-report-group-field hidden"
+                data-stock-report-field="<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>"
+                data-stock-report-groups="<?= $fieldGroupsJson ?>"
+                data-stock-report-labels="<?= $labelMapJson ?>"
+                data-stock-report-default-label="<?= htmlspecialchars($defaultLabel, ENT_QUOTES, 'UTF-8') ?>">
+                <?php renderPartial('views/shared/partials/order_filter_autocomplete_field.php', [
+                  'field_id' => 'stock_report_' . $fieldKey,
+                  'field_name' => $fieldKey,
+                  'field_label' => $defaultLabel,
+                  'field_placeholder' => (string)($fieldDef['placeholder'] ?? ''),
+                  'field_value' => $filters[$fieldKey] ?? '',
+                  'search_url' => base_url('?page=orders&action=search_filter_publishers&q='),
+                  'input_class' => $inputClass,
+                ]); ?>
+              </div>
+            <?php else: ?>
+              <div
+                class="stock-report-group-field hidden"
+                data-stock-report-field="<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>"
+                data-stock-report-groups="<?= $fieldGroupsJson ?>"
+                data-stock-report-labels="<?= $labelMapJson ?>"
+                data-stock-report-default-label="<?= htmlspecialchars($defaultLabel, ENT_QUOTES, 'UTF-8') ?>">
+                <label for="stock_report_<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>" class="stock-report-group-field-label block text-xs font-semibold text-gray-600 mb-1">
+                  <?= htmlspecialchars($defaultLabel) ?>
+                </label>
+                <input
+                  type="text"
+                  id="stock_report_<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>"
+                  name="<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>"
+                  value="<?= $fieldValue ?>"
+                  placeholder="<?= $placeholder ?>"
+                  class="<?= htmlspecialchars($inputClass, ENT_QUOTES, 'UTF-8') ?>">
+              </div>
+            <?php endif; ?>
+          <?php endforeach; ?>
+        </div>
+        <p id="stockReportGroupFiltersHint" class="mt-3 text-xs text-gray-500">
+          Select a group name above to show filters for books, textiles, paintings, and other product types.
+        </p>
       </div>
 
       <div class="mt-5 flex flex-wrap items-center gap-3">
@@ -190,7 +273,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
             </th>
             <th class="px-5 py-3.5 whitespace-nowrap">Image</th>
             <th class="px-5 py-3.5 whitespace-nowrap">SKU</th>
-            <th class="px-5 py-3.5 whitespace-nowrap">Category</th>
+            <th class="px-5 py-3.5 whitespace-nowrap">Group Name</th>
             <th class="px-5 py-3.5 whitespace-nowrap">Location</th>
             <th class="px-5 py-3.5 whitespace-nowrap">Stock</th>
             <th class="px-5 py-3.5 whitespace-nowrap text-right">Sell price</th>
@@ -471,12 +554,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     'This will delete vp_stock_movements and vp_stock rows, reset physical_stock to 0, '
     + 'fetch the latest local stock from the API, then reseed opening stock in the default warehouse.';
   const STOCK_REPORT_BATCH_SIZE = 5;
-  const STOCK_REPORT_FILTERS = <?= json_encode([
-    'search' => $filters['search'] ?? '',
-    'category' => $filters['category'] ?? 'allProducts',
-    'stock_status' => $filters['stock_status'] ?? 'all',
-    'warehouse_id' => (int)($filters['warehouse_id'] ?? 0),
-  ], JSON_UNESCAPED_UNICODE) ?>;
+  const STOCK_REPORT_FILTERS = <?= json_encode(stockReportFiltersForExportPayload($filters ?? []), JSON_UNESCAPED_UNICODE) ?>;
   const STOCK_REPORT_TOTAL_ROWS = <?= (int)($total_rows ?? 0) ?>;
 
   let stockReportOtpTimer = null;
@@ -1085,6 +1163,47 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     modalImg.src = '';
   }
 
+  function syncStockReportGroupFilters() {
+    const groupSelect = document.getElementById('stock_report_group_name');
+    const hint = document.getElementById('stockReportGroupFiltersHint');
+    const selectedGroup = groupSelect ? groupSelect.value : 'allProducts';
+    let visibleCount = 0;
+
+    document.querySelectorAll('.stock-report-group-field').forEach((fieldEl) => {
+      let groups = [];
+      try {
+        groups = JSON.parse(fieldEl.getAttribute('data-stock-report-groups') || '[]');
+      } catch (err) {
+        groups = [];
+      }
+
+      const show = selectedGroup !== 'allProducts' && groups.indexOf(selectedGroup) !== -1;
+      fieldEl.classList.toggle('hidden', !show);
+      if (!show) {
+        return;
+      }
+
+      visibleCount += 1;
+
+      let labelMap = {};
+      try {
+        labelMap = JSON.parse(fieldEl.getAttribute('data-stock-report-labels') || '{}');
+      } catch (err) {
+        labelMap = {};
+      }
+      const defaultLabel = fieldEl.getAttribute('data-stock-report-default-label') || '';
+      const labelText = labelMap[selectedGroup] || defaultLabel;
+      const labelEl = fieldEl.querySelector('label');
+      if (labelEl) {
+        labelEl.textContent = labelText;
+      }
+    });
+
+    if (hint) {
+      hint.classList.toggle('hidden', visibleCount > 0);
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     const modal = document.getElementById('stockReportImgModal');
     if (modal) {
@@ -1178,6 +1297,15 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
       });
     }
 
+    const groupSelect = document.getElementById('stock_report_group_name');
+    if (groupSelect) {
+      groupSelect.addEventListener('change', syncStockReportGroupFilters);
+    }
+    syncStockReportGroupFilters();
+
     updateStockReportSelectionUi();
   });
+</script>
+<script>
+  <?php renderPartial('views/shared/partials/order_filter_autocomplete_script.php'); ?>
 </script>
