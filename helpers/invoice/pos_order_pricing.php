@@ -472,6 +472,7 @@ function pos_order_enrich_line_display_pricing(array $orderRow, array $pricing, 
     $pricing['custom_reduce'] = $customReduce;
     $pricing['gross_incl'] = $grossIncl;
     $pricing['chargeable_value'] = $netChargeable;
+    $pricing['list_price_incl'] = pos_order_line_list_price_incl($orderRow);
     $pricing['taxable_value'] = $taxResult['taxable_value'];
     $pricing['total_gst'] = $taxResult['total_gst'];
     $pricing['pricing_components'] = $components;
@@ -482,4 +483,12 @@ function pos_order_enrich_line_display_pricing(array $orderRow, array $pricing, 
 function pos_order_format_pricing_amount(float $amount): string
 {
     return number_format($amount, 2);
+}
+
+/**
+ * GST-inclusive list price from vp_orders.finalprice (per unit × qty).
+ */
+function pos_order_line_list_price_incl(array $orderRow): float
+{
+    return pos_order_inclusive_line_total($orderRow, 'disc');
 }

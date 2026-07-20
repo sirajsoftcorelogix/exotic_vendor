@@ -202,6 +202,10 @@ $proformaPrintDisabledReason = $canPrintProforma
                         $netLineAmount = is_array($linePricing)
                             ? (float)($linePricing['chargeable_value'] ?? 0)
                             : (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
+                        $listLineAmount = is_array($linePricing)
+                            ? (float)($linePricing['list_price_incl'] ?? 0)
+                            : (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
+                        $headlineLineAmount = $listLineAmount > 0 ? $listLineAmount : $netLineAmount;
                         $hasExtendedPricing = is_array($linePricing)
                             && (((float)($linePricing['addons_total'] ?? 0)) > 0.001 || ((float)($linePricing['custom_reduce'] ?? 0)) > 0.001);
                         $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
@@ -260,8 +264,8 @@ $proformaPrintDisabledReason = $canPrintProforma
                                         <div class="flex items-center gap-12">
                                             <?php if ($hasExtendedPricing): ?>
                                                 <div class="text-right text-[13px] text-black-500">
-                                                    <p class="text-[11px] uppercase tracking-wide text-gray-500">Net total</p>
-                                                    <p class="tabular-nums font-bold text-[14px] text-black-900"><?php echo $currencysymbol . number_format($netLineAmount, 2); ?></p>
+                                                    <p class="text-[11px] uppercase tracking-wide text-gray-500">List price</p>
+                                                    <p class="tabular-nums font-bold text-[14px] text-black-900"><?php echo $currencysymbol . number_format($headlineLineAmount, 2); ?></p>
                                                 </div>
                                             <?php else: ?>
                                                 <div class="flex items-center gap-2 text-[13px] text-black-500">
