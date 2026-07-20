@@ -2428,16 +2428,18 @@ class PosInvoiceController
             ? round($sumLineTotals, 2)
             : round((float)$totalAmount, 2);
 
-        // Add row for tax amount totals (below each SGST/CGST/IGST column)
+        // Add row for tax amount totals (below each SGST/CGST/IGST Amount column)
         $posTotalDiscEmpty = ($usePosItemRowLayout && $showDiscPriceColumn)
             ? '<td></td>'
             : '';
+        $posTotalPriceEmpty = $usePosItemRowLayout ? '' : '<td></td>';
         $summaryrows .= '
                     <tr style="background: #e8e8e8; border-top: 2px solid #000;">
                         <td colspan="4" class="right bold">Total:</td>
                         ' . $posTotalDiscEmpty . '
                         <td class="right bold">' . $totalQuantity . '</td>
-                        <td></td>
+                        ' . $posTotalPriceEmpty . '
+                        <td class="right bold"></td>
                         <td class="right bold">' . number_format($totalSgstAmt, 2) . '</td>
                         <td class="right bold"></td>
                         <td class="right bold">' . number_format($totalCgstAmt, 2) . '</td>
