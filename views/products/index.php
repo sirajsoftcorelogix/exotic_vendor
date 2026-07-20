@@ -113,6 +113,24 @@
                         <label for="marketplace" class="block text-sm font-medium text-gray-600 mb-1">Marketplace</label>
                         <input type="text" value="<?= htmlspecialchars($_GET['marketplace'] ?? '') ?>" name="marketplace" id="marketplace" placeholder="Marketplace" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
+                    <?php renderPartial('views/shared/partials/order_filter_autocomplete_field.php', [
+                        'field_id' => 'author',
+                        'field_name' => 'author',
+                        'field_label' => 'Author',
+                        'field_placeholder' => 'Search author by name...',
+                        'field_value' => $_GET['author'] ?? '',
+                        'search_url' => base_url('?page=orders&action=search_filter_authors&q='),
+                        'input_class' => 'w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500',
+                    ]); ?>
+                    <?php renderPartial('views/shared/partials/order_filter_autocomplete_field.php', [
+                        'field_id' => 'publisher',
+                        'field_name' => 'publisher',
+                        'field_label' => 'Publisher',
+                        'field_placeholder' => 'Search publisher by name...',
+                        'field_value' => $_GET['publisher'] ?? '',
+                        'search_url' => base_url('?page=orders&action=search_filter_publishers&q='),
+                        'input_class' => 'w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500',
+                    ]); ?>
                     <!-- <div>
                     <label for="agent" class="block text-sm font-medium text-gray-600 mb-1">Agent</label>
                     <select id="agent" name="agent" class="w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
@@ -1086,6 +1104,7 @@
             // Let the form submit normally
         });
     });
+    <?php renderPartial('views/shared/partials/order_filter_autocomplete_script.php'); ?>
     //vendor auto complete
     document.getElementById('vendor_autocomplete').addEventListener('input', function() {
         const query = this.value;

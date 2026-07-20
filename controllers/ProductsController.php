@@ -52,6 +52,15 @@ class ProductsController
         if (!empty($_GET['marketplace'])) {
             $filters['marketplace'] = trim($_GET['marketplace']);
         }
+        require_once dirname(__DIR__) . '/helpers/order_filter_autocomplete.php';
+        $authorFilter = resolveProductListAuthorFilter($_GET);
+        if ($authorFilter !== '') {
+            $filters['author'] = $authorFilter;
+        }
+        $publisherFilter = resolveProductListPublisherFilter($_GET);
+        if ($publisherFilter !== '') {
+            $filters['publisher'] = $publisherFilter;
+        }
         $products_data = $productModel->getAllProducts($limit, $offset, $filters);
         // Assuming a method countAllProducts exists to get total count
         $total_records = $productModel->countAllProducts($filters);
