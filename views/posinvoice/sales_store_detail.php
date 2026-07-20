@@ -96,10 +96,24 @@ $initialFilters = is_array($initial_filters ?? null) ? $initial_filters : [];
                         <label for="type" class="block text-xs font-semibold text-gray-600 mb-1">Payment type</label>
                         <select id="type" class="ps-filter-input">
                             <option value="">All payment types</option>
-                            <option value="offline" <?= (($initialFilters['type'] ?? '') === 'offline') ? 'selected' : '' ?>>Offline</option>
-                            <option value="cod" <?= (($initialFilters['type'] ?? '') === 'cod') ? 'selected' : '' ?>>Cash</option>
-                            <option value="razorpay" <?= (($initialFilters['type'] ?? '') === 'razorpay') ? 'selected' : '' ?>>Razorpay</option>
-                            <option value="bank_transfer" <?= (($initialFilters['type'] ?? '') === 'bank_transfer') ? 'selected' : '' ?>>Bank transfer</option>
+                            <?php
+                            $selectedType = strtolower(trim((string) ($initialFilters['type'] ?? '')));
+                            if ($selectedType === 'cod') {
+                                $selectedType = 'cash';
+                            }
+                            $paymentTypeOptions = [
+                                'cash' => 'Cash',
+                                'upi' => 'UPI',
+                                'bank_transfer' => 'Bank transfer',
+                                'pos_machine' => 'POS machine',
+                                'razorpay' => 'Razorpay',
+                                'cheque' => 'Cheque',
+                                'offline' => 'Offline',
+                            ];
+                            foreach ($paymentTypeOptions as $value => $label):
+                            ?>
+                                <option value="<?= htmlspecialchars($value) ?>" <?= ($selectedType === $value) ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div>

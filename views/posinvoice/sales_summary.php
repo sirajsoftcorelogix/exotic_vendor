@@ -101,10 +101,13 @@
                         <label for="type" class="block text-xs font-semibold text-gray-600 mb-1">Payment type</label>
                         <select id="type" class="ps-filter-input">
                             <option value="">All payment types</option>
-                            <option value="offline">Offline</option>
-                            <option value="cod">Cash</option>
-                            <option value="razorpay">Razorpay</option>
+                            <option value="cash">Cash</option>
+                            <option value="upi">UPI</option>
                             <option value="bank_transfer">Bank transfer</option>
+                            <option value="pos_machine">POS machine</option>
+                            <option value="razorpay">Razorpay</option>
+                            <option value="cheque">Cheque</option>
+                            <option value="offline">Offline</option>
                         </select>
                     </div>
                     <div>

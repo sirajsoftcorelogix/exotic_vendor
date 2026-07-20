@@ -520,6 +520,36 @@ class POSInvoice
         ), 0)";
     }
 
+    /** Primary POS checkout mode from pos_payments (not vp_order_info.payment_type, which is always offline). */
+    private function posInvoicePrimaryPaymentModeSql(): string
+    {
+        return "(SELECT IFNULL(pp_mode.payment_mode, '')
+            FROM pos_payments pp_mode
+            WHERE CONVERT(pp_mode.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
+                  CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
+            ORDER BY pp_mode.id ASC
+            LIMIT 1)";
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function posInvoicePaymentModesForFilterType(string $type): array
+    {
+        $key = strtolower(trim($type));
+
+        return match ($key) {
+            'cod', 'cash' => ['cash', 'cod'],
+            'offline' => ['offline'],
+            'razorpay' => ['razorpay'],
+            'bank_transfer' => ['bank_transfer'],
+            'upi' => ['upi'],
+            'pos_machine' => ['pos_machine'],
+            'cheque' => ['cheque'],
+            default => $key !== '' ? [$key] : [],
+        };
+    }
+
     /**
      * POS invoice AJAX list with payment pending amounts.
      *
@@ -541,7 +571,7 @@ class POSInvoice
                 i.total_amount,
                 i.warehouse_id,
                 o.order_number,
-                o.payment_type,
+                {$this->posInvoicePrimaryPaymentModeSql()} AS payment_type,
                 c.name AS customer_name,
                 o.state AS customer_billing_state,
                 COALESCE(cnt.name, o.country) AS customer_billing_country,
@@ -815,7 +845,7 @@ class POSInvoice
         $pendingExpr = "GREATEST(0, ROUND({$payableSql} - {$paidSql}, 2))";
 
         $groupExpr = match ($dimension) {
-            'payment_type' => "IFNULL(o.payment_type, '')",
+            'payment_type' => $this->posInvoicePrimaryPaymentModeSql(),
             'status' => "IFNULL(i.status, '')",
             'discount' => "CASE WHEN ({$discountSql}) > 0.001 THEN '1' ELSE '0' END",
             default => "''",
@@ -945,7 +975,14 @@ class POSInvoice
         }
 
         if (!empty($filters['type'])) {
-            $sql .= " AND IFNULL(o.payment_type,'') = '" . $this->db->real_escape_string((string) $filters['type']) . "'";
+            $modes = $this->posInvoicePaymentModesForFilterType((string) $filters['type']);
+            if ($modes !== []) {
+                $escapedModes = array_map(
+                    fn(string $mode): string => "'" . $this->db->real_escape_string($mode) . "'",
+                    $modes
+                );
+                $sql .= ' AND ' . $this->posInvoicePrimaryPaymentModeSql() . ' IN (' . implode(', ', $escapedModes) . ')';
+            }
         }
 
         if (!empty($filters['customer_id'])) {
