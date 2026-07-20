@@ -40,26 +40,19 @@ class ProductsController
         if (isset($_GET['permanently_available']) && $_GET['permanently_available'] !== '') {
             $filters['permanently_available'] = (int)$_GET['permanently_available'] ? 1 : 0;
         }
-        if (!empty($_GET['size'])) {
-            $filters['size'] = trim($_GET['size']);
-        }
-        if (!empty($_GET['color'])) {
-            $filters['color'] = trim($_GET['color']);
-        }
         if (isset($_GET['local_stock']) && $_GET['local_stock'] !== '') {
             $filters['local_stock'] = (int)$_GET['local_stock'];
         }
         if (!empty($_GET['marketplace'])) {
             $filters['marketplace'] = trim($_GET['marketplace']);
         }
-        require_once dirname(__DIR__) . '/helpers/order_filter_autocomplete.php';
-        $authorFilter = resolveProductListAuthorFilter($_GET);
-        if ($authorFilter !== '') {
-            $filters['author'] = $authorFilter;
-        }
-        $publisherFilter = resolveProductListPublisherFilter($_GET);
-        if ($publisherFilter !== '') {
-            $filters['publisher'] = $publisherFilter;
+        require_once dirname(__DIR__) . '/helpers/stock_report_filters.php';
+        $itemGroup = trim((string)($_GET['item_group'] ?? ''));
+        $stockStatuses = parseStockReportStockStatusFilters($_GET);
+        $filters['physical_stock_status'] = $stockStatuses['physical_stock_status'];
+        $filters['local_stock_status'] = $stockStatuses['local_stock_status'];
+        foreach (parseProductListExtraFiltersFromRequest($_GET, $itemGroup) as $extraKey => $extraValue) {
+            $filters[$extraKey] = $extraValue;
         }
         $products_data = $productModel->getAllProducts($limit, $offset, $filters);
         // Assuming a method countAllProducts exists to get total count
@@ -72,8 +65,8 @@ class ProductsController
             'total_pages' => ceil($total_records / $limit),
             'total_records' => $total_records,
             'limit' => $limit,
-            'groupnameList' => $groupnameList
-
+            'groupnameList' => $groupnameList,
+            'group_filter_fields' => getStockReportGroupFilterFieldDefinitions(),
         ];
         renderTemplate('views/products/index.php', $data, 'Products');
     }

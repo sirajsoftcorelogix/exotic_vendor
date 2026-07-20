@@ -1,6 +1,19 @@
 <div class="container mx-auto p-4">
     <!-- Top Bar: Search & Advance Search -->
     <?php
+    require_once __DIR__ . '/../../helpers/stock_report_filters.php';
+    $selectedItemGroup = (string)($_GET['item_group'] ?? '');
+    $stockStatusFilters = parseStockReportStockStatusFilters($_GET);
+    $groupFilterFields = is_array($data['group_filter_fields'] ?? null) ? $data['group_filter_fields'] : getStockReportGroupFilterFieldDefinitions();
+    $filtersPanelOpen = productListFiltersPanelOpen($_GET);
+    $productListAutocompleteUrls = [
+        'author' => base_url('?page=orders&action=search_filter_authors&q='),
+        'artist' => base_url('?page=orders&action=search_filter_authors&q='),
+        'publisher' => base_url('?page=orders&action=search_filter_publishers&q='),
+        'material' => base_url('?page=orders&action=search_filter_materials&q='),
+        'language' => base_url('?page=orders&action=search_filter_languages&q='),
+    ];
+    $productListInputClass = 'w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500';
 
     $page = isset($_GET['page_no']) ? (int)$_GET['page_no'] : 1;
     $page = $page < 1 ? 1 : $page;
@@ -25,14 +38,14 @@
     ?>
     <!-- Advance Search Accordion -->
     <div class="mt-6 mb-8 bg-white rounded-xl p-4 ">
-        <button id="accordion-button-search" class="w-full flex justify-between items-center mb-2">
+        <button id="accordion-button-search" class="w-full flex justify-between items-center mb-2" aria-expanded="<?= $filtersPanelOpen ? 'true' : 'false' ?>">
             <h2 class="text-xl font-bold text-gray-900">Advance Search</h2>
-            <svg id="accordion-icon-search" class="w-6 h-6 transition-transform transform" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg id="accordion-icon-search" class="w-6 h-6 transition-transform transform <?= $filtersPanelOpen ? 'rotate-180' : '' ?>" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
             </svg>
         </button>
 
-        <div id="accordion-content-search" class="accordion-content hidden overflow-visible">
+        <div id="accordion-content-search" class="accordion-content <?= $filtersPanelOpen ? '' : 'hidden' ?> overflow-visible">
             <!-- Responsive Grid container -->
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
                 <form method="GET" id="productsSearchForm" action="<?= base_url('?page=products&action=list') ?>" class="contents">
@@ -67,14 +80,11 @@
                         <label for="item-group" class="block text-sm font-medium text-gray-600 mb-1">Item Group / Category</label>
                         <select name="item_group" id="item-group" class="w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
                             <option value="">-Select-</option>
-                            <?php
-                            $groups = ['sculptures', 'book', 'jewelry', 'textiles', 'paintings'];
-                            $selectedGroup = (string)($_GET['item_group'] ?? '');
-                            foreach ($groups as $g) {
-                                $sel = ($selectedGroup === $g) ? 'selected' : '';
-                                echo '<option value="' . htmlspecialchars($g) . '" ' . $sel . '>' . htmlspecialchars($g) . '</option>';
-                            }
-                            ?>
+                            <?php foreach (getCategories() as $groupSlug => $groupLabel): ?>
+                                <option value="<?= htmlspecialchars($groupSlug, ENT_QUOTES, 'UTF-8') ?>" <?= ($selectedItemGroup === $groupSlug) ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($groupLabel, ENT_QUOTES, 'UTF-8') ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div>
@@ -98,39 +108,89 @@
                         </select>
                     </div>
                     <div>
-                        <label for="size" class="block text-sm font-medium text-gray-600 mb-1">Size</label>
-                        <input type="text" value="<?= htmlspecialchars($_GET['size'] ?? '') ?>" name="size" id="size" placeholder="Size" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                        <label for="physical_stock_status" class="block text-sm font-medium text-gray-600 mb-1">Physical stock</label>
+                        <select id="physical_stock_status" name="physical_stock_status" class="w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                            <option value="all" <?= (($stockStatusFilters['physical_stock_status'] ?? 'all') === 'all') ? 'selected' : '' ?>>All</option>
+                            <option value="out" <?= (($stockStatusFilters['physical_stock_status'] ?? 'all') === 'out') ? 'selected' : '' ?>>Out of stock (0)</option>
+                            <option value="low" <?= (($stockStatusFilters['physical_stock_status'] ?? 'all') === 'low') ? 'selected' : '' ?>>Low stock (1-5)</option>
+                            <option value="in" <?= (($stockStatusFilters['physical_stock_status'] ?? 'all') === 'in') ? 'selected' : '' ?>>In stock</option>
+                        </select>
                     </div>
                     <div>
-                        <label for="color" class="block text-sm font-medium text-gray-600 mb-1">Color</label>
-                        <input type="text" value="<?= htmlspecialchars($_GET['color'] ?? '') ?>" name="color" id="color" placeholder="Color" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                        <label for="local_stock_status" class="block text-sm font-medium text-gray-600 mb-1">Local stock</label>
+                        <select id="local_stock_status" name="local_stock_status" class="w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
+                            <option value="all" <?= (($stockStatusFilters['local_stock_status'] ?? 'all') === 'all') ? 'selected' : '' ?>>All</option>
+                            <option value="out" <?= (($stockStatusFilters['local_stock_status'] ?? 'all') === 'out') ? 'selected' : '' ?>>Out of stock (0)</option>
+                            <option value="low" <?= (($stockStatusFilters['local_stock_status'] ?? 'all') === 'low') ? 'selected' : '' ?>>Low stock (1-5)</option>
+                            <option value="in" <?= (($stockStatusFilters['local_stock_status'] ?? 'all') === 'in') ? 'selected' : '' ?>>In stock</option>
+                        </select>
                     </div>
                     <div>
-                        <label for="local_stock" class="block text-sm font-medium text-gray-600 mb-1">Local Stock</label>
+                        <label for="local_stock" class="block text-sm font-medium text-gray-600 mb-1">Local Stock (exact)</label>
                         <input type="number" value="<?= htmlspecialchars($_GET['local_stock'] ?? '') ?>" name="local_stock" id="local_stock" placeholder="Local Stock" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
                     <div>
                         <label for="marketplace" class="block text-sm font-medium text-gray-600 mb-1">Marketplace</label>
                         <input type="text" value="<?= htmlspecialchars($_GET['marketplace'] ?? '') ?>" name="marketplace" id="marketplace" placeholder="Marketplace" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
-                    <?php renderPartial('views/shared/partials/order_filter_autocomplete_field.php', [
-                        'field_id' => 'author',
-                        'field_name' => 'author',
-                        'field_label' => 'Author',
-                        'field_placeholder' => 'Search author by name...',
-                        'field_value' => $_GET['author'] ?? '',
-                        'search_url' => base_url('?page=orders&action=search_filter_authors&q='),
-                        'input_class' => 'w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500',
-                    ]); ?>
-                    <?php renderPartial('views/shared/partials/order_filter_autocomplete_field.php', [
-                        'field_id' => 'publisher',
-                        'field_name' => 'publisher',
-                        'field_label' => 'Publisher',
-                        'field_placeholder' => 'Search publisher by name...',
-                        'field_value' => $_GET['publisher'] ?? '',
-                        'search_url' => base_url('?page=orders&action=search_filter_publishers&q='),
-                        'input_class' => 'w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500',
-                    ]); ?>
+
+                    <div id="productListGroupFilters" class="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-4 xl:col-span-5 2xl:col-span-6 border-t border-gray-100 pt-4 mt-2">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Group-specific filters</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 items-end">
+                            <?php foreach ($groupFilterFields as $fieldKey => $fieldDef): ?>
+                                <?php
+                                    $fieldGroups = $fieldDef['groups'] ?? [];
+                                    $fieldGroupsJson = htmlspecialchars(json_encode(array_values($fieldGroups), JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+                                    $fieldValue = htmlspecialchars((string)($_GET[$fieldKey] ?? ''), ENT_QUOTES, 'UTF-8');
+                                    $defaultLabel = (string)($fieldDef['label'] ?? ucfirst($fieldKey));
+                                    $labelMap = is_array($fieldDef['labels'] ?? null) ? $fieldDef['labels'] : [];
+                                    $labelMapJson = htmlspecialchars(json_encode($labelMap, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+                                    $placeholder = htmlspecialchars((string)($fieldDef['placeholder'] ?? ''), ENT_QUOTES, 'UTF-8');
+                                    $autocompleteType = (string)($fieldDef['autocomplete'] ?? '');
+                                    $autocompleteUrl = $productListAutocompleteUrls[$autocompleteType] ?? '';
+                                ?>
+                                <?php if ($autocompleteUrl !== ''): ?>
+                                    <div
+                                        class="product-list-group-field hidden"
+                                        data-product-list-field="<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-product-list-groups="<?= $fieldGroupsJson ?>"
+                                        data-product-list-labels="<?= $labelMapJson ?>"
+                                        data-product-list-default-label="<?= htmlspecialchars($defaultLabel, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?php renderPartial('views/shared/partials/order_filter_autocomplete_field.php', [
+                                            'field_id' => 'product_list_' . $fieldKey,
+                                            'field_name' => $fieldKey,
+                                            'field_label' => $defaultLabel,
+                                            'field_placeholder' => (string)($fieldDef['placeholder'] ?? ''),
+                                            'field_value' => $_GET[$fieldKey] ?? '',
+                                            'search_url' => $autocompleteUrl,
+                                            'input_class' => $productListInputClass,
+                                        ]); ?>
+                                    </div>
+                                <?php else: ?>
+                                    <div
+                                        class="product-list-group-field hidden"
+                                        data-product-list-field="<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-product-list-groups="<?= $fieldGroupsJson ?>"
+                                        data-product-list-labels="<?= $labelMapJson ?>"
+                                        data-product-list-default-label="<?= htmlspecialchars($defaultLabel, ENT_QUOTES, 'UTF-8') ?>">
+                                        <label for="product_list_<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>" class="product-list-group-field-label block text-sm font-medium text-gray-600 mb-1">
+                                            <?= htmlspecialchars($defaultLabel) ?>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            id="product_list_<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>"
+                                            name="<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>"
+                                            value="<?= $fieldValue ?>"
+                                            placeholder="<?= $placeholder ?>"
+                                            class="<?= htmlspecialchars($productListInputClass, ENT_QUOTES, 'UTF-8') ?>">
+                                    </div>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </div>
+                        <p id="productListGroupFiltersHint" class="mt-3 text-xs text-gray-500">
+                            Select an item group above to show filters for books, textiles, paintings, and other product types.
+                        </p>
+                    </div>
                     <!-- <div>
                     <label for="agent" class="block text-sm font-medium text-gray-600 mb-1">Agent</label>
                     <select id="agent" name="agent" class="w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white">
@@ -1054,6 +1114,47 @@
             });
     });
     document.addEventListener('DOMContentLoaded', function() {
+        function syncProductListGroupFilters() {
+            const groupSelect = document.getElementById('item-group');
+            const hint = document.getElementById('productListGroupFiltersHint');
+            const selectedGroup = groupSelect ? groupSelect.value : '';
+            let visibleCount = 0;
+
+            document.querySelectorAll('.product-list-group-field').forEach((fieldEl) => {
+                let groups = [];
+                try {
+                    groups = JSON.parse(fieldEl.getAttribute('data-product-list-groups') || '[]');
+                } catch (err) {
+                    groups = [];
+                }
+
+                const show = selectedGroup !== '' && groups.indexOf(selectedGroup) !== -1;
+                fieldEl.classList.toggle('hidden', !show);
+                if (!show) {
+                    return;
+                }
+
+                visibleCount += 1;
+
+                let labelMap = {};
+                try {
+                    labelMap = JSON.parse(fieldEl.getAttribute('data-product-list-labels') || '{}');
+                } catch (err) {
+                    labelMap = {};
+                }
+                const defaultLabel = fieldEl.getAttribute('data-product-list-default-label') || '';
+                const labelText = labelMap[selectedGroup] || defaultLabel;
+                const labelEl = fieldEl.querySelector('label');
+                if (labelEl) {
+                    labelEl.textContent = labelText;
+                }
+            });
+
+            if (hint) {
+                hint.classList.toggle('hidden', visibleCount > 0);
+            }
+        }
+
         // Accordion functionality
         const accordionButton = document.getElementById('accordion-button-search');
         const accordionContent = document.getElementById('accordion-content-search');
@@ -1070,6 +1171,12 @@
                 accordionIcon.classList.remove('rotate-180');
             }
         });
+
+        const groupSelect = document.getElementById('item-group');
+        if (groupSelect) {
+            groupSelect.addEventListener('change', syncProductListGroupFilters);
+        }
+        syncProductListGroupFilters();
 
         function clearFilters() {
             fromDateInput.value = '';
