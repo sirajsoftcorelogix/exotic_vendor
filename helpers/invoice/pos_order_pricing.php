@@ -430,7 +430,7 @@ function pos_order_enrich_line_display_pricing(array $orderRow, array $pricing, 
     $addonRows = pos_order_line_addon_rows($orderRow);
     $addonsTotal = pos_order_line_addons_total($orderRow);
     $customReduce = max(0.0, round((float)($orderRow['custom_reduce'] ?? 0), 2));
-    $baseListIncl = round((float)($pricing['chargeable_value'] ?? 0), 2);
+    $baseListIncl = pos_order_line_list_price_incl($orderRow);
 
     $applyGst = !array_key_exists('apply_gst', $options) || !empty($options['apply_gst']);
     $gstRate = $applyGst ? (float)($orderRow['gst'] ?? 0) : 0.0;
@@ -464,7 +464,7 @@ function pos_order_enrich_line_display_pricing(array $orderRow, array $pricing, 
         ]);
     }
 
-    $pricing['base_chargeable'] = $baseListIncl;
+    $pricing['base_list_incl'] = $baseListIncl;
     $pricing['base_discount_value'] = (float)($components[0]['discount_value'] ?? 0);
     $pricing['base_discounted_incl'] = (float)($components[0]['discounted_incl'] ?? $baseListIncl);
     $pricing['addon_rows'] = $enrichedAddonRows;
