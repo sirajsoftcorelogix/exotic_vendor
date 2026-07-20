@@ -4805,6 +4805,20 @@ class product
                 'text_color_class' => 'text-amber-600',
             ];
         }
+        if ($mt === 'IN' && $rt === 'SALES_RETURN') {
+            return [
+                'ledger_type' => 'Sales return',
+                'icon' => 'fa-rotate-left',
+                'text_color_class' => 'text-emerald-600',
+            ];
+        }
+        if ($mt === 'OUT' && $rt === 'SALES_RETURN_CANCEL') {
+            return [
+                'ledger_type' => 'Sales return cancelled',
+                'icon' => 'fa-rotate-right',
+                'text_color_class' => 'text-amber-600',
+            ];
+        }
         if ($mt === 'OPENING_STOCK' && $rt === 'BULK_IMPORT') {
             return [
                 'ledger_type' => 'Bulk Product Import',

@@ -527,6 +527,31 @@ switch ($page) {
         }
         break;
 
+    case 'sales_returns':
+        require_once 'controllers/SalesReturnController.php';
+        $controller = new SalesReturnController();
+        switch ($action) {
+            case 'index':
+                $controller->index();
+                break;
+            case 'create':
+                $controller->create();
+                break;
+            case 'save':
+                $controller->save();
+                break;
+            case 'view':
+                $controller->view();
+                break;
+            case 'cancel':
+                $controller->cancel();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
+
     case 'invoices':
         require_once 'controllers/InvoicesController.php';
         $controller = new InvoicesController();

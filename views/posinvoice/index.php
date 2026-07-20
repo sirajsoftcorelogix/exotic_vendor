@@ -4,6 +4,12 @@
         <div class="mx-auto flex max-w-[1500px] items-center justify-between gap-3 px-4 py-3">
             <h1 class="text-lg font-semibold">POS Invoice Listing</h1>
             <div class="flex flex-wrap items-center gap-2">
+                <a href="?page=sales_returns&action=index"
+                   class="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-white px-3 py-2 text-xs font-semibold text-orange-800 hover:bg-orange-50"
+                   title="View sales returns">
+                    <i class="fas fa-rotate-left text-xs" aria-hidden="true"></i>
+                    Sales returns
+                </a>
                 <a href="?page=posinvoice&action=sales_summary"
                    class="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-white px-3 py-2 text-xs font-semibold text-orange-800 hover:bg-orange-50"
                    title="View POS sales summary by store">
@@ -607,6 +613,14 @@ stroke-linejoin="round"/>
     Cancel
 </button>`;
 
+                    const orderNum = (i.order_number || '').trim();
+                    const returnBtn = (!isCancelled && orderNum) ? `
+<a href="?page=sales_returns&action=create&order_number=${encodeURIComponent(orderNum)}&invoice_id=${i.id}"
+   class="inline-flex items-center text-orange-700 hover:text-orange-900 text-xs font-semibold"
+   title="Create sales return">
+    Return
+</a>` : '';
+
                     const deleteBtn = isCancelled ? '' : `
   <button onclick="openDeleteModal(${i.id}, '?page=posinvoice&action=delete', 'Delete this invoice?')"
         class="flex items-center gap-1 text-red-600 hover:text-red-800 text-xs font-semibold"
@@ -634,6 +648,7 @@ stroke-linejoin="round"/>
 
  <td class="p-3 flex flex-wrap gap-3 items-center">
 ${pdfLink}
+${returnBtn}
 ${cancelBtn}
 ${deleteBtn}
 </td>

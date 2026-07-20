@@ -70,7 +70,8 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
 
         <div class="flex items-center gap-2">
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Restock</button>
-            <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Return</button>
+            <a href="<?= htmlspecialchars(base_url('?page=sales_returns&action=create&order_number=' . rawurlencode($displayOrderNumber)), ENT_QUOTES, 'UTF-8') ?>"
+                class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50 inline-block">Return</a>
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Edit</button>
             <div class="relative inline-block text-left">
                 <input type="checkbox" id="dropdown-toggle" class="peer hidden">
