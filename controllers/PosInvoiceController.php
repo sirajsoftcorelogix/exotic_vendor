@@ -7,7 +7,8 @@ require_once 'models/customer/Customer.php';
 require_once 'models/product/product.php';
 require_once __DIR__ . '/../models/payment/Payment.php';
 require_once __DIR__ . '/../helpers/invoice/pos_order_pricing.php';
-// Register in $GLOBALS so methods work when this file is required from a function scope (e.g. payments â†’ create invoice).
+// Register in $GLOBALS so methods work when this file is required from a function scope (e.g. payments → create invoice).
+global $conn;
 $GLOBALS['invoiceModel'] = $GLOBALS['invoiceModel'] ?? new POSInvoice($conn);
 $GLOBALS['ordersModel'] = $GLOBALS['ordersModel'] ?? new Order($conn);
 $GLOBALS['usersModel'] = $GLOBALS['usersModel'] ?? new User($conn);

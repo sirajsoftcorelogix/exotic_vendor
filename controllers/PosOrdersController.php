@@ -1026,6 +1026,7 @@ class PosOrdersController
      */
     public function printProforma(): void
     {
+        global $conn;
         require_once __DIR__ . '/PosInvoiceController.php';
         $posInv = new PosInvoiceController();
         $posInv->printProformaPreviewFromOrder();
