@@ -1,6 +1,7 @@
 <?php
 /**
  * One request to the order-import API (same shape as OrdersController::importOrders). No DB writes.
+ * Sample response documented in docs/samples/vendor-order-import-response.json
  *
  * CLI (project root):
  *   php scripts/check_order_import_api.php

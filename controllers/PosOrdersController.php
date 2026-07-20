@@ -6,6 +6,7 @@ require_once 'models/posorder/po_invoice.php';
 require_once 'models/product/product.php';
 require_once 'helpers/payment_type_groups.php';
 require_once 'helpers/order_filter_autocomplete.php';
+require_once 'models/order/order.php';
 $ordersModel = new POSOrder($conn);
 $commanModel = new Tables($conn);
 $savedSearchModel = new SavedSearch($conn);
@@ -376,6 +377,7 @@ class PosOrdersController
                     'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
                     'quantity' => $item['qty'] ?? '',
                     'options' => $item['options'] ?? 0,
+                    'addons' => Order::normalizeVendorOrderLineAddons($item['addons'] ?? null),
                     'gst' => $item['gst'] ?? '',
                     'hsn' => $item['hscode'] ?? '',
                     'local_stock' => is_numeric($item['local_stock'] ?? null) ? (float) $item['local_stock'] : 0.0,
@@ -1248,6 +1250,7 @@ class PosOrdersController
                     'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
                     'quantity' => $item['qty'] ?? '',
                     'options' => $item['options'] ?? 0,
+                    'addons' => Order::normalizeVendorOrderLineAddons($item['addons'] ?? null),
                     'gst' => $item['gst'] ?? '',
                     'hsn' => $item['hscode'] ?? '',
                     'local_stock' => is_numeric($item['local_stock'] ?? null) ? (float) $item['local_stock'] : 0.0,
