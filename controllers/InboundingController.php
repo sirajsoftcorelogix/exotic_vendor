@@ -529,6 +529,25 @@ class InboundingController {
         exit;
     }
 
+    /** ISBN lookup via Open Library + Google Books for inbound book entry. */
+    public function searchBookAttributes() {
+        is_login();
+        global $conn;
+
+        require_once __DIR__ . '/../services/inbound/BookIsbnLookupService.php';
+
+        $isbn = trim((string) ($_GET['isbn'] ?? $_POST['isbn'] ?? ''));
+        if ($isbn === '') {
+            vendorJsonResponse([
+                'success' => false,
+                'message' => 'ISBN is required.',
+            ], 400);
+        }
+
+        $lookupService = new BookIsbnLookupService($conn);
+        vendorJsonResponse($lookupService->lookupByIsbn($isbn));
+    }
+
     /** Resolve publisher by Exotic vendor/publisher id (for book inbound vendor → publisher sync). */
     public function publisherByVendor() {
         global $inboundingModel;
