@@ -62,7 +62,14 @@ class GoogleBooksProvider implements BookMetadataProviderInterface
             $httpCode = (int) ($response['http_code'] ?? 0);
             $errorMessage = trim((string) ($response['error'] ?? 'Google Books request failed.'));
 
-            if ($httpCode === 403 && stripos($errorMessage, 'Books API') !== false) {
+            if ($httpCode === 403 && stripos($errorMessage, 'referer') !== false) {
+                $this->lastLookupStatus = [
+                    'state' => 'key_referrer_blocked',
+                    'label' => 'Google API key is restricted to browser referrers. In Google Cloud Console, set Application restriction to IP addresses (this server\'s public IP) or None — not HTTP referrers.',
+                    'http_code' => $httpCode,
+                    'detail' => $errorMessage,
+                ];
+            } elseif ($httpCode === 403 && stripos($errorMessage, 'Books API') !== false) {
                 $this->lastLookupStatus = [
                     'state' => 'api_disabled',
                     'label' => 'Enable Books API in Google Cloud Console for this API key project.',
