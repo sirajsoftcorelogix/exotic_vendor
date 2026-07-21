@@ -55,6 +55,7 @@ class GoogleBooksProvider implements BookMetadataProviderInterface
 
         $url = 'https://www.googleapis.com/books/v1/volumes?q=isbn:'
             . rawurlencode($normalizedIsbn)
+            . '&country=IN'
             . '&key=' . rawurlencode(trim((string) $apiKey));
 
         $response = $this->http->requestJson($url);
@@ -66,6 +67,13 @@ class GoogleBooksProvider implements BookMetadataProviderInterface
                 $this->lastLookupStatus = [
                     'state' => 'key_referrer_blocked',
                     'label' => 'Google API key is restricted to browser referrers. In Google Cloud Console, set Application restriction to IP addresses (this server\'s public IP) or None — not HTTP referrers.',
+                    'http_code' => $httpCode,
+                    'detail' => $errorMessage,
+                ];
+            } elseif ($httpCode === 403 && (stripos($errorMessage, 'BooksVolumes.List are blocked') !== false || stripos($errorMessage, 'books method') !== false)) {
+                $this->lastLookupStatus = [
+                    'state' => 'key_api_blocked',
+                    'label' => 'Google API key must allow Books API (not App Engine or other APIs only). Credentials → your key → API restrictions → add Books API.',
                     'http_code' => $httpCode,
                     'detail' => $errorMessage,
                 ];
