@@ -281,12 +281,12 @@ $queryBase = [
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-gray-700">Phone</label>
-                        <input type="number" name="author_phone" id="author_phone" oninput="limitAuthorPhoneDigits(this)"
+                        <input type="text" name="author_phone" id="author_phone" oninput="limitAuthorPhoneDigits(this)"
                             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-gray-700">Alternate Phone (optional)</label>
-                        <input type="number" name="alt_phone" id="author_alt_phone" oninput="limitAuthorPhoneDigits(this)"
+                        <input type="text" name="alt_phone" id="author_alt_phone" oninput="limitAuthorPhoneDigits(this)"
                             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
                     </div>
                 </div>
