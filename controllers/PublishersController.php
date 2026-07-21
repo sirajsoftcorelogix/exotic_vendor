@@ -2,6 +2,7 @@
 require_once 'models/publisher/Publisher.php';
 require_once 'models/country/country.php';
 require_once 'models/country/state.php';
+require_once 'models/user/user.php';
 require_once __DIR__ . '/../helpers/vendor_external_api.php';
 
 class PublishersController
@@ -9,12 +10,14 @@ class PublishersController
     private Publisher $publisherModel;
     private Country $countryModel;
     private State $stateModel;
+    private User $userModel;
 
     public function __construct(mysqli $conn)
     {
         $this->publisherModel = new Publisher($conn);
         $this->countryModel = new Country($conn);
         $this->stateModel = new State($conn);
+        $this->userModel = new User($conn);
     }
 
     public function index(): void
@@ -199,6 +202,19 @@ class PublishersController
         $excludeId = isset($_GET['excludeId']) ? (int) $_GET['excludeId'] : 0;
         echo json_encode(
             $this->publisherModel->checkPublisherName($name, $excludeId > 0 ? $excludeId : null),
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        exit;
+    }
+
+    public function searchBrokers(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $query = trim((string)($_GET['q'] ?? ''));
+        echo json_encode(
+            $this->userModel->searchActiveUsers($query),
             JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
         );
         exit;
