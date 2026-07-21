@@ -123,6 +123,7 @@ $queryBase = [
                         <th class="px-5 py-3.5 whitespace-nowrap">Phone</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">City</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">State</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Broker</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Status</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Updated</th>
                         <th class="px-5 py-3.5 whitespace-nowrap text-right">Action</th>
@@ -141,6 +142,7 @@ $queryBase = [
                             $phone = (string)($publisher['publisher_phone'] ?? '');
                             $city = (string)($publisher['city'] ?? '');
                             $state = (string)($publisher['state'] ?? '');
+                            $brokerName = (string)($publisher['broker_name'] ?? '');
                             $publisherPayload = [
                                 'id' => $id,
                                 'publishers_id' => $publisherExternalId,
@@ -160,6 +162,8 @@ $queryBase = [
                                 'webpage' => (int)($publisher['webpage'] ?? 0),
                                 'stock_replenishment_months' => (int)($publisher['stock_replenishment_months'] ?? 0),
                                 'discount' => (float)($publisher['discount'] ?? 0),
+                                'broker_id' => (int)($publisher['broker_id'] ?? 0),
+                                'broker_name' => $brokerName,
                                 'is_active' => $active ? 1 : 0,
                             ];
                             ?>
@@ -171,6 +175,7 @@ $queryBase = [
                                 <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($phone, ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($city, ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($state, ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($brokerName !== '' ? $brokerName : '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm">
                                     <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold <?php echo $active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200'; ?>">
                                         <?php echo $active ? 'Active' : 'Inactive'; ?>
@@ -192,7 +197,7 @@ $queryBase = [
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="10" class="px-5 py-12 text-center text-sm text-gray-500">No publishers found.</td>
+                            <td colspan="11" class="px-5 py-12 text-center text-sm text-gray-500">No publishers found.</td>
                         </tr>
                     <?php endif; ?>
                     </tbody>
@@ -261,6 +266,13 @@ $queryBase = [
                             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none"
                             placeholder="e.g. 10">
                         <p class="mt-1 text-xs text-gray-500">Default discount percentage for this publisher. Leave empty or 0 if not set.</p>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Broker</label>
+                        <select name="broker_id" id="publisher_broker_id" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                            <option value="">Select broker...</option>
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">Search active portal users. Leave empty if not assigned.</p>
                     </div>
                 </div>
                 <div class="mt-3">
@@ -495,6 +507,57 @@ function showPublisherAlert(message, success) {
     box.classList.add(success ? 'border-green-200' : 'border-red-200', success ? 'bg-green-50' : 'bg-red-50', success ? 'text-green-700' : 'text-red-700');
 }
 
+function destroyPublisherBrokerSelect2() {
+    if (!window.jQuery || !jQuery.fn.select2) {
+        return;
+    }
+    const $broker = jQuery('#publisher_broker_id');
+    if ($broker.length && $broker.hasClass('select2-hidden-accessible')) {
+        $broker.select2('destroy');
+    }
+}
+
+function initPublisherBrokerSelect2(brokerId, brokerName) {
+    if (!window.jQuery || !jQuery.fn.select2) {
+        return;
+    }
+
+    const $broker = jQuery('#publisher_broker_id');
+    if (!$broker.length) {
+        return;
+    }
+
+    destroyPublisherBrokerSelect2();
+    $broker.empty().append(new Option('Select broker...', '', true, false));
+
+    const selectedId = parseInt(String(brokerId || '0'), 10);
+    const selectedName = String(brokerName || '').trim();
+    if (selectedId > 0 && selectedName !== '') {
+        $broker.append(new Option(selectedName, String(selectedId), true, true));
+    }
+
+    $broker.select2({
+        width: '100%',
+        placeholder: 'Type at least 2 characters to search...',
+        allowClear: true,
+        minimumInputLength: 2,
+        dropdownParent: jQuery('#publisherModal'),
+        ajax: {
+            url: 'index.php?page=publishers&action=searchBrokers',
+            type: 'GET',
+            dataType: 'json',
+            delay: 300,
+            data: function (params) {
+                return { q: params.term || '' };
+            },
+            processResults: function (data) {
+                return { results: Array.isArray(data) ? data : [] };
+            },
+            cache: true
+        }
+    });
+}
+
 function openPublisherModal(publisher) {
     if (typeof closeAllMenus === 'function') {
         closeAllMenus();
@@ -535,12 +598,15 @@ function openPublisherModal(publisher) {
     }
     setPublisherStateControl(countryValue, publisher.state || '');
 
+    initPublisherBrokerSelect2(publisher.broker_id, publisher.broker_name);
+
     document.getElementById('publisherModal').classList.remove('hidden');
     document.getElementById('publisherModal').classList.add('flex');
     setTimeout(function () { document.getElementById('publisher_name').focus(); }, 50);
 }
 
 function closePublisherModal() {
+    destroyPublisherBrokerSelect2();
     document.getElementById('publisherModal').classList.add('hidden');
     document.getElementById('publisherModal').classList.remove('flex');
 }

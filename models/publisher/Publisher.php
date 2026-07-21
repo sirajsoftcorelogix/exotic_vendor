@@ -4,7 +4,9 @@ class Publisher
 {
     private mysqli $conn;
 
-    private const LIST_COLUMNS = 'id, publishers_id, publishers, contact_name, publisher_email, country_code, publisher_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_months, discount, is_active, create_at, update_at';
+    private const LIST_COLUMNS = 'p.id, p.publishers_id, p.publishers, p.contact_name, p.publisher_email, p.country_code, p.publisher_phone, p.alt_phone, p.gst_number, p.pan_number, p.address, p.city, p.state, p.country, p.postal_code, p.webpage, p.stock_replenishment_months, p.discount, p.broker_id, bu.name AS broker_name, p.is_active, p.create_at, p.update_at';
+
+    private const LIST_FROM = ' FROM vp_publishers p LEFT JOIN vp_users bu ON bu.id = p.broker_id AND bu.is_deleted = 0';
 
     public function __construct(mysqli $conn)
     {
@@ -36,7 +38,41 @@ class Publisher
             'discount' => trim((string)($data['discount'] ?? '')) === ''
                 ? 0.0
                 : max(0.0, (float)$data['discount']),
+            'broker_id' => trim((string)($data['broker_id'] ?? '')) === ''
+                ? null
+                : max(0, (int)$data['broker_id']),
         ];
+    }
+
+    private function normalizeBrokerId(?int $brokerId): ?int
+    {
+        if ($brokerId === null || $brokerId <= 0) {
+            return null;
+        }
+
+        return $brokerId;
+    }
+
+    private function validateBrokerId(?int $brokerId): ?array
+    {
+        $brokerId = $this->normalizeBrokerId($brokerId);
+        if ($brokerId === null) {
+            return null;
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT id FROM vp_users WHERE id = ? AND is_active = 1 AND is_deleted = 0 LIMIT 1'
+        );
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Could not validate broker.'];
+        }
+        $stmt->bind_param('i', $brokerId);
+        $stmt->execute();
+        $stmt->store_result();
+        $ok = $stmt->num_rows > 0;
+        $stmt->close();
+
+        return $ok ? null : ['success' => false, 'message' => 'Selected broker is invalid or inactive.'];
     }
 
     private function publisherFieldExists(string $column, string $value, ?int $excludeId = null): bool
@@ -112,11 +148,12 @@ class Publisher
         $params = [];
 
         if ($search !== '') {
-            $where[] = '(publishers LIKE ? OR publishers_id = ? OR id = ? OR city LIKE ? OR state LIKE ? OR contact_name LIKE ? OR publisher_phone LIKE ?)';
-            $types .= 'siissss';
+            $where[] = '(p.publishers LIKE ? OR p.publishers_id = ? OR p.id = ? OR p.city LIKE ? OR p.state LIKE ? OR p.contact_name LIKE ? OR p.publisher_phone LIKE ? OR bu.name LIKE ?)';
+            $types .= 'siisssss';
             $params[] = '%' . $search . '%';
             $params[] = (int)$search;
             $params[] = (int)$search;
+            $params[] = '%' . $search . '%';
             $params[] = '%' . $search . '%';
             $params[] = '%' . $search . '%';
             $params[] = '%' . $search . '%';
@@ -124,13 +161,13 @@ class Publisher
         }
 
         if ($status === 'active') {
-            $where[] = 'is_active = 1';
+            $where[] = 'p.is_active = 1';
         } elseif ($status === 'inactive') {
-            $where[] = 'is_active = 0';
+            $where[] = 'p.is_active = 0';
         }
 
         $whereSql = $where ? (' WHERE ' . implode(' AND ', $where)) : '';
-        $countStmt = $this->conn->prepare('SELECT COUNT(*) AS total FROM vp_publishers' . $whereSql);
+        $countStmt = $this->conn->prepare('SELECT COUNT(*) AS total FROM vp_publishers p LEFT JOIN vp_users bu ON bu.id = p.broker_id AND bu.is_deleted = 0' . $whereSql);
         if (!$countStmt) {
             return ['publishers' => [], 'totalRecords' => 0, 'totalPages' => 1, 'currentPage' => $page, 'limit' => $limit];
         }
@@ -142,9 +179,8 @@ class Publisher
         $countStmt->close();
 
         $stmt = $this->conn->prepare(
-            'SELECT ' . self::LIST_COLUMNS . '
-             FROM vp_publishers' . $whereSql . '
-             ORDER BY publishers ASC
+            'SELECT ' . self::LIST_COLUMNS . self::LIST_FROM . $whereSql . '
+             ORDER BY p.publishers ASC
              LIMIT ? OFFSET ?'
         );
         if (!$stmt) {
@@ -169,7 +205,7 @@ class Publisher
 
     public function getPublisherById(int $id): ?array
     {
-        $stmt = $this->conn->prepare('SELECT ' . self::LIST_COLUMNS . ' FROM vp_publishers WHERE id = ? LIMIT 1');
+        $stmt = $this->conn->prepare('SELECT ' . self::LIST_COLUMNS . self::LIST_FROM . ' WHERE p.id = ? LIMIT 1');
         if (!$stmt) {
             return null;
         }
@@ -261,8 +297,14 @@ class Publisher
             return $duplicate;
         }
 
+        $brokerError = $this->validateBrokerId($fields['broker_id']);
+        if ($brokerError !== null) {
+            return $brokerError;
+        }
+        $brokerId = $this->normalizeBrokerId($fields['broker_id']);
+
         $stmt = $this->conn->prepare(
-            'UPDATE vp_publishers SET publishers = ?, contact_name = ?, publisher_email = ?, country_code = ?, publisher_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, stock_replenishment_months = ?, discount = ?, is_active = ? WHERE id = ?'
+            'UPDATE vp_publishers SET publishers = ?, contact_name = ?, publisher_email = ?, country_code = ?, publisher_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, stock_replenishment_months = ?, discount = ?, broker_id = ?, is_active = ? WHERE id = ?'
         );
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
@@ -271,7 +313,7 @@ class Publisher
         $stockReplenishmentMonths = (int)$fields['stock_replenishment_months'];
         $discount = (float)$fields['discount'];
         $stmt->bind_param(
-            'sssssssssssssiddi',
+            'sssssssssssssiddiii',
             $name,
             $fields['contact_name'],
             $fields['publisher_email'],
@@ -288,6 +330,7 @@ class Publisher
             $webpage,
             $stockReplenishmentMonths,
             $discount,
+            $brokerId,
             $isActive,
             $id
         );
@@ -334,8 +377,14 @@ class Publisher
             return $duplicate;
         }
 
+        $brokerError = $this->validateBrokerId($fields['broker_id']);
+        if ($brokerError !== null) {
+            return $brokerError;
+        }
+        $brokerId = $this->normalizeBrokerId($fields['broker_id']);
+
         $stmt = $this->conn->prepare(
-            'INSERT INTO vp_publishers (publishers_id, publishers, contact_name, publisher_email, country_code, publisher_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_months, discount, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO vp_publishers (publishers_id, publishers, contact_name, publisher_email, country_code, publisher_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_months, discount, broker_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
@@ -344,7 +393,7 @@ class Publisher
         $stockReplenishmentMonths = (int)$fields['stock_replenishment_months'];
         $discount = (float)$fields['discount'];
         $stmt->bind_param(
-            'issssssssssssssidi',
+            'issssssssssssssiddii',
             $publishersId,
             $name,
             $fields['contact_name'],
@@ -362,6 +411,7 @@ class Publisher
             $webpage,
             $stockReplenishmentMonths,
             $discount,
+            $brokerId,
             $isActive
         );
 
