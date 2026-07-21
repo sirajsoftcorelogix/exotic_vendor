@@ -149,9 +149,12 @@ $queryBase = [
                                 'publishers' => $name,
                                 'contact_name' => $contactName,
                                 'publisher_email' => (string)($publisher['publisher_email'] ?? ''),
+                                'publisher_email_is_billing' => (int)($publisher['publisher_email_is_billing'] ?? 0),
                                 'country_code' => (string)($publisher['country_code'] ?? ''),
                                 'publisher_phone' => $phone,
-                                'alt_phone' => (string)($publisher['alt_phone'] ?? ''),
+                                'publisher_phone_is_whatsapp' => (int)($publisher['publisher_phone_is_whatsapp'] ?? 0),
+                                'alt_phones' => $publisher['alt_phones'] ?? [],
+                                'alt_emails' => $publisher['alt_emails'] ?? [],
                                 'gst_number' => (string)($publisher['gst_number'] ?? ''),
                                 'pan_number' => (string)($publisher['pan_number'] ?? ''),
                                 'address' => (string)($publisher['address'] ?? ''),
@@ -293,10 +296,15 @@ $queryBase = [
                         <input type="text" name="contact_name" id="publisher_contact_name"
                             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
                     </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Email</label>
+                    <div class="md:col-span-2">
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Primary Email</label>
                         <input type="email" name="publisher_email" id="publisher_email"
                             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                        <label class="mt-2 flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                            <input type="checkbox" name="publisher_email_is_billing" id="publisher_email_is_billing" value="1"
+                                class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                            <span>Billing / accounts email</span>
+                        </label>
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-semibold text-gray-700">Country Code</label>
@@ -311,14 +319,41 @@ $queryBase = [
                         </select>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Phone</label>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Primary Phone</label>
                         <input type="text" name="publisher_phone" id="publisher_phone" oninput="limitPublisherPhoneDigits(this)"
                             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                        <label class="mt-2 flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                            <input type="checkbox" name="publisher_phone_is_whatsapp" id="publisher_phone_is_whatsapp" value="1"
+                                class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                            <span>WhatsApp number</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mt-5 space-y-5">
+                    <div>
+                        <div class="mb-2 flex items-center justify-between gap-3">
+                            <h4 class="text-sm font-semibold text-gray-800">Additional emails</h4>
+                            <button type="button" id="addPublisherAltEmailBtn"
+                                class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                                Add email
+                            </button>
+                        </div>
+                        <div id="publisherAltEmailsList" class="space-y-2"></div>
+                        <p class="mt-1 text-xs text-gray-500">Up to 5 alternate emails. Mark billing emails where invoices should be sent.</p>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Alternate Phone (optional)</label>
-                        <input type="text" name="alt_phone" id="publisher_alt_phone" oninput="limitPublisherPhoneDigits(this)"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                        <div class="mb-2 flex items-center justify-between gap-3">
+                            <h4 class="text-sm font-semibold text-gray-800">Additional phones</h4>
+                            <button type="button" id="addPublisherAltPhoneBtn"
+                                class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                                Add phone
+                            </button>
+                        </div>
+                        <div id="publisherAltPhonesList" class="space-y-2"></div>
+                        <p class="mt-1 text-xs text-gray-500">Up to 5 alternate phones. Tick WhatsApp for numbers reachable on WhatsApp.</p>
                     </div>
                 </div>
             </div>
@@ -443,6 +478,8 @@ $queryBase = [
 <script>
 let publisherNameExists = false;
 let publisherEditOriginalName = '';
+const PUBLISHER_MAX_ALT_PHONES = 5;
+const PUBLISHER_MAX_ALT_EMAILS = 5;
 
 function limitPublisherPhoneDigits(input) {
     if (!input) return;
@@ -494,6 +531,103 @@ function setPublisherStateControl(countryName, stateValue) {
 
 function fetchPublisherStates(countryName) {
     setPublisherStateControl(countryName, '');
+}
+
+function publisherAltRowClass() {
+    return 'grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_auto] gap-2 items-center rounded-lg border border-gray-200 bg-gray-50/60 p-3';
+}
+
+function publisherAltInputClass() {
+    return 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none';
+}
+
+function updatePublisherAltAddButtons() {
+    const phoneBtn = document.getElementById('addPublisherAltPhoneBtn');
+    const emailBtn = document.getElementById('addPublisherAltEmailBtn');
+    const phoneCount = document.querySelectorAll('#publisherAltPhonesList .publisher-alt-phone-row').length;
+    const emailCount = document.querySelectorAll('#publisherAltEmailsList .publisher-alt-email-row').length;
+    if (phoneBtn) phoneBtn.disabled = phoneCount >= PUBLISHER_MAX_ALT_PHONES;
+    if (emailBtn) emailBtn.disabled = emailCount >= PUBLISHER_MAX_ALT_EMAILS;
+}
+
+function addPublisherAltPhoneRow(data) {
+    const list = document.getElementById('publisherAltPhonesList');
+    if (!list || list.querySelectorAll('.publisher-alt-phone-row').length >= PUBLISHER_MAX_ALT_PHONES) {
+        return;
+    }
+    data = data || {};
+    const index = list.querySelectorAll('.publisher-alt-phone-row').length;
+    const row = document.createElement('div');
+    row.className = 'publisher-alt-phone-row ' + publisherAltRowClass();
+    row.innerHTML =
+        '<input type="text" name="alt_phones[' + index + '][phone]" value="' + String(data.phone || '').replace(/"/g, '&quot;') + '" oninput="limitPublisherPhoneDigits(this)" placeholder="10-digit phone" class="' + publisherAltInputClass() + '">' +
+        '<label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer whitespace-nowrap">' +
+            '<input type="checkbox" name="alt_phones[' + index + '][is_whatsapp]" value="1"' + (data.is_whatsapp === 1 || data.is_whatsapp === '1' ? ' checked' : '') + ' class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">' +
+            '<span>WhatsApp</span>' +
+        '</label>' +
+        '<button type="button" class="publisher-alt-remove inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">Remove</button>';
+    list.appendChild(row);
+    reindexPublisherAltPhoneRows();
+    updatePublisherAltAddButtons();
+}
+
+function addPublisherAltEmailRow(data) {
+    const list = document.getElementById('publisherAltEmailsList');
+    if (!list || list.querySelectorAll('.publisher-alt-email-row').length >= PUBLISHER_MAX_ALT_EMAILS) {
+        return;
+    }
+    data = data || {};
+    const index = list.querySelectorAll('.publisher-alt-email-row').length;
+    const row = document.createElement('div');
+    row.className = 'publisher-alt-email-row ' + publisherAltRowClass();
+    row.innerHTML =
+        '<input type="email" name="alt_emails[' + index + '][email]" value="' + String(data.email || '').replace(/"/g, '&quot;') + '" placeholder="email@example.com" class="' + publisherAltInputClass() + '">' +
+        '<label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer whitespace-nowrap">' +
+            '<input type="checkbox" name="alt_emails[' + index + '][is_billing]" value="1"' + (data.is_billing === 1 || data.is_billing === '1' ? ' checked' : '') + ' class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">' +
+            '<span>Billing</span>' +
+        '</label>' +
+        '<button type="button" class="publisher-alt-remove inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">Remove</button>';
+    list.appendChild(row);
+    reindexPublisherAltEmailRows();
+    updatePublisherAltAddButtons();
+}
+
+function reindexPublisherAltPhoneRows() {
+    document.querySelectorAll('#publisherAltPhonesList .publisher-alt-phone-row').forEach(function (row, index) {
+        const phoneInput = row.querySelector('input[type="text"]');
+        const whatsappInput = row.querySelector('input[type="checkbox"]');
+        if (phoneInput) phoneInput.name = 'alt_phones[' + index + '][phone]';
+        if (whatsappInput) whatsappInput.name = 'alt_phones[' + index + '][is_whatsapp]';
+    });
+}
+
+function reindexPublisherAltEmailRows() {
+    document.querySelectorAll('#publisherAltEmailsList .publisher-alt-email-row').forEach(function (row, index) {
+        const emailInput = row.querySelector('input[type="email"]');
+        const billingInput = row.querySelector('input[type="checkbox"]');
+        if (emailInput) emailInput.name = 'alt_emails[' + index + '][email]';
+        if (billingInput) billingInput.name = 'alt_emails[' + index + '][is_billing]';
+    });
+}
+
+function renderPublisherAltPhones(rows) {
+    const list = document.getElementById('publisherAltPhonesList');
+    if (!list) return;
+    list.innerHTML = '';
+    (Array.isArray(rows) ? rows : []).forEach(function (row) {
+        addPublisherAltPhoneRow(row);
+    });
+    updatePublisherAltAddButtons();
+}
+
+function renderPublisherAltEmails(rows) {
+    const list = document.getElementById('publisherAltEmailsList');
+    if (!list) return;
+    list.innerHTML = '';
+    (Array.isArray(rows) ? rows : []).forEach(function (row) {
+        addPublisherAltEmailRow(row);
+    });
+    updatePublisherAltAddButtons();
 }
 
 function setSelectValueByTextOrValue(selectEl, value) {
@@ -582,9 +716,14 @@ function openPublisherModal(publisher) {
     document.getElementById('publisher_webpage').checked = publisher.webpage === 1 || publisher.webpage === '1';
     document.getElementById('publisher_contact_name').value = publisher.contact_name || '';
     document.getElementById('publisher_email').value = publisher.publisher_email || '';
+    document.getElementById('publisher_email_is_billing').checked =
+        publisher.publisher_email_is_billing === 1 || publisher.publisher_email_is_billing === '1';
     setSelectValueByTextOrValue(document.getElementById('publisher_country_code'), publisher.country_code || '');
     document.getElementById('publisher_phone').value = publisher.publisher_phone || '';
-    document.getElementById('publisher_alt_phone').value = publisher.alt_phone || '';
+    document.getElementById('publisher_phone_is_whatsapp').checked =
+        publisher.publisher_phone_is_whatsapp === 1 || publisher.publisher_phone_is_whatsapp === '1';
+    renderPublisherAltEmails(publisher.alt_emails || []);
+    renderPublisherAltPhones(publisher.alt_phones || []);
     document.getElementById('publisher_address').value = publisher.address || '';
     document.getElementById('publisher_city').value = publisher.city || '';
     document.getElementById('publisher_postal_code').value = publisher.postal_code || '';
@@ -660,6 +799,12 @@ document.getElementById('publisherForm')?.addEventListener('submit', function (e
     const form = new FormData(this);
     if (!document.getElementById('publisher_webpage').checked) {
         form.set('webpage', '0');
+    }
+    if (!document.getElementById('publisher_phone_is_whatsapp').checked) {
+        form.set('publisher_phone_is_whatsapp', '0');
+    }
+    if (!document.getElementById('publisher_email_is_billing').checked) {
+        form.set('publisher_email_is_billing', '0');
     }
     const btn = document.getElementById('publisherSaveBtn');
     const oldLabel = btn ? btn.textContent : '';
@@ -867,6 +1012,30 @@ function handlePublisherMenuAction(item) {
         deletePublisher(id);
     }
 }
+
+document.getElementById('addPublisherAltPhoneBtn')?.addEventListener('click', function () {
+    addPublisherAltPhoneRow();
+});
+
+document.getElementById('addPublisherAltEmailBtn')?.addEventListener('click', function () {
+    addPublisherAltEmailRow();
+});
+
+document.getElementById('publisherAltPhonesList')?.addEventListener('click', function (event) {
+    const btn = event.target.closest('.publisher-alt-remove');
+    if (!btn || !event.currentTarget.contains(btn)) return;
+    btn.closest('.publisher-alt-phone-row')?.remove();
+    reindexPublisherAltPhoneRows();
+    updatePublisherAltAddButtons();
+});
+
+document.getElementById('publisherAltEmailsList')?.addEventListener('click', function (event) {
+    const btn = event.target.closest('.publisher-alt-remove');
+    if (!btn || !event.currentTarget.contains(btn)) return;
+    btn.closest('.publisher-alt-email-row')?.remove();
+    reindexPublisherAltEmailRows();
+    updatePublisherAltAddButtons();
+});
 
 document.addEventListener('DOMContentLoaded', function () {
     const menuButtons = document.querySelectorAll('#publisher-list-table .menu-button, .menu-wrapper .menu-button');
