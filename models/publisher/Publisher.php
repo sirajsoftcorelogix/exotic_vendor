@@ -4,9 +4,13 @@ class Publisher
 {
     private mysqli $conn;
 
-    private const LIST_COLUMNS = 'p.id, p.publishers_id, p.publishers, p.contact_name, p.publisher_email, p.country_code, p.publisher_phone, p.alt_phone, p.gst_number, p.pan_number, p.address, p.city, p.state, p.country, p.postal_code, p.webpage, p.stock_replenishment_months, p.discount, p.broker_id, bu.name AS broker_name, p.is_active, p.create_at, p.update_at';
+    private const LIST_COLUMNS = 'p.id, p.publishers_id, p.publishers, p.contact_name, p.publisher_email, p.publisher_email_is_billing, p.country_code, p.publisher_phone, p.publisher_phone_is_whatsapp, p.gst_number, p.pan_number, p.address, p.city, p.state, p.country, p.postal_code, p.webpage, p.stock_replenishment_months, p.discount, p.broker_id, bu.name AS broker_name, p.is_active, p.create_at, p.update_at';
 
     private const LIST_FROM = ' FROM vp_publishers p LEFT JOIN vp_users bu ON bu.id = p.broker_id AND bu.is_deleted = 0';
+
+    private const MAX_ALT_PHONES = 5;
+
+    private const MAX_ALT_EMAILS = 5;
 
     public function __construct(mysqli $conn)
     {
@@ -21,9 +25,10 @@ class Publisher
         return [
             'contact_name' => trim((string)($data['contact_name'] ?? '')),
             'publisher_email' => trim((string)($data['publisher_email'] ?? '')),
+            'publisher_email_is_billing' => (string)($data['publisher_email_is_billing'] ?? '0') === '1' ? 1 : 0,
             'country_code' => trim((string)($data['country_code'] ?? '')),
             'publisher_phone' => trim((string)($data['publisher_phone'] ?? '')),
-            'alt_phone' => trim((string)($data['alt_phone'] ?? '')),
+            'publisher_phone_is_whatsapp' => (string)($data['publisher_phone_is_whatsapp'] ?? '0') === '1' ? 1 : 0,
             'gst_number' => trim((string)($data['gst_number'] ?? '')),
             'pan_number' => trim((string)($data['pan_number'] ?? '')),
             'address' => trim((string)($data['address'] ?? '')),
@@ -41,7 +46,415 @@ class Publisher
             'broker_id' => trim((string)($data['broker_id'] ?? '')) === ''
                 ? null
                 : max(0, (int)$data['broker_id']),
+            'alt_phones' => $this->parseAlternatePhonesFromPost($data),
+            'alt_emails' => $this->parseAlternateEmailsFromPost($data),
         ];
+    }
+
+    /**
+     * @return array<int, array{phone:string,is_whatsapp:int}>
+     */
+    public function parseAlternatePhonesFromPost(array $data): array
+    {
+        $rows = [];
+        $raw = $data['alt_phones'] ?? [];
+        if (!is_array($raw)) {
+            return $rows;
+        }
+
+        foreach ($raw as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $phone = preg_replace('/\D+/', '', trim((string)($item['phone'] ?? '')));
+            if ($phone === '') {
+                continue;
+            }
+            if (strlen($phone) > 10) {
+                $phone = substr($phone, 0, 10);
+            }
+            $rows[] = [
+                'phone' => $phone,
+                'is_whatsapp' => !empty($item['is_whatsapp']) ? 1 : 0,
+            ];
+            if (count($rows) >= self::MAX_ALT_PHONES) {
+                break;
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return array<int, array{email:string,is_billing:int}>
+     */
+    public function parseAlternateEmailsFromPost(array $data): array
+    {
+        $rows = [];
+        $raw = $data['alt_emails'] ?? [];
+        if (!is_array($raw)) {
+            return $rows;
+        }
+
+        foreach ($raw as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $email = trim((string)($item['email'] ?? ''));
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
+            $rows[] = [
+                'email' => $email,
+                'is_billing' => !empty($item['is_billing']) ? 1 : 0,
+            ];
+            if (count($rows) >= self::MAX_ALT_EMAILS) {
+                break;
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return array<int, array{phone:string,is_whatsapp:int}>
+     */
+    public function getPhonesByPublisherId(int $publisherId): array
+    {
+        if ($publisherId <= 0) {
+            return [];
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT phone, is_whatsapp FROM publisher_phones WHERE publisher_id = ? ORDER BY sort_order ASC, id ASC'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $publisherId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = [];
+        while ($result && ($row = $result->fetch_assoc())) {
+            $rows[] = [
+                'phone' => (string)($row['phone'] ?? ''),
+                'is_whatsapp' => (int)($row['is_whatsapp'] ?? 0),
+            ];
+        }
+        $stmt->close();
+
+        return $rows;
+    }
+
+    /**
+     * @return array<int, array{email:string,is_billing:int}>
+     */
+    public function getEmailsByPublisherId(int $publisherId): array
+    {
+        if ($publisherId <= 0) {
+            return [];
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT email, is_billing FROM publisher_emails WHERE publisher_id = ? ORDER BY sort_order ASC, id ASC'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $publisherId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = [];
+        while ($result && ($row = $result->fetch_assoc())) {
+            $rows[] = [
+                'email' => (string)($row['email'] ?? ''),
+                'is_billing' => (int)($row['is_billing'] ?? 0),
+            ];
+        }
+        $stmt->close();
+
+        return $rows;
+    }
+
+    /**
+     * @param array<int, array{phone:string,is_whatsapp:int}> $phones
+     * @param array<int, array{email:string,is_billing:int}> $emails
+     */
+    private function replacePublisherContacts(int $publisherId, array $phones, array $emails): ?array
+    {
+        if ($publisherId <= 0) {
+            return ['success' => false, 'message' => 'Invalid publisher id for contacts.'];
+        }
+
+        $deletePhones = $this->conn->prepare('DELETE FROM publisher_phones WHERE publisher_id = ?');
+        $deleteEmails = $this->conn->prepare('DELETE FROM publisher_emails WHERE publisher_id = ?');
+        if (!$deletePhones || !$deleteEmails) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+        }
+
+        $deletePhones->bind_param('i', $publisherId);
+        $deleteEmails->bind_param('i', $publisherId);
+        if (!$deletePhones->execute() || !$deleteEmails->execute()) {
+            $error = $deletePhones->error ?: $deleteEmails->error;
+            $deletePhones->close();
+            $deleteEmails->close();
+
+            return ['success' => false, 'message' => 'Could not update publisher contacts: ' . $error];
+        }
+        $deletePhones->close();
+        $deleteEmails->close();
+
+        if ($phones !== []) {
+            $insertPhone = $this->conn->prepare(
+                'INSERT INTO publisher_phones (publisher_id, phone, is_whatsapp, sort_order) VALUES (?, ?, ?, ?)'
+            );
+            if (!$insertPhone) {
+                return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+            }
+            foreach ($phones as $index => $row) {
+                $phone = $row['phone'];
+                $isWhatsapp = (int)$row['is_whatsapp'];
+                $sortOrder = $index;
+                $insertPhone->bind_param('isii', $publisherId, $phone, $isWhatsapp, $sortOrder);
+                if (!$insertPhone->execute()) {
+                    $error = $insertPhone->error;
+                    $insertPhone->close();
+
+                    return ['success' => false, 'message' => 'Could not save alternate phone: ' . $error];
+                }
+            }
+            $insertPhone->close();
+        }
+
+        if ($emails !== []) {
+            $insertEmail = $this->conn->prepare(
+                'INSERT INTO publisher_emails (publisher_id, email, is_billing, sort_order) VALUES (?, ?, ?, ?)'
+            );
+            if (!$insertEmail) {
+                return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+            }
+            foreach ($emails as $index => $row) {
+                $email = $row['email'];
+                $isBilling = (int)$row['is_billing'];
+                $sortOrder = $index;
+                $insertEmail->bind_param('isii', $publisherId, $email, $isBilling, $sortOrder);
+                if (!$insertEmail->execute()) {
+                    $error = $insertEmail->error;
+                    $insertEmail->close();
+
+                    return ['success' => false, 'message' => 'Could not save alternate email: ' . $error];
+                }
+            }
+            $insertEmail->close();
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $publishers
+     */
+    private function attachContactsToPublishers(array &$publishers): void
+    {
+        if ($publishers === []) {
+            return;
+        }
+
+        $ids = [];
+        foreach ($publishers as $publisher) {
+            $id = (int)($publisher['id'] ?? 0);
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+        if ($ids === []) {
+            return;
+        }
+
+        $phonesByPublisher = array_fill_keys($ids, []);
+        $emailsByPublisher = array_fill_keys($ids, []);
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $types = str_repeat('i', count($ids));
+
+        $phoneStmt = $this->conn->prepare(
+            "SELECT publisher_id, phone, is_whatsapp FROM publisher_phones WHERE publisher_id IN ($placeholders) ORDER BY sort_order ASC, id ASC"
+        );
+        if ($phoneStmt) {
+            $phoneStmt->bind_param($types, ...$ids);
+            $phoneStmt->execute();
+            $phoneResult = $phoneStmt->get_result();
+            while ($phoneResult && ($row = $phoneResult->fetch_assoc())) {
+                $publisherId = (int)($row['publisher_id'] ?? 0);
+                if ($publisherId <= 0) {
+                    continue;
+                }
+                $phonesByPublisher[$publisherId][] = [
+                    'phone' => (string)($row['phone'] ?? ''),
+                    'is_whatsapp' => (int)($row['is_whatsapp'] ?? 0),
+                ];
+            }
+            $phoneStmt->close();
+        }
+
+        $emailStmt = $this->conn->prepare(
+            "SELECT publisher_id, email, is_billing FROM publisher_emails WHERE publisher_id IN ($placeholders) ORDER BY sort_order ASC, id ASC"
+        );
+        if ($emailStmt) {
+            $emailStmt->bind_param($types, ...$ids);
+            $emailStmt->execute();
+            $emailResult = $emailStmt->get_result();
+            while ($emailResult && ($row = $emailResult->fetch_assoc())) {
+                $publisherId = (int)($row['publisher_id'] ?? 0);
+                if ($publisherId <= 0) {
+                    continue;
+                }
+                $emailsByPublisher[$publisherId][] = [
+                    'email' => (string)($row['email'] ?? ''),
+                    'is_billing' => (int)($row['is_billing'] ?? 0),
+                ];
+            }
+            $emailStmt->close();
+        }
+
+        foreach ($publishers as &$publisher) {
+            $publisherId = (int)($publisher['id'] ?? 0);
+            $publisher['alt_phones'] = $phonesByPublisher[$publisherId] ?? [];
+            $publisher['alt_emails'] = $emailsByPublisher[$publisherId] ?? [];
+        }
+        unset($publisher);
+    }
+
+    private function attachContactsToPublisher(array &$publisher): void
+    {
+        $publisherId = (int)($publisher['id'] ?? 0);
+        if ($publisherId <= 0) {
+            $publisher['alt_phones'] = [];
+            $publisher['alt_emails'] = [];
+
+            return;
+        }
+
+        $publisher['alt_phones'] = $this->getPhonesByPublisherId($publisherId);
+        $publisher['alt_emails'] = $this->getEmailsByPublisherId($publisherId);
+    }
+
+    private function contactPhoneExistsGlobally(string $phone, ?int $excludePublisherId = null): bool
+    {
+        $phone = trim($phone);
+        if ($phone === '') {
+            return false;
+        }
+
+        if ($this->publisherFieldExists('publisher_phone', $phone, $excludePublisherId)) {
+            return true;
+        }
+
+        $sql = 'SELECT pp.id FROM publisher_phones pp INNER JOIN vp_publishers p ON p.id = pp.publisher_id WHERE pp.phone = ?';
+        if ($excludePublisherId !== null && $excludePublisherId > 0) {
+            $sql .= ' AND p.id != ? LIMIT 1';
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) {
+                return false;
+            }
+            $stmt->bind_param('si', $phone, $excludePublisherId);
+        } else {
+            $sql .= ' LIMIT 1';
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) {
+                return false;
+            }
+            $stmt->bind_param('s', $phone);
+        }
+        $stmt->execute();
+        $stmt->store_result();
+        $exists = $stmt->num_rows > 0;
+        $stmt->close();
+
+        return $exists;
+    }
+
+    private function contactEmailExistsGlobally(string $email, ?int $excludePublisherId = null): bool
+    {
+        $email = trim($email);
+        if ($email === '') {
+            return false;
+        }
+
+        if ($this->publisherFieldExists('publisher_email', $email, $excludePublisherId)) {
+            return true;
+        }
+
+        $sql = 'SELECT pe.id FROM publisher_emails pe INNER JOIN vp_publishers p ON p.id = pe.publisher_id WHERE LOWER(TRIM(pe.email)) = LOWER(TRIM(?))';
+        if ($excludePublisherId !== null && $excludePublisherId > 0) {
+            $sql .= ' AND p.id != ? LIMIT 1';
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) {
+                return false;
+            }
+            $stmt->bind_param('si', $email, $excludePublisherId);
+        } else {
+            $sql .= ' LIMIT 1';
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) {
+                return false;
+            }
+            $stmt->bind_param('s', $email);
+        }
+        $stmt->execute();
+        $stmt->store_result();
+        $exists = $stmt->num_rows > 0;
+        $stmt->close();
+
+        return $exists;
+    }
+
+    /**
+     * @param array<string, mixed> $fields
+     */
+    private function validatePublisherContacts(array $fields, ?int $excludePublisherId = null): ?array
+    {
+        $phones = [];
+        $primaryPhone = trim((string)($fields['publisher_phone'] ?? ''));
+        if ($primaryPhone !== '') {
+            $phones[] = $primaryPhone;
+        }
+        foreach ($fields['alt_phones'] ?? [] as $row) {
+            $phones[] = (string)($row['phone'] ?? '');
+        }
+
+        $normalizedPhones = array_values(array_filter($phones, static fn($value) => trim((string)$value) !== ''));
+        if (count($normalizedPhones) !== count(array_unique($normalizedPhones))) {
+            return ['success' => false, 'message' => 'Duplicate phone numbers are not allowed for the same publisher.'];
+        }
+        foreach ($normalizedPhones as $phone) {
+            if ($this->contactPhoneExistsGlobally($phone, $excludePublisherId)) {
+                return ['success' => false, 'message' => 'Phone number already exists. Please use a different phone number.'];
+            }
+        }
+
+        $emails = [];
+        $primaryEmail = trim((string)($fields['publisher_email'] ?? ''));
+        if ($primaryEmail !== '') {
+            if (!filter_var($primaryEmail, FILTER_VALIDATE_EMAIL)) {
+                return ['success' => false, 'message' => 'Primary email address is invalid.'];
+            }
+            $emails[] = strtolower($primaryEmail);
+        }
+        foreach ($fields['alt_emails'] ?? [] as $row) {
+            $emails[] = strtolower(trim((string)($row['email'] ?? '')));
+        }
+
+        $normalizedEmails = array_values(array_filter($emails, static fn($value) => trim((string)$value) !== ''));
+        if (count($normalizedEmails) !== count(array_unique($normalizedEmails))) {
+            return ['success' => false, 'message' => 'Duplicate email addresses are not allowed for the same publisher.'];
+        }
+        foreach ($normalizedEmails as $email) {
+            if ($this->contactEmailExistsGlobally($email, $excludePublisherId)) {
+                return ['success' => false, 'message' => 'Email already exists. Please use a different email.'];
+            }
+        }
+
+        return null;
     }
 
     private function normalizeBrokerId(?int $brokerId): ?int
@@ -121,12 +534,6 @@ class Publisher
         ?string $pan,
         ?int $excludeId = null
     ): ?array {
-        if ($phone !== null && trim($phone) !== '' && $this->publisherFieldExists('publisher_phone', trim($phone), $excludeId)) {
-            return ['success' => false, 'message' => 'Phone number already exists. Please use a different phone number.'];
-        }
-        if ($email !== null && trim($email) !== '' && $this->publisherFieldExists('publisher_email', trim($email), $excludeId)) {
-            return ['success' => false, 'message' => 'Email already exists. Please use a different email.'];
-        }
         if ($gst !== null && trim($gst) !== '' && $this->publisherFieldExists('gst_number', trim($gst), $excludeId)) {
             return ['success' => false, 'message' => 'GST number already exists. Please use a different GST number.'];
         }
@@ -194,6 +601,8 @@ class Publisher
         $publishers = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
 
+        $this->attachContactsToPublishers($publishers);
+
         return [
             'publishers' => $publishers,
             'totalRecords' => $totalRecords,
@@ -214,7 +623,13 @@ class Publisher
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
-        return $row ?: null;
+        if (!$row) {
+            return null;
+        }
+
+        $this->attachContactsToPublisher($row);
+
+        return $row;
     }
 
     public function publisherNameExists(string $name, ?int $excludeLocalId = null): bool
@@ -297,29 +712,41 @@ class Publisher
             return $duplicate;
         }
 
+        $contactError = $this->validatePublisherContacts($fields, $id);
+        if ($contactError !== null) {
+            return $contactError;
+        }
+
         $brokerError = $this->validateBrokerId($fields['broker_id']);
         if ($brokerError !== null) {
             return $brokerError;
         }
         $brokerId = $this->normalizeBrokerId($fields['broker_id']);
 
+        $this->conn->begin_transaction();
+
         $stmt = $this->conn->prepare(
-            'UPDATE vp_publishers SET publishers = ?, contact_name = ?, publisher_email = ?, country_code = ?, publisher_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, stock_replenishment_months = ?, discount = ?, broker_id = ?, is_active = ? WHERE id = ?'
+            'UPDATE vp_publishers SET publishers = ?, contact_name = ?, publisher_email = ?, publisher_email_is_billing = ?, country_code = ?, publisher_phone = ?, publisher_phone_is_whatsapp = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, stock_replenishment_months = ?, discount = ?, broker_id = ?, is_active = ? WHERE id = ?'
         );
         if (!$stmt) {
+            $this->conn->rollback();
+
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
         }
         $webpage = (int)$fields['webpage'];
         $stockReplenishmentMonths = (int)$fields['stock_replenishment_months'];
         $discount = (float)$fields['discount'];
+        $publisherEmailIsBilling = (int)$fields['publisher_email_is_billing'];
+        $publisherPhoneIsWhatsapp = (int)$fields['publisher_phone_is_whatsapp'];
         $stmt->bind_param(
-            'sssssssssssssiddiii',
+            'sssissssssssssiddiii',
             $name,
             $fields['contact_name'],
             $fields['publisher_email'],
+            $publisherEmailIsBilling,
             $fields['country_code'],
             $fields['publisher_phone'],
-            $fields['alt_phone'],
+            $publisherPhoneIsWhatsapp,
             $fields['gst_number'],
             $fields['pan_number'],
             $fields['address'],
@@ -339,14 +766,31 @@ class Publisher
             $ok = $stmt->execute();
             $error = $stmt->error;
             $stmt->close();
+            if (!$ok) {
+                $this->conn->rollback();
+
+                return ['success' => false, 'message' => 'Could not save publisher: ' . $error];
+            }
+
+            $contactSaveError = $this->replacePublisherContacts(
+                $id,
+                $fields['alt_phones'],
+                $fields['alt_emails']
+            );
+            if ($contactSaveError !== null) {
+                $this->conn->rollback();
+
+                return $contactSaveError;
+            }
+
+            $this->conn->commit();
         } catch (mysqli_sql_exception $e) {
-            $stmt->close();
+            $this->conn->rollback();
+
             return ['success' => false, 'message' => 'Could not save publisher: ' . $e->getMessage()];
         }
 
-        return $ok
-            ? ['success' => true, 'message' => 'Publisher saved successfully.', 'id' => $id]
-            : ['success' => false, 'message' => 'Could not save publisher: ' . $error];
+        return ['success' => true, 'message' => 'Publisher saved successfully.', 'id' => $id];
     }
 
     public function insertPublisher(int $publishersId, string $name, int $isActive, array $extra = []): array
@@ -377,30 +821,42 @@ class Publisher
             return $duplicate;
         }
 
+        $contactError = $this->validatePublisherContacts($fields);
+        if ($contactError !== null) {
+            return $contactError;
+        }
+
         $brokerError = $this->validateBrokerId($fields['broker_id']);
         if ($brokerError !== null) {
             return $brokerError;
         }
         $brokerId = $this->normalizeBrokerId($fields['broker_id']);
 
+        $this->conn->begin_transaction();
+
         $stmt = $this->conn->prepare(
-            'INSERT INTO vp_publishers (publishers_id, publishers, contact_name, publisher_email, country_code, publisher_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_months, discount, broker_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO vp_publishers (publishers_id, publishers, contact_name, publisher_email, publisher_email_is_billing, country_code, publisher_phone, publisher_phone_is_whatsapp, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_months, discount, broker_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         if (!$stmt) {
+            $this->conn->rollback();
+
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
         }
         $webpage = (int)$fields['webpage'];
         $stockReplenishmentMonths = (int)$fields['stock_replenishment_months'];
         $discount = (float)$fields['discount'];
+        $publisherEmailIsBilling = (int)$fields['publisher_email_is_billing'];
+        $publisherPhoneIsWhatsapp = (int)$fields['publisher_phone_is_whatsapp'];
         $stmt->bind_param(
-            'issssssssssssssiddii',
+            'isssissssssssssiddii',
             $publishersId,
             $name,
             $fields['contact_name'],
             $fields['publisher_email'],
+            $publisherEmailIsBilling,
             $fields['country_code'],
             $fields['publisher_phone'],
-            $fields['alt_phone'],
+            $publisherPhoneIsWhatsapp,
             $fields['gst_number'],
             $fields['pan_number'],
             $fields['address'],
@@ -420,14 +876,31 @@ class Publisher
             $newId = (int) $stmt->insert_id;
             $error = $stmt->error;
             $stmt->close();
+            if (!$ok || $newId <= 0) {
+                $this->conn->rollback();
+
+                return ['success' => false, 'message' => 'Could not save publisher: ' . $error];
+            }
+
+            $contactSaveError = $this->replacePublisherContacts(
+                $newId,
+                $fields['alt_phones'],
+                $fields['alt_emails']
+            );
+            if ($contactSaveError !== null) {
+                $this->conn->rollback();
+
+                return $contactSaveError;
+            }
+
+            $this->conn->commit();
         } catch (mysqli_sql_exception $e) {
-            $stmt->close();
+            $this->conn->rollback();
+
             return ['success' => false, 'message' => 'Could not save publisher: ' . $e->getMessage()];
         }
 
-        return $ok
-            ? ['success' => true, 'message' => 'Publisher saved successfully.', 'id' => $newId, 'publishers_id' => $publishersId]
-            : ['success' => false, 'message' => 'Could not save publisher: ' . $error];
+        return ['success' => true, 'message' => 'Publisher saved successfully.', 'id' => $newId, 'publishers_id' => $publishersId];
     }
 
     public function updatePublisherRemoteId(int $localId, int $publishersId): array
@@ -598,6 +1071,15 @@ class Publisher
             $bankStmt->bind_param('i', $id);
             $bankStmt->execute();
             $bankStmt->close();
+        }
+
+        foreach (['publisher_phones', 'publisher_emails'] as $contactTable) {
+            $contactStmt = $this->conn->prepare("DELETE FROM {$contactTable} WHERE publisher_id = ?");
+            if ($contactStmt) {
+                $contactStmt->bind_param('i', $id);
+                $contactStmt->execute();
+                $contactStmt->close();
+            }
         }
 
         $stmt = $this->conn->prepare('DELETE FROM vp_publishers WHERE id = ?');
