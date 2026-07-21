@@ -147,6 +147,8 @@ $queryBase = [
                                 'id' => $id,
                                 'publishers_id' => $publisherExternalId,
                                 'publishers' => $name,
+                                'display_name' => (string)($publisher['display_name'] ?? ''),
+                                'website' => (string)($publisher['website'] ?? ''),
                                 'contact_name' => $contactName,
                                 'publisher_email' => (string)($publisher['publisher_email'] ?? ''),
                                 'publisher_email_is_primary' => (int)($publisher['publisher_email_is_primary'] ?? 0),
@@ -231,86 +233,141 @@ $queryBase = [
 </div>
 
 <div id="publisherModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4 py-6">
-    <div class="w-full max-w-3xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col">
-        <div class="flex items-center justify-between border-b px-6 py-4 shrink-0">
-            <h2 id="publisherModalTitle" class="text-lg font-semibold text-gray-900">Add Publisher</h2>
-            <button type="button" onclick="closePublisherModal()" class="text-gray-400 hover:text-gray-700">x</button>
+    <div class="w-full max-w-4xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col">
+        <div class="flex items-center justify-between border-b border-gray-200 bg-gradient-to-r from-amber-50/60 to-white px-6 py-4 shrink-0">
+            <div>
+                <h2 id="publisherModalTitle" class="text-lg font-semibold text-gray-900">Add Publisher</h2>
+                <p class="mt-0.5 text-xs text-gray-500">Publisher profile, contacts, address, and tax details</p>
+            </div>
+            <button type="button" onclick="closePublisherModal()" class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition" aria-label="Close">&times;</button>
         </div>
-        <form id="publisherForm" class="overflow-y-auto px-6 py-5 space-y-5">
+        <form id="publisherForm" class="overflow-y-auto px-4 py-5 sm:px-6 space-y-5">
             <input type="hidden" name="id" id="publisher_id">
 
-            <div>
-                <h3 class="text-sm font-bold text-gray-800 mb-3">Basic Information</h3>
+            <section class="rounded-xl border border-gray-200/90 bg-gradient-to-b from-gray-50/70 to-white p-4 sm:p-5 space-y-4">
+                <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                        <i class="fas fa-building text-sm" aria-hidden="true"></i>
+                    </span>
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-900">Publisher profile</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">Legal name synced with Exotic India, plus display and web presence.</p>
+                    </div>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Publisher Name</label>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Publisher name <span class="text-red-500 normal-case">*</span></label>
                         <input type="text" name="publishers" id="publisher_name" required
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                            placeholder="Official publisher name">
                         <span id="publisherNameMsg" class="text-sm text-red-500"></span>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Status</label>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Display name</label>
+                        <input type="text" name="display_name" id="publisher_display_name"
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                            placeholder="Friendly name shown in listings">
+                        <p class="mt-1 text-xs text-gray-500">Optional. Use when the display label differs from the official name.</p>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Status</label>
                         <select name="is_active" id="publisher_is_active"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
                             <option value="1">Active</option>
                             <option value="0">Inactive</option>
                         </select>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Stock Replenishment Months</label>
-                        <input type="number" name="stock_replenishment_months" id="publisher_stock_replenishment_months" min="0" step="1"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none"
-                            placeholder="e.g. 30">
-                        <p class="mt-1 text-xs text-gray-500">Expected months to replenish stock for this publisher. Leave empty or 0 if not set.</p>
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Discount (%)</label>
-                        <input type="number" name="discount" id="publisher_discount" min="0" step="0.01"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none"
-                            placeholder="e.g. 10">
-                        <p class="mt-1 text-xs text-gray-500">Default discount percentage for this publisher. Leave empty or 0 if not set.</p>
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Broker</label>
-                        <select name="broker_id" id="publisher_broker_id" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Broker</label>
+                        <select name="broker_id" id="publisher_broker_id"
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
                             <option value="">Select broker...</option>
                         </select>
                         <p class="mt-1 text-xs text-gray-500">Search active portal users. Leave empty if not assigned.</p>
                     </div>
+                    <div class="md:col-span-2">
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Website</label>
+                        <div class="relative">
+                            <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                <i class="fas fa-globe text-xs" aria-hidden="true"></i>
+                            </span>
+                            <input type="url" name="website" id="publisher_website"
+                                class="w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-9 pr-3 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                                placeholder="https://example.com">
+                        </div>
+                    </div>
                 </div>
-                <div class="mt-3">
-                    <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                        <input type="checkbox" name="webpage" id="publisher_webpage" value="1"
-                            class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
-                        <span>Allow webpage on Exotic India</span>
-                    </label>
-                    <p class="mt-1 text-xs text-gray-500">Maps to the <code>webpage</code> parameter (0 or 1) on the vendor API.</p>
-                </div>
-            </div>
+                <label class="flex items-start gap-3 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2.5 cursor-pointer">
+                    <input type="checkbox" name="webpage" id="publisher_webpage" value="1"
+                        class="mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                    <span>
+                        <span class="block text-sm font-medium text-gray-800">Allow webpage on Exotic India</span>
+                        <span class="block text-xs text-gray-500 mt-0.5">Maps to the <code class="text-[11px] bg-white/80 px-1 rounded">webpage</code> parameter (0 or 1) on the vendor API.</span>
+                    </span>
+                </label>
+            </section>
 
-            <div>
-                <h3 class="text-sm font-bold text-gray-800 mb-3">Contact Details</h3>
+            <section class="rounded-xl border border-gray-200/90 bg-gradient-to-b from-gray-50/70 to-white p-4 sm:p-5 space-y-4">
+                <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                        <i class="fas fa-handshake text-sm" aria-hidden="true"></i>
+                    </span>
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-900">Commercial terms</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">Default discount and stock replenishment settings.</p>
+                    </div>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Contact Person</label>
-                        <input type="text" name="contact_name" id="publisher_contact_name"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Stock replenishment (months)</label>
+                        <input type="number" name="stock_replenishment_months" id="publisher_stock_replenishment_months" min="0" step="1"
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                            placeholder="e.g. 30">
+                        <p class="mt-1 text-xs text-gray-500">Expected months to replenish stock. Leave empty or 0 if not set.</p>
                     </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Discount (%)</label>
+                        <input type="number" name="discount" id="publisher_discount" min="0" step="0.01"
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                            placeholder="e.g. 10">
+                        <p class="mt-1 text-xs text-gray-500">Default discount percentage. Leave empty or 0 if not set.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="rounded-xl border border-gray-200/90 bg-gradient-to-b from-gray-50/70 to-white p-4 sm:p-5 space-y-4">
+                <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+                        <i class="fas fa-address-book text-sm" aria-hidden="true"></i>
+                    </span>
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-900">Contact details</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">Primary contact plus optional alternate emails and phones.</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="md:col-span-2">
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Primary Email</label>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Contact person</label>
+                        <input type="text" name="contact_name" id="publisher_contact_name"
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                            placeholder="Primary contact name">
+                    </div>
+                    <div class="md:col-span-2 rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+                        <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Primary email</label>
                         <input type="email" name="publisher_email" id="publisher_email"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
-                        <label class="mt-2 flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                            placeholder="name@publisher.com">
+                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                             <input type="checkbox" name="publisher_email_is_primary" id="publisher_email_is_primary" value="1"
                                 class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
-                            <span>Primary email</span>
+                            <span>Mark as primary email</span>
                         </label>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Country Code</label>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Country code</label>
                         <select name="country_code" id="publisher_country_code"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
-                            <option value="">Select Code</option>
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
+                            <option value="">Select code</option>
                             <?php foreach ($countryList as $cl): ?>
                                 <option value="<?php echo htmlspecialchars((string)($cl['phone_code'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" <?php echo (($cl['name'] ?? '') === 'India') ? 'selected' : ''; ?>>
                                     <?php echo htmlspecialchars((string)($cl['name'] ?? ''), ENT_QUOTES, 'UTF-8') . ' (+' . (string)($cl['phone_code'] ?? '') . ')'; ?>
@@ -318,11 +375,12 @@ $queryBase = [
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Primary Phone</label>
+                    <div class="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+                        <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Primary phone</label>
                         <input type="text" name="publisher_phone" id="publisher_phone" oninput="limitPublisherPhoneDigits(this)"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
-                        <label class="mt-2 flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                            placeholder="Phone number">
+                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                             <input type="checkbox" name="publisher_phone_is_whatsapp" id="publisher_phone_is_whatsapp" value="1"
                                 class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
                             <span>WhatsApp number</span>
@@ -330,8 +388,8 @@ $queryBase = [
                     </div>
                 </div>
 
-                <div class="mt-5 space-y-5">
-                    <div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-1">
+                    <div class="rounded-lg border border-dashed border-gray-300 bg-white/80 p-3">
                         <div class="mb-2 flex items-center justify-between gap-3">
                             <h4 class="text-sm font-semibold text-gray-800">Additional emails</h4>
                             <button type="button" id="addPublisherAltEmailBtn"
@@ -341,9 +399,9 @@ $queryBase = [
                             </button>
                         </div>
                         <div id="publisherAltEmailsList" class="space-y-2"></div>
-                        <p class="mt-1 text-xs text-gray-500">Up to 5 alternate emails. Mark primary contact emails where needed.</p>
+                        <p class="mt-2 text-xs text-gray-500">Up to 5 alternate emails.</p>
                     </div>
-                    <div>
+                    <div class="rounded-lg border border-dashed border-gray-300 bg-white/80 p-3">
                         <div class="mb-2 flex items-center justify-between gap-3">
                             <h4 class="text-sm font-semibold text-gray-800">Additional phones</h4>
                             <button type="button" id="addPublisherAltPhoneBtn"
@@ -353,30 +411,39 @@ $queryBase = [
                             </button>
                         </div>
                         <div id="publisherAltPhonesList" class="space-y-2"></div>
-                        <p class="mt-1 text-xs text-gray-500">Up to 5 alternate phones. Tick WhatsApp for numbers reachable on WhatsApp.</p>
+                        <p class="mt-2 text-xs text-gray-500">Up to 5 alternate phones. Tick WhatsApp where applicable.</p>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <div>
-                <h3 class="text-sm font-bold text-gray-800 mb-3">Address</h3>
+            <section class="rounded-xl border border-gray-200/90 bg-gradient-to-b from-gray-50/70 to-white p-4 sm:p-5 space-y-4">
+                <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
+                        <i class="fas fa-location-dot text-sm" aria-hidden="true"></i>
+                    </span>
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-900">Address</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">Business or correspondence address.</p>
+                    </div>
+                </div>
                 <div class="space-y-4">
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Address</label>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Street address</label>
                         <input type="text" name="address" id="publisher_address"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                            placeholder="Building, street, area">
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label class="mb-1 block text-sm font-semibold text-gray-700">City</label>
+                            <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">City</label>
                             <input type="text" name="city" id="publisher_city"
-                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                                class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
                         </div>
                         <div>
-                            <label class="mb-1 block text-sm font-semibold text-gray-700">State</label>
+                            <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">State</label>
                             <span id="publisherStateBlock">
                                 <select name="state" id="publisher_state"
-                                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                                    class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
                                     <option value="">Select state...</option>
                                     <?php foreach ($stateList as $item): ?>
                                         <option value="<?php echo htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
@@ -387,9 +454,9 @@ $queryBase = [
                             </span>
                         </div>
                         <div>
-                            <label class="mb-1 block text-sm font-semibold text-gray-700">Country</label>
+                            <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Country</label>
                             <select name="country" id="publisher_country" onchange="fetchPublisherStates(this.value);"
-                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                                class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
                                 <?php foreach ($countryList as $item): ?>
                                     <option value="<?php echo htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" <?php echo (($item['name'] ?? '') === 'India') ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
@@ -398,33 +465,41 @@ $queryBase = [
                             </select>
                         </div>
                         <div>
-                            <label class="mb-1 block text-sm font-semibold text-gray-700">Zip Code</label>
+                            <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Zip code</label>
                             <input type="text" name="postal_code" id="publisher_postal_code"
-                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                                class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
                         </div>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <div>
-                <h3 class="text-sm font-bold text-gray-800 mb-3">Tax Information</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <section class="rounded-xl border border-gray-200/90 bg-gradient-to-b from-gray-50/70 to-white p-4 sm:p-5 space-y-4">
+                <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-700">
+                        <i class="fas fa-file-invoice text-sm" aria-hidden="true"></i>
+                    </span>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">GST Number</label>
-                        <input type="text" name="gst_number" id="publisher_gst_number"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">PAN Number</label>
-                        <input type="text" name="pan_number" id="publisher_pan_number"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                        <h3 class="text-sm font-bold text-gray-900">Tax information</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">GST and PAN for invoicing and compliance.</p>
                     </div>
                 </div>
-            </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">GST number</label>
+                        <input type="text" name="gst_number" id="publisher_gst_number"
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">PAN number</label>
+                        <input type="text" name="pan_number" id="publisher_pan_number"
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
+                    </div>
+                </div>
+            </section>
 
-            <div class="flex justify-end gap-3 border-t pt-4">
-                <button type="button" onclick="closePublisherModal()" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button type="submit" id="publisherSaveBtn" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Save Publisher</button>
+            <div class="sticky bottom-0 -mx-4 sm:-mx-6 flex justify-end gap-3 border-t border-gray-200 bg-white/95 px-4 sm:px-6 py-4 backdrop-blur-sm">
+                <button type="button" onclick="closePublisherModal()" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
+                <button type="submit" id="publisherSaveBtn" class="rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 transition">Save Publisher</button>
             </div>
         </form>
     </div>
@@ -712,6 +787,8 @@ function openPublisherModal(publisher) {
     document.getElementById('publisherModalTitle').textContent = publisher.id ? 'Edit Publisher' : 'Add Publisher';
     document.getElementById('publisher_id').value = publisher.id || '';
     document.getElementById('publisher_name').value = publisher.publishers || '';
+    document.getElementById('publisher_display_name').value = publisher.display_name || '';
+    document.getElementById('publisher_website').value = publisher.website || '';
     document.getElementById('publisher_is_active').value = publisher.is_active != null ? String(publisher.is_active) : '1';
     document.getElementById('publisher_webpage').checked = publisher.webpage === 1 || publisher.webpage === '1';
     document.getElementById('publisher_contact_name').value = publisher.contact_name || '';

@@ -4,7 +4,7 @@ class Publisher
 {
     private mysqli $conn;
 
-    private const LIST_COLUMNS = 'p.id, p.publishers_id, p.publishers, p.contact_name, p.publisher_email, p.publisher_email_is_primary, p.country_code, p.publisher_phone, p.publisher_phone_is_whatsapp, p.gst_number, p.pan_number, p.address, p.city, p.state, p.country, p.postal_code, p.webpage, p.stock_replenishment_months, p.discount, p.broker_id, bu.name AS broker_name, p.is_active, p.create_at, p.update_at';
+    private const LIST_COLUMNS = 'p.id, p.publishers_id, p.publishers, p.display_name, p.website, p.contact_name, p.publisher_email, p.publisher_email_is_primary, p.country_code, p.publisher_phone, p.publisher_phone_is_whatsapp, p.gst_number, p.pan_number, p.address, p.city, p.state, p.country, p.postal_code, p.webpage, p.stock_replenishment_months, p.discount, p.broker_id, bu.name AS broker_name, p.is_active, p.create_at, p.update_at';
 
     private const LIST_FROM = ' FROM vp_publishers p LEFT JOIN vp_users bu ON bu.id = p.broker_id AND bu.is_deleted = 0';
 
@@ -23,6 +23,8 @@ class Publisher
     public function normalizePublisherFormData(array $data): array
     {
         return [
+            'display_name' => trim((string)($data['display_name'] ?? '')),
+            'website' => trim((string)($data['website'] ?? '')),
             'contact_name' => trim((string)($data['contact_name'] ?? '')),
             'publisher_email' => trim((string)($data['publisher_email'] ?? '')),
             'publisher_email_is_primary' => (string)($data['publisher_email_is_primary'] ?? '0') === '1' ? 1 : 0,
@@ -555,8 +557,10 @@ class Publisher
         $params = [];
 
         if ($search !== '') {
-            $where[] = '(p.publishers LIKE ? OR p.publishers_id = ? OR p.id = ? OR p.city LIKE ? OR p.state LIKE ? OR p.contact_name LIKE ? OR p.publisher_phone LIKE ? OR bu.name LIKE ?)';
-            $types .= 'siisssss';
+            $where[] = '(p.publishers LIKE ? OR p.display_name LIKE ? OR p.website LIKE ? OR p.publishers_id = ? OR p.id = ? OR p.city LIKE ? OR p.state LIKE ? OR p.contact_name LIKE ? OR p.publisher_phone LIKE ? OR bu.name LIKE ?)';
+            $types .= 'ssssiissss';
+            $params[] = '%' . $search . '%';
+            $params[] = '%' . $search . '%';
             $params[] = '%' . $search . '%';
             $params[] = (int)$search;
             $params[] = (int)$search;
@@ -726,7 +730,7 @@ class Publisher
         $this->conn->begin_transaction();
 
         $stmt = $this->conn->prepare(
-            'UPDATE vp_publishers SET publishers = ?, contact_name = ?, publisher_email = ?, publisher_email_is_primary = ?, country_code = ?, publisher_phone = ?, publisher_phone_is_whatsapp = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, stock_replenishment_months = ?, discount = ?, broker_id = ?, is_active = ? WHERE id = ?'
+            'UPDATE vp_publishers SET publishers = ?, display_name = ?, website = ?, contact_name = ?, publisher_email = ?, publisher_email_is_primary = ?, country_code = ?, publisher_phone = ?, publisher_phone_is_whatsapp = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, stock_replenishment_months = ?, discount = ?, broker_id = ?, is_active = ? WHERE id = ?'
         );
         if (!$stmt) {
             $this->conn->rollback();
@@ -739,8 +743,10 @@ class Publisher
         $publisherEmailIsPrimary = (int)$fields['publisher_email_is_primary'];
         $publisherPhoneIsWhatsapp = (int)$fields['publisher_phone_is_whatsapp'];
         $stmt->bind_param(
-            'sssissssssssssiddiii',
+            'sssssississsssssiddiii',
             $name,
+            $fields['display_name'],
+            $fields['website'],
             $fields['contact_name'],
             $fields['publisher_email'],
             $publisherEmailIsPrimary,
@@ -835,7 +841,7 @@ class Publisher
         $this->conn->begin_transaction();
 
         $stmt = $this->conn->prepare(
-            'INSERT INTO vp_publishers (publishers_id, publishers, contact_name, publisher_email, publisher_email_is_primary, country_code, publisher_phone, publisher_phone_is_whatsapp, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_months, discount, broker_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO vp_publishers (publishers_id, publishers, display_name, website, contact_name, publisher_email, publisher_email_is_primary, country_code, publisher_phone, publisher_phone_is_whatsapp, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_months, discount, broker_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         if (!$stmt) {
             $this->conn->rollback();
@@ -848,9 +854,11 @@ class Publisher
         $publisherEmailIsPrimary = (int)$fields['publisher_email_is_primary'];
         $publisherPhoneIsWhatsapp = (int)$fields['publisher_phone_is_whatsapp'];
         $stmt->bind_param(
-            'isssissssssssssiddii',
+            'isssssississsssssiddii',
             $publishersId,
             $name,
+            $fields['display_name'],
+            $fields['website'],
             $fields['contact_name'],
             $fields['publisher_email'],
             $publisherEmailIsPrimary,
