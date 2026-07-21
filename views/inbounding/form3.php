@@ -1581,7 +1581,8 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
         initIsbnLookup({
             authorTomSelect: authorTomSelect,
             publisherSelect: publisherSelect,
-            syncAuthorPipeValue: syncAuthorPipeValue
+            syncAuthorPipeValue: syncAuthorPipeValue,
+            isbnLookupUrl: isbnLookupUrl
         });
     });
 
@@ -1590,6 +1591,7 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
         const authorTomSelect = deps.authorTomSelect || null;
         const publisherSelect = deps.publisherSelect || null;
         const syncAuthorPipeValue = deps.syncAuthorPipeValue || function () {};
+        const isbnLookupUrl = deps.isbnLookupUrl || '';
         const lookupBtn = document.getElementById('isbn-lookup-btn');
         const isbnInput = document.getElementById('isbn_input');
         const modal = document.getElementById('isbnLookupModal');
