@@ -1119,7 +1119,8 @@ class Publisher
         if ($numericId > 0) {
             $sql = 'SELECT v.id, v.vendor_id, v.vendor_name, v.contact_name, v.city
                     FROM vp_vendors v
-                    WHERE (v.is_active = 1 OR v.is_active = \'active\')
+                    WHERE v.vendor_id > 0
+                      AND (v.is_active = 1 OR v.is_active = \'active\')
                       AND NOT EXISTS (
                           SELECT 1 FROM publisher_vendor_mapping m
                           WHERE m.publisher_id = ? AND m.vendor_id = v.id
@@ -1128,7 +1129,7 @@ class Publisher
                           v.vendor_name LIKE ?
                           OR v.contact_name LIKE ?
                           OR CAST(v.id AS CHAR) LIKE ?
-                          OR (v.vendor_id > 0 AND CAST(v.vendor_id AS CHAR) LIKE ?)
+                          OR CAST(v.vendor_id AS CHAR) LIKE ?
                           OR v.id = ?
                           OR v.vendor_id = ?
                       )
@@ -1142,7 +1143,8 @@ class Publisher
         } else {
             $sql = 'SELECT v.id, v.vendor_id, v.vendor_name, v.contact_name, v.city
                     FROM vp_vendors v
-                    WHERE (v.is_active = 1 OR v.is_active = \'active\')
+                    WHERE v.vendor_id > 0
+                      AND (v.is_active = 1 OR v.is_active = \'active\')
                       AND NOT EXISTS (
                           SELECT 1 FROM publisher_vendor_mapping m
                           WHERE m.publisher_id = ? AND m.vendor_id = v.id
@@ -1151,7 +1153,7 @@ class Publisher
                           v.vendor_name LIKE ?
                           OR v.contact_name LIKE ?
                           OR CAST(v.id AS CHAR) LIKE ?
-                          OR (v.vendor_id > 0 AND CAST(v.vendor_id AS CHAR) LIKE ?)
+                          OR CAST(v.vendor_id AS CHAR) LIKE ?
                       )
                     ORDER BY v.vendor_name ASC
                     LIMIT ?';
