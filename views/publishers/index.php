@@ -194,6 +194,7 @@ $queryBase = [
                                             <li data-action="edit" data-publisher="<?php echo htmlspecialchars(json_encode($publisherPayload), ENT_QUOTES, 'UTF-8'); ?>"><i class="fa-solid fa-pencil"></i> Edit</li>
                                             <li data-action="status" data-id="<?php echo $id; ?>" data-active="<?php echo $active ? 0 : 1; ?>"><i class="fa-solid fa-power-off"></i> <?php echo $active ? 'Deactivate' : 'Activate'; ?></li>
                                             <li data-action="bank" data-id="<?php echo $id; ?>"><i class="fa-solid fa-building-columns"></i> Bank Details</li>
+                                            <li data-action="distributors" data-id="<?php echo $id; ?>" data-name="<?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?>"><i class="fa-solid fa-truck"></i> Manage Distributors</li>
                                             <li class="text-red-700" data-action="delete" data-id="<?php echo $id; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
                                         </ul>
                                     </div>
@@ -546,6 +547,53 @@ $queryBase = [
                 <button type="submit" id="publisherBankSaveBtn" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Save Bank Details</button>
             </div>
         </form>
+    </div>
+</div>
+
+<div id="publisherVendorMappingModal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/50 px-4 py-6">
+    <div class="w-full max-w-2xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col">
+        <div class="flex items-center justify-between border-b border-gray-200 bg-gradient-to-r from-sky-50/70 to-white px-6 py-4 shrink-0">
+            <div class="min-w-0 pr-4">
+                <h2 class="text-lg font-semibold text-gray-900">Manage Distributors</h2>
+                <p id="publisherVendorMappingSubtitle" class="mt-0.5 text-xs text-gray-500 truncate">Map vendors used when buying from distributors instead of the publisher directly.</p>
+            </div>
+            <button type="button" onclick="closePublisherVendorMappingModal()" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition" aria-label="Close">&times;</button>
+        </div>
+        <div class="overflow-y-auto px-6 py-5 space-y-5">
+            <input type="hidden" id="publisher_vendor_mapping_publisher_id" value="">
+            <div id="publisherVendorMappingMsg" class="hidden rounded-lg border px-4 py-3 text-sm font-medium"></div>
+
+            <div class="rounded-xl border border-gray-200 bg-gray-50/60 p-4 space-y-3">
+                <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Add distributor (vendor)</label>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <div class="min-w-0 flex-1">
+                        <select id="publisher_vendor_mapping_lookup" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                            <option value="">Search vendor...</option>
+                        </select>
+                    </div>
+                    <button type="button" id="publisherVendorMappingAddBtn"
+                        class="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 transition whitespace-nowrap">
+                        <i class="fas fa-plus text-xs" aria-hidden="true"></i>
+                        Add
+                    </button>
+                </div>
+                <p class="text-xs text-gray-500">Type at least 2 characters to search active vendors not already mapped.</p>
+            </div>
+
+            <div>
+                <div class="mb-3 flex items-center justify-between gap-3">
+                    <h3 class="text-sm font-bold text-gray-900">Mapped distributors</h3>
+                    <span id="publisherVendorMappingCount" class="text-xs font-semibold text-gray-500">0 mapped</span>
+                </div>
+                <div id="publisherVendorMappingList" class="space-y-2"></div>
+                <p id="publisherVendorMappingEmpty" class="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+                    No distributors mapped yet. Search and add vendors above.
+                </p>
+            </div>
+        </div>
+        <div class="flex justify-end gap-3 border-t border-gray-200 px-6 py-4 shrink-0">
+            <button type="button" onclick="closePublisherVendorMappingModal()" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Close</button>
+        </div>
     </div>
 </div>
 
@@ -1020,6 +1068,296 @@ function closePublisherBankDetailModal() {
     document.getElementById('publisherBankDetailModal').classList.remove('flex');
 }
 
+let publisherVendorMappingSelectInitialized = false;
+
+function destroyPublisherVendorMappingSelect2() {
+    if (!window.jQuery || !jQuery.fn.select2) {
+        return;
+    }
+    const $lookup = jQuery('#publisher_vendor_mapping_lookup');
+    if ($lookup.length && $lookup.hasClass('select2-hidden-accessible')) {
+        $lookup.select2('destroy');
+    }
+    publisherVendorMappingSelectInitialized = false;
+}
+
+function initPublisherVendorMappingSelect2(publisherId) {
+    if (!window.jQuery || !jQuery.fn.select2) {
+        return;
+    }
+
+    const $lookup = jQuery('#publisher_vendor_mapping_lookup');
+    if (!$lookup.length) {
+        return;
+    }
+
+    destroyPublisherVendorMappingSelect2();
+    $lookup.empty().append(new Option('Search vendor...', '', true, false));
+
+    $lookup.select2({
+        width: '100%',
+        placeholder: 'Type at least 2 characters to search...',
+        allowClear: true,
+        minimumInputLength: 2,
+        dropdownParent: jQuery('#publisherVendorMappingModal'),
+        ajax: {
+            url: 'index.php?page=publishers&action=searchMappingVendors',
+            type: 'GET',
+            dataType: 'json',
+            delay: 300,
+            data: function (params) {
+                return {
+                    q: params.term || '',
+                    publisher_id: publisherId
+                };
+            },
+            processResults: function (data) {
+                return { results: Array.isArray(data) ? data : [] };
+            },
+            cache: true
+        }
+    });
+    publisherVendorMappingSelectInitialized = true;
+}
+
+function formatPublisherVendorMappingLabel(row) {
+    row = row || {};
+    const exoticId = String(row.exotic_vendor_id || '').trim();
+    const localId = String(row.vendor_id || '').trim();
+    const name = String(row.vendor_name || '').trim();
+    const contact = String(row.contact_name || '').trim();
+    const city = String(row.city || '').trim();
+    let label = '';
+
+    if (exoticId !== '' && name !== '') {
+        label = exoticId + '-' + name;
+    } else if (name !== '') {
+        label = name;
+    } else if (exoticId !== '') {
+        label = exoticId;
+    } else {
+        label = 'Vendor #' + localId;
+    }
+
+    const meta = [];
+    if (contact !== '') meta.push(contact);
+    if (city !== '') meta.push(city);
+    if (meta.length) {
+        label += ' (' + meta.join(', ') + ')';
+    }
+    return label;
+}
+
+function showPublisherVendorMappingAlert(message, success) {
+    const box = document.getElementById('publisherVendorMappingMsg');
+    if (!box) return;
+    box.textContent = message || '';
+    box.classList.remove('hidden', 'border-green-200', 'bg-green-50', 'text-green-700', 'border-red-200', 'bg-red-50', 'text-red-700');
+    box.classList.add(success ? 'border-green-200' : 'border-red-200', success ? 'bg-green-50' : 'bg-red-50', success ? 'text-green-700' : 'text-red-700');
+}
+
+function renderPublisherVendorMappings(mappings) {
+    const list = document.getElementById('publisherVendorMappingList');
+    const empty = document.getElementById('publisherVendorMappingEmpty');
+    const countEl = document.getElementById('publisherVendorMappingCount');
+    if (!list) return;
+
+    mappings = Array.isArray(mappings) ? mappings : [];
+    list.innerHTML = '';
+
+    if (countEl) {
+        countEl.textContent = mappings.length + ' mapped';
+    }
+    if (empty) {
+        empty.classList.toggle('hidden', mappings.length > 0);
+    }
+
+    mappings.forEach(function (row) {
+        const item = document.createElement('div');
+        item.className = 'flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm';
+        item.setAttribute('data-mapping-id', String(row.mapping_id || ''));
+
+        const label = formatPublisherVendorMappingLabel(row);
+        const state = String(row.state || '').trim();
+        const metaParts = [];
+        if (state !== '') metaParts.push(state);
+        const activeVal = String(row.is_active ?? '').toLowerCase();
+        const isActive = activeVal === '1' || activeVal === 'active';
+        metaParts.push(isActive ? 'Active' : 'Inactive');
+
+        item.innerHTML =
+            '<div class="min-w-0">' +
+                '<div class="text-sm font-semibold text-gray-900 break-words">' + label.replace(/</g, '&lt;') + '</div>' +
+                '<div class="mt-0.5 text-xs text-gray-500">' + metaParts.join(' · ').replace(/</g, '&lt;') + '</div>' +
+            '</div>' +
+            '<button type="button" class="publisher-vendor-mapping-remove inline-flex shrink-0 items-center gap-1 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 transition">' +
+                '<i class="fas fa-trash text-[10px]" aria-hidden="true"></i> Remove' +
+            '</button>';
+
+        list.appendChild(item);
+    });
+}
+
+function loadPublisherVendorMappings(publisherId) {
+    return fetch('index.php?page=publishers&action=getVendorMappings&id=' + encodeURIComponent(String(publisherId)), {
+        credentials: 'same-origin'
+    })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (!data || !data.success) {
+                showPublisherVendorMappingAlert((data && data.message) || 'Could not load distributor mappings.', false);
+                renderPublisherVendorMappings([]);
+                return null;
+            }
+            renderPublisherVendorMappings(data.mappings || []);
+            return data;
+        })
+        .catch(function () {
+            showPublisherVendorMappingAlert('Could not load distributor mappings.', false);
+            renderPublisherVendorMappings([]);
+            return null;
+        });
+}
+
+function openPublisherVendorMappingModal(id, publisherName) {
+    if (typeof closeAllMenus === 'function') {
+        closeAllMenus();
+    }
+
+    const modal = document.getElementById('publisherVendorMappingModal');
+    const msgBox = document.getElementById('publisherVendorMappingMsg');
+    if (!modal) {
+        return;
+    }
+
+    publisherName = String(publisherName || '').trim();
+    document.getElementById('publisher_vendor_mapping_publisher_id').value = String(id);
+    const subtitle = document.getElementById('publisherVendorMappingSubtitle');
+    if (subtitle) {
+        subtitle.textContent = publisherName !== ''
+            ? 'Publisher: ' + publisherName
+            : 'Map vendors used when buying from distributors instead of the publisher directly.';
+    }
+    if (msgBox) {
+        msgBox.textContent = '';
+        msgBox.classList.add('hidden');
+    }
+
+    renderPublisherVendorMappings([]);
+    initPublisherVendorMappingSelect2(id);
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    loadPublisherVendorMappings(id);
+}
+
+function closePublisherVendorMappingModal() {
+    destroyPublisherVendorMappingSelect2();
+    const modal = document.getElementById('publisherVendorMappingModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+}
+
+document.getElementById('publisherVendorMappingAddBtn')?.addEventListener('click', function () {
+    const publisherId = parseInt(document.getElementById('publisher_vendor_mapping_publisher_id')?.value || '0', 10);
+    const lookup = document.getElementById('publisher_vendor_mapping_lookup');
+    const vendorId = parseInt(String(lookup?.value || '0'), 10);
+    const btn = document.getElementById('publisherVendorMappingAddBtn');
+
+    if (!publisherId) {
+        showPublisherVendorMappingAlert('Invalid publisher.', false);
+        return;
+    }
+    if (!vendorId) {
+        showPublisherVendorMappingAlert('Select a vendor to add.', false);
+        return;
+    }
+
+    const oldLabel = btn ? btn.textContent : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Adding...';
+    }
+
+    const body = new URLSearchParams();
+    body.set('publisher_id', String(publisherId));
+    body.set('vendor_id', String(vendorId));
+
+    fetch('index.php?page=publishers&action=addVendorMapping', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString()
+    })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            showPublisherVendorMappingAlert(data.message || (data.success ? 'Distributor added.' : 'Could not add distributor.'), !!data.success);
+            if (data.success) {
+                renderPublisherVendorMappings(data.mappings || []);
+                if (window.jQuery && jQuery.fn.select2) {
+                    jQuery('#publisher_vendor_mapping_lookup').val(null).trigger('change');
+                } else if (lookup) {
+                    lookup.value = '';
+                }
+            }
+        })
+        .catch(function () {
+            showPublisherVendorMappingAlert('Could not add distributor.', false);
+        })
+        .finally(function () {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = oldLabel || 'Add';
+            }
+        });
+});
+
+document.getElementById('publisherVendorMappingList')?.addEventListener('click', function (event) {
+    const btn = event.target.closest('.publisher-vendor-mapping-remove');
+    if (!btn || !event.currentTarget.contains(btn)) {
+        return;
+    }
+
+    const row = btn.closest('[data-mapping-id]');
+    const mappingId = parseInt(row?.getAttribute('data-mapping-id') || '0', 10);
+    const publisherId = parseInt(document.getElementById('publisher_vendor_mapping_publisher_id')?.value || '0', 10);
+    if (!publisherId || !mappingId) {
+        return;
+    }
+
+    if (!window.confirm('Remove this distributor mapping?')) {
+        return;
+    }
+
+    btn.disabled = true;
+    const body = new URLSearchParams();
+    body.set('publisher_id', String(publisherId));
+    body.set('mapping_id', String(mappingId));
+
+    fetch('index.php?page=publishers&action=removeVendorMapping', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString()
+    })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            showPublisherVendorMappingAlert(data.message || (data.success ? 'Distributor removed.' : 'Could not remove distributor.'), !!data.success);
+            if (data.success) {
+                renderPublisherVendorMappings(data.mappings || []);
+            } else {
+                btn.disabled = false;
+            }
+        })
+        .catch(function () {
+            showPublisherVendorMappingAlert('Could not remove distributor.', false);
+            btn.disabled = false;
+        });
+});
+
 document.getElementById('publisherBankDetailForm')?.addEventListener('submit', function (e) {
     e.preventDefault();
     const form = new FormData(this);
@@ -1083,6 +1421,10 @@ function handlePublisherMenuAction(item) {
     }
     if (action === 'bank') {
         openPublisherBankDtlsModal(id);
+        return;
+    }
+    if (action === 'distributors') {
+        openPublisherVendorMappingModal(id, item.getAttribute('data-name') || '');
         return;
     }
     if (action === 'delete') {

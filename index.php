@@ -152,6 +152,18 @@ switch ($page) {
             case 'bankDetails':
                 $controller->addBankDetails();
                 break;
+            case 'getVendorMappings':
+                $controller->getVendorMappings();
+                break;
+            case 'searchMappingVendors':
+                $controller->searchMappingVendors();
+                break;
+            case 'addVendorMapping':
+                $controller->addVendorMapping();
+                break;
+            case 'removeVendorMapping':
+                $controller->removeVendorMapping();
+                break;
             default:
                 $controller->index();
                 break;
