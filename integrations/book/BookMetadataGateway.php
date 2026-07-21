@@ -17,6 +17,9 @@ class BookMetadataGateway
 
     private IsbnNormalizer $isbnNormalizer;
 
+    /** @var array<string, array<string, mixed>> */
+    private array $providerDiagnostics = [];
+
     /**
      * @param list<BookMetadataProviderInterface>|null $providers
      */
@@ -30,6 +33,14 @@ class BookMetadataGateway
         $this->isbnNormalizer = $isbnNormalizer ?? new IsbnNormalizer();
     }
 
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    public function getProviderDiagnostics(): array
+    {
+        return $this->providerDiagnostics;
+    }
+
     public function lookupByIsbn(string $isbn): ?BookMetadata
     {
         $normalized = $this->isbnNormalizer->normalize($isbn);
@@ -37,11 +48,16 @@ class BookMetadataGateway
             return null;
         }
 
+        $this->providerDiagnostics = [];
         $results = [];
         foreach ($this->providers as $provider) {
             $result = $provider->lookupByIsbn($normalized);
             if ($result instanceof BookMetadata) {
                 $results[] = $result;
+            }
+
+            if (method_exists($provider, 'getLastLookupStatus')) {
+                $this->providerDiagnostics[$provider->providerCode()] = $provider->getLastLookupStatus();
             }
         }
 
@@ -95,6 +111,34 @@ class BookMetadataGateway
             return '';
         };
 
+        $pickAuthors = static function () use ($openLibrary, $googleBooks): array {
+            if ($openLibrary instanceof BookMetadata && $openLibrary->authors !== []) {
+                return $openLibrary->authors;
+            }
+            if ($googleBooks instanceof BookMetadata && $googleBooks->authors !== []) {
+                return $googleBooks->authors;
+            }
+
+            return [];
+        };
+
+        $pickSubjects = static function () use ($openLibrary, $googleBooks): array {
+            $subjects = [];
+            foreach ([$openLibrary, $googleBooks] as $result) {
+                if (!$result instanceof BookMetadata) {
+                    continue;
+                }
+                foreach ($result->subjects as $subject) {
+                    $subject = trim((string) $subject);
+                    if ($subject !== '' && !in_array($subject, $subjects, true)) {
+                        $subjects[] = $subject;
+                    }
+                }
+            }
+
+            return $subjects;
+        };
+
         $merged = new BookMetadata();
         $merged->isbn = $this->isbnNormalizer->formatDisplay($normalizedIsbn);
         $merged->title = $pick('title');
@@ -106,21 +150,24 @@ class BookMetadataGateway
         $merged->language = $pick('language');
         $merged->edition = $pick('edition');
         $merged->description = $pick('description');
+        $merged->authors = $pickAuthors();
+        $merged->subjects = $pickSubjects();
 
-        if ($openLibrary instanceof BookMetadata && $openLibrary->authors !== []) {
-            $merged->authors = $openLibrary->authors;
-        } elseif ($googleBooks instanceof BookMetadata) {
-            $merged->authors = $googleBooks->authors;
+        if ($merged->description === '' && $merged->subjects !== []) {
+            $merged->description = 'Subjects: ' . implode(', ', $merged->subjects);
         }
 
+        $coverCandidates = [];
+        if ($googleBooks instanceof BookMetadata && $googleBooks->coverUrl !== '') {
+            $coverCandidates[] = $googleBooks->coverUrl;
+        }
         if ($openLibrary instanceof BookMetadata && $openLibrary->coverUrl !== '') {
-            $merged->coverUrl = $openLibrary->coverUrl;
-        } elseif ($googleBooks instanceof BookMetadata && $googleBooks->coverUrl !== '') {
-            $merged->coverUrl = $googleBooks->coverUrl;
-        } else {
-            $merged->coverUrl = 'https://covers.openlibrary.org/b/isbn/'
-                . rawurlencode($normalizedIsbn) . '-L.jpg?default=false';
+            $coverCandidates[] = $openLibrary->coverUrl;
         }
+        $coverCandidates[] = 'https://covers.openlibrary.org/b/isbn/'
+            . rawurlencode($normalizedIsbn) . '-L.jpg?default=false';
+
+        $merged->coverUrl = $coverCandidates[0] ?? '';
 
         foreach ($results as $result) {
             foreach ($result->sources as $source) {

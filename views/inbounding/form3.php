@@ -1654,6 +1654,7 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
             messageEl.textContent = payload.message || 'Book details found.';
 
             const authors = Array.isArray(data.authors) ? data.authors.join(', ') : '';
+            const subjects = Array.isArray(data.subjects) ? data.subjects.join(', ') : '';
             const sources = Array.isArray(data.sources)
                 ? data.sources.map(function (source) {
                     if (source === 'open_library') return 'Open Library';
@@ -1673,6 +1674,8 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
                 renderDetailRow('Edition', data.edition),
                 renderDetailRow('Publication Date', data.publication_date),
                 renderDetailRow('Language', data.language),
+                renderDetailRow('Subjects', subjects),
+                renderDetailRow('Description', data.description),
                 renderDetailRow('Sources', sources),
             ].join('');
 
@@ -1682,6 +1685,14 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
             }
             if (catalog.unmatched_publisher) {
                 warnings.push('Publisher not found in catalog — please search manually: ' + catalog.unmatched_publisher);
+            }
+            if (!data.pages && !data.cover_type) {
+                warnings.push('Pages and cover type are not listed in the catalog for this ISBN — enter manually if needed.');
+            }
+
+            const googleStatus = (payload.provider_status && payload.provider_status.google_books) ? payload.provider_status.google_books : null;
+            if (googleStatus && googleStatus.state && googleStatus.state !== 'ok') {
+                warnings.push('Google Books: ' + (googleStatus.label || googleStatus.state));
             }
 
             if (warnings.length) {
@@ -1693,11 +1704,13 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
             }
 
             if (data.cover_url) {
+                coverPlaceholder.textContent = 'No cover';
                 coverImg.src = data.cover_url;
                 coverImg.classList.remove('hidden');
                 coverPlaceholder.classList.add('hidden');
                 coverImg.onerror = function () {
                     coverImg.classList.add('hidden');
+                    coverPlaceholder.textContent = 'No cover image in catalog';
                     coverPlaceholder.classList.remove('hidden');
                 };
             } else {

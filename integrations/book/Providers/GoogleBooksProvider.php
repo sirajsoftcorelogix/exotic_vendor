@@ -16,6 +16,9 @@ class GoogleBooksProvider implements BookMetadataProviderInterface
     private CoverTypeMapper $coverTypeMapper;
     private LanguageCodeMapper $languageMapper;
 
+    /** @var array<string, mixed> */
+    private array $lastLookupStatus = ['state' => 'idle'];
+
     public function __construct(?HttpClient $http = null)
     {
         $this->http = $http ?? new HttpClient();
@@ -30,16 +33,60 @@ class GoogleBooksProvider implements BookMetadataProviderInterface
         return 'google_books';
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    public function getLastLookupStatus(): array
+    {
+        return $this->lastLookupStatus;
+    }
+
     public function lookupByIsbn(string $normalizedIsbn): ?BookMetadata
     {
-        $url = 'https://www.googleapis.com/books/v1/volumes?q=isbn:' . rawurlencode($normalizedIsbn);
         $apiKey = getenv('GOOGLE_BOOKS_API_KEY');
-        if ($apiKey !== false && trim((string) $apiKey) !== '') {
-            $url .= '&key=' . rawurlencode(trim((string) $apiKey));
+        if ($apiKey === false || trim((string) $apiKey) === '') {
+            $this->lastLookupStatus = [
+                'state' => 'key_missing',
+                'label' => 'Google Books API key is not configured.',
+            ];
+
+            return null;
         }
 
-        $payload = $this->http->getJson($url);
+        $url = 'https://www.googleapis.com/books/v1/volumes?q=isbn:'
+            . rawurlencode($normalizedIsbn)
+            . '&key=' . rawurlencode(trim((string) $apiKey));
+
+        $response = $this->http->requestJson($url);
+        if (!$response['ok']) {
+            $httpCode = (int) ($response['http_code'] ?? 0);
+            $errorMessage = trim((string) ($response['error'] ?? 'Google Books request failed.'));
+
+            if ($httpCode === 403 && stripos($errorMessage, 'Books API') !== false) {
+                $this->lastLookupStatus = [
+                    'state' => 'api_disabled',
+                    'label' => 'Enable Books API in Google Cloud Console for this API key project.',
+                    'http_code' => $httpCode,
+                    'detail' => $errorMessage,
+                ];
+            } else {
+                $this->lastLookupStatus = [
+                    'state' => 'error',
+                    'label' => $errorMessage,
+                    'http_code' => $httpCode,
+                ];
+            }
+
+            return null;
+        }
+
+        $payload = $response['data'] ?? null;
         if (!is_array($payload) || empty($payload['items'][0]['volumeInfo'])) {
+            $this->lastLookupStatus = [
+                'state' => 'not_found',
+                'label' => 'No Google Books match for this ISBN.',
+            ];
+
             return null;
         }
 
@@ -61,12 +108,28 @@ class GoogleBooksProvider implements BookMetadataProviderInterface
                 $bindingHint = (string) $identifierRow['identifier'];
             }
         }
+        if ($bindingHint === '' && !empty($info['printType'])) {
+            $bindingHint = (string) $info['printType'];
+        }
 
         $coverUrl = '';
-        if (!empty($info['imageLinks']['thumbnail'])) {
-            $coverUrl = str_replace('http://', 'https://', (string) $info['imageLinks']['thumbnail']);
-        } elseif (!empty($info['imageLinks']['smallThumbnail'])) {
-            $coverUrl = str_replace('http://', 'https://', (string) $info['imageLinks']['smallThumbnail']);
+        foreach (['thumbnail', 'smallThumbnail', 'medium', 'large'] as $size) {
+            if (!empty($info['imageLinks'][$size])) {
+                $coverUrl = str_replace('http://', 'https://', (string) $info['imageLinks'][$size]);
+                break;
+            }
+        }
+
+        $subjects = [];
+        foreach ($info['categories'] ?? [] as $categoryName) {
+            if (is_string($categoryName) && trim($categoryName) !== '') {
+                $subjects[] = trim($categoryName);
+            }
+        }
+
+        $description = trim(strip_tags((string) ($info['description'] ?? '')));
+        if ($description === '' && $subjects !== []) {
+            $description = 'Categories: ' . implode(', ', $subjects);
         }
 
         $metadata = new BookMetadata();
@@ -81,9 +144,24 @@ class GoogleBooksProvider implements BookMetadataProviderInterface
         $metadata->coverType = $this->coverTypeMapper->map($bindingHint);
         $metadata->language = $this->languageMapper->map((string) ($info['language'] ?? ''));
         $metadata->edition = trim((string) ($info['contentVersion'] ?? ''));
-        $metadata->description = trim(strip_tags((string) ($info['description'] ?? '')));
+        $metadata->subjects = array_values(array_unique($subjects));
+        $metadata->description = $description;
         $metadata->coverUrl = $coverUrl;
 
-        return $metadata->title !== '' ? $metadata : null;
+        if ($metadata->title === '') {
+            $this->lastLookupStatus = [
+                'state' => 'not_found',
+                'label' => 'Google Books returned an empty title for this ISBN.',
+            ];
+
+            return null;
+        }
+
+        $this->lastLookupStatus = [
+            'state' => 'ok',
+            'label' => 'Matched in Google Books.',
+        ];
+
+        return $metadata;
     }
 }

@@ -50,6 +50,7 @@ class BookIsbnLookupService
             'message' => $metadata->successMessage(),
             'data' => $metadata->toInboundArray(),
             'catalog_matches' => $catalogMatches,
+            'provider_status' => $this->gateway->getProviderDiagnostics(),
         ];
     }
 
