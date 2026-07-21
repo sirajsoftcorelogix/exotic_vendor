@@ -435,7 +435,20 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
                     </div>
                     <div>
                         <label class="block text-gray-800 font-bold text-xs mb-1">ISBN</label>
-                        <input type="text" name="isbn" value="<?php echo htmlspecialchars($form2['isbn'] ?? ''); ?>" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none">
+                        <div class="flex gap-2">
+                            <input type="text"
+                                   name="isbn"
+                                   id="isbn_input"
+                                   value="<?php echo htmlspecialchars($form2['isbn'] ?? ''); ?>"
+                                   class="flex-1 min-w-0 border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none"
+                                   placeholder="978-0-14-032872-1"
+                                   autocomplete="off">
+                            <button type="button"
+                                    id="isbn-lookup-btn"
+                                    class="shrink-0 bg-[#ea8c1e] hover:bg-orange-600 text-white font-bold px-3 py-1.5 rounded text-xs uppercase whitespace-nowrap">
+                                Lookup
+                            </button>
+                        </div>
                     </div>
                     <div>
                         <label class="block text-gray-800 font-bold text-xs mb-1">Cover Type</label>
@@ -586,6 +599,30 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
     </div>
 </div>
 
+<div id="isbnLookupModal" class="fixed inset-0 z-[10000] hidden items-center justify-center bg-black/70 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="isbnLookupModalTitle">
+    <div class="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-lg bg-white shadow-2xl" onclick="event.stopPropagation();">
+        <div class="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
+            <h2 id="isbnLookupModalTitle" class="text-base font-bold text-gray-800">ISBN Lookup Result</h2>
+            <button type="button" id="isbnLookupCloseBtn" class="flex h-8 w-8 items-center justify-center rounded-full text-xl text-gray-500 hover:bg-gray-100" aria-label="Close lookup preview">&times;</button>
+        </div>
+        <div class="p-4 space-y-4">
+            <p id="isbnLookupMessage" class="text-sm text-gray-600"></p>
+            <div class="flex flex-col sm:flex-row gap-4">
+                <div class="sm:w-36 shrink-0">
+                    <img id="isbnLookupCover" src="" alt="Book cover preview" class="hidden w-full rounded border border-gray-300 object-cover aspect-[3/4] bg-gray-100">
+                    <div id="isbnLookupCoverPlaceholder" class="flex aspect-[3/4] w-full items-center justify-center rounded border border-dashed border-gray-300 bg-gray-50 text-xs text-gray-400">No cover</div>
+                </div>
+                <div id="isbnLookupDetails" class="flex-1 space-y-2 text-sm"></div>
+            </div>
+            <div id="isbnLookupWarnings" class="hidden rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"></div>
+        </div>
+        <div class="sticky bottom-0 flex justify-end gap-2 border-t border-gray-200 bg-gray-50 px-4 py-3">
+            <button type="button" id="isbnLookupCancelBtn" class="rounded border border-gray-300 bg-white px-4 py-2 text-xs font-bold uppercase text-gray-700 hover:bg-gray-100">Cancel</button>
+            <button type="button" id="isbnLookupApplyBtn" class="rounded bg-[#ea8c1e] px-4 py-2 text-xs font-bold uppercase text-white hover:bg-orange-600">Apply to Form</button>
+        </div>
+    </div>
+</div>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // --- START: VARIANT / PARENT ITEM CODE LOGIC ---
@@ -624,6 +661,7 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
 
         const searchAuthorsUrl = '<?php echo base_url('?page=inbounding&action=searchAuthors&q='); ?>';
         const searchPublishersUrl = '<?php echo base_url('?page=inbounding&action=searchPublishers&q='); ?>';
+        const isbnLookupUrl = <?php echo json_encode(base_url('?page=inbounding&action=search_book_attr'), JSON_UNESCAPED_SLASHES); ?>;
         const publisherByVendorUrl = '<?php echo base_url('?page=inbounding&action=publisherByVendor&vendor_code='); ?>';
         const form3PublishersForVendor = <?php echo json_encode($form3PublishersForVendor, JSON_UNESCAPED_UNICODE); ?>;
 
@@ -1539,7 +1577,274 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
         if (getCategoryType().isBook && getForm3VendorValue() && publisherSelect && !String(publisherSelect.getValue() || '').trim()) {
             syncPublisherFromForm3Vendor();
         }
+
+        initIsbnLookup({
+            authorTomSelect: authorTomSelect,
+            publisherSelect: publisherSelect,
+            syncAuthorPipeValue: syncAuthorPipeValue
+        });
     });
+
+    function initIsbnLookup(deps) {
+        deps = deps || {};
+        const authorTomSelect = deps.authorTomSelect || null;
+        const publisherSelect = deps.publisherSelect || null;
+        const syncAuthorPipeValue = deps.syncAuthorPipeValue || function () {};
+        const lookupBtn = document.getElementById('isbn-lookup-btn');
+        const isbnInput = document.getElementById('isbn_input');
+        const modal = document.getElementById('isbnLookupModal');
+        const closeBtn = document.getElementById('isbnLookupCloseBtn');
+        const cancelBtn = document.getElementById('isbnLookupCancelBtn');
+        const applyBtn = document.getElementById('isbnLookupApplyBtn');
+        const messageEl = document.getElementById('isbnLookupMessage');
+        const detailsEl = document.getElementById('isbnLookupDetails');
+        const warningsEl = document.getElementById('isbnLookupWarnings');
+        const coverImg = document.getElementById('isbnLookupCover');
+        const coverPlaceholder = document.getElementById('isbnLookupCoverPlaceholder');
+
+        if (!lookupBtn || !isbnInput || !modal) {
+            return;
+        }
+
+        let pendingLookupPayload = null;
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function setLookupButtonLoading(isLoading) {
+            lookupBtn.disabled = isLoading;
+            lookupBtn.textContent = isLoading ? 'Searching...' : 'Lookup';
+            lookupBtn.classList.toggle('opacity-70', isLoading);
+            lookupBtn.classList.toggle('cursor-not-allowed', isLoading);
+        }
+
+        function closeIsbnLookupModal() {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.classList.remove('overflow-hidden');
+            pendingLookupPayload = null;
+            applyBtn.disabled = false;
+        }
+
+        function openIsbnLookupModal() {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.classList.add('overflow-hidden');
+        }
+
+        function renderDetailRow(label, value) {
+            const text = String(value ?? '').trim();
+            if (!text) {
+                return '';
+            }
+            return '<div><span class="font-bold text-gray-700">' + escapeHtml(label) + ':</span> ' + escapeHtml(text) + '</div>';
+        }
+
+        function renderLookupPreview(payload) {
+            const data = payload.data || {};
+            const catalog = payload.catalog_matches || {};
+
+            messageEl.textContent = payload.message || 'Book details found.';
+
+            const authors = Array.isArray(data.authors) ? data.authors.join(', ') : '';
+            const sources = Array.isArray(data.sources)
+                ? data.sources.map(function (source) {
+                    if (source === 'open_library') return 'Open Library';
+                    if (source === 'google_books') return 'Google Books';
+                    return source;
+                }).join(', ')
+                : '';
+
+            detailsEl.innerHTML = [
+                renderDetailRow('Title', data.title),
+                data.subtitle ? renderDetailRow('Subtitle', data.subtitle) : '',
+                renderDetailRow('Authors', authors),
+                renderDetailRow('Publisher', data.publisher),
+                renderDetailRow('ISBN', data.isbn),
+                renderDetailRow('Pages', data.pages),
+                renderDetailRow('Cover Type', data.cover_type),
+                renderDetailRow('Edition', data.edition),
+                renderDetailRow('Publication Date', data.publication_date),
+                renderDetailRow('Language', data.language),
+                renderDetailRow('Sources', sources),
+            ].join('');
+
+            const warnings = [];
+            if (Array.isArray(catalog.unmatched_authors) && catalog.unmatched_authors.length) {
+                warnings.push('Author(s) not found in catalog — please search manually: ' + catalog.unmatched_authors.join(', '));
+            }
+            if (catalog.unmatched_publisher) {
+                warnings.push('Publisher not found in catalog — please search manually: ' + catalog.unmatched_publisher);
+            }
+
+            if (warnings.length) {
+                warningsEl.textContent = warnings.join(' ');
+                warningsEl.classList.remove('hidden');
+            } else {
+                warningsEl.textContent = '';
+                warningsEl.classList.add('hidden');
+            }
+
+            if (data.cover_url) {
+                coverImg.src = data.cover_url;
+                coverImg.classList.remove('hidden');
+                coverPlaceholder.classList.add('hidden');
+                coverImg.onerror = function () {
+                    coverImg.classList.add('hidden');
+                    coverPlaceholder.classList.remove('hidden');
+                };
+            } else {
+                coverImg.classList.add('hidden');
+                coverImg.removeAttribute('src');
+                coverPlaceholder.classList.remove('hidden');
+            }
+        }
+
+        function setFormFieldValue(name, value) {
+            const field = document.querySelector('[name="' + name + '"]');
+            if (!field || value === undefined || value === null) {
+                return;
+            }
+            const text = String(value).trim();
+            if (text === '') {
+                return;
+            }
+            field.value = text;
+        }
+
+        function applyIsbnLookupToForm(payload) {
+            const data = payload.data || {};
+            const catalog = payload.catalog_matches || {};
+
+            setFormFieldValue('isbn', data.isbn);
+            setFormFieldValue('pages', data.pages);
+            setFormFieldValue('edition', data.edition);
+            setFormFieldValue('publication_date', data.publication_date);
+            setFormFieldValue('language', data.language);
+
+            const coverTypeSelect = document.querySelector('select[name="cover_type"]');
+            if (coverTypeSelect && data.cover_type) {
+                const wanted = String(data.cover_type).trim();
+                let matched = false;
+                Array.prototype.forEach.call(coverTypeSelect.options, function (option) {
+                    if (option.value === wanted) {
+                        coverTypeSelect.value = wanted;
+                        matched = true;
+                    }
+                });
+                if (!matched) {
+                    const wantedLower = wanted.toLowerCase();
+                    Array.prototype.forEach.call(coverTypeSelect.options, function (option) {
+                        if (!matched && option.value.toLowerCase() === wantedLower) {
+                            coverTypeSelect.value = option.value;
+                            matched = true;
+                        }
+                    });
+                }
+            }
+
+            if (authorTomSelect && Array.isArray(catalog.authors) && catalog.authors.length) {
+                const authorIds = [];
+                catalog.authors.forEach(function (author) {
+                    const id = String(author.id || '');
+                    const name = String(author.name || '');
+                    if (!id) {
+                        return;
+                    }
+                    authorTomSelect.addOption({ id: id, name: name });
+                    authorIds.push(id);
+                });
+                if (authorIds.length) {
+                    authorTomSelect.setValue(authorIds);
+                    syncAuthorPipeValue(authorTomSelect);
+                }
+            }
+
+            if (publisherSelect && catalog.publisher && catalog.publisher.id) {
+                const publisherId = String(catalog.publisher.id);
+                const publisherName = String(catalog.publisher.name || '');
+                publisherSelect.addOption({ id: publisherId, name: publisherName });
+                publisherSelect.setValue(publisherId);
+            }
+        }
+
+        function runIsbnLookup() {
+            const isbn = String(isbnInput.value || '').trim();
+            if (!isbn) {
+                alert('Please enter an ISBN before lookup.');
+                isbnInput.focus();
+                return;
+            }
+
+            setLookupButtonLoading(true);
+            fetch(isbnLookupUrl + '&isbn=' + encodeURIComponent(isbn), {
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then(function (response) {
+                    return response.json().then(function (json) {
+                        return { ok: response.ok, json: json };
+                    });
+                })
+                .then(function (result) {
+                    if (!result.ok || !result.json || !result.json.success) {
+                        const message = (result.json && result.json.message)
+                            ? result.json.message
+                            : 'ISBN lookup failed. Please try again.';
+                        alert(message);
+                        return;
+                    }
+
+                    pendingLookupPayload = result.json;
+                    renderLookupPreview(result.json);
+                    openIsbnLookupModal();
+                })
+                .catch(function (err) {
+                    console.error('ISBN lookup error:', err);
+                    alert('ISBN lookup failed. Please check your connection and try again.');
+                })
+                .finally(function () {
+                    setLookupButtonLoading(false);
+                });
+        }
+
+        lookupBtn.addEventListener('click', runIsbnLookup);
+        isbnInput.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                runIsbnLookup();
+            }
+        });
+
+        applyBtn.addEventListener('click', function () {
+            if (!pendingLookupPayload) {
+                closeIsbnLookupModal();
+                return;
+            }
+            applyIsbnLookupToForm(pendingLookupPayload);
+            closeIsbnLookupModal();
+        });
+
+        [closeBtn, cancelBtn].forEach(function (button) {
+            if (button) {
+                button.addEventListener('click', closeIsbnLookupModal);
+            }
+        });
+
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) {
+                closeIsbnLookupModal();
+            }
+        });
+    }
 
     // Navigation & Popups (form3 is the first inbound step)
     const form3BackUrl = <?php echo json_encode($form3BackUrl); ?>;
@@ -1600,6 +1905,13 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
 
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
+            const isbnModal = document.getElementById('isbnLookupModal');
+            if (isbnModal && !isbnModal.classList.contains('hidden')) {
+                isbnModal.classList.add('hidden');
+                isbnModal.classList.remove('flex');
+                document.body.classList.remove('overflow-hidden');
+                return;
+            }
             const popup = document.getElementById('imagePopup');
             if (popup && !popup.classList.contains('hidden')) {
                 closeImagePopup();

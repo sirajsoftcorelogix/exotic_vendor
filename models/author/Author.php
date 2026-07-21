@@ -517,4 +517,53 @@ class Author
 
         return ['imported' => $imported, 'skipped' => $skipped];
     }
+
+    /**
+     * @return array{id:string,name:string}|null
+     */
+    public function findBestMatchByName(string $name): ?array
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return null;
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT author_id AS id, author AS name
+             FROM vp_author
+             WHERE is_active = 1 AND author = ?
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('s', $name);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (is_array($row) && !empty($row['id'])) {
+            return ['id' => (string) $row['id'], 'name' => (string) $row['name']];
+        }
+
+        $search = '%' . $name . '%';
+        $stmt = $this->conn->prepare(
+            'SELECT author_id AS id, author AS name
+             FROM vp_author
+             WHERE is_active = 1 AND author LIKE ?
+             ORDER BY CHAR_LENGTH(author) ASC
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('s', $search);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (is_array($row) && !empty($row['id'])) {
+            return ['id' => (string) $row['id'], 'name' => (string) $row['name']];
+        }
+
+        return null;
+    }
 }

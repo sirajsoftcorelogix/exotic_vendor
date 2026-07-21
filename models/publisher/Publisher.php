@@ -624,4 +624,53 @@ class Publisher
         ];
     }
 
+    /**
+     * @return array{id:string,name:string}|null
+     */
+    public function findBestMatchByName(string $name): ?array
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return null;
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT publishers_id AS id, publishers AS name
+             FROM vp_publishers
+             WHERE is_active = 1 AND publishers = ?
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('s', $name);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (is_array($row) && !empty($row['id'])) {
+            return ['id' => (string) $row['id'], 'name' => (string) $row['name']];
+        }
+
+        $search = '%' . $name . '%';
+        $stmt = $this->conn->prepare(
+            'SELECT publishers_id AS id, publishers AS name
+             FROM vp_publishers
+             WHERE is_active = 1 AND publishers LIKE ?
+             ORDER BY CHAR_LENGTH(publishers) ASC
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('s', $search);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (is_array($row) && !empty($row['id'])) {
+            return ['id' => (string) $row['id'], 'name' => (string) $row['name']];
+        }
+
+        return null;
+    }
+
 }
