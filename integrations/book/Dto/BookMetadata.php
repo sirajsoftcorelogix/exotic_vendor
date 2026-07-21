@@ -15,6 +15,9 @@ class BookMetadata
     /** @var list<string> */
     public array $authors = [];
 
+    /** @var list<string> */
+    public array $subjects = [];
+
     public string $publisher = '';
     public string $pages = '';
     public string $publicationDate = '';
@@ -34,6 +37,7 @@ class BookMetadata
             'title' => $this->title,
             'subtitle' => $this->subtitle,
             'authors' => $this->authors,
+            'subjects' => $this->subjects,
             'publisher' => $this->publisher,
             'pages' => $this->pages,
             'publication_date' => $this->publicationDate,

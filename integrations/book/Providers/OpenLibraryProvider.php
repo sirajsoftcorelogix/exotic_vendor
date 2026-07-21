@@ -16,6 +16,9 @@ class OpenLibraryProvider implements BookMetadataProviderInterface
     private CoverTypeMapper $coverTypeMapper;
     private LanguageCodeMapper $languageMapper;
 
+    /** @var array<string, mixed> */
+    private array $lastLookupStatus = ['state' => 'idle'];
+
     public function __construct(?HttpClient $http = null)
     {
         $this->http = $http ?? new HttpClient();
@@ -30,6 +33,14 @@ class OpenLibraryProvider implements BookMetadataProviderInterface
         return 'open_library';
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    public function getLastLookupStatus(): array
+    {
+        return $this->lastLookupStatus;
+    }
+
     public function lookupByIsbn(string $normalizedIsbn): ?BookMetadata
     {
         $bibKey = 'ISBN:' . $normalizedIsbn;
@@ -38,6 +49,11 @@ class OpenLibraryProvider implements BookMetadataProviderInterface
 
         $payload = $this->http->getJson($url);
         if (!is_array($payload)) {
+            $this->lastLookupStatus = [
+                'state' => 'error',
+                'label' => 'Open Library request failed.',
+            ];
+
             return null;
         }
 
@@ -63,9 +79,27 @@ class OpenLibraryProvider implements BookMetadataProviderInterface
         $metadata->publicationDate = $this->dateNormalizer->normalize((string) ($entry['publish_date'] ?? ''));
         $metadata->coverType = $this->coverTypeMapper->map((string) ($entry['physical_format'] ?? ''));
         $metadata->language = $this->languageMapper->map((string) ($entry['languages'][0]['key'] ?? ''));
-        $metadata->coverUrl = $this->extractCoverUrl($entry['cover'] ?? null, $normalizedIsbn);
+        $metadata->subjects = $this->extractSubjects($entry['subjects'] ?? []);
+        $metadata->description = $this->buildDescriptionFromSubjects($metadata->subjects);
+        $metadata->coverUrl = $this->resolveCoverUrl($entry, $normalizedIsbn);
 
-        return $metadata->title !== '' ? $metadata : null;
+        $this->enrichFromEditionJson($metadata, $normalizedIsbn);
+
+        if ($metadata->title === '') {
+            $this->lastLookupStatus = [
+                'state' => 'not_found',
+                'label' => 'No Open Library match for this ISBN.',
+            ];
+
+            return null;
+        }
+
+        $this->lastLookupStatus = [
+            'state' => 'ok',
+            'label' => 'Matched in Open Library.',
+        ];
+
+        return $metadata;
     }
 
     /**
@@ -88,9 +122,125 @@ class OpenLibraryProvider implements BookMetadataProviderInterface
         $metadata->publisher = $this->extractPublisherName($edition['publishers'] ?? []);
         $metadata->pages = $this->pageFormatter->format($edition['number_of_pages'] ?? null);
         $metadata->publicationDate = $this->dateNormalizer->normalize((string) ($edition['publish_date'] ?? ''));
-        $metadata->coverUrl = 'https://covers.openlibrary.org/b/isbn/' . rawurlencode($isbn) . '-L.jpg?default=false';
+        $metadata->language = $this->languageMapper->map((string) ($edition['languages'][0]['key'] ?? ''));
+        $metadata->coverType = $this->coverTypeMapper->map((string) ($edition['physical_format'] ?? ''));
+        $metadata->subjects = $this->extractSubjects($edition['subjects'] ?? []);
+        $metadata->description = $this->buildDescriptionFromSubjects($metadata->subjects);
+        $metadata->coverUrl = $this->resolveCoverUrl($edition, $isbn);
+
+        $this->lastLookupStatus = [
+            'state' => 'ok',
+            'label' => 'Matched in Open Library.',
+        ];
 
         return $metadata;
+    }
+
+    private function enrichFromEditionJson(BookMetadata $metadata, string $isbn): void
+    {
+        $editionUrl = 'https://openlibrary.org/isbn/' . rawurlencode($isbn) . '.json';
+        $edition = $this->http->getJson($editionUrl);
+        if (!is_array($edition)) {
+            return;
+        }
+
+        if ($metadata->language === '' && !empty($edition['languages'][0]['key'])) {
+            $metadata->language = $this->languageMapper->map((string) $edition['languages'][0]['key']);
+        }
+        if ($metadata->pages === '' && isset($edition['number_of_pages'])) {
+            $metadata->pages = $this->pageFormatter->format($edition['number_of_pages']);
+        }
+        if ($metadata->coverType === '' && !empty($edition['physical_format'])) {
+            $metadata->coverType = $this->coverTypeMapper->map((string) $edition['physical_format']);
+        }
+
+        $editionSubjects = $this->extractSubjects($edition['subjects'] ?? []);
+        if ($editionSubjects !== []) {
+            $metadata->subjects = array_values(array_unique(array_merge($metadata->subjects, $editionSubjects)));
+            if ($metadata->description === '') {
+                $metadata->description = $this->buildDescriptionFromSubjects($metadata->subjects);
+            }
+        }
+
+        if ($metadata->coverUrl === '' || str_contains($metadata->coverUrl, '/b/isbn/')) {
+            $resolvedCover = $this->resolveCoverUrl($edition, $isbn);
+            if ($resolvedCover !== '') {
+                $metadata->coverUrl = $resolvedCover;
+            }
+        }
+    }
+
+    /**
+     * @param mixed $subjectsRaw
+     * @return list<string>
+     */
+    private function extractSubjects($subjectsRaw): array
+    {
+        if (!is_array($subjectsRaw)) {
+            return [];
+        }
+
+        $subjects = [];
+        foreach ($subjectsRaw as $subjectRow) {
+            if (is_array($subjectRow) && !empty($subjectRow['name'])) {
+                $subjects[] = trim((string) $subjectRow['name']);
+            } elseif (is_string($subjectRow) && trim($subjectRow) !== '') {
+                $subjects[] = trim($subjectRow);
+            }
+        }
+
+        return array_values(array_unique(array_filter($subjects)));
+    }
+
+    /**
+     * @param list<string> $subjects
+     */
+    private function buildDescriptionFromSubjects(array $subjects): string
+    {
+        if ($subjects === []) {
+            return '';
+        }
+
+        return 'Subjects: ' . implode(', ', $subjects);
+    }
+
+    /**
+     * @param array<string, mixed> $entry
+     */
+    private function resolveCoverUrl(array $entry, string $isbn): string
+    {
+        if (!empty($entry['cover']) && is_array($entry['cover'])) {
+            foreach (['large', 'medium', 'small'] as $size) {
+                if (!empty($entry['cover'][$size])) {
+                    return (string) $entry['cover'][$size];
+                }
+            }
+        }
+
+        $olid = $this->extractOlid($entry);
+        if ($olid !== '') {
+            return 'https://covers.openlibrary.org/b/olid/' . rawurlencode($olid) . '-L.jpg?default=false';
+        }
+
+        return 'https://covers.openlibrary.org/b/isbn/' . rawurlencode($isbn) . '-L.jpg?default=false';
+    }
+
+    /**
+     * @param array<string, mixed> $entry
+     */
+    private function extractOlid(array $entry): string
+    {
+        $identifiers = $entry['identifiers']['openlibrary'] ?? [];
+        if (is_array($identifiers) && !empty($identifiers[0])) {
+            return trim((string) $identifiers[0]);
+        }
+
+        $key = trim((string) ($entry['key'] ?? ''));
+        if ($key !== '' && preg_match('#/books/(OL\d+[A-Z0-9]*)#i', $key, $matches)) {
+            return $matches[1];
+        }
+
+        return '';
     }
 
     /**
@@ -132,22 +282,6 @@ class OpenLibraryProvider implements BookMetadataProviderInterface
         }
 
         return '';
-    }
-
-    /**
-     * @param mixed $coverRaw
-     */
-    private function extractCoverUrl($coverRaw, string $isbn): string
-    {
-        if (is_array($coverRaw)) {
-            foreach (['large', 'medium', 'small'] as $size) {
-                if (!empty($coverRaw[$size])) {
-                    return (string) $coverRaw[$size];
-                }
-            }
-        }
-
-        return 'https://covers.openlibrary.org/b/isbn/' . rawurlencode($isbn) . '-L.jpg?default=false';
     }
 
     private function fetchAuthorName(string $authorKey): string
