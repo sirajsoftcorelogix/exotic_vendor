@@ -75,5 +75,5 @@ WHERE TRIM(COALESCE(p.alt_phone, '')) <> ''
   AND NOT EXISTS (
       SELECT 1 FROM publisher_phones pp
       WHERE pp.publisher_id = p.id
-        AND pp.phone COLLATE utf8mb4_general_ci = TRIM(p.alt_phone) COLLATE utf8mb4_general_ci
+        AND BINARY pp.phone = BINARY TRIM(p.alt_phone)
   );

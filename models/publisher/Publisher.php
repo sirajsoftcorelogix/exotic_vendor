@@ -349,7 +349,7 @@ class Publisher
             return true;
         }
 
-        $sql = 'SELECT pp.id FROM publisher_phones pp INNER JOIN vp_publishers p ON p.id = pp.publisher_id WHERE pp.phone COLLATE utf8mb4_general_ci = ? COLLATE utf8mb4_general_ci';
+        $sql = 'SELECT pp.id FROM publisher_phones pp INNER JOIN vp_publishers p ON p.id = pp.publisher_id WHERE BINARY pp.phone = ?';
         if ($excludePublisherId !== null && $excludePublisherId > 0) {
             $sql .= ' AND p.id != ? LIMIT 1';
             $stmt = $this->conn->prepare($sql);
@@ -375,7 +375,7 @@ class Publisher
 
     private function contactEmailExistsGlobally(string $email, ?int $excludePublisherId = null): bool
     {
-        $email = trim($email);
+        $email = strtolower(trim($email));
         if ($email === '') {
             return false;
         }
@@ -384,7 +384,7 @@ class Publisher
             return true;
         }
 
-        $sql = 'SELECT pe.id FROM publisher_emails pe INNER JOIN vp_publishers p ON p.id = pe.publisher_id WHERE LOWER(TRIM(pe.email)) COLLATE utf8mb4_general_ci = LOWER(TRIM(?)) COLLATE utf8mb4_general_ci';
+        $sql = 'SELECT pe.id FROM publisher_emails pe INNER JOIN vp_publishers p ON p.id = pe.publisher_id WHERE CONVERT(LOWER(TRIM(pe.email)) USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci';
         if ($excludePublisherId !== null && $excludePublisherId > 0) {
             $sql .= ' AND p.id != ? LIMIT 1';
             $stmt = $this->conn->prepare($sql);
