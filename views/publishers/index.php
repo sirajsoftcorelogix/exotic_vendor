@@ -342,6 +342,7 @@ $queryBase = [
                             <span id="publisherStateBlock">
                                 <select name="state" id="publisher_state"
                                     class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                                    <option value="">Select state...</option>
                                     <?php foreach ($stateList as $item): ?>
                                         <option value="<?php echo htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
                                             <?php echo htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
@@ -469,6 +470,13 @@ function setPublisherStateControl(countryName, stateValue) {
             select.id = 'publisher_state';
             select.name = 'state';
             select.className = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none';
+            const blankOption = document.createElement('option');
+            blankOption.value = '';
+            blankOption.textContent = 'Select state...';
+            if (!stateValue) {
+                blankOption.selected = true;
+            }
+            select.appendChild(blankOption);
             states.forEach(function (state) {
                 const option = document.createElement('option');
                 option.value = state.name;
