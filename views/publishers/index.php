@@ -149,7 +149,7 @@ $queryBase = [
                                 'publishers' => $name,
                                 'contact_name' => $contactName,
                                 'publisher_email' => (string)($publisher['publisher_email'] ?? ''),
-                                'publisher_email_is_billing' => (int)($publisher['publisher_email_is_billing'] ?? 0),
+                                'publisher_email_is_primary' => (int)($publisher['publisher_email_is_primary'] ?? 0),
                                 'country_code' => (string)($publisher['country_code'] ?? ''),
                                 'publisher_phone' => $phone,
                                 'publisher_phone_is_whatsapp' => (int)($publisher['publisher_phone_is_whatsapp'] ?? 0),
@@ -301,9 +301,9 @@ $queryBase = [
                         <input type="email" name="publisher_email" id="publisher_email"
                             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
                         <label class="mt-2 flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                            <input type="checkbox" name="publisher_email_is_billing" id="publisher_email_is_billing" value="1"
+                            <input type="checkbox" name="publisher_email_is_primary" id="publisher_email_is_primary" value="1"
                                 class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
-                            <span>Billing / accounts email</span>
+                            <span>Primary email</span>
                         </label>
                     </div>
                     <div>
@@ -341,7 +341,7 @@ $queryBase = [
                             </button>
                         </div>
                         <div id="publisherAltEmailsList" class="space-y-2"></div>
-                        <p class="mt-1 text-xs text-gray-500">Up to 5 alternate emails. Mark billing emails where invoices should be sent.</p>
+                        <p class="mt-1 text-xs text-gray-500">Up to 5 alternate emails. Mark primary contact emails where needed.</p>
                     </div>
                     <div>
                         <div class="mb-2 flex items-center justify-between gap-3">
@@ -583,8 +583,8 @@ function addPublisherAltEmailRow(data) {
     row.innerHTML =
         '<input type="email" name="alt_emails[' + index + '][email]" value="' + String(data.email || '').replace(/"/g, '&quot;') + '" placeholder="email@example.com" class="' + publisherAltInputClass() + '">' +
         '<label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer whitespace-nowrap">' +
-            '<input type="checkbox" name="alt_emails[' + index + '][is_billing]" value="1"' + (data.is_billing === 1 || data.is_billing === '1' ? ' checked' : '') + ' class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">' +
-            '<span>Billing</span>' +
+            '<input type="checkbox" name="alt_emails[' + index + '][is_primary]" value="1"' + (data.is_primary === 1 || data.is_primary === '1' ? ' checked' : '') + ' class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">' +
+            '<span>Primary</span>' +
         '</label>' +
         '<button type="button" class="publisher-alt-remove inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">Remove</button>';
     list.appendChild(row);
@@ -604,9 +604,9 @@ function reindexPublisherAltPhoneRows() {
 function reindexPublisherAltEmailRows() {
     document.querySelectorAll('#publisherAltEmailsList .publisher-alt-email-row').forEach(function (row, index) {
         const emailInput = row.querySelector('input[type="email"]');
-        const billingInput = row.querySelector('input[type="checkbox"]');
+        const primaryInput = row.querySelector('input[type="checkbox"]');
         if (emailInput) emailInput.name = 'alt_emails[' + index + '][email]';
-        if (billingInput) billingInput.name = 'alt_emails[' + index + '][is_billing]';
+        if (primaryInput) primaryInput.name = 'alt_emails[' + index + '][is_primary]';
     });
 }
 
@@ -716,8 +716,8 @@ function openPublisherModal(publisher) {
     document.getElementById('publisher_webpage').checked = publisher.webpage === 1 || publisher.webpage === '1';
     document.getElementById('publisher_contact_name').value = publisher.contact_name || '';
     document.getElementById('publisher_email').value = publisher.publisher_email || '';
-    document.getElementById('publisher_email_is_billing').checked =
-        publisher.publisher_email_is_billing === 1 || publisher.publisher_email_is_billing === '1';
+    document.getElementById('publisher_email_is_primary').checked =
+        publisher.publisher_email_is_primary === 1 || publisher.publisher_email_is_primary === '1';
     setSelectValueByTextOrValue(document.getElementById('publisher_country_code'), publisher.country_code || '');
     document.getElementById('publisher_phone').value = publisher.publisher_phone || '';
     document.getElementById('publisher_phone_is_whatsapp').checked =
@@ -803,8 +803,8 @@ document.getElementById('publisherForm')?.addEventListener('submit', function (e
     if (!document.getElementById('publisher_phone_is_whatsapp').checked) {
         form.set('publisher_phone_is_whatsapp', '0');
     }
-    if (!document.getElementById('publisher_email_is_billing').checked) {
-        form.set('publisher_email_is_billing', '0');
+    if (!document.getElementById('publisher_email_is_primary').checked) {
+        form.set('publisher_email_is_primary', '0');
     }
     const btn = document.getElementById('publisherSaveBtn');
     const oldLabel = btn ? btn.textContent : '';
