@@ -4,7 +4,7 @@ class Publisher
 {
     private mysqli $conn;
 
-    private const LIST_COLUMNS = 'p.id, p.publishers_id, p.publishers, p.contact_name, p.publisher_email, p.publisher_email_is_billing, p.country_code, p.publisher_phone, p.publisher_phone_is_whatsapp, p.gst_number, p.pan_number, p.address, p.city, p.state, p.country, p.postal_code, p.webpage, p.stock_replenishment_months, p.discount, p.broker_id, bu.name AS broker_name, p.is_active, p.create_at, p.update_at';
+    private const LIST_COLUMNS = 'p.id, p.publishers_id, p.publishers, p.contact_name, p.publisher_email, p.publisher_email_is_primary, p.country_code, p.publisher_phone, p.publisher_phone_is_whatsapp, p.gst_number, p.pan_number, p.address, p.city, p.state, p.country, p.postal_code, p.webpage, p.stock_replenishment_months, p.discount, p.broker_id, bu.name AS broker_name, p.is_active, p.create_at, p.update_at';
 
     private const LIST_FROM = ' FROM vp_publishers p LEFT JOIN vp_users bu ON bu.id = p.broker_id AND bu.is_deleted = 0';
 
@@ -25,7 +25,7 @@ class Publisher
         return [
             'contact_name' => trim((string)($data['contact_name'] ?? '')),
             'publisher_email' => trim((string)($data['publisher_email'] ?? '')),
-            'publisher_email_is_billing' => (string)($data['publisher_email_is_billing'] ?? '0') === '1' ? 1 : 0,
+            'publisher_email_is_primary' => (string)($data['publisher_email_is_primary'] ?? '0') === '1' ? 1 : 0,
             'country_code' => trim((string)($data['country_code'] ?? '')),
             'publisher_phone' => trim((string)($data['publisher_phone'] ?? '')),
             'publisher_phone_is_whatsapp' => (string)($data['publisher_phone_is_whatsapp'] ?? '0') === '1' ? 1 : 0,
@@ -86,7 +86,7 @@ class Publisher
     }
 
     /**
-     * @return array<int, array{email:string,is_billing:int}>
+     * @return array<int, array{email:string,is_primary:int}>
      */
     public function parseAlternateEmailsFromPost(array $data): array
     {
@@ -106,7 +106,7 @@ class Publisher
             }
             $rows[] = [
                 'email' => $email,
-                'is_billing' => !empty($item['is_billing']) ? 1 : 0,
+                'is_primary' => !empty($item['is_primary']) ? 1 : 0,
             ];
             if (count($rows) >= self::MAX_ALT_EMAILS) {
                 break;
@@ -147,7 +147,7 @@ class Publisher
     }
 
     /**
-     * @return array<int, array{email:string,is_billing:int}>
+     * @return array<int, array{email:string,is_primary:int}>
      */
     public function getEmailsByPublisherId(int $publisherId): array
     {
@@ -156,7 +156,7 @@ class Publisher
         }
 
         $stmt = $this->conn->prepare(
-            'SELECT email, is_billing FROM publisher_emails WHERE publisher_id = ? ORDER BY sort_order ASC, id ASC'
+            'SELECT email, is_primary FROM publisher_emails WHERE publisher_id = ? ORDER BY sort_order ASC, id ASC'
         );
         if (!$stmt) {
             return [];
@@ -168,7 +168,7 @@ class Publisher
         while ($result && ($row = $result->fetch_assoc())) {
             $rows[] = [
                 'email' => (string)($row['email'] ?? ''),
-                'is_billing' => (int)($row['is_billing'] ?? 0),
+                'is_primary' => (int)($row['is_primary'] ?? 0),
             ];
         }
         $stmt->close();
@@ -178,7 +178,7 @@ class Publisher
 
     /**
      * @param array<int, array{phone:string,is_whatsapp:int}> $phones
-     * @param array<int, array{email:string,is_billing:int}> $emails
+     * @param array<int, array{email:string,is_primary:int}> $emails
      */
     private function replacePublisherContacts(int $publisherId, array $phones, array $emails): ?array
     {
@@ -228,16 +228,16 @@ class Publisher
 
         if ($emails !== []) {
             $insertEmail = $this->conn->prepare(
-                'INSERT INTO publisher_emails (publisher_id, email, is_billing, sort_order) VALUES (?, ?, ?, ?)'
+                'INSERT INTO publisher_emails (publisher_id, email, is_primary, sort_order) VALUES (?, ?, ?, ?)'
             );
             if (!$insertEmail) {
                 return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
             }
             foreach ($emails as $index => $row) {
                 $email = $row['email'];
-                $isBilling = (int)$row['is_billing'];
+                $isPrimary = (int)$row['is_primary'];
                 $sortOrder = $index;
-                $insertEmail->bind_param('isii', $publisherId, $email, $isBilling, $sortOrder);
+                $insertEmail->bind_param('isii', $publisherId, $email, $isPrimary, $sortOrder);
                 if (!$insertEmail->execute()) {
                     $error = $insertEmail->error;
                     $insertEmail->close();
@@ -297,7 +297,7 @@ class Publisher
         }
 
         $emailStmt = $this->conn->prepare(
-            "SELECT publisher_id, email, is_billing FROM publisher_emails WHERE publisher_id IN ($placeholders) ORDER BY sort_order ASC, id ASC"
+            "SELECT publisher_id, email, is_primary FROM publisher_emails WHERE publisher_id IN ($placeholders) ORDER BY sort_order ASC, id ASC"
         );
         if ($emailStmt) {
             $emailStmt->bind_param($types, ...$ids);
@@ -310,7 +310,7 @@ class Publisher
                 }
                 $emailsByPublisher[$publisherId][] = [
                     'email' => (string)($row['email'] ?? ''),
-                    'is_billing' => (int)($row['is_billing'] ?? 0),
+                    'is_primary' => (int)($row['is_primary'] ?? 0),
                 ];
             }
             $emailStmt->close();
@@ -349,7 +349,7 @@ class Publisher
             return true;
         }
 
-        $sql = 'SELECT pp.id FROM publisher_phones pp INNER JOIN vp_publishers p ON p.id = pp.publisher_id WHERE pp.phone = ?';
+        $sql = 'SELECT pp.id FROM publisher_phones pp INNER JOIN vp_publishers p ON p.id = pp.publisher_id WHERE pp.phone COLLATE utf8mb4_general_ci = ? COLLATE utf8mb4_general_ci';
         if ($excludePublisherId !== null && $excludePublisherId > 0) {
             $sql .= ' AND p.id != ? LIMIT 1';
             $stmt = $this->conn->prepare($sql);
@@ -384,7 +384,7 @@ class Publisher
             return true;
         }
 
-        $sql = 'SELECT pe.id FROM publisher_emails pe INNER JOIN vp_publishers p ON p.id = pe.publisher_id WHERE LOWER(TRIM(pe.email)) = LOWER(TRIM(?))';
+        $sql = 'SELECT pe.id FROM publisher_emails pe INNER JOIN vp_publishers p ON p.id = pe.publisher_id WHERE LOWER(TRIM(pe.email)) COLLATE utf8mb4_general_ci = LOWER(TRIM(?)) COLLATE utf8mb4_general_ci';
         if ($excludePublisherId !== null && $excludePublisherId > 0) {
             $sql .= ' AND p.id != ? LIMIT 1';
             $stmt = $this->conn->prepare($sql);
@@ -726,7 +726,7 @@ class Publisher
         $this->conn->begin_transaction();
 
         $stmt = $this->conn->prepare(
-            'UPDATE vp_publishers SET publishers = ?, contact_name = ?, publisher_email = ?, publisher_email_is_billing = ?, country_code = ?, publisher_phone = ?, publisher_phone_is_whatsapp = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, stock_replenishment_months = ?, discount = ?, broker_id = ?, is_active = ? WHERE id = ?'
+            'UPDATE vp_publishers SET publishers = ?, contact_name = ?, publisher_email = ?, publisher_email_is_primary = ?, country_code = ?, publisher_phone = ?, publisher_phone_is_whatsapp = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, stock_replenishment_months = ?, discount = ?, broker_id = ?, is_active = ? WHERE id = ?'
         );
         if (!$stmt) {
             $this->conn->rollback();
@@ -736,14 +736,14 @@ class Publisher
         $webpage = (int)$fields['webpage'];
         $stockReplenishmentMonths = (int)$fields['stock_replenishment_months'];
         $discount = (float)$fields['discount'];
-        $publisherEmailIsBilling = (int)$fields['publisher_email_is_billing'];
+        $publisherEmailIsPrimary = (int)$fields['publisher_email_is_primary'];
         $publisherPhoneIsWhatsapp = (int)$fields['publisher_phone_is_whatsapp'];
         $stmt->bind_param(
             'sssissssssssssiddiii',
             $name,
             $fields['contact_name'],
             $fields['publisher_email'],
-            $publisherEmailIsBilling,
+            $publisherEmailIsPrimary,
             $fields['country_code'],
             $fields['publisher_phone'],
             $publisherPhoneIsWhatsapp,
@@ -835,7 +835,7 @@ class Publisher
         $this->conn->begin_transaction();
 
         $stmt = $this->conn->prepare(
-            'INSERT INTO vp_publishers (publishers_id, publishers, contact_name, publisher_email, publisher_email_is_billing, country_code, publisher_phone, publisher_phone_is_whatsapp, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_months, discount, broker_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO vp_publishers (publishers_id, publishers, contact_name, publisher_email, publisher_email_is_primary, country_code, publisher_phone, publisher_phone_is_whatsapp, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_months, discount, broker_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         if (!$stmt) {
             $this->conn->rollback();
@@ -845,7 +845,7 @@ class Publisher
         $webpage = (int)$fields['webpage'];
         $stockReplenishmentMonths = (int)$fields['stock_replenishment_months'];
         $discount = (float)$fields['discount'];
-        $publisherEmailIsBilling = (int)$fields['publisher_email_is_billing'];
+        $publisherEmailIsPrimary = (int)$fields['publisher_email_is_primary'];
         $publisherPhoneIsWhatsapp = (int)$fields['publisher_phone_is_whatsapp'];
         $stmt->bind_param(
             'isssissssssssssiddii',
@@ -853,7 +853,7 @@ class Publisher
             $name,
             $fields['contact_name'],
             $fields['publisher_email'],
-            $publisherEmailIsBilling,
+            $publisherEmailIsPrimary,
             $fields['country_code'],
             $fields['publisher_phone'],
             $publisherPhoneIsWhatsapp,
