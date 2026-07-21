@@ -333,7 +333,7 @@ class Author
         }
         $webpage = (int)$fields['webpage'];
         $stmt->bind_param(
-            'issssssssssssii',
+            'issssssssssii',
             $authorId,
             $name,
             $fields['contact_name'],
