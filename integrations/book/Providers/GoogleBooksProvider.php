@@ -70,6 +70,13 @@ class GoogleBooksProvider implements BookMetadataProviderInterface
                     'http_code' => $httpCode,
                     'detail' => $errorMessage,
                 ];
+            } elseif ($httpCode === 429 || stripos($errorMessage, 'Quota exceeded') !== false) {
+                $this->lastLookupStatus = [
+                    'state' => 'quota_exceeded',
+                    'label' => 'Google Books daily quota exceeded — try again tomorrow or request a quota increase.',
+                    'http_code' => $httpCode,
+                    'detail' => $errorMessage,
+                ];
             } elseif ($httpCode === 403 && (stripos($errorMessage, 'BooksVolumes.List are blocked') !== false || stripos($errorMessage, 'books method') !== false)) {
                 $this->lastLookupStatus = [
                     'state' => 'key_api_blocked',

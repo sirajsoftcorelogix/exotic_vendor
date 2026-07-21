@@ -58,6 +58,8 @@ class BookMetadata
                 $labels[] = 'Open Library';
             } elseif ($source === 'google_books') {
                 $labels[] = 'Google Books';
+            } elseif ($source === 'vp_catalog') {
+                $labels[] = 'Exotic Catalog';
             }
         }
 

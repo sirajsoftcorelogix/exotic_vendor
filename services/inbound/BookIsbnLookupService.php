@@ -1,6 +1,10 @@
 <?php
 
 require_once __DIR__ . '/../../integrations/book/BookMetadataGateway.php';
+require_once __DIR__ . '/../../integrations/shared/Http/HttpClient.php';
+require_once __DIR__ . '/../../integrations/book/Providers/OpenLibraryProvider.php';
+require_once __DIR__ . '/../../integrations/book/Providers/GoogleBooksProvider.php';
+require_once __DIR__ . '/../../integrations/book/Providers/VpCatalogProvider.php';
 require_once __DIR__ . '/../../models/author/Author.php';
 require_once __DIR__ . '/../../models/publisher/Publisher.php';
 
@@ -17,7 +21,15 @@ class BookIsbnLookupService
     public function __construct(mysqli $conn, ?BookMetadataGateway $gateway = null)
     {
         $this->conn = $conn;
-        $this->gateway = $gateway ?? new BookMetadataGateway();
+        if ($gateway === null) {
+            $http = new HttpClient();
+            $gateway = new BookMetadataGateway([
+                new OpenLibraryProvider($http),
+                new GoogleBooksProvider($http),
+                new VpCatalogProvider($conn),
+            ]);
+        }
+        $this->gateway = $gateway;
         $this->authorModel = new Author($conn);
         $this->publisherModel = new Publisher($conn);
     }
@@ -37,9 +49,13 @@ class BookIsbnLookupService
 
         $metadata = $this->gateway->lookupByIsbn($isbn);
         if (!$metadata instanceof BookMetadata) {
+            $providerStatus = $this->gateway->getProviderDiagnostics();
+
             return [
                 'success' => false,
-                'message' => 'No book found for ISBN ' . $this->gateway->formatIsbnDisplay($normalized) . '.',
+                'message' => 'No book found for ISBN ' . $this->gateway->formatIsbnDisplay($normalized)
+                    . '. This ISBN may be valid but not listed in Open Library, Google Books, or your local catalog — enter details manually.',
+                'provider_status' => $providerStatus,
             ];
         }
 

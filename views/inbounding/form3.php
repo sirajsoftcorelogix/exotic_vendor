@@ -1647,6 +1647,32 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
             return '<div><span class="font-bold text-gray-700">' + escapeHtml(label) + ':</span> ' + escapeHtml(text) + '</div>';
         }
 
+        function formatProviderStatusHints(providerStatus) {
+            if (!providerStatus || typeof providerStatus !== 'object') {
+                return '';
+            }
+
+            const hints = [];
+            Object.keys(providerStatus).forEach(function (providerKey) {
+                const status = providerStatus[providerKey];
+                if (!status || !status.state || status.state === 'ok') {
+                    return;
+                }
+                const label = status.label || status.state;
+                if (providerKey === 'open_library') {
+                    hints.push('Open Library: ' + label);
+                } else if (providerKey === 'google_books') {
+                    hints.push('Google Books: ' + label);
+                } else if (providerKey === 'vp_catalog') {
+                    hints.push('Exotic Catalog: ' + label);
+                } else {
+                    hints.push(label);
+                }
+            });
+
+            return hints.join('\n');
+        }
+
         function renderLookupPreview(payload) {
             const data = payload.data || {};
             const catalog = payload.catalog_matches || {};
@@ -1659,6 +1685,7 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
                 ? data.sources.map(function (source) {
                     if (source === 'open_library') return 'Open Library';
                     if (source === 'google_books') return 'Google Books';
+                    if (source === 'vp_catalog') return 'Exotic Catalog';
                     return source;
                 }).join(', ')
                 : '';
@@ -1811,9 +1838,13 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
                 })
                 .then(function (result) {
                     if (!result.ok || !result.json || !result.json.success) {
-                        const message = (result.json && result.json.message)
+                        let message = (result.json && result.json.message)
                             ? result.json.message
                             : 'ISBN lookup failed. Please try again.';
+                        const providerHints = formatProviderStatusHints(result.json && result.json.provider_status);
+                        if (providerHints) {
+                            message += '\n\n' + providerHints;
+                        }
                         alert(message);
                         return;
                     }

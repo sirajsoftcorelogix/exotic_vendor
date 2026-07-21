@@ -62,6 +62,11 @@ class OpenLibraryProvider implements BookMetadataProviderInterface
             $editionUrl = 'https://openlibrary.org/isbn/' . rawurlencode($normalizedIsbn) . '.json';
             $edition = $this->http->getJson($editionUrl);
             if (!is_array($edition) || empty($edition['title'])) {
+                $this->lastLookupStatus = [
+                    'state' => 'not_found',
+                    'label' => 'No Open Library match for this ISBN.',
+                ];
+
                 return null;
             }
 

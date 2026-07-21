@@ -4,6 +4,7 @@ require_once __DIR__ . '/Contracts/BookMetadataProviderInterface.php';
 require_once __DIR__ . '/Dto/BookMetadata.php';
 require_once __DIR__ . '/Providers/OpenLibraryProvider.php';
 require_once __DIR__ . '/Providers/GoogleBooksProvider.php';
+require_once __DIR__ . '/Providers/VpCatalogProvider.php';
 require_once __DIR__ . '/Support/IsbnNormalizer.php';
 require_once __DIR__ . '/../shared/Http/HttpClient.php';
 
@@ -85,6 +86,7 @@ class BookMetadataGateway
 
         $openLibrary = null;
         $googleBooks = null;
+        $vpCatalog = null;
         foreach ($results as $result) {
             if (in_array('open_library', $result->sources, true)) {
                 $openLibrary = $result;
@@ -92,17 +94,17 @@ class BookMetadataGateway
             if (in_array('google_books', $result->sources, true)) {
                 $googleBooks = $result;
             }
+            if (in_array('vp_catalog', $result->sources, true)) {
+                $vpCatalog = $result;
+            }
         }
 
-        $pick = static function (string $getter) use ($openLibrary, $googleBooks): string {
-            if ($openLibrary instanceof BookMetadata) {
-                $value = $openLibrary->{$getter};
-                if (is_string($value) && trim($value) !== '') {
-                    return trim($value);
+        $pick = static function (string $getter) use ($openLibrary, $googleBooks, $vpCatalog): string {
+            foreach ([$openLibrary, $googleBooks, $vpCatalog] as $result) {
+                if (!$result instanceof BookMetadata) {
+                    continue;
                 }
-            }
-            if ($googleBooks instanceof BookMetadata) {
-                $value = $googleBooks->{$getter};
+                $value = $result->{$getter};
                 if (is_string($value) && trim($value) !== '') {
                     return trim($value);
                 }
@@ -111,20 +113,19 @@ class BookMetadataGateway
             return '';
         };
 
-        $pickAuthors = static function () use ($openLibrary, $googleBooks): array {
-            if ($openLibrary instanceof BookMetadata && $openLibrary->authors !== []) {
-                return $openLibrary->authors;
-            }
-            if ($googleBooks instanceof BookMetadata && $googleBooks->authors !== []) {
-                return $googleBooks->authors;
+        $pickAuthors = static function () use ($openLibrary, $googleBooks, $vpCatalog): array {
+            foreach ([$openLibrary, $googleBooks, $vpCatalog] as $result) {
+                if ($result instanceof BookMetadata && $result->authors !== []) {
+                    return $result->authors;
+                }
             }
 
             return [];
         };
 
-        $pickSubjects = static function () use ($openLibrary, $googleBooks): array {
+        $pickSubjects = static function () use ($openLibrary, $googleBooks, $vpCatalog): array {
             $subjects = [];
-            foreach ([$openLibrary, $googleBooks] as $result) {
+            foreach ([$openLibrary, $googleBooks, $vpCatalog] as $result) {
                 if (!$result instanceof BookMetadata) {
                     continue;
                 }
@@ -158,6 +159,9 @@ class BookMetadataGateway
         }
 
         $coverCandidates = [];
+        if ($vpCatalog instanceof BookMetadata && $vpCatalog->coverUrl !== '') {
+            $coverCandidates[] = $vpCatalog->coverUrl;
+        }
         if ($googleBooks instanceof BookMetadata && $googleBooks->coverUrl !== '') {
             $coverCandidates[] = $googleBooks->coverUrl;
         }
