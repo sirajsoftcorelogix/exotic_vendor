@@ -276,6 +276,92 @@ class PublishersController
         exit;
     }
 
+    public function getVendorMappings(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $publisherId = (int) ($_GET['id'] ?? 0);
+        if ($publisherId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid publisher ID.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $publisher = $this->publisherModel->getPublisherById($publisherId);
+        if (!$publisher) {
+            echo json_encode(['success' => false, 'message' => 'Publisher not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'publisher' => [
+                'id' => (int) ($publisher['id'] ?? 0),
+                'publishers' => (string) ($publisher['publishers'] ?? ''),
+                'display_name' => (string) ($publisher['display_name'] ?? ''),
+            ],
+            'mappings' => $this->publisherModel->getVendorMappingsByPublisherId($publisherId),
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    public function searchMappingVendors(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $publisherId = (int) ($_GET['publisher_id'] ?? 0);
+        $query = trim((string) ($_GET['q'] ?? ''));
+        if ($publisherId <= 0) {
+            echo json_encode([], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        echo json_encode(
+            $this->publisherModel->searchVendorsForPublisherMapping($query, $publisherId),
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        exit;
+    }
+
+    public function addVendorMapping(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+            exit;
+        }
+
+        $publisherId = (int) ($_POST['publisher_id'] ?? 0);
+        $vendorId = (int) ($_POST['vendor_id'] ?? 0);
+        echo json_encode(
+            $this->publisherModel->addPublisherVendorMapping($publisherId, $vendorId),
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        exit;
+    }
+
+    public function removeVendorMapping(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+            exit;
+        }
+
+        $publisherId = (int) ($_POST['publisher_id'] ?? 0);
+        $mappingId = (int) ($_POST['mapping_id'] ?? 0);
+        echo json_encode(
+            $this->publisherModel->removePublisherVendorMapping($publisherId, $mappingId),
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        exit;
+    }
+
     public function syncFromAdmin(): void
     {
         is_login();

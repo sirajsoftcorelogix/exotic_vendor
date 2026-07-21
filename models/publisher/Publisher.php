@@ -1068,6 +1068,256 @@ class Publisher
         ];
     }
 
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getVendorMappingsByPublisherId(int $publisherId): array
+    {
+        if ($publisherId <= 0) {
+            return [];
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT m.id AS mapping_id, m.vendor_id, m.sort_order, m.created_at,
+                    v.vendor_name, v.vendor_id AS exotic_vendor_id, v.contact_name, v.city, v.state, v.is_active
+             FROM publisher_vendor_mapping m
+             INNER JOIN vp_vendors v ON v.id = m.vendor_id
+             WHERE m.publisher_id = ?
+             ORDER BY m.sort_order ASC, m.id ASC'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $publisherId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = [];
+        while ($row = $result->fetch_assoc()) {
+            $rows[] = $row;
+        }
+        $stmt->close();
+
+        return $rows;
+    }
+
+    /**
+     * Select2 options for vendor lookup when mapping distributors to a publisher.
+     *
+     * @return array<int, array{id:int,text:string}>
+     */
+    public function searchVendorsForPublisherMapping(string $query, int $publisherId, int $limit = 20): array
+    {
+        $query = trim($query);
+        if (strlen($query) < 2 || $publisherId <= 0) {
+            return [];
+        }
+
+        $limit = max(1, min(50, $limit));
+        $like = '%' . $query . '%';
+        $numericId = ctype_digit($query) ? (int) $query : 0;
+
+        if ($numericId > 0) {
+            $sql = 'SELECT v.id, v.vendor_id, v.vendor_name, v.contact_name, v.city
+                    FROM vp_vendors v
+                    WHERE (v.is_active = 1 OR v.is_active = \'active\')
+                      AND NOT EXISTS (
+                          SELECT 1 FROM publisher_vendor_mapping m
+                          WHERE m.publisher_id = ? AND m.vendor_id = v.id
+                      )
+                      AND (
+                          v.vendor_name LIKE ?
+                          OR v.contact_name LIKE ?
+                          OR CAST(v.id AS CHAR) LIKE ?
+                          OR (v.vendor_id > 0 AND CAST(v.vendor_id AS CHAR) LIKE ?)
+                          OR v.id = ?
+                          OR v.vendor_id = ?
+                      )
+                    ORDER BY v.vendor_name ASC
+                    LIMIT ?';
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) {
+                return [];
+            }
+            $stmt->bind_param('issssiii', $publisherId, $like, $like, $like, $like, $numericId, $numericId, $limit);
+        } else {
+            $sql = 'SELECT v.id, v.vendor_id, v.vendor_name, v.contact_name, v.city
+                    FROM vp_vendors v
+                    WHERE (v.is_active = 1 OR v.is_active = \'active\')
+                      AND NOT EXISTS (
+                          SELECT 1 FROM publisher_vendor_mapping m
+                          WHERE m.publisher_id = ? AND m.vendor_id = v.id
+                      )
+                      AND (
+                          v.vendor_name LIKE ?
+                          OR v.contact_name LIKE ?
+                          OR CAST(v.id AS CHAR) LIKE ?
+                          OR (v.vendor_id > 0 AND CAST(v.vendor_id AS CHAR) LIKE ?)
+                      )
+                    ORDER BY v.vendor_name ASC
+                    LIMIT ?';
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) {
+                return [];
+            }
+            $stmt->bind_param('issssi', $publisherId, $like, $like, $like, $like, $limit);
+        }
+
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $options = [];
+        while ($row = $result->fetch_assoc()) {
+            $vendorLocalId = (int) ($row['id'] ?? 0);
+            if ($vendorLocalId <= 0) {
+                continue;
+            }
+            $options[] = [
+                'id' => $vendorLocalId,
+                'text' => $this->formatVendorMappingLabel($row),
+            ];
+        }
+        $stmt->close();
+
+        return $options;
+    }
+
+    public function addPublisherVendorMapping(int $publisherId, int $vendorId): array
+    {
+        if ($publisherId <= 0 || $vendorId <= 0) {
+            return ['success' => false, 'message' => 'Invalid publisher or vendor.'];
+        }
+
+        if (!$this->getPublisherById($publisherId)) {
+            return ['success' => false, 'message' => 'Publisher not found.'];
+        }
+
+        $vendorStmt = $this->conn->prepare(
+            'SELECT id, vendor_name FROM vp_vendors
+             WHERE id = ? AND (is_active = 1 OR is_active = \'active\')
+             LIMIT 1'
+        );
+        if (!$vendorStmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+        }
+        $vendorStmt->bind_param('i', $vendorId);
+        $vendorStmt->execute();
+        $vendor = $vendorStmt->get_result()->fetch_assoc();
+        $vendorStmt->close();
+        if (!$vendor) {
+            return ['success' => false, 'message' => 'Active vendor not found.'];
+        }
+
+        $dupStmt = $this->conn->prepare(
+            'SELECT id FROM publisher_vendor_mapping WHERE publisher_id = ? AND vendor_id = ? LIMIT 1'
+        );
+        if (!$dupStmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+        }
+        $dupStmt->bind_param('ii', $publisherId, $vendorId);
+        $dupStmt->execute();
+        $existing = $dupStmt->get_result()->fetch_assoc();
+        $dupStmt->close();
+        if ($existing) {
+            return ['success' => false, 'message' => 'This vendor is already mapped to the publisher.'];
+        }
+
+        $sortStmt = $this->conn->prepare(
+            'SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_sort FROM publisher_vendor_mapping WHERE publisher_id = ?'
+        );
+        $nextSort = 1;
+        if ($sortStmt) {
+            $sortStmt->bind_param('i', $publisherId);
+            $sortStmt->execute();
+            $sortRow = $sortStmt->get_result()->fetch_assoc();
+            $nextSort = max(1, (int) ($sortRow['next_sort'] ?? 1));
+            $sortStmt->close();
+        }
+
+        $insertStmt = $this->conn->prepare(
+            'INSERT INTO publisher_vendor_mapping (publisher_id, vendor_id, sort_order) VALUES (?, ?, ?)'
+        );
+        if (!$insertStmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+        }
+        $insertStmt->bind_param('iii', $publisherId, $vendorId, $nextSort);
+        $ok = $insertStmt->execute();
+        $mappingId = (int) $this->conn->insert_id;
+        $error = $insertStmt->error;
+        $insertStmt->close();
+
+        if (!$ok) {
+            return ['success' => false, 'message' => 'Could not add vendor mapping: ' . $error];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Distributor added.',
+            'mapping_id' => $mappingId,
+            'mappings' => $this->getVendorMappingsByPublisherId($publisherId),
+        ];
+    }
+
+    public function removePublisherVendorMapping(int $publisherId, int $mappingId): array
+    {
+        if ($publisherId <= 0 || $mappingId <= 0) {
+            return ['success' => false, 'message' => 'Invalid mapping.'];
+        }
+
+        $stmt = $this->conn->prepare(
+            'DELETE FROM publisher_vendor_mapping WHERE id = ? AND publisher_id = ? LIMIT 1'
+        );
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+        }
+        $stmt->bind_param('ii', $mappingId, $publisherId);
+        $stmt->execute();
+        $removed = $stmt->affected_rows > 0;
+        $stmt->close();
+
+        if (!$removed) {
+            return ['success' => false, 'message' => 'Mapping not found.'];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Distributor removed.',
+            'mappings' => $this->getVendorMappingsByPublisherId($publisherId),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function formatVendorMappingLabel(array $row): string
+    {
+        $exoticId = trim((string) ($row['exotic_vendor_id'] ?? $row['vendor_id'] ?? ''));
+        $name = trim((string) ($row['vendor_name'] ?? ''));
+        $contact = trim((string) ($row['contact_name'] ?? ''));
+        $city = trim((string) ($row['city'] ?? ''));
+
+        if ($exoticId !== '' && $name !== '') {
+            $label = $exoticId . '-' . $name;
+        } elseif ($name !== '') {
+            $label = $name;
+        } elseif ($exoticId !== '') {
+            $label = $exoticId;
+        } else {
+            $label = 'Vendor #' . (int) ($row['id'] ?? 0);
+        }
+
+        $meta = [];
+        if ($contact !== '') {
+            $meta[] = $contact;
+        }
+        if ($city !== '') {
+            $meta[] = $city;
+        }
+        if ($meta !== []) {
+            $label .= ' (' . implode(', ', $meta) . ')';
+        }
+
+        return $label;
+    }
+
     public function deletePublisher(int $id): array
     {
         if ($id <= 0) {
@@ -1088,6 +1338,13 @@ class Publisher
                 $contactStmt->execute();
                 $contactStmt->close();
             }
+        }
+
+        $mappingStmt = $this->conn->prepare('DELETE FROM publisher_vendor_mapping WHERE publisher_id = ?');
+        if ($mappingStmt) {
+            $mappingStmt->bind_param('i', $id);
+            $mappingStmt->execute();
+            $mappingStmt->close();
         }
 
         $stmt = $this->conn->prepare('DELETE FROM vp_publishers WHERE id = ?');
