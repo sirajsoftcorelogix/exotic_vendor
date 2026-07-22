@@ -601,6 +601,8 @@ class SalesReturn
         }
         $changeDate = date('Y-m-d H:i:s');
         $orderRowIdsFromReturnLookup = array_fill_keys($orderRowIdsFromReturn, true);
+        require_once __DIR__ . '/../../integrations/exotic/ExoticIndiaGateway.php';
+        $exoticGateway = ExoticIndiaGateway::create($this->conn);
 
         foreach ($targetRowIds as $orderRowId) {
             $line = $rowsById[$orderRowId] ?? null;
@@ -632,7 +634,7 @@ class SalesReturn
                 $result['api_failed']++;
                 error_log('[Sales return status API] Order ' . $orderNumber . ' item ' . $orderRowId . ': missing item_code');
             } else {
-                $apiRes = $commanModel->updateExoticIndiaOrderStatus([
+                $apiRes = $exoticGateway->updateOrderItemStatus([
                     'orderid' => $orderNumber,
                     'level' => 'item',
                     'order_status' => $adminId,

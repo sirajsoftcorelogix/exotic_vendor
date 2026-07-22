@@ -2173,7 +2173,7 @@ class PosOrdersController
      */
     private function syncOrderStatusToExoticApi(int $orderId, string $statusSlug): array
     {
-        global $ordersModel, $commanModel;
+        global $ordersModel, $conn;
 
         $orderval = $ordersModel->getOrderById($orderId);
         if (!$orderval) {
@@ -2186,28 +2186,21 @@ class PosOrdersController
             ];
         }
 
-        $statusRow = $commanModel->getExoticIndiaOrderStatusCode($statusSlug);
-        $adminId = (int) ($statusRow['admin_id'] ?? 0);
-        if ($adminId <= 0) {
+        require_once __DIR__ . '/../integrations/exotic/ExoticIndiaGateway.php';
+        $gateway = ExoticIndiaGateway::create($conn);
+        $result = $gateway->updateOrderLineFromSlug($statusSlug, $orderval);
+
+        if (!empty($result['skipped'])) {
             return [
                 'attempted' => false,
                 'success' => true,
                 'skipped' => true,
-                'message' => 'This status is not synced to Exotic India.',
+                'message' => (string) ($result['message'] ?? 'This status is not synced to Exotic India.'),
                 'order_id' => $orderId,
                 'order_number' => (string) ($orderval['order_number'] ?? ''),
                 'item_code' => (string) ($orderval['item_code'] ?? ''),
             ];
         }
-
-        $result = $commanModel->updateExoticIndiaOrderStatus([
-            'orderid' => $orderval['order_number'],
-            'level' => 'item',
-            'order_status' => $adminId,
-            'size' => trim((string) ($orderval['size'] ?? '')),
-            'color' => trim((string) ($orderval['color'] ?? '')),
-            'itemcode' => trim((string) ($orderval['item_code'] ?? '')),
-        ]);
 
         return array_merge([
             'attempted' => true,
@@ -2215,11 +2208,6 @@ class PosOrdersController
             'order_id' => $orderId,
             'order_number' => (string) ($orderval['order_number'] ?? ''),
             'item_code' => (string) ($orderval['item_code'] ?? ''),
-        ], is_array($result) ? $result : [
-            'success' => false,
-            'http_code' => 0,
-            'message' => 'Unexpected API response.',
-            'raw' => (string) $result,
-        ]);
+        ], $result);
     }
 }

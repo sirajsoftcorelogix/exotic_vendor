@@ -931,19 +931,9 @@ class PicklistController
             return;
         }
 
-        $statusCode = $commanModel->getExoticIndiaOrderStatusCode($status);
-        $adminId = (int) ($statusCode['admin_id'] ?? 0);
-        if ($adminId > 0) {
-            $apidata = [
-                'orderid' => $orderval['order_number'],
-                'level' => 'item',
-                'order_status' => $adminId,
-                'size' => trim((string) ($orderval['size'] ?? '')),
-                'color' => trim((string) ($orderval['color'] ?? '')),
-                'itemcode' => trim((string) ($orderval['item_code'] ?? '')),
-            ];
-            $commanModel->updateExoticIndiaOrderStatus($apidata);
-        }
+        require_once __DIR__ . '/../integrations/exotic/ExoticIndiaGateway.php';
+        global $conn;
+        ExoticIndiaGateway::create($conn)->updateOrderLineFromSlug($status, $orderval);
 
         if (!empty($orderval['agent_id']) && (int) $orderval['agent_id'] > 0) {
             $link = base_url('index.php?page=orders&action=list&' . $orderId);

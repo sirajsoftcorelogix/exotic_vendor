@@ -27,7 +27,28 @@ endforeach;
 $currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
 $orderremarks = is_array($orderremarks ?? null) ? $orderremarks : [];
 $customerdetails = is_array($customerdetails ?? null) ? $customerdetails : [];
+$statusList = is_array($statusList ?? null) ? $statusList : [];
+$order_status_list = is_array($order_status_list ?? null) ? $order_status_list : [];
+$staff_list = is_array($staff_list ?? null) ? $staff_list : [];
+$showOrderVendorName = (bool)($showOrderVendorName ?? false);
 $countries = country_array();
+$buildStatusOrderPayload = static function (array $item): array {
+    return [
+        'order_id' => (int)($item['id'] ?? 0),
+        'order_number' => (string)($item['order_number'] ?? ''),
+        'item_code' => (string)($item['item_code'] ?? ''),
+        'vendor_name' => (string)($item['vendor_name'] ?? $item['vendor'] ?? ''),
+        'groupname' => (string)($item['groupname'] ?? ''),
+        'subcategories' => (string)($item['subcategories'] ?? ''),
+        'title' => (string)($item['title'] ?? ''),
+        'image' => (string)($item['image'] ?? ''),
+        'status' => (string)($item['status'] ?? ''),
+        'priority' => (string)($item['priority'] ?? ''),
+        'agent_id' => (string)($item['agent_id'] ?? ''),
+        'esd' => (string)($item['esd'] ?? ''),
+        'remarks' => (string)($item['remarks'] ?? ''),
+    ];
+};
 $displayOrderNumber = (string)($orderremarks['order_number'] ?? ($order[0]['order_number'] ?? ''));
 $resolveCountryLabel = static function (?string $code) use ($countries): string {
     $code = trim((string)$code);
@@ -46,7 +67,14 @@ if ($invoiceIdForReturn > 0) {
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-            <h1 class="text-xl font-bold"><?php echo $orderremarks['order_number'] ?? ''; ?></h1>
+            <h1 class="text-xl font-bold"><?php echo htmlspecialchars((string)($orderremarks['order_number'] ?? '')); ?></h1>
+            <button type="button"
+                class="inline-flex items-center gap-1.5 rounded border border-orange-200 bg-orange-50 px-3 py-1.5 text-sm font-medium text-orange-700 hover:bg-orange-100"
+                title="Refresh all lines for this order from Exotic"
+                onclick="openRefreshOrderModal('<?= htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8') ?>')">
+                <i class="fa-solid fa-rotate text-xs"></i>
+                Refresh from Exotic
+            </button>
             <!-- <span class="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white">Paid</span>
             <span class="rounded-full bg-red-500 px-3 py-1 text-xs font-semibold text-white">Canceled</span>
             <span class="rounded-full bg-yellow-500 px-3 py-1 text-xs font-semibold text-white">Refunded</span>
@@ -138,6 +166,14 @@ if ($invoiceIdForReturn > 0) {
                         } else {
                             $currencysymbol = $currencyCode . ' ';
                         }
+                        $lineId = (int)($item['id'] ?? 0);
+                        $lineStatus = (string)($item['status'] ?? '');
+                        $lineStatusLabel = (string)($statusList[$lineStatus] ?? ucwords(str_replace('_', ' ', $lineStatus)));
+                        $lineAgentId = (int)($item['agent_id'] ?? 0);
+                        $lineAgentName = $lineAgentId > 0 ? (string)($staff_list[$lineAgentId] ?? 'N/A') : 'N/A';
+                        $linePriority = trim((string)($item['priority'] ?? ''));
+                        $lineEsd = trim((string)($item['esd'] ?? ''));
+                        $statusOrderPayload = $buildStatusOrderPayload($item);
                     ?>
                         <div class="flex items-center gap-4 accordion-trigger">
                             <input type="checkbox" class="h-5 w-5 rounded border-gray-300">
@@ -175,6 +211,11 @@ if ($invoiceIdForReturn > 0) {
                                                     <?php echo str_pad($item['quantity'], 2, '0', STR_PAD_LEFT); ?>
                                                 </span>
                                             </div>
+                                            <div class="grid grid-cols-1 gap-1 pt-2 text-[12px] text-black-600">
+                                                <p><span class="font-bold text-black">Priority</span>: <?php echo $linePriority !== '' ? htmlspecialchars(ucfirst($linePriority)) : '—'; ?></p>
+                                                <p><span class="font-bold text-black">Agent</span>: <?php echo htmlspecialchars($lineAgentName); ?></p>
+                                                <p><span class="font-bold text-black">Ship by</span>: <?php echo $lineEsd !== '' ? htmlspecialchars(date('d M Y', strtotime($lineEsd))) : '—'; ?></p>
+                                            </div>
                                         </div>
                                         <div class="flex items-center gap-12">
                                             <div class="flex items-center gap-2 text-[13px] text-black-500">
@@ -185,8 +226,14 @@ if ($invoiceIdForReturn > 0) {
                                             <div class="w-20 text-right text-[14px] font-bold text-black-900">
                                                 <?php echo $currencysymbol; ?><?php echo $item['finalprice'] * $item['quantity']; ?>
                                             </div>
-                                            <div class="flex-shrink-0">
-                                                <span class="rounded-full bg-green-600 px-3 py-1 text-[11px] font-semibold text-white whitespace-nowrap"><?php echo ucwords(str_replace('_', ' ', $item['status'])); ?></span>
+                                            <div class="flex-shrink-0 flex flex-col items-end gap-2">
+                                                <span class="rounded-full bg-green-600 px-3 py-1 text-[11px] font-semibold text-white whitespace-nowrap"><?php echo htmlspecialchars($lineStatusLabel); ?></span>
+                                                <button type="button"
+                                                    onclick="openStatusPopup(<?= $lineId ?>)"
+                                                    class="text-[11px] font-semibold text-orange-700 hover:text-orange-900 hover:underline">
+                                                    Update status
+                                                </button>
+                                                <span id="order-id-<?= $lineId ?>" class="hidden" data-order='<?= htmlspecialchars(json_encode($statusOrderPayload), ENT_QUOTES, 'UTF-8') ?>'></span>
                                             </div>
                                         </div>
                                     </div>
@@ -618,6 +665,129 @@ if ($invoiceIdForReturn > 0) {
         </div>
     </div>
 </div>
+
+<div id="statusPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50 p-4" onclick="closeStatusPopup(event)">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative" onclick="event.stopPropagation();">
+        <button type="button" onclick="closeStatusPopup()" class="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <div class="grid grid-cols-1 md:grid-cols-[38%_62%] gap-0">
+            <div class="p-6 border-b md:border-b-0 md:border-r border-gray-200">
+                <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md border h-36 w-full max-w-[220px] object-cover mb-4">
+                <p class="text-sm text-gray-600 space-y-1">
+                    <strong>Order Number:</strong> <span id="status_order_number"></span><br>
+                    <strong>Item Code:</strong> <span id="status_item_code"></span><br>
+                    <?php if ($showOrderVendorName): ?>
+                    <strong>Vendor Name:</strong> <span id="status_vendor_name"></span><br>
+                    <?php endif; ?>
+                    <span id="status_category"></span> / <span id="status_sub_category"></span><br>
+                    <span id="status_item" class="font-bold"></span>
+                </p>
+            </div>
+            <div class="p-6">
+                <h2 class="text-2xl font-bold mb-4">Update Order</h2>
+                <form id="statusForm" enctype="multipart/form-data" method="post" action="?page=orders&action=update_status">
+                    <input type="hidden" name="status_order_id" id="status_order_id">
+                    <div class="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="orderStatus" class="block text-gray-700 font-bold mb-2">Order Status</label>
+                            <select id="orderStatus" name="orderStatus" class="border border-gray-300 rounded px-3 py-2 w-full">
+                                <option value="">-- Order Status --</option>
+                                <?php renderPartial('views/shared/partials/order_status_select_options.php', [
+                                    'order_status_list' => $order_status_list,
+                                ]); ?>
+                            </select>
+                            <input type="hidden" id="previousStatus" name="previousStatus" value="">
+                        </div>
+                        <div>
+                            <label for="statusESD" class="block text-gray-700 font-bold mb-2">Ship By Date</label>
+                            <input type="date" id="statusESD" name="esd" class="border border-gray-300 rounded px-2 py-1.5 w-full">
+                            <input type="hidden" id="previousESD" name="previous_esd" value="">
+                        </div>
+                    </div>
+                    <div class="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="agentId" class="block text-gray-700 font-bold mb-2">Assign agent</label>
+                            <select name="agent_id" id="agentId" class="border border-gray-300 rounded px-3 py-2 w-full">
+                                <option value="">Select User</option>
+                                <?php foreach ($staff_list as $id => $name): ?>
+                                    <option value="<?= (int)$id ?>"><?= htmlspecialchars((string)$name) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <input type="hidden" id="agentName" name="agent_name" value="">
+                            <input type="hidden" id="previousAgent" name="previous_agent" value="">
+                        </div>
+                        <div>
+                            <label for="orderPriority" class="block text-gray-700 font-bold mb-2">Priority</label>
+                            <select id="orderPriority" name="orderPriority" class="border border-gray-300 rounded px-3 py-2 w-full">
+                                <option value="">-Select-</option>
+                                <option value="critical">Critical</option>
+                                <option value="urgent">Urgent</option>
+                                <option value="high">High</option>
+                                <option value="medium">Medium</option>
+                                <option value="low">Low</option>
+                            </select>
+                            <input type="hidden" id="previousPriority" name="previous_priority" value="">
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label for="orderRemarks" class="block text-gray-700 font-bold mb-2">Notes</label>
+                        <textarea id="orderRemarks" name="orderRemarks" class="border border-gray-300 rounded px-3 py-2 w-full" rows="4"></textarea>
+                        <input type="hidden" id="previousRemarks" name="previous_remarks" value="">
+                    </div>
+                    <p class="text-xs text-gray-500 mb-3">Saving updates the local status and syncs to Exotic India when supported for this status.</p>
+                    <div id="orderStatusError" class="text-red-500 text-sm mt-1 hidden">Please select a status.</div>
+                    <div class="flex justify-end gap-3">
+                        <button type="button" onclick="closeStatusPopup()" class="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-600">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="refreshOrderModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50 p-4" onclick="closeRefreshOrderModal(event)">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative" onclick="event.stopPropagation();">
+        <button type="button" onclick="closeRefreshOrderModal()" class="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <div class="p-6">
+            <h2 class="text-xl font-bold mb-2">Refresh order from Exotic</h2>
+            <p class="text-sm text-gray-600 mb-4">Order <strong id="refreshOrderNumberLabel"></strong> — all cart lines with this order number will be imported or updated.</p>
+            <div id="refreshOrderLoading" class="hidden text-sm text-gray-600 mb-3">Loading preview from vendor API…</div>
+            <div id="refreshOrderError" class="hidden text-sm text-red-600 mb-3"></div>
+            <div id="refreshOrderPreviewWrap" class="hidden">
+                <div class="overflow-x-auto border border-gray-200 rounded-lg mb-4">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-gray-50 text-left">
+                            <tr>
+                                <th class="px-3 py-2 font-semibold">Item</th>
+                                <th class="px-3 py-2 font-semibold">Qty</th>
+                                <th class="px-3 py-2 font-semibold">In DB</th>
+                                <th class="px-3 py-2 font-semibold">Current status (DB)</th>
+                                <th class="px-3 py-2 font-semibold">Status from API</th>
+                                <th class="px-3 py-2 font-semibold">Addons (API)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="refreshOrderLinesBody" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+                <div id="refreshOrderStatusChoice" class="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 hidden">
+                    <label class="inline-flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox" id="refreshOrderUpdateStatus" class="mt-1 h-4 w-4 text-orange-600 border-gray-300 rounded">
+                        <span>
+                            <span class="font-semibold text-gray-900 block">Update order status from Exotic API</span>
+                            <span class="text-xs text-gray-600">If unchecked, existing lines keep their current status in the database; prices, addons, and other fields still refresh. New lines always use the API status.</span>
+                        </span>
+                    </label>
+                </div>
+                <p id="refreshOrderNoStatusDiff" class="hidden text-sm text-gray-600 mb-4">No status differences detected on existing lines. Status will remain unchanged unless you add new lines.</p>
+            </div>
+            <div class="flex justify-end gap-3">
+                <button type="button" onclick="closeRefreshOrderModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">Cancel</button>
+                <button type="button" id="refreshOrderApplyBtn" disabled onclick="applyRefreshOrderFromModal()" class="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed">Refresh order</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     function openNoteEditPopup(orderNumber, currentRemarks) {
         document.getElementById('note_order_number').value = orderNumber;
@@ -757,6 +927,230 @@ if ($invoiceIdForReturn > 0) {
                 alert("Connection problem. Please try again.");
             });
     });
+
+    let refreshOrderModalNumber = '';
+
+    function closeRefreshOrderModal(e) {
+        if (e && e.target && e.currentTarget !== e.target) {
+            return;
+        }
+        document.getElementById('refreshOrderModal').classList.add('hidden');
+        refreshOrderModalNumber = '';
+    }
+
+    function escapeHtmlRefresh(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function parseRefreshOrderJsonResponse(res) {
+        return res.text().then(function(text) {
+            const cleaned = String(text || '').replace(/^\uFEFF/, '').trim();
+            try {
+                return JSON.parse(cleaned);
+            } catch (err) {
+                const snippet = cleaned.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 280);
+                throw new Error(snippet || 'Server returned non-JSON response.');
+            }
+        });
+    }
+
+    function openRefreshOrderModal(orderNumber) {
+        orderNumber = String(orderNumber || '').trim();
+        if (!orderNumber) {
+            alert('Order number is missing.');
+            return;
+        }
+        refreshOrderModalNumber = orderNumber;
+        document.getElementById('refreshOrderNumberLabel').textContent = orderNumber;
+        document.getElementById('refreshOrderError').classList.add('hidden');
+        document.getElementById('refreshOrderError').textContent = '';
+        document.getElementById('refreshOrderPreviewWrap').classList.add('hidden');
+        document.getElementById('refreshOrderLoading').classList.remove('hidden');
+        document.getElementById('refreshOrderApplyBtn').disabled = true;
+        document.getElementById('refreshOrderUpdateStatus').checked = false;
+        document.getElementById('refreshOrderStatusChoice').classList.add('hidden');
+        document.getElementById('refreshOrderNoStatusDiff').classList.add('hidden');
+        document.getElementById('refreshOrderLinesBody').innerHTML = '';
+        document.getElementById('refreshOrderModal').classList.remove('hidden');
+
+        fetch('index.php?page=orders&action=refresh_order_preview&order_number=' + encodeURIComponent(orderNumber), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({ order_number: orderNumber })
+        })
+            .then(parseRefreshOrderJsonResponse)
+            .then(function(data) {
+                document.getElementById('refreshOrderLoading').classList.add('hidden');
+                if (!data || !data.success) {
+                    document.getElementById('refreshOrderError').textContent = (data && data.message) ? data.message : 'Could not load preview.';
+                    document.getElementById('refreshOrderError').classList.remove('hidden');
+                    return;
+                }
+                const tbody = document.getElementById('refreshOrderLinesBody');
+                tbody.innerHTML = '';
+                (data.lines || []).forEach(function(line) {
+                    const tr = document.createElement('tr');
+                    if (line.status_differs) {
+                        tr.className = 'bg-amber-50';
+                    }
+                    const addons = line.addons ? line.addons : '—';
+                    tr.innerHTML =
+                        '<td class="px-3 py-2"><div class="font-medium">' + escapeHtmlRefresh(line.item_code) + '</div>' +
+                        '<div class="text-xs text-gray-500">' + escapeHtmlRefresh(line.title || '') + '</div></td>' +
+                        '<td class="px-3 py-2">' + escapeHtmlRefresh(line.quantity) + '</td>' +
+                        '<td class="px-3 py-2">' + (line.in_db ? 'Yes' : '<span class="text-green-700 font-medium">New</span>') + '</td>' +
+                        '<td class="px-3 py-2">' + escapeHtmlRefresh(line.db_status_label || '—') + '</td>' +
+                        '<td class="px-3 py-2">' + escapeHtmlRefresh(line.api_status_label || line.api_status || '—') + '</td>' +
+                        '<td class="px-3 py-2 text-xs font-mono">' + escapeHtmlRefresh(addons) + '</td>';
+                    tbody.appendChild(tr);
+                });
+                document.getElementById('refreshOrderPreviewWrap').classList.remove('hidden');
+                document.getElementById('refreshOrderApplyBtn').disabled = false;
+                if (data.has_status_diff) {
+                    document.getElementById('refreshOrderStatusChoice').classList.remove('hidden');
+                    document.getElementById('refreshOrderNoStatusDiff').classList.add('hidden');
+                } else {
+                    document.getElementById('refreshOrderStatusChoice').classList.add('hidden');
+                    document.getElementById('refreshOrderNoStatusDiff').classList.remove('hidden');
+                }
+            })
+            .catch(function(err) {
+                document.getElementById('refreshOrderLoading').classList.add('hidden');
+                document.getElementById('refreshOrderError').textContent = err && err.message ? err.message : 'Preview request failed.';
+                document.getElementById('refreshOrderError').classList.remove('hidden');
+            });
+    }
+
+    function applyRefreshOrderFromModal() {
+        if (!refreshOrderModalNumber) {
+            return;
+        }
+        const updateStatus = document.getElementById('refreshOrderUpdateStatus').checked;
+        const btn = document.getElementById('refreshOrderApplyBtn');
+        btn.disabled = true;
+        btn.textContent = 'Refreshing…';
+
+        fetch('index.php?page=orders&action=refresh_order_apply&order_number=' + encodeURIComponent(refreshOrderModalNumber), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({
+                order_number: refreshOrderModalNumber,
+                update_status: updateStatus ? '1' : '0'
+            })
+        })
+            .then(parseRefreshOrderJsonResponse)
+            .then(function(data) {
+                btn.disabled = false;
+                btn.textContent = 'Refresh order';
+                if (!data || !data.success) {
+                    alert((data && data.message) ? data.message : 'Refresh failed.');
+                    return;
+                }
+                alert(data.message || 'Order refreshed.');
+                closeRefreshOrderModal();
+                window.location.reload();
+            })
+            .catch(function(err) {
+                btn.disabled = false;
+                btn.textContent = 'Refresh order';
+                alert(err && err.message ? err.message : 'Refresh request failed.');
+            });
+    }
+
+    function openStatusPopup(orderId) {
+        document.getElementById('status_order_id').value = orderId;
+        document.getElementById('statusPopup').classList.remove('hidden');
+        document.getElementById('orderStatusError').textContent = '';
+        document.getElementById('orderStatusError').classList.add('hidden');
+        document.getElementById('orderRemarks').value = '';
+        document.getElementById('orderPriority').value = '';
+
+        const orderEl = document.querySelector('#order-id-' + orderId);
+        if (!orderEl) {
+            alert('Order data not found.');
+            return;
+        }
+        const orderData = JSON.parse(orderEl.getAttribute('data-order'));
+        document.getElementById('orderRemarks').value = orderData.remarks || '';
+        document.getElementById('orderStatus').value = orderData.status || '';
+        document.getElementById('status_order_number').textContent = orderData.order_number || 'N/A';
+        document.getElementById('status_item_code').textContent = orderData.item_code || 'N/A';
+        <?php if ($showOrderVendorName): ?>
+        document.getElementById('status_vendor_name').textContent = orderData.vendor_name || orderData.vendor || 'N/A';
+        <?php endif; ?>
+        document.getElementById('status_category').textContent = orderData.groupname || 'N/A';
+        document.getElementById('status_sub_category').textContent = orderData.subcategories || 'N/A';
+        document.getElementById('status_item').textContent = orderData.title || 'N/A';
+        document.getElementById('orderPriority').value = orderData.priority || '';
+        document.getElementById('previousStatus').value = orderData.status || '';
+        document.getElementById('previousAgent').value = orderData.agent_id || '';
+        document.getElementById('agentId').value = orderData.agent_id || '';
+        document.getElementById('previousPriority').value = orderData.priority || '';
+        document.getElementById('previousRemarks').value = orderData.remarks || '';
+        document.getElementById('previousESD').value = orderData.esd || '';
+
+        const statusESD = document.getElementById('statusESD');
+        const raw = orderData.esd || '';
+        if (statusESD) {
+            const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            statusESD.value = m ? raw : (raw || '');
+        }
+
+        const imgElem = document.querySelector('#statusPopup img');
+        if (imgElem) {
+            imgElem.src = orderData.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=Item';
+        }
+    }
+
+    function closeStatusPopup(e) {
+        if (e && e.target && e.currentTarget !== e.target) {
+            return;
+        }
+        document.getElementById('statusPopup').classList.add('hidden');
+    }
+
+    document.getElementById('agentId')?.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        document.getElementById('agentName').value = selectedOption.text;
+    });
+
+    document.getElementById('statusForm')?.addEventListener('submit', function(e) {
+        const statusSelect = document.getElementById('orderStatus');
+        const errorDiv = document.getElementById('orderStatusError');
+        if (statusSelect.value === '') {
+            e.preventDefault();
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+        errorDiv.classList.add('hidden');
+        e.preventDefault();
+        const formData = new FormData(document.getElementById('statusForm'));
+        fetch('index.php?page=orders&action=update_status', {
+            method: 'POST',
+            body: formData
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Order status updated successfully.');
+                    closeStatusPopup();
+                    window.location.reload();
+                } else {
+                    errorDiv.textContent = data.message || 'Error updating order status.';
+                    errorDiv.classList.remove('hidden');
+                }
+            })
+            .catch(function() {
+                alert('An error occurred while updating order status.');
+            });
+    });
+
     document.addEventListener('DOMContentLoaded', function() {
         const accordionTriggers = document.querySelectorAll('.accordion-trigger');
         accordionTriggers.forEach(trigger => {

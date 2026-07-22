@@ -818,18 +818,9 @@ class OrdersController
                 // commented out on 09-11-2025 as per request
                 // call exotic india API to update order status
                 $orderval = $ordersModel->getOrderById($order_id);
-                $apidata = [
-                    'orderid' => $orderval['order_number'],
-                    'level' => 'item',
-                    'order_status' => $commanModel->getExoticIndiaOrderStatusCode($new_status)['admin_id'],
-                    'size' => trim($orderval['size']),
-                    'color' => trim($orderval['color']),
-                    'itemcode' => trim($orderval['item_code'])
-                ];
-                //run update if admin id not 0
-                if ($apidata['order_status'] > 0) {
-                    $resp = $commanModel->updateExoticIndiaOrderStatus($apidata);
-                }
+                require_once __DIR__ . '/../integrations/exotic/ExoticIndiaGateway.php';
+                global $conn;
+                ExoticIndiaGateway::create($conn)->updateOrderLineFromSlug($new_status, is_array($orderval) ? $orderval : []);
                 //log status change
                 $logData = [
                     'order_id' => $order_id,
@@ -951,7 +942,16 @@ class OrdersController
         if ($type === 'inner') {
             renderPartial('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks]);
         } else {
-            renderTemplate('views/orders/other_partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks, 'fullOrderJourny' => $fullOrderJourny, 'customerdetails' => $customerdetails], 'Order Details');
+            renderTemplate('views/orders/other_partial_order_details.php', [
+                'order' => $order,
+                'statusList' => $statusList,
+                'orderremarks' => $orderremarks,
+                'fullOrderJourny' => $fullOrderJourny,
+                'customerdetails' => $customerdetails,
+                'order_status_list' => $commanModel->get_order_status(),
+                'staff_list' => $commanModel->get_staff_list(),
+                'showOrderVendorName' => function_exists('canViewOrderVendorName') && canViewOrderVendorName(),
+            ], 'Order Details');
         }
         exit;
     }
@@ -1560,18 +1560,9 @@ class OrdersController
                     $commanModel->add_order_status_log($logData);
                     //call exotic india API to update order status
                     $orderval = $ordersModel->getOrderById($oid);
-                    $apidata = [
-                        'orderid' => $orderval['order_number'],
-                        'level' => 'item',
-                        'order_status' => $commanModel->getExoticIndiaOrderStatusCode($new_status)['admin_id'],
-                        'size' => trim($orderval['size']),
-                        'color' => trim($orderval['color']),
-                        'itemcode' => trim($orderval['item_code'])
-                    ];
-                    //run update if admin id not 0
-                    if ($apidata['order_status'] > 0) {
-                        $resp = $commanModel->updateExoticIndiaOrderStatus($apidata);
-                    }
+                    require_once __DIR__ . '/../integrations/exotic/ExoticIndiaGateway.php';
+                    global $conn;
+                    ExoticIndiaGateway::create($conn)->updateOrderLineFromSlug($new_status, is_array($orderval) ? $orderval : []);
                     //notify agent if assigned
                     $orderval = $ordersModel->getOrderById($oid);
                     if (!empty($orderval['agent_id']) && $orderval['agent_id'] > 0) {
