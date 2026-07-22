@@ -883,8 +883,19 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     </div>
     <div class="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3 rounded-b-2xl">
       <button type="button" id="deliveryStatusBackBtn" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Back</button>
-      <button type="button" id="deliveryStatusSubmitBtn" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Submit order</button>
+      <button type="button" id="deliveryStatusSubmitBtn" class="inline-flex items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-70">
+        <span id="deliveryStatusSubmitBtnLabel">Submit order</span>
+      </button>
     </div>
+  </div>
+</div>
+
+<!-- POS checkout loading (covers screen after delivery/GST steps) -->
+<div id="posCheckoutLoadingOverlay" class="fixed inset-0 z-[10003] hidden items-center justify-center bg-black/40 backdrop-blur-sm" role="status" aria-live="polite" aria-busy="true">
+  <div class="mx-4 flex max-w-sm flex-col items-center rounded-2xl bg-white px-8 py-7 text-center shadow-2xl">
+    <i class="fas fa-spinner fa-spin text-3xl text-orange-600" aria-hidden="true"></i>
+    <p id="posCheckoutLoadingTitle" class="mt-4 text-base font-semibold text-slate-800">Creating order…</p>
+    <p id="posCheckoutLoadingHint" class="mt-1 text-sm text-slate-500">Your request was accepted. Order creation is in progress.</p>
   </div>
 </div>
 
@@ -1636,6 +1647,54 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (modal) {
       modal.classList.add("hidden");
     }
+    setPosCheckoutLoading(false);
+  }
+
+  var posCheckoutLoadingActive = false;
+
+  function setPosCheckoutLoading(isLoading, options) {
+    options = options || {};
+    posCheckoutLoadingActive = !!isLoading;
+
+    var globalOverlay = document.getElementById("posCheckoutLoadingOverlay");
+    var submitBtn = document.getElementById("deliveryStatusSubmitBtn");
+    var backBtn = document.getElementById("deliveryStatusBackBtn");
+    var submitLabel = document.getElementById("deliveryStatusSubmitBtnLabel");
+    var titleEl = document.getElementById("posCheckoutLoadingTitle");
+    var hintEl = document.getElementById("posCheckoutLoadingHint");
+
+    if (titleEl && options.title) {
+      titleEl.textContent = options.title;
+    } else if (titleEl && !isLoading) {
+      titleEl.textContent = "Creating order…";
+    }
+    if (hintEl && options.hint) {
+      hintEl.textContent = options.hint;
+    } else if (hintEl && !isLoading) {
+      hintEl.textContent = "Your request was accepted. Order creation is in progress.";
+    }
+
+    if (globalOverlay) {
+      globalOverlay.classList.toggle("hidden", !isLoading);
+      globalOverlay.classList.toggle("flex", !!isLoading);
+      globalOverlay.setAttribute("aria-busy", isLoading ? "true" : "false");
+    }
+    if (submitBtn) {
+      submitBtn.disabled = !!isLoading;
+    }
+    if (backBtn) {
+      backBtn.disabled = !!isLoading;
+    }
+    if (submitLabel) {
+      submitLabel.textContent = isLoading ? "Creating order…" : "Submit order";
+    }
+
+    ["overseasGstBackBtn", "overseasGstNoBtn", "overseasGstYesBtn"].forEach(function(id) {
+      var btn = document.getElementById(id);
+      if (btn) {
+        btn.disabled = !!isLoading;
+      }
+    });
   }
 
   function openAddressConfirmModal() {
@@ -2699,6 +2758,9 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   });
 
   function createOrderNow(addressPayload) {
+    if (posCheckoutLoadingActive) {
+      return;
+    }
     var customerId = getSelectedCustomerId();
     var live = typeof window.getPosCartTotalsForCheckout === "function" ? window.getPosCartTotalsForCheckout() : null;
     var disc =
@@ -2788,6 +2850,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (Array.isArray(listPricePayload) && listPricePayload.length > 0) {
       body.list_line_prices = listPricePayload;
     }
+    setPosCheckoutLoading(true);
     fetch("index.php?page=pos_register&action=checkout-create", {
       method: "POST",
       credentials: "same-origin",
@@ -2835,6 +2898,9 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       .catch(function (err) {
         console.error(err);
         showToast(err && err.message ? err.message : "Checkout request failed", "red");
+      })
+      .finally(function () {
+        setPosCheckoutLoading(false);
       });
   }
 
