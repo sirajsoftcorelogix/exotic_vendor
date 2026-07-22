@@ -704,6 +704,7 @@ class POSRegisterController
             $_SESSION['discount_coupon'],
             $_SESSION['gift_voucher'],
             $_SESSION['custom_discount'],
+            $_SESSION['pos_exotic_cart_custom_reduce'],
             $_SESSION['pos_coupon_api_debug'],
             $_SESSION['pos_order_create_api_debug']
         );
@@ -3589,6 +3590,13 @@ class POSRegisterController
      *
      * @return array{query: array<string, string>, extraHeaders: list<string>}
      */
+    /** Reset custom discount on Exotic cart and in PHP session (after checkout or when cart has no discount). */
+    private function clearPosExoticCartCustomDiscount(): void
+    {
+        unset($_SESSION['pos_exotic_cart_custom_reduce']);
+        $this->exotic_api_call('/cart/addcustomdiscount', 'GET', ['custom_reduce' => '0']);
+    }
+
     private function exoticCartDiscountContext(): array
     {
         $discountStr = trim($this->getSessionDiscountCouponDetailsString());
@@ -4468,18 +4476,13 @@ class POSRegisterController
         }
 
         $cashDiscount = round((float)($payload['receipt_cash_discount'] ?? 0), 2);
-        $sessionCustom = round((float)($_SESSION['pos_exotic_cart_custom_reduce'] ?? 0), 2);
-        if ($cashDiscount <= 0 && $sessionCustom > 0) {
-            $cashDiscount = $sessionCustom;
-        }
         if ($cashDiscount > 0.001) {
             $this->exotic_api_call('/cart/addcustomdiscount', 'GET', [
                 'custom_reduce' => number_format($cashDiscount, 2, '.', ''),
             ]);
             $_SESSION['pos_exotic_cart_custom_reduce'] = number_format($cashDiscount, 2, '.', '');
-        } elseif ($sessionCustom > 0.001) {
-            $this->exotic_api_call('/cart/addcustomdiscount', 'GET', ['custom_reduce' => '0']);
-            unset($_SESSION['pos_exotic_cart_custom_reduce']);
+        } else {
+            $this->clearPosExoticCartCustomDiscount();
         }
 
         $ctx = $this->exoticCartDiscountContext();
@@ -4787,6 +4790,8 @@ class POSRegisterController
         if (!empty($fulfillmentStatusMeta['message']) && (empty($fulfillmentStatusMeta['local_updated']) || !empty($fulfillmentStatusMeta['api_failed']))) {
             $successMessage .= ' ' . $fulfillmentStatusMeta['message'];
         }
+
+        $this->clearPosExoticCartCustomDiscount();
 
         echo json_encode([
             'success' => true,

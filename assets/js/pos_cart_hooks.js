@@ -2831,6 +2831,29 @@
     return result;
   }
 
+  /**
+   * Exotic cart can keep custom_reduce after checkout; clear it when the cart is empty
+   * and this browser session has not applied a custom discount.
+   * @param {Record<string, unknown>} cartData
+   * @returns {Promise<boolean>}
+   */
+  function clearStaleCustomDiscountOnEmptyCart(cartData) {
+    if (posCustomDiscountPersist) {
+      return Promise.resolve(false);
+    }
+    if (getCartItems(cartData || {}).length > 0) {
+      return Promise.resolve(false);
+    }
+    var customDeduction = totalsFromRetrieve(cartData || {}).customDeduction;
+    if (customDeduction == null || isNaN(Number(customDeduction)) || Number(customDeduction) <= 0.001) {
+      return Promise.resolve(false);
+    }
+    return cartRequest('customdiscount', { query: { custom_reduce: '0' } }).then(function (r2) {
+      cartHandleApiMessages(r2);
+      return !!(r2 && r2.success);
+    });
+  }
+
   function refreshCartInternal(opts) {
     opts = opts || {};
     var skipPctSync = !!opts.skipPctSync;
@@ -2846,14 +2869,19 @@
       } else {
         renderCartUI({});
       }
-      if (skipPctSync) {
-        return r;
-      }
-      return maybeSyncPercentCustomDiscount(data).then(function (didSync) {
-        if (!didSync) {
+      return clearStaleCustomDiscountOnEmptyCart(data).then(function (didClearStale) {
+        if (didClearStale) {
+          return refreshCartInternal({ skipPctSync: true });
+        }
+        if (skipPctSync) {
           return r;
         }
-        return refreshCartInternal({ skipPctSync: true });
+        return maybeSyncPercentCustomDiscount(data).then(function (didSync) {
+          if (!didSync) {
+            return r;
+          }
+          return refreshCartInternal({ skipPctSync: true });
+        });
       });
     });
   }
