@@ -110,8 +110,6 @@ class CustomerController {
     public function view() {
         is_login();
         global $customerModel;
-        require_once 'models/comman/tables.php';
-        $commanModel = new Tables($GLOBALS['conn']);
         $customerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
         if ($customerId <= 0) {
             header('Location: ' . base_url('?page=customer&action=list'));
@@ -149,7 +147,7 @@ class CustomerController {
         if (!in_array($tab, $allowedTabs, true)) {
             $tab = 'orders';
         }
-        $viewMode = (string)($_GET['view_mode'] ?? 'cards');
+        $viewMode = (string)($_GET['view_mode'] ?? 'table');
         if (!in_array($viewMode, ['cards', 'table'], true)) {
             $viewMode = 'cards';
         }
@@ -171,29 +169,37 @@ class CustomerController {
             $filters['date_to'] = $dateTo;
         }
 
-        $totalRecords = $customerModel->countOrderItemsByCustomerId($customerId, $filters);
-        $totalPages = $limit > 0 ? (int)ceil($totalRecords / $limit) : 1;
-        if ($pageNo > $totalPages && $totalPages > 0) {
-            $pageNo = $totalPages;
-            $offset = ($pageNo - 1) * $limit;
-        }
+        $headerSummary = $customerModel->getCustomerHeaderSummary($customerId);
+        $statusCounts = [
+            'pending' => (int)($headerSummary['pending'] ?? 0),
+            'progress' => (int)($headerSummary['progress'] ?? 0),
+            'completed' => (int)($headerSummary['completed'] ?? 0),
+            'cancelled' => (int)($headerSummary['cancelled'] ?? 0),
+        ];
 
         $orders = [];
+        $totalRecords = 0;
+        $totalPages = 1;
         if ($tab === 'orders') {
-            $orders = $customerModel->getOrderItemsByCustomerId($customerId, $limit, $offset, $filters);
-            foreach ($orders as $key => $order) {
-                $orders[$key]['status_log'] = $commanModel->get_order_status_log($order['id']);
+            $totalRecords = $customerModel->countOrderItemsByCustomerId($customerId, $filters);
+            $totalPages = $limit > 0 ? (int)ceil($totalRecords / $limit) : 1;
+            if ($pageNo > $totalPages && $totalPages > 0) {
+                $pageNo = $totalPages;
+                $offset = ($pageNo - 1) * $limit;
             }
+            $orders = $customerModel->getOrderItemsByCustomerId($customerId, $limit, $offset, $filters);
         }
 
-        $addresses = $customerModel->getCustomerBillingShippingForPos($customerId);
-        $orderDates = $customerModel->getCustomerOrderDateRange($customerId);
-        $insights = $customerModel->getCustomerInsights($customerId);
-        $spents = $customerModel->getCustomerTotalSpent($customerId);
-        $statusCounts = $customerModel->getCustomerOrderStatusCounts($customerId);
-        $invoices = $customerModel->getInvoicesByCustomerId($customerId);
-        $dispatches = $customerModel->getDispatchesByCustomerId($customerId);
-        $activityLog = $customerModel->getCustomerActivityLog($customerId);
+        $invoices = [];
+        $dispatches = [];
+        $activityLog = [];
+        if ($tab === 'invoices') {
+            $invoices = $customerModel->getInvoicesByCustomerId($customerId);
+        } elseif ($tab === 'dispatches') {
+            $dispatches = $customerModel->getDispatchesByCustomerId($customerId);
+        } elseif ($tab === 'activity') {
+            $activityLog = $customerModel->getCustomerActivityLog($customerId);
+        }
 
         $data = [
             'customer' => $customer,
@@ -211,13 +217,14 @@ class CustomerController {
             'date_to' => $dateTo,
             'tab' => $tab,
             'view_mode' => $viewMode,
-            'billing' => $addresses['billing'] ?? [],
-            'shipping' => $addresses['shipping'] ?? [],
-            'orderDates' => $orderDates,
-            'insights' => $insights,
-            'customerOrderCount' => $customerModel->getCustomerOrderCount($customerId),
-            'customerTotalSpent' => $spents['total_spent'] ?? 0,
-            'customerAverageOrderValue' => $spents['average_order_value'] ?? 0,
+            'orderDates' => [
+                'first_order_date' => $headerSummary['first_order_date'] ?? null,
+                'last_order_date' => $headerSummary['last_order_date'] ?? null,
+            ],
+            'open_order_value' => (float)($headerSummary['open_order_value'] ?? 0),
+            'customerOrderCount' => (int)($headerSummary['line_count'] ?? 0),
+            'customerTotalSpent' => $headerSummary['total_spent'] ?? 0,
+            'customerAverageOrderValue' => $headerSummary['average_order_value'] ?? 0,
             'statusCounts' => $statusCounts,
             'invoices' => $invoices,
             'dispatches' => $dispatches,
