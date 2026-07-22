@@ -83,11 +83,55 @@ function appendOrderPaymentTypeFilterSql(string &$sql, array &$params, array $fi
     $params[] = $filters['payment_type'];
 }
 
+/**
+ * @param mixed $value
+ * @return array<int, string>
+ */
+function parseOrderNumberFilter($value): array
+{
+    if ($value === null || $value === '') {
+        return [];
+    }
+
+    $parts = is_array($value)
+        ? $value
+        : preg_split('/[\s,;]+/', (string) $value, -1, PREG_SPLIT_NO_EMPTY);
+
+    $normalized = [];
+    foreach ($parts as $part) {
+        $part = trim((string) $part);
+        if ($part !== '') {
+            $normalized[] = $part;
+        }
+    }
+
+    return array_values(array_unique($normalized));
+}
+
+function appendOrderNumberFilterSql(
+    string &$sql,
+    array &$params,
+    $orderNumber,
+    string $column = 'vp_orders.order_number'
+): void {
+    $orderNumbers = parseOrderNumberFilter($orderNumber);
+    if ($orderNumbers === []) {
+        return;
+    }
+
+    $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
+    $sql .= " AND {$column} IN ($placeholders)";
+    foreach ($orderNumbers as $orderNum) {
+        $params[] = $orderNum;
+    }
+}
+
 function buildOrderListFiltersFromRequest(array $request): array
 {
     $filters = [];
-    if (!empty($request['order_number'])) {
-        $filters['order_number'] = $request['order_number'];
+    $orderNumbers = parseOrderNumberFilter($request['order_number'] ?? null);
+    if ($orderNumbers !== []) {
+        $filters['order_number'] = $orderNumbers;
     }
     if (!empty($request['item_code'])) {
         $filters['item_code'] = $request['item_code'];

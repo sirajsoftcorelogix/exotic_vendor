@@ -237,21 +237,7 @@ class Order
 		WHERE 1=1";
 
         $params = [];
-        if (!empty($filters['order_number'])) {
-            // Support comma-separated order numbers
-            $orderNumbers = is_array($filters['order_number'])
-                ? $filters['order_number']
-                : array_map('trim', explode(',', $filters['order_number']));
-            $orderNumbers = array_filter($orderNumbers); // Remove empty values
-
-            if (!empty($orderNumbers)) {
-                $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
-                $sql .= " AND vp_orders.order_number IN ($placeholders)";
-                foreach ($orderNumbers as $orderNum) {
-                    $params[] = $orderNum;
-                }
-            }
-        }
+        appendOrderNumberFilterSql($sql, $params, $filters['order_number'] ?? null);
         if (!empty($filters['item_code'])) {
             $sql .= " AND vp_orders.item_code LIKE ?";
             $params[] = '%' . $filters['item_code'] . '%';
@@ -414,21 +400,7 @@ class Order
         }
         $sql .= ' WHERE 1=1';
         $params = [];
-        if (!empty($filters['order_number'])) {
-            // Support comma-separated order numbers
-            $orderNumbers = is_array($filters['order_number'])
-                ? $filters['order_number']
-                : array_map('trim', explode(',', $filters['order_number']));
-            $orderNumbers = array_filter($orderNumbers); // Remove empty values
-
-            if (!empty($orderNumbers)) {
-                $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
-                $sql .= " AND vp_orders.order_number IN ($placeholders)";
-                foreach ($orderNumbers as $orderNum) {
-                    $params[] = $orderNum;
-                }
-            }
-        }
+        appendOrderNumberFilterSql($sql, $params, $filters['order_number'] ?? null);
         if (!empty($filters['item_code'])) {
             $sql .= " AND item_code LIKE ?";
             $params[] = '%' . $filters['item_code'] . '%';

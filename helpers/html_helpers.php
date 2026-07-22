@@ -872,7 +872,7 @@ function sanitizeGet(array $input): array
 		// Trim leading/trailing whitespace
 		$value = trim($value);
 
-		$preserveTextSearch = in_array($key, ['author', 'publisher', 'vendor', 'vendor_name', 'item_name', 'title'], true);
+		$preserveTextSearch = in_array($key, ['author', 'publisher', 'vendor', 'vendor_name', 'item_name', 'title', 'order_number'], true);
 		if (!$preserveTextSearch) {
 			// Remove all spaces inside the string
 			$value = str_replace(' ', '', $value);
