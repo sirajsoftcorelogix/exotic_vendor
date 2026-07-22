@@ -222,6 +222,7 @@ class CustomerController {
                 'last_order_date' => $headerSummary['last_order_date'] ?? null,
             ],
             'open_order_value' => (float)($headerSummary['open_order_value'] ?? 0),
+            'primary_currency' => strtoupper(trim((string)($headerSummary['primary_currency'] ?? 'INR'))) ?: 'INR',
             'customerOrderCount' => (int)($headerSummary['line_count'] ?? 0),
             'customerTotalSpent' => $headerSummary['total_spent'] ?? 0,
             'customerAverageOrderValue' => $headerSummary['average_order_value'] ?? 0,
