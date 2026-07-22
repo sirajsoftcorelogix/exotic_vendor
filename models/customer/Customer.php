@@ -712,6 +712,7 @@ class Customer
             'progress' => 0,
             'completed' => 0,
             'cancelled' => 0,
+            'primary_currency' => 'INR',
         ];
         if ($customerId <= 0) {
             return $defaults;
@@ -727,7 +728,8 @@ class Customer
                     COUNT(CASE WHEN status = 'pending' THEN 1 END) AS pending,
                     COUNT(CASE WHEN status IN ('ready_for_packing','po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair','ready_for_dispatch') THEN 1 END) AS progress,
                     COUNT(CASE WHEN status = 'shipped' THEN 1 END) AS completed,
-                    COUNT(CASE WHEN status = 'cancelled' THEN 1 END) AS cancelled
+                    COUNT(CASE WHEN status = 'cancelled' THEN 1 END) AS cancelled,
+                    SUBSTRING_INDEX(GROUP_CONCAT(currency ORDER BY order_date DESC SEPARATOR ','), ',', 1) AS primary_currency
                 FROM vp_orders
                 WHERE customer_id = ?";
         $stmt = $this->conn->prepare($sql);
