@@ -25,7 +25,17 @@ foreach ($order as $items => $item):
     $total_price += $item['finalprice'] * $item['quantity'];
 endforeach;
 $currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
+$orderremarks = is_array($orderremarks ?? null) ? $orderremarks : [];
+$customerdetails = is_array($customerdetails ?? null) ? $customerdetails : [];
+$countries = country_array();
 $displayOrderNumber = (string)($orderremarks['order_number'] ?? ($order[0]['order_number'] ?? ''));
+$resolveCountryLabel = static function (?string $code) use ($countries): string {
+    $code = trim((string)$code);
+    if ($code === '') {
+        return '';
+    }
+    return (string)($countries[$code] ?? $code);
+};
 $salesReturnUrl = base_url('?page=sales_returns&action=create&order_number=' . rawurlencode($displayOrderNumber));
 $invoiceIdForReturn = (int)($order[0]['invoice_id'] ?? 0);
 if ($invoiceIdForReturn > 0) {
@@ -403,6 +413,78 @@ if ($invoiceIdForReturn > 0) {
                         </div>
                     </div>
                 <?php } ?>
+
+                <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm relative mt-8" id="order-address-section">
+                    <button type="button"
+                        onclick="openNameEmailPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '', ENT_QUOTES, 'UTF-8') ?>')"
+                        class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors"
+                        title="Edit addresses">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                    </button>
+                    <h3 class="mb-4 text-sm font-bold text-black-700">Shipping &amp; Billing Address</h3>
+                    <span id="display-customer-name" class="hidden"><?php echo htmlspecialchars($customerdetails['customer_name'] ?? ''); ?></span>
+                    <span id="display-customer-phone" class="hidden"><?php echo htmlspecialchars($customerdetails['customer_phone'] ?? ''); ?></span>
+                    <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                        <div>
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Shipping address</h4>
+                            <address class="mt-2 text-sm not-italic text-black-800 leading-relaxed">
+                                <?php if (!empty($customerdetails['customer_name'])): ?>
+                                    <span class="block font-medium"><?php echo htmlspecialchars($customerdetails['customer_name']); ?></span>
+                                <?php endif; ?>
+                                <span id="shipping_address1"><?php echo htmlspecialchars($orderremarks['shipping_address_line1'] ?? ''); ?></span>
+                                <?php if (!empty($orderremarks['shipping_address_line2'])): ?>
+                                    <br><span id="shipping_address2"><?php echo htmlspecialchars($orderremarks['shipping_address_line2']); ?></span>
+                                <?php else: ?>
+                                    <span id="shipping_address2" class="hidden"></span>
+                                <?php endif; ?>
+                                <br>
+                                <span id="shipping_city"><?php echo htmlspecialchars($orderremarks['shipping_city'] ?? ''); ?></span><?php if (!empty($orderremarks['shipping_state'])): ?>,
+                                    <span id="shipping_state"><?php echo htmlspecialchars($orderremarks['shipping_state']); ?></span><?php else: ?><span id="shipping_state" class="hidden"></span><?php endif; ?>
+                                <?php if (!empty($orderremarks['shipping_zipcode'])): ?>
+                                    - <span id="shipping_zipcode"><?php echo htmlspecialchars($orderremarks['shipping_zipcode']); ?></span>
+                                <?php else: ?>
+                                    <span id="shipping_zipcode" class="hidden"></span>
+                                <?php endif; ?>
+                                <?php if (!empty($orderremarks['shipping_country'])): ?>
+                                    <br><span id="shipping_country" data-code="<?php echo htmlspecialchars($orderremarks['shipping_country']); ?>"><?php echo htmlspecialchars($resolveCountryLabel($orderremarks['shipping_country'])); ?></span>
+                                <?php else: ?>
+                                    <span id="shipping_country" class="hidden"></span>
+                                <?php endif; ?>
+                                <?php if (!empty($orderremarks['shipping_mobile'])): ?>
+                                    <br><span id="shipping_mobile" class="mt-1 block"><?php echo htmlspecialchars($orderremarks['shipping_mobile']); ?></span>
+                                <?php else: ?>
+                                    <span id="shipping_mobile" class="hidden"></span>
+                                <?php endif; ?>
+                            </address>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Billing address</h4>
+                            <address class="mt-2 text-sm not-italic text-black-800 leading-relaxed">
+                                <span id="billing_address1"><?php echo htmlspecialchars($orderremarks['address_line1'] ?? ''); ?></span>
+                                <?php if (!empty($orderremarks['address_line2'])): ?>
+                                    <br><span id="billing_address2"><?php echo htmlspecialchars($orderremarks['address_line2']); ?></span>
+                                <?php else: ?>
+                                    <span id="billing_address2" class="hidden"></span>
+                                <?php endif; ?>
+                                <br>
+                                <span id="billing_city"><?php echo htmlspecialchars($orderremarks['city'] ?? ''); ?></span><?php if (!empty($orderremarks['state'])): ?>,
+                                    <span id="billing_state"><?php echo htmlspecialchars($orderremarks['state']); ?></span><?php else: ?><span id="billing_state" class="hidden"></span><?php endif; ?>
+                                <?php if (!empty($orderremarks['zipcode'])): ?>
+                                    - <span id="billing_zipcode"><?php echo htmlspecialchars($orderremarks['zipcode']); ?></span>
+                                <?php else: ?>
+                                    <span id="billing_zipcode" class="hidden"></span>
+                                <?php endif; ?>
+                                <?php if (!empty($orderremarks['country'])): ?>
+                                    <br><span id="billing_country" data-code="<?php echo htmlspecialchars($orderremarks['country']); ?>"><?php echo htmlspecialchars($resolveCountryLabel($orderremarks['country'])); ?></span>
+                                <?php else: ?>
+                                    <span id="billing_country" class="hidden"></span>
+                                <?php endif; ?>
+                            </address>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="space-y-6">
@@ -434,57 +516,6 @@ if ($invoiceIdForReturn > 0) {
                     </div>
                 </div>
             <?php endif; ?>
-            <!-- address Section -->
-            <?php /* <div class="rounded-lg border bg-white p-5 shadow-sm relative">
-                <button type="button" onclick="openNameEmailPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit address">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
-                </button>
-                <h3 class="mb-3 text-sm font-bold">Customer</h3>
-                <p class="text-sm font-medium text-blue-600" id="display-customer-name"><?php echo $customerdetails['customer_name'] ?? 'N/A'; ?></p>
-                <p class="text-sm text-black-500">12 orders</p>
-
-                <div class="mt-6">
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Contact information</h4>
-                    <p class="mt-1 text-sm text-blue-600"><?php echo $customerdetails['customer_email'] ?? 'N/A'; ?></p>
-                    <p class="text-sm" id="display-customer-phone"><?php echo $customerdetails['customer_phone'] ?? 'N/A'; ?></p>
-                </div>
-
-                <div class="mt-6">
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Shipping address</h4>
-                    <address class="text-sm not-italic text-black-800 leading-relaxed">
-                        <span class="block font-medium"><?php echo $customerdetails['customer_name'] ?? 'N/A'; ?></span>
-                        <span id="address1"><?php echo $orderremarks['address_line1'] ?? ''; ?></span>
-                        <span id="address2"><?php echo $orderremarks['address_line2'] ?? ''; ?></span>
-                        <br>
-                        <span id="city"><?php echo $orderremarks['city'] ?? ''; ?></span> -
-                        <span id="zipcode"><?php echo $orderremarks['zipcode'] ?? ''; ?></span>,
-                        <span id="country"><?php echo $orderremarks['country'] ?? ''; ?></span>
-                        <br>
-                        <span id="customer_phone" class="mt-1 block"><?php echo $customerdetails['customer_phone'] ?? ''; ?></span>
-                    </address>
-                </div>
-
-                <div class="mt-6">
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Billing Address</h4>
-                    <address class="text-sm not-italic text-black-800 leading-relaxed">
-                        <span id="billing_address1"><?php echo $orderremarks['shipping_address_line1'] ?? ''; ?></span>
-                        <span id="billing_address2"><?php echo $orderremarks['shipping_address_line2'] ?? ''; ?></span>
-                        <br>
-                        <span id="billing_city_city"><?php echo $orderremarks['shipping_city'] ?? ''; ?></span> -
-                        <span id="billing_city_zip"><?php echo $orderremarks['shipping_zipcode'] ?? ''; ?></span>, 
-                        <span id="billing_country"><?php echo $orderremarks['shipping_country'] ?? ''; ?></span><br>
-                        <span id="billing_mobile" class="mt-1 block"><?php echo $orderremarks['shipping_mobile'] ?? ''; ?></span>
-                    </address>
-                </div>
-
-                <div class="mt-6 border-t pt-4">
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Conversion summary</h4>
-                    <p class="mt-1 text-sm">This is their 11th order</p>
-                    <button class="mt-2 text-sm text-blue-600 hover:underline">View map</button>
-                </div>
-            </div> */ ?>
         </div>
     </div>
 </div>
@@ -525,7 +556,7 @@ if ($invoiceIdForReturn > 0) {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
-            <h2 class="text-lg font-bold mb-4 text-gray-800">Edit Customer Name & Email</h2>
+            <h2 class="text-lg font-bold mb-4 text-gray-800">Edit Customer &amp; Addresses</h2>
         </div>
 
         <div class="overflow-y-auto p-6 pt-2 custom-scrollbar">
@@ -547,13 +578,13 @@ if ($invoiceIdForReturn > 0) {
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Shipping Address</label>
                         <div class="space-y-2">
-                            <input type="text" id="edit_address_line1" name="address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                            <input type="text" id="edit_address_line2" name="address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                            <input type="text" id="edit_shipping_address_line1" name="billing_address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                            <input type="text" id="edit_shipping_address_line2" name="billing_address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
                             <div class="grid grid-cols-2 gap-2">
-                                <input type="text" id="edit_city" name="city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                                <input type="text" id="edit_zipcode" name="zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_shipping_city" name="billing_city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_shipping_zipcode" name="billing_zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
                             </div>
-                            <input type="text" id="edit_country" name="country" placeholder="Country" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                            <input type="text" id="edit_shipping_country" name="billing_country" placeholder="Country code (e.g. IN)" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
                         </div>
                     </div>
 
@@ -562,13 +593,13 @@ if ($invoiceIdForReturn > 0) {
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Billing Address</label>
                         <div class="space-y-2">
-                            <input type="text" id="edit_billing_address_line1" name="billing_address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                            <input type="text" id="edit_billing_address_line2" name="billing_address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                            <input type="text" id="edit_billing_address_line1" name="address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                            <input type="text" id="edit_billing_address_line2" name="address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
                             <div class="grid grid-cols-2 gap-2">
-                                <input type="text" id="edit_billing_city" name="billing_city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                                <input type="text" id="edit_billing_zipcode" name="billing_zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_billing_city" name="city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_billing_zipcode" name="zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
                             </div>
-                            <input type="text" id="edit_billing_country" name="billing_country" placeholder="Country" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                            <input type="text" id="edit_billing_country" name="country" placeholder="Country code (e.g. IN)" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
                         </div>
                     </div>
                 </div>
@@ -664,16 +695,16 @@ if ($invoiceIdForReturn > 0) {
         document.getElementById('edit_order_number').value = orderNumber;
         document.getElementById('edit_name').value = document.getElementById('display-customer-name')?.textContent.trim() || '';
         document.getElementById('edit_phone').value = document.getElementById('display-customer-phone')?.textContent.trim() || '';
-        document.getElementById('edit_address_line1').value = document.getElementById('address1')?.textContent.trim() || '';
-        document.getElementById('edit_address_line2').value = document.getElementById('address2')?.textContent.trim() || '';
-        document.getElementById('edit_city').value = document.getElementById('city')?.textContent.trim() || '';
-        document.getElementById('edit_zipcode').value = document.getElementById('zipcode')?.textContent.trim() || '';
-        document.getElementById('edit_country').value = document.getElementById('country')?.textContent.trim() || '';
+        document.getElementById('edit_shipping_address_line1').value = document.getElementById('shipping_address1')?.textContent.trim() || '';
+        document.getElementById('edit_shipping_address_line2').value = document.getElementById('shipping_address2')?.textContent.trim() || '';
+        document.getElementById('edit_shipping_city').value = document.getElementById('shipping_city')?.textContent.trim() || '';
+        document.getElementById('edit_shipping_zipcode').value = document.getElementById('shipping_zipcode')?.textContent.trim() || '';
+        document.getElementById('edit_shipping_country').value = document.getElementById('shipping_country')?.dataset.code || document.getElementById('shipping_country')?.textContent.trim() || '';
         document.getElementById('edit_billing_address_line1').value = document.getElementById('billing_address1')?.textContent.trim() || '';
         document.getElementById('edit_billing_address_line2').value = document.getElementById('billing_address2')?.textContent.trim() || '';
-        document.getElementById('edit_billing_city').value = document.getElementById('billing_city_city')?.textContent.trim() || '';
-        document.getElementById('edit_billing_zipcode').value = document.getElementById('billing_city_zip')?.textContent.trim() || '';
-        document.getElementById('edit_billing_country').value = document.getElementById('billing_country')?.textContent.trim() || '';
+        document.getElementById('edit_billing_city').value = document.getElementById('billing_city')?.textContent.trim() || '';
+        document.getElementById('edit_billing_zipcode').value = document.getElementById('billing_zipcode')?.textContent.trim() || '';
+        document.getElementById('edit_billing_country').value = document.getElementById('billing_country')?.dataset.code || document.getElementById('billing_country')?.textContent.trim() || '';
         document.getElementById('nameEmailPopup').classList.remove('hidden');
     }
 
@@ -687,16 +718,16 @@ if ($invoiceIdForReturn > 0) {
         const orderNumber = document.getElementById('edit_order_number').value;
         const name = document.getElementById('edit_name').value.trim();
         const phone = document.getElementById('edit_phone').value.trim();
-        const address_line1 = document.getElementById('edit_address_line1').value.trim();
-        const address_line2 = document.getElementById('edit_address_line2').value.trim();
-        const city = document.getElementById('edit_city').value.trim();
-        const zipcode = document.getElementById('edit_zipcode').value.trim();
-        const country = document.getElementById('edit_country').value.trim();
-        const billing_address_line1 = document.getElementById('edit_billing_address_line1').value.trim();
-        const billing_address_line2 = document.getElementById('edit_billing_address_line2').value.trim();
-        const billing_city = document.getElementById('edit_billing_city').value.trim();
-        const billing_zipcode = document.getElementById('edit_billing_zipcode').value.trim();
-        const billing_country = document.getElementById('edit_billing_country').value.trim();
+        const address_line1 = document.getElementById('edit_billing_address_line1').value.trim();
+        const address_line2 = document.getElementById('edit_billing_address_line2').value.trim();
+        const city = document.getElementById('edit_billing_city').value.trim();
+        const zipcode = document.getElementById('edit_billing_zipcode').value.trim();
+        const country = document.getElementById('edit_billing_country').value.trim();
+        const billing_address_line1 = document.getElementById('edit_shipping_address_line1').value.trim();
+        const billing_address_line2 = document.getElementById('edit_shipping_address_line2').value.trim();
+        const billing_city = document.getElementById('edit_shipping_city').value.trim();
+        const billing_zipcode = document.getElementById('edit_shipping_zipcode').value.trim();
+        const billing_country = document.getElementById('edit_shipping_country').value.trim();
 
         if (!name || !phone) {
             alert("All fields (Name, Email, Phone) are required.");
@@ -713,19 +744,6 @@ if ($invoiceIdForReturn > 0) {
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
-                    document.getElementById('display-customer-name').textContent = name;
-                    document.getElementById('display-customer-phone').textContent = phone;
-                    document.getElementById('address1').textContent = address_line1;
-                    document.getElementById('address2').textContent = address_line2;
-                    document.getElementById('city').textContent = city;
-                    document.getElementById('zipcode').textContent = zipcode;
-                    document.getElementById('country').textContent = country;
-                    document.getElementById('billing_address1').textContent = billing_address_line1;
-                    document.getElementById('billing_address2').textContent = billing_address_line2;
-                    document.getElementById('billing_city_city').textContent = billing_city;
-                    document.getElementById('billing_city_zip').textContent = billing_zipcode;
-                    document.getElementById('billing_country').textContent = billing_country;
-
                     alert("Customer information updated successfully!");
                     closeNameEmailPopup();
 
