@@ -192,6 +192,56 @@ function pos_invoice_build_amount_summary_rows(
 }
 
 /**
+ * Advance received and COD pending rows for POS invoices.
+ *
+ * @return list<array{label: string, amount: float, note: string, is_grand: bool, is_pending?: bool}>
+ */
+function pos_invoice_build_payment_collection_rows(mysqli $conn, string $orderNumber): array
+{
+    require_once __DIR__ . '/../pos_payment_receipt.php';
+
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return [];
+    }
+
+    $advance = pos_payment_sum_paid($conn, $orderNumber);
+    $codRecorded = pos_payment_sum_cod_pending($conn, $orderNumber);
+    if ($advance <= 0.001 && $codRecorded <= 0.001) {
+        return [];
+    }
+
+    $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
+    $codPending = $codRecorded > 0.001
+        ? max(0.0, round($orderTotal - $advance, 2))
+        : 0.0;
+    if ($advance <= 0.001 && $codPending <= 0.001) {
+        return [];
+    }
+
+    $rows = [];
+    if ($advance > 0.001) {
+        $rows[] = [
+            'label' => 'Advance Received',
+            'amount' => $advance,
+            'note' => '',
+            'is_grand' => false,
+        ];
+    }
+    if ($codPending > 0.001) {
+        $rows[] = [
+            'label' => 'COD Pending',
+            'amount' => $codPending,
+            'note' => 'Collect on delivery',
+            'is_grand' => false,
+            'is_pending' => true,
+        ];
+    }
+
+    return $rows;
+}
+
+/**
  * Resolve POS discount meta + grand/tax totals the same way invoice PDF generation does.
  *
  * @param array<string, mixed> $invoice
@@ -254,7 +304,7 @@ function pos_invoice_resolve_pdf_summary_inputs(array $invoice, float $lineTotal
 /**
  * @param list<array{label: string, amount: float, note: string, is_grand: bool}> $rows
  */
-function pos_invoice_render_amount_summary_html(array $rows, int $colCount = 13): string
+function pos_invoice_render_amount_summary_html(array $rows, int $colCount = 13, ?string $sectionTitle = 'Summary'): string
 {
     if ($rows === []) {
         return '';
@@ -264,32 +314,37 @@ function pos_invoice_render_amount_summary_html(array $rows, int $colCount = 13)
 
     $colCount = max(3, $colCount);
     $labelSpan = $colCount - 2;
-    $html = '
+    $html = '';
+    if ($sectionTitle !== null && trim($sectionTitle) !== '') {
+        $html .= '
                     <tr style="background:#ffffff;">
                         <td colspan="' . $colCount . '" style="text-align:left;padding:14px 8px 6px;border:none;border-top:2px solid #000;">
-                            <span style="font-size:13px;font-weight:bold;letter-spacing:0.08em;text-transform:uppercase;color:#333;">Summary</span>
+                            <span style="font-size:13px;font-weight:bold;letter-spacing:0.08em;text-transform:uppercase;color:#333;">' . htmlspecialchars($sectionTitle) . '</span>
                         </td>
                     </tr>';
+    }
 
     foreach ($rows as $row) {
         $label = (string)($row['label'] ?? '');
         $amount = round((float)($row['amount'] ?? 0), 2);
         $note = trim((string)($row['note'] ?? ''));
         $isGrand = !empty($row['is_grand']);
+        $isPending = !empty($row['is_pending']);
         $noteHtml = $note !== ''
             ? '<br><span class="invoice-summary-note" style="' . invoice_pdf_body_text_inline_style() . ' font-weight:normal;color:#555;">' . htmlspecialchars($note) . '</span>'
             : '';
-        $bg = $isGrand ? '#f0f0f0' : '#f9f9f9';
-        $rowClass = $isGrand ? 'invoice-summary-grand' : '';
+        $bg = $isGrand ? '#f0f0f0' : ($isPending ? '#fff7ed' : '#f9f9f9');
+        $rowClass = $isGrand ? 'invoice-summary-grand' : ($isPending ? 'invoice-summary-pending' : '');
         $borderTop = $isGrand ? 'border-top:2px solid #000;' : '';
         $cellStyle = 'text-align:right;padding:8px 10px;border:1px solid #ddd;' . invoice_pdf_body_text_inline_style();
+        $amountStyle = $isPending ? ' color:#b45309;font-weight:bold;' : '';
 
         $html .= '
                     <tr class="' . $rowClass . '" style="background:' . $bg . ';' . $borderTop . '">
                         <td colspan="' . $labelSpan . '" class="right invoice-text" style="' . $cellStyle . '">'
                             . htmlspecialchars($label) . $noteHtml .
                         '</td>
-                        <td colspan="2" class="right invoice-text" style="' . $cellStyle . '">'
+                        <td colspan="2" class="right invoice-text" style="' . $cellStyle . $amountStyle . '">'
                             . number_format($amount, 2) .
                         '</td>
                     </tr>';

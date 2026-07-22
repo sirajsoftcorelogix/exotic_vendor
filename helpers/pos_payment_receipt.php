@@ -223,6 +223,43 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
     return 0.0;
 }
 
+function pos_payment_is_cod_mode(string $mode): bool
+{
+    return strtolower(trim($mode)) === 'cod';
+}
+
+/**
+ * @param list<array{mode?:string,amount?:float|int|string}> $splits
+ */
+function pos_payment_split_advance_total(array $splits): float
+{
+    $total = 0.0;
+    foreach ($splits as $split) {
+        if (!is_array($split) || pos_payment_is_cod_mode((string)($split['mode'] ?? ''))) {
+            continue;
+        }
+        $total += round((float)($split['amount'] ?? 0), 2);
+    }
+
+    return round($total, 2);
+}
+
+/**
+ * @param list<array{mode?:string,amount?:float|int|string}> $splits
+ */
+function pos_payment_split_cod_total(array $splits): float
+{
+    $total = 0.0;
+    foreach ($splits as $split) {
+        if (!is_array($split) || !pos_payment_is_cod_mode((string)($split['mode'] ?? ''))) {
+            continue;
+        }
+        $total += round((float)($split['amount'] ?? 0), 2);
+    }
+
+    return round($total, 2);
+}
+
 function pos_payment_sum_paid(mysqli $conn, string $orderNumber): float
 {
     $orderNumber = trim($orderNumber);
@@ -230,7 +267,9 @@ function pos_payment_sum_paid(mysqli $conn, string $orderNumber): float
         return 0.0;
     }
 
-    $stmt = $conn->prepare('SELECT IFNULL(SUM(payment_amount), 0) AS paid FROM pos_payments WHERE order_number = ?');
+    $stmt = $conn->prepare(
+        'SELECT IFNULL(SUM(payment_amount), 0) AS paid FROM pos_payments WHERE order_number = ? AND LOWER(TRIM(payment_mode)) <> \'cod\''
+    );
     if (!$stmt) {
         return 0.0;
     }
@@ -240,6 +279,27 @@ function pos_payment_sum_paid(mysqli $conn, string $orderNumber): float
     $stmt->close();
 
     return round((float)($row['paid'] ?? 0), 2);
+}
+
+function pos_payment_sum_cod_pending(mysqli $conn, string $orderNumber): float
+{
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return 0.0;
+    }
+
+    $stmt = $conn->prepare(
+        'SELECT IFNULL(SUM(payment_amount), 0) AS cod FROM pos_payments WHERE order_number = ? AND LOWER(TRIM(payment_mode)) = \'cod\''
+    );
+    if (!$stmt) {
+        return 0.0;
+    }
+    $stmt->bind_param('s', $orderNumber);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return round((float)($row['cod'] ?? 0), 2);
 }
 
 function pos_payment_is_fully_paid(mysqli $conn, string $orderNumber): bool
@@ -267,7 +327,7 @@ function pos_payment_refresh_order_snapshots(mysqli $conn, string $orderNumber):
         return;
     }
 
-    $stmt = $conn->prepare('SELECT id, payment_amount FROM pos_payments WHERE order_number = ? ORDER BY id ASC');
+    $stmt = $conn->prepare('SELECT id, payment_mode, payment_amount FROM pos_payments WHERE order_number = ? ORDER BY id ASC');
     if (!$stmt) {
         return;
     }
@@ -283,7 +343,9 @@ function pos_payment_refresh_order_snapshots(mysqli $conn, string $orderNumber):
     }
 
     while ($row = $res->fetch_assoc()) {
-        $cumulative += round((float)($row['payment_amount'] ?? 0), 2);
+        if (!pos_payment_is_cod_mode((string)($row['payment_mode'] ?? ''))) {
+            $cumulative += round((float)($row['payment_amount'] ?? 0), 2);
+        }
         $pending = round($orderTotal - $cumulative, 2);
         $id = (int)($row['id'] ?? 0);
         $upd->bind_param('ddi', $orderTotal, $pending, $id);
@@ -419,7 +481,13 @@ function pos_payment_finalize_invoice_for_order(mysqli $conn, string $orderNumbe
  *
  * @return array{order_amount: float, pending_amount: float}
  */
-function pos_payment_compute_order_snapshots(mysqli $conn, string $orderNumber, float $thisPaymentAmount, ?float $orderTotalOverride = null): array
+function pos_payment_compute_order_snapshots(
+    mysqli $conn,
+    string $orderNumber,
+    float $thisPaymentAmount,
+    ?float $orderTotalOverride = null,
+    string $paymentMode = ''
+): array
 {
     $orderNumber = trim($orderNumber);
     if ($orderNumber === '') {
@@ -433,17 +501,10 @@ function pos_payment_compute_order_snapshots(mysqli $conn, string $orderNumber, 
         $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
     }
 
-    $paidPrior = 0.0;
-    $stmt2 = $conn->prepare('SELECT IFNULL(SUM(payment_amount), 0) AS s FROM pos_payments WHERE order_number = ?');
-    if ($stmt2) {
-        $stmt2->bind_param('s', $orderNumber);
-        $stmt2->execute();
-        $row2 = $stmt2->get_result()->fetch_assoc();
-        $stmt2->close();
-        $paidPrior = round((float)($row2['s'] ?? 0), 2);
-    }
+    $paidPrior = pos_payment_sum_paid($conn, $orderNumber);
 
-    $pendingAfter = round($orderTotal - $paidPrior - $thisPaymentAmount, 2);
+    $effectivePayment = pos_payment_is_cod_mode($paymentMode) ? 0.0 : round($thisPaymentAmount, 2);
+    $pendingAfter = round($orderTotal - $paidPrior - $effectivePayment, 2);
 
     return [
         'order_amount' => $orderTotal,
@@ -500,14 +561,15 @@ function pos_payment_insert_row(
         ];
     }
 
-    $snap = pos_payment_compute_order_snapshots($conn, $orderNumber, $amount, $orderTotalOverride);
+    $snap = pos_payment_compute_order_snapshots($conn, $orderNumber, $amount, $orderTotalOverride, $paymentMode);
     $orderAmtSnap = $snap['order_amount'];
     $pendingAmtSnap = $snap['pending_amount'];
+    $paymentStatus = pos_payment_is_cod_mode($paymentMode) ? 'pending' : 'success';
 
     if ($customerId > 0) {
         $stmt = $conn->prepare(
             'INSERT INTO pos_payments (order_number, receipt_number, customer_id, payment_stage, payment_mode, payment_amount, order_amount, pending_amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
-             VALUES (?,?,?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', \'success\', NOW())'
+             VALUES (?,?,?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', ?, NOW())'
         );
         if (!$stmt) {
             return [
@@ -521,7 +583,7 @@ function pos_payment_insert_row(
         }
         $cid = $customerId;
         $stmt->bind_param(
-            'ssissdddssii',
+            'ssissdddssiis',
             $orderNumber,
             $receiptNumber,
             $cid,
@@ -533,7 +595,8 @@ function pos_payment_insert_row(
             $transactionId,
             $note,
             $userId,
-            $whEff
+            $whEff,
+            $paymentStatus
         );
 
         if (!$stmt->execute()) {
@@ -584,7 +647,7 @@ function pos_payment_insert_row(
 
     $stmt = $conn->prepare(
         'INSERT INTO pos_payments (order_number, receipt_number, payment_stage, payment_mode, payment_amount, order_amount, pending_amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', \'success\', NOW())'
+         VALUES (?,?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', ?, NOW())'
     );
     if (!$stmt) {
         return [
@@ -597,7 +660,7 @@ function pos_payment_insert_row(
         ];
     }
     $stmt->bind_param(
-        'ssssdddssii',
+        'ssssdddssiis',
         $orderNumber,
         $receiptNumber,
         $paymentStage,
@@ -608,7 +671,8 @@ function pos_payment_insert_row(
         $transactionId,
         $note,
         $userId,
-        $whEff
+        $whEff,
+        $paymentStatus
     );
 
     if (!$stmt->execute()) {

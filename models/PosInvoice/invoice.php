@@ -517,6 +517,7 @@ class POSInvoice
             FROM pos_payments pp
             WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci =
                   CONVERT(o.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci
+              AND LOWER(TRIM(pp.payment_mode)) <> 'cod'
         ), 0)";
     }
 

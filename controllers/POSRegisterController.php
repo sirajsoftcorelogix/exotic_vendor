@@ -362,7 +362,7 @@ class POSRegisterController
     /**
      * After full payment: import order from vendor API and create tax invoice for receipt screen.
      */
-    private function finalizePosReceiptInvoice(mysqli $conn, string $orderNumber, string $paymentStage, array $compliance, string $customInvoiceNumber = ''): array
+    private function finalizePosReceiptInvoice(mysqli $conn, string $orderNumber, string $paymentStage, array $compliance, string $customInvoiceNumber = '', bool $createAdvanceInvoice = false): array
     {
         $out = [
             'import_status' => '',
@@ -374,7 +374,7 @@ class POSRegisterController
             'invoice_pdf_disabled_hint' => 'Tax invoice is available after payment is received in full.',
         ];
 
-        if ($paymentStage !== 'final') {
+        if ($paymentStage !== 'final' && !$createAdvanceInvoice) {
             return $out;
         }
 
@@ -4426,6 +4426,14 @@ class POSRegisterController
 
         $paymentStage = strtolower(trim((string)($payload['payment_stage'] ?? 'final')));
         $splitBundle = $this->resolvePosPaymentSplitsFromPayload($payload);
+        $advanceAmount = pos_payment_split_advance_total($splitBundle['splits']);
+        $codAmount = pos_payment_split_cod_total($splitBundle['splits']);
+        $hasCodPending = $codAmount > 0.001;
+
+        if ($hasCodPending) {
+            $paymentStage = 'advance';
+        }
+
         $splitErrors = $this->validatePosPaymentSplits($splitBundle, $orderTotal, $paymentStage);
         if (!empty($splitErrors)) {
             echo json_encode([
@@ -4439,10 +4447,14 @@ class POSRegisterController
         $paymentAmount = (float)$splitBundle['total'];
         $paymentMode = (string)$splitBundle['primary_mode'];
         $txn = (string)$splitBundle['primary_txn'];
-        $payload['payment_amount'] = $paymentAmount;
+        $payload['payment_amount'] = $advanceAmount;
+        $payload['advance_amount'] = $advanceAmount;
+        $payload['cod_amount'] = $codAmount;
+        $payload['has_cod_pending'] = $hasCodPending;
         $payload['payment_mode'] = $paymentMode;
         $payload['transaction_id'] = $txn;
         $payload['payment_splits'] = $splitBundle['splits'];
+        $payload['payment_stage'] = $paymentStage;
 
         $deliveryStatus = $this->resolvePosDeliveryStatusFromPayload($payload, $conn);
         if (!$deliveryStatus['ok']) {
@@ -4464,7 +4476,7 @@ class POSRegisterController
             exit;
         }
 
-        $compliance = $this->evaluateHighValueCompliance($payload, $orderTotal, $paymentAmount, $paymentMode, $conn);
+        $compliance = $this->evaluateHighValueCompliance($payload, $orderTotal, $advanceAmount, $paymentMode, $conn);
         if (!$compliance['ok']) {
             echo json_encode([
                 'success' => false,
@@ -4647,7 +4659,15 @@ class POSRegisterController
 
         $pay = null;
         $paymentIds = [];
-        foreach ($splitBundle['splits'] as $split) {
+        $sortedSplits = $splitBundle['splits'];
+        usort($sortedSplits, static function (array $a, array $b): int {
+            $aCod = (($a['mode'] ?? '') === 'cod') ? 1 : 0;
+            $bCod = (($b['mode'] ?? '') === 'cod') ? 1 : 0;
+
+            return $aCod <=> $bCod;
+        });
+
+        foreach ($sortedSplits as $split) {
             $pay = pos_payment_insert_row(
                 $conn,
                 $orderNumber,
@@ -4700,8 +4720,17 @@ class POSRegisterController
             'custom_discount_value' => round((float)($payload['custom_discount_value'] ?? 0), 2),
             'coupon_display_name' => trim((string)($payload['coupon_display_name'] ?? '')),
             'apply_export_gst' => !empty($payload['apply_export_gst']) ? 1 : 0,
+            'advance_received' => $advanceAmount,
+            'cod_pending' => $codAmount,
         ];
-        $invoiceMeta = $this->finalizePosReceiptInvoice($conn, $orderNumber, $paymentStage, $compliance, $customInvoiceNumber);
+        $invoiceMeta = $this->finalizePosReceiptInvoice(
+            $conn,
+            $orderNumber,
+            $paymentStage,
+            $compliance,
+            $customInvoiceNumber,
+            $hasCodPending
+        );
         $fulfillmentStatusMeta = $this->syncPosCheckoutOrderFulfillmentStatus(
             $conn,
             $orderNumber,
@@ -4741,7 +4770,12 @@ class POSRegisterController
             'payment_splits' => $receiptPaymentSplits,
             'receipt_payment_splits' => $receiptPaymentSplits,
             'transaction_id' => $txn,
-            'receipt_banner_text' => 'Thank you. Payment of ₹ ' . number_format($paymentAmount, 2, '.', ',') . ' recorded for order ' . $orderNumber . '.',
+            'receipt_banner_text' => $hasCodPending
+                ? ($advanceAmount > 0.001
+                    ? 'Order ' . $orderNumber . ' placed. Advance ₹ ' . number_format($advanceAmount, 2, '.', ',')
+                        . ' received. COD ₹ ' . number_format($codAmount, 2, '.', ',') . ' pending on delivery.'
+                    : 'Order ' . $orderNumber . ' placed on COD. ₹ ' . number_format($codAmount, 2, '.', ',') . ' to collect on delivery.')
+                : 'Thank you. Payment of ₹ ' . number_format($paymentAmount, 2, '.', ',') . ' recorded for order ' . $orderNumber . '.',
             'receipt_billing_block' => $this->formatAddressLinesFromPayload($payload, 'billing'),
             'receipt_shipping_block' => $this->formatAddressLinesFromPayload($payload, 'shipping'),
             'receipt_lines' => [],
@@ -4757,8 +4791,10 @@ class POSRegisterController
             'receipt_agg_cgst' => 0.0,
             'receipt_agg_igst' => 0.0,
             'receipt_amount_in_words' => '',
-            'receipt_amount_received' => $paymentAmount,
-            'receipt_pending_amount' => (float)($pay['pending_amount'] ?? 0),
+            'receipt_amount_received' => $advanceAmount,
+            'receipt_cod_pending_amount' => $codAmount,
+            'receipt_pending_amount' => $hasCodPending ? $codAmount : (float)($pay['pending_amount'] ?? 0),
+            'has_cod_pending' => $hasCodPending,
             'import_status' => $invoiceMeta['import_status'],
             'show_invoice_pdf_button' => $invoiceMeta['show_invoice_pdf_button'],
             'show_invoice_preview_button' => $invoiceMeta['show_invoice_preview_button'] ?? false,
@@ -4766,7 +4802,7 @@ class POSRegisterController
             'invoice_pdf_url' => $invoiceMeta['invoice_pdf_url'],
             'invoice_preview_url' => $invoiceMeta['invoice_preview_url'] ?? '',
             'invoice_pdf_disabled_hint' => $invoiceMeta['invoice_pdf_disabled_hint'],
-            'is_payment_in_full' => ($paymentStage === 'final' && (float)($pay['pending_amount'] ?? 0) <= 0.02),
+            'is_payment_in_full' => ($paymentStage === 'final' && !$hasCodPending && (float)($pay['pending_amount'] ?? 0) <= 0.02),
             'receipt_company_legal_name' => 'EXOTIC INDIA ART PVT LTD',
             'receipt_company_tagline' => '',
             'receipt_company_gstin' => '',
@@ -4978,7 +5014,8 @@ class POSRegisterController
     {
         $stage = strtolower(trim((string)($row['payment_stage'] ?? '')));
         $pending = (float)($row['receipt_pending_amount'] ?? 0);
-        $row['is_payment_in_full'] = ($stage === 'final' && $pending <= 0.02);
+        $hasCodPending = !empty($row['has_cod_pending']) || (float)($row['receipt_cod_pending_amount'] ?? 0) > 0.001;
+        $row['is_payment_in_full'] = ($stage === 'final' && $pending <= 0.02 && !$hasCodPending);
 
         $invoiceId = (int)($row['invoice_id'] ?? 0);
         if ($invoiceId <= 0 && !empty($row['invoice_pdf_url'])) {
@@ -4988,8 +5025,13 @@ class POSRegisterController
             }
         }
 
-        if ($row['is_payment_in_full'] && $invoiceId > 0) {
+        if (($row['is_payment_in_full'] || $hasCodPending) && $invoiceId > 0) {
             $row = $this->applyPosReceiptInvoiceLinks($row, $invoiceId);
+            if ($hasCodPending && !$row['is_payment_in_full']) {
+                $row['show_invoice_pdf_button'] = false;
+                $row['show_invoice_preview_button'] = true;
+                $row['invoice_pdf_disabled_hint'] = 'Proforma invoice shows advance received and COD pending until full payment.';
+            }
         } elseif (!$row['is_payment_in_full']) {
             $row['show_invoice_pdf_button'] = false;
             $row['show_invoice_preview_button'] = false;
@@ -5076,6 +5118,21 @@ class POSRegisterController
     private function buildOrderCreatePostFromPayload(array $payload, array $cartData): array
     {
         $posMode = strtolower(trim((string)($payload['payment_mode'] ?? 'cash')));
+        $codAmount = round((float)($payload['cod_amount'] ?? 0), 2);
+        if ($codAmount <= 0.001) {
+            foreach ($payload['payment_splits'] ?? [] as $splitRow) {
+                if (!is_array($splitRow)) {
+                    continue;
+                }
+                if (strtolower(trim((string)($splitRow['mode'] ?? ''))) === 'cod') {
+                    $codAmount += round((float)($splitRow['amount'] ?? 0), 2);
+                }
+            }
+            $codAmount = round($codAmount, 2);
+        }
+        if ($codAmount > 0.001) {
+            $posMode = 'cod';
+        }
         $storePaymentMode = $this->mapPosPaymentModeToExoticPaymentType($posMode);
         $paymentType = 'offline';
 
@@ -5114,7 +5171,7 @@ class POSRegisterController
             'payment_type' => $paymentType,
             'buynow' => '0',
             'checkoutdata' => $checkoutdata,
-            'cod' => '0',
+            'cod' => $codAmount > 0.001 ? '1' : '0',
             'codcharges' => '0.00',
             'first_name' => trim((string)($payload['confirm_first_name'] ?? '')),
             'last_name' => trim((string)($payload['confirm_last_name'] ?? '')),
@@ -5328,7 +5385,7 @@ class POSRegisterController
         $m = strtolower(trim($mode));
         $map = [
             'cash' => 'Cash',
-            'cod' => 'Cash',
+            'cod' => 'Cash on Delivery',
             'upi' => 'UPI',
             'bank_transfer' => 'Bank transfer',
             'pos_machine' => 'POS machine',
@@ -5344,7 +5401,7 @@ class POSRegisterController
      */
     private function allowedPosPaymentModes(): array
     {
-        return ['cash', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque'];
+        return ['cash', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque', 'cod'];
     }
 
     /**
@@ -5419,27 +5476,49 @@ class POSRegisterController
         $errors = [];
         $splits = $splitBundle['splits'] ?? [];
         if ($splits === []) {
-            $errors[] = 'Add at least one payment line with amount greater than zero.';
+            $errors[] = 'Add at least one payment line.';
 
             return $errors;
         }
 
-        $paymentAmount = (float)($splitBundle['total'] ?? 0);
-        if ($paymentAmount <= 0) {
-            $errors[] = 'Payment amount must be greater than zero.';
+        $advanceTotal = pos_payment_split_advance_total($splits);
+        $codTotal = pos_payment_split_cod_total($splits);
+        $splitTotal = round($advanceTotal + $codTotal, 2);
+        $hasCod = $codTotal > 0.001;
 
-            return $errors;
-        }
+        foreach ($splits as $idx => $split) {
+            $amount = round((float)($split['amount'] ?? 0), 2);
+            if ($amount <= 0) {
+                $errors[] = 'Each payment line must have amount greater than zero (line ' . ($idx + 1) . ').';
 
-        if ($paymentStage === 'final') {
-            if ($paymentAmount + 0.02 < $orderTotal) {
-                $errors[] = 'Final payment must match order total ₹ ' . $orderTotal . '.';
-            } elseif ($paymentAmount - 0.02 > $orderTotal) {
-                $errors[] = 'Over payment is not allowed for final settlement.';
+                return $errors;
             }
-        } elseif ($paymentStage === 'partial' || $paymentStage === 'advance') {
-            if ($paymentAmount + 0.02 >= $orderTotal) {
-                $errors[] = 'Partial / advance must be less than order total ₹ ' . $orderTotal . '.';
+        }
+
+        if ($hasCod) {
+            if ($splitTotal + 0.02 < $orderTotal) {
+                $errors[] = 'Advance plus COD must equal order total ₹ ' . $orderTotal . '.';
+            } elseif ($splitTotal - 0.02 > $orderTotal) {
+                $errors[] = 'Advance plus COD exceeds order total.';
+            }
+        } else {
+            $paymentAmount = (float)($splitBundle['total'] ?? 0);
+            if ($paymentAmount <= 0) {
+                $errors[] = 'Payment amount must be greater than zero.';
+
+                return $errors;
+            }
+
+            if ($paymentStage === 'final') {
+                if ($paymentAmount + 0.02 < $orderTotal) {
+                    $errors[] = 'Final payment must match order total ₹ ' . $orderTotal . '.';
+                } elseif ($paymentAmount - 0.02 > $orderTotal) {
+                    $errors[] = 'Over payment is not allowed for final settlement.';
+                }
+            } elseif ($paymentStage === 'partial' || $paymentStage === 'advance') {
+                if ($paymentAmount + 0.02 >= $orderTotal) {
+                    $errors[] = 'Partial / advance must be less than order total ₹ ' . $orderTotal . '.';
+                }
             }
         }
 
