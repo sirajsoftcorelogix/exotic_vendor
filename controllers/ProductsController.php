@@ -7142,12 +7142,20 @@ class ProductsController
                 $skuLabels[] = $label;
                 $parts[] = $label . ' req:' . $row['requested_qty'] . ' avail:' . $row['available_qty'];
             }
+            $refreshCodes = [];
+            foreach ($insufficient as $row) {
+                $ic = trim((string)($row['item_code'] ?? ''));
+                if ($ic !== '') {
+                    $refreshCodes[strtoupper($ic)] = $ic;
+                }
+            }
             $this->exitTransferRequestResponse([
                 'success' => false,
                 'error_type' => 'insufficient_stock',
                 'message' => $this->insufficientStockSummaryMessage($insufficient),
                 'insufficient_items' => $insufficient,
                 'details' => $parts,
+                'refreshable_item_codes' => array_values($refreshCodes),
             ], $wantsJson);
         }
 
@@ -7216,13 +7224,16 @@ class ProductsController
 
     /**
      * Refresh vp_products fields from vendor API before transfer validation (e.g. SKU resolution).
-     * Local warehouse stock (local_stock) is not overwritten; movement ledger is aligned to existing stock only.
+     * By default local warehouse stock is unchanged; pass sync_stock to pull local_stock from API
+     * and align default-warehouse physical stock for the resolved SKUs / item-code variants.
      *
      * @param list<string> $itemCodes
+     * @param array{sync_stock?:bool,skus?:list<string>} $options
      * @return array{success:bool,message:string}
      */
-    private function refreshTransferItemsFromApi(array $itemCodes, $productModel): array
+    private function refreshTransferItemsFromApi(array $itemCodes, $productModel, array $options = []): array
     {
+        $syncStock = !empty($options['sync_stock']);
         $codes = array_values(array_unique(array_filter(array_map(static function ($v) {
             return trim((string)$v);
         }, $itemCodes))));
@@ -7277,9 +7288,28 @@ class ProductsController
             return ['success' => false, 'message' => 'Failed to refresh product data from API: no item rows returned for the submitted codes.' . $suffix];
         }
 
+        if ($syncStock) {
+            $allRows = product::expandVendorProductFetchVariants($allRows);
+        }
+
+        $updateOptions = [];
+        if ($syncStock) {
+            $skusForSync = is_array($options['skus'] ?? null) ? $options['skus'] : [];
+            $updateOptions = [
+                'preserve_local_stock' => false,
+                'stock_sync_mode' => 'user_selected',
+                'physical_stock_sync_product_ids' => $this->resolveTransferStockSyncProductIds(
+                    $productModel,
+                    $skusForSync,
+                    $codes
+                ),
+                'variants_already_expanded' => true,
+            ];
+        }
+
         $charsetState = $productModel->beginBulkProductUpdateConnection();
         try {
-            $res = $productModel->updateProductFromApi($allRows);
+            $res = $productModel->updateProductFromApi($allRows, $updateOptions);
         } finally {
             $productModel->endBulkProductUpdateConnection($charsetState);
         }
@@ -7288,10 +7318,58 @@ class ProductsController
             return ['success' => false, 'message' => 'Could not sync product data from API before transfer: ' . $msg];
         }
 
+        if ($syncStock) {
+            if ($failedChunks > 0) {
+                return ['success' => true, 'message' => 'Local and default-warehouse stock refreshed from Exotic for available items. Some API chunks failed; please retry once.'];
+            }
+            return ['success' => true, 'message' => 'Local and default-warehouse stock refreshed from Exotic. Please submit again.'];
+        }
+
         if ($failedChunks > 0) {
             return ['success' => true, 'message' => 'Product data refreshed from API for available items (local stock unchanged). Some chunks failed; please retry refresh once.'];
         }
         return ['success' => true, 'message' => 'Product data refreshed from API (local stock unchanged).'];
+    }
+
+    /**
+     * Resolve vp_products ids for physical stock sync during transfer refresh-from-Exotic.
+     *
+     * @param list<string> $skus
+     * @param list<string> $itemCodes
+     * @return list<int>
+     */
+    private function resolveTransferStockSyncProductIds($productModel, array $skus, array $itemCodes): array
+    {
+        $ids = [];
+        foreach ($skus as $sku) {
+            $sku = trim((string) $sku);
+            if ($sku === '') {
+                continue;
+            }
+            $row = $productModel->getProductByskuExact($sku);
+            if (is_array($row) && !empty($row['id'])) {
+                $ids[(int) $row['id']] = (int) $row['id'];
+            }
+        }
+
+        foreach ($itemCodes as $code) {
+            $code = trim((string) $code);
+            if ($code === '') {
+                continue;
+            }
+            $rows = $productModel->getProductByItemCode($code);
+            if (!is_array($rows)) {
+                continue;
+            }
+            foreach ($rows as $row) {
+                if (!is_array($row) || empty($row['id'])) {
+                    continue;
+                }
+                $ids[(int) $row['id']] = (int) $row['id'];
+            }
+        }
+
+        return array_values($ids);
     }
 
     public function getTransferStockBulkForm()
@@ -7868,12 +7946,20 @@ class ProductsController
                 $skuLabels[] = $label;
                 $parts[] = $label . ' req:' . $row['requested_qty'] . ' avail:' . $row['available_qty'];
             }
+            $refreshCodes = [];
+            foreach ($insufficient as $row) {
+                $ic = trim((string)($row['item_code'] ?? ''));
+                if ($ic !== '') {
+                    $refreshCodes[strtoupper($ic)] = $ic;
+                }
+            }
             $this->finishJsonApiResponse([
                 'success' => false,
                 'error_type' => 'insufficient_stock',
                 'message' => $this->insufficientStockSummaryMessage($insufficient),
                 'insufficient_items' => $insufficient,
                 'details' => $parts,
+                'refreshable_item_codes' => array_values($refreshCodes),
             ]);
         }
 
@@ -7920,7 +8006,20 @@ class ProductsController
             exit;
         }
 
-        $result = $this->refreshTransferItemsFromApi($codes, $productModel);
+        $syncStock = !empty($_POST['sync_stock']) && (string) $_POST['sync_stock'] !== '0';
+        $skus = [];
+        $rawSkus = $_POST['skus_json'] ?? '[]';
+        $decodedSkus = json_decode((string) $rawSkus, true);
+        if (is_array($decodedSkus)) {
+            $skus = array_values(array_unique(array_filter(array_map(static function ($v) {
+                return trim((string) $v);
+            }, $decodedSkus))));
+        }
+
+        $result = $this->refreshTransferItemsFromApi($codes, $productModel, [
+            'sync_stock' => $syncStock,
+            'skus' => $skus,
+        ]);
         if (!$result['success']) {
             echo json_encode(['success' => false, 'message' => $result['message']]);
             exit;
@@ -7928,8 +8027,11 @@ class ProductsController
 
         echo json_encode([
             'success' => true,
-            'message' => 'API refresh completed for ' . count($codes) . ' item code(s).',
+            'message' => $result['message'] !== ''
+                ? $result['message']
+                : ('API refresh completed for ' . count($codes) . ' item code(s).'),
             'refreshed_codes' => $codes,
+            'sync_stock' => $syncStock,
         ]);
         exit;
     }
