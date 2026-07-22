@@ -8,17 +8,15 @@ $pageNo = max(1, (int)($page_no ?? 1));
 $limitVal = (int)($limit ?? 20);
 $limitVal = in_array($limitVal, [10, 20, 50, 100], true) ? $limitVal : 20;
 $tab = $tab ?? 'orders';
-$viewMode = $view_mode ?? 'cards';
+$viewMode = $view_mode ?? 'table';
 $searchVal = (string)($search ?? '');
 $sortVal = (string)($sort ?? 'new_to_old');
 $statusGroup = (string)($status_group ?? 'all');
 $paymentType = (string)($payment_type ?? 'all');
 $dateFrom = (string)($date_from ?? '');
 $dateTo = (string)($date_to ?? '');
-$billing = is_array($billing ?? null) ? $billing : [];
-$shipping = is_array($shipping ?? null) ? $shipping : [];
 $orderDates = is_array($orderDates ?? null) ? $orderDates : [];
-$insights = is_array($insights ?? null) ? $insights : [];
+$openOrderValue = (float)($open_order_value ?? 0);
 $invoices = is_array($invoices ?? null) ? $invoices : [];
 $dispatches = is_array($dispatches ?? null) ? $dispatches : [];
 $activityLog = is_array($activityLog ?? null) ? $activityLog : [];
@@ -45,29 +43,6 @@ $fmtDate = static function ($dt, string $fallback = '—'): string {
 
 $fmtMoney = static function ($amount): string {
     return '₹' . number_format((float)$amount, 2);
-};
-
-$formatAddress = static function (array $addr, bool $shipping = false): string {
-    if ($shipping) {
-        $parts = array_filter([
-            trim((string)($addr['saddress1'] ?? '')),
-            trim((string)($addr['saddress2'] ?? '')),
-            trim((string)($addr['scity'] ?? '')),
-            trim((string)($addr['sstate'] ?? '')),
-            trim((string)($addr['szip'] ?? '')),
-            trim((string)($addr['scountry'] ?? '')),
-        ]);
-    } else {
-        $parts = array_filter([
-            trim((string)($addr['address1'] ?? '')),
-            trim((string)($addr['address2'] ?? '')),
-            trim((string)($addr['city'] ?? '')),
-            trim((string)($addr['state'] ?? '')),
-            trim((string)($addr['zip'] ?? '')),
-            trim((string)($addr['country'] ?? '')),
-        ]);
-    }
-    return $parts !== [] ? implode(', ', $parts) : '—';
 };
 
 $buildViewParams = static function (array $overrides = []) use (
@@ -150,17 +125,14 @@ $statusChipDefs = [
 ];
 
 $tabDefs = [
-    'orders' => ['label' => 'Orders', 'count' => $customerOrderCount ?? 0],
-    'invoices' => ['label' => 'Invoices', 'count' => count($invoices)],
-    'dispatches' => ['label' => 'Dispatches', 'count' => count($dispatches)],
-    'activity' => ['label' => 'Activity', 'count' => count($activityLog)],
+    'orders' => ['label' => 'Orders'],
+    'invoices' => ['label' => 'Invoices'],
+    'dispatches' => ['label' => 'Dispatches'],
+    'activity' => ['label' => 'Activity'],
 ];
 
 $firstOrderDate = $orderDates['first_order_date'] ?? null;
 $lastOrderDate = $orderDates['last_order_date'] ?? null;
-$billingAddress = $formatAddress($billing, false);
-$shippingAddress = $formatAddress($shipping, true);
-$gstin = trim((string)($billing['gstin'] ?? ''));
 $hasActiveFilters = $searchVal !== '' || $statusGroup !== 'all' || $paymentType !== 'all' || $dateFrom !== '' || $dateTo !== '';
 
 $slotSize = 10;
@@ -189,9 +161,6 @@ if ($end - $start < $slotSize - 1) {
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
                         <h1 class="text-xl font-bold text-gray-900"><?= htmlspecialchars($customerName) ?></h1>
-                        <?php if (!empty($insights['is_repeat_customer'])): ?>
-                            <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">Repeat customer</span>
-                        <?php endif; ?>
                     </div>
                     <p class="text-sm text-gray-500 mt-1">Customer #<?= $customerId ?></p>
                     <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-gray-600">
@@ -225,7 +194,7 @@ if ($end - $start < $slotSize - 1) {
                 </div>
                 <div class="rounded-lg bg-orange-50 px-4 py-3 text-center">
                     <p class="text-[10px] uppercase tracking-wide text-orange-700/80">Open value</p>
-                    <p class="text-lg font-bold text-orange-600 tabular-nums"><?= $fmtMoney($insights['open_order_value'] ?? 0) ?></p>
+                    <p class="text-lg font-bold text-orange-600 tabular-nums"><?= $fmtMoney($openOrderValue) ?></p>
                 </div>
             </div>
         </div>
@@ -238,75 +207,14 @@ if ($end - $start < $slotSize - 1) {
         </div>
     </div>
 
-    <!-- Addresses + insights -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
-            <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide">Addresses</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div>
-                    <p class="text-xs font-medium text-gray-500 mb-1">Billing</p>
-                    <p class="text-gray-700 leading-relaxed"><?= htmlspecialchars($billingAddress) ?></p>
-                    <?php if ($gstin !== ''): ?>
-                        <p class="mt-2 text-xs text-gray-500">GSTIN: <span class="font-medium text-gray-800"><?= htmlspecialchars($gstin) ?></span></p>
-                    <?php endif; ?>
-                </div>
-                <div>
-                    <p class="text-xs font-medium text-gray-500 mb-1">Shipping</p>
-                    <p class="text-gray-700 leading-relaxed"><?= htmlspecialchars($shippingAddress) ?></p>
-                </div>
-            </div>
-        </div>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
-            <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide">Insights</h2>
-            <dl class="space-y-2 text-sm">
-                <div class="flex justify-between gap-3">
-                    <dt class="text-gray-500">Distinct orders</dt>
-                    <dd class="font-medium text-gray-800 tabular-nums"><?= (int)($insights['distinct_order_count'] ?? 0) ?></dd>
-                </div>
-                <div class="flex justify-between gap-3">
-                    <dt class="text-gray-500">Cancellation rate</dt>
-                    <dd class="font-medium text-gray-800"><?= number_format((float)($insights['cancellation_rate'] ?? 0), 1) ?>%</dd>
-                </div>
-                <?php if (!empty($insights['preferred_payment_type'])): ?>
-                <div class="flex justify-between gap-3">
-                    <dt class="text-gray-500">Preferred payment</dt>
-                    <dd class="font-medium text-gray-800 uppercase"><?= htmlspecialchars((string)$insights['preferred_payment_type']) ?></dd>
-                </div>
-                <?php endif; ?>
-                <?php if ($insights['avg_days_between_orders'] !== null): ?>
-                <div class="flex justify-between gap-3">
-                    <dt class="text-gray-500">Avg days between orders</dt>
-                    <dd class="font-medium text-gray-800"><?= number_format((float)$insights['avg_days_between_orders'], 1) ?></dd>
-                </div>
-                <?php endif; ?>
-            </dl>
-            <?php if (!empty($insights['top_items'])): ?>
-                <div class="pt-2 border-t border-gray-100">
-                    <p class="text-xs font-medium text-gray-500 mb-2">Top items</p>
-                    <ul class="space-y-1 text-sm">
-                        <?php foreach ($insights['top_items'] as $item): ?>
-                            <li class="flex justify-between gap-2">
-                                <span class="text-gray-700 truncate" title="<?= htmlspecialchars((string)($item['title'] ?? '')) ?>">
-                                    <?= htmlspecialchars((string)($item['item_code'] ?? '')) ?>
-                                </span>
-                                <span class="text-gray-500 shrink-0"><?= (int)($item['order_count'] ?? 0) ?>×</span>
-                            </li>
-                        <?php endforeach; ?>
-                    </ul>
-                </div>
-            <?php endif; ?>
-        </div>
-    </div>
-
     <!-- Tabs -->
     <div class="border-b border-gray-200">
         <nav class="flex flex-wrap gap-1 -mb-px">
             <?php foreach ($tabDefs as $tabKey => $tabInfo): ?>
                 <?php $isActiveTab = $tab === $tabKey; ?>
                 <a href="<?= htmlspecialchars($viewUrl(['tab' => $tabKey, 'page_no' => 1])) ?>"
-                   class="inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors <?= $isActiveTab ? 'border-[#d97706] text-[#d97706]' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' ?>">
+                   class="inline-flex items-center px-4 py-3 text-sm font-medium border-b-2 transition-colors <?= $isActiveTab ? 'border-[#d97706] text-[#d97706]' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' ?>">
                     <?= htmlspecialchars($tabInfo['label']) ?>
-                    <span class="rounded-full px-2 py-0.5 text-xs <?= $isActiveTab ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600' ?>"><?= (int)$tabInfo['count'] ?></span>
                 </a>
             <?php endforeach; ?>
         </nav>
@@ -487,7 +395,7 @@ if ($end - $start < $slotSize - 1) {
 
                 <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start pr-10">
                     <div class="flex gap-3 min-w-0">
-                        <img src="<?= htmlspecialchars((string)($order['image'] ?? 'https://via.placeholder.com/60')) ?>" alt="" class="w-16 h-16 object-cover border rounded-lg shrink-0">
+                        <img src="<?= htmlspecialchars((string)($order['image'] ?? 'https://via.placeholder.com/60')) ?>" alt="" loading="lazy" decoding="async" class="w-16 h-16 object-cover border rounded-lg shrink-0">
                         <div class="min-w-0">
                             <p class="text-sm">Order: <a href="<?= htmlspecialchars($orderDetailUrl) ?>" target="_blank" class="text-blue-600 hover:underline font-medium"><?= htmlspecialchars($orderNumber) ?></a></p>
                             <p class="text-sm mt-1">Item: <a href="<?= htmlspecialchars($productUrl) ?>" target="_blank" class="text-blue-600 hover:underline"><?= htmlspecialchars($itemCode) ?></a></p>
@@ -525,29 +433,6 @@ if ($end - $start < $slotSize - 1) {
                         <div class="inline-block bg-[#d97706] text-white px-4 py-2 rounded-lg mt-2 text-sm font-semibold">Total <?= $fmtMoney($totalPrice) ?></div>
                     </div>
                 </div>
-
-                <?php if (!empty($order['status_log']) && is_array($order['status_log'])): ?>
-                <hr class="my-4 border-gray-100">
-                <div class="overflow-x-auto">
-                    <div class="flex gap-6 min-w-max px-1 py-2">
-                        <div class="text-center min-w-[100px]">
-                            <div class="w-[18px] h-[18px] rounded-full bg-emerald-500 mx-auto"></div>
-                            <p class="text-xs font-medium mt-2">Created</p>
-                            <p class="text-xs text-gray-500"><?= $fmtDate($order['order_date'] ?? null) ?></p>
-                        </div>
-                        <?php foreach ($order['status_log'] as $log): ?>
-                            <div class="text-center min-w-[100px]">
-                                <div class="w-[18px] h-[18px] rounded-full bg-emerald-500 mx-auto"></div>
-                                <p class="text-xs font-medium mt-2"><?= htmlspecialchars(ucfirst(str_replace('_', ' ', (string)($log['status'] ?? '')))) ?></p>
-                                <p class="text-xs text-gray-500"><?= $fmtDate($log['change_date'] ?? null) ?></p>
-                                <?php if (!empty($log['changed_by_username'])): ?>
-                                    <p class="text-xs text-gray-400"><?= htmlspecialchars((string)$log['changed_by_username']) ?></p>
-                                <?php endif; ?>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-                <?php endif; ?>
             </div>
             <?php endforeach; ?>
         <?php endif; ?>

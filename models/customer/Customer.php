@@ -77,8 +77,7 @@ class Customer
     {
         $clause = $this->buildCustomerOrdersFilterClause($customerId, $filters);
         $sql = 'SELECT COUNT(*) AS total
-                FROM vp_order_info AS oi
-                JOIN vp_orders AS o ON oi.order_number = o.order_number
+                FROM vp_orders AS o
                 WHERE o.customer_id = ?' . $clause['sql'];
 
         $stmt = $this->conn->prepare($sql);
@@ -99,9 +98,9 @@ class Customer
     public function getOrderItemsByCustomerIdForExport(int $customerId, array $filters = []): array
     {
         $clause = $this->buildCustomerOrdersFilterClause($customerId, $filters);
-        $sql = 'SELECT oi.*, o.*, inv.invoice_number, inv.id AS linked_invoice_id
-                FROM vp_order_info AS oi
-                JOIN vp_orders AS o ON oi.order_number = o.order_number
+        $sql = 'SELECT o.*, oi.*, inv.invoice_number, inv.id AS linked_invoice_id
+                FROM vp_orders AS o
+                LEFT JOIN vp_order_info AS oi ON oi.order_number = o.order_number
                 LEFT JOIN vp_invoices inv ON inv.id = o.invoice_id
                 WHERE o.customer_id = ?' . $clause['sql'] . $this->customerOrdersOrderBy($filters);
 
@@ -656,9 +655,9 @@ class Customer
     {
         $customerId = (int)$customer_id;
         $clause = $this->buildCustomerOrdersFilterClause($customerId, $filters);
-        $sql = 'SELECT oi.*, o.*, inv.invoice_number, inv.id AS linked_invoice_id
-                FROM vp_order_info AS oi
-                JOIN vp_orders AS o ON oi.order_number = o.order_number
+        $sql = 'SELECT o.*, oi.*, inv.invoice_number, inv.id AS linked_invoice_id
+                FROM vp_orders AS o
+                LEFT JOIN vp_order_info AS oi ON oi.order_number = o.order_number
                 LEFT JOIN vp_invoices inv ON inv.id = o.invoice_id
                 WHERE o.customer_id = ?' . $clause['sql'] . $this->customerOrdersOrderBy($filters) . ' LIMIT ? OFFSET ?';
 
@@ -682,32 +681,77 @@ class Customer
     }
     public function getCustomerTotalSpent($customer_id)
     {
-        $sql = "SELECT 
-                    COUNT(*) AS total_orders, 
-                    SUM(finalprice) AS total_spent, 
-                    AVG(finalprice) AS average_order_value
+        $summary = $this->getCustomerHeaderSummary((int)$customer_id);
+        return [
+            'total_orders' => $summary['line_count'],
+            'total_spent' => $summary['total_spent'],
+            'average_order_value' => $summary['average_order_value'],
+        ];
+    }
+
+    /**
+     * Single-query header stats for customer detail (avoids multiple round-trips).
+     *
+     * @return array<string, mixed>
+     */
+    public function getCustomerHeaderSummary(int $customerId): array
+    {
+        static $cache = [];
+        if (isset($cache[$customerId])) {
+            return $cache[$customerId];
+        }
+
+        $defaults = [
+            'line_count' => 0,
+            'total_spent' => 0.0,
+            'average_order_value' => 0.0,
+            'first_order_date' => null,
+            'last_order_date' => null,
+            'open_order_value' => 0.0,
+            'pending' => 0,
+            'progress' => 0,
+            'completed' => 0,
+            'cancelled' => 0,
+        ];
+        if ($customerId <= 0) {
+            return $defaults;
+        }
+
+        $sql = "SELECT
+                    COUNT(*) AS line_count,
+                    COALESCE(SUM(finalprice), 0) AS total_spent,
+                    COALESCE(AVG(finalprice), 0) AS average_order_value,
+                    MIN(order_date) AS first_order_date,
+                    MAX(order_date) AS last_order_date,
+                    COALESCE(SUM(CASE WHEN status NOT IN ('shipped','cancelled') THEN finalprice ELSE 0 END), 0) AS open_order_value,
+                    COUNT(CASE WHEN status = 'pending' THEN 1 END) AS pending,
+                    COUNT(CASE WHEN status IN ('ready_for_packing','po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair','ready_for_dispatch') THEN 1 END) AS progress,
+                    COUNT(CASE WHEN status = 'shipped' THEN 1 END) AS completed,
+                    COUNT(CASE WHEN status = 'cancelled' THEN 1 END) AS cancelled
                 FROM vp_orders
                 WHERE customer_id = ?";
         $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param("i", $customer_id);
+        if (!$stmt) {
+            return $defaults;
+        }
+        $stmt->bind_param('i', $customerId);
         $stmt->execute();
-        return $stmt->get_result()->fetch_assoc();
+        $row = $stmt->get_result()->fetch_assoc() ?: [];
+        $stmt->close();
+
+        $cache[$customerId] = array_merge($defaults, $row);
+        return $cache[$customerId];
     }
 
     public function getCustomerOrderStatusCounts($customer_id)
     {
-        $sql = "SELECT 
-                    COUNT(CASE WHEN o.status = 'pending' THEN 1 END) as pending,
-                    COUNT(CASE WHEN o.status IN ('ready_for_packing', 'po_pending', 'po_approved', 'po_inprogress', 'item_received', 'added_to_picklist', 'store_transfer', 'ready_for_qc', 'sent_for_repair', 'ready_for_dispatch') THEN 1 END) as progress,
-                    COUNT(CASE WHEN o.status = 'shipped' THEN 1 END) as completed,
-                    COUNT(CASE WHEN o.status = 'cancelled' THEN 1 END) as cancelled
-                FROM vp_orders o
-                WHERE o.customer_id = ?";
-
-        $stmt = $this->conn->prepare($sql);
-        $stmt->bind_param("i", $customer_id);
-        $stmt->execute();
-        return $stmt->get_result()->fetch_assoc();
+        $summary = $this->getCustomerHeaderSummary((int)$customer_id);
+        return [
+            'pending' => (int)($summary['pending'] ?? 0),
+            'progress' => (int)($summary['progress'] ?? 0),
+            'completed' => (int)($summary['completed'] ?? 0),
+            'cancelled' => (int)($summary['cancelled'] ?? 0),
+        ];
     }
 
     /** Used when deleting a customer (cleans optional extended rows). */
