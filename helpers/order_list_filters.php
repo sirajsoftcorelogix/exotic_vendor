@@ -151,12 +151,13 @@ function appendOrderStockAvailabilityFilterSql(string &$sql, array &$params, arr
         return;
     }
 
-    $stockExistsSql = 'EXISTS (
+    $skuMatchSql = 's.sku COLLATE utf8mb4_unicode_ci = vp_orders.sku COLLATE utf8mb4_unicode_ci';
+    $stockExistsSql = "EXISTS (
         SELECT 1 FROM vp_stock s
-        WHERE s.sku = vp_orders.sku
+        WHERE {$skuMatchSql}
           AND s.warehouse_id = ?
           AND s.current_stock >= COALESCE(vp_orders.quantity, 1)
-    )';
+    )";
 
     if ($stockAvailable === 'yes') {
         $sql .= " AND vp_orders.sku IS NOT NULL AND vp_orders.sku <> '' AND {$stockExistsSql}";
@@ -168,7 +169,7 @@ function appendOrderStockAvailabilityFilterSql(string &$sql, array &$params, arr
         vp_orders.sku IS NULL OR vp_orders.sku = ''
         OR NOT EXISTS (
             SELECT 1 FROM vp_stock s
-            WHERE s.sku = vp_orders.sku
+            WHERE {$skuMatchSql}
               AND s.warehouse_id = ?
               AND s.current_stock >= COALESCE(vp_orders.quantity, 1)
         )
