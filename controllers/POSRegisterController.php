@@ -468,8 +468,11 @@ class POSRegisterController
             return $result;
         }
 
+        require_once __DIR__ . '/../integrations/exotic/ExoticIndiaGateway.php';
+        $exoticGateway = ExoticIndiaGateway::create($conn);
+
         foreach ($rows as $row) {
-            $apiRes = $this->updateExoticVendorOrderItemStatus([
+            $apiRes = $exoticGateway->updateOrderItemStatus([
                 'orderid' => $orderNumber,
                 'level' => 'item',
                 'order_status' => $exoticAdminCode,
@@ -480,7 +483,7 @@ class POSRegisterController
             ++$result['api_called'];
             if (empty($apiRes['success'])) {
                 ++$result['api_failed'];
-                error_log('[POS fulfillment status API] Order ' . $orderNumber . ' item ' . (string)($row['id'] ?? '') . ': ' . (string)($apiRes['error'] ?? 'failed'));
+                error_log('[POS fulfillment status API] Order ' . $orderNumber . ' item ' . (string)($row['id'] ?? '') . ': ' . (string)($apiRes['message'] ?? 'failed'));
             }
         }
 
@@ -575,50 +578,6 @@ class POSRegisterController
         $line = 'Delivery status: ' . $label;
 
         return trim($note) !== '' ? trim($note) . "\n" . $line : $line;
-    }
-
-    /**
-     * Mirrors models/comman/tables.php::updateExoticIndiaOrderStatus for POS checkout.
-     *
-     * @param array{orderid:string,level:string,order_status:int,itemcode:string,size:string,color:string} $apiData
-     * @return array{success:bool,http_code:int,raw:string,error:string}
-     */
-    private function updateExoticVendorOrderItemStatus(array $apiData): array
-    {
-        $postData = [
-            'makeRequestOf' => 'vendors-orderjson',
-            'orderid' => $apiData['orderid'],
-            'level' => $apiData['level'],
-            'order_status' => (string)$apiData['order_status'],
-            'itemcode' => $apiData['itemcode'],
-            'size' => $apiData['size'],
-            'color' => $apiData['color'],
-        ];
-        $headers = [
-            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-            'x-adminapitest: 1',
-            'Content-Type: application/x-www-form-urlencoded',
-        ];
-
-        $ch = curl_init('https://www.exoticindia.com/vendor-api/order/modify');
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        $response = curl_exec($ch);
-        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        $raw = (string)$response;
-        $ok = ($error === '' && $httpCode >= 200 && $httpCode < 300);
-        return [
-            'success' => $ok,
-            'http_code' => $httpCode,
-            'raw' => $raw,
-            'error' => $error !== '' ? $error : ($ok ? '' : 'HTTP ' . $httpCode . ' ' . substr($raw, 0, 500)),
-        ];
     }
 
     private function appendHighValueComplianceToNote(string $note, float $invoiceAmount, string $paymentMode, array $compliance): string

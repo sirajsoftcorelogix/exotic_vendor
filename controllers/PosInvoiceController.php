@@ -676,6 +676,9 @@ class PosInvoiceController
         $adminId = (int) ($statusRow['admin_id'] ?? 0);
         $userId = (int) ($_SESSION['user']['id'] ?? 0);
         $changeDate = date('Y-m-d H:i:s');
+        require_once __DIR__ . '/../integrations/exotic/ExoticIndiaGateway.php';
+        global $conn;
+        $exoticGateway = ExoticIndiaGateway::create($conn);
 
         foreach ($orderNumbers as $orderNumber) {
             $lines = $invoiceModel->getOrderLinesForCancelSync($orderNumber);
@@ -683,7 +686,7 @@ class PosInvoiceController
             foreach ($lines as $line) {
                 $apiRes = null;
                 if ($adminId > 0) {
-                    $apiRes = $commanModel->updateExoticIndiaOrderStatus([
+                    $apiRes = $exoticGateway->updateOrderItemStatus([
                         'orderid' => $orderNumber,
                         'level' => 'item',
                         'order_status' => $adminId,
