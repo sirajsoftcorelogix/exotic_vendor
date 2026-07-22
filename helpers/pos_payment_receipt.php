@@ -302,6 +302,25 @@ function pos_payment_sum_cod_pending(mysqli $conn, string $orderNumber): float
     return round((float)($row['cod'] ?? 0), 2);
 }
 
+function pos_payment_sum_allocated(mysqli $conn, string $orderNumber): float
+{
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return 0.0;
+    }
+
+    $stmt = $conn->prepare('SELECT IFNULL(SUM(payment_amount), 0) AS allocated FROM pos_payments WHERE order_number = ?');
+    if (!$stmt) {
+        return 0.0;
+    }
+    $stmt->bind_param('s', $orderNumber);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return round((float)($row['allocated'] ?? 0), 2);
+}
+
 function pos_payment_is_fully_paid(mysqli $conn, string $orderNumber): bool
 {
     $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
@@ -343,9 +362,7 @@ function pos_payment_refresh_order_snapshots(mysqli $conn, string $orderNumber):
     }
 
     while ($row = $res->fetch_assoc()) {
-        if (!pos_payment_is_cod_mode((string)($row['payment_mode'] ?? ''))) {
-            $cumulative += round((float)($row['payment_amount'] ?? 0), 2);
-        }
+        $cumulative += round((float)($row['payment_amount'] ?? 0), 2);
         $pending = round($orderTotal - $cumulative, 2);
         $id = (int)($row['id'] ?? 0);
         $upd->bind_param('ddi', $orderTotal, $pending, $id);
@@ -501,10 +518,8 @@ function pos_payment_compute_order_snapshots(
         $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
     }
 
-    $paidPrior = pos_payment_sum_paid($conn, $orderNumber);
-
-    $effectivePayment = pos_payment_is_cod_mode($paymentMode) ? 0.0 : round($thisPaymentAmount, 2);
-    $pendingAfter = round($orderTotal - $paidPrior - $effectivePayment, 2);
+    $allocatedPrior = pos_payment_sum_allocated($conn, $orderNumber);
+    $pendingAfter = round($orderTotal - $allocatedPrior - round($thisPaymentAmount, 2), 2);
 
     return [
         'order_amount' => $orderTotal,
