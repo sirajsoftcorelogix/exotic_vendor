@@ -5029,9 +5029,9 @@ class POSRegisterController
         if (($row['is_payment_in_full'] || $hasCodPending) && $invoiceId > 0) {
             $row = $this->applyPosReceiptInvoiceLinks($row, $invoiceId);
             if ($hasCodPending && !$row['is_payment_in_full']) {
-                $row['show_invoice_pdf_button'] = false;
+                $row['show_invoice_pdf_button'] = true;
                 $row['show_invoice_preview_button'] = true;
-                $row['invoice_pdf_disabled_hint'] = 'Proforma invoice shows advance received and COD pending until full payment.';
+                $row['invoice_pdf_disabled_hint'] = '';
             }
         } elseif (!$row['is_payment_in_full']) {
             $row['show_invoice_pdf_button'] = false;
@@ -5054,7 +5054,24 @@ class POSRegisterController
             return $this->enrichPosCheckoutReceiptRow($row);
         }
         $invoiceId = $this->findInvoiceIdForOrderNumber($conn, $orderNum);
-        if ($invoiceId) {
+        if ($invoiceId <= 0) {
+            $hasCodPending = !empty($row['has_cod_pending']) || (float)($row['receipt_cod_pending_amount'] ?? 0) > 0.001;
+            if ($hasCodPending) {
+                try {
+                    $ordersCtrl = $this->getOrdersControllerForImport();
+                    if ($ordersCtrl->isOrderReadyForPosCheckout($orderNum)) {
+                        $posInv = $this->getPosInvoiceControllerForCheckout();
+                        $invRes = $posInv->createAutoInvoiceForOrder($orderNum);
+                        if (!empty($invRes['success']) && !empty($invRes['invoice_id'])) {
+                            $invoiceId = (int)$invRes['invoice_id'];
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    error_log('[POS checkout receipt invoice retry] ' . $e->getMessage());
+                }
+            }
+        }
+        if ($invoiceId > 0) {
             if (trim((string)($row['import_status'] ?? '')) === '') {
                 $row['import_status'] = 'success';
             }
