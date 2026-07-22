@@ -7,6 +7,7 @@ require_once 'models/product/product.php';
 require_once 'models/picklist/Picklist.php';
 require_once 'helpers/payment_type_groups.php';
 require_once 'helpers/order_filter_autocomplete.php';
+require_once 'helpers/order_list_filters.php';
 $ordersModel = new Order($conn);
 $commanModel = new Tables($conn);
 $savedSearchModel = new SavedSearch($conn);
@@ -53,7 +54,7 @@ class OrdersController
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page
         $offset = ($page - 1) * $limit;
 
-        $filters = $this->buildOrderListFiltersFromRequest($_GET);
+        $filters = buildOrderListFiltersFromRequest($_GET);
 
         //order status list
         $statusList = $commanModel->get_order_status_list();
@@ -2394,7 +2395,7 @@ class OrdersController
 
         header('Content-Type: application/json');
         $_GET = sanitizeGet($_GET);
-        $filters = $this->buildOrderListFiltersFromRequest($_GET);
+        $filters = buildOrderListFiltersFromRequest($_GET);
         $orderIds = $ordersModel->getFilteredOrderIds($filters);
 
         echo json_encode([
@@ -2403,90 +2404,6 @@ class OrdersController
             'total' => count($orderIds),
         ]);
         exit;
-    }
-
-    private function buildOrderListFiltersFromRequest(array $request): array
-    {
-        $filters = [];
-        if (!empty($request['order_number'])) {
-            $filters['order_number'] = $request['order_number'];
-        }
-        if (!empty($request['item_code'])) {
-            $filters['item_code'] = $request['item_code'];
-        }
-        if (!empty($request['sku'])) {
-            $filters['sku'] = $request['sku'];
-        }
-        if (!empty($request['order_from']) && !empty($request['order_till'])) {
-            $filters['order_from'] = $request['order_from'];
-            $filters['order_till'] = $request['order_till'];
-        }
-        if (!empty($request['item_name'])) {
-            $filters['title'] = $request['item_name'];
-        }
-        if (!empty($request['min_amount'])) {
-            $filters['min_amount'] = $request['min_amount'];
-        }
-        if (!empty($request['max_amount'])) {
-            $filters['max_amount'] = $request['max_amount'];
-        }
-        if (!empty($request['po_no'])) {
-            $filters['po_no'] = $request['po_no'];
-        }
-        if (!empty($request['status'])) {
-            $filters['status_filter'] = $request['status'];
-        }
-
-        if (!empty($request['category']) && $request['category'] != 'all') {
-            $filters['category'] = $request['category'];
-        } else {
-            $filters['category'] = 'all';
-        }
-        if (!empty($request['country'])) {
-            $filters['country'] = $request['country'];
-        }
-        if (!empty($request['options']) && $request['options'] == 'express') {
-            $filters['options'] = 'express';
-        }
-        if (!empty($request['sort'])) {
-            $filters['sort'] = strtolower($request['sort']);
-        } else {
-            $filters['sort'] = 'desc';
-        }
-        if (!empty($request['payment_type']) && $request['payment_type'] != 'all') {
-            $filters['payment_type'] = $request['payment_type'];
-        } else {
-            $filters['payment_type'] = 'all';
-        }
-        if (!empty($request['staff_name'])) {
-            $filters['staff_name'] = $request['staff_name'];
-        }
-        if (!empty($request['priority'])) {
-            $filters['priority'] = $request['priority'];
-        }
-        $vendorFilter = resolveOrderListVendorFilter($request);
-        if ($vendorFilter !== '') {
-            $filters['vendor'] = $vendorFilter;
-        }
-        if (!empty($request['agent'])) {
-            $filters['agent'] = $request['agent'];
-        }
-        $publisherFilter = resolveOrderListPublisherFilter($request);
-        if ($publisherFilter !== '') {
-            $filters['publisher'] = $publisherFilter;
-        }
-        $authorFilter = resolveOrderListAuthorFilter($request);
-        if ($authorFilter !== '') {
-            $filters['author'] = $authorFilter;
-        }
-        if (!empty($request['options']) && $request['options'] == 'unshipped') {
-            $filters['unshipped'] = true;
-        }
-        if (!empty($request['sortdaterange'])) {
-            $filters['sortdaterange'] = $request['sortdaterange'];
-        }
-
-        return $filters;
     }
 
     private function assertCanRefreshOrdersFromVendor(): void

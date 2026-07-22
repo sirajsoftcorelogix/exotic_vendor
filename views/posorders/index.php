@@ -274,16 +274,7 @@
                     </div> -->
                     </div>
 
-                    <div>
-                        <label for="status" class="block text-sm font-medium text-gray-600 mb-1">Status</label>
-                        <select id="status" name="status[]" multiple="multiple" class="max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white advanced-multiselect">
-
-                            <!-- <option value="all" disabled >Select Status</option> -->
-                            <?php foreach ($status_list as $key => $value): ?>
-                                <option value="<?php echo $key; ?>" <?php echo (isset($_GET['status']) && $_GET['status'] === $key) ? 'selected' : ''; ?>><?php echo $value; ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
+                    <?php renderPartial('views/shared/partials/status_filter_select.php', ['status_list' => $status_list]); ?>
                     <?php renderPartial('views/shared/partials/payment_type_filter_select.php', [
                         'payment_type_groups' => $payment_type_groups ?? [],
                         'payment_types' => $payment_types ?? [],
@@ -2287,26 +2278,7 @@
         document.getElementById('importedPopup').classList.remove('hidden');
     }
     <?php renderPartial('views/shared/partials/order_filter_autocomplete_script.php'); ?>
-    //advanced multiselect Initialize Select2 for status 
-    document.addEventListener('DOMContentLoaded', function() {
-        const statusSelect = document.querySelector('.advanced-multiselect');
-        if (statusSelect) {
-            // Initialize Select2
-            $(statusSelect).select2({
-                placeholder: "Select Status",
-                allowClear: true,
-                width: '100%'
-            });
-
-            // Preselect values if any
-            const preselectedStatus = <?php echo json_encode(isset($_GET['status']) ? (is_array($_GET['status']) ? $_GET['status'] : [$_GET['status']]) : []); ?>;
-            if (preselectedStatus.length > 0) {
-                $(statusSelect).val(preselectedStatus).trigger('change');
-            }
-        }
-
-    });
-    <?php renderPartial('views/shared/partials/payment_type_filter_script.php'); ?>
+    <?php renderPartial('views/shared/partials/order_advance_filter_script.php'); ?>
     //category multiselect Initialize Select2 for category 
     document.addEventListener('DOMContentLoaded', function() {
         const categorySelect = document.querySelector('#category');

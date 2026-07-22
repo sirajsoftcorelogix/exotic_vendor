@@ -6,6 +6,7 @@ require_once 'models/posorder/po_invoice.php';
 require_once 'models/product/product.php';
 require_once 'helpers/payment_type_groups.php';
 require_once 'helpers/order_filter_autocomplete.php';
+require_once 'helpers/order_list_filters.php';
 require_once 'models/order/order.php';
 $ordersModel = new POSOrder($conn);
 $commanModel = new Tables($conn);
@@ -31,93 +32,7 @@ class PosOrdersController
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page
         $offset = ($page - 1) * $limit;
 
-        //Advanced Search Filters
-        $filters = [];
-        if (!empty($_GET['order_number'])) {
-            $filters['order_number'] = $_GET['order_number'];
-        }
-        if (!empty($_GET['item_code'])) {
-            $filters['item_code'] = $_GET['item_code'];
-        }
-        if (!empty($_GET['order_from']) && !empty($_GET['order_till'])) {
-            $filters['order_from'] = $_GET['order_from'];
-            $filters['order_till'] = $_GET['order_till'];
-        }
-
-        // if(!empty($_GET['daterange'])){
-        //     echo urldecode($_GET['daterange']);
-        //     $dateRange = explode(' - ', $_GET['daterange']);       
-        //     print_array($dateRange);     
-        //     if (count($dateRange) === 2) {
-        //         $filters['order_from'] = date('Y-m-d', strtotime($dateRange[0]));
-        //         $filters['order_till'] = date('Y-m-d', strtotime($dateRange[1]));
-        //     }
-        // }
-        if (!empty($_GET['item_name'])) {
-            $filters['title'] = $_GET['item_name'];
-        }
-        if (!empty($_GET['min_amount'])) {
-            $filters['min_amount'] = $_GET['min_amount'];
-        }
-        if (!empty($_GET['max_amount'])) {
-            $filters['max_amount'] = $_GET['max_amount'];
-        }
-        if (!empty($_GET['po_no'])) {
-            $filters['po_no'] = $_GET['po_no'];
-        }
-        if (!empty($_GET['status'])) {
-            $filters['status_filter'] = $_GET['status'];
-        }
-
-        if (!empty($_GET['category']) && $_GET['category'] != 'all') {
-            $filters['category'] = $_GET['category'];
-        } else {
-            $filters['category'] = 'all';
-        }
-        if (!empty($_GET['country'])) {
-            $filters['country'] = $_GET['country'];
-        }
-        if (!empty($_GET['options']) && $_GET['options'] == 'express') {
-            $filters['options'] = 'express';
-        }
-        if (!empty($_GET['sort']) && in_array(strtolower($_GET['sort']), ['asc', 'desc'])) {
-            $filters['sort'] = strtolower($_GET['sort']);
-        } else {
-            $filters['sort'] = 'desc'; // Default sort order
-        }
-        if (!empty($_GET['payment_type']) && $_GET['payment_type'] != 'all') {
-            $filters['payment_type'] = $_GET['payment_type'];
-        } else {
-            $filters['payment_type'] = 'all';
-        }
-        if (!empty($_GET['staff_name'])) {
-            $filters['staff_name'] = $_GET['staff_name'];
-        }
-        if (!empty($_GET['priority'])) {
-            $filters['priority'] = $_GET['priority'];
-        }
-        $vendorFilter = resolveOrderListVendorFilter($_GET);
-        if ($vendorFilter !== '') {
-            $filters['vendor'] = $vendorFilter;
-        }
-        if (!empty($_GET['agent'])) {
-            $filters['agent'] = $_GET['agent'];
-        }
-        $publisherFilter = resolveOrderListPublisherFilter($_GET);
-        if ($publisherFilter !== '') {
-            $filters['publisher'] = $publisherFilter;
-        }
-        $authorFilter = resolveOrderListAuthorFilter($_GET);
-        if ($authorFilter !== '') {
-            $filters['author'] = $authorFilter;
-        }
-        //unshipped
-        if (!empty($_GET['options']) && $_GET['options'] == 'unshipped') {
-            $filters['unshipped'] = true;
-        }
-
-
-
+        $filters = buildOrderListFiltersFromRequest($_GET);
         //order status list
         $statusList = $commanModel->get_order_status_list();
         $order_status_row = $commanModel->get_order_status();
