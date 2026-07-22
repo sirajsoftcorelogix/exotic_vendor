@@ -661,7 +661,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         <div class="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2.5">
           <div>
             <h3 class="text-sm font-semibold text-slate-800">Payment split</h3>
-            <p class="text-[11px] text-slate-500">Each row is saved as a separate payment entry (same receipt). Use <strong class="text-slate-700">Cash on Delivery (COD)</strong> for the balance to collect on delivery.</p>
+            <p class="text-[11px] text-slate-500">Each row is saved as a separate payment entry (same receipt)</p>
           </div>
           <button type="button" id="payment_split_add_btn" class="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-white px-3 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-50 shadow-sm">
             <span class="text-base leading-none">+</span> Add mode
