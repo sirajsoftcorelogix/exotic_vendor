@@ -68,13 +68,6 @@ if ($invoiceIdForReturn > 0) {
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-3">
             <h1 class="text-xl font-bold"><?php echo htmlspecialchars((string)($orderremarks['order_number'] ?? '')); ?></h1>
-            <button type="button"
-                class="inline-flex items-center gap-1.5 rounded border border-orange-200 bg-orange-50 px-3 py-1.5 text-sm font-medium text-orange-700 hover:bg-orange-100"
-                title="Refresh all lines for this order from Exotic"
-                onclick="openRefreshOrderModal('<?= htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8') ?>')">
-                <i class="fa-solid fa-rotate text-xs"></i>
-                Refresh from Exotic
-            </button>
             <!-- <span class="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white">Paid</span>
             <span class="rounded-full bg-red-500 px-3 py-1 text-xs font-semibold text-white">Canceled</span>
             <span class="rounded-full bg-yellow-500 px-3 py-1 text-xs font-semibold text-white">Refunded</span>
@@ -745,49 +738,6 @@ if ($invoiceIdForReturn > 0) {
     </div>
 </div>
 
-<div id="refreshOrderModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50 p-4" onclick="closeRefreshOrderModal(event)">
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative" onclick="event.stopPropagation();">
-        <button type="button" onclick="closeRefreshOrderModal()" class="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
-        <div class="p-6">
-            <h2 class="text-xl font-bold mb-2">Refresh order from Exotic</h2>
-            <p class="text-sm text-gray-600 mb-4">Order <strong id="refreshOrderNumberLabel"></strong> — all cart lines with this order number will be imported or updated.</p>
-            <div id="refreshOrderLoading" class="hidden text-sm text-gray-600 mb-3">Loading preview from vendor API…</div>
-            <div id="refreshOrderError" class="hidden text-sm text-red-600 mb-3"></div>
-            <div id="refreshOrderPreviewWrap" class="hidden">
-                <div class="overflow-x-auto border border-gray-200 rounded-lg mb-4">
-                    <table class="min-w-full text-sm">
-                        <thead class="bg-gray-50 text-left">
-                            <tr>
-                                <th class="px-3 py-2 font-semibold">Item</th>
-                                <th class="px-3 py-2 font-semibold">Qty</th>
-                                <th class="px-3 py-2 font-semibold">In DB</th>
-                                <th class="px-3 py-2 font-semibold">Current status (DB)</th>
-                                <th class="px-3 py-2 font-semibold">Status from API</th>
-                                <th class="px-3 py-2 font-semibold">Addons (API)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="refreshOrderLinesBody" class="divide-y divide-gray-100"></tbody>
-                    </table>
-                </div>
-                <div id="refreshOrderStatusChoice" class="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 hidden">
-                    <label class="inline-flex items-start gap-2 cursor-pointer">
-                        <input type="checkbox" id="refreshOrderUpdateStatus" class="mt-1 h-4 w-4 text-orange-600 border-gray-300 rounded">
-                        <span>
-                            <span class="font-semibold text-gray-900 block">Update order status from Exotic API</span>
-                            <span class="text-xs text-gray-600">If unchecked, existing lines keep their current status in the database; prices, addons, and other fields still refresh. New lines always use the API status.</span>
-                        </span>
-                    </label>
-                </div>
-                <p id="refreshOrderNoStatusDiff" class="hidden text-sm text-gray-600 mb-4">No status differences detected on existing lines. Status will remain unchanged unless you add new lines.</p>
-            </div>
-            <div class="flex justify-end gap-3">
-                <button type="button" onclick="closeRefreshOrderModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">Cancel</button>
-                <button type="button" id="refreshOrderApplyBtn" disabled onclick="applyRefreshOrderFromModal()" class="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed">Refresh order</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script>
     function openNoteEditPopup(orderNumber, currentRemarks) {
         document.getElementById('note_order_number').value = orderNumber;
@@ -927,141 +877,6 @@ if ($invoiceIdForReturn > 0) {
                 alert("Connection problem. Please try again.");
             });
     });
-
-    let refreshOrderModalNumber = '';
-
-    function closeRefreshOrderModal(e) {
-        if (e && e.target && e.currentTarget !== e.target) {
-            return;
-        }
-        document.getElementById('refreshOrderModal').classList.add('hidden');
-        refreshOrderModalNumber = '';
-    }
-
-    function escapeHtmlRefresh(s) {
-        return String(s == null ? '' : s)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
-    }
-
-    function parseRefreshOrderJsonResponse(res) {
-        return res.text().then(function(text) {
-            const cleaned = String(text || '').replace(/^\uFEFF/, '').trim();
-            try {
-                return JSON.parse(cleaned);
-            } catch (err) {
-                const snippet = cleaned.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 280);
-                throw new Error(snippet || 'Server returned non-JSON response.');
-            }
-        });
-    }
-
-    function openRefreshOrderModal(orderNumber) {
-        orderNumber = String(orderNumber || '').trim();
-        if (!orderNumber) {
-            alert('Order number is missing.');
-            return;
-        }
-        refreshOrderModalNumber = orderNumber;
-        document.getElementById('refreshOrderNumberLabel').textContent = orderNumber;
-        document.getElementById('refreshOrderError').classList.add('hidden');
-        document.getElementById('refreshOrderError').textContent = '';
-        document.getElementById('refreshOrderPreviewWrap').classList.add('hidden');
-        document.getElementById('refreshOrderLoading').classList.remove('hidden');
-        document.getElementById('refreshOrderApplyBtn').disabled = true;
-        document.getElementById('refreshOrderUpdateStatus').checked = false;
-        document.getElementById('refreshOrderStatusChoice').classList.add('hidden');
-        document.getElementById('refreshOrderNoStatusDiff').classList.add('hidden');
-        document.getElementById('refreshOrderLinesBody').innerHTML = '';
-        document.getElementById('refreshOrderModal').classList.remove('hidden');
-
-        fetch('index.php?page=orders&action=refresh_order_preview&order_number=' + encodeURIComponent(orderNumber), {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-            body: JSON.stringify({ order_number: orderNumber })
-        })
-            .then(parseRefreshOrderJsonResponse)
-            .then(function(data) {
-                document.getElementById('refreshOrderLoading').classList.add('hidden');
-                if (!data || !data.success) {
-                    document.getElementById('refreshOrderError').textContent = (data && data.message) ? data.message : 'Could not load preview.';
-                    document.getElementById('refreshOrderError').classList.remove('hidden');
-                    return;
-                }
-                const tbody = document.getElementById('refreshOrderLinesBody');
-                tbody.innerHTML = '';
-                (data.lines || []).forEach(function(line) {
-                    const tr = document.createElement('tr');
-                    if (line.status_differs) {
-                        tr.className = 'bg-amber-50';
-                    }
-                    const addons = line.addons ? line.addons : '—';
-                    tr.innerHTML =
-                        '<td class="px-3 py-2"><div class="font-medium">' + escapeHtmlRefresh(line.item_code) + '</div>' +
-                        '<div class="text-xs text-gray-500">' + escapeHtmlRefresh(line.title || '') + '</div></td>' +
-                        '<td class="px-3 py-2">' + escapeHtmlRefresh(line.quantity) + '</td>' +
-                        '<td class="px-3 py-2">' + (line.in_db ? 'Yes' : '<span class="text-green-700 font-medium">New</span>') + '</td>' +
-                        '<td class="px-3 py-2">' + escapeHtmlRefresh(line.db_status_label || '—') + '</td>' +
-                        '<td class="px-3 py-2">' + escapeHtmlRefresh(line.api_status_label || line.api_status || '—') + '</td>' +
-                        '<td class="px-3 py-2 text-xs font-mono">' + escapeHtmlRefresh(addons) + '</td>';
-                    tbody.appendChild(tr);
-                });
-                document.getElementById('refreshOrderPreviewWrap').classList.remove('hidden');
-                document.getElementById('refreshOrderApplyBtn').disabled = false;
-                if (data.has_status_diff) {
-                    document.getElementById('refreshOrderStatusChoice').classList.remove('hidden');
-                    document.getElementById('refreshOrderNoStatusDiff').classList.add('hidden');
-                } else {
-                    document.getElementById('refreshOrderStatusChoice').classList.add('hidden');
-                    document.getElementById('refreshOrderNoStatusDiff').classList.remove('hidden');
-                }
-            })
-            .catch(function(err) {
-                document.getElementById('refreshOrderLoading').classList.add('hidden');
-                document.getElementById('refreshOrderError').textContent = err && err.message ? err.message : 'Preview request failed.';
-                document.getElementById('refreshOrderError').classList.remove('hidden');
-            });
-    }
-
-    function applyRefreshOrderFromModal() {
-        if (!refreshOrderModalNumber) {
-            return;
-        }
-        const updateStatus = document.getElementById('refreshOrderUpdateStatus').checked;
-        const btn = document.getElementById('refreshOrderApplyBtn');
-        btn.disabled = true;
-        btn.textContent = 'Refreshing…';
-
-        fetch('index.php?page=orders&action=refresh_order_apply&order_number=' + encodeURIComponent(refreshOrderModalNumber), {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-            body: JSON.stringify({
-                order_number: refreshOrderModalNumber,
-                update_status: updateStatus ? '1' : '0'
-            })
-        })
-            .then(parseRefreshOrderJsonResponse)
-            .then(function(data) {
-                btn.disabled = false;
-                btn.textContent = 'Refresh order';
-                if (!data || !data.success) {
-                    alert((data && data.message) ? data.message : 'Refresh failed.');
-                    return;
-                }
-                alert(data.message || 'Order refreshed.');
-                closeRefreshOrderModal();
-                window.location.reload();
-            })
-            .catch(function(err) {
-                btn.disabled = false;
-                btn.textContent = 'Refresh order';
-                alert(err && err.message ? err.message : 'Refresh request failed.');
-            });
-    }
 
     function openStatusPopup(orderId) {
         document.getElementById('status_order_id').value = orderId;
