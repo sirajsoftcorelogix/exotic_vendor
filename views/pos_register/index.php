@@ -661,7 +661,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         <div class="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2.5">
           <div>
             <h3 class="text-sm font-semibold text-slate-800">Payment split</h3>
-            <p class="text-[11px] text-slate-500">Each row is saved as a separate payment entry (same receipt)</p>
+            <p class="text-[11px] text-slate-500">Each row is saved as a separate payment entry (same receipt). Use <strong class="text-slate-700">Cash on Delivery (COD)</strong> for the balance to collect on delivery.</p>
           </div>
           <button type="button" id="payment_split_add_btn" class="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-white px-3 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-50 shadow-sm">
             <span class="text-base leading-none">+</span> Add mode
@@ -714,15 +714,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   <div class="payment-split-row px-4 py-3 sm:grid sm:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_2.5rem] sm:gap-2 sm:items-start space-y-2 sm:space-y-0">
     <div>
       <label class="sm:hidden text-[10px] font-semibold text-slate-500 uppercase">Mode</label>
-      <select class="payment-split-mode mt-0.5 sm:mt-0 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
-        <option value="cash">Cash</option>
-        <option value="upi">UPI</option>
-        <option value="bank_transfer">Bank transfer</option>
-        <option value="pos_machine">POS machine</option>
-        <option value="razorpay">Razorpay</option>
-        <option value="cheque">Cheque</option>
-        <option value="cod">Cash on Delivery (COD)</option>
-      </select>
+      <select class="payment-split-mode mt-0.5 sm:mt-0 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></select>
     </div>
     <div>
       <label class="sm:hidden text-[10px] font-semibold text-slate-500 uppercase">Amount (₹)</label>
@@ -1204,15 +1196,49 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     }
   }
 
-  var POS_PAYMENT_MODE_OPTIONS = [
-    ["cash", "Cash"],
-    ["upi", "UPI"],
-    ["bank_transfer", "Bank transfer"],
-    ["pos_machine", "POS machine"],
-    ["razorpay", "Razorpay"],
-    ["cheque", "Cheque"],
-    ["cod", "Cash on Delivery (COD)"]
-  ];
+  var POS_PAYMENT_MODE_OPTIONS = <?= json_encode(
+      $pos_payment_mode_options ?? [],
+      JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+  ) ?>;
+
+  function populatePaymentSplitModeSelect(selectEl, selectedMode) {
+    if (!selectEl) return;
+    var prev = String(selectedMode || selectEl.value || "cash").toLowerCase();
+    selectEl.innerHTML = "";
+    var options = Array.isArray(POS_PAYMENT_MODE_OPTIONS) ? POS_PAYMENT_MODE_OPTIONS : [];
+    if (!options.length) {
+      options = [
+        ["cash", "Cash"],
+        ["cod", "Cash on Delivery (COD)"],
+        ["upi", "UPI"],
+        ["bank_transfer", "Bank transfer"],
+        ["pos_machine", "POS machine"],
+        ["razorpay", "Razorpay"],
+        ["cheque", "Cheque"]
+      ];
+    }
+    options.forEach(function(pair) {
+      if (!Array.isArray(pair) || !pair[0]) return;
+      var opt = document.createElement("option");
+      opt.value = String(pair[0]);
+      opt.textContent = String(pair[1] || pair[0]);
+      selectEl.appendChild(opt);
+    });
+    if (prev && selectEl.querySelector('option[value="' + prev.replace(/"/g, "") + '"]')) {
+      selectEl.value = prev;
+    } else if (selectEl.options.length) {
+      selectEl.selectedIndex = 0;
+    }
+  }
+
+  function refreshAllPaymentSplitModeSelects() {
+    var container = getPaymentSplitRowsContainer();
+    if (!container) return;
+    container.querySelectorAll(".payment-split-row").forEach(function(row) {
+      var modeEl = row.querySelector(".payment-split-mode");
+      populatePaymentSplitModeSelect(modeEl, modeEl ? modeEl.value : "cash");
+    });
+  }
 
   function formatPaymentInr(amount) {
     var n = parseFloat(String(amount));
@@ -1276,6 +1302,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var modeEl = row.querySelector(".payment-split-mode");
     var amtEl = row.querySelector(".payment-split-amount");
     var txnEl = row.querySelector(".payment-split-txn");
+    populatePaymentSplitModeSelect(modeEl, mode || "cash");
     if (modeEl && mode) modeEl.value = mode;
     if (amtEl != null && amount != null && amount !== "") amtEl.value = String(amount);
     if (txnEl && txn) txnEl.value = txn;

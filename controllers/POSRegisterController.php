@@ -867,6 +867,7 @@ class POSRegisterController
             'country_list' => $countryList,
             'pos_india_states' => $posCountryStates['IN'] ?? [],
             'pos_country_states' => $posCountryStates,
+            'pos_payment_mode_options' => $this->posPaymentModeOptionsForView(),
         ]);
     }
 
@@ -5397,11 +5398,34 @@ class POSRegisterController
     }
 
     /**
+     * @return list<array{0:string,1:string}>
+     */
+    public function posPaymentModeOptionsForView(): array
+    {
+        $labels = [
+            'cash' => 'Cash',
+            'cod' => 'Cash on Delivery (COD)',
+            'upi' => 'UPI',
+            'bank_transfer' => 'Bank transfer',
+            'pos_machine' => 'POS machine',
+            'razorpay' => 'Razorpay',
+            'cheque' => 'Cheque',
+        ];
+
+        $options = [];
+        foreach ($this->allowedPosPaymentModes() as $mode) {
+            $options[] = [$mode, $labels[$mode] ?? ucfirst(str_replace('_', ' ', $mode))];
+        }
+
+        return $options;
+    }
+
+    /**
      * @return list<string>
      */
     private function allowedPosPaymentModes(): array
     {
-        return ['cash', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque', 'cod'];
+        return ['cash', 'cod', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque'];
     }
 
     /**
