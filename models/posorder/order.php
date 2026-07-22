@@ -78,6 +78,7 @@ class POSOrder
             $sql .= " AND vp_orders.options LIKE '%express%' AND vp_orders.status = 'pending'";
         }
         appendOrderPaymentTypeFilterSql($sql, $params, $filters);
+        appendOrderStockAvailabilityFilterSql($sql, $params, $filters);
         if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
             //$sql .= " AND vp_users.id = ?";
             //$params[] = $filters['staff_name'];
@@ -251,6 +252,7 @@ class POSOrder
             $sql .= " AND options LIKE '%express%' AND vp_orders.status = 'pending'";
         }
         appendOrderPaymentTypeFilterSql($sql, $params, $filters, 'payment_type');
+        appendOrderStockAvailabilityFilterSql($sql, $params, $filters);
         if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
             //$sql .= " AND vp_users.id = ?";
             //$params[] = $filters['staff_name'];

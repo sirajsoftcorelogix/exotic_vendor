@@ -126,6 +126,56 @@ function appendOrderNumberFilterSql(
     }
 }
 
+function normalizeStockAvailableFilter(?string $value): string
+{
+    $value = strtolower(trim((string) $value));
+
+    return in_array($value, ['yes', 'no'], true) ? $value : '';
+}
+
+function resolveOrderListDefaultWarehouseId(): int
+{
+    $warehouseId = (int) ($_SESSION['warehouse_id'] ?? 0);
+    if ($warehouseId <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+        $warehouseId = (int) $_SESSION['user']['warehouse_id'];
+    }
+
+    return max(0, $warehouseId);
+}
+
+function appendOrderStockAvailabilityFilterSql(string &$sql, array &$params, array $filters): void
+{
+    $stockAvailable = normalizeStockAvailableFilter($filters['stock_available'] ?? '');
+    $warehouseId = (int) ($filters['stock_warehouse_id'] ?? 0);
+    if ($stockAvailable === '' || $warehouseId <= 0) {
+        return;
+    }
+
+    $stockExistsSql = 'EXISTS (
+        SELECT 1 FROM vp_stock s
+        WHERE s.sku = vp_orders.sku
+          AND s.warehouse_id = ?
+          AND s.current_stock >= COALESCE(vp_orders.quantity, 1)
+    )';
+
+    if ($stockAvailable === 'yes') {
+        $sql .= " AND vp_orders.sku IS NOT NULL AND vp_orders.sku <> '' AND {$stockExistsSql}";
+        $params[] = $warehouseId;
+        return;
+    }
+
+    $sql .= " AND (
+        vp_orders.sku IS NULL OR vp_orders.sku = ''
+        OR NOT EXISTS (
+            SELECT 1 FROM vp_stock s
+            WHERE s.sku = vp_orders.sku
+              AND s.warehouse_id = ?
+              AND s.current_stock >= COALESCE(vp_orders.quantity, 1)
+        )
+    )";
+    $params[] = $warehouseId;
+}
+
 function buildOrderListFiltersFromRequest(array $request): array
 {
     $filters = [];
@@ -207,6 +257,17 @@ function buildOrderListFiltersFromRequest(array $request): array
     }
     if (!empty($request['sortdaterange'])) {
         $filters['sortdaterange'] = $request['sortdaterange'];
+    }
+    $stockAvailable = normalizeStockAvailableFilter($request['stock_available'] ?? '');
+    if ($stockAvailable !== '') {
+        $warehouseId = (int) ($request['stock_warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            $warehouseId = resolveOrderListDefaultWarehouseId();
+        }
+        if ($warehouseId > 0) {
+            $filters['stock_available'] = $stockAvailable;
+            $filters['stock_warehouse_id'] = $warehouseId;
+        }
     }
 
     return $filters;
