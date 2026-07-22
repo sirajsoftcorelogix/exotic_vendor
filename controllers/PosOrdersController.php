@@ -86,6 +86,8 @@ class PosOrdersController
                 'staff_list' => $commanModel->get_staff_list(),
                 'filters' => $filters,
                 'saved_searches' => $saved_searches,
+                'warehouses' => $commanModel->get_exotic_address(),
+                'default_warehouse_id' => resolveOrderListDefaultWarehouseId(),
             ],
             preparePaymentTypeFilterData($paymentTypes, $_GET['payment_type'] ?? null)
         ), 'Manage Orders');

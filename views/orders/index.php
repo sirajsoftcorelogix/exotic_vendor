@@ -450,6 +450,10 @@
                 </div> -->
 
                     <?php renderPartial('views/shared/partials/order_number_filter_field.php'); ?>
+                    <?php renderPartial('views/shared/partials/stock_availability_filter.php', [
+                        'warehouses' => $warehouses ?? [],
+                        'default_warehouse_id' => $default_warehouse_id ?? 0,
+                    ]); ?>
 
                     <!-- Status -->
                     <div>
