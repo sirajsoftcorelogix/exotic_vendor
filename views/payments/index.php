@@ -60,7 +60,9 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                     <select id="payment_mode"
                         class="w-full border rounded px-2 py-2">
                         <option value="">All</option>
-                        <option value="cod">Cash</option>
+                        <option value="cash">Cash</option>
+                        <option value="cod">Cash on Delivery (COD)</option>
+                        <option value="upi">UPI</option>
                         <option value="offline">Offline</option>
                         <option value="bank_transfer">Bank</option>
                         <option value="pos_machine">POS</option>
@@ -188,8 +190,10 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                     <label class="text-xs text-gray-500">Payment Mode</label>
                     <select id="payment_type"
                         class="w-full mt-1 border rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500">
+                        <option value="cash">Cash</option>
+                        <option value="cod">Cash on Delivery (COD)</option>
+                        <option value="upi">UPI</option>
                         <option value="offline">Offline</option>
-                        <option value="cod">Cash</option>
                         <option value="bank_transfer">Bank Transfer</option>
                         <option value="pos_machine">POS Machine</option>
                         <option value="razorpay">Razorpay</option>
@@ -325,6 +329,23 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         return n.toFixed(2);
     }
 
+    function formatPaymentModeLabel(mode) {
+        const key = String(mode ?? '').trim().toLowerCase();
+        const labels = {
+            cash: 'Cash',
+            cod: 'Cash on Delivery (COD)',
+            upi: 'UPI',
+            offline: 'Offline',
+            bank_transfer: 'Bank transfer',
+            pos_machine: 'POS machine',
+            razorpay: 'Razorpay',
+            specialpay: 'SpecialPay',
+            cheque: 'Cheque',
+            demand_draft: 'Demand draft'
+        };
+        return labels[key] || (key ? key.replace(/_/g, ' ') : '—');
+    }
+
     function escapeJsString(value) {
         return String(value ?? '')
             .replace(/\\/g, '\\\\')
@@ -443,7 +464,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
    
 </td>
 <td> <span class="text-red-600 text-xs tabular-nums"> ₹ ${formatPaymentAmount(p.pending_balance ?? 0)}</span></td>
-        <td class="p-3">${p.payment_mode ?? ''}</td>
+        <td class="p-3">${formatPaymentModeLabel(p.payment_mode)}</td>
         <td class="p-3">${p.payment_stage ?? ''}</td>
         <td class="p-3">${p.user_name ?? ''}</td>
 
@@ -649,6 +670,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         document.getElementById("payment_order_label").innerText = orderNumber;
 
         document.getElementById("payment_stage").value = "final";
+        document.getElementById("payment_type").value = "cash";
         document.getElementById("transaction_id").value = "";
         document.getElementById("payment_note").value = "";
         document.getElementById("payment_date").value = new Date().toISOString().split('T')[0];
