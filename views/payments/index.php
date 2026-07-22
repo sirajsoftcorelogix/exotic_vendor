@@ -390,11 +390,6 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
     }
 
     function buildInvoiceActionHtml(p) {
-        const settled = p.is_settled === true || p.is_settled === 1;
-        if (!settled) {
-            return '';
-        }
-
         const invoiceId = parseInt(p.invoice_id, 10);
         if (invoiceId > 0) {
             return `
@@ -406,9 +401,15 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
     </a>`;
         }
 
+        const settled = p.is_settled === true || p.is_settled === 1;
+        const canProforma = p.can_create_proforma === true || p.can_create_proforma === 1;
+        if (!settled && !canProforma) {
+            return '';
+        }
+
         return `
     <button onclick="createInvoiceFromPayment(${p.id})"
-        title="Create invoice"
+        title="${canProforma ? 'Create proforma invoice (advance + COD)' : 'Create invoice'}"
         class="flex items-center gap-1 text-purple-600 hover:text-purple-800 text-xs font-semibold">
         <i class="fa-solid fa-file-circle-plus"></i>
     </button>`;

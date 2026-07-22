@@ -249,9 +249,25 @@ class PaymentsController
         }
 
         if (!pos_payment_is_fully_paid($conn, $orderNumber)) {
+            if (pos_payment_is_allocation_complete($conn, $orderNumber)
+                && pos_payment_sum_cod_pending($conn, $orderNumber) > 0.001) {
+                $invoiceMeta = pos_payment_ensure_proforma_invoice_for_order($conn, $orderNumber);
+                if (!empty($invoiceMeta['success']) && !empty($invoiceMeta['invoice_id'])) {
+                    vendorJsonResponse([
+                        'success' => true,
+                        'invoice_id' => (int)$invoiceMeta['invoice_id'],
+                        'created' => !empty($invoiceMeta['created']),
+                        'proforma' => true,
+                    ]);
+                }
+                vendorJsonResponse([
+                    'success' => false,
+                    'message' => $invoiceMeta['message'] ?? 'Proforma invoice could not be created.',
+                ]);
+            }
             vendorJsonResponse([
                 'success' => false,
-                'message' => 'Order is not fully paid yet. Invoice can be created only when balance is zero.',
+                'message' => 'Order is not fully paid yet. A tax invoice is created only after all cash/UPI/card payments are received. For COD orders, create a proforma once advance plus COD covers the order total.',
             ]);
         }
 
