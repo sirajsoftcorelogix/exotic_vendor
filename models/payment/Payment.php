@@ -81,15 +81,16 @@ SELECT
 
     ROUND(
         IFNULL(
-            NULLIF(vo.order_grand_total, 0),
-            IFNULL(NULLIF(p.order_amount, 0), IFNULL(vo.order_line_subtotal, 0))
+            NULLIF(p.order_amount, 0),
+            IFNULL(
+                NULLIF(vo.order_grand_total, 0),
+                IFNULL(vo.order_line_subtotal, 0)
+            )
         )
         -
         IFNULL(
             (
-                SELECT SUM(
-                    CASE WHEN LOWER(TRIM(p2.payment_mode)) = 'cod' THEN 0 ELSE p2.payment_amount END
-                )
+                SELECT SUM(p2.payment_amount)
                 FROM pos_payments p2
                 WHERE p2.order_number COLLATE utf8mb4_unicode_ci
                       = p.order_number COLLATE utf8mb4_unicode_ci
@@ -97,7 +98,19 @@ SELECT
             ), 0
         ),
         2
-    ) AS pending_balance
+    ) AS pending_balance,
+
+    IFNULL(
+        (
+            SELECT SUM(
+                CASE WHEN LOWER(TRIM(p3.payment_mode)) = 'cod' THEN 0 ELSE p3.payment_amount END
+            )
+            FROM pos_payments p3
+            WHERE p3.order_number COLLATE utf8mb4_unicode_ci
+                  = p.order_number COLLATE utf8mb4_unicode_ci
+        ),
+        0
+    ) AS order_collected_paid
 
 FROM pos_payments p
 
@@ -240,17 +253,20 @@ WHERE 1=1
      */
     private function formatListAjaxRow(array $row): array
     {
-        $resolvedOrderAmount = round((float)($row['order_grand_total'] ?? 0), 2);
+        $storedOrderAmount = round((float)($row['order_amount'] ?? 0), 2);
+        $resolvedOrderAmount = $storedOrderAmount;
         if ($resolvedOrderAmount <= 0) {
-            $resolvedOrderAmount = round((float)($row['order_amount'] ?? 0), 2);
+            $resolvedOrderAmount = round((float)($row['order_grand_total'] ?? 0), 2);
         }
         if ($resolvedOrderAmount > 0) {
             $row['order_amount'] = $resolvedOrderAmount;
         }
+
+        $collectedPaid = round((float)($row['order_collected_paid'] ?? 0), 2);
+        $row['is_settled'] = $resolvedOrderAmount > 0 && $collectedPaid + 0.02 >= $resolvedOrderAmount;
         $row['order_number'] = trim((string)($row['order_number'] ?? ''));
         $row['invoice_id'] = (int)($row['invoice_id'] ?? 0);
-        $row['is_settled'] = round((float)($row['pending_balance'] ?? 0), 2) <= 0.02;
-        unset($row['order_grand_total'], $row['order_line_subtotal']);
+        unset($row['order_grand_total'], $row['order_line_subtotal'], $row['balance_snapshot'], $row['order_collected_paid']);
 
         return $row;
     }
