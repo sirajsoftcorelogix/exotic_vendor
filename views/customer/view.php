@@ -85,6 +85,24 @@ $renderAddonBadges = static function (array $order) use ($fmtMoney, $primaryCurr
     return $html !== '' ? $html : '<span class="text-gray-400">—</span>';
 };
 
+$buildStatusOrderPayload = static function (array $order): array {
+    return [
+        'order_id' => (int)($order['id'] ?? 0),
+        'order_number' => (string)($order['order_number'] ?? ''),
+        'item_code' => (string)($order['item_code'] ?? $order['sku'] ?? ''),
+        'vendor_name' => (string)($order['vendor_name'] ?? $order['vendor'] ?? ''),
+        'groupname' => (string)($order['groupname'] ?? ''),
+        'subcategories' => (string)($order['subcategories'] ?? ''),
+        'title' => (string)($order['title'] ?? ''),
+        'image' => (string)($order['image'] ?? ''),
+        'status' => (string)($order['status'] ?? ''),
+        'priority' => (string)($order['priority'] ?? ''),
+        'agent_id' => (string)($order['agent_id'] ?? ''),
+        'esd' => (string)($order['esd'] ?? ''),
+        'remarks' => (string)($order['remarks'] ?? ''),
+    ];
+};
+
 $buildViewParams = static function (array $overrides = []) use (
     $customerId,
     $pageNo,
@@ -381,6 +399,7 @@ if ($end - $start < $slotSize - 1) {
                             <th class="px-4 py-3">Payment</th>
                             <th class="px-4 py-3 text-right">Total</th>
                             <th class="px-4 py-3">Invoice</th>
+                            <th class="px-4 py-3">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
@@ -396,6 +415,7 @@ if ($end - $start < $slotSize - 1) {
                             $shipBy = $fmtDate($order['esd'] ?? null);
                             $imageUrl = (string)($order['image'] ?? 'https://via.placeholder.com/60');
                             $imageAlt = trim($itemCode . ' ' . (string)($order['title'] ?? ''));
+                            $statusOrderPayload = $buildStatusOrderPayload($order);
                         ?>
                         <tr class="hover:bg-gray-50/80">
                             <td class="px-3 py-3">
@@ -422,6 +442,10 @@ if ($end - $start < $slotSize - 1) {
                                     —
                                 <?php endif; ?>
                             </td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <button type="button" onclick="openStatusPopup(<?= $orderLineId ?>)" class="text-orange-700 hover:text-orange-900 hover:underline text-sm font-medium">Update status</button>
+                                <span id="order-id-<?= $orderLineId ?>" class="hidden" data-order='<?= htmlspecialchars(json_encode($statusOrderPayload), ENT_QUOTES, 'UTF-8') ?>'></span>
+                            </td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -447,14 +471,17 @@ if ($end - $start < $slotSize - 1) {
                 $ordersListUrl = base_url('?page=orders&action=list&search=' . rawurlencode($orderNumber));
                 $imageUrl = (string)($order['image'] ?? 'https://via.placeholder.com/60');
                 $imageAlt = trim($itemCode . ' ' . $productTitle);
+                $statusOrderPayload = $buildStatusOrderPayload($order);
             ?>
             <div class="order-card-item bg-white shadow-sm border border-gray-100 rounded-xl p-5 mt-4 relative">
+                <span id="order-id-<?= $orderLineId ?>" class="hidden" data-order='<?= htmlspecialchars(json_encode($statusOrderPayload), ENT_QUOTES, 'UTF-8') ?>'></span>
                 <div class="absolute top-4 right-4">
                     <button type="button" class="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500" onclick="this.nextElementSibling.classList.toggle('hidden')" aria-label="Order options">
                         <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="18" r="1.5"/></svg>
                     </button>
                     <div class="order-card-menu hidden absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border py-1 z-50">
                         <a href="<?= htmlspecialchars($orderDetailUrl) ?>" target="_blank" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">View details</a>
+                        <button type="button" onclick="openStatusPopup(<?= $orderLineId ?>)" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update status</button>
                         <a href="<?= htmlspecialchars($ordersListUrl) ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Find in orders</a>
                     </div>
                 </div>
@@ -474,6 +501,7 @@ if ($end - $start < $slotSize - 1) {
                                 <p class="text-sm text-gray-600 mt-1 truncate" title="<?= htmlspecialchars($productTitle) ?>"><?= htmlspecialchars($productTitle) ?></p>
                             <?php endif; ?>
                             <p class="mt-2"><span class="<?= $statusClass ?> px-2 py-0.5 rounded text-xs font-medium"><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $status))) ?></span></p>
+                            <button type="button" onclick="openStatusPopup(<?= $orderLineId ?>)" class="mt-2 text-xs font-semibold text-orange-700 hover:text-orange-900 hover:underline">Update status</button>
                         </div>
                     </div>
 
@@ -638,6 +666,14 @@ if ($end - $start < $slotSize - 1) {
     <?php endif; ?>
 
 </div>
+
+<?php if ($tab === 'orders'): ?>
+    <?php renderPartial('views/shared/partials/order_status_update_popup.php', [
+        'order_status_list' => $order_status_list ?? [],
+        'staff_list' => $staff_list ?? [],
+        'showOrderVendorName' => !empty($showOrderVendorName),
+    ]); ?>
+<?php endif; ?>
 
 <div id="customer-image-lightbox"
      class="fixed inset-0 z-[200] hidden flex-col items-center justify-center bg-black/85 p-4 sm:p-6"
