@@ -7226,10 +7226,11 @@ class ProductsController
      * Refresh vp_products fields from vendor API before transfer validation (e.g. SKU resolution).
      * By default local warehouse stock is unchanged; pass sync_stock to pull local_stock from API
      * and align default-warehouse physical stock for the resolved SKUs / item-code variants.
+     * Stock-sync mode processes small code batches to avoid gateway timeouts on large transfers.
      *
      * @param list<string> $itemCodes
      * @param array{sync_stock?:bool,skus?:list<string>} $options
-     * @return array{success:bool,message:string}
+     * @return array{success:bool,message:string,processed_codes?:int,failed_codes?:list<string>}
      */
     private function refreshTransferItemsFromApi(array $itemCodes, $productModel, array $options = []): array
     {
@@ -7238,97 +7239,152 @@ class ProductsController
             return trim((string)$v);
         }, $itemCodes))));
         if (empty($codes)) {
-            return ['success' => true, 'message' => 'No item codes to refresh.'];
+            return ['success' => true, 'message' => 'No item codes to refresh.', 'processed_codes' => 0];
         }
+
         $headers = [
             'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
             'x-adminapitest: 1',
             'Content-Type: application/x-www-form-urlencoded',
         ];
 
-        // Vendor fetch endpoint is stable with <= 50 codes/request (same as product-details flow).
-        $chunks = array_chunk($codes, 50);
-        $allRows = [];
+        // Stock sync is heavy (variant expand + ledger writes); keep batches small server-side too.
+        $processChunkSize = $syncStock ? 5 : 50;
+        $codeChunks = array_chunk($codes, $processChunkSize);
+        $skusForSync = is_array($options['skus'] ?? null) ? $options['skus'] : [];
+
+        $processedCodes = 0;
+        $failedCodes = [];
         $emptyResponseCodes = [];
         $failedChunks = 0;
+        $updatedTotal = 0;
 
-        foreach ($chunks as $chunk) {
-            $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode(implode(',', $chunk));
-            $ch = curl_init($url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-            $response = curl_exec($ch);
-            $curlErr = curl_error($ch);
-            curl_close($ch);
+        foreach ($codeChunks as $chunk) {
+            $chunkRows = $this->fetchVendorProductRowsForItemCodes($chunk, $headers, $emptyResponseCodes, $failedChunks);
+            if ($chunkRows === []) {
+                foreach ($chunk as $missingCode) {
+                    $failedCodes[] = (string) $missingCode;
+                }
+                continue;
+            }
 
-            if ($response === false) {
+            if ($syncStock) {
+                $chunkRows = product::expandVendorProductFetchVariants($chunkRows);
+            }
+
+            $updateOptions = [];
+            if ($syncStock) {
+                $updateOptions = [
+                    'preserve_local_stock' => false,
+                    'stock_sync_mode' => 'user_selected',
+                    'physical_stock_sync_product_ids' => $this->resolveTransferStockSyncProductIds(
+                        $productModel,
+                        $skusForSync,
+                        $chunk
+                    ),
+                    'variants_already_expanded' => true,
+                ];
+            }
+
+            $charsetState = $productModel->beginBulkProductUpdateConnection();
+            try {
+                $res = $productModel->updateProductFromApi($chunkRows, $updateOptions);
+            } finally {
+                $productModel->endBulkProductUpdateConnection($charsetState);
+            }
+
+            if (!is_array($res) || empty($res['success'])) {
                 $failedChunks++;
-                continue;
-            }
-            $decoded = json_decode($response, true);
-            if (!is_array($decoded)) {
-                $failedChunks++;
+                foreach ($chunk as $badCode) {
+                    $failedCodes[] = (string) $badCode;
+                }
                 continue;
             }
 
-            $rows = product::normalizeVendorProductFetchItems($decoded);
-            if (empty($rows)) {
-                // Track sample item codes from empty-response chunks for user visibility.
-                $emptyResponseCodes = array_merge($emptyResponseCodes, $chunk);
-                continue;
-            }
-            $allRows = array_merge($allRows, $rows);
+            $processedCodes += count($chunk);
+            $updatedTotal += (int) ($res['updated_count'] ?? 0);
         }
 
-        if (empty($allRows)) {
+        $failedCodes = array_values(array_unique($failedCodes));
+
+        if ($processedCodes === 0) {
             $sample = implode(', ', array_slice(array_values(array_unique($emptyResponseCodes)), 0, 10));
             $suffix = $sample !== '' ? ' Sample item code(s): ' . $sample : '';
-            return ['success' => false, 'message' => 'Failed to refresh product data from API: no item rows returned for the submitted codes.' . $suffix];
-        }
-
-        if ($syncStock) {
-            $allRows = product::expandVendorProductFetchVariants($allRows);
-        }
-
-        $updateOptions = [];
-        if ($syncStock) {
-            $skusForSync = is_array($options['skus'] ?? null) ? $options['skus'] : [];
-            $updateOptions = [
-                'preserve_local_stock' => false,
-                'stock_sync_mode' => 'user_selected',
-                'physical_stock_sync_product_ids' => $this->resolveTransferStockSyncProductIds(
-                    $productModel,
-                    $skusForSync,
-                    $codes
-                ),
-                'variants_already_expanded' => true,
+            return [
+                'success' => false,
+                'message' => 'Failed to refresh product data from API: no item rows returned for the submitted codes.' . $suffix,
+                'processed_codes' => 0,
+                'failed_codes' => $failedCodes,
             ];
         }
 
-        $charsetState = $productModel->beginBulkProductUpdateConnection();
-        try {
-            $res = $productModel->updateProductFromApi($allRows, $updateOptions);
-        } finally {
-            $productModel->endBulkProductUpdateConnection($charsetState);
-        }
-        if (!is_array($res) || empty($res['success'])) {
-            $msg = is_array($res) ? (string)($res['message'] ?? 'Unknown API refresh error.') : 'Unknown API refresh error.';
-            return ['success' => false, 'message' => 'Could not sync product data from API before transfer: ' . $msg];
-        }
-
         if ($syncStock) {
-            if ($failedChunks > 0) {
-                return ['success' => true, 'message' => 'Local and default-warehouse stock refreshed from Exotic for available items. Some API chunks failed; please retry once.'];
+            $message = 'Local and default-warehouse stock refreshed from Exotic for '
+                . $processedCodes . ' item code(s). Please submit again.';
+            if ($failedChunks > 0 || $failedCodes !== []) {
+                $message = 'Refreshed ' . $processedCodes . ' of ' . count($codes)
+                    . ' item code(s) from Exotic. Some batches failed; retry once for the remainder.';
             }
-            return ['success' => true, 'message' => 'Local and default-warehouse stock refreshed from Exotic. Please submit again.'];
+
+            return [
+                'success' => true,
+                'message' => $message,
+                'processed_codes' => $processedCodes,
+                'failed_codes' => $failedCodes,
+                'updated_count' => $updatedTotal,
+            ];
         }
 
-        if ($failedChunks > 0) {
-            return ['success' => true, 'message' => 'Product data refreshed from API for available items (local stock unchanged). Some chunks failed; please retry refresh once.'];
+        $message = 'Product data refreshed from API (local stock unchanged).';
+        if ($failedChunks > 0 || $failedCodes !== []) {
+            $message = 'Product data refreshed from API for ' . $processedCodes . ' of ' . count($codes)
+                . ' item code(s) (local stock unchanged). Some batches failed; please retry refresh once.';
         }
-        return ['success' => true, 'message' => 'Product data refreshed from API (local stock unchanged).'];
+
+        return [
+            'success' => true,
+            'message' => $message,
+            'processed_codes' => $processedCodes,
+            'failed_codes' => $failedCodes,
+            'updated_count' => $updatedTotal,
+        ];
+    }
+
+    /**
+     * @param list<string> $chunk
+     * @param list<string> $headers
+     * @param list<string> $emptyResponseCodes
+     * @return list<array<string,mixed>>
+     */
+    private function fetchVendorProductRowsForItemCodes(array $chunk, array $headers, array &$emptyResponseCodes, int &$failedChunks): array
+    {
+        $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode(implode(',', $chunk));
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        if ($response === false) {
+            $failedChunks++;
+            return [];
+        }
+
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded)) {
+            $failedChunks++;
+            return [];
+        }
+
+        $rows = product::normalizeVendorProductFetchItems($decoded);
+        if ($rows === []) {
+            $emptyResponseCodes = array_merge($emptyResponseCodes, $chunk);
+            return [];
+        }
+
+        return $rows;
     }
 
     /**
@@ -7347,9 +7403,13 @@ class ProductsController
                 continue;
             }
             $row = $productModel->getProductByskuExact($sku);
-            if (is_array($row) && !empty($row['id'])) {
-                $ids[(int) $row['id']] = (int) $row['id'];
+            if (!is_array($row) || empty($row['id'])) {
+                continue;
             }
+            if (!$this->transferStockSyncRowMatchesItemCodes($row, $itemCodes)) {
+                continue;
+            }
+            $ids[(int) $row['id']] = (int) $row['id'];
         }
 
         foreach ($itemCodes as $code) {
@@ -7370,6 +7430,28 @@ class ProductsController
         }
 
         return array_values($ids);
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @param list<string> $itemCodes
+     */
+    private function transferStockSyncRowMatchesItemCodes(array $row, array $itemCodes): bool
+    {
+        if ($itemCodes === []) {
+            return true;
+        }
+        $rowItemCode = strtoupper(trim((string) ($row['item_code'] ?? '')));
+        if ($rowItemCode === '') {
+            return true;
+        }
+        foreach ($itemCodes as $code) {
+            if (strtoupper(trim((string) $code)) === $rowItemCode) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function getTransferStockBulkForm()
@@ -7979,10 +8061,13 @@ class ProductsController
 
     public function refreshTransferItemsFromApiAjax()
     {
+        @set_time_limit(120);
+        @ini_set('memory_limit', '512M');
         is_login();
         global $conn, $productModel;
 
         $this->prepareJsonAjaxResponse();
+        $this->startJsonApiErrorCapture();
 
         header('Content-Type: application/json');
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -8007,6 +8092,15 @@ class ProductsController
         }
 
         $syncStock = !empty($_POST['sync_stock']) && (string) $_POST['sync_stock'] !== '0';
+        $maxCodesPerRequest = $syncStock ? 5 : 25;
+        if (count($codes) > $maxCodesPerRequest) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Too many item codes in one request (max ' . $maxCodesPerRequest . '). Send smaller batches.',
+            ]);
+            exit;
+        }
+
         $skus = [];
         $rawSkus = $_POST['skus_json'] ?? '[]';
         $decodedSkus = json_decode((string) $rawSkus, true);
@@ -8016,24 +8110,36 @@ class ProductsController
             }, $decodedSkus))));
         }
 
-        $result = $this->refreshTransferItemsFromApi($codes, $productModel, [
-            'sync_stock' => $syncStock,
-            'skus' => $skus,
-        ]);
-        if (!$result['success']) {
-            echo json_encode(['success' => false, 'message' => $result['message']]);
-            exit;
+        try {
+            $result = $this->refreshTransferItemsFromApi($codes, $productModel, [
+                'sync_stock' => $syncStock,
+                'skus' => $skus,
+            ]);
+        } catch (Throwable $e) {
+            $this->finishJsonApiResponse([
+                'success' => false,
+                'message' => 'API refresh failed: ' . $e->getMessage(),
+            ], 500);
         }
 
-        echo json_encode([
+        if (!$result['success']) {
+            $this->finishJsonApiResponse([
+                'success' => false,
+                'message' => $result['message'],
+                'failed_codes' => $result['failed_codes'] ?? [],
+            ]);
+        }
+
+        $this->finishJsonApiResponse([
             'success' => true,
             'message' => $result['message'] !== ''
                 ? $result['message']
                 : ('API refresh completed for ' . count($codes) . ' item code(s).'),
             'refreshed_codes' => $codes,
             'sync_stock' => $syncStock,
+            'processed_codes' => (int) ($result['processed_codes'] ?? count($codes)),
+            'failed_codes' => $result['failed_codes'] ?? [],
         ]);
-        exit;
     }
 
     /**

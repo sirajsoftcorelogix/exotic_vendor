@@ -87,7 +87,9 @@ SELECT
         -
         IFNULL(
             (
-                SELECT SUM(p2.payment_amount)
+                SELECT SUM(
+                    CASE WHEN LOWER(TRIM(p2.payment_mode)) = 'cod' THEN 0 ELSE p2.payment_amount END
+                )
                 FROM pos_payments p2
                 WHERE p2.order_number COLLATE utf8mb4_unicode_ci
                       = p.order_number COLLATE utf8mb4_unicode_ci
@@ -444,7 +446,7 @@ WHERE 1=1
     public function sumPaidByOrderNumber(string $orderNumber): float
     {
         $stmt = $this->db->prepare(
-            'SELECT IFNULL(SUM(payment_amount), 0) AS paid FROM pos_payments WHERE order_number = ?'
+            'SELECT IFNULL(SUM(payment_amount), 0) AS paid FROM pos_payments WHERE order_number = ? AND LOWER(TRIM(payment_mode)) <> \'cod\''
         );
         if (!$stmt) {
             return 0.0;

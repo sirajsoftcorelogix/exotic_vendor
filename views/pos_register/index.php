@@ -650,7 +650,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
             <div id="payment_summary_paid" class="mt-0.5 text-lg font-bold text-orange-700 tabular-nums">₹ 0.00</div>
           </div>
           <div>
-            <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Balance</div>
+            <div id="payment_summary_balance_label" class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Balance</div>
             <div id="payment_summary_balance" class="mt-0.5 text-lg font-bold text-emerald-700 tabular-nums">₹ 0.00</div>
           </div>
         </div>
@@ -721,6 +721,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         <option value="pos_machine">POS machine</option>
         <option value="razorpay">Razorpay</option>
         <option value="cheque">Cheque</option>
+        <option value="cod">Cash on Delivery (COD)</option>
       </select>
     </div>
     <div>
@@ -1209,7 +1210,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     ["bank_transfer", "Bank transfer"],
     ["pos_machine", "POS machine"],
     ["razorpay", "Razorpay"],
-    ["cheque", "Cheque"]
+    ["cheque", "Cheque"],
+    ["cod", "Cash on Delivery (COD)"]
   ];
 
   function formatPaymentInr(amount) {
@@ -1289,7 +1291,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     addPaymentSplitRow("cash", isFinite(total) && total > 0 ? total : "", "");
   }
 
-  function collectPaymentSplitsFromUi() {
+  function collectAllPaymentSplitRowsFromUi() {
     var container = getPaymentSplitRowsContainer();
     if (!container) return [];
     var out = [];
@@ -1303,9 +1305,33 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     return out;
   }
 
+  function getPaymentSplitAdvanceTotalFromUi() {
+    var total = 0;
+    collectAllPaymentSplitRowsFromUi().forEach(function(s) {
+      if (s.mode !== "cod") total += s.amount;
+    });
+    return Math.round(total * 100) / 100;
+  }
+
+  function getPaymentSplitCodTotalFromUi() {
+    var total = 0;
+    collectAllPaymentSplitRowsFromUi().forEach(function(s) {
+      if (s.mode === "cod") total += s.amount;
+    });
+    return Math.round(total * 100) / 100;
+  }
+
+  function paymentSplitHasCodFromUi() {
+    return getPaymentSplitCodTotalFromUi() > 0.001;
+  }
+
+  function collectPaymentSplitsFromUi() {
+    return collectAllPaymentSplitRowsFromUi();
+  }
+
   function getPaymentSplitTotalFromUi() {
     var total = 0;
-    collectPaymentSplitsFromUi().forEach(function(s) {
+    collectAllPaymentSplitRowsFromUi().forEach(function(s) {
       total += s.amount;
     });
     return Math.round(total * 100) / 100;
@@ -1325,27 +1351,34 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   }
 
   function recalcPaymentSplitUi() {
-    var splits = collectPaymentSplitsFromUi();
+    var splits = collectAllPaymentSplitRowsFromUi();
     var splitTotal = getPaymentSplitTotalFromUi();
+    var advanceTotal = getPaymentSplitAdvanceTotalFromUi();
+    var codTotal = getPaymentSplitCodTotalFromUi();
+    var hasCod = paymentSplitHasCodFromUi();
     var orderTotal = getCurrentCheckoutTotal();
     var stage = String(document.getElementById("payment_stage")?.value || "final").toLowerCase();
-    var target = stage === "final" ? orderTotal : orderTotal;
+    var target = orderTotal;
     var balance = Math.round((target - splitTotal) * 100) / 100;
 
-    syncLegacyPaymentHiddenFields(splits, splitTotal);
+    syncLegacyPaymentHiddenFields(splits, hasCod ? advanceTotal : splitTotal);
 
     var orderEl = document.getElementById("payment_summary_order");
     var paidEl = document.getElementById("payment_summary_paid");
     var balEl = document.getElementById("payment_summary_balance");
+    var balLabelEl = document.getElementById("payment_summary_balance_label");
     var hintEl = document.getElementById("payment_summary_hint");
     var countEl = document.getElementById("payment_split_count");
     var totalEl = document.getElementById("payment_split_total");
 
     if (orderEl) orderEl.textContent = formatPaymentInr(target);
-    if (paidEl) paidEl.textContent = formatPaymentInr(splitTotal);
+    if (paidEl) paidEl.textContent = formatPaymentInr(hasCod ? advanceTotal : splitTotal);
+    if (balLabelEl) balLabelEl.textContent = hasCod ? "COD pending" : "Balance";
     if (balEl) {
-      balEl.textContent = formatPaymentInr(balance);
-      if (stage === "final" && Math.abs(balance) < 0.02) {
+      balEl.textContent = formatPaymentInr(hasCod ? codTotal : balance);
+      if (hasCod) {
+        balEl.className = "mt-0.5 text-lg font-bold text-amber-700 tabular-nums";
+      } else if (stage === "final" && Math.abs(balance) < 0.02) {
         balEl.className = "mt-0.5 text-lg font-bold text-emerald-700 tabular-nums";
       } else if (balance > 0.01) {
         balEl.className = "mt-0.5 text-lg font-bold text-amber-700 tabular-nums";
@@ -1358,7 +1391,17 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (countEl) countEl.textContent = String(splits.length);
     if (totalEl) totalEl.textContent = formatPaymentInr(splitTotal);
     if (hintEl) {
-      if (stage === "final" && balance > 0.02) {
+      if (hasCod) {
+        if (Math.abs(splitTotal - orderTotal) > 0.02) {
+          hintEl.textContent = "Advance plus COD must equal order total (" + formatPaymentInr(orderTotal) + ").";
+          hintEl.classList.remove("hidden");
+        } else if (codTotal > 0.001) {
+          hintEl.textContent = formatPaymentInr(codTotal) + " will be collected on delivery.";
+          hintEl.classList.remove("hidden");
+        } else {
+          hintEl.classList.add("hidden");
+        }
+      } else if (stage === "final" && balance > 0.02) {
         hintEl.textContent = "Add " + formatPaymentInr(balance) + " more to match order total.";
         hintEl.classList.remove("hidden");
       } else if (stage === "final" && balance < -0.02) {
@@ -1390,33 +1433,55 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       showToast("⚠ " + msg, "red");
     };
 
-    var splits = collectPaymentSplitsFromUi();
+    var splits = collectAllPaymentSplitRowsFromUi();
     if (!splits.length) {
-      showErr("Add at least one payment line with amount greater than zero.");
+      showErr("Add at least one payment line.");
       return null;
     }
 
     var paymentStage = String(document.getElementById("payment_stage")?.value || "final").toLowerCase();
+    var advanceTotal = getPaymentSplitAdvanceTotalFromUi();
+    var codTotal = getPaymentSplitCodTotalFromUi();
     var paymentAmount = getPaymentSplitTotalFromUi();
+    var hasCod = codTotal > 0.001;
 
-    if (paymentAmount <= 0) {
-      showErr("Payment amount must be greater than zero.");
-      return null;
+    for (var i = 0; i < splits.length; i++) {
+      if (!isFinite(splits[i].amount) || splits[i].amount <= 0) {
+        showErr("Each payment line must have amount greater than zero.");
+        return null;
+      }
     }
 
-    if (paymentStage === "final") {
+    if (hasCod) {
       if (paymentAmount + 0.02 < grandTotal) {
-        showErr("Final payment must be FULL amount ₹ " + grandTotal);
+        showErr("Advance plus COD must equal order total ₹ " + grandTotal);
         return null;
       }
       if (paymentAmount - 0.02 > grandTotal) {
-        showErr("Over payment not allowed");
+        showErr("Advance plus COD exceeds order total.");
         return null;
       }
-    } else if (paymentStage === "partial" || paymentStage === "advance") {
-      if (paymentAmount + 0.02 >= grandTotal) {
-        showErr("Partial payment must be less than total ₹ " + grandTotal);
+      paymentStage = "advance";
+    } else {
+      if (paymentAmount <= 0) {
+        showErr("Payment amount must be greater than zero.");
         return null;
+      }
+
+      if (paymentStage === "final") {
+        if (paymentAmount + 0.02 < grandTotal) {
+          showErr("Final payment must be FULL amount ₹ " + grandTotal);
+          return null;
+        }
+        if (paymentAmount - 0.02 > grandTotal) {
+          showErr("Over payment not allowed");
+          return null;
+        }
+      } else if (paymentStage === "partial" || paymentStage === "advance") {
+        if (paymentAmount + 0.02 >= grandTotal) {
+          showErr("Partial payment must be less than total ₹ " + grandTotal);
+          return null;
+        }
       }
     }
 
@@ -1448,7 +1513,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     hideErr();
     return {
       payment_stage: paymentStage,
-      payment_amount: paymentAmount,
+      payment_amount: hasCod ? advanceTotal : paymentAmount,
       payment_splits: splits,
       sec269st_cash_warning_confirmed: cashLegNeeds269 ? "1" : "0",
       primary_mode: splits.reduce(function(best, s) { return s.amount > best.amount ? s : best; }, splits[0]).mode,

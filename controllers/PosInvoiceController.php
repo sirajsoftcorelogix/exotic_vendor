@@ -100,7 +100,8 @@ class PosInvoiceController
 
         return match ($key) {
             'offline' => 'Offline',
-            'cash', 'cod' => 'Cash',
+            'cash' => 'Cash',
+            'cod' => 'Cash on Delivery',
             'upi' => 'UPI',
             'razorpay' => 'Razorpay',
             'bank_transfer' => 'Bank transfer',
@@ -2482,6 +2483,14 @@ class PosInvoiceController
                         <td class="right bold" style="border: 1px solid #000; padding: 8px;">' . number_format($totalAmount, 2) . '</td>
                     </tr>
         ';
+        }
+
+        if ($orderNumberForRepair !== '' && $conn instanceof mysqli && !empty($invoice['pos_flag'])) {
+            require_once __DIR__ . '/../helpers/invoice/pos_invoice_amount_summary.php';
+            $paymentCollectionRows = pos_invoice_build_payment_collection_rows($conn, $orderNumberForRepair);
+            if ($paymentCollectionRows !== []) {
+                $summaryrows .= pos_invoice_render_amount_summary_html($paymentCollectionRows, $tableColCount, 'Payment');
+            }
         }
 
         // Fetch currency exchange rate and add conversion row

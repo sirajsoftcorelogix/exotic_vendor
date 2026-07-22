@@ -176,7 +176,7 @@ if ($receipt_download_filename_base === '') {
                 <div class="flex justify-between pt-1 text-[12px] font-black text-neutral-900"><span>Grand Total</span><span>₹<?= $rfmt($receipt_grand_total ?? 0) ?></span></div>
                 <div class="pt-3 text-[10px] font-semibold text-neutral-700">Amount in words</div>
                 <div class="text-[10px] italic text-neutral-800"><?= $h($receipt_amount_in_words ?? '') ?></div>
-                <div class="flex justify-between pt-3 border-t border-neutral-300 text-[11px]"><span class="font-semibold">Amount Received</span><span class="font-bold">₹<?= $rfmt($receipt_amount_received ?? 0) ?></span></div>
+                <div class="flex justify-between pt-3 border-t border-neutral-300 text-[11px]"><span class="font-semibold">Advance Received</span><span class="font-bold">₹<?= $rfmt($receipt_amount_received ?? 0) ?></span></div>
                 <?php
                 $receiptSplits = is_array($receipt_payment_splits ?? null) ? $receipt_payment_splits : (is_array($payment_splits ?? null) ? $payment_splits : []);
                 if (count($receiptSplits) > 1):
@@ -196,7 +196,12 @@ if ($receipt_download_filename_base === '') {
                     <?php endforeach; ?>
                   </div>
                 <?php endif; ?>
+                <?php $codPendingAmt = (float)($receipt_cod_pending_amount ?? 0); ?>
+                <?php if ($codPendingAmt > 0.009): ?>
+                <div class="flex justify-between text-[11px]"><span class="font-semibold text-amber-800">COD Pending</span><span class="font-bold text-amber-800">₹<?= $rfmt($codPendingAmt) ?></span></div>
+                <?php else: ?>
                 <div class="flex justify-between text-[11px]"><span class="font-semibold">Pending Amount</span><span class="font-bold">₹<?= $rfmt($receipt_pending_amount ?? 0) ?></span></div>
+                <?php endif; ?>
                 <?php if (trim((string)($transaction_id ?? '')) !== '' && count($receiptSplits) <= 1): ?>
                   <div class="pt-1 text-[10px] text-neutral-600"><span class="font-semibold">Transaction ID:</span> <?= $h((string)$transaction_id) ?></div>
                 <?php endif; ?>
@@ -245,15 +250,20 @@ if ($receipt_download_filename_base === '') {
         <div class="no-print space-y-3">
           <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Print or download</div>
           <?php
+          $hasCodPending = !empty($has_cod_pending) || (float)($receipt_cod_pending_amount ?? 0) > 0.009;
           $isPaymentInFull = !empty($is_payment_in_full)
-            || (strtolower(trim((string)($payment_stage ?? ''))) === 'final' && (float)($receipt_pending_amount ?? 0) <= 0.02);
+            || (strtolower(trim((string)($payment_stage ?? ''))) === 'final' && (float)($receipt_pending_amount ?? 0) <= 0.02 && !$hasCodPending);
           $invoiceOrderNumber = trim((string)($order_id ?? ''));
           $invoiceId = (int)($invoice_id ?? 0);
           $invoiceDownloadUrl = $invoiceId > 0
             ? pos_invoice_pdf_url($invoiceId)
             : trim((string)($invoice_pdf_url ?? ''));
+          $invoicePreviewUrl = $invoiceId > 0
+            ? 'index.php?page=invoices&action=preview&invoice_id=' . $invoiceId
+            : trim((string)($invoice_preview_url ?? ''));
           $invoiceCreateUrl = 'index.php?page=pos_register&action=create-invoice-from-receipt&order_number=' . rawurlencode($invoiceOrderNumber);
           $canDownloadInvoice = $isPaymentInFull && $invoiceDownloadUrl !== '';
+          $canPreviewInvoice = $hasCodPending && $invoicePreviewUrl !== '';
           $canCreateInvoice = $isPaymentInFull && !$canDownloadInvoice && $invoiceOrderNumber !== '';
           $actionBtnClass = 'inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold';
           ?>
@@ -271,6 +281,8 @@ if ($receipt_download_filename_base === '') {
                     <path d="M2.62925 10.3889C1.64271 9.68768 1 8.54159 1 7.24672C1 5.47783 2.3 3.84375 4.25 3.52778C4.86168 2.07349 6.30934 1 7.99783 1C10.1607 1 11.9284 2.67737 12.05 4.79167C13.1978 5.29352 14 6.52522 14 7.85887C14 8.98648 13.4266 9.98004 12.5556 10.5634M7.5 14V6.77778M7.5 14L5.33333 11.8333M7.5 14L9.66667 11.8333" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
                   </svg>
                 </a>
+              <?php elseif ($canPreviewInvoice): ?>
+                <a href="<?= $h($invoicePreviewUrl) ?>" target="_blank" rel="noopener noreferrer" class="<?= $actionBtnClass ?> bg-orange-600 text-white hover:bg-orange-700">Preview proforma invoice</a>
               <?php elseif ($canCreateInvoice): ?>
                 <a href="<?= $h($invoiceCreateUrl) ?>" target="_blank" rel="noopener noreferrer" class="<?= $actionBtnClass ?> bg-orange-600 text-white hover:bg-orange-700">Create invoice</a>
               <?php else: ?>
@@ -286,7 +298,7 @@ if ($receipt_download_filename_base === '') {
               <a href="index.php?page=pos_register&action=list" class="<?= $actionBtnClass ?> border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">Back to POS</a>
             </div>
           </div>
-          <p class="text-xs text-slate-500">Use the left control for the <strong class="font-medium text-slate-600">payment receipt</strong>. When payment is received in full, use <strong class="font-medium text-slate-600">Download Invoice</strong> for the tax invoice PDF.</p>
+          <p class="text-xs text-slate-500">Use the left control for the <strong class="font-medium text-slate-600">payment receipt</strong>.<?php if ($hasCodPending): ?> For COD orders, use <strong class="font-medium text-slate-600">Preview proforma invoice</strong> to print advance received and COD pending.<?php else: ?> When payment is received in full, use <strong class="font-medium text-slate-600">Download Invoice</strong> for the tax invoice PDF.<?php endif; ?></p>
         </div>
       </div>
     </div>
