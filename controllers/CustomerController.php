@@ -201,6 +201,17 @@ class CustomerController {
             $activityLog = $customerModel->getCustomerActivityLog($customerId);
         }
 
+        $orderStatusList = [];
+        $staffList = [];
+        $showOrderVendorName = false;
+        if ($tab === 'orders') {
+            require_once 'models/comman/tables.php';
+            $commanModel = new Tables($GLOBALS['conn']);
+            $orderStatusList = $commanModel->get_order_status();
+            $staffList = $commanModel->get_staff_list();
+            $showOrderVendorName = function_exists('canViewOrderVendorName') && canViewOrderVendorName();
+        }
+
         $data = [
             'customer' => $customer,
             'orders' => $orders,
@@ -231,6 +242,9 @@ class CustomerController {
             'dispatches' => $dispatches,
             'activityLog' => $activityLog,
             'customer_id' => $customerId,
+            'order_status_list' => $orderStatusList,
+            'staff_list' => $staffList,
+            'showOrderVendorName' => $showOrderVendorName,
         ];
         renderTemplate('views/customer/view.php', $data, 'Customer Details');
     }
