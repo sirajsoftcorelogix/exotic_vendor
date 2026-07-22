@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../../helpers/order_filter_autocomplete.php';
+require_once __DIR__ . '/../../helpers/order_list_filters.php';
 
 class POSOrder
 {
@@ -69,30 +70,7 @@ class POSOrder
             $sql .= " AND vp_orders.total_price <= ?";
             $params[] = $filters['max_amount'];
         }
-        if (!empty($filters['status_filter']) && $filters['status_filter'] !== 'all') {
-            if ($filters['status_filter'] === 'pending') {
-                //$sql .= " AND (vp_orders.po_number IS NULL OR vp_orders.po_number = '')";
-                $sql .= " AND vp_orders.status = 'pending'";
-            } elseif ($filters['status_filter'] === 'processed') {
-                //$sql .= " AND (vp_orders.po_number IS NOT NULL AND vp_orders.po_number != '')";
-                $sql .= " AND vp_orders.status IN ('ready_for_packing','po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
-            } elseif ($filters['status_filter'] === 'dispatch') {
-                $sql .= " AND vp_orders.status IN ('ready_for_dispatch')";
-            } elseif ($filters['status_filter'] === 'shipped') {
-                $sql .= " AND vp_orders.status = 'shipped'";
-            } elseif (!empty($filters['status_filter'])) {
-                //array of statuses
-                if (is_array($filters['status_filter'])) {
-                    $placeholders = implode(',', array_fill(0, count($filters['status_filter']), '?'));
-                    $sql .= " AND vp_orders.status IN ($placeholders)";
-                    foreach ($filters['status_filter'] as $status) {
-                        $params[] = $status;
-                    }
-                } else {
-                    $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
-                }
-            }
-        }
+        appendOrderStatusFilterSql($sql, $params, $filters);
         if (!empty($filters['country'])) {
             if ($filters['country'] == 'overseas') {
                 $sql .= " AND (vp_orders.shipping_country != 'IN' AND vp_orders.country != 'IN')";
@@ -113,19 +91,7 @@ class POSOrder
         if (!empty($filters['options']) && $filters['options'] === 'express') {
             $sql .= " AND vp_orders.options LIKE '%express%' AND vp_orders.status = 'pending'";
         }
-        if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
-            //array of payment types
-            if (is_array($filters['payment_type'])) {
-                $placeholders = implode(',', array_fill(0, count($filters['payment_type']), '?'));
-                $sql .= " AND vp_orders.payment_type IN ($placeholders)";
-                foreach ($filters['payment_type'] as $payment_type) {
-                    $params[] = $payment_type;
-                }
-            } else {
-                $sql .= " AND vp_orders.payment_type = ?";
-                $params[] = $filters['payment_type'];
-            }
-        }
+        appendOrderPaymentTypeFilterSql($sql, $params, $filters);
         if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
             //$sql .= " AND vp_users.id = ?";
             //$params[] = $filters['staff_name'];
@@ -295,30 +261,7 @@ class POSOrder
             $sql .= " AND total_price <= ?";
             $params[] = $filters['max_amount'];
         }
-        if (!empty($filters['status_filter']) && $filters['status_filter'] !== 'all') {
-            if ($filters['status_filter'] === 'pending') {
-                //$sql .= " AND (vp_orders.po_number IS NULL OR vp_orders.po_number = '')";
-                $sql .= " AND vp_orders.status = 'pending'";
-            } elseif ($filters['status_filter'] === 'processed') {
-                //$sql .= " AND (po_number IS NOT NULL AND po_number != '')";
-                $sql .= " AND vp_orders.status IN ('ready_for_packing','po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
-            } elseif ($filters['status_filter'] === 'dispatch') {
-                $sql .= " AND vp_orders.status IN ('ready_for_dispatch')";
-            } elseif ($filters['status_filter'] === 'shipped') {
-                $sql .= " AND vp_orders.status = 'shipped'";
-            } elseif (!empty($filters['status_filter'])) {
-                //array of statuses
-                if (is_array($filters['status_filter'])) {
-                    $placeholders = implode(',', array_fill(0, count($filters['status_filter']), '?'));
-                    $sql .= " AND vp_orders.status IN ($placeholders)";
-                    foreach ($filters['status_filter'] as $status) {
-                        $params[] = $status;
-                    }
-                } else {
-                    $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
-                }
-            }
-        }
+        appendOrderStatusFilterSql($sql, $params, $filters);
         if (!empty($filters['country'])) {
             $sql .= " AND vp_orders.shipping_country = '" . $filters['country'] . "'";
             //$params[] = '%' . $filters['country'] . '%';
@@ -335,18 +278,7 @@ class POSOrder
         if (!empty($filters['options']) && $filters['options'] === 'express') {
             $sql .= " AND options LIKE '%express%' AND vp_orders.status = 'pending'";
         }
-        if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
-            if (is_array($filters['payment_type'])) {
-                $placeholders = implode(',', array_fill(0, count($filters['payment_type']), '?'));
-                $sql .= " AND vp_orders.payment_type IN ($placeholders)";
-                foreach ($filters['payment_type'] as $payment_type) {
-                    $params[] = $payment_type;
-                }
-            } else {
-                $sql .= " AND payment_type = ?";
-                $params[] = $filters['payment_type'];
-            }
-        }
+        appendOrderPaymentTypeFilterSql($sql, $params, $filters, 'payment_type');
         if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
             //$sql .= " AND vp_users.id = ?";
             //$params[] = $filters['staff_name'];

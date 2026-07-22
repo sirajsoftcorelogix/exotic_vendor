@@ -1,22 +1,33 @@
 <?php
 require_once __DIR__ . '/../../../helpers/payment_type_groups.php';
+require_once __DIR__ . '/../../../helpers/order_list_filters.php';
 
 $paymentTypeGroups = $payment_type_groups ?? groupPaymentTypes($payment_types ?? []);
 $selectedPaymentTypes = $selected_payment_types ?? normalizeSelectedPaymentTypes($_GET['payment_type'] ?? null);
 $selectId = $select_id ?? 'payment_type';
-$selectClass = $select_class ?? 'advanced-multiselect max-w-48 px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white';
+$paymentTypeOp = normalizeFilterOperator($_GET['payment_type_op'] ?? 'in');
+$paymentTypeBorderClass = $paymentTypeOp === 'not_in' ? 'border-red-300' : 'border-gray-300';
+$selectClass = $select_class ?? 'advanced-multiselect max-w-48 px-2 py-1.5 border ' . $paymentTypeBorderClass . ' rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white';
 $groupsJson = htmlspecialchars(json_encode($paymentTypeGroups), ENT_QUOTES, 'UTF-8');
 $selectedJson = htmlspecialchars(json_encode(array_values($selectedPaymentTypes)), ENT_QUOTES, 'UTF-8');
 ?>
 <div>
-    <label for="<?php echo htmlspecialchars($selectId); ?>" class="block text-sm font-medium text-gray-600 mb-1">Payment Type</label>
+    <?php renderPartial('views/shared/partials/filter_operator_header.php', [
+        'operator_name' => 'payment_type_op',
+        'label_for' => $selectId,
+        'label_text' => 'Payment Type',
+        'target_select_id' => $selectId,
+        'badge_id' => $selectId . '-op-badge',
+        'selected_op' => $paymentTypeOp,
+    ]); ?>
     <select
         id="<?php echo htmlspecialchars($selectId); ?>"
         name="payment_type[]"
         multiple="multiple"
         class="<?php echo htmlspecialchars($selectClass); ?>"
         data-payment-type-groups="<?php echo $groupsJson; ?>"
-        data-selected-payment-types="<?php echo $selectedJson; ?>">
+        data-selected-payment-types="<?php echo $selectedJson; ?>"
+        data-payment-type-op="<?php echo htmlspecialchars($paymentTypeOp); ?>">
         <?php foreach ($paymentTypeGroups as $groupLabel => $groupItems): ?>
             <?php if ($groupItems === []) {
                 continue;
