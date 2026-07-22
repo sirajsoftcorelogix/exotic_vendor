@@ -110,53 +110,218 @@ class CustomerController {
     public function view() {
         is_login();
         global $customerModel;
-        //require_once 'models/order/order.php';
-        //$orderModel = new Order($GLOBALS['conn']);
         require_once 'models/comman/tables.php';
         $commanModel = new Tables($GLOBALS['conn']);
-        $customerId = $_GET['customer_id'] ?? null;
-        if (!$customerId) {
-            header("Location: " . base_url('?page=customer&action=list'));
+        $customerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
+        if ($customerId <= 0) {
+            header('Location: ' . base_url('?page=customer&action=list'));
             exit;
         }
         $customer = $customerModel->getCustomerById($customerId);
         if (!$customer) {
-            header("Location: " . base_url('?page=customer&action=list'));
+            header('Location: ' . base_url('?page=customer&action=list'));
             exit;
         }
-        //print_array($customer);
-        //search filters
-        $search = $_GET['search'] ?? '';
-        $filters = [];
-        if (!empty($search)) {
+
+        $search = trim((string)($_GET['search'] ?? ''));
+        $sort = (string)($_GET['sort'] ?? 'new_to_old');
+        $allowedSort = ['new_to_old', 'old_to_new', 'ship_by_date_desc', 'ship_by_date_asc'];
+        if (!in_array($sort, $allowedSort, true)) {
+            $sort = 'new_to_old';
+        }
+
+        $pageNo = isset($_GET['page_no']) ? max(1, (int)$_GET['page_no']) : 1;
+        $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20;
+        $limit = in_array($limit, [10, 20, 50, 100], true) ? $limit : 20;
+        $offset = ($pageNo - 1) * $limit;
+
+        $statusGroup = (string)($_GET['status_group'] ?? 'all');
+        $allowedStatusGroups = ['all', 'pending', 'progress', 'completed', 'cancelled'];
+        if (!in_array($statusGroup, $allowedStatusGroups, true)) {
+            $statusGroup = 'all';
+        }
+
+        $paymentType = (string)($_GET['payment_type'] ?? 'all');
+        $dateFrom = trim((string)($_GET['date_from'] ?? ''));
+        $dateTo = trim((string)($_GET['date_to'] ?? ''));
+        $tab = (string)($_GET['tab'] ?? 'orders');
+        $allowedTabs = ['orders', 'invoices', 'dispatches', 'activity'];
+        if (!in_array($tab, $allowedTabs, true)) {
+            $tab = 'orders';
+        }
+        $viewMode = (string)($_GET['view_mode'] ?? 'cards');
+        if (!in_array($viewMode, ['cards', 'table'], true)) {
+            $viewMode = 'cards';
+        }
+
+        $filters = [
+            'sort' => $sort,
+            'status_group' => $statusGroup,
+        ];
+        if ($search !== '') {
             $filters['search'] = $search;
         }
-        $sort = $_GET['sort'] ?? 'new_to_old';
-        // Fetch orders for this customer
-        $orders = $customerModel->getOrderItemsByCustomerId($customerId, 20, 0, $filters);
-        $assignmentDates = [];          
-        foreach ($orders as $key => $order) {
-            $orders[$key]['status_log'] = $commanModel->get_order_status_log($order['id']);  
-            $assignmentDates[$order['id']] =  $orders[$key]['status_log']['change_date'] ?? '';         
+        if ($paymentType !== '' && $paymentType !== 'all') {
+            $filters['payment_type'] = $paymentType;
         }
+        if ($dateFrom !== '') {
+            $filters['date_from'] = $dateFrom;
+        }
+        if ($dateTo !== '') {
+            $filters['date_to'] = $dateTo;
+        }
+
+        $totalRecords = $customerModel->countOrderItemsByCustomerId($customerId, $filters);
+        $totalPages = $limit > 0 ? (int)ceil($totalRecords / $limit) : 1;
+        if ($pageNo > $totalPages && $totalPages > 0) {
+            $pageNo = $totalPages;
+            $offset = ($pageNo - 1) * $limit;
+        }
+
+        $orders = [];
+        if ($tab === 'orders') {
+            $orders = $customerModel->getOrderItemsByCustomerId($customerId, $limit, $offset, $filters);
+            foreach ($orders as $key => $order) {
+                $orders[$key]['status_log'] = $commanModel->get_order_status_log($order['id']);
+            }
+        }
+
+        $addresses = $customerModel->getCustomerBillingShippingForPos($customerId);
+        $orderDates = $customerModel->getCustomerOrderDateRange($customerId);
+        $insights = $customerModel->getCustomerInsights($customerId);
         $spents = $customerModel->getCustomerTotalSpent($customerId);
         $statusCounts = $customerModel->getCustomerOrderStatusCounts($customerId);
-        //print_array($spents);
+        $invoices = $customerModel->getInvoicesByCustomerId($customerId);
+        $dispatches = $customerModel->getDispatchesByCustomerId($customerId);
+        $activityLog = $customerModel->getCustomerActivityLog($customerId);
+
         $data = [
             'customer' => $customer,
-            'orders' => $orders ?? [],
-            'total_records' => count($orders),
-            'page_no' => 1,
-            'limit' => 20,
+            'orders' => $orders,
+            'total_records' => $totalRecords,
+            'page_no' => $pageNo,
+            'total_pages' => max(1, $totalPages),
+            'limit' => $limit,
             'sort' => $sort,
             'filters' => $filters,
-            'assignmentDates' => $assignmentDates,
+            'search' => $search,
+            'status_group' => $statusGroup,
+            'payment_type' => $paymentType,
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+            'tab' => $tab,
+            'view_mode' => $viewMode,
+            'billing' => $addresses['billing'] ?? [],
+            'shipping' => $addresses['shipping'] ?? [],
+            'orderDates' => $orderDates,
+            'insights' => $insights,
             'customerOrderCount' => $customerModel->getCustomerOrderCount($customerId),
             'customerTotalSpent' => $spents['total_spent'] ?? 0,
             'customerAverageOrderValue' => $spents['average_order_value'] ?? 0,
-            'statusCounts' => $statusCounts
+            'statusCounts' => $statusCounts,
+            'invoices' => $invoices,
+            'dispatches' => $dispatches,
+            'activityLog' => $activityLog,
+            'customer_id' => $customerId,
         ];
         renderTemplate('views/customer/view.php', $data, 'Customer Details');
+    }
+
+    public function export_orders()
+    {
+        is_login();
+        global $customerModel;
+
+        $customerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
+        if ($customerId <= 0) {
+            header('Location: ' . base_url('?page=customer&action=list'));
+            exit;
+        }
+
+        $customer = $customerModel->getCustomerById($customerId);
+        if (!$customer) {
+            header('Location: ' . base_url('?page=customer&action=list'));
+            exit;
+        }
+
+        $search = trim((string)($_GET['search'] ?? ''));
+        $sort = (string)($_GET['sort'] ?? 'new_to_old');
+        $allowedSort = ['new_to_old', 'old_to_new', 'ship_by_date_desc', 'ship_by_date_asc'];
+        if (!in_array($sort, $allowedSort, true)) {
+            $sort = 'new_to_old';
+        }
+
+        $statusGroup = (string)($_GET['status_group'] ?? 'all');
+        $paymentType = (string)($_GET['payment_type'] ?? 'all');
+        $dateFrom = trim((string)($_GET['date_from'] ?? ''));
+        $dateTo = trim((string)($_GET['date_to'] ?? ''));
+
+        $filters = ['sort' => $sort, 'status_group' => $statusGroup];
+        if ($search !== '') {
+            $filters['search'] = $search;
+        }
+        if ($paymentType !== '' && $paymentType !== 'all') {
+            $filters['payment_type'] = $paymentType;
+        }
+        if ($dateFrom !== '') {
+            $filters['date_from'] = $dateFrom;
+        }
+        if ($dateTo !== '') {
+            $filters['date_to'] = $dateTo;
+        }
+
+        $rows = $customerModel->getOrderItemsByCustomerIdForExport($customerId, $filters);
+        $safeName = preg_replace('/[^a-zA-Z0-9_-]+/', '_', (string)($customer['name'] ?? 'customer'));
+        $filename = 'customer_' . $customerId . '_' . $safeName . '_orders_' . date('Ymd_His') . '.csv';
+
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        $out = fopen('php://output', 'w');
+        if ($out === false) {
+            exit;
+        }
+
+        fprintf($out, chr(0xEF) . chr(0xBB) . chr(0xBF));
+        fputcsv($out, [
+            'Order Number',
+            'Item Code',
+            'Product Title',
+            'Status',
+            'Order Date',
+            'Ship By Date',
+            'Payment Type',
+            'Quantity',
+            'Unit Price',
+            'Line Total',
+            'Invoice Number',
+        ]);
+
+        foreach ($rows as $row) {
+            $qty = (int)($row['quantity'] ?? 0);
+            $unit = (float)($row['itemprice'] ?? 0);
+            fputcsv($out, [
+                $row['order_number'] ?? '',
+                $row['item_code'] ?? '',
+                $row['title'] ?? '',
+                $row['status'] ?? '',
+                $row['order_date'] ?? '',
+                $row['esd'] ?? '',
+                $row['payment_type'] ?? '',
+                $qty,
+                $unit,
+                (float)($row['finalprice'] ?? ($unit * $qty)),
+                $row['invoice_number'] ?? '',
+            ]);
+        }
+
+        fclose($out);
+        exit;
     }
 }
 ?>

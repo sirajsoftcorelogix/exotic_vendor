@@ -1652,6 +1652,9 @@ switch ($page) {
             case 'view':
                 $controller->view();
                 break;
+            case 'export_orders':
+                $controller->export_orders();
+                break;
             case 'delete_customer':
                 $controller->delete_customer();
                 break;
