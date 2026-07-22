@@ -449,11 +449,7 @@
                     <input type="text" name="receipt_date" id="receipt-date" placeholder="Receipt Date" onfocus="(this.type='date')" onblur="(this.type='text')" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div> -->
 
-                    <!-- Order Number -->
-                    <div>
-                        <label for="order-number" class="block text-sm font-medium text-gray-600 mb-1">Order No</label>
-                        <input type="text" value="<?= htmlspecialchars($_GET['order_number'] ?? '') ?>" name="order_number" id="order-number" placeholder="Order Number" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
-                    </div>
+                    <?php renderPartial('views/shared/partials/order_number_filter_field.php'); ?>
 
                     <!-- Status -->
                     <div>
