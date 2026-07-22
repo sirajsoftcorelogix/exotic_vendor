@@ -135,7 +135,24 @@ SELECT
                   = p.order_number COLLATE utf8mb4_unicode_ci
         ),
         0
-    ) AS order_collected_paid
+    ) AS order_collected_paid,
+
+    IFNULL(
+        (
+            SELECT SUM(
+                CASE
+                    WHEN LOWER(TRIM(p4.payment_mode)) = 'cod'
+                         AND LOWER(TRIM(COALESCE(p4.payment_status, 'pending'))) = 'pending'
+                    THEN p4.payment_amount
+                    ELSE 0
+                END
+            )
+            FROM pos_payments p4
+            WHERE p4.order_number COLLATE utf8mb4_unicode_ci
+                  = p.order_number COLLATE utf8mb4_unicode_ci
+        ),
+        0
+    ) AS order_cod_pending
 
 FROM pos_payments p
 
@@ -288,10 +305,17 @@ WHERE 1=1
         }
 
         $collectedPaid = round((float)($row['order_collected_paid'] ?? 0), 2);
+        $codPendingObligation = round((float)($row['order_cod_pending'] ?? 0), 2);
         $row['is_settled'] = $resolvedOrderAmount > 0 && $collectedPaid + 0.02 >= $resolvedOrderAmount;
+        $allocationComplete = $resolvedOrderAmount > 0
+            && ($collectedPaid + $codPendingObligation + 0.02 >= $resolvedOrderAmount);
+        $row['can_create_proforma'] = $allocationComplete
+            && $codPendingObligation > 0.001
+            && empty($row['is_settled'])
+            && (int)($row['invoice_id'] ?? 0) <= 0;
         $row['order_number'] = trim((string)($row['order_number'] ?? ''));
         $row['invoice_id'] = (int)($row['invoice_id'] ?? 0);
-        unset($row['order_grand_total'], $row['order_line_subtotal'], $row['balance_snapshot'], $row['order_collected_paid']);
+        unset($row['order_grand_total'], $row['order_line_subtotal'], $row['balance_snapshot'], $row['order_collected_paid'], $row['order_cod_pending']);
 
         return $row;
     }

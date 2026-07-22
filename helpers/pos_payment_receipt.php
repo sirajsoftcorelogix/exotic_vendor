@@ -151,18 +151,8 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
         return 0.0;
     }
 
-    $stmt = $conn->prepare('SELECT total FROM vp_order_info WHERE order_number = ? LIMIT 1');
-    if ($stmt) {
-        $stmt->bind_param('s', $orderNumber);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        $total = round((float)($row['total'] ?? 0), 2);
-        if ($total > 0) {
-            return $total;
-        }
-    }
-
+    // POS checkout stores the payable total on payment rows — prefer over imported vp_order_info
+    // when custom_reduce on vp_orders makes imported totals stale (e.g. 7.28 vs 11.20).
     $stmt = $conn->prepare(
         'SELECT MAX(order_amount) AS order_total FROM pos_payments WHERE order_number = ? AND order_amount > 0'
     );
@@ -172,6 +162,18 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
         $total = round((float)($row['order_total'] ?? 0), 2);
+        if ($total > 0) {
+            return $total;
+        }
+    }
+
+    $stmt = $conn->prepare('SELECT total FROM vp_order_info WHERE order_number = ? LIMIT 1');
+    if ($stmt) {
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $total = round((float)($row['total'] ?? 0), 2);
         if ($total > 0) {
             return $total;
         }
@@ -356,6 +358,90 @@ function pos_payment_is_fully_paid(mysqli $conn, string $orderNumber): bool
     }
 
     return pos_payment_sum_paid($conn, $orderNumber) + 0.02 >= $orderTotal;
+}
+
+/**
+ * Checkout plan complete: collected + pending COD obligation covers order total.
+ * Row pending ₹0 on a COD line means this — not that payment was fully collected.
+ */
+function pos_payment_is_allocation_complete(mysqli $conn, string $orderNumber): bool
+{
+    $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
+    if ($orderTotal <= 0) {
+        return false;
+    }
+
+    $collected = pos_payment_sum_paid($conn, $orderNumber);
+    $codObligation = pos_payment_sum_cod_pending($conn, $orderNumber);
+
+    return $collected + $codObligation + 0.02 >= $orderTotal;
+}
+
+/**
+ * Create or return a proforma invoice for advance/COD checkout (before full collection).
+ *
+ * @return array{success:bool,attempted:bool,fully_paid:bool,invoice_id:int,created:bool,message?:string}
+ */
+function pos_payment_ensure_proforma_invoice_for_order(mysqli $conn, string $orderNumber): array
+{
+    $orderNumber = trim($orderNumber);
+    $empty = [
+        'success' => false,
+        'attempted' => true,
+        'fully_paid' => false,
+        'invoice_id' => 0,
+        'created' => false,
+    ];
+    if ($orderNumber === '') {
+        $empty['message'] = 'Order number missing';
+        return $empty;
+    }
+
+    if (pos_payment_is_fully_paid($conn, $orderNumber)) {
+        return pos_payment_finalize_invoice_for_order($conn, $orderNumber);
+    }
+
+    if (!pos_payment_is_allocation_complete($conn, $orderNumber)
+        || pos_payment_sum_cod_pending($conn, $orderNumber) <= 0.001) {
+        $empty['message'] = 'Proforma invoice is available when advance plus COD covers the order total.';
+        return $empty;
+    }
+
+    require_once __DIR__ . '/../models/PosInvoice/invoice.php';
+    $invoiceModel = new POSInvoice($conn);
+    $existing = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
+    if ($existing) {
+        $invoiceId = (int)($existing['id'] ?? 0);
+        if ($invoiceId > 0) {
+            require_once __DIR__ . '/../controllers/PosInvoiceController.php';
+            $posInv = new PosInvoiceController();
+            $posInv->repairPosInvoiceMetadataForOrder($invoiceId, $orderNumber);
+        }
+
+        return [
+            'success' => true,
+            'attempted' => true,
+            'fully_paid' => false,
+            'invoice_id' => $invoiceId,
+            'created' => false,
+        ];
+    }
+
+    require_once __DIR__ . '/../controllers/PosInvoiceController.php';
+    $posInv = new PosInvoiceController();
+    $created = $posInv->createAutoInvoiceForOrder($orderNumber, '', false);
+    if (!empty($created['success']) && !empty($created['invoice_id'])) {
+        return [
+            'success' => true,
+            'attempted' => true,
+            'fully_paid' => false,
+            'invoice_id' => (int)$created['invoice_id'],
+            'created' => true,
+        ];
+    }
+
+    $empty['message'] = (string)($created['message'] ?? 'Proforma invoice could not be created.');
+    return $empty;
 }
 
 /**
