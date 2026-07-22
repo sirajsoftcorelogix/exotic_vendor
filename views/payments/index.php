@@ -390,9 +390,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
     }
 
     function buildInvoiceActionHtml(p) {
-        const settled = p.is_settled === true
-            || p.is_settled === 1
-            || parseFloat(p.pending_balance ?? 0) <= 0.02;
+        const settled = p.is_settled === true || p.is_settled === 1;
         if (!settled) {
             return '';
         }

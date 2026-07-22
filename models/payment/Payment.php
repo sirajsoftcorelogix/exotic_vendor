@@ -80,22 +80,47 @@ SELECT
     inv_map.invoice_id,
 
     ROUND(
-        IFNULL(
-            NULLIF(p.order_amount, 0),
+        GREATEST(
+            0,
             IFNULL(
-                NULLIF(vo.order_grand_total, 0),
-                IFNULL(vo.order_line_subtotal, 0)
+                NULLIF(p.order_amount, 0),
+                IFNULL(
+                    NULLIF(vo.order_grand_total, 0),
+                    IFNULL(vo.order_line_subtotal, 0)
+                )
             )
-        )
-        -
-        IFNULL(
-            (
-                SELECT SUM(p2.payment_amount)
-                FROM pos_payments p2
-                WHERE p2.order_number COLLATE utf8mb4_unicode_ci
-                      = p.order_number COLLATE utf8mb4_unicode_ci
-                AND p2.id <= p.id
-            ), 0
+            - IFNULL(
+                (
+                    SELECT SUM(
+                        CASE
+                            WHEN LOWER(TRIM(p2.payment_mode)) = 'cod' THEN 0
+                            ELSE p2.payment_amount
+                        END
+                    )
+                    FROM pos_payments p2
+                    WHERE p2.order_number COLLATE utf8mb4_unicode_ci
+                          = p.order_number COLLATE utf8mb4_unicode_ci
+                    AND p2.id <= p.id
+                ),
+                0
+            )
+            - IFNULL(
+                (
+                    SELECT SUM(
+                        CASE
+                            WHEN LOWER(TRIM(p3.payment_mode)) = 'cod'
+                                 AND LOWER(TRIM(COALESCE(p3.payment_status, 'pending'))) = 'pending'
+                            THEN p3.payment_amount
+                            ELSE 0
+                        END
+                    )
+                    FROM pos_payments p3
+                    WHERE p3.order_number COLLATE utf8mb4_unicode_ci
+                          = p.order_number COLLATE utf8mb4_unicode_ci
+                    AND p3.id <= p.id
+                ),
+                0
+            )
         ),
         2
     ) AS pending_balance,

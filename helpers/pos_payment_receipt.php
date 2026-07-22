@@ -289,7 +289,11 @@ function pos_payment_sum_cod_pending(mysqli $conn, string $orderNumber): float
     }
 
     $stmt = $conn->prepare(
-        'SELECT IFNULL(SUM(payment_amount), 0) AS cod FROM pos_payments WHERE order_number = ? AND LOWER(TRIM(payment_mode)) = \'cod\''
+        'SELECT IFNULL(SUM(payment_amount), 0) AS cod
+         FROM pos_payments
+         WHERE order_number = ?
+           AND LOWER(TRIM(payment_mode)) = \'cod\'
+           AND LOWER(TRIM(COALESCE(payment_status, \'pending\'))) = \'pending\''
     );
     if (!$stmt) {
         return 0.0;
@@ -304,21 +308,44 @@ function pos_payment_sum_cod_pending(mysqli $conn, string $orderNumber): float
 
 function pos_payment_sum_allocated(mysqli $conn, string $orderNumber): float
 {
-    $orderNumber = trim($orderNumber);
-    if ($orderNumber === '') {
-        return 0.0;
+    return round(
+        pos_payment_sum_paid($conn, $orderNumber) + pos_payment_sum_cod_pending($conn, $orderNumber),
+        2
+    );
+}
+
+/**
+ * When non-COD payments complete the order, COD obligation rows are fulfilled.
+ */
+function pos_payment_mark_cod_collected_if_fully_paid(mysqli $conn, string $orderNumber): void
+{
+    if (!pos_payment_is_fully_paid($conn, $orderNumber)) {
+        return;
     }
 
-    $stmt = $conn->prepare('SELECT IFNULL(SUM(payment_amount), 0) AS allocated FROM pos_payments WHERE order_number = ?');
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return;
+    }
+
+    $stmt = $conn->prepare(
+        'UPDATE pos_payments
+         SET payment_status = \'success\'
+         WHERE order_number = ?
+           AND LOWER(TRIM(payment_mode)) = \'cod\'
+           AND LOWER(TRIM(COALESCE(payment_status, \'pending\'))) = \'pending\''
+    );
     if (!$stmt) {
-        return 0.0;
+        return;
     }
     $stmt->bind_param('s', $orderNumber);
     $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
+}
 
-    return round((float)($row['allocated'] ?? 0), 2);
+function pos_payment_compute_pending_amount(float $orderTotal, float $collectedNonCod, float $codObligation): float
+{
+    return max(0.0, round($orderTotal - $collectedNonCod - $codObligation, 2));
 }
 
 function pos_payment_is_fully_paid(mysqli $conn, string $orderNumber): bool
@@ -341,12 +368,16 @@ function pos_payment_refresh_order_snapshots(mysqli $conn, string $orderNumber):
         return;
     }
 
+    pos_payment_mark_cod_collected_if_fully_paid($conn, $orderNumber);
+
     $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
     if ($orderTotal <= 0) {
         return;
     }
 
-    $stmt = $conn->prepare('SELECT id, payment_mode, payment_amount FROM pos_payments WHERE order_number = ? ORDER BY id ASC');
+    $stmt = $conn->prepare(
+        'SELECT id, payment_mode, payment_amount, payment_status FROM pos_payments WHERE order_number = ? ORDER BY id ASC'
+    );
     if (!$stmt) {
         return;
     }
@@ -355,15 +386,23 @@ function pos_payment_refresh_order_snapshots(mysqli $conn, string $orderNumber):
     $res = $stmt->get_result();
     $stmt->close();
 
-    $cumulative = 0.0;
+    $collected = 0.0;
+    $codObligation = 0.0;
     $upd = $conn->prepare('UPDATE pos_payments SET order_amount = ?, pending_amount = ? WHERE id = ?');
     if (!$upd) {
         return;
     }
 
     while ($row = $res->fetch_assoc()) {
-        $cumulative += round((float)($row['payment_amount'] ?? 0), 2);
-        $pending = round($orderTotal - $cumulative, 2);
+        $amount = round((float)($row['payment_amount'] ?? 0), 2);
+        if (pos_payment_is_cod_mode((string)($row['payment_mode'] ?? ''))) {
+            if (strtolower(trim((string)($row['payment_status'] ?? 'pending'))) === 'pending') {
+                $codObligation += $amount;
+            }
+        } else {
+            $collected += $amount;
+        }
+        $pending = pos_payment_compute_pending_amount($orderTotal, $collected, $codObligation);
         $id = (int)($row['id'] ?? 0);
         $upd->bind_param('ddi', $orderTotal, $pending, $id);
         $upd->execute();
@@ -518,8 +557,23 @@ function pos_payment_compute_order_snapshots(
         $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
     }
 
-    $allocatedPrior = pos_payment_sum_allocated($conn, $orderNumber);
-    $pendingAfter = round($orderTotal - $allocatedPrior - round($thisPaymentAmount, 2), 2);
+    $collectedPrior = pos_payment_sum_paid($conn, $orderNumber);
+    $codObligationPrior = pos_payment_sum_cod_pending($conn, $orderNumber);
+    $amount = round($thisPaymentAmount, 2);
+
+    if (pos_payment_is_cod_mode($paymentMode)) {
+        $pendingAfter = pos_payment_compute_pending_amount(
+            $orderTotal,
+            $collectedPrior,
+            $codObligationPrior + $amount
+        );
+    } else {
+        $pendingAfter = pos_payment_compute_pending_amount(
+            $orderTotal,
+            $collectedPrior + $amount,
+            $codObligationPrior
+        );
+    }
 
     return [
         'order_amount' => $orderTotal,
