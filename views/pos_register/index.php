@@ -845,6 +845,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
             </select>
           </label>
         </div>
+        <label class="block text-xs font-medium text-slate-600">GSTIN<input id="confirm_sgstin" class="w-full rounded border uppercase" placeholder="GSTIN (optional)" maxlength="15"></label>
       </div>
     </div>
     </div>
@@ -2015,7 +2016,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       confirm_scity: firstNonEmpty(shipping.scity, shipping.shipping_city, shipping.city),
       confirm_sstate: firstNonEmpty(shipping.sstate, shipping.shipping_state, shipping.state),
       confirm_szip: firstNonEmpty(shipping.szip, shipping.shipping_zipcode, shipping.zip, shipping.zipcode),
-      confirm_sphone: firstNonEmpty(shipping.sphone, shipping.shipping_mobile, shipping.mobile, shipping.phone)
+      confirm_sphone: firstNonEmpty(shipping.sphone, shipping.shipping_mobile, shipping.mobile, shipping.phone),
+      confirm_sgstin: firstNonEmpty(shipping.sgstin, shipping.shipping_gstin)
     };
     var billingCountryRaw = firstNonEmpty(billing.country, billing.billing_country, "IN");
     var shippingCountryRaw = firstNonEmpty(shipping.scountry, shipping.shipping_country, shipping.country, "IN");
@@ -2056,7 +2058,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     "confirm_scity",
     "confirm_sstate",
     "confirm_szip",
-    "confirm_scountry"
+    "confirm_scountry",
+    "confirm_sgstin"
   ];
 
   var POS_BILLING_TO_SHIPPING_FIELDS = [
@@ -2068,7 +2071,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     ["confirm_city", "confirm_scity"],
     ["confirm_state", "confirm_sstate"],
     ["confirm_zip", "confirm_szip"],
-    ["confirm_country", "confirm_scountry"]
+    ["confirm_country", "confirm_scountry"],
+    ["confirm_gstin", "confirm_sgstin"]
   ];
 
   function isShippingSameAsBillingChecked() {
@@ -2197,6 +2201,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       confirm_szip: read("confirm_szip"),
       confirm_scountry: read("confirm_scountry"),
       confirm_sphone: read("confirm_sphone"),
+      confirm_sgstin: read("confirm_sgstin").toUpperCase(),
       confirm_shipping_same_as_billing: isShippingSameAsBillingChecked() ? "1" : "0",
       confirm_omit_shipping_api: omitShippingOnOrder ? "1" : "0",
       customer_residency_status: read("customer_residency_status") || "INDIAN_RESIDENT",
@@ -2249,7 +2254,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   }
 
   function clearAddressValidationState() {
-    ["confirm_first_name", "confirm_phone", "confirm_zip", "confirm_state", "confirm_state_select", "confirm_email", "confirm_gstin", "customer_pan", "customer_aadhaar", "passport_number", "country_of_residence"].forEach(function(id) {
+    ["confirm_first_name", "confirm_phone", "confirm_zip", "confirm_state", "confirm_state_select", "confirm_email", "confirm_gstin", "confirm_sgstin", "customer_pan", "customer_aadhaar", "passport_number", "country_of_residence"].forEach(function(id) {
       setPosFieldInvalid(id, false);
     });
     POS_SHIPPING_ADDRESS_FIELD_IDS.forEach(function(id) {
@@ -2443,6 +2448,20 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         setPosFieldInvalid("confirm_state", true);
         if (!firstInvalidId) firstInvalidId = "confirm_state";
       }
+    }
+
+    var shippingGstin = String(payload.confirm_sgstin || "").trim().toUpperCase();
+    if (shippingGstin !== "" && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(shippingGstin)) {
+      setPosFieldInvalid("confirm_sgstin", true);
+      var gstinSummary = document.getElementById("addressConfirmValidationSummary");
+      if (gstinSummary) {
+        gstinSummary.textContent = "Shipping GSTIN format is invalid.";
+        gstinSummary.classList.remove("hidden");
+      }
+      showToast("⚠ Shipping GSTIN format is invalid.", "red");
+      var sgstinEl = document.getElementById("confirm_sgstin");
+      if (sgstinEl) sgstinEl.focus();
+      return false;
     }
 
     if (missing.length) {
