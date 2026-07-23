@@ -1961,6 +1961,8 @@ class PosOrdersController
         $billing_country = trim($_POST['billing_country'] ?? '');
         $gstin = strtoupper(trim($_POST['gstin'] ?? ''));
         $shipping_gstin = strtoupper(trim($_POST['shipping_gstin'] ?? ''));
+        $state = trim($_POST['state'] ?? '');
+        $shipping_state = trim($_POST['shipping_state'] ?? '');
         if (empty($order_number) || empty($customer_name) || empty($customer_phone)) {
             echo json_encode([
                 'success' => false,
@@ -1968,7 +1970,7 @@ class PosOrdersController
             ]);
             exit;
         }
-        $result = $ordersModel->updateCustomerNameAndEmail($order_number, $customer_name, $customer_phone, $address_line1, $address_line2, $city, $zipcode, $country, $billing_address_line1, $billing_address_line2, $billing_city, $billing_zipcode, $billing_country, $gstin, $shipping_gstin);
+        $result = $ordersModel->updateCustomerNameAndEmail($order_number, $customer_name, $customer_phone, $address_line1, $address_line2, $city, $zipcode, $country, $billing_address_line1, $billing_address_line2, $billing_city, $billing_zipcode, $billing_country, $gstin, $shipping_gstin, $state, $shipping_state);
         echo json_encode($result);
         exit;
     }
