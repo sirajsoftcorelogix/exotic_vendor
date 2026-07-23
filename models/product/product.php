@@ -1812,7 +1812,7 @@ class product
                                 ? $targetProductId
                                 : (is_array($existingBase) ? (int) ($existingBase['id'] ?? 0) : 0);
                             if ($resolvedProductId > 0) {
-                                $this->syncLatestStockMovementLocationFromApi($resolvedProductId, (string) $location);
+                                $this->syncProductLocation($resolvedProductId, (string) $location);
                             }
                         }
                     }
@@ -1937,7 +1937,7 @@ class product
                                 );
                                 $insertProductId = is_array($freshRow) ? (int) ($freshRow['id'] ?? 0) : (int) $insertId;
                                 if ($insertProductId > 0) {
-                                    $this->syncLatestStockMovementLocationFromApi($insertProductId, (string) $location);
+                                    $this->syncProductLocation($insertProductId, (string) $location);
                                 }
                             }
                         }
@@ -2125,7 +2125,7 @@ class product
                                 );
                                 $variationProductId = is_array($existingBase) ? (int) ($existingBase['id'] ?? 0) : 0;
                                 if ($variationProductId > 0) {
-                                    $this->syncLatestStockMovementLocationFromApi($variationProductId, (string) $location);
+                                    $this->syncProductLocation($variationProductId, (string) $location);
                                 }
                             }
                             if ($stmt->error) {
@@ -2249,7 +2249,7 @@ class product
                                         );
                                         $variationInsertProductId = is_array($freshRow) ? (int) ($freshRow['id'] ?? 0) : (int) $insertId;
                                         if ($variationInsertProductId > 0) {
-                                            $this->syncLatestStockMovementLocationFromApi($variationInsertProductId, (string) $location);
+                                            $this->syncProductLocation($variationInsertProductId, (string) $location);
                                         }
                                     }
                                 }
@@ -2515,13 +2515,20 @@ class product
     }
 
     /**
-     * Push API location onto the latest movement row at the default warehouse (warehouse stock table).
+     * Keep vp_products.location and the latest default-warehouse movement location in sync.
      */
-    private function syncLatestStockMovementLocationFromApi(int $productId, string $location): void
+    public function syncProductLocation(int $productId, string $location): void
     {
         $location = trim($location);
         if ($productId <= 0 || $location === '') {
             return;
+        }
+
+        $stmt = $this->db->prepare('UPDATE vp_products SET location = ?, updated_at = NOW() WHERE id = ?');
+        if ($stmt) {
+            $stmt->bind_param('si', $location, $productId);
+            $stmt->execute();
+            $stmt->close();
         }
 
         $warehouseId = $this->resolveDefaultWarehouseIdForStock();
@@ -2529,25 +2536,33 @@ class product
             $warehouseId = 1;
         }
 
-        $stmt = $this->db->prepare(
+        $movStmt = $this->db->prepare(
             'SELECT id FROM vp_stock_movements
              WHERE product_id = ? AND warehouse_id = ?
              ORDER BY id DESC LIMIT 1'
         );
-        if (!$stmt) {
+        if (!$movStmt) {
             return;
         }
-        $stmt->bind_param('ii', $productId, $warehouseId);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
+        $movStmt->bind_param('ii', $productId, $warehouseId);
+        $movStmt->execute();
+        $row = $movStmt->get_result()->fetch_assoc();
+        $movStmt->close();
 
         $movementId = (int) ($row['id'] ?? 0);
         if ($movementId <= 0) {
             return;
         }
 
-        $this->updateStockMovementLocation($movementId, $productId, $location);
+        $updMov = $this->db->prepare(
+            'UPDATE vp_stock_movements SET location = ?, updated_at = NOW() WHERE id = ? AND product_id = ?'
+        );
+        if (!$updMov) {
+            return;
+        }
+        $updMov->bind_param('sii', $location, $movementId, $productId);
+        $updMov->execute();
+        $updMov->close();
     }
 
     /**
@@ -2641,9 +2656,10 @@ class product
                 ]);
             } else {
                 StockMovement::syncProductPhysicalStock($this->db, $productId);
-                if ($movementLocation !== '') {
-                    $this->syncLatestStockMovementLocationFromApi($productId, $movementLocation);
-                }
+            }
+
+            if ($movementLocation !== '') {
+                $this->syncProductLocation($productId, $movementLocation);
             }
 
             $updL = $this->db->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
@@ -2780,6 +2796,9 @@ class product
                 'update_by_user' => $userId,
                 'strict_stock_check' => false,
             ]);
+            if ($movementLocation !== '') {
+                $this->syncProductLocation($productId, $movementLocation);
+            }
         } catch (\Throwable $e) {
             error_log('maybeSeedPhysicalStockOnLocalStockApiUpdate: ' . $e->getMessage());
         }
@@ -5461,6 +5480,14 @@ class product
         if ($stmt->affected_rows < 1) {
             return ['success' => false, 'message' => 'No stock movement row updated.'];
         }
+
+        $productStmt = $this->db->prepare('UPDATE vp_products SET location = ?, updated_at = NOW() WHERE id = ?');
+        if ($productStmt) {
+            $productStmt->bind_param('si', $location, $productId);
+            $productStmt->execute();
+            $productStmt->close();
+        }
+
         return ['success' => true, 'message' => 'Location updated successfully.'];
     }
     public function setProductLimits($productId, $minStock, $maxStock)
