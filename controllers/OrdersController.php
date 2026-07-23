@@ -925,45 +925,10 @@ class OrdersController
     }
     public function getOrderDetailsHTML()
     {
-        is_login();
-        global $ordersModel, $commanModel;
-        $orderRef = trim((string)($_GET['order_number'] ?? ''));
-        $type = isset($_GET['type']) ? $_GET['type'] : 'inner';
-        if ($orderRef === '') {
-            echo '<p>Invalid Order Number.</p>';
-            exit;
-        }
-
-        $order = $ordersModel->getOrderLineItemsByRef($orderRef);
-        if (!$order) {
-            echo '<p>Order details not found.</p>';
-            exit;
-        }
-
-        $resolvedOrderNumber = (string)($order[0]['order_number'] ?? $orderRef);
-        $orderremarks = $ordersModel->getRemarksByOrderNumber($resolvedOrderNumber);
-        $fullOrderJourny = $ordersModel->getfullOrderJournyByNumber($resolvedOrderNumber);
-        $customerdetails = $ordersModel->getCustomerNameAndEmailByOrderNumber($resolvedOrderNumber);
-        $statusList = $commanModel->get_order_status_list();
-        foreach ($order as $key => $orders) {
-            $order[$key]['status_log'] = $commanModel->get_order_status_log($orders['id']);
-        }
-
-        if ($type === 'inner') {
-            renderPartial('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks]);
-        } else {
-            renderTemplate('views/orders/other_partial_order_details.php', [
-                'order' => $order,
-                'statusList' => $statusList,
-                'orderremarks' => $orderremarks,
-                'fullOrderJourny' => $fullOrderJourny,
-                'customerdetails' => $customerdetails,
-                'order_status_list' => $commanModel->get_order_status(),
-                'staff_list' => $commanModel->get_staff_list(),
-                'showOrderVendorName' => function_exists('canViewOrderVendorName') && canViewOrderVendorName(),
-            ], 'Order Details');
-        }
-        exit;
+        global $conn;
+        require_once __DIR__ . '/PosOrdersController.php';
+        $posController = new PosOrdersController();
+        $posController->getOrderDetailsHTML();
     }
     public function updateImportedOrders()
     {
