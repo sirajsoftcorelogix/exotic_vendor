@@ -2580,9 +2580,16 @@ class product
         }
 
         $location = trim($location);
-        $this->syncProductLocation($productId, $location);
+        try {
+            $this->syncProductLocation($productId, $location);
+            $vendorSync = $this->syncLocationToVendorFrontend($product, $location);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => 'Location update failed: ' . $e->getMessage(),
+            ];
+        }
 
-        $vendorSync = $this->syncLocationToVendorFrontend($product, $location);
         $message = 'Location updated successfully.';
         if (empty($vendorSync['success'])) {
             $vendorMessage = trim((string) ($vendorSync['message'] ?? 'Vendor sync failed.'));
@@ -5685,6 +5692,10 @@ class product
      */
     public function syncLocationToVendorFrontend(array $product, string $location): array
     {
+        if (!function_exists('exotic_india_api_post')) {
+            require_once __DIR__ . '/../../helpers/exotic_india_api.php';
+        }
+
         $itemCode = trim((string) ($product['item_code'] ?? ''));
         if ($itemCode === '') {
             return ['success' => false, 'message' => 'Missing item_code for vendor location sync.'];
@@ -5704,6 +5715,10 @@ class product
      */
     private function postProductModifyToVendor(array $product, array $postFields, string $failureLabel): array
     {
+        if (!function_exists('exotic_india_api_post')) {
+            require_once __DIR__ . '/../../helpers/exotic_india_api.php';
+        }
+
         $itemCode = trim((string) ($product['item_code'] ?? ''));
         $size = trim((string) ($product['size'] ?? ''));
         $color = trim((string) ($product['color'] ?? ''));

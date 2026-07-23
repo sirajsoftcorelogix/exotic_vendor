@@ -5181,9 +5181,11 @@ class ProductsController
 
             $location = trim((string) ($data['location'] ?? ''));
             $result = $productModel->setProductLocation($productId, $location);
-            echo json_encode($result, JSON_UNESCAPED_UNICODE);
+            echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         } catch (Exception $e) {
-            echo json_encode(['success' => false, 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['success' => false, 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        } catch (Throwable $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         }
         exit;
     }
