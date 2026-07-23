@@ -951,6 +951,97 @@ class PosOrdersController
         $posInv->printProformaPreviewFromOrder();
     }
 
+    /**
+     * Customer handover print: order summary + payment details (not tax invoice).
+     */
+    public function printOrder(): void
+    {
+        is_login();
+        global $ordersModel, $commanModel, $conn;
+
+        $orderRef = trim((string)($_GET['order_number'] ?? ''));
+        if ($orderRef === '') {
+            http_response_code(400);
+            echo '<p>Invalid order number.</p>';
+            exit;
+        }
+
+        $order = $ordersModel->getOrderLineItemsByRef($orderRef);
+        if (!$order) {
+            http_response_code(404);
+            echo '<p>Order not found.</p>';
+            exit;
+        }
+
+        $resolvedOrderNumber = (string)($order[0]['order_number'] ?? $orderRef);
+        $orderremarks = $ordersModel->getRemarksByOrderNumber($resolvedOrderNumber);
+        $customerdetails = $ordersModel->getCustomerNameAndEmailByOrderNumber($resolvedOrderNumber);
+        $orderInfo = $ordersModel->getAddressInfoByOrderNumber($resolvedOrderNumber);
+
+        $invoiceId = (int)($order[0]['invoice_id'] ?? 0);
+        require_once __DIR__ . '/../models/PosInvoice/invoice.php';
+        $posInvoiceModel = new POSInvoice($conn);
+
+        $activeInvoice = null;
+        if ($invoiceId > 0) {
+            $activeInvoice = $posInvoiceModel->getInvoiceById($invoiceId);
+            if ($activeInvoice && strtolower(trim((string)($activeInvoice['status'] ?? ''))) === 'cancelled') {
+                $activeInvoice = null;
+            }
+        }
+        if (!$activeInvoice) {
+            $activeInvoice = $posInvoiceModel->getActiveInvoiceForOrderNumber($resolvedOrderNumber);
+        }
+
+        $invoiceDisplay = $this->buildOrderInvoiceDisplaySummary($activeInvoice, $resolvedOrderNumber);
+        $paymentSummary = $this->buildOrderPaymentSummary(
+            $resolvedOrderNumber,
+            is_array($orderremarks) ? $orderremarks : null
+        );
+
+        require_once __DIR__ . '/../helpers/invoice/pos_order_pricing.php';
+        $linePricingByLineId = pos_order_build_line_display_pricing_map(
+            $order,
+            is_array($activeInvoice) ? $activeInvoice : null,
+            is_array($orderInfo) ? $orderInfo : null,
+            $commanModel
+        );
+
+        if (is_array($invoiceDisplay) && pos_order_line_pricing_should_override_invoice_summary($linePricingByLineId, is_array($orderInfo) ? $orderInfo : null)) {
+            $pricingAggregate = pos_order_aggregate_line_pricing_summary(
+                $linePricingByLineId,
+                is_array($orderInfo) ? $orderInfo : null
+            );
+            if (is_array($pricingAggregate)) {
+                $posMeta = is_array($activeInvoice)
+                    ? pos_invoice_parse_discount_meta($activeInvoice['notes'] ?? null)
+                    : [];
+                $invoiceDisplay['summary_rows'] = pos_order_build_summary_rows_from_line_pricing($pricingAggregate, $posMeta);
+                $invoiceDisplay['pdf_grand_total'] = $pricingAggregate['net_chargeable'];
+                $invoiceDisplay['grand_total'] = $pricingAggregate['net_chargeable'];
+            }
+        }
+
+        require_once __DIR__ . '/../helpers/app_settings.php';
+        $firmDetails = app_settings_model() ? app_settings_model()->getFirmDetailsRow() : [];
+
+        require_once __DIR__ . '/../models/payment/Payment.php';
+        $paymentModel = new Payment($conn);
+        $storeAddress = $paymentModel->getDefaultWarehouseAddress();
+
+        renderTemplateClean('views/posorders/print_order.php', [
+            'order' => $order,
+            'orderremarks' => is_array($orderremarks) ? $orderremarks : [],
+            'customerdetails' => is_array($customerdetails) ? $customerdetails : [],
+            'invoiceDisplay' => $invoiceDisplay,
+            'paymentSummary' => $paymentSummary,
+            'linePricingByLineId' => $linePricingByLineId,
+            'orderNumber' => $resolvedOrderNumber,
+            'firmDetails' => is_array($firmDetails) ? $firmDetails : [],
+            'storeAddress' => is_array($storeAddress) ? $storeAddress : ['title' => '', 'lines' => []],
+        ], 'Order ' . $resolvedOrderNumber);
+    }
+
     public function getOrderDetailsHTML()
     {
         is_login();

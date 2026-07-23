@@ -279,8 +279,9 @@ $(function () {
   const $pmQtyVal = $('#pmQtyVal');
 
   let activeModalKey = null;
-  /** When set from `stock_qty`, qty controls cannot exceed this (warehouse running stock). */
+  /** When set, qty controls cannot exceed this (warehouse running stock). Null = no cap (cross-store / unmapped). */
   let modalWarehouseMaxQty = null;
+  let modalStockWarningMessage = '';
   let modalPreselectedAddonEntries = [];
 
   function openModal() {
@@ -293,7 +294,9 @@ $(function () {
     $('body').removeClass('overflow-hidden');
     activeModalKey = null;
     modalWarehouseMaxQty = null;
+    modalStockWarningMessage = '';
     $('#pmQtyMaxHint').text('');
+    $('#pmStockWarning').addClass('hidden').text('');
     $('#pmSiblingSkus').empty();
     $('#pmSiblingSkusWrapper').addClass('hidden');
     $('#modal_stock_check_code').val('');
@@ -309,6 +312,33 @@ $(function () {
   $overlay.on('click', closeModal);
   $close.on('click', closeModal);
   $closeBtn.on('click', closeModal);
+
+  function resolveModalQtyCap(p) {
+    if (!p || typeof p !== 'object') return null;
+    if (p.enforce_qty_cap === true && p.qty_cap != null && String(p.qty_cap).trim() !== '') {
+      const capped = Math.floor(Number(p.qty_cap));
+      return Number.isFinite(capped) && capped > 0 ? capped : null;
+    }
+    const sqRaw = p.stock_qty;
+    if (sqRaw !== null && sqRaw !== undefined && String(sqRaw).trim() !== '') {
+      const n = Number(sqRaw);
+      if (!Number.isNaN(n) && n > 0) {
+        return Math.floor(n);
+      }
+    }
+    return null;
+  }
+
+  function renderStockWarningBanner(message) {
+    const $banner = $('#pmStockWarning');
+    modalStockWarningMessage = String(message || '').trim();
+    if (!$banner.length) return;
+    if (modalStockWarningMessage) {
+      $banner.text(modalStockWarningMessage).removeClass('hidden');
+    } else {
+      $banner.addClass('hidden').text('');
+    }
+  }
 
   function updateModalQtyUiState() {
     const max = modalWarehouseMaxQty;
@@ -437,15 +467,13 @@ $(function () {
     const max = modalWarehouseMaxQty;
     const q = parseInt(String($('#modal_qty').val()), 10);
     const qtyNum = Number.isFinite(q) ? q : 0;
-    if (typeof max === 'number' && max >= 0) {
-      if (max === 0 || qtyNum > max) {
-        alert(
-          max === 0
-            ? 'Out of stock in this warehouse.'
-            : 'Maximum quantity available is ' + max + '.'
-        );
-        return;
-      }
+    if (typeof max === 'number' && max > 0 && qtyNum > max) {
+      alert('Maximum quantity available is ' + max + '.');
+      return;
+    }
+    if (qtyNum < 1) {
+      alert('Please enter a quantity of at least 1.');
+      return;
     }
 
     if (typeof window.handleAddToCart === 'function') {
@@ -475,25 +503,20 @@ $(function () {
     $('#pmImage').attr('src', imgSrc).attr('alt', title || 'Product');
 
     const sqRaw = p.stock_qty;
-    modalWarehouseMaxQty = null;
-    if (sqRaw !== null && sqRaw !== undefined && String(sqRaw).trim() !== '') {
-      const n = Number(sqRaw);
-      if (!Number.isNaN(n)) {
-        modalWarehouseMaxQty = Math.max(0, Math.floor(n));
-      }
-    }
+    modalWarehouseMaxQty = resolveModalQtyCap(p);
+    renderStockWarningBanner(p.stock_warning_message || p.stock_warning || '');
     const $hint = $('#pmQtyMaxHint');
     if ($hint.length) {
-      $hint.text(
-        modalWarehouseMaxQty !== null && modalWarehouseMaxQty >= 0
-          ? modalWarehouseMaxQty > 0
-            ? `(max ${modalWarehouseMaxQty})`
-            : '(out of stock)'
-          : ''
-      );
+      if (modalWarehouseMaxQty !== null && modalWarehouseMaxQty > 0) {
+        $hint.text('(max ' + modalWarehouseMaxQty + ')');
+      } else if (sqRaw !== null && sqRaw !== undefined && String(sqRaw).trim() !== '' && !Number.isNaN(Number(sqRaw)) && Number(sqRaw) <= 0) {
+        $hint.text('(out of stock here)');
+      } else {
+        $hint.text('');
+      }
     }
 
-    setModalQty(modalWarehouseMaxQty === 0 ? 0 : 1);
+    setModalQty(modalWarehouseMaxQty === null ? 1 : (modalWarehouseMaxQty === 0 ? 0 : 1));
 
     //  ADDONS UI (FINAL CLEAN)
 
@@ -929,7 +952,10 @@ data-code="${lookupCode}">
     modalPreselectedAddonEntries = normalizeAddonEntries(preselectedAddonEntries);
     openModal();
 
-    //  CACHE HIT
+    // CACHE HIT — refetch if cached before stock-context fields were added
+    if (productApiCache[code] && productApiCache[code].stock_warning_type === undefined) {
+      delete productApiCache[code];
+    }
     if (productApiCache[code]) {
       renderProductModal(productApiCache[code], code);
       applyPreselectedAddonsToModal(modalPreselectedAddonEntries);
@@ -969,22 +995,7 @@ data-code="${lookupCode}">
     const sku = product.sku != null ? String(product.sku) : '';
     const codeForPopup = sku || itemCode;
     if (!codeForPopup) return;
-    const url = '?page=pos_register&action=product-availability'
-      + (productId ? ('&product_id=' + encodeURIComponent(productId)) : ('&q=' + encodeURIComponent(codeForPopup)));
-    fetch(url, {
-      credentials: 'same-origin',
-      headers: { 'Accept': 'application/json' }
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data && data.success && data.current_available === false && data.message) {
-          alert(data.message);
-          openProductModalByCode(codeForPopup, []);
-        }
-      })
-      .catch(function () {
-        // keep search flow functional even if availability endpoint fails
-      });
+    openProductModalByCode(codeForPopup, []);
   }
   function renderModalData(p) {
 
@@ -1218,8 +1229,8 @@ data-code="${lookupCode}">
 
   if ($pagePrev.length) {
     $pagePrev.on('click', function () {
-      if (isLoading) return;
-      resetAndLoad();
+      if (isLoading || currentPage <= 1) return;
+      fetchProducts(currentPage - 1, false);
     });
   }
   if ($pageNext.length) {

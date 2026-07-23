@@ -110,6 +110,22 @@ function pos_order_proforma_print_url(string $orderNumber): string
 	return base_url('?page=posorders&action=print_proforma&order_number=' . rawurlencode($orderNumber));
 }
 
+/** Customer handover print: order lines + payment summary (not tax invoice). */
+function pos_order_print_url(string $orderNumber, bool $autoPrint = false): string
+{
+	$orderNumber = trim($orderNumber);
+	if ($orderNumber === '') {
+		return '';
+	}
+
+	$url = base_url('?page=posorders&action=print_order&order_number=' . rawurlencode($orderNumber));
+	if ($autoPrint) {
+		$url .= '&autoprint=1';
+	}
+
+	return $url;
+}
+
 /** Inbound book shipping fee (INR): MAX(min, billable_kg × rate). Constants in init.php. */
 function book_shipping_fee_inr($weightKg): float
 {

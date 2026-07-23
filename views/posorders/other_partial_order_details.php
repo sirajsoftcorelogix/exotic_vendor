@@ -138,8 +138,11 @@ $proformaPrintDisabledReason = $canPrintProforma
                                 Print Invoice
                             </span>
                         <?php endif; ?>
-                        <a href="#" class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100 border-t border-gray-50">
-                            print order
+                        <a href="<?php echo htmlspecialchars(pos_order_print_url($displayOrderNumber), ENT_QUOTES, 'UTF-8'); ?>"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100 border-t border-gray-50">
+                            Print Order
                         </a>
                     </div>
                 </div>
