@@ -4840,7 +4840,9 @@ class POSRegisterController
             'local_stock_warnings' => $localStockWarnings,
             'fulfillment_status_sync' => $fulfillmentStatusMeta,
             'shipped_status_sync' => $fulfillmentStatusMeta,
-            'redirect_url' => 'index.php?page=pos_register&action=checkout-receipt',
+            'redirect_url' => 'index.php?page=pos_register&action=checkout-receipt'
+                . '&order_number=' . rawurlencode($orderNumber)
+                . '&receipt_number=' . rawurlencode($receiptNo),
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
@@ -4849,12 +4851,34 @@ class POSRegisterController
     {
         is_login();
         global $conn;
-        $row = $_SESSION['pos_last_checkout_receipt'] ?? null;
+
+        $orderNumber = trim((string)($_GET['order_number'] ?? ''));
+        $receiptNumber = trim((string)($_GET['receipt_number'] ?? ''));
+
+        $row = null;
+        $sessionRow = $_SESSION['pos_last_checkout_receipt'] ?? null;
+        if (is_array($sessionRow) && !empty($sessionRow['receipt_number'])) {
+            $sessionOrder = trim((string)($sessionRow['order_id'] ?? ''));
+            $sessionReceipt = trim((string)($sessionRow['receipt_number'] ?? ''));
+            $matchesRequest = ($orderNumber === '' && $receiptNumber === '')
+                || ($orderNumber !== '' && $orderNumber === $sessionOrder)
+                || ($receiptNumber !== '' && $receiptNumber === $sessionReceipt);
+            if ($matchesRequest) {
+                $row = $sessionRow;
+            }
+        }
+
+        if (!is_array($row) || empty($row['receipt_number'])) {
+            $row = $this->rebuildCheckoutReceiptFromDb($conn, $orderNumber, $receiptNumber);
+        }
+
         if (!is_array($row) || empty($row['receipt_number'])) {
             header('Location: index.php?page=pos_register&action=list');
             exit;
         }
-        unset($_SESSION['pos_last_checkout_receipt']);
+
+        $_SESSION['pos_last_checkout_receipt'] = $row;
+
         $row = $this->fillReceiptInvoicePdfFromDb($conn, $row);
         if (empty($row['invoice_poitem_ids']) || !is_array($row['invoice_poitem_ids'])) {
             $row['invoice_poitem_ids'] = $this->resolveInvoicePoitemIdsForOrderNumber($conn, $row['order_id'] ?? '');
@@ -5653,8 +5677,238 @@ class POSRegisterController
             ];
         }
 
+        return $this->filterReceiptAddressLines($lines);
+    }
+
+    /**
+     * @param array<string, mixed>|null $info
+     * @param 'billing'|'shipping' $which
+     *
+     * @return list<string>
+     */
+    private function formatAddressLinesFromOrderInfo(?array $info, string $which): array
+    {
+        if (!is_array($info)) {
+            return ['—'];
+        }
+
+        if ($which === 'shipping') {
+            $name = trim((string)($info['sname'] ?? ''));
+            if ($name === '') {
+                $name = trim((string)($info['shipping_first_name'] ?? '') . ' ' . (string)($info['shipping_last_name'] ?? ''));
+            }
+            $lines = [
+                $name,
+                trim((string)($info['saddress1'] ?? $info['shipping_address1'] ?? '')),
+                trim((string)($info['saddress2'] ?? $info['shipping_address2'] ?? '')),
+                trim((string)($info['scity'] ?? $info['shipping_city'] ?? ''))
+                    . ', ' . trim((string)($info['sstate'] ?? $info['shipping_state'] ?? ''))
+                    . ' ' . trim((string)($info['szip'] ?? $info['shipping_zip'] ?? '')),
+                trim((string)($info['scountry'] ?? $info['shipping_country'] ?? '')),
+                'Ph: ' . trim((string)($info['sphone'] ?? $info['shipping_mobile'] ?? $info['shipping_phone'] ?? '')),
+            ];
+        } else {
+            $name = trim((string)($info['first_name'] ?? '') . ' ' . (string)($info['last_name'] ?? ''));
+            $lines = [
+                $name,
+                trim((string)($info['address1'] ?? '')),
+                trim((string)($info['address2'] ?? '')),
+                trim((string)($info['city'] ?? ''))
+                    . ', ' . trim((string)($info['state'] ?? ''))
+                    . ' ' . trim((string)($info['zip'] ?? '')),
+                trim((string)($info['country'] ?? '')),
+                'Ph: ' . trim((string)($info['mobile'] ?? $info['phone'] ?? '')),
+            ];
+        }
+
+        $filtered = $this->filterReceiptAddressLines($lines);
+
+        return $filtered !== [] ? $filtered : ['—'];
+    }
+
+    /**
+     * @param list<string> $lines
+     *
+     * @return list<string>
+     */
+    private function filterReceiptAddressLines(array $lines): array
+    {
         return array_values(array_filter(array_map('trim', $lines), static function ($x) {
             return $x !== '' && !preg_match('/^Ph:\s*$/', $x);
         }));
+    }
+
+    private function parseDeliveryStatusLabelFromPaymentNote(string $note): string
+    {
+        if (preg_match('/Delivery status:\s*(.+)$/mi', $note, $matches)) {
+            return trim((string)$matches[1]);
+        }
+
+        return '';
+    }
+
+    /**
+     * Rebuild checkout receipt view data from pos_payments when session is missing (page refresh/bookmark).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function rebuildCheckoutReceiptFromDb(mysqli $conn, string $orderNumber, string $receiptNumber = ''): ?array
+    {
+        require_once __DIR__ . '/../models/payment/Payment.php';
+        require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+
+        $paymentModel = new Payment($conn);
+        $payments = $paymentModel->findCheckoutReceiptPayments($orderNumber, $receiptNumber !== '' ? $receiptNumber : null);
+        if ($payments === []) {
+            return null;
+        }
+
+        $first = $payments[0];
+        $orderNumber = trim((string)($first['order_number'] ?? $orderNumber));
+        $receiptNo = trim((string)($first['receipt_number'] ?? ''));
+        if ($orderNumber === '' || $receiptNo === '') {
+            return null;
+        }
+
+        $splits = [];
+        $advanceAmount = 0.0;
+        $codAmount = 0.0;
+        $paymentAmount = 0.0;
+        foreach ($payments as $paymentRow) {
+            $mode = strtolower(trim((string)($paymentRow['payment_mode'] ?? '')));
+            $amount = round((float)($paymentRow['payment_amount'] ?? 0), 2);
+            $paymentAmount += $amount;
+            if (pos_payment_is_cod_mode($mode)) {
+                $codAmount += $amount;
+            } else {
+                $advanceAmount += $amount;
+            }
+            $splits[] = [
+                'mode' => $mode,
+                'amount' => $amount,
+                'transaction_id' => trim((string)($paymentRow['transaction_id'] ?? '')),
+            ];
+        }
+        $advanceAmount = round($advanceAmount, 2);
+        $codAmount = round($codAmount, 2);
+        $paymentAmount = round($paymentAmount, 2);
+        $hasCodPending = $codAmount > 0.001;
+
+        $receiptPaymentSplits = [];
+        foreach ($splits as $splitRow) {
+            $receiptPaymentSplits[] = [
+                'mode' => (string)$splitRow['mode'],
+                'mode_label' => $this->mapPosPaymentModeLabel((string)$splitRow['mode']),
+                'amount' => (float)$splitRow['amount'],
+                'transaction_id' => (string)$splitRow['transaction_id'],
+            ];
+        }
+
+        $orderTotal = round((float)($first['order_amount'] ?? 0), 2);
+        if ($orderTotal <= 0) {
+            $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
+        }
+
+        $paymentStage = strtolower(trim((string)($first['payment_stage'] ?? 'final')));
+        $pendingAmount = round((float)($first['pending_amount'] ?? 0), 2);
+        $txn = trim((string)($first['transaction_id'] ?? ''));
+        $note = trim((string)($first['note'] ?? ''));
+
+        $createdRaw = trim((string)($first['created_at'] ?? ''));
+        if ($createdRaw === '') {
+            $createdRaw = trim((string)($first['payment_date'] ?? '')) . ' 00:00:00';
+        }
+        try {
+            $dt = new \DateTime($createdRaw, new \DateTimeZone('Asia/Kolkata'));
+        } catch (\Throwable $e) {
+            $dt = new \DateTime('now', new \DateTimeZone('Asia/Kolkata'));
+        }
+
+        $this->bootstrapOrderImportGlobals();
+        global $ordersModel;
+        $orderInfo = $ordersModel->getAddressInfoByOrderNumber($orderNumber);
+
+        $deliveryLabel = $this->parseDeliveryStatusLabelFromPaymentNote($note);
+        if ($deliveryLabel === '' && is_array($orderInfo)) {
+            $localStatus = strtolower(trim((string)($orderInfo['remarks'] ?? '')));
+            if ($localStatus === 'shipped') {
+                $deliveryLabel = 'Collected from showroom by Customer';
+            }
+        }
+
+        $importStatus = '';
+        try {
+            $ordersCtrl = $this->getOrdersControllerForImport();
+            $importStatus = $ordersCtrl->isOrderReadyForPosCheckout($orderNumber) ? 'success' : 'failed';
+        } catch (\Throwable $e) {
+            $importStatus = 'failed';
+        }
+
+        $couponDiscount = round((float)($orderInfo['coupon_reduce'] ?? 0), 2);
+        $giftDiscount = round((float)($orderInfo['giftvoucher_reduce'] ?? 0), 2);
+        $cashDiscount = round(max(
+            (float)($orderInfo['custom_reduce'] ?? 0),
+            0.0
+        ), 2);
+
+        return [
+            'receipt_number' => $receiptNo,
+            'receipt_date_formatted' => $dt->format('d M Y, h:i A'),
+            'order_id' => $orderNumber,
+            'payment_stage' => $paymentStage,
+            'payment_mode_label' => $this->formatPosPaymentSplitsLabel($splits),
+            'pos_delivery_status_label' => $deliveryLabel,
+            'pos_delivery_local_status' => '',
+            'payment_splits' => $receiptPaymentSplits,
+            'receipt_payment_splits' => $receiptPaymentSplits,
+            'transaction_id' => $txn,
+            'receipt_banner_text' => $hasCodPending
+                ? ($advanceAmount > 0.001
+                    ? 'Order ' . $orderNumber . ' placed. Advance ₹ ' . number_format($advanceAmount, 2, '.', ',')
+                        . ' received. COD ₹ ' . number_format($codAmount, 2, '.', ',') . ' pending on delivery.'
+                    : 'Order ' . $orderNumber . ' placed on COD. ₹ ' . number_format($codAmount, 2, '.', ',') . ' to collect on delivery.')
+                : 'Thank you. Payment of ₹ ' . number_format($paymentAmount, 2, '.', ',') . ' recorded for order ' . $orderNumber . '.',
+            'receipt_billing_block' => $this->formatAddressLinesFromOrderInfo($orderInfo, 'billing'),
+            'receipt_shipping_block' => $this->formatAddressLinesFromOrderInfo($orderInfo, 'shipping'),
+            'receipt_lines' => [],
+            'receipt_subtotal_goods' => $orderTotal,
+            'receipt_gst_total' => 0.0,
+            'receipt_coupon_discount' => $couponDiscount,
+            'receipt_gift_discount' => $giftDiscount,
+            'receipt_line_discount' => 0.0,
+            'receipt_cash_discount' => $cashDiscount,
+            'receipt_grand_total' => $orderTotal,
+            'receipt_qty_total' => 0.0,
+            'receipt_agg_sgst' => 0.0,
+            'receipt_agg_cgst' => 0.0,
+            'receipt_agg_igst' => 0.0,
+            'receipt_amount_in_words' => '',
+            'receipt_amount_received' => $advanceAmount,
+            'receipt_cod_pending_amount' => $codAmount,
+            'receipt_pending_amount' => $hasCodPending ? $codAmount : $pendingAmount,
+            'has_cod_pending' => $hasCodPending,
+            'import_status' => $importStatus,
+            'show_invoice_pdf_button' => false,
+            'show_invoice_preview_button' => false,
+            'invoice_id' => 0,
+            'invoice_pdf_url' => '',
+            'invoice_preview_url' => '',
+            'invoice_pdf_disabled_hint' => 'Tax invoice is available after payment is received in full.',
+            'is_payment_in_full' => ($paymentStage === 'final' && !$hasCodPending && $pendingAmount <= 0.02),
+            'receipt_company_legal_name' => 'EXOTIC INDIA ART PVT LTD',
+            'receipt_company_tagline' => '',
+            'receipt_company_gstin' => '',
+            'receipt_company_pan' => '',
+            'receipt_title_main' => 'PAYMENT RECEIPT',
+            'receipt_place_of_supply' => '',
+            'receipt_terms' => [
+                'Goods once sold will not be taken back.',
+                'Subject to jurisdiction of competent courts at New Delhi.',
+            ],
+            'receipt_office_footer' => '',
+            'receipt_signature_date' => $dt->format('d M Y'),
+            'payment_history_url' => 'index.php?page=payments&order_number=' . rawurlencode($orderNumber) . '&order_exact=1',
+            'invoice_poitem_ids' => $this->resolveInvoicePoitemIdsForOrderNumber($conn, $orderNumber),
+        ];
     }
 }
