@@ -24,7 +24,7 @@ $odSectionHead = static function (string $label): void {
     <div class="rounded-xl border border-amber-200/80 bg-gradient-to-br from-amber-600 to-amber-700 text-white shadow-sm p-4 sm:p-5">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-5 text-sm sm:text-[15px]">
             <div class="space-y-1.5">
-                <?php $link = 'index.php?page=orders&action=get_order_details_html&type=outer&order_number=' . $order[0]['order_number']; ?>
+                <?php $link = 'index.php?page=posorders&action=get_order_details_html&type=outer&order_number=' . $order[0]['order_number']; ?>
                 <p class="font-semibold text-amber-50/95 text-[11px] sm:text-xs uppercase tracking-wide">Order</p>
                 <p class="text-xl sm:text-2xl font-bold leading-snug">
                     <a href="<?php echo htmlspecialchars($link); ?>" class="text-white underline decoration-white/45 underline-offset-2 hover:decoration-white" target="_blank" rel="noopener noreferrer"><?php echo htmlspecialchars((string)$order[0]['order_number']); ?></a>
