@@ -142,7 +142,7 @@ function pos_payment_resolve_session_user_id(): int
 
 /**
  * Payable order total after discounts (grand total), not raw line list prices.
- * Priority: vp_order_info.total → pos_payments.order_amount → vp_invoices.total_amount → line subtotal minus reductions.
+ * Priority: pos_payments.order_amount → vp_order_info.total → vp_invoices → line subtotal minus reductions.
  */
 function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): float
 {
@@ -223,6 +223,115 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
     }
 
     return 0.0;
+}
+
+/**
+ * Align imported vp_orders / vp_order_info with POS checkout payable (vendor import often stores net API total).
+ *
+ * @param list<array{itemcode?:string,size?:string,color?:string,price?:float|int|string}> $linePrices
+ */
+function pos_payment_sync_checkout_order_payable(
+    mysqli $conn,
+    string $orderNumber,
+    float $checkoutGrandTotal,
+    array $linePrices = []
+): void {
+    $orderNumber = trim($orderNumber);
+    $checkoutGrandTotal = round($checkoutGrandTotal, 2);
+    if ($orderNumber === '' || $checkoutGrandTotal <= 0) {
+        return;
+    }
+
+    $stmt = $conn->prepare('UPDATE vp_order_info SET total = ? WHERE order_number = ? LIMIT 1');
+    if ($stmt) {
+        $stmt->bind_param('ds', $checkoutGrandTotal, $orderNumber);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    $stmt = $conn->prepare(
+        'UPDATE vp_orders SET custom_reduce = 0 WHERE order_number = ? AND IFNULL(custom_reduce, 0) > 0'
+    );
+    if ($stmt) {
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    $updatedLines = 0;
+    foreach ($linePrices as $linePriceRow) {
+        if (!is_array($linePriceRow)) {
+            continue;
+        }
+        $itemCode = trim((string)($linePriceRow['itemcode'] ?? $linePriceRow['item_code'] ?? ''));
+        $unitPrice = round((float)($linePriceRow['price'] ?? 0), 2);
+        if ($itemCode === '' || $unitPrice <= 0) {
+            continue;
+        }
+
+        $size = trim((string)($linePriceRow['size'] ?? ''));
+        $color = trim((string)($linePriceRow['color'] ?? ''));
+
+        if ($size !== '' || $color !== '') {
+            $upd = $conn->prepare(
+                'UPDATE vp_orders
+                 SET finalprice = ?
+                 WHERE order_number = ?
+                   AND item_code = ?
+                   AND TRIM(COALESCE(size, \'\')) = ?
+                   AND TRIM(COALESCE(color, \'\')) = ?'
+            );
+            if ($upd) {
+                $upd->bind_param('dssss', $unitPrice, $orderNumber, $itemCode, $size, $color);
+                $upd->execute();
+                $updatedLines += $upd->affected_rows;
+                $upd->close();
+                continue;
+            }
+        }
+
+        $upd = $conn->prepare(
+            'UPDATE vp_orders SET finalprice = ? WHERE order_number = ? AND item_code = ? LIMIT 1'
+        );
+        if ($upd) {
+            $upd->bind_param('dss', $unitPrice, $orderNumber, $itemCode);
+            $upd->execute();
+            $updatedLines += $upd->affected_rows;
+            $upd->close();
+        }
+    }
+
+    if ($updatedLines <= 0) {
+        $lineStmt = $conn->prepare(
+            'SELECT id, quantity FROM vp_orders WHERE order_number = ? ORDER BY id ASC'
+        );
+        if ($lineStmt) {
+            $lineStmt->bind_param('s', $orderNumber);
+            $lineStmt->execute();
+            $lineRes = $lineStmt->get_result();
+            $lines = [];
+            while ($lineRow = $lineRes->fetch_assoc()) {
+                $lines[] = $lineRow;
+            }
+            $lineStmt->close();
+
+            if (count($lines) === 1) {
+                $qty = max(1, (int)($lines[0]['quantity'] ?? 1));
+                $unit = round($checkoutGrandTotal / $qty, 2);
+                $lineId = (int)($lines[0]['id'] ?? 0);
+                if ($lineId > 0 && $unit > 0) {
+                    $upd = $conn->prepare('UPDATE vp_orders SET finalprice = ? WHERE id = ? LIMIT 1');
+                    if ($upd) {
+                        $upd->bind_param('di', $unit, $lineId);
+                        $upd->execute();
+                        $upd->close();
+                    }
+                }
+            }
+        }
+    }
+
+    pos_payment_refresh_order_snapshots($conn, $orderNumber);
 }
 
 function pos_payment_is_cod_mode(string $mode): bool
@@ -308,12 +417,30 @@ function pos_payment_sum_cod_pending(mysqli $conn, string $orderNumber): float
     return round((float)($row['cod'] ?? 0), 2);
 }
 
+function pos_payment_sum_receipt_total(mysqli $conn, string $orderNumber): float
+{
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return 0.0;
+    }
+
+    $stmt = $conn->prepare(
+        'SELECT IFNULL(SUM(payment_amount), 0) AS receipt_total FROM pos_payments WHERE order_number = ?'
+    );
+    if (!$stmt) {
+        return 0.0;
+    }
+    $stmt->bind_param('s', $orderNumber);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return round((float)($row['receipt_total'] ?? 0), 2);
+}
+
 function pos_payment_sum_allocated(mysqli $conn, string $orderNumber): float
 {
-    return round(
-        pos_payment_sum_paid($conn, $orderNumber) + pos_payment_sum_cod_pending($conn, $orderNumber),
-        2
-    );
+    return pos_payment_sum_receipt_total($conn, $orderNumber);
 }
 
 /**
@@ -361,8 +488,7 @@ function pos_payment_is_fully_paid(mysqli $conn, string $orderNumber): bool
 }
 
 /**
- * Checkout plan complete: collected + pending COD obligation covers order total.
- * Row pending ₹0 on a COD line means this — not that payment was fully collected.
+ * Receipt plan complete: sum of all payment receipt rows (including COD) covers order total.
  */
 function pos_payment_is_allocation_complete(mysqli $conn, string $orderNumber): bool
 {
@@ -371,14 +497,52 @@ function pos_payment_is_allocation_complete(mysqli $conn, string $orderNumber): 
         return false;
     }
 
-    $collected = pos_payment_sum_paid($conn, $orderNumber);
-    $codObligation = pos_payment_sum_cod_pending($conn, $orderNumber);
-
-    return $collected + $codObligation + 0.02 >= $orderTotal;
+    return pos_payment_sum_receipt_total($conn, $orderNumber) + 0.02 >= $orderTotal;
 }
 
 /**
- * Create or return a proforma invoice for advance/COD checkout (before full collection).
+ * POS checkout order exists only after at least one payment receipt row is saved.
+ */
+function pos_payment_has_recorded_payments(mysqli $conn, string $orderNumber): bool
+{
+    return pos_payment_sum_receipt_total($conn, $orderNumber) > 0.001;
+}
+
+/** @deprecated Use pos_payment_has_recorded_payments() */
+function pos_payment_is_invoice_eligible(mysqli $conn, string $orderNumber): bool
+{
+    return pos_payment_has_recorded_payments($conn, $orderNumber);
+}
+
+/**
+ * Invoice type from receipt total vs order total.
+ *
+ * No payment receipts → no order (null).
+ * Receipt total >= order → final (COD receipt rows count).
+ * Receipt total > 0 but below order → proforma only.
+ *
+ * @return 'final'|'proforma'|null null when no payments recorded
+ */
+function pos_payment_resolve_auto_invoice_status(mysqli $conn, string $orderNumber): ?string
+{
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return null;
+    }
+
+    if (!pos_payment_has_recorded_payments($conn, $orderNumber)) {
+        return null;
+    }
+
+    if (pos_payment_is_allocation_complete($conn, $orderNumber)) {
+        return 'final';
+    }
+
+    return 'proforma';
+}
+
+/**
+ * Create or return a proforma invoice for partial payment (receipt total below order amount).
  *
  * @return array{success:bool,attempted:bool,fully_paid:bool,invoice_id:int,created:bool,message?:string}
  */
@@ -397,13 +561,12 @@ function pos_payment_ensure_proforma_invoice_for_order(mysqli $conn, string $ord
         return $empty;
     }
 
-    if (pos_payment_is_fully_paid($conn, $orderNumber)) {
+    if (pos_payment_is_allocation_complete($conn, $orderNumber)) {
         return pos_payment_finalize_invoice_for_order($conn, $orderNumber);
     }
 
-    if (!pos_payment_is_allocation_complete($conn, $orderNumber)
-        || pos_payment_sum_cod_pending($conn, $orderNumber) <= 0.001) {
-        $empty['message'] = 'Proforma invoice is available when advance plus COD covers the order total.';
+    if (!pos_payment_has_recorded_payments($conn, $orderNumber)) {
+        $empty['message'] = 'No payments recorded for this order.';
         return $empty;
     }
 
@@ -527,7 +690,7 @@ function pos_payment_find_invoice_id(mysqli $conn, string $orderNumber): int
 }
 
 /**
- * When order is fully paid: finalize proforma or create a final tax invoice.
+ * When receipt total covers the order: finalize proforma or create a final tax invoice.
  *
  * @return array{success:bool,attempted:bool,fully_paid:bool,invoice_id:int,created:bool,message?:string}
  */
@@ -545,7 +708,7 @@ function pos_payment_finalize_invoice_for_order(mysqli $conn, string $orderNumbe
         return $empty;
     }
 
-    if (!pos_payment_is_fully_paid($conn, $orderNumber)) {
+    if (!pos_payment_is_allocation_complete($conn, $orderNumber)) {
         return $empty;
     }
 

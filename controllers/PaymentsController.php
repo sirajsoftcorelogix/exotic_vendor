@@ -101,6 +101,23 @@ class PaymentsController
     {
         $id = (int)($_GET['id'] ?? 0);
         $payment = $this->paymentModel->findForReceipt($id);
+        if (!$payment) {
+            http_response_code(404);
+            echo 'Payment not found';
+            exit;
+        }
+
+        $receiptNumber = trim((string)($payment['receipt_number'] ?? ''));
+        $orderNumber = trim((string)($payment['order_number'] ?? ''));
+        if ($receiptNumber !== '' && $orderNumber !== '') {
+            header(
+                'Location: index.php?page=pos_register&action=checkout-receipt'
+                . '&order_number=' . rawurlencode($orderNumber)
+                . '&receipt_number=' . rawurlencode($receiptNumber)
+            );
+            exit;
+        }
+
         $defaultWarehouseAddress = $this->paymentModel->getDefaultWarehouseAddress();
 
         require 'views/payments/receipt.php';
@@ -214,7 +231,14 @@ class PaymentsController
         $newPaymentId = $insertRes['payment_id'];
 
         pos_payment_refresh_order_snapshots($conn, $orderNumberStr);
-        $invoiceMeta = pos_payment_finalize_invoice_for_order($conn, $orderNumberStr);
+        $invoiceStatus = pos_payment_resolve_auto_invoice_status($conn, $orderNumberStr);
+        if ($invoiceStatus === 'final') {
+            $invoiceMeta = pos_payment_finalize_invoice_for_order($conn, $orderNumberStr);
+        } elseif ($invoiceStatus === 'proforma') {
+            $invoiceMeta = pos_payment_ensure_proforma_invoice_for_order($conn, $orderNumberStr);
+        } else {
+            $invoiceMeta = ['success' => true, 'invoice_id' => 0, 'created' => false];
+        }
 
         echo json_encode([
             'success' => true,
@@ -248,41 +272,42 @@ class PaymentsController
             vendorJsonResponse(['success' => false, 'message' => 'Payment not found']);
         }
 
-        if (!pos_payment_is_fully_paid($conn, $orderNumber)) {
-            if (pos_payment_is_allocation_complete($conn, $orderNumber)
-                && pos_payment_sum_cod_pending($conn, $orderNumber) > 0.001) {
-                $invoiceMeta = pos_payment_ensure_proforma_invoice_for_order($conn, $orderNumber);
-                if (!empty($invoiceMeta['success']) && !empty($invoiceMeta['invoice_id'])) {
-                    vendorJsonResponse([
-                        'success' => true,
-                        'invoice_id' => (int)$invoiceMeta['invoice_id'],
-                        'created' => !empty($invoiceMeta['created']),
-                        'proforma' => true,
-                    ]);
-                }
+        $invoiceStatus = pos_payment_resolve_auto_invoice_status($conn, $orderNumber);
+        if ($invoiceStatus === 'final') {
+            $invoiceMeta = pos_payment_finalize_invoice_for_order($conn, $orderNumber);
+            if (!empty($invoiceMeta['success']) && !empty($invoiceMeta['invoice_id'])) {
                 vendorJsonResponse([
-                    'success' => false,
-                    'message' => $invoiceMeta['message'] ?? 'Proforma invoice could not be created.',
+                    'success' => true,
+                    'invoice_id' => (int)$invoiceMeta['invoice_id'],
+                    'created' => !empty($invoiceMeta['created']),
+                    'proforma' => false,
                 ]);
             }
             vendorJsonResponse([
                 'success' => false,
-                'message' => 'Order is not fully paid yet. A tax invoice is created only after all cash/UPI/card payments are received. For COD orders, create a proforma once advance plus COD covers the order total.',
+                'message' => $invoiceMeta['message'] ?? 'Final invoice could not be created.',
             ]);
         }
 
-        $invoiceMeta = pos_payment_finalize_invoice_for_order($conn, $orderNumber);
-        if (empty($invoiceMeta['success']) || empty($invoiceMeta['invoice_id'])) {
+        if ($invoiceStatus === 'proforma') {
+            $invoiceMeta = pos_payment_ensure_proforma_invoice_for_order($conn, $orderNumber);
+            if (!empty($invoiceMeta['success']) && !empty($invoiceMeta['invoice_id'])) {
+                vendorJsonResponse([
+                    'success' => true,
+                    'invoice_id' => (int)$invoiceMeta['invoice_id'],
+                    'created' => !empty($invoiceMeta['created']),
+                    'proforma' => true,
+                ]);
+            }
             vendorJsonResponse([
                 'success' => false,
-                'message' => $invoiceMeta['message'] ?? 'Invoice could not be created.',
+                'message' => $invoiceMeta['message'] ?? 'Proforma invoice could not be created.',
             ]);
         }
 
         vendorJsonResponse([
-            'success' => true,
-            'invoice_id' => (int)$invoiceMeta['invoice_id'],
-            'created' => !empty($invoiceMeta['created']),
+            'success' => false,
+            'message' => 'No payments recorded for this order.',
         ]);
     }
 

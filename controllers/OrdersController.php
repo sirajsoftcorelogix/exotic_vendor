@@ -338,11 +338,20 @@ class OrdersController
 
         foreach ($ordersList as $order) {
             $orderId = (string)($order['orderid'] ?? '');
-            if ($onlyOrderNumber !== null && $orderId !== $onlyOrderNumber) {
+            if ($orderId === '') {
                 continue;
             }
-            if (in_array($orderId, $skipIds, true)) {
+
+            $storeOrderNumber = ($onlyOrderNumber !== null && trim($onlyOrderNumber) !== '')
+                ? trim($onlyOrderNumber)
+                : $orderId;
+
+            if ($onlyOrderNumber === null && in_array($orderId, $skipIds, true)) {
                 continue;
+            }
+
+            if (strcasecmp($storeOrderNumber, $orderId) !== 0) {
+                $ordersModel->rekeyOrderNumber($orderId, $storeOrderNumber);
             }
 
             $customerdata = $ordersModel->addCustomerIfNotExists($order);
@@ -390,7 +399,7 @@ class OrdersController
                 }
                 $rdata = [
                     'sku' => $item['sku'] ?? '',
-                    'order_number' => $order['orderid'] ?? '',
+                    'order_number' => $storeOrderNumber,
                     'shipping_country' => $order['shipping_country'] ?? '',
                     'title' => !empty($item['title']) ? preg_replace('/[^a-zA-Z0-9\s\-_]/', '', $item['title']) : '',
                     'description' => $item['description'] ?? '',
@@ -483,7 +492,9 @@ class OrdersController
             }
 
             try {
-                $addressdata[] = $ordersModel->insertAddressInfo($order, $customerdata['customer_id'] ?? 0);
+                $orderForAddress = $order;
+                $orderForAddress['orderid'] = $storeOrderNumber;
+                $addressdata[] = $ordersModel->insertAddressInfo($orderForAddress, $customerdata['customer_id'] ?? 0);
             } catch (\Throwable $e) {
                 error_log('[order import insertAddressInfo] ' . $e->getMessage());
                 $addressdata[] = ['success' => false, 'message' => $e->getMessage()];
@@ -504,35 +515,34 @@ class OrdersController
      */
     public function isOrderReadyForPosCheckout(string $orderNumber): bool
     {
-        global $conn;
+        global $ordersModel;
 
         $orderNumber = trim($orderNumber);
         if ($orderNumber === '') {
             return false;
         }
 
-        $hasLines = false;
-        $stmt = $conn->prepare('SELECT 1 FROM vp_orders WHERE order_number = ? LIMIT 1');
-        if ($stmt) {
-            $stmt->bind_param('s', $orderNumber);
-            $stmt->execute();
-            $hasLines = (bool)$stmt->get_result()->fetch_row();
-            $stmt->close();
-        }
-        if (!$hasLines) {
-            return false;
+        if ($ordersModel->hasOrderLines($orderNumber) && $ordersModel->hasOrderInfo($orderNumber)) {
+            return true;
         }
 
-        $hasInfo = false;
-        $stmtInfo = $conn->prepare('SELECT 1 FROM vp_order_info WHERE order_number = ? LIMIT 1');
-        if ($stmtInfo) {
-            $stmtInfo->bind_param('s', $orderNumber);
-            $stmtInfo->execute();
-            $hasInfo = (bool)$stmtInfo->get_result()->fetch_row();
-            $stmtInfo->close();
+        $fetch = $this->fetchVendorOrderPayloadForCheckout($orderNumber);
+        if (!$fetch['ok']) {
+            return $ordersModel->hasOrderLines($orderNumber) && $ordersModel->hasOrderInfo($orderNumber);
         }
 
-        return $hasInfo;
+        foreach ($fetch['orders'] as $order) {
+            $apiId = trim((string)($order['orderid'] ?? ''));
+            if ($apiId === '' || strcasecmp($apiId, $orderNumber) === 0) {
+                continue;
+            }
+            if ($ordersModel->hasOrderLines($apiId) || $ordersModel->hasOrderInfo($apiId)) {
+                $ordersModel->rekeyOrderNumber($apiId, $orderNumber);
+                break;
+            }
+        }
+
+        return $ordersModel->hasOrderLines($orderNumber) && $ordersModel->hasOrderInfo($orderNumber);
     }
 
     /**

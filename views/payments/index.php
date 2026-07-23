@@ -409,7 +409,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
 
         return `
     <button onclick="createInvoiceFromPayment(${p.id})"
-        title="${canProforma ? 'Create proforma invoice (advance + COD)' : 'Create invoice'}"
+        title="${canProforma ? 'Create proforma invoice (partial payment)' : 'Create final invoice'}"
         class="flex items-center gap-1 text-purple-600 hover:text-purple-800 text-xs font-semibold">
         <i class="fa-solid fa-file-circle-plus"></i>
     </button>`;
@@ -444,16 +444,29 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         </tr>`;
                 }
 
+                const receiptRowCounts = {};
+                data.forEach(function (row) {
+                    const rn = String(row.receipt_number || '').trim();
+                    if (rn !== '') {
+                        receiptRowCounts[rn] = (receiptRowCounts[rn] || 0) + 1;
+                    }
+                });
+
                 data.forEach(p => {
 
                     const orderNumJs = escapeJsString(normalizePaymentOrderNumber(p.order_number));
                     const invoiceAction = buildInvoiceActionHtml(p);
+                    const receiptKey = String(p.receipt_number || '').trim();
+                    const receiptCell = receiptKey !== ''
+                        ? receiptKey.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
+                            + ((receiptRowCounts[receiptKey] || 0) > 1
+                                ? ' <span class="text-[10px] font-normal text-slate-400" title="One checkout receipt — each payment mode is stored as its own row">(split)</span>'
+                                : '')
+                        : ('#' + p.id);
 
                     html += `
     <tr class="border-t hover:bg-gray-50">
-        <td class="p-3">${(String(p.receipt_number || '').trim() !== '')
-            ? String(p.receipt_number).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
-            : ('#' + p.id)}</td>
+        <td class="p-3">${receiptCell}</td>
         <td class="p-3">${buildOrderNumberLinkHtml(p.order_number)}</td>
         <td class="p-3">${p.payment_date ?? ''}</td>
         <td class="p-3">${p.warehouse ?? ''}</td>

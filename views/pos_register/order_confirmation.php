@@ -295,7 +295,7 @@ if ($receipt_download_filename_base === '') {
               <a href="index.php?page=pos_register&action=list" class="<?= $actionBtnClass ?> border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">Back to POS</a>
             </div>
           </div>
-          <p class="text-xs text-slate-500">Use the left control for the <strong class="font-medium text-slate-600">payment receipt</strong>.<?php if ($hasCodPending): ?> Use <strong class="font-medium text-slate-600">Download Invoice</strong> for the proforma invoice (advance received and COD pending).<?php else: ?> When payment is received in full, use <strong class="font-medium text-slate-600">Download Invoice</strong> for the tax invoice PDF.<?php endif; ?></p>
+          <p class="text-xs text-slate-500">Use the left control for the <strong class="font-medium text-slate-600">payment receipt</strong>.<?php if (!empty($show_invoice_pdf_button)): ?> Use <strong class="font-medium text-slate-600">Download Invoice</strong> for the <?php if ($hasCodPending && empty($is_payment_in_full)): ?>tax invoice (COD balance still to collect on delivery)<?php else: ?>tax invoice PDF<?php endif; ?>.<?php elseif ($hasCodPending): ?> Invoice is available once the order is imported into the system.<?php else: ?> When payment receipts total at least the order amount, use <strong class="font-medium text-slate-600">Download Invoice</strong> for the tax invoice PDF.<?php endif; ?></p>
         </div>
       </div>
     </div>

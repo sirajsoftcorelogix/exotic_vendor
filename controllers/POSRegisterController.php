@@ -374,7 +374,11 @@ class POSRegisterController
             'invoice_pdf_disabled_hint' => 'Tax invoice is available after payment is received in full.',
         ];
 
-        if ($paymentStage !== 'final' && !$createAdvanceInvoice) {
+        $invoiceStatus = pos_payment_resolve_auto_invoice_status($conn, $orderNumber);
+        if ($invoiceStatus === null) {
+            $out['invoice_pdf_disabled_hint'] = pos_payment_has_recorded_payments($conn, $orderNumber)
+                ? 'Invoice could not be determined for this order.'
+                : 'No payments recorded — order receipt only.';
             return $out;
         }
 
@@ -393,7 +397,11 @@ class POSRegisterController
             }
 
             $posInv = $this->getPosInvoiceControllerForCheckout();
-            $invRes = $posInv->createAutoInvoiceForOrder($orderNumber, $customInvoiceNumber);
+            $invRes = $posInv->createAutoInvoiceForOrder(
+                $orderNumber,
+                $customInvoiceNumber,
+                $invoiceStatus === 'final'
+            );
 
             if (!empty($invRes['success']) && !empty($invRes['invoice_id'])) {
                 $invoiceId = (int)$invRes['invoice_id'];
@@ -4729,8 +4737,7 @@ class POSRegisterController
             $orderNumber,
             $paymentStage,
             $compliance,
-            $customInvoiceNumber,
-            $hasCodPending
+            $customInvoiceNumber
         );
         $fulfillmentStatusMeta = $this->syncPosCheckoutOrderFulfillmentStatus(
             $conn,
@@ -5050,7 +5057,7 @@ class POSRegisterController
             }
         }
 
-        if (($row['is_payment_in_full'] || $hasCodPending) && $invoiceId > 0) {
+        if ($invoiceId > 0) {
             $row = $this->applyPosReceiptInvoiceLinks($row, $invoiceId);
             if ($hasCodPending && !$row['is_payment_in_full']) {
                 $row['show_invoice_pdf_button'] = true;
@@ -5079,13 +5086,17 @@ class POSRegisterController
         }
         $invoiceId = $this->findInvoiceIdForOrderNumber($conn, $orderNum);
         if ($invoiceId <= 0) {
-            $hasCodPending = !empty($row['has_cod_pending']) || (float)($row['receipt_cod_pending_amount'] ?? 0) > 0.001;
-            if ($hasCodPending) {
+            $invoiceStatus = pos_payment_resolve_auto_invoice_status($conn, $orderNum);
+            if ($invoiceStatus !== null) {
                 try {
                     $ordersCtrl = $this->getOrdersControllerForImport();
                     if ($ordersCtrl->isOrderReadyForPosCheckout($orderNum)) {
                         $posInv = $this->getPosInvoiceControllerForCheckout();
-                        $invRes = $posInv->createAutoInvoiceForOrder($orderNum);
+                        $invRes = $posInv->createAutoInvoiceForOrder(
+                            $orderNum,
+                            '',
+                            $invoiceStatus === 'final'
+                        );
                         if (!empty($invRes['success']) && !empty($invRes['invoice_id'])) {
                             $invoiceId = (int)$invRes['invoice_id'];
                         }

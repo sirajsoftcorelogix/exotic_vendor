@@ -988,9 +988,9 @@ class PosInvoiceController
         }
 
         require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
-        if ($conn instanceof mysqli && pos_payment_is_fully_paid($conn, $orderNumber)) {
+        if ($conn instanceof mysqli && pos_payment_is_allocation_complete($conn, $orderNumber)) {
             http_response_code(400);
-            echo '<p>Order is fully paid. Use Print Invoice for the tax invoice.</p>';
+            echo '<p>Payment receipts cover the order total. Use Print Invoice for the final tax invoice.</p>';
             exit;
         }
 
@@ -2719,7 +2719,7 @@ class PosInvoiceController
      */
     public function createAutoInvoiceForOrder(string $orderNumber, string $customInvoiceNumber = '', bool $forceFinal = false): array
     {
-        global $invoiceModel, $ordersModel, $paymentModel;
+        global $invoiceModel, $ordersModel, $paymentModel, $conn;
 
         $orderNumber = trim($orderNumber);
         if ($orderNumber === '') {
@@ -2739,10 +2739,29 @@ class PosInvoiceController
             ];
         }
 
-        $paymentStage = $paymentModel->getLatestPaymentStage($orderNumber);
-        $status = $forceFinal || (strtolower(trim($paymentStage)) === 'final') ? 'final' : 'proforma';
+        require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+        $status = 'proforma';
+        if ($forceFinal) {
+            $status = 'final';
+        } elseif ($conn instanceof mysqli) {
+            $resolvedStatus = pos_payment_resolve_auto_invoice_status($conn, $orderNumber);
+            if ($resolvedStatus !== null) {
+                $status = $resolvedStatus;
+            } else {
+                $paymentStage = $paymentModel->getLatestPaymentStage($orderNumber);
+                $status = (strtolower(trim($paymentStage)) === 'final') ? 'final' : 'proforma';
+            }
+        }
 
         $items = $ordersModel->getOrderByOrderNumber($orderNumber);
+        if (empty($items)) {
+            require_once __DIR__ . '/OrdersController.php';
+            $ordersCtrl = new OrdersController();
+            if (!$ordersCtrl->isOrderReadyForPosCheckout($orderNumber)) {
+                $ordersCtrl->importSingleOrderForCheckoutWithRetry($orderNumber, 3, 1);
+            }
+            $items = $ordersModel->getOrderByOrderNumber($orderNumber);
+        }
         if (empty($items)) {
             return ['success' => false, 'message' => 'Order not found in vp_orders'];
         }

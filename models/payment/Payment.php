@@ -152,7 +152,17 @@ SELECT
                   = p.order_number COLLATE utf8mb4_unicode_ci
         ),
         0
-    ) AS order_cod_pending
+    ) AS order_cod_pending,
+
+    IFNULL(
+        (
+            SELECT SUM(p5.payment_amount)
+            FROM pos_payments p5
+            WHERE p5.order_number COLLATE utf8mb4_unicode_ci
+                  = p.order_number COLLATE utf8mb4_unicode_ci
+        ),
+        0
+    ) AS order_receipt_total
 
 FROM pos_payments p
 
@@ -168,6 +178,16 @@ LEFT JOIN (
         agg.order_id,
         agg.order_line_subtotal,
         COALESCE(
+            NULLIF(
+                (
+                    SELECT MAX(pay_snap.order_amount)
+                    FROM pos_payments pay_snap
+                    WHERE pay_snap.order_number COLLATE utf8mb4_unicode_ci
+                          = agg.order_number COLLATE utf8mb4_unicode_ci
+                      AND pay_snap.order_amount > 0
+                ),
+                0
+            ),
             NULLIF(agg.order_info_total, 0),
             GREATEST(
                 agg.order_line_subtotal
@@ -305,17 +325,16 @@ WHERE 1=1
         }
 
         $collectedPaid = round((float)($row['order_collected_paid'] ?? 0), 2);
-        $codPendingObligation = round((float)($row['order_cod_pending'] ?? 0), 2);
-        $row['is_settled'] = $resolvedOrderAmount > 0 && $collectedPaid + 0.02 >= $resolvedOrderAmount;
+        $receiptTotal = round((float)($row['order_receipt_total'] ?? 0), 2);
         $allocationComplete = $resolvedOrderAmount > 0
-            && ($collectedPaid + $codPendingObligation + 0.02 >= $resolvedOrderAmount);
-        $row['can_create_proforma'] = $allocationComplete
-            && $codPendingObligation > 0.001
-            && empty($row['is_settled'])
+            && ($receiptTotal + 0.02 >= $resolvedOrderAmount);
+        $row['is_settled'] = $allocationComplete;
+        $row['can_create_proforma'] = $receiptTotal > 0.001
+            && !$allocationComplete
             && (int)($row['invoice_id'] ?? 0) <= 0;
         $row['order_number'] = trim((string)($row['order_number'] ?? ''));
         $row['invoice_id'] = (int)($row['invoice_id'] ?? 0);
-        unset($row['order_grand_total'], $row['order_line_subtotal'], $row['balance_snapshot'], $row['order_collected_paid'], $row['order_cod_pending']);
+        unset($row['order_grand_total'], $row['order_line_subtotal'], $row['balance_snapshot'], $row['order_collected_paid'], $row['order_cod_pending'], $row['order_receipt_total']);
 
         return $row;
     }
@@ -716,13 +735,25 @@ WHERE 1=1
         $orderNumber = trim($orderNumber);
 
         if ($receiptNumber !== '') {
-            $stmt = $this->db->prepare(
-                'SELECT * FROM pos_payments WHERE receipt_number = ? ORDER BY id ASC'
-            );
-            if (!$stmt) {
-                return [];
+            if ($orderNumber !== '') {
+                $stmt = $this->db->prepare(
+                    'SELECT * FROM pos_payments
+                     WHERE receipt_number = ? AND order_number = ?
+                     ORDER BY id ASC'
+                );
+                if (!$stmt) {
+                    return [];
+                }
+                $stmt->bind_param('ss', $receiptNumber, $orderNumber);
+            } else {
+                $stmt = $this->db->prepare(
+                    'SELECT * FROM pos_payments WHERE receipt_number = ? ORDER BY id ASC'
+                );
+                if (!$stmt) {
+                    return [];
+                }
+                $stmt->bind_param('s', $receiptNumber);
             }
-            $stmt->bind_param('s', $receiptNumber);
         } elseif ($orderNumber !== '') {
             $stmt = $this->db->prepare(
                 'SELECT p.*
