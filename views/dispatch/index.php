@@ -301,7 +301,20 @@
                 <div class="flex flex-col gap-2">
                   <div>
                     <p class="text-xs text-gray-500">Customer</p>
-                    <p class="font-semibold text-gray-800"><?php echo htmlspecialchars($invoice['name'] ?? '-'); ?></p>
+                    <?php
+                      $customerName = trim((string)($invoice['name'] ?? ''));
+                      $customerId = (int)($invoice['customer_id'] ?? 0);
+                      if ($customerName === '') {
+                          $customerName = '-';
+                      }
+                    ?>
+                    <p class="font-semibold text-gray-800">
+                      <?php if ($customerId > 0 && $customerName !== '-'): ?>
+                        <a href="<?php echo htmlspecialchars(base_url('?page=customer&action=view&customer_id=' . $customerId)); ?>" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline" title="View customer details"><?php echo htmlspecialchars($customerName); ?></a>
+                      <?php else: ?>
+                        <?php echo htmlspecialchars($customerName); ?>
+                      <?php endif; ?>
+                    </p>
                     <p class="text-xs text-gray-500"><?php echo htmlspecialchars($invoice['email'] ?? ''); ?></p>
                     <p class="text-xs text-gray-500"><?php echo htmlspecialchars($invoice['phone'] ?? ''); ?></p>
                   </div>
