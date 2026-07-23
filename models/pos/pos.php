@@ -134,14 +134,16 @@ class pos
             $types .= "d";
         }
 
+        $hasSearch = ($productName !== '' || $searchValue !== '' || $productCode !== '');
+
         // Stock scope: align with stock report (getStockReport) — default is "all" rows with a movement row.
         $stockFilter = strtolower(trim((string)$stockFilter));
         if ($stockFilter === 'out') {
-            $where .= ' AND sm.running_stock = 0 ';
+            $where .= ' AND COALESCE(sm.running_stock, 0) = 0 ';
         } elseif ($stockFilter === 'low') {
             $where .= ' AND sm.running_stock BETWEEN 1 AND 5 ';
         } elseif ($stockFilter === 'in') {
-            $where .= ' AND sm.running_stock > 0 ';
+            $where .= ' AND COALESCE(sm.running_stock, 0) > 0 ';
         }
 
         /* ================= ORDER ================= */
@@ -166,7 +168,7 @@ class pos
         $orderExpr = 'p.' . $orderColumn;
         $orderSuffix = $orderDir;
         if ($orderColumn === 'stock_qty') {
-            $orderExpr = 'sm.running_stock';
+            $orderExpr = 'COALESCE(sm.running_stock, 0)';
         } elseif ($orderColumn === 'price') {
             // GST-inclusive list price; deprioritize rows missing DB price_india (filled via API after query).
             $hasIndiaPrice = "CASE WHEN COALESCE(NULLIF(p.price_india, 0), 0) > 0 THEN 0 ELSE 1 END";
@@ -181,9 +183,11 @@ class pos
             $orderExpr = $baseSell;
         }
 
+        // When searching, LEFT JOIN so products with no movements in this warehouse still appear with 0 stock.
+        $joinType = $hasSearch ? 'LEFT' : 'INNER';
         $stockFrom = "
     FROM vp_products p
-    INNER JOIN (
+    {$joinType} JOIN (
         SELECT sm1.product_id, sm1.running_stock, sm1.location
         FROM vp_stock_movements sm1
         INNER JOIN (
@@ -225,7 +229,7 @@ class pos
         p.gst,
         p.sourcingfee,
         p.shippingfee,
-        sm.running_stock AS stock_qty,
+        COALESCE(sm.running_stock, 0) AS stock_qty,
         sm.location AS warehouse_location,
         {$sellPriceExpr} AS price
     $stockFrom
