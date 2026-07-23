@@ -2566,7 +2566,7 @@ class product
     }
 
     /**
-     * @return array{success:bool,message:string,location?:string}
+     * @return array{success:bool,message:string,location?:string,vendor_sync?:array<string,mixed>}
      */
     public function setProductLocation(int $productId, string $location): array
     {
@@ -2582,10 +2582,20 @@ class product
         $location = trim($location);
         $this->syncProductLocation($productId, $location);
 
+        $vendorSync = $this->syncLocationToVendorFrontend($product, $location);
+        $message = 'Location updated successfully.';
+        if (empty($vendorSync['success'])) {
+            $vendorMessage = trim((string) ($vendorSync['message'] ?? 'Vendor sync failed.'));
+            if ($vendorMessage !== '') {
+                $message .= ' ' . $vendorMessage;
+            }
+        }
+
         return [
             'success' => true,
-            'message' => 'Location updated successfully.',
+            'message' => $message,
             'location' => $location,
+            'vendor_sync' => $vendorSync,
         ];
     }
 
@@ -5512,7 +5522,24 @@ class product
             $productStmt->close();
         }
 
-        return ['success' => true, 'message' => 'Location updated successfully.'];
+        $product = $this->getProduct($productId);
+        $vendorSync = is_array($product)
+            ? $this->syncLocationToVendorFrontend($product, $location)
+            : ['success' => false, 'message' => 'Updated locally but could not reload product for vendor sync.'];
+
+        $message = 'Location updated successfully.';
+        if (empty($vendorSync['success'])) {
+            $vendorMessage = trim((string) ($vendorSync['message'] ?? 'Vendor sync failed.'));
+            if ($vendorMessage !== '') {
+                $message .= ' ' . $vendorMessage;
+            }
+        }
+
+        return [
+            'success' => true,
+            'message' => $message,
+            'vendor_sync' => $vendorSync,
+        ];
     }
     public function setProductLimits($productId, $minStock, $maxStock)
     {
@@ -5648,6 +5675,26 @@ class product
         }
 
         return $this->postProductModifyToVendor($product, $postFields, 'Vendor product sync failed.');
+    }
+
+    /**
+     * Push location to exoticindia.com via vendor product/modify.
+     *
+     * @param array<string, mixed> $product
+     * @return array{success:bool,message:string,http_code?:int,response?:array}
+     */
+    public function syncLocationToVendorFrontend(array $product, string $location): array
+    {
+        $itemCode = trim((string) ($product['item_code'] ?? ''));
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Missing item_code for vendor location sync.'];
+        }
+
+        return $this->postProductModifyToVendor(
+            $product,
+            ['location' => trim($location)],
+            'Vendor location sync failed.'
+        );
     }
 
     /**

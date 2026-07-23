@@ -547,7 +547,7 @@
         </div>
         <?php $productLocationDisplay = trim((string)($products['location'] ?? '')); ?>
         <!-- Storage location (vp_products.location — synced from API on refresh) -->
-        <div class="<?php echo $invCard; ?> border-teal-100 bg-teal-50/50 pr-6 sm:pr-7" title="Bin, shelf, or storage location. Synced from the vendor API on refresh; you can edit it here.">
+        <div class="<?php echo $invCard; ?> border-teal-100 bg-teal-50/50 pr-6 sm:pr-7" title="Bin, shelf, or storage location. Saved locally and synced to Exotic India on save.">
           <div class="<?php echo $invBody; ?>">
             <p class="<?php echo $invLbl; ?>">Location</p>
             <p id="productLocationDisplay" class="<?php echo $invVal; ?> text-sm sm:text-base break-words leading-snug">
@@ -1359,7 +1359,7 @@
     <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
         <button type="button" onclick="closeProductLocationModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700" aria-label="Close">✕</button>
         <h2 class="text-lg font-semibold text-gray-800 mb-1">Edit location</h2>
-        <p class="text-sm text-gray-500 mb-4">Updates the product location in inventory and the latest stock movement at the default warehouse.</p>
+        <p class="text-sm text-gray-500 mb-4">Saved to inventory and pushed to Exotic India. Also updates the latest stock movement at the default warehouse.</p>
         <div>
             <label for="input_product_location" class="block text-sm font-medium text-gray-600 mb-1">Location</label>
             <input
