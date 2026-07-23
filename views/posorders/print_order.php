@@ -125,12 +125,17 @@ $linePricingMap = is_array($linePricingByLineId ?? null) ? $linePricingByLineId 
                     <?php if ($firmGst !== ''): ?>
                         <div><span class="font-semibold">GSTIN:</span> <?= $h($firmGst) ?></div>
                     <?php endif; ?>
-                    <?php if ($storeTitle !== ''): ?>
-                        <div class="mt-1 font-medium text-neutral-800"><?= $h($storeTitle) ?></div>
+                    <?php if ($storeTitle !== '' || $storeLines !== []): ?>
+                        <div class="mt-2">
+                            <div class="text-[10px] font-bold uppercase tracking-wider text-neutral-900">Sale Store</div>
+                            <?php if ($storeTitle !== ''): ?>
+                                <div class="mt-0.5 font-medium text-neutral-800"><?= $h($storeTitle) ?></div>
+                            <?php endif; ?>
+                            <?php foreach ($storeLines as $storeLine): ?>
+                                <div><?= $h($storeLine) ?></div>
+                            <?php endforeach; ?>
+                        </div>
                     <?php endif; ?>
-                    <?php foreach ($storeLines as $storeLine): ?>
-                        <div><?= $h($storeLine) ?></div>
-                    <?php endforeach; ?>
                 </div>
             </div>
             <div class="text-right">

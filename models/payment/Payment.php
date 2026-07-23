@@ -413,22 +413,105 @@ WHERE 1=1
     }
 
     /**
+     * Warehouse where the POS order was created (first payment row).
+     */
+    public function getSaleWarehouseIdForOrder(string $orderNumber): int
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return 0;
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT warehouse_id FROM pos_payments
+             WHERE order_number = ? AND warehouse_id > 0
+             ORDER BY id ASC
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return (int)($row['warehouse_id'] ?? 0);
+    }
+
+    /**
+     * @return array{title: string, lines: array<int, string>}
+     */
+    public function getWarehouseAddressById(int $warehouseId): array
+    {
+        $empty = ['title' => '', 'lines' => []];
+        if ($warehouseId <= 0) {
+            return $empty;
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT address_title, display_name, address FROM exotic_address WHERE id = ? AND is_active = 1 LIMIT 1'
+        );
+        if (!$stmt) {
+            return $empty;
+        }
+        $stmt->bind_param('i', $warehouseId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return $this->formatWarehouseAddressRow(is_array($row) ? $row : null);
+    }
+
+    /**
+     * Sale store address from the order's checkout payment warehouse.
+     *
+     * @return array{title: string, lines: array<int, string>}
+     */
+    public function getSaleStoreAddressForOrder(string $orderNumber): array
+    {
+        $warehouseId = $this->getSaleWarehouseIdForOrder($orderNumber);
+        if ($warehouseId > 0) {
+            $address = $this->getWarehouseAddressById($warehouseId);
+            if ($address['title'] !== '' || $address['lines'] !== []) {
+                return $address;
+            }
+        }
+
+        return $this->getDefaultWarehouseAddress();
+    }
+
+    /**
      * @return array{title: string, lines: array<int, string>}
      */
     public function getDefaultWarehouseAddress(): array
     {
-        $defaultWarehouseAddress = ['title' => '', 'lines' => []];
         $dwRes = $this->db->query(
             'SELECT address_title, display_name, address FROM exotic_address WHERE is_active = 1 ORDER BY is_default DESC, order_no ASC, id ASC LIMIT 1'
         );
         if (!$dwRes || !($dw = $dwRes->fetch_assoc())) {
-            return $defaultWarehouseAddress;
+            return ['title' => '', 'lines' => []];
         }
 
-        $defaultWarehouseAddress['title'] = trim((string)($dw['address_title'] ?? ''));
-        $addrText = trim((string)($dw['address'] ?? ''));
+        return $this->formatWarehouseAddressRow($dw);
+    }
+
+    /**
+     * @param array<string, mixed>|null $row
+     *
+     * @return array{title: string, lines: array<int, string>}
+     */
+    private function formatWarehouseAddressRow(?array $row): array
+    {
+        $result = ['title' => '', 'lines' => []];
+        if (!is_array($row)) {
+            return $result;
+        }
+
+        $result['title'] = trim((string)($row['address_title'] ?? ''));
+        $addrText = trim((string)($row['address'] ?? ''));
         if ($addrText === '') {
-            $addrText = trim((string)($dw['display_name'] ?? ''));
+            $addrText = trim((string)($row['display_name'] ?? ''));
         }
         $parts = preg_split('/\r\n|\r|\n/', $addrText);
         $lines = [];
@@ -438,9 +521,9 @@ WHERE 1=1
                 $lines[] = $ln;
             }
         }
-        $defaultWarehouseAddress['lines'] = $lines;
+        $result['lines'] = $lines;
 
-        return $defaultWarehouseAddress;
+        return $result;
     }
 
     /**
@@ -670,14 +753,7 @@ WHERE 1=1
 
     public function getWarehouseIdForOrder(string $orderNumber): int
     {
-        $orderNumber = trim($orderNumber);
-        if ($orderNumber === '') {
-            return 0;
-        }
-
-        $payment = $this->findLatestByOrderNumber($orderNumber);
-
-        return (int)($payment['warehouse_id'] ?? 0);
+        return $this->getSaleWarehouseIdForOrder($orderNumber);
     }
 
     /**
