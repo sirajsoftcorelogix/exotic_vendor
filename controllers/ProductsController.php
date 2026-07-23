@@ -5157,6 +5157,37 @@ class ProductsController
         exit;
     }
 
+    public function updateProductLocation(): void
+    {
+        is_login();
+        global $productModel;
+
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        header('Content-Type: application/json');
+
+        try {
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true);
+            if (!is_array($data)) {
+                throw new Exception('Invalid request payload.');
+            }
+
+            $productId = (int) ($data['product_id'] ?? 0);
+            if ($productId <= 0) {
+                throw new Exception('Invalid product id.');
+            }
+
+            $location = trim((string) ($data['location'] ?? ''));
+            $result = $productModel->setProductLocation($productId, $location);
+            echo json_encode($result, JSON_UNESCAPED_UNICODE);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        }
+        exit;
+    }
+
     public function updateStockLimits()
     {
         is_login();

@@ -2520,7 +2520,7 @@ class product
     public function syncProductLocation(int $productId, string $location): void
     {
         $location = trim($location);
-        if ($productId <= 0 || $location === '') {
+        if ($productId <= 0) {
             return;
         }
 
@@ -2563,6 +2563,30 @@ class product
         $updMov->bind_param('sii', $location, $movementId, $productId);
         $updMov->execute();
         $updMov->close();
+    }
+
+    /**
+     * @return array{success:bool,message:string,location?:string}
+     */
+    public function setProductLocation(int $productId, string $location): array
+    {
+        if ($productId <= 0) {
+            return ['success' => false, 'message' => 'Invalid product.'];
+        }
+
+        $product = $this->getProduct($productId);
+        if (!$product || !is_array($product)) {
+            return ['success' => false, 'message' => 'Product not found.'];
+        }
+
+        $location = trim($location);
+        $this->syncProductLocation($productId, $location);
+
+        return [
+            'success' => true,
+            'message' => 'Location updated successfully.',
+            'location' => $location,
+        ];
     }
 
     /**

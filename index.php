@@ -866,6 +866,11 @@ switch ($page) {
                 $controller = new ProductsController($conn);
                 $controller->updateStockMovementLocation();
                 break;
+            case 'update_product_location':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->updateProductLocation();
+                break;
             case 'update_stock_limits':
                 require_once 'controllers/ProductsController.php';
                 $controller = new ProductsController($conn);
