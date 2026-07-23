@@ -1,15 +1,20 @@
 <?php
 require_once 'models/pos/pos.php';
 require_once 'models/user/user.php';
+require_once dirname(__DIR__) . '/integrations/exotic/Clients/RetailApiClient.php';
+require_once dirname(__DIR__) . '/integrations/exotic/Support/CartResponseParser.php';
+require_once dirname(__DIR__) . '/integrations/exotic/Support/OrderResponseParser.php';
 
 class POSRegisterController
 {
     private $product;
     private $pos;
+    private RetailApiClient $retailApiClient;
 
     public function __construct($conn)
     {
-        $this->pos     = new pos($conn);
+        $this->pos = new pos($conn);
+        $this->retailApiClient = RetailApiClient::create($conn instanceof mysqli ? $conn : null);
     }
 
     /**
@@ -2613,7 +2618,7 @@ class POSRegisterController
             return [];
         }
 
-        $headers = $this->buildExoticPosApiRequestHeaders();
+        $headers = $this->retailApiClient->buildRequestHeaders();
         $baseUrl = 'https://www.exoticindia.com/api/product/code';
         $out = [];
 
@@ -2657,34 +2662,6 @@ class POSRegisterController
         }
 
         return $out;
-    }
-
-    /** @return list<string> */
-    private function buildExoticPosApiRequestHeaders(): array
-    {
-        $deviceId = $this->resolveApiDeviceId();
-        $headers = [
-            'x-api-key: aeRGoUvQLCxztK0Wzxmv9O2VRJ2H1B44',
-            'x-api-deviceid: ' . $deviceId,
-            'x-api-appplayerid: POS-Web-Terminal',
-            'x-api-countrycode: IN',
-            'x-api-euid:' . (string)($_SESSION['x_api_euid'] ?? ''),
-            'User-Agent: ExoticPOS',
-        ];
-        if (!empty($_SESSION['x_api_jwt'])) {
-            $headers[] = 'x-api-jwt:' . (string)$_SESSION['x_api_jwt'];
-        }
-        if (!empty($_SESSION['x_api_browsehistory'])) {
-            $headers[] = 'x-api-browsehistory:' . (string)$_SESSION['x_api_browsehistory'];
-        }
-        if (!empty($_SESSION['x_api_etd'])) {
-            $headers[] = 'x-api-etd:' . (string)$_SESSION['x_api_etd'];
-        }
-        if (!empty($_SESSION['x_api_etd_pincode'])) {
-            $headers[] = 'x-api-etd-pincode:' . (string)$_SESSION['x_api_etd_pincode'];
-        }
-
-        return $headers;
     }
 
     /**
@@ -2889,6 +2866,143 @@ class POSRegisterController
     }
 
     /**
+     * POS stock context for a VP product at the session warehouse.
+     * Allows order creation even when current-store stock is zero, unmapped, or fulfilled elsewhere.
+     *
+     * @return array{
+     *   current_warehouse_id:int,
+     *   current_warehouse_name:string,
+     *   current_stock_qty:float,
+     *   mapped_at_current:bool,
+     *   mapped_anywhere:bool,
+     *   alternative_warehouses:list<array{warehouse_id:int,warehouse_name:string,stock_qty:float}>,
+     *   default_warehouse:?array{id:int,address_title:string},
+     *   allow_order:bool,
+     *   enforce_qty_cap:bool,
+     *   qty_cap:?int,
+     *   warning_message:string,
+     *   warning_type:string
+     * }
+     */
+    private function resolvePosStockContext($conn, int $productId, int $currentWarehouseId, string $currentWarehouseName = ''): array
+    {
+        $currentWarehouseName = trim($currentWarehouseName);
+        $empty = [
+            'current_warehouse_id' => $currentWarehouseId,
+            'current_warehouse_name' => $currentWarehouseName,
+            'current_stock_qty' => 0.0,
+            'mapped_at_current' => false,
+            'mapped_anywhere' => false,
+            'alternative_warehouses' => [],
+            'default_warehouse' => null,
+            'allow_order' => true,
+            'enforce_qty_cap' => false,
+            'qty_cap' => null,
+            'warning_message' => '',
+            'warning_type' => 'none',
+        ];
+
+        if ($productId <= 0 || !$conn) {
+            return $empty;
+        }
+
+        $stockSql = "
+            SELECT sm.warehouse_id,
+                   COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
+                   sm.running_stock AS stock_qty
+            FROM vp_stock_movements sm
+            INNER JOIN (
+                SELECT warehouse_id, product_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE product_id = ?
+                GROUP BY warehouse_id, product_id
+            ) latest ON latest.max_id = sm.id
+            LEFT JOIN exotic_address ea ON ea.id = sm.warehouse_id
+            WHERE sm.product_id = ?
+            ORDER BY warehouse_name ASC";
+
+        $stockStmt = $conn->prepare($stockSql);
+        if (!$stockStmt) {
+            return $empty;
+        }
+        $stockStmt->bind_param('ii', $productId, $productId);
+        $stockStmt->execute();
+        $rows = $stockStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stockStmt->close();
+
+        $mappedAtCurrent = false;
+        $currentStock = 0.0;
+        $alternativeWarehouses = [];
+        foreach ($rows as $row) {
+            $wid = (int)($row['warehouse_id'] ?? 0);
+            $stockQty = (float)($row['stock_qty'] ?? 0);
+            $entry = [
+                'warehouse_id' => $wid,
+                'warehouse_name' => trim((string)($row['warehouse_name'] ?? '')),
+                'stock_qty' => $stockQty,
+            ];
+            if ($wid === $currentWarehouseId) {
+                $mappedAtCurrent = true;
+                $currentStock = $stockQty;
+            } elseif ($stockQty > 0) {
+                $alternativeWarehouses[] = $entry;
+            }
+        }
+
+        $mappedAnywhere = !empty($rows);
+        $defaultWarehouse = $this->getDefaultWarehouseRow($conn);
+        $storeLabel = $currentWarehouseName !== '' ? $currentWarehouseName : 'this store';
+
+        $altNames = array_values(array_filter(array_map(static function (array $w): string {
+            return trim((string)($w['warehouse_name'] ?? ''));
+        }, $alternativeWarehouses)));
+
+        $warningMessage = '';
+        $warningType = 'none';
+
+        if (!$mappedAnywhere) {
+            $warningType = 'unmapped_anywhere';
+            $defaultName = trim((string)($defaultWarehouse['address_title'] ?? ''));
+            if ($defaultName === '') {
+                $defaultName = 'Default Store';
+            }
+            $warningMessage = 'This item is not mapped to any store. It will be treated as mapped to the default store ('
+                . $defaultName . '). You can create an order for ' . $storeLabel . '.';
+        } elseif (!$mappedAtCurrent && !empty($altNames)) {
+            $warningType = 'unmapped_current';
+            $warningMessage = 'This item is not mapped to ' . $storeLabel . '. Stock is available at '
+                . implode(', ', $altNames) . '. You can still create an order for ' . $storeLabel . '.';
+        } elseif (!$mappedAtCurrent) {
+            $warningType = 'unmapped_current';
+            $warningMessage = 'This item is not mapped to ' . $storeLabel . '. You can still create an order for ' . $storeLabel . '.';
+        } elseif ($currentStock <= 0 && !empty($altNames)) {
+            $warningType = 'cross_store';
+            $warningMessage = 'Out of stock at ' . $storeLabel . '. Stock is available at '
+                . implode(', ', $altNames) . '. You can still create an order.';
+        } elseif ($mappedAtCurrent && $currentStock <= 0) {
+            $warningType = 'out_of_stock_local';
+            $warningMessage = 'This item is out of stock at ' . $storeLabel . '. You can still create an order.';
+        }
+
+        $enforceQtyCap = $mappedAtCurrent && $currentStock > 0;
+
+        return [
+            'current_warehouse_id' => $currentWarehouseId,
+            'current_warehouse_name' => $currentWarehouseName,
+            'current_stock_qty' => $currentStock,
+            'mapped_at_current' => $mappedAtCurrent,
+            'mapped_anywhere' => $mappedAnywhere,
+            'alternative_warehouses' => $alternativeWarehouses,
+            'default_warehouse' => $defaultWarehouse,
+            'allow_order' => true,
+            'enforce_qty_cap' => $enforceQtyCap,
+            'qty_cap' => $enforceQtyCap ? (int) floor($currentStock) : null,
+            'warning_message' => $warningMessage,
+            'warning_type' => $warningType,
+        ];
+    }
+
+    /**
      * Single-line footer text from exotic_address row marked is_default (receipt / printouts).
      */
     private function getDefaultExoticAddressFooterString(mysqli $conn): string
@@ -3085,7 +3199,7 @@ class POSRegisterController
             }
         }
 
-        $res = $this->exotic_api_call('/product/code', 'GET', ['code' => $code]);
+        $res = $this->retailApiClient->call('/product/code', 'GET', ['code' => $code]);
 
         $data = $this->unwrapProductApiResponse($res['data'] ?? []);
         $apiImageRaw = $this->pickRawImageFromProductApiArray($data);
@@ -3109,7 +3223,7 @@ class POSRegisterController
                 || ($mrpFromVariant <= 0)
                 || ($gstFromVariant <= 0);
             if ($needBaseFetch) {
-                $res2 = $this->exotic_api_call('/product/code', 'GET', ['code' => $dbItemCode]);
+                $res2 = $this->retailApiClient->call('/product/code', 'GET', ['code' => $dbItemCode]);
                 $data2 = $this->unwrapProductApiResponse($res2['data'] ?? []);
                 if ($imageResolved === '') {
                     $imgBase = $this->fixImageUrl($this->pickRawImageFromProductApiArray($data2));
@@ -3177,6 +3291,19 @@ class POSRegisterController
             $stockQtyOut = $data['stock'] ?? 0;
         }
 
+        $stockContext = ($vpId > 0)
+            ? $this->resolvePosStockContext($conn, $vpId, $warehouseId, $currentWarehouseName)
+            : [
+                'allow_order' => true,
+                'enforce_qty_cap' => false,
+                'qty_cap' => null,
+                'warning_message' => '',
+                'warning_type' => 'none',
+                'alternative_warehouses' => [],
+                'mapped_at_current' => false,
+                'mapped_anywhere' => false,
+            ];
+
         $siblingSkus = [];
         if ($dbItemCode !== '') {
             $siblingSkus = $this->fetchSiblingSkusByItemCode($conn, $dbItemCode, trim($code), $warehouseId);
@@ -3225,6 +3352,14 @@ class POSRegisterController
             'current_warehouse_name' => $currentWarehouseName,
             'default_store_qty' => $defaultStoreQty,
             'default_store_name' => $defaultStoreName,
+            'allow_order' => (bool)($stockContext['allow_order'] ?? true),
+            'enforce_qty_cap' => (bool)($stockContext['enforce_qty_cap'] ?? false),
+            'qty_cap' => $stockContext['qty_cap'] ?? null,
+            'stock_warning_message' => (string)($stockContext['warning_message'] ?? ''),
+            'stock_warning_type' => (string)($stockContext['warning_type'] ?? 'none'),
+            'mapped_at_current_store' => (bool)($stockContext['mapped_at_current'] ?? false),
+            'mapped_any_store' => (bool)($stockContext['mapped_anywhere'] ?? false),
+            'alternative_warehouses' => $stockContext['alternative_warehouses'] ?? [],
             'maincategory' => $data['maincategory'] ?? '',
             'dimensions' => $dimensionsMerged,
             'weight' => $wKgApi,
@@ -3263,6 +3398,15 @@ class POSRegisterController
         $productId = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
         $q = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
         $currentWarehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+        $currentWarehouseName = '';
+        if ($currentWarehouseId > 0 && !empty($conn)) {
+            require_once 'models/user/user.php';
+            $usersModel = new User($conn);
+            $whRow = $usersModel->getWarehouseById($currentWarehouseId);
+            if (!empty($whRow)) {
+                $currentWarehouseName = trim((string)($whRow['address_title'] ?? ''));
+            }
+        }
 
         if ($productId <= 0 && $q === '') {
             echo json_encode(['success' => false, 'message' => 'Missing product identifier.']);
@@ -3304,64 +3448,13 @@ class POSRegisterController
             }
         }
 
-        $stockSql = "
-            SELECT sm.warehouse_id,
-                   COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
-                   sm.running_stock AS stock_qty
-            FROM vp_stock_movements sm
-            INNER JOIN (
-                SELECT warehouse_id, product_id, MAX(id) AS max_id
-                FROM vp_stock_movements
-                WHERE product_id = ?
-                GROUP BY warehouse_id, product_id
-            ) latest ON latest.max_id = sm.id
-            LEFT JOIN exotic_address ea ON ea.id = sm.warehouse_id
-            WHERE sm.product_id = ?
-            ORDER BY warehouse_name ASC";
-
-        $stockStmt = $conn->prepare($stockSql);
-        if (!$stockStmt) {
-            echo json_encode(['success' => false, 'message' => 'Could not prepare stock query.']);
-            exit;
-        }
-        $stockStmt->bind_param('ii', $productId, $productId);
-        $stockStmt->execute();
-        $rows = $stockStmt->get_result()->fetch_all(MYSQLI_ASSOC);
-        $stockStmt->close();
-
-        $currentWarehouse = null;
-        $alternativeWarehouses = [];
-        foreach ($rows as $row) {
-            $wid = (int)($row['warehouse_id'] ?? 0);
-            $stockQty = (float)($row['stock_qty'] ?? 0);
-            $entry = [
-                'warehouse_id' => $wid,
-                'warehouse_name' => (string)($row['warehouse_name'] ?? ''),
-                'stock_qty' => $stockQty,
-            ];
-            if ($wid === $currentWarehouseId) {
-                $currentWarehouse = $entry;
-            } elseif ($stockQty > 0) {
-                $alternativeWarehouses[] = $entry;
-            }
-        }
-
-        if ($currentWarehouse === null) {
-            $currentWarehouse = [
-                'warehouse_id' => $currentWarehouseId,
-                'warehouse_name' => 'Current Store',
-                'stock_qty' => 0,
-            ];
-        }
-
+        $stockContext = $this->resolvePosStockContext($conn, $productId, $currentWarehouseId, $currentWarehouseName);
+        $currentWarehouse = [
+            'warehouse_id' => $currentWarehouseId,
+            'warehouse_name' => $currentWarehouseName !== '' ? $currentWarehouseName : 'Current Store',
+            'stock_qty' => (float)($stockContext['current_stock_qty'] ?? 0),
+        ];
         $currentAvailable = ((float)$currentWarehouse['stock_qty']) > 0;
-        $message = '';
-        if (!$currentAvailable && !empty($alternativeWarehouses)) {
-            $altNames = array_values(array_filter(array_map(static function ($w) {
-                return trim((string)($w['warehouse_name'] ?? ''));
-            }, $alternativeWarehouses)));
-            $message = 'Product not available in this store, but you still can create an order from another store (' . implode(', ', $altNames) . ')';
-        }
 
         echo json_encode([
             'success' => true,
@@ -3373,14 +3466,18 @@ class POSRegisterController
             ],
             'current_warehouse' => $currentWarehouse,
             'current_available' => $currentAvailable,
-            'alternative_warehouses' => $alternativeWarehouses,
-            'message' => $message,
+            'alternative_warehouses' => $stockContext['alternative_warehouses'] ?? [],
+            'allow_order' => (bool)($stockContext['allow_order'] ?? true),
+            'enforce_qty_cap' => (bool)($stockContext['enforce_qty_cap'] ?? false),
+            'qty_cap' => $stockContext['qty_cap'] ?? null,
+            'warning_type' => (string)($stockContext['warning_type'] ?? 'none'),
+            'message' => (string)($stockContext['warning_message'] ?? ''),
         ]);
         exit;
     }
     /**
      * Same-origin JSON proxy for Exotic retail cart endpoints (browser cannot send x-api-* headers / CORS).
-     * Forwards to https://www.exoticindia.com/api via exotic_api_call().
+     * Forwards to https://www.exoticindia.com/api via RetailApiClient.
      */
     public function cartApi(): void
     {
@@ -3393,7 +3490,7 @@ class POSRegisterController
             case 'retrieve':
                 // Same discount / gift query + header as add/modifyqty so cart totals reflect applied coupon.
                 $ctx = $this->exoticCartDiscountContext();
-                $this->emitCartApiResponse($this->exotic_api_call(
+                $this->emitCartApiResponse($this->retailApiClient->call(
                     '/cart/retrieve',
                     'GET',
                     $ctx['query'],
@@ -3426,7 +3523,7 @@ class POSRegisterController
                 }
                 $split = $this->buildExoticCartAddSplit(is_array($body) ? $body : []);
                 $ctxAdd = $this->exoticCartDiscountContext();
-                $primaryRes = $this->exotic_api_call(
+                $primaryRes = $this->retailApiClient->call(
                     '/cart/add',
                     'POST',
                     $split['query'],
@@ -3444,9 +3541,9 @@ class POSRegisterController
                     'attempts' => [
                         [
                             'label' => 'primary',
-                            'request_url' => $this->exoticCartAddPublicUrl($split['query']),
+                            'request_url' => CartResponseParser::cartAddPublicUrl($split['query']),
                             'post_body' => $split['post'],
-                            'response' => $this->compactUpstreamCartSnapshot($primaryRes),
+                            'response' => CartResponseParser::compactUpstreamSnapshot($primaryRes),
                         ],
                     ],
                 ];
@@ -3474,22 +3571,22 @@ class POSRegisterController
                 $extraHeaders = $discountStr !== ''
                     ? ['x-api-discountcoupondetails:' . $discountStr]
                     : [];
-                $this->emitCartApiResponse($this->exotic_api_call('/cart/modifyqty', 'GET', $query, null, null, $extraHeaders));
+                $this->emitCartApiResponse($this->retailApiClient->call('/cart/modifyqty', 'GET', $query, null, null, $extraHeaders));
                 return;
 
             case 'delete':
                 $cartid = $this->resolveCartLineIdFromRequest();
-                $this->emitCartApiResponse($this->exotic_api_call('/cart/delete', 'GET', [
+                $this->emitCartApiResponse($this->retailApiClient->call('/cart/delete', 'GET', [
                     'cartid' => $cartid,
                 ]));
                 return;
 
             case 'addcoupon':
                 $couponId = trim((string)($_GET['couponid'] ?? $_REQUEST['couponid'] ?? ''));
-                $res = $this->exotic_api_call('/cart/addcoupon', 'GET', [
+                $res = $this->retailApiClient->call('/cart/addcoupon', 'GET', [
                     'couponid' => $couponId,
                 ]);
-                if ($this->isExoticCartSuccess($res)) {
+                if (CartResponseParser::isSuccess($res)) {
                     $data = is_array($res['data'] ?? null) ? $res['data'] : [];
                     $details = $data['discountcoupondetails'] ?? $data['discount_coupon_details'] ?? null;
                     if ($details !== null && $details !== '') {
@@ -3511,8 +3608,8 @@ class POSRegisterController
 
             case 'removecoupon':
                 unset($_SESSION['pos_exotic_cart_coupon_details'], $_SESSION['discount_coupon']);
-                $remoteRm = $this->exotic_api_call('/cart/removecoupon', 'GET', []);
-                if ($this->isExoticCartSuccess($remoteRm)) {
+                $remoteRm = $this->retailApiClient->call('/cart/removecoupon', 'GET', []);
+                if (CartResponseParser::isSuccess($remoteRm)) {
                     $this->emitCartApiResponse($remoteRm);
 
                     return;
@@ -3537,7 +3634,7 @@ class POSRegisterController
                 } else {
                     $_SESSION['pos_exotic_cart_custom_reduce'] = $customReduce;
                 }
-                $this->emitCartApiResponse($this->exotic_api_call('/cart/addcustomdiscount', 'GET', [
+                $this->emitCartApiResponse($this->retailApiClient->call('/cart/addcustomdiscount', 'GET', [
                     'custom_reduce' => $customReduce,
                 ]));
                 return;
@@ -3603,7 +3700,7 @@ class POSRegisterController
     private function clearPosExoticCartCustomDiscount(): void
     {
         unset($_SESSION['pos_exotic_cart_custom_reduce']);
-        $this->exotic_api_call('/cart/addcustomdiscount', 'GET', ['custom_reduce' => '0']);
+        $this->retailApiClient->call('/cart/addcustomdiscount', 'GET', ['custom_reduce' => '0']);
     }
 
     private function exoticCartDiscountContext(): array
@@ -3666,449 +3763,24 @@ class POSRegisterController
 
     /**
      * @param array{data?: mixed, code?: int, raw?: string} $res
-     */
-    private function isExoticCartSuccess(array $res): bool
-    {
-        $c = (int)($res['code'] ?? 0);
-        if ($c < 200 || $c >= 300) {
-            return false;
-        }
-        $d = $res['data'] ?? [];
-        if (!is_array($d)) {
-            return true;
-        }
-        if (array_key_exists('success', $d)) {
-            $sv = $d['success'];
-            if ($sv === false || $sv === 0 || $sv === '0' || $sv === 'false' || $sv === 'False') {
-                return false;
-            }
-        }
-        if (isset($d['status'])) {
-            $st = strtolower((string)$d['status']);
-            if (in_array($st, ['error', 'fail', 'failed'], true)) {
-                return false;
-            }
-        }
-        if (isset($d['error'])) {
-            $ev = $d['error'];
-            if ($ev === true) {
-                return false;
-            }
-            if (is_string($ev) && trim($ev) !== '') {
-                return false;
-            }
-            if (is_array($ev) && $ev !== []) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Turn API "error" payloads (string, list, or nested assoc) into one user-visible line.
-     *
-     * @param mixed $value
-     */
-    private function humanizeExoticApiMixedValue($value, int $depth = 0): string
-    {
-        if ($depth > 10) {
-            return '';
-        }
-        if (is_string($value)) {
-            $t = trim($value);
-
-            return $t;
-        }
-        if (is_int($value) || is_float($value)) {
-            return trim((string)$value);
-        }
-        if (!is_array($value)) {
-            return '';
-        }
-        if ($value === []) {
-            return '';
-        }
-        // List: join first few human-readable parts.
-        if ($value === [] || array_keys($value) === range(0, count($value) - 1)) {
-            $parts = [];
-            foreach ($value as $item) {
-                $s = $this->humanizeExoticApiMixedValue($item, $depth + 1);
-                if ($s !== '') {
-                    $parts[] = $s;
-                }
-                if (count($parts) >= 5) {
-                    break;
-                }
-            }
-
-            return implode('; ', $parts);
-        }
-        $msgKeys = [
-            'message', 'Message', 'error', 'Error', 'errormessage', 'msg', 'reason', 'detail',
-            'description', 'error_description', 'title', 'text', 'errorMessage',
-            'UserMessage', 'userMessage', 'statusMessage', 'StatusMessage', 'exceptionMessage',
-        ];
-        foreach ($msgKeys as $k) {
-            if (!array_key_exists($k, $value)) {
-                continue;
-            }
-            $s = $this->humanizeExoticApiMixedValue($value[$k], $depth + 1);
-            if ($s !== '') {
-                return $s;
-            }
-        }
-        foreach (['errors', 'Errors', 'validation', 'ValidationErrors'] as $ek) {
-            if (empty($value[$ek])) {
-                continue;
-            }
-            $s = $this->humanizeExoticApiMixedValue($value[$ek], $depth + 1);
-            if ($s !== '') {
-                return $s;
-            }
-        }
-        foreach (['data', 'result', 'payload', 'response'] as $wrap) {
-            if (empty($value[$wrap]) || !is_array($value[$wrap])) {
-                continue;
-            }
-            $inner = $this->extractExoticMessageFromAssoc($value[$wrap], $depth + 1);
-            if ($inner !== '') {
-                return $inner;
-            }
-        }
-        foreach ($value as $sub) {
-            if (!is_array($sub)) {
-                continue;
-            }
-            $nested = $this->humanizeExoticApiMixedValue($sub, $depth + 1);
-            if ($nested !== '') {
-                return $nested;
-            }
-        }
-        foreach ($value as $item) {
-            if (!is_string($item)) {
-                continue;
-            }
-            $t = trim($item);
-            if ($t !== '') {
-                return $t;
-            }
-        }
-
-        return '';
-    }
-
-    /**
-     * @param array<string, mixed> $arr
-     */
-    private function extractExoticMessageFromAssoc(array $arr, int $depth = 0): string
-    {
-        if ($depth > 10) {
-            return '';
-        }
-
-        return $this->humanizeExoticApiMixedValue($arr, $depth);
-    }
-
-    /**
-     * Best-effort user-facing message from Exotic cart JSON (shape varies by endpoint).
-     *
-     * @param array{data?: mixed, raw?: string} $res
-     */
-    private function extractExoticCartUserMessage(array $res): string
-    {
-        $d = $res['data'] ?? null;
-        if (is_array($d)) {
-            $msg = $this->extractExoticMessageFromAssoc($d, 0);
-            if ($msg !== '') {
-                return $msg;
-            }
-        }
-        $raw = trim((string)($res['raw'] ?? ''));
-        if ($raw !== '' && strpos($raw, '{') !== false) {
-            $decoded = json_decode($raw, true);
-            if (is_array($decoded)) {
-                $msg = $this->extractExoticMessageFromAssoc($decoded, 0);
-                if ($msg !== '') {
-                    return $msg;
-                }
-            }
-        }
-        if ($raw !== '' && strlen($raw) < 400 && strpos($raw, '<') === false) {
-            return $raw;
-        }
-
-        return '';
-    }
-
-    /**
-     * Full URL as sent to Exotic (GET query on /cart/add).
-     *
-     * @param array<string, string|int|float> $queryParams
-     */
-    private function exoticCartAddPublicUrl(array $queryParams): string
-    {
-        $base = 'https://www.exoticindia.com/api';
-        $url = rtrim($base, '/') . '/cart/add';
-        if ($queryParams !== []) {
-            $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($queryParams);
-        }
-
-        return $url;
-    }
-
-    /**
-     * Trimmed upstream response for debug JSON (same limits as proxy raw).
-     *
-     * @param array{data?: mixed, code?: int, raw?: string} $res
-     *
-     * @return array<string, mixed>
-     */
-    private function compactUpstreamCartSnapshot(array $res): array
-    {
-        $raw = (string)($res['raw'] ?? '');
-        if (strlen($raw) > 65536) {
-            $raw = substr($raw, 0, 65536) . '…(truncated)';
-        }
-
-        return [
-            'http_code' => (int)($res['code'] ?? 0),
-            'success_evaluated' => $this->isExoticCartSuccess($res),
-            'message_extracted' => $this->extractExoticCartUserMessage($res),
-            'data' => $res['data'] ?? [],
-            'raw' => $raw,
-        ];
-    }
-
-    /**
-     * @param array{data?: mixed, code?: int, raw?: string} $res
      * @param array<string, mixed> $extra Merged into JSON (e.g. upstream Exotic request/response for /cart/add)
      */
     private function emitCartApiResponse(array $res, array $extra = []): void
     {
-        $raw = (string)($res['raw'] ?? '');
-        if (strlen($raw) > 65536) {
-            $raw = substr($raw, 0, 65536) . '…(truncated)';
-        }
-        $ok = $this->isExoticCartSuccess($res);
-        $msg = $this->extractExoticCartUserMessage($res);
-        if (!$ok && $msg === '' && $raw !== '' && strpos(trim($raw), '<') !== false) {
-            $plain = trim(preg_replace('/\s+/', ' ', strip_tags($raw)));
-            if (strlen($plain) >= 12 && strlen($plain) <= 4000) {
-                $msg = $plain;
-            }
-        }
-        if (!$ok && $msg === '') {
-            $msg = 'Cart request failed (HTTP ' . (int)($res['code'] ?? 0) . ').';
-        }
-        $payload = array_merge([
-            'success' => $ok,
-            'message' => $msg,
-            'http_code' => (int)($res['code'] ?? 0),
-            'data' => $res['data'] ?? [],
-            'raw' => $raw,
-        ], $extra);
+        $payload = CartResponseParser::buildEmitPayload($res, $extra);
         echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
 
     /**
      * @param list<string> $extraHttpHeaders Additional request headers (full "Name:value" lines).
+     * @deprecated Use RetailApiClient via $this->retailApiClient
      */
     public function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null, ?string $apiBaseUrl = null, array $extraHttpHeaders = [])
     {
-        require_once dirname(__DIR__) . '/helpers/api_call_logger.php';
-
-        // echo "<pre>";
-        // print_r($_SESSION['discount_coupon']['discountcoupondetails']);
-        // exit;
-
-        $ep = '/' . ltrim((string)$endpoint, '/');
-        if (strtoupper((string)$method) === 'POST' && rtrim($ep, '/') === '/order/create'
-                && is_file(dirname(__DIR__) . '/.pos_skip_exotic_order_create_api')) {
-            $d = ['orderid' => 'LOCAL-' . gmdate('YmdHis')];
-            $j = json_encode($d);
-            api_call_log_write([
-                'kind' => 'exotic_api_local_stub',
-                'endpoint' => $ep,
-                'method' => strtoupper((string)$method),
-                'note' => '.pos_skip_exotic_order_create_api present — order/create not sent remotely',
-                'response_http_code' => 200,
-                'response_raw' => $j,
-                'response_decoded' => $d,
-            ]);
-
-            return ['data' => $d, 'code' => 200, 'raw' => $j];
-        }
-
-
-        $base = $apiBaseUrl ?? 'https://www.exoticindia.com/api';
-        $url = rtrim($base, '/') . $endpoint;
-        if ($params) {
-            $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($params);
-        }
-
-        $encodedPostData = null;
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-
-        // $headers = [
-        //     'x-api-key: aeRGoUvQLCxztK0Wzxmv9O2VRJ2H1B44',
-        //     'x-api-deviceid: POS-Store_1',
-        //     'x-api-appplayerid: POS-Web-Terminal',
-        //     'x-api-countrycode: IN',
-        //     'x-api-euid:' . ($_SESSION['user']['id'] ?? ''),
-        //     'User-Agent: ExoticPOS-Web/1.0'
-        // ];
-        $deviceId = $this->resolveApiDeviceId();
-        $headers = [
-            'x-api-key: aeRGoUvQLCxztK0Wzxmv9O2VRJ2H1B44',
-            'x-api-deviceid: ' . $deviceId,
-            'x-api-appplayerid: POS-Web-Terminal',
-            'x-api-countrycode: IN',
-            // Keep API-issued euid in session; do not use local user id here.
-            'x-api-euid:' . (string)($_SESSION['x_api_euid'] ?? ''),
-            'User-Agent: ExoticPOS'
-        ];
-        // Forward optional evolving API session headers when available.
-        if (!empty($_SESSION['x_api_jwt'])) {
-            $headers[] = 'x-api-jwt:' . (string)$_SESSION['x_api_jwt'];
-        }
-        if (!empty($_SESSION['x_api_browsehistory'])) {
-            $headers[] = 'x-api-browsehistory:' . (string)$_SESSION['x_api_browsehistory'];
-        }
-        if (!empty($_SESSION['x_api_etd'])) {
-            $headers[] = 'x-api-etd:' . (string)$_SESSION['x_api_etd'];
-        }
-        if (!empty($_SESSION['x_api_etd_pincode'])) {
-            $headers[] = 'x-api-etd-pincode:' . (string)$_SESSION['x_api_etd_pincode'];
-        }
-        foreach ($extraHttpHeaders as $line) {
-            if (is_string($line) && $line !== '') {
-                $headers[] = $line;
-            }
-        }
-
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-        $capturedHeaders = [];
-        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $headerLine) use (&$capturedHeaders) {
-            $len = strlen($headerLine);
-            $header = explode(':', $headerLine, 2);
-            if (count($header) < 2) {
-                return $len;
-            }
-            $name = strtolower(trim($header[0]));
-            if (in_array($name, ['x-api-euid', 'x-api-jwt', 'x-api-browsehistory', 'x-api-etd', 'x-api-etd-pincode'], true)) {
-                $capturedHeaders[$name] = trim($header[1]);
-            }
-            return $len;
-        });
-
-        if ($method === 'POST' && $postData !== null) {
-            $headers[] = 'Content-Type: application/x-www-form-urlencoded';
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_POST, true);
-            if (is_array($postData)) {
-                $encodedPostData = http_build_query($postData);
-            } elseif (is_string($postData)) {
-                $encodedPostData = $postData;
-            } else {
-                $encodedPostData = (string)$postData;
-            }
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $encodedPostData);
-        }
-
-        $response = curl_exec($ch);
-        //   echo '<pre>';
-        // print_r($response);
-        // exit;
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlErr = curl_error($ch);
-
-        curl_close($ch);
-
-        if (!empty($capturedHeaders['x-api-euid'])) {
-            $_SESSION['x_api_euid'] = $capturedHeaders['x-api-euid'];
-        }
-        if (!empty($capturedHeaders['x-api-jwt'])) {
-            $_SESSION['x_api_jwt'] = $capturedHeaders['x-api-jwt'];
-        }
-        if (!empty($capturedHeaders['x-api-browsehistory'])) {
-            $_SESSION['x_api_browsehistory'] = $capturedHeaders['x-api-browsehistory'];
-        }
-        if (!empty($capturedHeaders['x-api-etd'])) {
-            $_SESSION['x_api_etd'] = $capturedHeaders['x-api-etd'];
-        }
-        if (!empty($capturedHeaders['x-api-etd-pincode'])) {
-            $_SESSION['x_api_etd_pincode'] = $capturedHeaders['x-api-etd-pincode'];
-        }
-
-        $body = (string)$response;
-        $decoded = json_decode($body, true);
-        $data = (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) ? $decoded : [];
-
-        api_call_log_write([
-            'kind' => 'exotic_api_http',
-            'endpoint' => $ep,
-            'method' => strtoupper((string)$method),
-            'base_url' => $base,
-            'request_url' => $url,
-            'request_headers' => api_call_log_sanitize_header_lines($headers),
-            'request_query_params' => $params,
-            'request_post_body' => $encodedPostData,
-            'curl_error' => $curlErr !== '' ? $curlErr : null,
-            'response_http_code' => $httpCode,
-            'response_session_headers_from_api' => $capturedHeaders,
-            'response_raw' => $body,
-            'response_decoded' => $data,
-        ]);
-
-        return [
-            'data' => $data,
-            'code' => $httpCode,
-            'raw' => $body,
-        ];
+        return $this->retailApiClient->call($endpoint, $method, $params, $postData, $apiBaseUrl, $extraHttpHeaders);
     }
 
-    /**
-     * Use real store/warehouse label for x-api-deviceid.
-     * Falls back to POS-Store_<warehouse_id> / POS-Store_1.
-     */
-    private function resolveApiDeviceId(): string
-    {
-        $fallbackId = (int)($_SESSION['warehouse_id'] ?? 0);
-        if ($fallbackId <= 0) {
-            $fallbackId = 1;
-        }
-        $fallback = 'POS-Store_' . $fallbackId;
-
-        if (empty($_SESSION['warehouse_id'])) {
-            return $fallback;
-        }
-
-        global $conn;
-        if (empty($conn)) {
-            return $fallback;
-        }
-
-        try {
-            $usersModel = new User($conn);
-            $warehouse = $usersModel->getWarehouseById((int)$_SESSION['warehouse_id']);
-            $name = trim((string)($warehouse['address_title'] ?? ''));
-            if ($name === '') {
-                return $fallback;
-            }
-            // Header-safe normalization.
-            $name = preg_replace('/\s+/', '_', $name);
-            $name = preg_replace('/[^A-Za-z0-9_\-]/', '', (string)$name);
-            return $name !== '' ? $name : $fallback;
-        } catch (\Throwable $e) {
-            return $fallback;
-        }
-    }
     public function add_customer()
     {
         global $conn;
@@ -4498,7 +4170,7 @@ class POSRegisterController
 
         $cashDiscount = round((float)($payload['receipt_cash_discount'] ?? 0), 2);
         if ($cashDiscount > 0.001) {
-            $this->exotic_api_call('/cart/addcustomdiscount', 'GET', [
+            $this->retailApiClient->call('/cart/addcustomdiscount', 'GET', [
                 'custom_reduce' => number_format($cashDiscount, 2, '.', ''),
             ]);
             $_SESSION['pos_exotic_cart_custom_reduce'] = number_format($cashDiscount, 2, '.', '');
@@ -4507,7 +4179,7 @@ class POSRegisterController
         }
 
         $ctx = $this->exoticCartDiscountContext();
-        $retrieve = $this->exotic_api_call(
+        $retrieve = $this->retailApiClient->call(
             '/cart/retrieve',
             'GET',
             $ctx['query'],
@@ -4515,7 +4187,7 @@ class POSRegisterController
             null,
             $ctx['extraHeaders']
         );
-        if (!$this->isExoticCartSuccess($retrieve)) {
+        if (!CartResponseParser::isSuccess($retrieve)) {
             echo json_encode([
                 'success' => false,
                 'message' => 'Could not load cart before checkout. Try refreshing the cart.',
@@ -4538,7 +4210,7 @@ class POSRegisterController
             ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
-        $createRes = $this->exotic_api_call(
+        $createRes = $this->retailApiClient->call(
             '/order/create',
             'POST',
             $ctx['query'],
@@ -4568,7 +4240,7 @@ class POSRegisterController
             ],
         ];
 
-        if (!$this->isExoticCartSuccess($createRes)) {
+        if (!CartResponseParser::isSuccess($createRes)) {
             $d = is_array($createRes['data'] ?? null) ? $createRes['data'] : [];
             $msg = trim((string)($d['message'] ?? $d['error'] ?? $d['errormessage'] ?? ''));
             if ($msg === '') {
@@ -4582,7 +4254,7 @@ class POSRegisterController
             exit;
         }
 
-        $orderNumber = $this->extractExoticOrderNumberFromCreateResponse(is_array($createRes['data'] ?? null) ? $createRes['data'] : []);
+        $orderNumber = OrderResponseParser::extractOrderNumber(is_array($createRes['data'] ?? null) ? $createRes['data'] : []);
         if ($orderNumber === '') {
             echo json_encode([
                 'success' => false,
@@ -4630,8 +4302,8 @@ class POSRegisterController
                 }
             }
             $editRes = $this->exoticPosEditOrderPrices($orderNumber, $editLinePrices);
-            if (!$this->isExoticCartSuccess($editRes)) {
-                $em = $this->extractExoticCartUserMessage($editRes);
+            if (!CartResponseParser::isSuccess($editRes)) {
+                $em = CartResponseParser::extractUserMessage($editRes);
                 if ($em === '') {
                     $em = 'HTTP ' . (int)($editRes['code'] ?? 0);
                 }
@@ -5413,24 +5085,7 @@ class POSRegisterController
             ++$i;
         }
 
-        return $this->exotic_api_call('/order/pos_editorderprices', 'POST', [], $post);
-    }
-
-    private function extractExoticOrderNumberFromCreateResponse(array $data): string
-    {
-        foreach (['orderid', 'order_id', 'OrderId', 'ordernumber', 'order_number', 'order_no', 'orderNo'] as $k) {
-            if (!empty($data[$k])) {
-                return trim((string)$data[$k]);
-            }
-        }
-        if (!empty($data['order']) && is_array($data['order'])) {
-            return $this->extractExoticOrderNumberFromCreateResponse($data['order']);
-        }
-        if (!empty($data['data']) && is_array($data['data'])) {
-            return $this->extractExoticOrderNumberFromCreateResponse($data['data']);
-        }
-
-        return '';
+        return $this->retailApiClient->call('/order/pos_editorderprices', 'POST', [], $post);
     }
 
     private function mapPosPaymentModeLabel(string $mode): string

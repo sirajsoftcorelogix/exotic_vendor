@@ -1840,6 +1840,9 @@ switch ($page) {
             case 'print_proforma':
                 $controller->printProforma();
                 break;
+            case 'print_order':
+                $controller->printOrder();
+                break;
             case 'get_order_details_for_dispatch':
                 $controller->getOrderDetailsForDispatch();
                 break;

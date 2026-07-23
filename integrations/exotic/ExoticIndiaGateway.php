@@ -1,22 +1,30 @@
 <?php
 
 require_once __DIR__ . '/Clients/OrderClient.php';
+require_once __DIR__ . '/Clients/RetailApiClient.php';
 require_once __DIR__ . '/Dto/OrderModifyRequest.php';
 require_once __DIR__ . '/Support/OrderStatusResolver.php';
 
 /**
- * Central entry point for Exotic India vendor-api integrations.
- * Phase 1: order item status updates (/order/modify).
+ * Central entry point for Exotic India integrations.
+ *
+ * - vendor-api (https://www.exoticindia.com/vendor-api/*) — order modify, product fetch, etc.
+ * - retail-api (https://www.exoticindia.com/api/*) — POS cart, product/code, order/create
  */
 class ExoticIndiaGateway
 {
     private OrderClient $orderClient;
     private OrderStatusResolver $statusResolver;
+    private ?RetailApiClient $retailApiClient;
 
-    public function __construct(OrderClient $orderClient, OrderStatusResolver $statusResolver)
-    {
+    public function __construct(
+        OrderClient $orderClient,
+        OrderStatusResolver $statusResolver,
+        ?RetailApiClient $retailApiClient = null
+    ) {
         $this->orderClient = $orderClient;
         $this->statusResolver = $statusResolver;
+        $this->retailApiClient = $retailApiClient;
     }
 
     public static function create(?mysqli $db = null): self
@@ -28,7 +36,20 @@ class ExoticIndiaGateway
             throw new RuntimeException('ExoticIndiaGateway requires a mysqli connection.');
         }
 
-        return new self(new OrderClient(), new OrderStatusResolver($db));
+        return new self(
+            new OrderClient(),
+            new OrderStatusResolver($db),
+            RetailApiClient::create($db)
+        );
+    }
+
+    public function retail(): RetailApiClient
+    {
+        if ($this->retailApiClient === null) {
+            $this->retailApiClient = RetailApiClient::create();
+        }
+
+        return $this->retailApiClient;
     }
 
     /**

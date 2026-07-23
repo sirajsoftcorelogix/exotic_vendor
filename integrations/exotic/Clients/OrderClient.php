@@ -12,7 +12,7 @@ class OrderClient
      */
     public function modifyOrderItem(OrderModifyRequest $request): array
     {
-        require_once __DIR__ . '/../../../helpers/exotic_india_api.php';
+        require_once __DIR__ . '/../vendor_api.php';
 
         $postBody = http_build_query($request->toFormFields());
         $result = exotic_india_api_post('/order/modify', $postBody, [
