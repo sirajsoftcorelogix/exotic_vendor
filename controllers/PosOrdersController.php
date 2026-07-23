@@ -1139,6 +1139,9 @@ class PosOrdersController
                 'canEditInvoiceNumber' => canSrEmpAccess(),
                 'paymentSummary' => $paymentSummary,
                 'linePricingByLineId' => $linePricingByLineId,
+                'order_status_list' => $commanModel->get_order_status(),
+                'staff_list' => $commanModel->get_staff_list(),
+                'showOrderVendorName' => function_exists('canViewOrderVendorName') && canViewOrderVendorName(),
             ], 'Order Details');
         }
         exit;
