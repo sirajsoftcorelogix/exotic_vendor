@@ -1958,6 +1958,10 @@ class POSRegisterController
         }
 
         $localStock = max(0, (int) ($product['local_stock'] ?? 0));
+        $stockLocation = trim((string) ($product['location'] ?? ''));
+        if ($stockLocation === '') {
+            $stockLocation = $defaultWarehouseName;
+        }
 
         $conn->begin_transaction();
         try {
@@ -1969,7 +1973,7 @@ class POSRegisterController
                     'size' => trim((string) ($product['size'] ?? '')),
                     'color' => trim((string) ($product['color'] ?? '')),
                     'warehouse_id' => $defaultWarehouseId,
-                    'location' => $defaultWarehouseName,
+                    'location' => $stockLocation,
                     'movement_type' => 'OPENING_STOCK',
                     'quantity' => $localStock,
                     'ref_type' => 'STOCK_REPORT_REFRESH',
@@ -2031,7 +2035,7 @@ class POSRegisterController
     private function loadStockReportRefreshProduct(mysqli $conn, int $productId): ?array
     {
         $stmt = $conn->prepare(
-            'SELECT id, sku, item_code, size, color, IFNULL(local_stock, 0) AS local_stock
+            'SELECT id, sku, item_code, size, color, IFNULL(local_stock, 0) AS local_stock, IFNULL(location, \'\') AS location
              FROM vp_products WHERE id = ? AND is_active = 1 LIMIT 1'
         );
         if (!$stmt) {

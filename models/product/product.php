@@ -1805,8 +1805,15 @@ class product
                                 (string) $whereColor,
                                 (int) $localStock,
                                 $syncStockFromApi,
-                                $syncPhysicalStock
+                                $syncPhysicalStock,
+                                (string) $location
                             );
+                            $resolvedProductId = $targetProductId > 0
+                                ? $targetProductId
+                                : (is_array($existingBase) ? (int) ($existingBase['id'] ?? 0) : 0);
+                            if ($resolvedProductId > 0) {
+                                $this->syncLatestStockMovementLocationFromApi($resolvedProductId, (string) $location);
+                            }
                         }
                     }
                     if ($stmt->error) {
@@ -1925,8 +1932,13 @@ class product
                                     (string) $color,
                                     (int) $freshStockDecision['local_stock'],
                                     $freshStockDecision['sync_stock'],
-                                    $syncPhysicalStock
+                                    $syncPhysicalStock,
+                                    (string) $location
                                 );
+                                $insertProductId = is_array($freshRow) ? (int) ($freshRow['id'] ?? 0) : (int) $insertId;
+                                if ($insertProductId > 0) {
+                                    $this->syncLatestStockMovementLocationFromApi($insertProductId, (string) $location);
+                                }
                             }
                         }
                     }
@@ -1959,7 +1971,7 @@ class product
                             $localStock = $stockDecision['local_stock'];
                             $syncStockFromApi = $stockDecision['sync_stock'];
                             $upc = isset($variation['upc']) ? $variation['upc'] : '';
-                            $location = isset($variation['location']) ? $variation['location'] : '';
+                            $location = isset($variation['location']) ? $variation['location'] : (isset($product['location']) ? $product['location'] : '');
                             $fba_in = isset($variation['fba_in']) ? (int)$variation['fba_in'] : 0;
                             $fba_us = isset($variation['fba_us']) ? (int)$variation['fba_us'] : 0;
                             $leadtime = $this->normalizeIntValue($variation['leadtime'] ?? null, 0);
@@ -2108,8 +2120,13 @@ class product
                                     (string) $whereColor,
                                     (int) $localStock,
                                     $syncStockFromApi,
-                                    $syncPhysicalStock
+                                    $syncPhysicalStock,
+                                    (string) $location
                                 );
+                                $variationProductId = is_array($existingBase) ? (int) ($existingBase['id'] ?? 0) : 0;
+                                if ($variationProductId > 0) {
+                                    $this->syncLatestStockMovementLocationFromApi($variationProductId, (string) $location);
+                                }
                             }
                             if ($stmt->error) {
                                 return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
@@ -2227,8 +2244,13 @@ class product
                                             (string) $color,
                                             (int) $freshStockDecision['local_stock'],
                                             $freshStockDecision['sync_stock'],
-                                            $syncPhysicalStock
+                                            $syncPhysicalStock,
+                                            (string) $location
                                         );
+                                        $variationInsertProductId = is_array($freshRow) ? (int) ($freshRow['id'] ?? 0) : (int) $insertId;
+                                        if ($variationInsertProductId > 0) {
+                                            $this->syncLatestStockMovementLocationFromApi($variationInsertProductId, (string) $location);
+                                        }
                                     }
                                 }
                             }
@@ -2480,6 +2502,55 @@ class product
     }
 
     /**
+     * Location label for stock movements after API / stock refresh (vp_products.location from vendor API).
+     */
+    private function resolveApiRefreshMovementLocation(string $apiLocation, string $warehouseFallback = ''): string
+    {
+        $location = trim($apiLocation);
+        if ($location !== '') {
+            return $location;
+        }
+
+        return trim($warehouseFallback);
+    }
+
+    /**
+     * Push API location onto the latest movement row at the default warehouse (warehouse stock table).
+     */
+    private function syncLatestStockMovementLocationFromApi(int $productId, string $location): void
+    {
+        $location = trim($location);
+        if ($productId <= 0 || $location === '') {
+            return;
+        }
+
+        $warehouseId = $this->resolveDefaultWarehouseIdForStock();
+        if ($warehouseId <= 0) {
+            $warehouseId = 1;
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT id FROM vp_stock_movements
+             WHERE product_id = ? AND warehouse_id = ?
+             ORDER BY id DESC LIMIT 1'
+        );
+        if (!$stmt) {
+            return;
+        }
+        $stmt->bind_param('ii', $productId, $warehouseId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        $movementId = (int) ($row['id'] ?? 0);
+        if ($movementId <= 0) {
+            return;
+        }
+
+        $this->updateStockMovementLocation($movementId, $productId, $location);
+    }
+
+    /**
      * Align warehouse ledger + physical_stock to API local_stock (import-style target sync).
      */
     private function applyRefreshApiStockSync(
@@ -2488,7 +2559,8 @@ class product
         string $itemCode,
         string $size,
         string $color,
-        int $targetQty
+        int $targetQty,
+        string $location = ''
     ): void {
         require_once __DIR__ . '/StockMovement.php';
 
@@ -2514,6 +2586,7 @@ class product
 
         $size = trim($size);
         $color = trim($color);
+        $movementLocation = $this->resolveApiRefreshMovementLocation($location);
 
         if (session_status() !== PHP_SESSION_ACTIVE) {
             @session_start();
@@ -2540,7 +2613,7 @@ class product
                     'size' => $size,
                     'color' => $color,
                     'warehouse_id' => $warehouseId,
-                    'location' => 'API refresh',
+                    'location' => $movementLocation,
                     'movement_type' => $movementType,
                     'quantity' => $movementQty,
                     'ref_type' => $refType,
@@ -2557,7 +2630,7 @@ class product
                     'size' => $size,
                     'color' => $color,
                     'warehouse_id' => $warehouseId,
-                    'location' => 'API refresh',
+                    'location' => $movementLocation,
                     'movement_type' => 'OUT',
                     'quantity' => abs($delta),
                     'ref_type' => $refType,
@@ -2568,6 +2641,9 @@ class product
                 ]);
             } else {
                 StockMovement::syncProductPhysicalStock($this->db, $productId);
+                if ($movementLocation !== '') {
+                    $this->syncLatestStockMovementLocationFromApi($productId, $movementLocation);
+                }
             }
 
             $updL = $this->db->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
@@ -2598,7 +2674,8 @@ class product
         string $color,
         int $localStock,
         bool $syncStockFromApi,
-        bool $syncPhysicalStock
+        bool $syncPhysicalStock,
+        string $location = ''
     ): void {
         if (!$syncStockFromApi || !$syncPhysicalStock) {
             return;
@@ -2624,7 +2701,8 @@ class product
                 $itemCode,
                 $size,
                 $color,
-                $localStock
+                $localStock,
+                $location
             );
 
             return;
@@ -2636,7 +2714,8 @@ class product
             $itemCode,
             $size,
             $color,
-            $localStock
+            $localStock,
+            $location
         );
     }
 
@@ -2650,7 +2729,8 @@ class product
         string $itemCode,
         string $size,
         string $color,
-        int $localStock
+        int $localStock,
+        string $location = ''
     ): void {
         if (!$existingBase || empty($existingBase['id']) || $localStock <= 0) {
             return;
@@ -2681,6 +2761,7 @@ class product
         }
         $userId = (int) ($_SESSION['user']['id'] ?? 0);
         $refId = 'api_refresh:' . date('YmdHis');
+        $movementLocation = $this->resolveApiRefreshMovementLocation($location);
 
         try {
             StockMovement::insert($this->db, [
@@ -2690,7 +2771,7 @@ class product
                 'size' => trim($size),
                 'color' => trim($color),
                 'warehouse_id' => $warehouseId,
-                'location' => 'API refresh',
+                'location' => $movementLocation,
                 'movement_type' => 'OPENING_STOCK',
                 'quantity' => $localStock,
                 'ref_type' => 'API_REFRESH',
