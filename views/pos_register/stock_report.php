@@ -59,7 +59,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         </span>
         <div class="min-w-0">
           <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
-          <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Warehouse, keyword, group name, physical/local stock status, group-specific fields, and rows limit.</p>
+          <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Warehouse, keyword, location, group name, physical/local stock status, group-specific fields, and rows limit.</p>
         </div>
       </div>
       <span class="shrink-0 inline-flex items-center gap-2 text-xs font-semibold text-amber-800">
@@ -128,6 +128,18 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
             <option value="low" <?= (($filters['local_stock_status'] ?? 'all') === 'low') ? 'selected' : '' ?>>Low stock (1-5)</option>
             <option value="in" <?= (($filters['local_stock_status'] ?? 'all') === 'in') ? 'selected' : '' ?>>In stock</option>
           </select>
+        </div>
+
+        <div>
+          <label for="stock_report_location" class="block text-xs font-semibold text-gray-600 mb-1">Location</label>
+          <input
+            type="text"
+            id="stock_report_location"
+            name="location"
+            value="<?= htmlspecialchars((string)($filters['location'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+            placeholder="Bin, shelf, or storage location"
+            class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition"
+          >
         </div>
 
         <div>

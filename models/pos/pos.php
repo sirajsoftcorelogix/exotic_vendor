@@ -423,10 +423,9 @@ class pos
         // Latest movement row per product in selected warehouse using MAX(id) subquery.
         // When searching, LEFT JOIN so products with no movements in this warehouse still appear with 0 stock.
         $joinType = ($search !== '') ? 'LEFT' : 'INNER';
-        $locationSelect = $includeLocation ? ', sm1.location' : '';
         $join = "
             {$joinType} JOIN (
-                SELECT sm1.product_id, sm1.running_stock{$locationSelect}
+                SELECT sm1.product_id, sm1.running_stock, sm1.location
                 FROM vp_stock_movements sm1
                 INNER JOIN (
                     SELECT product_id, MAX(id) AS max_id
@@ -461,6 +460,7 @@ class pos
 
         appendStockReportExtraFiltersSql($where, $params, $types, $filters, $this->db);
         appendStockReportStockStatusFiltersSql($where, $filters);
+        appendStockReportLocationFilterSql($where, $params, $types, $filters);
 
         return [
             'join' => $join,

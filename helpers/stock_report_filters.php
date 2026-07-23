@@ -59,6 +59,27 @@ function appendStockReportStockStatusFiltersSql(string &$where, array $filters):
 }
 
 /**
+ * Filter by bin/shelf location from the latest stock movement row.
+ *
+ * @param array<string, mixed> $filters
+ */
+function appendStockReportLocationFilterSql(
+    string &$where,
+    array &$params,
+    string &$types,
+    array $filters
+): void {
+    $location = normalizeOrderFilterSearchText((string) ($filters['location'] ?? ''));
+    if ($location === '') {
+        return;
+    }
+
+    $where .= " AND IFNULL(sm.location, '') LIKE ? ";
+    $params[] = '%' . $location . '%';
+    $types .= 's';
+}
+
+/**
  * Group-specific stock report filter field definitions.
  *
  * @return array<string, array{label:string,placeholder:string,groups:list<string>,labels?:array<string,string>,autocomplete?:string}>
@@ -152,6 +173,7 @@ function parseStockReportFiltersFromRequest(array $get, int $warehouseId): array
 
     $filters = [
         'search' => trim((string) ($get['search'] ?? '')),
+        'location' => trim((string) ($get['location'] ?? '')),
         'category' => $category !== '' ? $category : 'allProducts',
         'physical_stock_status' => $stockStatuses['physical_stock_status'],
         'local_stock_status' => $stockStatuses['local_stock_status'],
@@ -189,6 +211,9 @@ function parseStockReportFiltersFromRequest(array $get, int $warehouseId): array
 function stockReportFiltersPanelOpen(array $filters, bool $canChangeWarehouse): bool
 {
     if (trim((string) ($filters['search'] ?? '')) !== '') {
+        return true;
+    }
+    if (trim((string) ($filters['location'] ?? '')) !== '') {
         return true;
     }
     if (($filters['category'] ?? 'allProducts') !== 'allProducts') {
@@ -287,6 +312,7 @@ function stockReportFiltersForExportPayload(array $filters): array
 {
     $payload = [
         'search' => $filters['search'] ?? '',
+        'location' => $filters['location'] ?? '',
         'category' => $filters['category'] ?? 'allProducts',
         'physical_stock_status' => $filters['physical_stock_status'] ?? 'all',
         'local_stock_status' => $filters['local_stock_status'] ?? 'all',
