@@ -2188,4 +2188,77 @@ class Order
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }
     }
+
+    public function hasOrderLines(string $orderNumber): bool
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return false;
+        }
+
+        $stmt = $this->db->prepare('SELECT 1 FROM vp_orders WHERE order_number = ? LIMIT 1');
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $hasLines = (bool)$stmt->get_result()->fetch_row();
+        $stmt->close();
+
+        return $hasLines;
+    }
+
+    public function hasOrderInfo(string $orderNumber): bool
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return false;
+        }
+
+        $stmt = $this->db->prepare('SELECT 1 FROM vp_order_info WHERE order_number = ? LIMIT 1');
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $hasInfo = (bool)$stmt->get_result()->fetch_row();
+        $stmt->close();
+
+        return $hasInfo;
+    }
+
+    /**
+     * POS checkout uses WZ… receipt numbers; vendor import may store the numeric API orderid instead.
+     *
+     * @return array{success: bool, orders: int, info: int}
+     */
+    public function rekeyOrderNumber(string $fromOrderNumber, string $toOrderNumber): array
+    {
+        $from = trim($fromOrderNumber);
+        $to = trim($toOrderNumber);
+        if ($from === '' || $to === '' || strcasecmp($from, $to) === 0) {
+            return ['success' => true, 'orders' => 0, 'info' => 0];
+        }
+
+        $ordersUpdated = 0;
+        $infoUpdated = 0;
+
+        $stmt = $this->db->prepare('UPDATE vp_orders SET order_number = ? WHERE order_number = ?');
+        if ($stmt) {
+            $stmt->bind_param('ss', $to, $from);
+            $stmt->execute();
+            $ordersUpdated = (int)$stmt->affected_rows;
+            $stmt->close();
+        }
+
+        $stmtInfo = $this->db->prepare('UPDATE vp_order_info SET order_number = ? WHERE order_number = ?');
+        if ($stmtInfo) {
+            $stmtInfo->bind_param('ss', $to, $from);
+            $stmtInfo->execute();
+            $infoUpdated = (int)$stmtInfo->affected_rows;
+            $stmtInfo->close();
+        }
+
+        return ['success' => true, 'orders' => $ordersUpdated, 'info' => $infoUpdated];
+    }
 }
