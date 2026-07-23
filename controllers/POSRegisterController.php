@@ -1962,6 +1962,9 @@ class POSRegisterController
         if ($stockLocation === '') {
             $stockLocation = $defaultWarehouseName;
         }
+        if ($stockLocation !== '') {
+            $productModel->syncProductLocation($productId, $stockLocation);
+        }
 
         $conn->begin_transaction();
         try {

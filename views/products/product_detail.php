@@ -545,6 +545,19 @@
             <i class="fas fa-edit text-sm"></i>
           </button>
         </div>
+        <?php $productLocationDisplay = trim((string)($products['location'] ?? '')); ?>
+        <!-- Storage location (vp_products.location — synced from API on refresh) -->
+        <div class="<?php echo $invCard; ?> border-teal-100 bg-teal-50/50" title="Bin, shelf, or storage location from the vendor API. Updated on Refresh from API and Refresh stock.">
+          <div class="<?php echo $invBody; ?>">
+            <p class="<?php echo $invLbl; ?>">Location</p>
+            <p id="productLocationDisplay" class="<?php echo $invVal; ?> text-sm sm:text-base break-words leading-snug">
+              <?php echo $productLocationDisplay !== '' ? htmlspecialchars($productLocationDisplay, ENT_QUOTES, 'UTF-8') : '—'; ?>
+            </p>
+          </div>
+          <div class="<?php echo $invIco; ?> bg-teal-100 text-teal-700">
+            <i class="fas fa-map-marker-alt"></i>
+          </div>
+        </div>
         <!-- Pending Orders -->
         <a
           href="<?php echo base_url('?page=orders&action=list&options=unshipped&sku=' . rawurlencode((string)($products['sku'] ?? '')) . '&item_code=' . rawurlencode((string)($products['item_code'] ?? ''))); ?>"
