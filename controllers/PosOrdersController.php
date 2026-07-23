@@ -1027,7 +1027,7 @@ class PosOrdersController
 
         require_once __DIR__ . '/../models/payment/Payment.php';
         $paymentModel = new Payment($conn);
-        $storeAddress = $paymentModel->getDefaultWarehouseAddress();
+        $storeAddress = $paymentModel->getSaleStoreAddressForOrder($resolvedOrderNumber);
 
         renderTemplateClean('views/posorders/print_order.php', [
             'order' => $order,
