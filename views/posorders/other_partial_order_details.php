@@ -439,6 +439,11 @@ $proformaPrintDisabledReason = $canPrintProforma
                                 <?php else: ?>
                                     <span id="shipping_mobile" class="hidden"></span>
                                 <?php endif; ?>
+                                <?php if (!empty($orderremarks['shipping_gstin'])): ?>
+                                    <br><span class="text-xs text-gray-500">GSTIN:</span> <span id="shipping_gstin"><?php echo htmlspecialchars($orderremarks['shipping_gstin']); ?></span>
+                                <?php else: ?>
+                                    <span id="shipping_gstin" class="hidden"></span>
+                                <?php endif; ?>
                             </address>
                         </div>
                         <div>
@@ -462,6 +467,11 @@ $proformaPrintDisabledReason = $canPrintProforma
                                     <br><span id="billing_country" data-code="<?php echo htmlspecialchars($orderremarks['country']); ?>"><?php echo htmlspecialchars($resolveCountryLabel($orderremarks['country'])); ?></span>
                                 <?php else: ?>
                                     <span id="billing_country" class="hidden"></span>
+                                <?php endif; ?>
+                                <?php if (!empty($orderremarks['gstin'])): ?>
+                                    <br><span class="text-xs text-gray-500">GSTIN:</span> <span id="billing_gstin"><?php echo htmlspecialchars($orderremarks['gstin']); ?></span>
+                                <?php else: ?>
+                                    <span id="billing_gstin" class="hidden"></span>
                                 <?php endif; ?>
                             </address>
                         </div>
@@ -751,6 +761,7 @@ $proformaPrintDisabledReason = $canPrintProforma
                                     <input type="text" id="edit_shipping_zipcode" name="billing_zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 </div>
                                 <input type="text" id="edit_shipping_country" name="billing_country" placeholder="Country code (e.g. IN)" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_shipping_gstin" name="shipping_gstin" placeholder="GSTIN (optional)" maxlength="15" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white uppercase focus:ring-blue-500 focus:border-blue-500">
                             </div>
                         </div>
 
@@ -764,6 +775,7 @@ $proformaPrintDisabledReason = $canPrintProforma
                                     <input type="text" id="edit_billing_zipcode" name="zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 </div>
                                 <input type="text" id="edit_billing_country" name="country" placeholder="Country code (e.g. IN)" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_billing_gstin" name="gstin" placeholder="GSTIN (optional)" maxlength="15" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white uppercase focus:ring-blue-500 focus:border-blue-500">
                             </div>
                         </div>
                     </div>
@@ -957,11 +969,13 @@ $proformaPrintDisabledReason = $canPrintProforma
         document.getElementById('edit_shipping_city').value = document.getElementById('shipping_city')?.textContent.trim() || '';
         document.getElementById('edit_shipping_zipcode').value = document.getElementById('shipping_zipcode')?.textContent.trim() || '';
         document.getElementById('edit_shipping_country').value = document.getElementById('shipping_country')?.dataset.code || document.getElementById('shipping_country')?.textContent.trim() || '';
+        document.getElementById('edit_shipping_gstin').value = document.getElementById('shipping_gstin')?.textContent.trim() || '';
         document.getElementById('edit_billing_address_line1').value = document.getElementById('billing_address1')?.textContent.trim() || '';
         document.getElementById('edit_billing_address_line2').value = document.getElementById('billing_address2')?.textContent.trim() || '';
         document.getElementById('edit_billing_city').value = document.getElementById('billing_city')?.textContent.trim() || '';
         document.getElementById('edit_billing_zipcode').value = document.getElementById('billing_zipcode')?.textContent.trim() || '';
         document.getElementById('edit_billing_country').value = document.getElementById('billing_country')?.dataset.code || document.getElementById('billing_country')?.textContent.trim() || '';
+        document.getElementById('edit_billing_gstin').value = document.getElementById('billing_gstin')?.textContent.trim() || '';
         document.getElementById('nameEmailPopup').classList.remove('hidden');
     }
 
@@ -985,6 +999,8 @@ $proformaPrintDisabledReason = $canPrintProforma
         const billing_city = document.getElementById('edit_shipping_city').value.trim();
         const billing_zipcode = document.getElementById('edit_shipping_zipcode').value.trim();
         const billing_country = document.getElementById('edit_shipping_country').value.trim();
+        const gstin = document.getElementById('edit_billing_gstin').value.trim().toUpperCase();
+        const shipping_gstin = document.getElementById('edit_shipping_gstin').value.trim().toUpperCase();
 
         if (!name || !phone) {
             alert("All fields (Name, Email, Phone) are required.");
@@ -996,7 +1012,7 @@ $proformaPrintDisabledReason = $canPrintProforma
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: `order_number=${encodeURIComponent(orderNumber)}&customer_name=${encodeURIComponent(name)}&customer_phone=${encodeURIComponent(phone)}&address_line1=${encodeURIComponent(address_line1)}&address_line2=${encodeURIComponent(address_line2)}&city=${encodeURIComponent(city)}&zipcode=${encodeURIComponent(zipcode)}&country=${encodeURIComponent(country)}&billing_address_line1=${encodeURIComponent(billing_address_line1)}&billing_address_line2=${encodeURIComponent(billing_address_line2)}&billing_city=${encodeURIComponent(billing_city)}&billing_zipcode=${encodeURIComponent(billing_zipcode)}&billing_country=${encodeURIComponent(billing_country)}`
+                body: `order_number=${encodeURIComponent(orderNumber)}&customer_name=${encodeURIComponent(name)}&customer_phone=${encodeURIComponent(phone)}&address_line1=${encodeURIComponent(address_line1)}&address_line2=${encodeURIComponent(address_line2)}&city=${encodeURIComponent(city)}&zipcode=${encodeURIComponent(zipcode)}&country=${encodeURIComponent(country)}&gstin=${encodeURIComponent(gstin)}&billing_address_line1=${encodeURIComponent(billing_address_line1)}&billing_address_line2=${encodeURIComponent(billing_address_line2)}&billing_city=${encodeURIComponent(billing_city)}&billing_zipcode=${encodeURIComponent(billing_zipcode)}&billing_country=${encodeURIComponent(billing_country)}&shipping_gstin=${encodeURIComponent(shipping_gstin)}`
             })
             .then(r => r.json())
             .then(data => {
