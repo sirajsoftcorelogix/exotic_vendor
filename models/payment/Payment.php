@@ -704,4 +704,54 @@ WHERE 1=1
 
         return $rows;
     }
+
+    /**
+     * Payment rows for one POS checkout receipt (same receipt_number group).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function findCheckoutReceiptPayments(string $orderNumber = '', ?string $receiptNumber = null): array
+    {
+        $receiptNumber = trim((string)$receiptNumber);
+        $orderNumber = trim($orderNumber);
+
+        if ($receiptNumber !== '') {
+            $stmt = $this->db->prepare(
+                'SELECT * FROM pos_payments WHERE receipt_number = ? ORDER BY id ASC'
+            );
+            if (!$stmt) {
+                return [];
+            }
+            $stmt->bind_param('s', $receiptNumber);
+        } elseif ($orderNumber !== '') {
+            $stmt = $this->db->prepare(
+                'SELECT p.*
+                 FROM pos_payments p
+                 INNER JOIN (
+                     SELECT receipt_number
+                     FROM pos_payments
+                     WHERE order_number = ?
+                     ORDER BY id DESC
+                     LIMIT 1
+                 ) latest ON latest.receipt_number = p.receipt_number
+                 ORDER BY p.id ASC'
+            );
+            if (!$stmt) {
+                return [];
+            }
+            $stmt->bind_param('s', $orderNumber);
+        } else {
+            return [];
+        }
+
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = [];
+        while ($row = $result->fetch_assoc()) {
+            $rows[] = $row;
+        }
+        $stmt->close();
+
+        return $rows;
+    }
 }
