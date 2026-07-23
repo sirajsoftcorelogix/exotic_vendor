@@ -810,10 +810,13 @@ data-code="${lookupCode}">
     const minPrice = $('#minPrice').val();
     const maxPrice = $('#maxPrice').val();
     const $stockFilterEl = $('#stockFilter');
-    // Align POS listing default with stock report compare URL (stock_status=in).
-    const stockFilter = $stockFilterEl.length ? String($stockFilterEl.val() || 'in') : 'in';
     // One search box: same semantics as stock report (title OR item_code OR sku).
     const searchVal = String($('#searchName').val() || '').trim();
+    // Browse default: in-stock only. When searching, include zero-stock matches.
+    const stockFilterDefault = searchVal !== '' ? 'all' : 'in';
+    const stockFilter = $stockFilterEl.length
+      ? String($stockFilterEl.val() || stockFilterDefault)
+      : stockFilterDefault;
     const productName = searchVal;
     const productCode = '';
     const requestedPage = page;
