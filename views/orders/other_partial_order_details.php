@@ -635,7 +635,15 @@ if ($invoiceIdForReturn > 0) {
                                     <input type="text" id="edit_shipping_city" name="billing_city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                     <input type="text" id="edit_shipping_zipcode" name="billing_zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 </div>
-                                <input type="text" id="edit_shipping_country" name="billing_country" placeholder="Country code (e.g. IN)" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_shipping_state" name="shipping_state" placeholder="State" class="hidden w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <select id="edit_shipping_state_select" class="hidden w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500"></select>
+                                <select id="edit_shipping_country" name="billing_country" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                    <?php
+                                    $selected_iso = strtoupper(trim((string)($orderremarks['shipping_country'] ?? 'IN')));
+                                    $country_list = $countries;
+                                    include __DIR__ . '/../pos_register/partials/iso_country_options.php';
+                                    ?>
+                                </select>
                                 <input type="text" id="edit_shipping_gstin" name="shipping_gstin" placeholder="GSTIN (optional)" maxlength="15" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white uppercase focus:ring-blue-500 focus:border-blue-500">
                             </div>
                         </div>
@@ -649,7 +657,15 @@ if ($invoiceIdForReturn > 0) {
                                     <input type="text" id="edit_billing_city" name="city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                     <input type="text" id="edit_billing_zipcode" name="zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 </div>
-                                <input type="text" id="edit_billing_country" name="country" placeholder="Country code (e.g. IN)" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_billing_state" name="state" placeholder="State" class="hidden w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <select id="edit_billing_state_select" class="hidden w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500"></select>
+                                <select id="edit_billing_country" name="country" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                    <?php
+                                    $selected_iso = strtoupper(trim((string)($orderremarks['country'] ?? 'IN')));
+                                    $country_list = $countries;
+                                    include __DIR__ . '/../pos_register/partials/iso_country_options.php';
+                                    ?>
+                                </select>
                                 <input type="text" id="edit_billing_gstin" name="gstin" placeholder="GSTIN (optional)" maxlength="15" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white uppercase focus:ring-blue-500 focus:border-blue-500">
                             </div>
                         </div>
@@ -823,6 +839,116 @@ if ($invoiceIdForReturn > 0) {
         return (str + '').replace(/([^>\r\n]?)(\r\n|\n\r|\r|\n)/g, '$1<br>');
     }
 
+    const ORDER_STATE_FIELD_CONFIG = {
+        shipping: { countryId: 'edit_shipping_country', inputId: 'edit_shipping_state', selectId: 'edit_shipping_state_select' },
+        billing: { countryId: 'edit_billing_country', inputId: 'edit_billing_state', selectId: 'edit_billing_state_select' }
+    };
+
+    function isOrderStateDropdownCountry(code) {
+        const c = String(code || '').trim().toUpperCase().substring(0, 2);
+        return c === 'IN' || c === 'US';
+    }
+
+    function fetchOrderCountryStates(countryCode) {
+        const country = String(countryCode || 'IN').trim().toUpperCase().substring(0, 2) || 'IN';
+        window.ORDER_COUNTRY_STATES = window.ORDER_COUNTRY_STATES || {};
+        if (Array.isArray(window.ORDER_COUNTRY_STATES[country]) && window.ORDER_COUNTRY_STATES[country].length) {
+            return Promise.resolve(window.ORDER_COUNTRY_STATES[country]);
+        }
+
+        return fetch('index.php?page=pos_register&action=states-by-country&country=' + encodeURIComponent(country), {
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json' }
+            })
+            .then(res => res.json())
+            .then(data => {
+                window.ORDER_COUNTRY_STATES[country] = Array.isArray(data) ? data : [];
+                return window.ORDER_COUNTRY_STATES[country];
+            })
+            .catch(() => {
+                window.ORDER_COUNTRY_STATES[country] = [];
+                return [];
+            });
+    }
+
+    function populateOrderStateSelect(selectEl, states, selectedValue) {
+        if (!selectEl) return;
+        const selected = String(selectedValue || '').trim();
+        const selectedLower = selected.toLowerCase();
+        let html = '<option value="">Select state</option>';
+        (states || []).forEach(state => {
+            const name = String((state && state.name) || '').trim();
+            if (!name) return;
+            const esc = name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            html += '<option value="' + esc + '">' + esc + '</option>';
+        });
+        selectEl.innerHTML = html;
+        if (selected) {
+            let matched = false;
+            Array.from(selectEl.options).forEach(opt => {
+                if (opt.value.toLowerCase() === selectedLower) {
+                    opt.selected = true;
+                    matched = true;
+                }
+            });
+            if (!matched) {
+                const opt = document.createElement('option');
+                opt.value = selected;
+                opt.textContent = selected;
+                opt.selected = true;
+                selectEl.appendChild(opt);
+            }
+        }
+    }
+
+    function resetOrderStateSelect(selectEl, message) {
+        if (!selectEl) return;
+        const label = message || 'Select state';
+        const esc = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        selectEl.innerHTML = '<option value="">' + esc + '</option>';
+        selectEl.value = '';
+    }
+
+    function getOrderStateValue(kind) {
+        const cfg = ORDER_STATE_FIELD_CONFIG[kind];
+        if (!cfg) return '';
+        const selectEl = document.getElementById(cfg.selectId);
+        const inputEl = document.getElementById(cfg.inputId);
+        if (selectEl && !selectEl.classList.contains('hidden')) {
+            return String(selectEl.value || '').trim();
+        }
+        return inputEl ? String(inputEl.value || '').trim() : '';
+    }
+
+    function syncOrderStateField(kind, preferredValue) {
+        const cfg = ORDER_STATE_FIELD_CONFIG[kind];
+        if (!cfg) return Promise.resolve();
+        const countryEl = document.getElementById(cfg.countryId);
+        const inputEl = document.getElementById(cfg.inputId);
+        const selectEl = document.getElementById(cfg.selectId);
+        if (!countryEl || !inputEl || !selectEl) return Promise.resolve();
+
+        const country = String(countryEl.value || 'IN').trim().toUpperCase().substring(0, 2) || 'IN';
+        const useDropdown = isOrderStateDropdownCountry(country);
+        const value = preferredValue !== undefined ? String(preferredValue || '').trim() : getOrderStateValue(kind);
+
+        if (!useDropdown) {
+            inputEl.value = value;
+            selectEl.classList.add('hidden');
+            inputEl.classList.remove('hidden');
+            return Promise.resolve();
+        }
+
+        inputEl.value = '';
+        resetOrderStateSelect(selectEl, 'Loading states...');
+        inputEl.classList.add('hidden');
+        selectEl.classList.remove('hidden');
+
+        return fetchOrderCountryStates(country).then(states => {
+            populateOrderStateSelect(selectEl, states, value);
+        });
+    }
+
     function openNameEmailPopup(orderNumber) {
         document.getElementById('edit_order_number').value = orderNumber;
         document.getElementById('edit_name').value = document.getElementById('display-customer-name')?.textContent.trim() || '';
@@ -831,15 +957,24 @@ if ($invoiceIdForReturn > 0) {
         document.getElementById('edit_shipping_address_line2').value = document.getElementById('shipping_address2')?.textContent.trim() || '';
         document.getElementById('edit_shipping_city').value = document.getElementById('shipping_city')?.textContent.trim() || '';
         document.getElementById('edit_shipping_zipcode').value = document.getElementById('shipping_zipcode')?.textContent.trim() || '';
-        document.getElementById('edit_shipping_country').value = document.getElementById('shipping_country')?.dataset.code || document.getElementById('shipping_country')?.textContent.trim() || '';
+        document.getElementById('edit_shipping_country').value = document.getElementById('shipping_country')?.dataset.code || 'IN';
         document.getElementById('edit_shipping_gstin').value = document.getElementById('shipping_gstin')?.textContent.trim() || '';
         document.getElementById('edit_billing_address_line1').value = document.getElementById('billing_address1')?.textContent.trim() || '';
         document.getElementById('edit_billing_address_line2').value = document.getElementById('billing_address2')?.textContent.trim() || '';
         document.getElementById('edit_billing_city').value = document.getElementById('billing_city')?.textContent.trim() || '';
         document.getElementById('edit_billing_zipcode').value = document.getElementById('billing_zipcode')?.textContent.trim() || '';
-        document.getElementById('edit_billing_country').value = document.getElementById('billing_country')?.dataset.code || document.getElementById('billing_country')?.textContent.trim() || '';
+        document.getElementById('edit_billing_country').value = document.getElementById('billing_country')?.dataset.code || 'IN';
         document.getElementById('edit_billing_gstin').value = document.getElementById('billing_gstin')?.textContent.trim() || '';
-        document.getElementById('nameEmailPopup').classList.remove('hidden');
+
+        const shippingState = document.getElementById('shipping_state')?.textContent.trim() || '';
+        const billingState = document.getElementById('billing_state')?.textContent.trim() || '';
+
+        Promise.all([
+            syncOrderStateField('shipping', shippingState),
+            syncOrderStateField('billing', billingState)
+        ]).then(() => {
+            document.getElementById('nameEmailPopup').classList.remove('hidden');
+        });
     }
 
     function closeNameEmailPopup() {
@@ -855,11 +990,13 @@ if ($invoiceIdForReturn > 0) {
         const address_line1 = document.getElementById('edit_billing_address_line1').value.trim();
         const address_line2 = document.getElementById('edit_billing_address_line2').value.trim();
         const city = document.getElementById('edit_billing_city').value.trim();
+        const state = getOrderStateValue('billing');
         const zipcode = document.getElementById('edit_billing_zipcode').value.trim();
         const country = document.getElementById('edit_billing_country').value.trim();
         const billing_address_line1 = document.getElementById('edit_shipping_address_line1').value.trim();
         const billing_address_line2 = document.getElementById('edit_shipping_address_line2').value.trim();
         const billing_city = document.getElementById('edit_shipping_city').value.trim();
+        const shipping_state = getOrderStateValue('shipping');
         const billing_zipcode = document.getElementById('edit_shipping_zipcode').value.trim();
         const billing_country = document.getElementById('edit_shipping_country').value.trim();
         const gstin = document.getElementById('edit_billing_gstin').value.trim().toUpperCase();
@@ -875,7 +1012,7 @@ if ($invoiceIdForReturn > 0) {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: `order_number=${encodeURIComponent(orderNumber)}&customer_name=${encodeURIComponent(name)}&customer_phone=${encodeURIComponent(phone)}&address_line1=${encodeURIComponent(address_line1)}&address_line2=${encodeURIComponent(address_line2)}&city=${encodeURIComponent(city)}&zipcode=${encodeURIComponent(zipcode)}&country=${encodeURIComponent(country)}&gstin=${encodeURIComponent(gstin)}&billing_address_line1=${encodeURIComponent(billing_address_line1)}&billing_address_line2=${encodeURIComponent(billing_address_line2)}&billing_city=${encodeURIComponent(billing_city)}&billing_zipcode=${encodeURIComponent(billing_zipcode)}&billing_country=${encodeURIComponent(billing_country)}&shipping_gstin=${encodeURIComponent(shipping_gstin)}`
+                body: `order_number=${encodeURIComponent(orderNumber)}&customer_name=${encodeURIComponent(name)}&customer_phone=${encodeURIComponent(phone)}&address_line1=${encodeURIComponent(address_line1)}&address_line2=${encodeURIComponent(address_line2)}&city=${encodeURIComponent(city)}&state=${encodeURIComponent(state)}&zipcode=${encodeURIComponent(zipcode)}&country=${encodeURIComponent(country)}&gstin=${encodeURIComponent(gstin)}&billing_address_line1=${encodeURIComponent(billing_address_line1)}&billing_address_line2=${encodeURIComponent(billing_address_line2)}&billing_city=${encodeURIComponent(billing_city)}&shipping_state=${encodeURIComponent(shipping_state)}&billing_zipcode=${encodeURIComponent(billing_zipcode)}&billing_country=${encodeURIComponent(billing_country)}&shipping_gstin=${encodeURIComponent(shipping_gstin)}`
             })
             .then(r => r.json())
             .then(data => {
@@ -1007,6 +1144,13 @@ if ($invoiceIdForReturn > 0) {
             // store the handler reference so it can be removed later
             trigger.__accordionClick__ = handler;
             trigger.addEventListener('click', handler);
+        });
+
+        document.getElementById('edit_shipping_country')?.addEventListener('change', function() {
+            syncOrderStateField('shipping', '');
+        });
+        document.getElementById('edit_billing_country')?.addEventListener('change', function() {
+            syncOrderStateField('billing', '');
         });
     });
 </script>

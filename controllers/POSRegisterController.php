@@ -437,6 +437,35 @@ class POSRegisterController
     }
 
     /**
+     * Persist billing/shipping GSTIN from checkout confirm payload onto vp_order_info after import.
+     */
+    private function patchPosCheckoutOrderInfoFromConfirmPayload(mysqli $conn, string $orderNumber, array $payload): void
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return;
+        }
+
+        $gstin = strtoupper(trim((string)($payload['confirm_gstin'] ?? '')));
+        $shippingGstin = strtoupper(trim((string)($payload['confirm_sgstin'] ?? '')));
+        if ($gstin === '' && $shippingGstin === '') {
+            return;
+        }
+
+        $sql = 'UPDATE vp_order_info SET
+            gstin = CASE WHEN ? <> "" THEN ? ELSE gstin END,
+            shipping_gstin = CASE WHEN ? <> "" THEN ? ELSE shipping_gstin END
+            WHERE order_number = ?';
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return;
+        }
+        $stmt->bind_param('ssssss', $gstin, $gstin, $shippingGstin, $shippingGstin, $orderNumber);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    /**
      * Sync local vp_orders status and Exotic item-level status after POS checkout.
      *
      * @return array{local_rows:int,local_updated:bool,api_called:int,api_failed:int,message:string,local_status:string,exotic_status:int}
@@ -1043,6 +1072,8 @@ class POSRegisterController
                         'szip' => trim((string)($info['shipping_zipcode'] ?? '')),
                         'scountry' => trim((string)($info['shipping_country'] ?? 'IN')),
                         'sphone' => trim((string)($info['shipping_mobile'] ?? '')),
+                        'sgstin' => trim((string)($info['shipping_gstin'] ?? '')),
+                        'shipping_gstin' => trim((string)($info['shipping_gstin'] ?? '')),
                     ];
                 }
             }
@@ -1104,6 +1135,8 @@ class POSRegisterController
             'szip' => $pick($shippingVc['szip'] ?? '', $shippingOrder['szip'] ?? '', $shippingSession['szip'] ?? ''),
             'scountry' => $pick($shippingVc['scountry'] ?? '', $shippingOrder['scountry'] ?? '', $shippingSession['scountry'] ?? ''),
             'sphone' => $pick($shippingVc['sphone'] ?? '', $shippingOrder['sphone'] ?? '', $shippingSession['sphone'] ?? ''),
+            'sgstin' => $pick($shippingVc['sgstin'] ?? '', $shippingOrder['sgstin'] ?? '', $shippingOrder['shipping_gstin'] ?? '', $shippingSession['sgstin'] ?? ''),
+            'shipping_gstin' => $pick($shippingVc['shipping_gstin'] ?? '', $shippingOrder['shipping_gstin'] ?? '', $shippingOrder['sgstin'] ?? '', $shippingSession['shipping_gstin'] ?? ''),
         ];
 
         echo json_encode([
@@ -4411,6 +4444,7 @@ class POSRegisterController
             $compliance,
             $customInvoiceNumber
         );
+        $this->patchPosCheckoutOrderInfoFromConfirmPayload($conn, $orderNumber, $payload);
         $fulfillmentStatusMeta = $this->syncPosCheckoutOrderFulfillmentStatus(
             $conn,
             $orderNumber,
@@ -4939,6 +4973,7 @@ class POSRegisterController
             $out['szip'] = trim((string)($payload['confirm_szip'] ?? ''));
             $out['scountry'] = $scountry;
             $out['sphone'] = trim((string)($payload['confirm_sphone'] ?? ''));
+            $out['sgstin'] = strtoupper(trim((string)($payload['confirm_sgstin'] ?? '')));
         }
 
         if ($storePaymentMode === 'razorpay') {

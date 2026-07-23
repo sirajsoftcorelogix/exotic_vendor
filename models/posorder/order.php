@@ -1403,7 +1403,7 @@ class POSOrder
             'message'       => $affected > 0 ? 'Remarks updated successfully' : 'No changes made (value was already the same)'
         ];
     }
-    public function updateCustomerNameAndEmail($order_number, $name, $phone, $address_line1 = '', $address_line2 = '', $city = '', $zipcode = '', $country = '', $billing_address_line1 = '', $billing_address_line2 = '', $billing_city = '', $billing_zipcode = '', $billing_country = '', $gstin = '', $shipping_gstin = '')
+    public function updateCustomerNameAndEmail($order_number, $name, $phone, $address_line1 = '', $address_line2 = '', $city = '', $zipcode = '', $country = '', $billing_address_line1 = '', $billing_address_line2 = '', $billing_city = '', $billing_zipcode = '', $billing_country = '', $gstin = '', $shipping_gstin = '', $state = '', $shipping_state = '')
     {
 
         // Update customer (main operation)
@@ -1425,13 +1425,13 @@ class POSOrder
         // Update address – don't fail the whole operation if this fails
         $sql_addr = "
             UPDATE vp_order_info 
-            SET address_line1 = ?, address_line2 = ?, city = ?, zipcode = ?, country = ?, gstin = ?,
-                shipping_address_line1 = ?, shipping_address_line2 = ?, shipping_city = ?, shipping_zipcode = ?, shipping_country = ?, shipping_gstin = ?
+            SET address_line1 = ?, address_line2 = ?, city = ?, state = ?, zipcode = ?, country = ?, gstin = ?,
+                shipping_address_line1 = ?, shipping_address_line2 = ?, shipping_city = ?, shipping_state = ?, shipping_zipcode = ?, shipping_country = ?, shipping_gstin = ?
             WHERE order_number = ?
         ";
         $stmt_addr = $this->db->prepare($sql_addr);
         if ($stmt_addr) {
-            $stmt_addr->bind_param('sssssssssssss', $address_line1, $address_line2, $city, $zipcode, $country, $gstin, $billing_address_line1, $billing_address_line2, $billing_city, $billing_zipcode, $billing_country, $shipping_gstin, $order_number);
+            $stmt_addr->bind_param('sssssssssssssss', $address_line1, $address_line2, $city, $state, $zipcode, $country, $gstin, $billing_address_line1, $billing_address_line2, $billing_city, $shipping_state, $billing_zipcode, $billing_country, $shipping_gstin, $order_number);
             $stmt_addr->execute();  // ← ignore result
         }
 
