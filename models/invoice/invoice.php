@@ -471,7 +471,14 @@ class Invoice
         $items = [];
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
-                $items[] = $row;
+                $invoiceId = (int)($row['invoice_id'] ?? 0);
+                if ($invoiceId <= 0) {
+                    continue;
+                }
+                if (!isset($items[$invoiceId])) {
+                    $items[$invoiceId] = [];
+                }
+                $items[$invoiceId][] = $row;
             }
         }
         return $items;
