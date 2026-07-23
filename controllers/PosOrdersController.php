@@ -2,12 +2,16 @@
 require_once 'models/posorder/order.php';
 require_once 'models/comman/tables.php';
 require_once 'models/searches/saved_search.php';
-require_once 'models/posorder/po_invoice.php';
+if (!class_exists('POInvoice', false)) {
+    require_once 'models/posorder/po_invoice.php';
+}
 require_once 'models/product/product.php';
 require_once 'helpers/payment_type_groups.php';
 require_once 'helpers/order_filter_autocomplete.php';
 require_once 'helpers/order_list_filters.php';
-require_once 'models/order/order.php';
+if (!class_exists('Order', false)) {
+    require_once 'models/order/order.php';
+}
 $ordersModel = new POSOrder($conn);
 $commanModel = new Tables($conn);
 $savedSearchModel = new SavedSearch($conn);
