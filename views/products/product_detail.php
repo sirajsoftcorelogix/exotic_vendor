@@ -2734,7 +2734,25 @@ function closeImagePopup() {
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify(data)
         })
-        .then(function (response) { return response.json(); })
+        .then(function (response) {
+            return response.text().then(function (text) {
+                var parsed = null;
+                try {
+                    parsed = text ? JSON.parse(text) : {};
+                } catch (parseErr) {
+                    var snippet = (text || '').replace(/\s+/g, ' ').trim();
+                    if (snippet.length > 240) {
+                        snippet = snippet.slice(0, 240) + '…';
+                    }
+                    throw new Error(snippet || ('Server returned HTTP ' + response.status));
+                }
+                if (!response.ok && parsed && !parsed.message) {
+                    parsed.message = 'Server returned HTTP ' + response.status;
+                    parsed.success = false;
+                }
+                return parsed;
+            });
+        })
         .then(function (res) {
             if (res && res.success) {
                 var display = document.getElementById('productLocationDisplay');
@@ -2757,11 +2775,12 @@ function closeImagePopup() {
                 alert('Failed: ' + msg);
             }
         })
-        .catch(function () {
+        .catch(function (err) {
+            var msg = (err && err.message) ? err.message : 'Could not update location.';
             if (typeof showProfileStatusModal === 'function') {
-                showProfileStatusModal('Could not update location.', 'error', false);
+                showProfileStatusModal(msg, 'error', false);
             } else {
-                alert('Could not update location.');
+                alert('Failed: ' + msg);
             }
         });
     }
