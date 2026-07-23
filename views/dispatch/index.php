@@ -231,7 +231,7 @@
                     if (!empty($orderNumbers)):
                         $orderLinks = [];
                         foreach (array_keys($orderNumbers) as $num) {
-                            $orderLinks[] = '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . urlencode($num)) . '" class="text-blue-600 hover:underline">' . htmlspecialchars($num) . '</a>';
+                            $orderLinks[] = '<a href="' . base_url('?page=posorders&action=get_order_details_html&type=outer&order_number=' . rawurlencode($num)) . '" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline" title="View order details">' . htmlspecialchars($num) . '</a>';
                         }
                     ?>
                     <p class="text-xs text-gray-500 mt-1">Order No.</p>
