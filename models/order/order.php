@@ -1123,15 +1123,15 @@ class Order
         }
 
         if ($customerId > 0) {
-            $rows = array_values(array_filter($rows, static function (array $row) use ($customerId): bool {
+            $filtered = array_values(array_filter($rows, static function (array $row) use ($customerId): bool {
                 return (int)($row['customer_id'] ?? 0) === $customerId;
             }));
-            if ($rows === []) {
-                return $empty;
+            if ($filtered !== []) {
+                $rows = $filtered;
             }
         }
 
-        $blockedStatuses = ['cancelled', 'shipped'];
+        $blockedStatuses = ['cancelled', 'shipped', 'returned'];
         $grouped = [];
         $eligibleIds = [];
         $blocked = [];
@@ -1140,6 +1140,19 @@ class Order
             $orderNumber = trim((string)($row['order_number'] ?? ''));
             $itemId = (int)($row['id'] ?? 0);
             if ($orderNumber === '' || $itemId <= 0) {
+                continue;
+            }
+
+            $invoiceIdRaw = $row['invoice_id'] ?? null;
+            $hasInvoice = $invoiceIdRaw !== null && $invoiceIdRaw !== '' && (int)$invoiceIdRaw > 0;
+            if ($hasInvoice) {
+                $blocked[] = [
+                    'order_id' => $itemId,
+                    'order_number' => $orderNumber,
+                    'item_code' => trim((string)($row['item_code'] ?? $row['sku'] ?? '')),
+                    'status' => 'invoiced',
+                    'message' => 'Already invoiced',
+                ];
                 continue;
             }
 
@@ -1265,7 +1278,7 @@ class Order
                     'product_weight' => $productWeight,
                     'gst' => (string)($row['gst'] ?? '0'),
                     'finalprice' => $finalprice,
-                    'item_total' => $quantity * $finalprice,
+                    'item_total' => $finalprice,
                     'payment_type' => $paymentType,
                     'groupname' => (string)($row['groupname'] ?? ''),
                     'is_express' => $isExpress ? 1 : 0,
@@ -1278,6 +1291,9 @@ class Order
             }
 
             $shipCountry = strtoupper(trim((string)($orderInfo['shipping_country'] ?? '')));
+            if ($shipCountry === '') {
+                $shipCountry = strtoupper(trim((string)($orderInfo['country'] ?? '')));
+            }
             $isInternational = $shipCountry !== '' && !in_array($shipCountry, ['IN', 'IND', 'INDIA'], true);
             $customerName = trim(
                 trim((string)($orderInfo['first_name'] ?? '')) . ' ' . trim((string)($orderInfo['last_name'] ?? ''))

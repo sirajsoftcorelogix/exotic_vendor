@@ -1678,6 +1678,9 @@ class OrdersController
         $customerId = isset($input['customer_id']) ? (int)$input['customer_id'] : 0;
 
         $split = $ordersModel->splitOrderIdsForBulkDispatch($orderIds, $customerId);
+        if ($customerId > 0 && $split['orders'] === [] && $split['blocked'] === []) {
+            $split = $ordersModel->splitOrderIdsForBulkDispatch($orderIds, 0);
+        }
         $groups = $split['orders'];
         $blocked = $split['blocked'];
         $eligibleIds = $split['eligible_ids'];
@@ -1723,6 +1726,16 @@ class OrdersController
             exit;
         }
         $customerId = isset($input['customer_id']) ? (int)$input['customer_id'] : 0;
+
+        $requestedIds = array_values(array_filter(array_map('intval', $orderIds)));
+        $foundRows = $ordersModel->getOrdersByIds($requestedIds);
+        if (!is_array($foundRows) || $foundRows === []) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'No matching order lines found for the selected IDs. Hard-refresh the customer page and select the item again.',
+            ]);
+            exit;
+        }
 
         $payload = $ordersModel->buildBulkDispatchImportPayload($orderIds, $customerId);
         $orders = $payload['orders'];
@@ -1932,9 +1945,9 @@ class OrdersController
         global $ordersModel;
         header('Content-Type: application/json');
 
-        $order_number = isset($_GET['order_number']) ? (int)$_GET['order_number'] : 0;
+        $order_number = isset($_GET['order_number']) ? trim((string)$_GET['order_number']) : '';
 
-        if ($order_number <= 0) {
+        if ($order_number === '') {
             echo json_encode([
                 'success' => false,
                 'message' => 'Invalid order number'
@@ -2113,9 +2126,9 @@ class OrdersController
         global $ordersModel;
         header('Content-Type: application/json');
 
-        $order_number = isset($_GET['order_number']) ? (int)$_GET['order_number'] : 0;
+        $order_number = isset($_GET['order_number']) ? trim((string)$_GET['order_number']) : '';
 
-        if ($order_number <= 0) {
+        if ($order_number === '') {
             echo json_encode([
                 'success' => false,
                 'message' => 'Invalid order number'
