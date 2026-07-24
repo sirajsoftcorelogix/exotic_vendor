@@ -111,6 +111,34 @@ $buildProductDetailUrl = static function (array $order): string {
     return base_url('?page=products&action=detail&id=' . $catalogPid);
 };
 
+$renderAwbCell = static function (array $order): string {
+    $awbs = is_array($order['awb_list'] ?? null) ? $order['awb_list'] : [];
+    if ($awbs === []) {
+        return '<span class="text-gray-400">—</span>';
+    }
+    $parts = [];
+    foreach ($awbs as $awb) {
+        $code = trim((string)($awb['awb_code'] ?? ''));
+        if ($code === '') {
+            continue;
+        }
+        $status = strtolower(trim((string)($awb['shipment_status'] ?? '')));
+        $cancelled = $status === 'cancelled' || $status === 'cancellation requested';
+        $url = trim((string)($awb['tracking_url'] ?? ''));
+        if ($url === '') {
+            $url = trim((string)($awb['label_url'] ?? ''));
+        }
+        if ($cancelled) {
+            $parts[] = '<span class="line-through text-red-500">' . htmlspecialchars($code) . '</span>';
+        } elseif ($url !== '') {
+            $parts[] = '<a href="' . htmlspecialchars($url) . '" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">' . htmlspecialchars($code) . '</a>';
+        } else {
+            $parts[] = htmlspecialchars($code);
+        }
+    }
+    return $parts === [] ? '<span class="text-gray-400">—</span>' : implode('<br>', $parts);
+};
+
 $buildViewParams = static function (array $overrides = []) use (
     $customerId,
     $pageNo,
@@ -400,10 +428,9 @@ if ($end - $start < $slotSize - 1) {
                             <th class="px-4 py-3">Order</th>
                             <th class="px-4 py-3">Item</th>
                             <th class="px-4 py-3">Product</th>
-                            <th class="px-4 py-3">Addons</th>
+                            <th class="px-4 py-3">AWB</th>
                             <th class="px-4 py-3">Status</th>
                             <th class="px-4 py-3">Order date</th>
-                            <th class="px-4 py-3">Ship by</th>
                             <th class="px-4 py-3">Payment</th>
                             <th class="px-4 py-3 text-right">Total</th>
                             <th class="px-4 py-3">Invoice</th>
@@ -420,7 +447,6 @@ if ($end - $start < $slotSize - 1) {
                             $orderCurrency = strtoupper(trim((string)($order['currency'] ?? $primaryCurrency)));
                             $orderDetailUrl = base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . rawurlencode($orderNumber));
                             $productUrl = $buildProductDetailUrl($order);
-                            $shipBy = $fmtDate($order['esd'] ?? null);
                             $imageUrl = (string)($order['image'] ?? 'https://via.placeholder.com/60');
                             $imageAlt = trim($itemCode . ' ' . (string)($order['title'] ?? ''));
                             $statusOrderPayload = $buildStatusOrderPayload($order);
@@ -443,10 +469,9 @@ if ($end - $start < $slotSize - 1) {
                                 <?php endif; ?>
                             </td>
                             <td class="px-4 py-3 max-w-[180px] truncate" title="<?= htmlspecialchars((string)($order['title'] ?? '')) ?>"><?= htmlspecialchars((string)($order['title'] ?? '—')) ?></td>
-                            <td class="px-4 py-3 max-w-[160px]"><?= $renderAddonBadges($order) ?></td>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm"><?= $renderAwbCell($order) ?></td>
                             <td class="px-4 py-3"><span class="<?= $statusClass ?> px-2 py-0.5 rounded text-xs font-medium"><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $status))) ?></span></td>
                             <td class="px-4 py-3 whitespace-nowrap"><?= $fmtDate($order['order_date'] ?? null) ?></td>
-                            <td class="px-4 py-3 whitespace-nowrap"><?= $shipBy ?></td>
                             <td class="px-4 py-3 uppercase"><?= htmlspecialchars((string)($order['payment_type'] ?? '—')) ?></td>
                             <td class="px-4 py-3 text-right font-medium tabular-nums"><?= $fmtMoney($order['finalprice'] ?? 0, $orderCurrency) ?></td>
                             <td class="px-4 py-3">
