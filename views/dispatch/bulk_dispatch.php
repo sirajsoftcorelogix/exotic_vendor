@@ -3293,49 +3293,56 @@
     });
 
     /**
-     * Prefill from customer page handoff:
-     * sessionStorage.bulk_dispatch_preselect_ids = {
-     *   customer_id, order_line_ids: ["123"], items: [{id, order_number, item_code}]
-     * }
-     * Legacy array form ["123","456"] is still accepted.
+     * Prefill from customer page:
+     * 1) PHP-injected import_ids (URL handoff) — preferred
+     * 2) sessionStorage.bulk_dispatch_preselect_ids — backup
      */
     (async function preloadSelectedOrdersFromCustomerPage() {
         const PRESELECT_KEY = 'bulk_dispatch_preselect_ids';
-        let raw = null;
-        try {
-            raw = sessionStorage.getItem(PRESELECT_KEY);
-        } catch (err) {
-            return;
+        const serverImportIds = <?= json_encode(array_values(array_map('intval', is_array($bulkImportLineIds ?? null) ? $bulkImportLineIds : [])), JSON_UNESCAPED_UNICODE) ?>;
+        const serverImportCustomerId = <?= (int)($bulkImportCustomerId ?? 0) ?>;
+
+        let selectedIds = [];
+        let customerId = serverImportCustomerId > 0 ? serverImportCustomerId : 0;
+        let labelsById = {};
+
+        if (Array.isArray(serverImportIds) && serverImportIds.length) {
+            selectedIds = serverImportIds.map(function(id) { return String(id); });
+        } else {
+            let raw = null;
+            try {
+                raw = sessionStorage.getItem(PRESELECT_KEY);
+            } catch (err) {
+                raw = null;
+            }
+            if (!raw) {
+                return;
+            }
+            try {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    selectedIds = parsed;
+                } else if (parsed && typeof parsed === 'object') {
+                    customerId = parseInt(parsed.customer_id, 10) || customerId;
+                    selectedIds = Array.isArray(parsed.order_line_ids) ? parsed.order_line_ids : [];
+                    (Array.isArray(parsed.items) ? parsed.items : []).forEach(function(item) {
+                        if (!item) return;
+                        const id = String(item.id || '').trim();
+                        if (!id) return;
+                        const orderNumber = String(item.order_number || '').trim();
+                        const itemCode = String(item.item_code || '').trim();
+                        labelsById[id] = (orderNumber && itemCode) ? (orderNumber + '-' + itemCode) : (orderNumber || itemCode || id);
+                    });
+                }
+            } catch (err) {
+                selectedIds = [];
+            }
         }
-        if (!raw) {
-            return;
-        }
+
         try {
             sessionStorage.removeItem(PRESELECT_KEY);
         } catch (err) {}
 
-        let selectedIds = [];
-        let customerId = 0;
-        let labelsById = {};
-        try {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) {
-                selectedIds = parsed;
-            } else if (parsed && typeof parsed === 'object') {
-                customerId = parseInt(parsed.customer_id, 10) || 0;
-                selectedIds = Array.isArray(parsed.order_line_ids) ? parsed.order_line_ids : [];
-                (Array.isArray(parsed.items) ? parsed.items : []).forEach(function(item) {
-                    if (!item) return;
-                    const id = String(item.id || '').trim();
-                    if (!id) return;
-                    const orderNumber = String(item.order_number || '').trim();
-                    const itemCode = String(item.item_code || '').trim();
-                    labelsById[id] = (orderNumber && itemCode) ? (orderNumber + '-' + itemCode) : (orderNumber || itemCode || id);
-                });
-            }
-        } catch (err) {
-            selectedIds = [];
-        }
         selectedIds = Array.from(new Set(
             (Array.isArray(selectedIds) ? selectedIds : [])
                 .map(function(id) { return String(id).trim(); })
@@ -3344,6 +3351,19 @@
         if (!selectedIds.length) {
             return;
         }
+
+        // Clean import params from the address bar after we have captured them.
+        try {
+            const cleanUrl = new URL(window.location.href);
+            if (cleanUrl.searchParams.has('import_ids') || cleanUrl.searchParams.has('customer_id')) {
+                cleanUrl.searchParams.delete('import_ids');
+                // keep page/action; drop only import handoff params
+                if (serverImportCustomerId > 0) {
+                    cleanUrl.searchParams.delete('customer_id');
+                }
+                window.history.replaceState({}, document.title, cleanUrl.toString());
+            }
+        } catch (err) {}
 
         const addBtn = modal.querySelector('#addToInvoiceBtn');
         if (!addBtn) {
@@ -3397,7 +3417,7 @@
                 });
                 showAlert(
                     blockedLabels.length
-                        ? ('Selected items cannot be dispatched:\n' + blockedLabels.join('\n'))
+                        ? ('Selected items cannot be dispatched: ' + blockedLabels.join(', '))
                         : 'No orders found for selected items.',
                     'warning'
                 );
@@ -3419,6 +3439,7 @@
 
         let addedOrders = 0;
         let skippedOrders = 0;
+        const skipReasons = [];
 
         for (const group of groups) {
             const orderNumber = String(group.order_number || '').trim();
@@ -3427,21 +3448,28 @@
                 : [];
             if (!orderNumber || !itemIds.length) {
                 skippedOrders++;
+                skipReasons.push('Invalid order group');
                 continue;
             }
 
             try {
                 const itemResp = await fetch('?page=orders&action=get_order_items_for_dispatch&order_number=' + encodeURIComponent(orderNumber));
-                const data = await itemResp.json();
-                if (!data.success) {
+                const itemText = await itemResp.text();
+                let data = null;
+                try {
+                    data = itemText ? JSON.parse(itemText) : null;
+                } catch (err) {
+                    throw new Error('Invalid item response for order #' + orderNumber);
+                }
+                if (!data || !data.success) {
                     skippedOrders++;
-                    showAlert((data && data.message) || ('Could not load order #' + orderNumber), 'warning');
+                    skipReasons.push((data && data.message) || ('Could not load order #' + orderNumber));
                     continue;
                 }
 
-                if (document.querySelector('[data-order-number="' + orderNumber + '"]')) {
+                if (document.querySelector('#invDispatchesContainer [data-order-number="' + orderNumber + '"]')) {
                     skippedOrders++;
-                    showAlert('Order #' + orderNumber + ' is already in bulk dispatch.', 'warning');
+                    skipReasons.push('Order #' + orderNumber + ' is already in bulk dispatch');
                     continue;
                 }
 
@@ -3451,7 +3479,7 @@
                 const orderNoLink = modal.querySelector('.flex.justify-between div:first-child a');
                 const customerLink = modal.querySelector('.flex.justify-between div:last-child a');
                 if (orderNoLink) orderNoLink.textContent = data.order_number;
-                if (customerLink) customerLink.textContent = data.customer_name + ' - ' + data.customer_id;
+                if (customerLink) customerLink.textContent = (data.customer_name || '') + ' - ' + (data.customer_id || '');
 
                 const tbody = modal.querySelector('tbody');
                 if (tbody) {
@@ -3463,24 +3491,42 @@
                 modal.querySelectorAll('tbody tr').forEach(function(row) {
                     const cb = row.querySelector('input[type="checkbox"]');
                     if (!cb) return;
-                    const shouldCheck = idSet.has(String(cb.value));
+                    const rowId = String(cb.value || row.getAttribute('data-item-id') || '').trim();
+                    const shouldCheck = idSet.has(rowId);
                     cb.checked = shouldCheck;
                     if (shouldCheck) checkedCount++;
                 });
 
                 if (checkedCount === 0) {
                     skippedOrders++;
-                    showAlert('No dispatchable selected items found for order #' + orderNumber + '.', 'warning');
+                    skipReasons.push(
+                        'Selected line(s) for order #' + orderNumber
+                        + ' are not dispatchable (already invoiced, cancelled, or shipped). Expected IDs: '
+                        + itemIds.join(', ')
+                    );
+                    continue;
+                }
+
+                if (!currentShippingAddress || !String(currentShippingAddress).trim()) {
+                    skippedOrders++;
+                    skipReasons.push('Order #' + orderNumber + ' is missing a shipping address/pincode');
                     continue;
                 }
 
                 currentBox = null;
                 addBtn.click();
-                addedOrders++;
+
+                const addedBox = document.querySelector('#invDispatchesContainer [data-order-number="' + orderNumber + '"]');
+                if (addedBox) {
+                    addedOrders++;
+                } else {
+                    skippedOrders++;
+                    skipReasons.push('Order #' + orderNumber + ' was not added (check shipping address / duplicates)');
+                }
             } catch (err) {
                 console.error(err);
                 skippedOrders++;
-                showAlert('Error loading order #' + orderNumber, 'error');
+                skipReasons.push('Error loading order #' + orderNumber + ': ' + ((err && err.message) || 'unknown'));
             }
         }
 
@@ -3491,8 +3537,13 @@
                     sessionStorage.removeItem('customer_bulk_dispatch_selection_' + customerId);
                 } catch (err) {}
             }
-        } else if (skippedOrders > 0) {
-            showAlert('Selected items could not be added. They may already be invoiced/cancelled or missing a shipping address.', 'warning');
+        } else {
+            showAlert(
+                skipReasons.length
+                    ? ('Could not add selected items. ' + skipReasons.join(' | '))
+                    : 'Selected items could not be added. They may already be invoiced/cancelled or missing a shipping address.',
+                'error'
+            );
         }
     })();
 })();

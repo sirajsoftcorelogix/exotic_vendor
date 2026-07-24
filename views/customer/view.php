@@ -943,14 +943,29 @@ if ($end - $start < $slotSize - 1) {
                 items: eligible
             }));
         } catch (err) {
-            alert('Unable to prepare bulk dispatch in this browser.');
-            return;
+            // URL handoff below is the primary path; sessionStorage is only a backup.
         }
 
         const next = {};
         eligible.forEach(function(item) { next[item.id] = item; });
         writeSelection(next);
-        window.location.href = bulkDispatchUrl;
+
+        // Primary handoff: URL query params (survives redirects; no sessionStorage dependency).
+        try {
+            const url = new URL(bulkDispatchUrl, window.location.origin);
+            url.searchParams.set('page', 'dispatch');
+            url.searchParams.set('action', 'bulk_dispatch');
+            url.searchParams.set('import_ids', handoffIds.join(','));
+            if (customerId > 0) {
+                url.searchParams.set('customer_id', String(customerId));
+            }
+            window.location.href = url.toString();
+        } catch (err) {
+            window.location.href = bulkDispatchUrl
+                + (bulkDispatchUrl.indexOf('?') >= 0 ? '&' : '?')
+                + 'import_ids=' + encodeURIComponent(handoffIds.join(','))
+                + (customerId > 0 ? '&customer_id=' + encodeURIComponent(String(customerId)) : '');
+        }
     }
 
     document.addEventListener('click', function(event) {

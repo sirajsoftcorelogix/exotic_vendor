@@ -2117,7 +2117,10 @@ class OrdersController
 
             $items_html = '';
             foreach ($orders as $order) {
-                if (in_array(strtolower($order['order_status'] ?? ''), ['cancelled', 'returned']) || $order['invoice_id'] > 0 || $order['invoice_id'] !== null) {
+                $lineStatus = strtolower(trim((string)($order['status'] ?? $order['order_status'] ?? '')));
+                $invoiceIdRaw = $order['invoice_id'] ?? null;
+                $hasInvoice = $invoiceIdRaw !== null && $invoiceIdRaw !== '' && (int)$invoiceIdRaw > 0;
+                if ($hasInvoice || in_array($lineStatus, ['cancelled', 'returned', 'shipped'], true)) {
                     continue;
                 }
                 $quantity = $order['quantity'] ?? 0;
@@ -2128,9 +2131,9 @@ class OrdersController
                 $payment_type = strtolower($order['payment_type'] ?? '') === 'cod' ? 'COD' : 'Prepaid';
                 $is_express = strpos(strtolower($order['options'] ?? ''), 'express') !== false;
                 $items_html .= '
-                <tr class="border-b border-gray-100" data-groupname="' . htmlspecialchars($order['groupname'] ?? '') . '" data-item-id="' . htmlspecialchars($order['id'] ?? '') . '" data-is-express="' . ($is_express ? '1' : '0') . '">
+                <tr class="border-b border-gray-100" data-groupname="' . htmlspecialchars($order['groupname'] ?? '') . '" data-item-id="' . htmlspecialchars((string)($order['id'] ?? '')) . '" data-is-express="' . ($is_express ? '1' : '0') . '">
                     <td class="p-2">
-                        <input type="checkbox" name="order_ids[]" value="' . htmlspecialchars($order['id'] ?? '') . '"/>
+                        <input type="checkbox" name="order_ids[]" value="' . htmlspecialchars((string)($order['id'] ?? '')) . '"/>
                     </td>
                     <td class="p-2">' . htmlspecialchars($order['order_number'] ?? '') . '</td>
                     <td class="p-2">' . htmlspecialchars($order['title'] ?? 'Product') . '</td>
