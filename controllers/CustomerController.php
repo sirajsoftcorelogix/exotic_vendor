@@ -192,20 +192,32 @@ class CustomerController {
                 require_once 'models/product/product.php';
                 $productModel = new product($GLOBALS['conn']);
                 $productIdCache = [];
+                $orderNumbersForAwb = [];
                 foreach ($orders as &$orderRow) {
                     $itemCode = trim((string)($orderRow['item_code'] ?? ''));
                     $size = trim((string)($orderRow['size'] ?? ''));
                     $color = trim((string)($orderRow['color'] ?? ''));
+                    $orderNumber = trim((string)($orderRow['order_number'] ?? ''));
+                    if ($orderNumber !== '') {
+                        $orderNumbersForAwb[] = $orderNumber;
+                    }
                     if ($itemCode === '') {
                         $orderRow['catalog_product_id'] = 0;
-                        continue;
+                    } else {
+                        $cacheKey = strtolower($itemCode) . '|' . strtolower($size) . '|' . strtolower($color);
+                        if (!array_key_exists($cacheKey, $productIdCache)) {
+                            $productRow = $productModel->findProductRowByVariant($itemCode, $size, $color);
+                            $productIdCache[$cacheKey] = !empty($productRow['id']) ? (int)$productRow['id'] : 0;
+                        }
+                        $orderRow['catalog_product_id'] = $productIdCache[$cacheKey];
                     }
-                    $cacheKey = strtolower($itemCode) . '|' . strtolower($size) . '|' . strtolower($color);
-                    if (!array_key_exists($cacheKey, $productIdCache)) {
-                        $productRow = $productModel->findProductRowByVariant($itemCode, $size, $color);
-                        $productIdCache[$cacheKey] = !empty($productRow['id']) ? (int)$productRow['id'] : 0;
-                    }
-                    $orderRow['catalog_product_id'] = $productIdCache[$cacheKey];
+                }
+                unset($orderRow);
+
+                $awbsByOrderNumber = $customerModel->getAwbsByOrderNumbers($orderNumbersForAwb);
+                foreach ($orders as &$orderRow) {
+                    $orderNumber = trim((string)($orderRow['order_number'] ?? ''));
+                    $orderRow['awb_list'] = $orderNumber !== '' ? ($awbsByOrderNumber[$orderNumber] ?? []) : [];
                 }
                 unset($orderRow);
             }

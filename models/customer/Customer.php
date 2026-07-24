@@ -274,6 +274,70 @@ class Customer
     }
 
     /**
+     * AWB rows keyed by order_number for customer order tables.
+     *
+     * @param list<string> $orderNumbers
+     * @return array<string, list<array{awb_code:string,tracking_url:string,label_url:string,shipment_status:string}>>
+     */
+    public function getAwbsByOrderNumbers(array $orderNumbers): array
+    {
+        $normalized = [];
+        foreach ($orderNumbers as $orderNumber) {
+            $orderNumber = trim((string)$orderNumber);
+            if ($orderNumber !== '') {
+                $normalized[$orderNumber] = true;
+            }
+        }
+        $orderNumbers = array_keys($normalized);
+        if ($orderNumbers === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
+        $types = str_repeat('s', count($orderNumbers));
+        $sql = "SELECT order_number, awb_code, tracking_url, label_url, shipment_status
+                FROM vp_dispatch_details
+                WHERE order_number IN ($placeholders)
+                  AND awb_code IS NOT NULL
+                  AND TRIM(awb_code) <> ''
+                ORDER BY id ASC";
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param($types, ...$orderNumbers);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+
+        $grouped = [];
+        $seen = [];
+        foreach ($rows as $row) {
+            $orderNumber = trim((string)($row['order_number'] ?? ''));
+            $awbCode = trim((string)($row['awb_code'] ?? ''));
+            if ($orderNumber === '' || $awbCode === '') {
+                continue;
+            }
+            $dedupeKey = $orderNumber . '|' . $awbCode;
+            if (isset($seen[$dedupeKey])) {
+                continue;
+            }
+            $seen[$dedupeKey] = true;
+            if (!isset($grouped[$orderNumber])) {
+                $grouped[$orderNumber] = [];
+            }
+            $grouped[$orderNumber][] = [
+                'awb_code' => $awbCode,
+                'tracking_url' => trim((string)($row['tracking_url'] ?? '')),
+                'label_url' => trim((string)($row['label_url'] ?? '')),
+                'shipment_status' => trim((string)($row['shipment_status'] ?? '')),
+            ];
+        }
+
+        return $grouped;
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     public function getCustomerActivityLog(int $customerId, int $limit = 30): array
