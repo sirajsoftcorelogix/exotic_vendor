@@ -98,7 +98,8 @@ class Customer
     public function getOrderItemsByCustomerIdForExport(int $customerId, array $filters = []): array
     {
         $clause = $this->buildCustomerOrdersFilterClause($customerId, $filters);
-        $sql = 'SELECT o.*, oi.*, inv.invoice_number, inv.id AS linked_invoice_id
+        $sql = 'SELECT o.*, oi.*, inv.invoice_number, inv.id AS linked_invoice_id,
+                       o.id AS id, o.customer_id AS customer_id, o.order_number AS order_number, o.status AS status
                 FROM vp_orders AS o
                 LEFT JOIN vp_order_info AS oi ON oi.order_number = o.order_number
                 LEFT JOIN vp_invoices inv ON inv.id = o.invoice_id
@@ -719,7 +720,8 @@ class Customer
     {
         $customerId = (int)$customer_id;
         $clause = $this->buildCustomerOrdersFilterClause($customerId, $filters);
-        $sql = 'SELECT o.*, oi.*, inv.invoice_number, inv.id AS linked_invoice_id
+        $sql = 'SELECT o.*, oi.*, inv.invoice_number, inv.id AS linked_invoice_id,
+                       o.id AS id, o.customer_id AS customer_id, o.order_number AS order_number, o.status AS status
                 FROM vp_orders AS o
                 LEFT JOIN vp_order_info AS oi ON oi.order_number = o.order_number
                 LEFT JOIN vp_invoices inv ON inv.id = o.invoice_id
