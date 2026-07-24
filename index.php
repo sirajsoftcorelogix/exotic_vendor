@@ -331,6 +331,9 @@ switch ($page) {
             case 'get_orders_for_bulk_dispatch':
                 $controller->getOrdersForBulkDispatch();
                 break;
+            case 'get_bulk_dispatch_import_payload':
+                $controller->getBulkDispatchImportPayload();
+                break;
             case 'saveSearch':
                 $controller->saveSearch();
                 break;
