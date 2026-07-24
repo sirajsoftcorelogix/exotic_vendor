@@ -1698,7 +1698,25 @@ class DispatchController {
         //     $invoice_dispatch[$invoice['id']] = $dispatchModel->getDispatchRecordsByInvoiceId($invoice['id']);
         // }
         unset($invoice);
-        renderTemplate('views/dispatch/bulk_dispatch.php', ['invoices' => [], 'dispatchRecords' => $invoice_dispatch]);
+
+        $bulkImportLineIds = [];
+        if (!empty($_GET['import_ids'])) {
+            foreach (explode(',', (string)$_GET['import_ids']) as $rawId) {
+                $id = (int)trim($rawId);
+                if ($id > 0) {
+                    $bulkImportLineIds[] = $id;
+                }
+            }
+            $bulkImportLineIds = array_values(array_unique($bulkImportLineIds));
+        }
+        $bulkImportCustomerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
+
+        renderTemplate('views/dispatch/bulk_dispatch.php', [
+            'invoices' => [],
+            'dispatchRecords' => $invoice_dispatch,
+            'bulkImportLineIds' => $bulkImportLineIds,
+            'bulkImportCustomerId' => $bulkImportCustomerId,
+        ]);
     }
 
     /**
