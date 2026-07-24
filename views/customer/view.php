@@ -103,6 +103,14 @@ $buildStatusOrderPayload = static function (array $order): array {
     ];
 };
 
+$buildProductDetailUrl = static function (array $order): string {
+    $catalogPid = (int)($order['catalog_product_id'] ?? 0);
+    if ($catalogPid <= 0) {
+        return '';
+    }
+    return base_url('?page=products&action=detail&id=' . $catalogPid);
+};
+
 $buildViewParams = static function (array $overrides = []) use (
     $customerId,
     $pageNo,
@@ -411,7 +419,7 @@ if ($end - $start < $slotSize - 1) {
                             $statusClass = $statusColors[$status] ?? 'bg-gray-100 text-gray-800';
                             $orderCurrency = strtoupper(trim((string)($order['currency'] ?? $primaryCurrency)));
                             $orderDetailUrl = base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . rawurlencode($orderNumber));
-                            $productUrl = base_url('?page=products&action=get_product_details_html&type=outer&item_code=' . rawurlencode($itemCode));
+                            $productUrl = $buildProductDetailUrl($order);
                             $shipBy = $fmtDate($order['esd'] ?? null);
                             $imageUrl = (string)($order['image'] ?? 'https://via.placeholder.com/60');
                             $imageAlt = trim($itemCode . ' ' . (string)($order['title'] ?? ''));
@@ -427,7 +435,13 @@ if ($end - $start < $slotSize - 1) {
                                 </button>
                             </td>
                             <td class="px-4 py-3"><a href="<?= htmlspecialchars($orderDetailUrl) ?>" target="_blank" class="text-blue-600 hover:underline font-medium"><?= htmlspecialchars($orderNumber) ?></a></td>
-                            <td class="px-4 py-3"><a href="<?= htmlspecialchars($productUrl) ?>" target="_blank" class="text-blue-600 hover:underline"><?= htmlspecialchars($itemCode) ?></a></td>
+                            <td class="px-4 py-3">
+                                <?php if ($productUrl !== ''): ?>
+                                    <a href="<?= htmlspecialchars($productUrl) ?>" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline" title="View product details"><?= htmlspecialchars($itemCode) ?></a>
+                                <?php else: ?>
+                                    <?= htmlspecialchars($itemCode) ?>
+                                <?php endif; ?>
+                            </td>
                             <td class="px-4 py-3 max-w-[180px] truncate" title="<?= htmlspecialchars((string)($order['title'] ?? '')) ?>"><?= htmlspecialchars((string)($order['title'] ?? '—')) ?></td>
                             <td class="px-4 py-3 max-w-[160px]"><?= $renderAddonBadges($order) ?></td>
                             <td class="px-4 py-3"><span class="<?= $statusClass ?> px-2 py-0.5 rounded text-xs font-medium"><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $status))) ?></span></td>
@@ -467,7 +481,7 @@ if ($end - $start < $slotSize - 1) {
                 $orderCurrency = strtoupper(trim((string)($order['currency'] ?? $primaryCurrency)));
                 $statusClass = $statusColors[$status] ?? 'bg-gray-100 text-gray-800';
                 $orderDetailUrl = base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . rawurlencode($orderNumber));
-                $productUrl = base_url('?page=products&action=get_product_details_html&type=outer&item_code=' . rawurlencode($itemCode));
+                $productUrl = $buildProductDetailUrl($order);
                 $ordersListUrl = base_url('?page=orders&action=list&search=' . rawurlencode($orderNumber));
                 $imageUrl = (string)($order['image'] ?? 'https://via.placeholder.com/60');
                 $imageAlt = trim($itemCode . ' ' . $productTitle);
@@ -496,7 +510,13 @@ if ($end - $start < $slotSize - 1) {
                         </div>
                         <div class="min-w-0">
                             <p class="text-sm">Order: <a href="<?= htmlspecialchars($orderDetailUrl) ?>" target="_blank" class="text-blue-600 hover:underline font-medium"><?= htmlspecialchars($orderNumber) ?></a></p>
-                            <p class="text-sm mt-1">Item: <a href="<?= htmlspecialchars($productUrl) ?>" target="_blank" class="text-blue-600 hover:underline"><?= htmlspecialchars($itemCode) ?></a></p>
+                            <p class="text-sm mt-1">Item:
+                                <?php if ($productUrl !== ''): ?>
+                                    <a href="<?= htmlspecialchars($productUrl) ?>" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline" title="View product details"><?= htmlspecialchars($itemCode) ?></a>
+                                <?php else: ?>
+                                    <?= htmlspecialchars($itemCode) ?>
+                                <?php endif; ?>
+                            </p>
                             <?php if ($productTitle !== ''): ?>
                                 <p class="text-sm text-gray-600 mt-1 truncate" title="<?= htmlspecialchars($productTitle) ?>"><?= htmlspecialchars($productTitle) ?></p>
                             <?php endif; ?>

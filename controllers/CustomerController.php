@@ -188,6 +188,27 @@ class CustomerController {
                 $offset = ($pageNo - 1) * $limit;
             }
             $orders = $customerModel->getOrderItemsByCustomerId($customerId, $limit, $offset, $filters);
+            if (!empty($orders)) {
+                require_once 'models/product/product.php';
+                $productModel = new product($GLOBALS['conn']);
+                $productIdCache = [];
+                foreach ($orders as &$orderRow) {
+                    $itemCode = trim((string)($orderRow['item_code'] ?? ''));
+                    $size = trim((string)($orderRow['size'] ?? ''));
+                    $color = trim((string)($orderRow['color'] ?? ''));
+                    if ($itemCode === '') {
+                        $orderRow['catalog_product_id'] = 0;
+                        continue;
+                    }
+                    $cacheKey = strtolower($itemCode) . '|' . strtolower($size) . '|' . strtolower($color);
+                    if (!array_key_exists($cacheKey, $productIdCache)) {
+                        $productRow = $productModel->findProductRowByVariant($itemCode, $size, $color);
+                        $productIdCache[$cacheKey] = !empty($productRow['id']) ? (int)$productRow['id'] : 0;
+                    }
+                    $orderRow['catalog_product_id'] = $productIdCache[$cacheKey];
+                }
+                unset($orderRow);
+            }
         }
 
         $invoices = [];
