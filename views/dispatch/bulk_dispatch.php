@@ -3293,8 +3293,11 @@
     });
 
     /**
-     * Prefill from customer/orders selection:
-     * sessionStorage.bulk_dispatch_preselect_ids = ["123","456"]
+     * Prefill from customer page handoff:
+     * sessionStorage.bulk_dispatch_preselect_ids = {
+     *   customer_id, order_line_ids: ["123"], items: [{id, order_number, item_code}]
+     * }
+     * Legacy array form ["123","456"] is still accepted.
      */
     (async function preloadSelectedOrdersFromCustomerPage() {
         const PRESELECT_KEY = 'bulk_dispatch_preselect_ids';
@@ -3312,15 +3315,31 @@
         } catch (err) {}
 
         let selectedIds = [];
+        let customerId = 0;
+        let labelsById = {};
         try {
-            selectedIds = JSON.parse(raw) || [];
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+                selectedIds = parsed;
+            } else if (parsed && typeof parsed === 'object') {
+                customerId = parseInt(parsed.customer_id, 10) || 0;
+                selectedIds = Array.isArray(parsed.order_line_ids) ? parsed.order_line_ids : [];
+                (Array.isArray(parsed.items) ? parsed.items : []).forEach(function(item) {
+                    if (!item) return;
+                    const id = String(item.id || '').trim();
+                    if (!id) return;
+                    const orderNumber = String(item.order_number || '').trim();
+                    const itemCode = String(item.item_code || '').trim();
+                    labelsById[id] = (orderNumber && itemCode) ? (orderNumber + '-' + itemCode) : (orderNumber || itemCode || id);
+                });
+            }
         } catch (err) {
             selectedIds = [];
         }
         selectedIds = Array.from(new Set(
             (Array.isArray(selectedIds) ? selectedIds : [])
                 .map(function(id) { return String(id).trim(); })
-                .filter(Boolean)
+                .filter(function(id) { return /^\d+$/.test(id) && id !== '0'; })
         ));
         if (!selectedIds.length) {
             return;
@@ -3332,24 +3351,69 @@
             return;
         }
 
-        showAlert('Loading ' + selectedIds.length + ' selected item(s) into bulk dispatch…', 'success');
+        const labelPreview = selectedIds.slice(0, 3).map(function(id) {
+            return labelsById[id] || ('#' + id);
+        }).join(', ');
+        showAlert(
+            'Loading ' + selectedIds.length + ' selected item(s)'
+            + (labelPreview ? ' (' + labelPreview + (selectedIds.length > 3 ? ', …' : '') + ')' : '')
+            + ' into bulk dispatch…',
+            'success'
+        );
 
         let groups = [];
+        let blocked = [];
         try {
+            const payload = { order_ids: selectedIds };
+            if (customerId > 0) payload.customer_id = customerId;
             const groupResp = await fetch('?page=orders&action=get_orders_for_bulk_dispatch', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ order_ids: selectedIds })
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(payload)
             });
-            const groupData = await groupResp.json();
-            if (!groupData.success || !Array.isArray(groupData.orders) || !groupData.orders.length) {
+            const groupText = await groupResp.text();
+            let groupData = null;
+            try {
+                groupData = groupText ? JSON.parse(groupText) : null;
+            } catch (err) {
+                throw new Error('Invalid response while resolving selected items.');
+            }
+            if (!groupData || !groupData.success) {
                 showAlert((groupData && groupData.message) || 'No orders found for selected items.', 'error');
                 return;
             }
-            groups = groupData.orders;
+            groups = Array.isArray(groupData.orders) ? groupData.orders : [];
+            blocked = Array.isArray(groupData.blocked) ? groupData.blocked : [];
+            if (!groups.length) {
+                const blockedLabels = blocked.map(function(row) {
+                    const orderNumber = String(row.order_number || '').trim();
+                    const itemCode = String(row.item_code || '').trim();
+                    const label = (orderNumber && itemCode) ? (orderNumber + '-' + itemCode) : (orderNumber || itemCode || ('#' + row.order_id));
+                    return label + ' (' + (row.status || 'blocked') + ')';
+                });
+                showAlert(
+                    blockedLabels.length
+                        ? ('Selected items cannot be dispatched:\n' + blockedLabels.join('\n'))
+                        : 'No orders found for selected items.',
+                    'warning'
+                );
+                return;
+            }
+            if (blocked.length) {
+                const blockedLabels = blocked.map(function(row) {
+                    const orderNumber = String(row.order_number || '').trim();
+                    const itemCode = String(row.item_code || '').trim();
+                    return ((orderNumber && itemCode) ? (orderNumber + '-' + itemCode) : (orderNumber || itemCode)) + ' (' + (row.status || 'blocked') + ')';
+                });
+                showAlert('Skipping ' + blocked.length + ' item(s): ' + blockedLabels.join(', '), 'warning');
+            }
         } catch (err) {
             console.error(err);
-            showAlert('Failed to resolve selected orders for bulk dispatch.', 'error');
+            showAlert((err && err.message) || 'Failed to resolve selected orders for bulk dispatch.', 'error');
             return;
         }
 
@@ -3422,9 +3486,11 @@
 
         if (addedOrders > 0) {
             showAlert('Added ' + addedOrders + ' order(s) from selection' + (skippedOrders ? ' (' + skippedOrders + ' skipped)' : '') + '.', 'success');
-            try {
-                localStorage.removeItem('selected_po_orders');
-            } catch (err) {}
+            if (customerId > 0) {
+                try {
+                    sessionStorage.removeItem('customer_bulk_dispatch_selection_' + customerId);
+                } catch (err) {}
+            }
         } else if (skippedOrders > 0) {
             showAlert('Selected items could not be added. They may already be invoiced/cancelled or missing a shipping address.', 'warning');
         }
