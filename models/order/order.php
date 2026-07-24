@@ -1103,13 +1103,14 @@ class Order
      * Split selected line IDs into dispatch-eligible groups vs cancelled/shipped blocked rows.
      *
      * @param list<int|string> $orderIds
+     * @param int $customerId When > 0, only lines for this customer are considered.
      * @return array{
      *   orders: list<array{order_number:string,item_ids:list<int>}>,
      *   eligible_ids: list<int>,
      *   blocked: list<array{order_id:int,order_number:string,item_code:string,status:string}>
      * }
      */
-    public function splitOrderIdsForBulkDispatch(array $orderIds): array
+    public function splitOrderIdsForBulkDispatch(array $orderIds, int $customerId = 0): array
     {
         $empty = [
             'orders' => [],
@@ -1119,6 +1120,15 @@ class Order
         $rows = $this->getOrdersByIds($orderIds);
         if (!is_array($rows) || $rows === []) {
             return $empty;
+        }
+
+        if ($customerId > 0) {
+            $rows = array_values(array_filter($rows, static function (array $row) use ($customerId): bool {
+                return (int)($row['customer_id'] ?? 0) === $customerId;
+            }));
+            if ($rows === []) {
+                return $empty;
+            }
         }
 
         $blockedStatuses = ['cancelled', 'shipped'];

@@ -1675,8 +1675,9 @@ class OrdersController
             echo json_encode(['success' => false, 'message' => 'Invalid order IDs.']);
             exit;
         }
+        $customerId = isset($input['customer_id']) ? (int)$input['customer_id'] : 0;
 
-        $split = $ordersModel->splitOrderIdsForBulkDispatch($orderIds);
+        $split = $ordersModel->splitOrderIdsForBulkDispatch($orderIds, $customerId);
         $groups = $split['orders'];
         $blocked = $split['blocked'];
         $eligibleIds = $split['eligible_ids'];
