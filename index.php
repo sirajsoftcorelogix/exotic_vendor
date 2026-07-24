@@ -328,6 +328,9 @@ switch ($page) {
             case 'get_orders_customer_id':
                 $controller->getOrdersCustomerId();
                 break;
+            case 'get_orders_for_bulk_dispatch':
+                $controller->getOrdersForBulkDispatch();
+                break;
             case 'saveSearch':
                 $controller->saveSearch();
                 break;
@@ -1881,9 +1884,6 @@ switch ($page) {
                 break;
             case 'get_orders_customer_id':
                 $controller->getOrdersCustomerId();
-                break;
-            case 'get_orders_for_bulk_dispatch':
-                $controller->getOrdersForBulkDispatch();
                 break;
             case 'saveSearch':
                 $controller->saveSearch();
