@@ -163,13 +163,21 @@ include __DIR__ . '/partials/detail_hero.php';
                         <div class="text-sm font-semibold text-gray-900">Order: <span class="font-mono text-xs"><?= htmlspecialchars((string) ($item['order_number'] ?? '')) ?></span></div>
                         <div class="text-xs text-gray-500 mt-0.5">SKU: <?= htmlspecialchars(picklist_item_sku($item) ?: '—') ?></div>
                         <div class="text-sm text-gray-800 mt-1.5 line-clamp-2 leading-snug"><?= htmlspecialchars((string) ($item['title'] ?? '')) ?></div>
+                        <?php $titleMetaLines = picklist_item_title_meta_lines($item, $isBook); ?>
+                        <?php if ($titleMetaLines !== []): ?>
+                            <div class="mt-1 space-y-0.5 text-[11px] leading-snug text-gray-500">
+                                <?php foreach ($titleMetaLines as $metaLine): ?>
+                                    <div><?= htmlspecialchars($metaLine) ?></div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
                         <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600">
                             <span>Phys: <strong class="text-gray-900 tabular-nums"><?= (int) ($item['physical_qty'] ?? 0) ?></strong></span>
                             <span>Order: <strong class="text-gray-900 tabular-nums"><?= (int) ($item['quantity'] ?? 1) ?></strong></span>
                         </div>
                         <?php if ($isBook): ?>
                             <div class="text-xs text-gray-500 mt-1 line-clamp-1">
-                                <?= htmlspecialchars((string) ($item['publisher'] ?? '—')) ?> · <?= htmlspecialchars((string) ($item['cover_type'] ?? '—')) ?>
+                                <?= htmlspecialchars((string) ($item['publisher'] ?? '—')) ?>
                             </div>
                         <?php endif; ?>
                     </div>

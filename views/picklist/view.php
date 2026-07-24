@@ -165,6 +165,14 @@ include __DIR__ . '/partials/detail_hero.php';
                         </td>
                         <td class="px-3 py-3 align-middle">
                             <span class="line-clamp-2 text-gray-900"><?= htmlspecialchars((string) ($item['title'] ?? '')) ?></span>
+                            <?php $titleMetaLines = picklist_item_title_meta_lines($item, $isBook); ?>
+                            <?php if ($titleMetaLines !== []): ?>
+                                <div class="mt-1 space-y-0.5 text-[11px] leading-snug text-gray-500">
+                                    <?php foreach ($titleMetaLines as $metaLine): ?>
+                                        <div><?= htmlspecialchars($metaLine) ?></div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
                         </td>
                         <td class="px-3 py-3 align-middle">
                             <?php if ($imageUrl !== ''): ?>
