@@ -464,14 +464,39 @@ if ($invoiceIdForReturn > 0) {
                         </svg>
                     </button>
                     <h3 class="mb-4 text-sm font-bold text-black-700">Shipping &amp; Billing Address</h3>
+                    <?php
+                    $customerNameParts = preg_split('/\s+/', trim((string)($customerdetails['customer_name'] ?? '')), 2);
+                    $fallbackFirstName = trim((string)($customerNameParts[0] ?? ''));
+                    $fallbackLastName = trim((string)($customerNameParts[1] ?? ''));
+                    $billingFirstName = trim((string)($orderremarks['first_name'] ?? ''));
+                    $billingLastName = trim((string)($orderremarks['last_name'] ?? ''));
+                    $shippingFirstName = trim((string)($orderremarks['shipping_first_name'] ?? ''));
+                    $shippingLastName = trim((string)($orderremarks['shipping_last_name'] ?? ''));
+                    if ($billingFirstName === '' && $billingLastName === '') {
+                        $billingFirstName = $fallbackFirstName;
+                        $billingLastName = $fallbackLastName;
+                    }
+                    if ($shippingFirstName === '' && $shippingLastName === '') {
+                        $shippingFirstName = $billingFirstName;
+                        $shippingLastName = $billingLastName;
+                    }
+                    $billingDisplayName = trim($billingFirstName . ' ' . $billingLastName);
+                    $shippingDisplayName = trim($shippingFirstName . ' ' . $shippingLastName);
+                    ?>
                     <span id="display-customer-name" class="hidden"><?php echo htmlspecialchars($customerdetails['customer_name'] ?? ''); ?></span>
                     <span id="display-customer-phone" class="hidden"><?php echo htmlspecialchars($customerdetails['customer_phone'] ?? ''); ?></span>
+                    <span id="billing_first_name" class="hidden"><?php echo htmlspecialchars($billingFirstName); ?></span>
+                    <span id="billing_last_name" class="hidden"><?php echo htmlspecialchars($billingLastName); ?></span>
+                    <span id="shipping_first_name" class="hidden"><?php echo htmlspecialchars($shippingFirstName); ?></span>
+                    <span id="shipping_last_name" class="hidden"><?php echo htmlspecialchars($shippingLastName); ?></span>
                     <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
                         <div>
                             <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Shipping address</h4>
                             <address class="mt-2 text-sm not-italic text-black-800 leading-relaxed">
-                                <?php if (!empty($customerdetails['customer_name'])): ?>
-                                    <span class="block font-medium"><?php echo htmlspecialchars($customerdetails['customer_name']); ?></span>
+                                <?php if ($shippingDisplayName !== ''): ?>
+                                    <span class="block font-medium" id="shipping_display_name"><?php echo htmlspecialchars($shippingDisplayName); ?></span>
+                                <?php else: ?>
+                                    <span class="block font-medium hidden" id="shipping_display_name"></span>
                                 <?php endif; ?>
                                 <span id="shipping_address1"><?php echo htmlspecialchars($orderremarks['shipping_address_line1'] ?? ''); ?></span>
                                 <?php if (!empty($orderremarks['shipping_address_line2'])): ?>
@@ -507,6 +532,11 @@ if ($invoiceIdForReturn > 0) {
                         <div>
                             <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Billing address</h4>
                             <address class="mt-2 text-sm not-italic text-black-800 leading-relaxed">
+                                <?php if ($billingDisplayName !== ''): ?>
+                                    <span class="block font-medium" id="billing_display_name"><?php echo htmlspecialchars($billingDisplayName); ?></span>
+                                <?php else: ?>
+                                    <span class="block font-medium hidden" id="billing_display_name"></span>
+                                <?php endif; ?>
                                 <span id="billing_address1"><?php echo htmlspecialchars($orderremarks['address_line1'] ?? ''); ?></span>
                                 <?php if (!empty($orderremarks['address_line2'])): ?>
                                     <br><span id="billing_address2"><?php echo htmlspecialchars($orderremarks['address_line2']); ?></span>
@@ -614,21 +644,19 @@ if ($invoiceIdForReturn > 0) {
                 <input type="hidden" id="edit_order_number" name="order_number">
 
                 <div class="space-y-5">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                            <input type="text" id="edit_name" name="customer_name" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" required>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                            <input type="text" id="edit_phone" name="customer_phone" oninput="this.value = this.value.replace(/[^0-9]/g, '')" maxlength="12" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" required>
-                        </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                        <input type="text" id="edit_phone" name="customer_phone" oninput="this.value = this.value.replace(/[^0-9]/g, '')" maxlength="12" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" required>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
                         <div class="rounded-lg border border-gray-200 bg-gray-50/60 p-4">
                             <label class="block text-sm font-bold text-gray-700 mb-3">Shipping Address</label>
                             <div class="space-y-2">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <input type="text" id="edit_shipping_first_name" name="shipping_first_name" placeholder="First Name" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                    <input type="text" id="edit_shipping_last_name" name="shipping_last_name" placeholder="Last Name" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                </div>
                                 <input type="text" id="edit_shipping_address_line1" name="billing_address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 <input type="text" id="edit_shipping_address_line2" name="billing_address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 <div class="grid grid-cols-2 gap-2">
@@ -651,6 +679,10 @@ if ($invoiceIdForReturn > 0) {
                         <div class="rounded-lg border border-gray-200 bg-gray-50/60 p-4">
                             <label class="block text-sm font-bold text-gray-700 mb-3">Billing Address</label>
                             <div class="space-y-2">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <input type="text" id="edit_billing_first_name" name="first_name" placeholder="First Name *" required class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                    <input type="text" id="edit_billing_last_name" name="last_name" placeholder="Last Name *" required class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                </div>
                                 <input type="text" id="edit_billing_address_line1" name="address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 <input type="text" id="edit_billing_address_line2" name="address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 <div class="grid grid-cols-2 gap-2">
@@ -951,8 +983,11 @@ if ($invoiceIdForReturn > 0) {
 
     function openNameEmailPopup(orderNumber) {
         document.getElementById('edit_order_number').value = orderNumber;
-        document.getElementById('edit_name').value = document.getElementById('display-customer-name')?.textContent.trim() || '';
         document.getElementById('edit_phone').value = document.getElementById('display-customer-phone')?.textContent.trim() || '';
+        document.getElementById('edit_shipping_first_name').value = document.getElementById('shipping_first_name')?.textContent.trim() || '';
+        document.getElementById('edit_shipping_last_name').value = document.getElementById('shipping_last_name')?.textContent.trim() || '';
+        document.getElementById('edit_billing_first_name').value = document.getElementById('billing_first_name')?.textContent.trim() || '';
+        document.getElementById('edit_billing_last_name').value = document.getElementById('billing_last_name')?.textContent.trim() || '';
         document.getElementById('edit_shipping_address_line1').value = document.getElementById('shipping_address1')?.textContent.trim() || '';
         document.getElementById('edit_shipping_address_line2').value = document.getElementById('shipping_address2')?.textContent.trim() || '';
         document.getElementById('edit_shipping_city').value = document.getElementById('shipping_city')?.textContent.trim() || '';
@@ -985,7 +1020,11 @@ if ($invoiceIdForReturn > 0) {
         e.preventDefault();
 
         const orderNumber = document.getElementById('edit_order_number').value;
-        const name = document.getElementById('edit_name').value.trim();
+        const first_name = document.getElementById('edit_billing_first_name').value.trim();
+        const last_name = document.getElementById('edit_billing_last_name').value.trim();
+        const shipping_first_name = document.getElementById('edit_shipping_first_name').value.trim();
+        const shipping_last_name = document.getElementById('edit_shipping_last_name').value.trim();
+        const name = [first_name, last_name].filter(Boolean).join(' ');
         const phone = document.getElementById('edit_phone').value.trim();
         const address_line1 = document.getElementById('edit_billing_address_line1').value.trim();
         const address_line2 = document.getElementById('edit_billing_address_line2').value.trim();
@@ -1002,8 +1041,8 @@ if ($invoiceIdForReturn > 0) {
         const gstin = document.getElementById('edit_billing_gstin').value.trim().toUpperCase();
         const shipping_gstin = document.getElementById('edit_shipping_gstin').value.trim().toUpperCase();
 
-        if (!name || !phone) {
-            alert("All fields (Name, Email, Phone) are required.");
+        if (!first_name || !last_name || !phone) {
+            alert("Billing first name, last name and phone are required.");
             return;
         }
 
@@ -1012,7 +1051,7 @@ if ($invoiceIdForReturn > 0) {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: `order_number=${encodeURIComponent(orderNumber)}&customer_name=${encodeURIComponent(name)}&customer_phone=${encodeURIComponent(phone)}&address_line1=${encodeURIComponent(address_line1)}&address_line2=${encodeURIComponent(address_line2)}&city=${encodeURIComponent(city)}&state=${encodeURIComponent(state)}&zipcode=${encodeURIComponent(zipcode)}&country=${encodeURIComponent(country)}&gstin=${encodeURIComponent(gstin)}&billing_address_line1=${encodeURIComponent(billing_address_line1)}&billing_address_line2=${encodeURIComponent(billing_address_line2)}&billing_city=${encodeURIComponent(billing_city)}&shipping_state=${encodeURIComponent(shipping_state)}&billing_zipcode=${encodeURIComponent(billing_zipcode)}&billing_country=${encodeURIComponent(billing_country)}&shipping_gstin=${encodeURIComponent(shipping_gstin)}`
+                body: `order_number=${encodeURIComponent(orderNumber)}&customer_name=${encodeURIComponent(name)}&customer_phone=${encodeURIComponent(phone)}&first_name=${encodeURIComponent(first_name)}&last_name=${encodeURIComponent(last_name)}&shipping_first_name=${encodeURIComponent(shipping_first_name)}&shipping_last_name=${encodeURIComponent(shipping_last_name)}&address_line1=${encodeURIComponent(address_line1)}&address_line2=${encodeURIComponent(address_line2)}&city=${encodeURIComponent(city)}&state=${encodeURIComponent(state)}&zipcode=${encodeURIComponent(zipcode)}&country=${encodeURIComponent(country)}&gstin=${encodeURIComponent(gstin)}&billing_address_line1=${encodeURIComponent(billing_address_line1)}&billing_address_line2=${encodeURIComponent(billing_address_line2)}&billing_city=${encodeURIComponent(billing_city)}&shipping_state=${encodeURIComponent(shipping_state)}&billing_zipcode=${encodeURIComponent(billing_zipcode)}&billing_country=${encodeURIComponent(billing_country)}&shipping_gstin=${encodeURIComponent(shipping_gstin)}`
             })
             .then(r => r.json())
             .then(data => {
