@@ -767,10 +767,13 @@ if ($end - $start < $slotSize - 1) {
 
 <script>
 (function() {
-    const STORAGE_KEY = 'selected_po_orders';
+    const customerId = <?= (int)$customerId ?>;
+    const STORAGE_KEY = 'selected_customer_orders_' + customerId;
+    const ORDERS_LIST_STORAGE_KEY = 'selected_po_orders';
     const BULK_DISPATCH_PRESELECT_KEY = 'bulk_dispatch_preselect_ids';
     const ordersListBase = <?= json_encode(base_url('?page=orders&action=list')) ?>;
     const bulkDispatchUrl = <?= json_encode(base_url('?page=dispatch&action=bulk_dispatch')) ?>;
+    const bulkDispatchValidateUrl = <?= json_encode(base_url('?page=orders&action=get_orders_for_bulk_dispatch')) ?>;
 
     document.addEventListener('click', function(event) {
         const actionMenu = document.getElementById('actionMenu');
@@ -826,31 +829,48 @@ if ($end - $start < $slotSize - 1) {
         return Array.from(document.querySelectorAll('input.customer-order-cb[name="poitem[]"]'));
     }
 
+    function normalizeIds(ids) {
+        const seen = {};
+        const out = [];
+        (Array.isArray(ids) ? ids : []).forEach(function(id) {
+            const value = String(id == null ? '' : id).trim();
+            if (!value || seen[value]) return;
+            seen[value] = true;
+            out.push(value);
+        });
+        return out;
+    }
+
     function getStoredSelection() {
         try {
-            return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            return normalizeIds(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'));
         } catch (err) {
             return [];
         }
     }
 
+    function setStoredSelection(ids) {
+        const normalized = normalizeIds(ids);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+        return normalized;
+    }
+
     function saveCheckedOrders() {
         let checked = getStoredSelection();
         const allCbs = getOrderCheckboxes();
-        const checkedOnPage = allCbs.filter(function(cb) { return cb.checked; }).map(function(cb) { return cb.value; });
-        const uncheckedOnPage = allCbs.filter(function(cb) { return !cb.checked; }).map(function(cb) { return cb.value; });
+        const checkedOnPage = allCbs.filter(function(cb) { return cb.checked; }).map(function(cb) { return String(cb.value); });
+        const uncheckedOnPage = allCbs.filter(function(cb) { return !cb.checked; }).map(function(cb) { return String(cb.value); });
         checked = checked.filter(function(id) { return uncheckedOnPage.indexOf(id) === -1; });
         checkedOnPage.forEach(function(id) {
             if (checked.indexOf(id) === -1) checked.push(id);
         });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(checked));
-        return checked;
+        return setStoredSelection(checked);
     }
 
     function restoreCheckedOrders() {
         const checked = getStoredSelection();
         getOrderCheckboxes().forEach(function(cb) {
-            cb.checked = checked.indexOf(cb.value) !== -1;
+            cb.checked = checked.indexOf(String(cb.value)) !== -1;
         });
     }
 
@@ -896,9 +916,7 @@ if ($end - $start < $slotSize - 1) {
     }
 
     function goToBulkDispatchWithIds(ids) {
-        const normalized = (Array.isArray(ids) ? ids : [])
-            .map(function(id) { return String(id).trim(); })
-            .filter(Boolean);
+        const normalized = normalizeIds(ids);
         if (!normalized.length) {
             alert('No eligible items left to dispatch.');
             return;
@@ -925,6 +943,14 @@ if ($end - $start < $slotSize - 1) {
         const value = String(status || '').trim().toLowerCase();
         if (!value) return 'Unknown';
         return value.replace(/_/g, ' ').replace(/\b\w/g, function(ch) { return ch.toUpperCase(); });
+    }
+
+    function formatBlockedItemLabel(row) {
+        const orderNumber = String(row.order_number || '').trim();
+        const itemCode = String(row.item_code || '').trim();
+        if (orderNumber && itemCode) return orderNumber + '-' + itemCode;
+        if (orderNumber) return 'Order ' + orderNumber;
+        return itemCode || 'Unknown item';
     }
 
     const blockedModal = document.getElementById('customer-bulk-dispatch-blocked-modal');
@@ -971,8 +997,8 @@ if ($end - $start < $slotSize - 1) {
                 : 'bg-red-100 text-red-800';
             return '<li class="flex items-start justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2">'
                 + '<div class="min-w-0">'
-                + '<p class="font-medium text-gray-900 truncate">Order ' + escapeHtml(row.order_number || '—') + '</p>'
-                + '<p class="text-xs text-gray-500 truncate">' + escapeHtml(row.item_code || 'Item') + '</p>'
+                + '<p class="font-medium text-gray-900 truncate">' + escapeHtml(formatBlockedItemLabel(row)) + '</p>'
+                + '<p class="text-xs text-gray-500 truncate">Line ID ' + escapeHtml(String(row.order_id || '')) + '</p>'
                 + '</div>'
                 + '<span class="shrink-0 rounded px-2 py-0.5 text-xs font-medium ' + badgeClass + '">'
                 + escapeHtml(formatStatusLabel(status))
@@ -1010,8 +1036,43 @@ if ($end - $start < $slotSize - 1) {
         }
     });
 
+    function validateSelectionForBulkDispatch(ids) {
+        return fetch(bulkDispatchValidateUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ order_ids: ids, customer_id: customerId })
+        }).then(function(response) {
+            return response.text().then(function(text) {
+                let data = null;
+                try {
+                    data = text ? JSON.parse(text) : null;
+                } catch (err) {
+                    throw new Error('Invalid response while validating bulk dispatch selection.');
+                }
+                if (!response.ok) {
+                    throw new Error((data && data.message) || 'Unable to validate bulk dispatch selection.');
+                }
+                return data;
+            });
+        });
+    }
+
+    function removeIdsFromSelection(idsToRemove) {
+        const removeSet = {};
+        normalizeIds(idsToRemove).forEach(function(id) { removeSet[id] = true; });
+        const next = getStoredSelection().filter(function(id) { return !removeSet[id]; });
+        setStoredSelection(next);
+        restoreCheckedOrders();
+        updateSelectionUi();
+        return next;
+    }
+
     function goToBulkDispatchWithSelection() {
-        const ids = saveCheckedOrders().map(function(id) { return String(id); }).filter(Boolean);
+        const ids = saveCheckedOrders();
         if (!ids.length) {
             alert('Please select at least one order item to dispatch.');
             return;
@@ -1020,12 +1081,7 @@ if ($end - $start < $slotSize - 1) {
         const actionMenu = document.getElementById('actionMenu');
         if (actionMenu) actionMenu.classList.add('hidden');
 
-        fetch('<?= base_url('?page=orders&action=get_orders_for_bulk_dispatch') ?>', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ order_ids: ids })
-        })
-            .then(function(response) { return response.json(); })
+        validateSelectionForBulkDispatch(ids)
             .then(function(data) {
                 if (!data || !data.success) {
                     alert((data && data.message) || 'Unable to prepare selected items for bulk dispatch.');
@@ -1033,9 +1089,12 @@ if ($end - $start < $slotSize - 1) {
                 }
 
                 const blocked = Array.isArray(data.blocked) ? data.blocked : [];
-                const eligibleIds = Array.isArray(data.eligible_ids)
-                    ? data.eligible_ids.map(function(id) { return String(id); })
-                    : [];
+                const eligibleIds = normalizeIds(data.eligible_ids || []);
+
+                // Drop cancelled/shipped IDs from this customer's selection so the count stays accurate.
+                if (blocked.length) {
+                    removeIdsFromSelection(blocked.map(function(row) { return row.order_id; }));
+                }
 
                 if (blocked.length > 0) {
                     openBlockedModal(blocked, eligibleIds);
@@ -1046,7 +1105,31 @@ if ($end - $start < $slotSize - 1) {
             })
             .catch(function(err) {
                 console.error(err);
-                alert('Failed to validate selected items for bulk dispatch.');
+                alert((err && err.message) || 'Failed to validate selected items for bulk dispatch.');
+            });
+    }
+
+    function pruneIneligibleStoredSelection() {
+        const ids = getStoredSelection();
+        if (!ids.length) return;
+
+        validateSelectionForBulkDispatch(ids)
+            .then(function(data) {
+                if (!data || !data.success) return;
+                const blocked = Array.isArray(data.blocked) ? data.blocked : [];
+                const eligibleIds = normalizeIds(data.eligible_ids || []);
+                // Keep only IDs that still exist and are dispatch-eligible for this customer.
+                const keep = eligibleIds.length || blocked.length
+                    ? eligibleIds
+                    : [];
+                if (blocked.length || keep.length !== ids.length) {
+                    setStoredSelection(keep);
+                    restoreCheckedOrders();
+                    updateSelectionUi();
+                }
+            })
+            .catch(function() {
+                // Non-blocking: leave selection as-is if prune fails.
             });
     }
 
@@ -1074,7 +1157,11 @@ if ($end - $start < $slotSize - 1) {
             const cbs = getOrderCheckboxes().filter(function(cb) { return cb.checked; });
             if (!cbs.length) return;
             const orderNum = cbs[0].getAttribute('data-order-number') || '';
-            saveCheckedOrders();
+            const ids = saveCheckedOrders();
+            // Orders list still uses the shared key — sync only when navigating there.
+            try {
+                localStorage.setItem(ORDERS_LIST_STORAGE_KEY, JSON.stringify(ids));
+            } catch (err) {}
             window.location.href = ordersListBase + (orderNum ? '&search=' + encodeURIComponent(orderNum) : '');
         });
     }
@@ -1109,5 +1196,6 @@ if ($end - $start < $slotSize - 1) {
 
     restoreCheckedOrders();
     updateSelectionUi();
+    pruneIneligibleStoredSelection();
 })();
 </script>
