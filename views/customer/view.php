@@ -322,7 +322,8 @@ if ($end - $start < $slotSize - 1) {
             <button type="button" id="customerActionMenuBtn" class="bg-[#d97706] hover:bg-[#b45309] text-white px-5 py-2 rounded-lg text-sm font-medium" onclick="document.getElementById('actionMenu').classList.toggle('hidden')" aria-label="Action menu">Actions</button>
             <div id="actionMenu" class="hidden absolute left-0 top-full mt-2 w-56 bg-white shadow-lg rounded-lg border py-1 z-50">
                 <a href="<?= htmlspecialchars(base_url('?page=pos_register&action=list')) ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create POS order</a>
-                <a href="<?= htmlspecialchars(base_url('?page=dispatch&action=bulk_dispatch')) ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Bulk dispatch</a>
+                <a href="<?= htmlspecialchars(base_url('?page=dispatch&action=bulk_dispatch')) ?>" id="customerActionBulkDispatch" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Bulk dispatch</a>
+                <button type="button" id="customerActionBulkDispatchSelected" class="hidden w-full text-left px-4 py-2 text-sm text-orange-700 hover:bg-orange-50 font-medium" disabled>Bulk dispatch selected</button>
                 <a href="<?= htmlspecialchars($exportUrl()) ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export orders (CSV)</a>
                 <button type="button" id="customerActionFindOrders" class="hidden w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" disabled>Find selected in Orders</button>
                 <button type="button" id="customerActionClearSelection" class="hidden w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100" disabled>Clear selection</button>
@@ -730,10 +731,41 @@ if ($end - $start < $slotSize - 1) {
     <img id="customer-image-lightbox-img" src="" alt="" class="max-h-[90vh] max-w-full rounded-lg object-contain shadow-2xl ring-1 ring-white/10 bg-white">
 </div>
 
+<div id="customer-bulk-dispatch-blocked-modal"
+     class="fixed inset-0 z-[210] hidden items-center justify-center bg-black/50 p-4"
+     role="dialog" aria-modal="true" aria-labelledby="customer-bulk-dispatch-blocked-title">
+    <div class="relative w-full max-w-lg rounded-xl border border-amber-200 bg-white shadow-xl">
+        <div class="flex items-start justify-between gap-3 border-b border-amber-100 px-5 py-4">
+            <div>
+                <h3 id="customer-bulk-dispatch-blocked-title" class="text-lg font-semibold text-gray-900">Cannot dispatch some items</h3>
+                <p id="customer-bulk-dispatch-blocked-summary" class="mt-1 text-sm text-gray-600"></p>
+            </div>
+            <button type="button" id="customer-bulk-dispatch-blocked-close"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100"
+                    aria-label="Close">&times;</button>
+        </div>
+        <div class="max-h-64 overflow-y-auto px-5 py-4">
+            <ul id="customer-bulk-dispatch-blocked-list" class="space-y-2 text-sm"></ul>
+        </div>
+        <div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-5 py-3 rounded-b-xl">
+            <button type="button" id="customer-bulk-dispatch-blocked-cancel"
+                    class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                Cancel
+            </button>
+            <button type="button" id="customer-bulk-dispatch-blocked-continue"
+                    class="rounded-lg bg-[#d97706] px-4 py-2 text-sm font-medium text-white hover:bg-[#b45309] disabled:cursor-not-allowed disabled:opacity-50">
+                Continue with eligible
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
 (function() {
     const STORAGE_KEY = 'selected_po_orders';
+    const BULK_DISPATCH_PRESELECT_KEY = 'bulk_dispatch_preselect_ids';
     const ordersListBase = <?= json_encode(base_url('?page=orders&action=list')) ?>;
+    const bulkDispatchUrl = <?= json_encode(base_url('?page=dispatch&action=bulk_dispatch')) ?>;
 
     document.addEventListener('click', function(event) {
         const actionMenu = document.getElementById('actionMenu');
@@ -823,6 +855,7 @@ if ($end - $start < $slotSize - 1) {
         const selectAll = document.getElementById('customer-orders-select-all');
         const findBtn = document.getElementById('customerActionFindOrders');
         const clearBtn = document.getElementById('customerActionClearSelection');
+        const bulkSelectedBtn = document.getElementById('customerActionBulkDispatchSelected');
         const cbs = getOrderCheckboxes();
         const checkedOnPage = cbs.filter(function(cb) { return cb.checked; });
 
@@ -834,12 +867,170 @@ if ($end - $start < $slotSize - 1) {
             selectAll.indeterminate = checkedOnPage.length > 0 && checkedOnPage.length < cbs.length;
         }
         const hasSelection = stored.length > 0;
-        [findBtn, clearBtn].forEach(function(btn) {
+        [findBtn, clearBtn, bulkSelectedBtn].forEach(function(btn) {
             if (!btn) return;
             btn.disabled = !hasSelection;
             btn.classList.toggle('hidden', !hasSelection);
             btn.classList.toggle('opacity-50', !hasSelection);
         });
+        if (bulkSelectedBtn && hasSelection) {
+            bulkSelectedBtn.textContent = 'Bulk dispatch selected (' + stored.length + ')';
+        }
+    }
+
+    function goToBulkDispatchWithIds(ids) {
+        const normalized = (Array.isArray(ids) ? ids : [])
+            .map(function(id) { return String(id).trim(); })
+            .filter(Boolean);
+        if (!normalized.length) {
+            alert('No eligible items left to dispatch.');
+            return;
+        }
+        try {
+            sessionStorage.setItem(BULK_DISPATCH_PRESELECT_KEY, JSON.stringify(normalized));
+        } catch (err) {
+            alert('Unable to prepare bulk dispatch selection in this browser.');
+            return;
+        }
+        window.location.href = bulkDispatchUrl;
+    }
+
+    function escapeHtml(text) {
+        return String(text ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function formatStatusLabel(status) {
+        const value = String(status || '').trim().toLowerCase();
+        if (!value) return 'Unknown';
+        return value.replace(/_/g, ' ').replace(/\b\w/g, function(ch) { return ch.toUpperCase(); });
+    }
+
+    const blockedModal = document.getElementById('customer-bulk-dispatch-blocked-modal');
+    const blockedListEl = document.getElementById('customer-bulk-dispatch-blocked-list');
+    const blockedSummaryEl = document.getElementById('customer-bulk-dispatch-blocked-summary');
+    const blockedContinueBtn = document.getElementById('customer-bulk-dispatch-blocked-continue');
+    let pendingEligibleIds = [];
+
+    function closeBlockedModal() {
+        if (!blockedModal) return;
+        blockedModal.classList.add('hidden');
+        blockedModal.classList.remove('flex');
+        document.body.style.overflow = '';
+        pendingEligibleIds = [];
+    }
+
+    function openBlockedModal(blocked, eligibleIds) {
+        if (!blockedModal || !blockedListEl || !blockedSummaryEl || !blockedContinueBtn) {
+            alert('Some selected items are cancelled or shipped and cannot be dispatched.');
+            return;
+        }
+
+        const cancelledCount = blocked.filter(function(row) {
+            return String(row.status || '').toLowerCase() === 'cancelled';
+        }).length;
+        const shippedCount = blocked.filter(function(row) {
+            return String(row.status || '').toLowerCase() === 'shipped';
+        }).length;
+        const parts = [];
+        if (cancelledCount) parts.push(cancelledCount + ' cancelled');
+        if (shippedCount) parts.push(shippedCount + ' shipped');
+        const eligibleCount = Array.isArray(eligibleIds) ? eligibleIds.length : 0;
+
+        blockedSummaryEl.textContent = parts.join(' and ')
+            + ' item(s) cannot be moved to bulk dispatch.'
+            + (eligibleCount > 0
+                ? ' You can continue with the remaining ' + eligibleCount + ' eligible item(s).'
+                : ' There are no eligible items left to dispatch.');
+
+        blockedListEl.innerHTML = blocked.map(function(row) {
+            const status = String(row.status || '').toLowerCase();
+            const badgeClass = status === 'shipped'
+                ? 'bg-green-100 text-green-800'
+                : 'bg-red-100 text-red-800';
+            return '<li class="flex items-start justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2">'
+                + '<div class="min-w-0">'
+                + '<p class="font-medium text-gray-900 truncate">Order ' + escapeHtml(row.order_number || '—') + '</p>'
+                + '<p class="text-xs text-gray-500 truncate">' + escapeHtml(row.item_code || 'Item') + '</p>'
+                + '</div>'
+                + '<span class="shrink-0 rounded px-2 py-0.5 text-xs font-medium ' + badgeClass + '">'
+                + escapeHtml(formatStatusLabel(status))
+                + '</span>'
+                + '</li>';
+        }).join('');
+
+        pendingEligibleIds = Array.isArray(eligibleIds) ? eligibleIds.slice() : [];
+        blockedContinueBtn.disabled = pendingEligibleIds.length === 0;
+        blockedContinueBtn.classList.toggle('hidden', pendingEligibleIds.length === 0);
+        blockedModal.classList.remove('hidden');
+        blockedModal.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+    }
+
+    if (blockedContinueBtn) {
+        blockedContinueBtn.addEventListener('click', function() {
+            const ids = pendingEligibleIds.slice();
+            closeBlockedModal();
+            goToBulkDispatchWithIds(ids);
+        });
+    }
+    const blockedCancelBtn = document.getElementById('customer-bulk-dispatch-blocked-cancel');
+    const blockedCloseBtn = document.getElementById('customer-bulk-dispatch-blocked-close');
+    if (blockedCancelBtn) blockedCancelBtn.addEventListener('click', closeBlockedModal);
+    if (blockedCloseBtn) blockedCloseBtn.addEventListener('click', closeBlockedModal);
+    if (blockedModal) {
+        blockedModal.addEventListener('click', function(e) {
+            if (e.target === blockedModal) closeBlockedModal();
+        });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && blockedModal && !blockedModal.classList.contains('hidden')) {
+            closeBlockedModal();
+        }
+    });
+
+    function goToBulkDispatchWithSelection() {
+        const ids = saveCheckedOrders().map(function(id) { return String(id); }).filter(Boolean);
+        if (!ids.length) {
+            alert('Please select at least one order item to dispatch.');
+            return;
+        }
+
+        const actionMenu = document.getElementById('actionMenu');
+        if (actionMenu) actionMenu.classList.add('hidden');
+
+        fetch('<?= base_url('?page=orders&action=get_orders_for_bulk_dispatch') ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order_ids: ids })
+        })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (!data || !data.success) {
+                    alert((data && data.message) || 'Unable to prepare selected items for bulk dispatch.');
+                    return;
+                }
+
+                const blocked = Array.isArray(data.blocked) ? data.blocked : [];
+                const eligibleIds = Array.isArray(data.eligible_ids)
+                    ? data.eligible_ids.map(function(id) { return String(id); })
+                    : [];
+
+                if (blocked.length > 0) {
+                    openBlockedModal(blocked, eligibleIds);
+                    return;
+                }
+
+                goToBulkDispatchWithIds(eligibleIds.length ? eligibleIds : ids);
+            })
+            .catch(function(err) {
+                console.error(err);
+                alert('Failed to validate selected items for bulk dispatch.');
+            });
     }
 
     const selectAllEl = document.getElementById('customer-orders-select-all');
@@ -868,6 +1059,25 @@ if ($end - $start < $slotSize - 1) {
             const orderNum = cbs[0].getAttribute('data-order-number') || '';
             saveCheckedOrders();
             window.location.href = ordersListBase + (orderNum ? '&search=' + encodeURIComponent(orderNum) : '');
+        });
+    }
+
+    const bulkSelectedBtn = document.getElementById('customerActionBulkDispatchSelected');
+    if (bulkSelectedBtn) {
+        bulkSelectedBtn.addEventListener('click', function() {
+            goToBulkDispatchWithSelection();
+        });
+    }
+
+    const bulkDispatchLink = document.getElementById('customerActionBulkDispatch');
+    if (bulkDispatchLink) {
+        bulkDispatchLink.addEventListener('click', function(e) {
+            const ids = getStoredSelection();
+            if (!ids.length) {
+                return;
+            }
+            e.preventDefault();
+            goToBulkDispatchWithSelection();
         });
     }
 
