@@ -3837,10 +3837,10 @@ class POSRegisterController
         $phone = $_POST['mobile'] ?? '';
         $email = $_POST['cus_email'] ?? '';
 
-        if (!$first || !$phone) {
+        if (!$first || !$last || !$phone) {
             echo json_encode([
                 "success" => false,
-                "message" => "Name and phone required"
+                "message" => "First name, last name and phone required"
             ]);
             exit;
         }
@@ -4101,6 +4101,9 @@ class POSRegisterController
         $errors = [];
         if (trim((string)($payload['confirm_first_name'] ?? '')) === '') {
             $errors[] = 'First name';
+        }
+        if (trim((string)($payload['confirm_last_name'] ?? '')) === '') {
+            $errors[] = 'Last name';
         }
         if (trim((string)($payload['confirm_state'] ?? '')) === '') {
             $errors[] = 'State';
