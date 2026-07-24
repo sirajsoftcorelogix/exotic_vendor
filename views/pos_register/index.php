@@ -465,8 +465,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         </div>
 
         <div>
-          <label class="text-gray-500">Last Name</label>
-          <input name="last_name" class="w-full border rounded px-2 py-1.5" placeholder="Optional">
+          <label class="text-gray-500">Last Name <span class="text-red-600">*</span></label>
+          <input name="last_name" required class="w-full border rounded px-2 py-1.5">
         </div>
 
         <div>
@@ -739,7 +739,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     <div class="flex shrink-0 items-center justify-between border-b px-5 py-3">
       <div>
         <h2 class="text-lg font-semibold text-slate-800">Confirm Billing &amp; Shipping Details</h2>
-        <p class="mt-0.5 text-xs text-slate-500">Required: First name and State. Other fields use defaults when left blank.</p>
+        <p class="mt-0.5 text-xs text-slate-500">Required: First name, Last name and State. Other fields use defaults when left blank.</p>
       </div>
       <button type="button" onclick="closeAddressConfirmModal()" class="text-lg leading-none text-gray-500 hover:text-gray-800" aria-label="Close">✕</button>
     </div>
@@ -751,7 +751,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         <h3 class="text-sm font-semibold text-slate-800">Billing Information</h3>
         <div class="grid grid-cols-2 gap-3">
           <label class="block text-xs font-medium text-slate-600">First Name <span class="field-req-star text-red-600">*</span><input id="confirm_first_name" class="w-full rounded border" placeholder="First Name"></label>
-          <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_last_name" class="w-full rounded border" placeholder="Last Name"></label>
+          <label class="block text-xs font-medium text-slate-600">Last Name <span class="field-req-star text-red-600">*</span><input id="confirm_last_name" class="w-full rounded border" placeholder="Last Name"></label>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <label class="block text-xs font-medium text-slate-600">Email<input id="confirm_email" type="email" class="w-full rounded border" placeholder="Email"></label>
@@ -2254,7 +2254,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   }
 
   function clearAddressValidationState() {
-    ["confirm_first_name", "confirm_phone", "confirm_zip", "confirm_state", "confirm_state_select", "confirm_email", "confirm_gstin", "confirm_sgstin", "customer_pan", "customer_aadhaar", "passport_number", "country_of_residence"].forEach(function(id) {
+    ["confirm_first_name", "confirm_last_name", "confirm_phone", "confirm_zip", "confirm_state", "confirm_state_select", "confirm_email", "confirm_gstin", "confirm_sgstin", "customer_pan", "customer_aadhaar", "passport_number", "country_of_residence"].forEach(function(id) {
       setPosFieldInvalid(id, false);
     });
     POS_SHIPPING_ADDRESS_FIELD_IDS.forEach(function(id) {
@@ -2419,12 +2419,18 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var missing = [];
     var firstInvalidId = "";
     var firstName = String(payload.confirm_first_name || "").trim();
+    var lastName = String(payload.confirm_last_name || "").trim();
     var state = String(payload.confirm_state || "").trim();
     var zip = String(payload.confirm_zip || "").trim();
     if (!firstName) {
       missing.push("First name");
       setPosFieldInvalid("confirm_first_name", true);
       firstInvalidId = "confirm_first_name";
+    }
+    if (!lastName) {
+      missing.push("Last name");
+      setPosFieldInvalid("confirm_last_name", true);
+      if (!firstInvalidId) firstInvalidId = "confirm_last_name";
     }
     if (!zip) {
       missing.push("ZIP / Pincode");
