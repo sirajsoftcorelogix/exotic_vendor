@@ -316,32 +316,6 @@ if ($end - $start < $slotSize - 1) {
 
     <?php if ($tab === 'orders'): ?>
 
-    <!-- Toolbar -->
-    <div class="flex flex-wrap gap-3 items-center relative z-10">
-        <div class="relative">
-            <button type="button" id="customerActionMenuBtn" class="bg-[#d97706] hover:bg-[#b45309] text-white px-5 py-2 rounded-lg text-sm font-medium" onclick="document.getElementById('actionMenu').classList.toggle('hidden')" aria-label="Action menu">Actions</button>
-            <div id="actionMenu" class="hidden absolute left-0 top-full mt-2 w-56 bg-white shadow-lg rounded-lg border py-1 z-50">
-                <a href="<?= htmlspecialchars(base_url('?page=pos_register&action=list')) ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create POS order</a>
-                <a href="<?= htmlspecialchars(base_url('?page=dispatch&action=bulk_dispatch')) ?>" id="customerActionBulkDispatch" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Bulk dispatch</a>
-                <button type="button" id="customerActionBulkDispatchSelected" class="hidden w-full text-left px-4 py-2 text-sm text-orange-700 hover:bg-orange-50 font-medium" disabled>Bulk dispatch selected</button>
-                <a href="<?= htmlspecialchars($exportUrl()) ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export orders (CSV)</a>
-                <button type="button" id="customerActionFindOrders" class="hidden w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" disabled>Find selected in Orders</button>
-                <button type="button" id="customerActionClearSelection" class="hidden w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100" disabled>Clear selection</button>
-            </div>
-        </div>
-        <div class="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
-            <a href="<?= htmlspecialchars($viewUrl(['view_mode' => 'cards', 'page_no' => 1])) ?>"
-               class="px-3 py-2 <?= $viewMode === 'cards' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50' ?>">Cards</a>
-            <a href="<?= htmlspecialchars($viewUrl(['view_mode' => 'table', 'page_no' => 1])) ?>"
-               class="px-3 py-2 border-l border-gray-200 <?= $viewMode === 'table' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50' ?>">Table</a>
-        </div>
-        <div class="flex items-center gap-2 ml-auto text-sm text-gray-600">
-            <input type="checkbox" id="customer-orders-select-all" class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
-            <label for="customer-orders-select-all" class="cursor-pointer select-none">Select all on page</label>
-            <span id="customer-selected-count" class="text-xs text-gray-500 tabular-nums">(0 selected)</span>
-        </div>
-    </div>
-
     <!-- Filters -->
     <form method="GET" action="<?= htmlspecialchars(base_url('')) ?>" class="bg-white rounded-xl border border-gray-200 p-4 shadow-sm space-y-4">
         <input type="hidden" name="page" value="customer">
@@ -409,6 +383,37 @@ if ($end - $start < $slotSize - 1) {
             <?php endif; ?>
         </div>
     </form>
+
+    <!-- Toolbar -->
+    <div class="flex flex-wrap gap-3 items-center relative z-10">
+        <div class="relative">
+            <button type="button" id="customerActionMenuBtn" class="bg-[#d97706] hover:bg-[#b45309] text-white px-5 py-2 rounded-lg text-sm font-medium" onclick="document.getElementById('actionMenu').classList.toggle('hidden')" aria-label="Action menu">Actions</button>
+            <div id="actionMenu" class="hidden absolute left-0 top-full mt-2 w-56 bg-white shadow-lg rounded-lg border py-1 z-50">
+                <a href="<?= htmlspecialchars(base_url('?page=pos_register&action=list')) ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create POS order</a>
+                <a href="<?= htmlspecialchars(base_url('?page=dispatch&action=bulk_dispatch')) ?>" id="customerActionBulkDispatch" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Bulk dispatch</a>
+                <button type="button" id="customerActionBulkDispatchSelected" class="hidden w-full text-left px-4 py-2 text-sm text-orange-700 hover:bg-orange-50 font-medium" disabled>Bulk dispatch selected</button>
+                <a href="<?= htmlspecialchars($exportUrl()) ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export orders (CSV)</a>
+                <button type="button" id="customerActionFindOrders" class="hidden w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" disabled>Find selected in Orders</button>
+                <button type="button" id="customerActionClearSelection" class="hidden w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100" disabled>Clear selection</button>
+            </div>
+        </div>
+        <div class="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+            <a href="<?= htmlspecialchars($viewUrl(['view_mode' => 'cards', 'page_no' => 1])) ?>"
+               class="px-3 py-2 <?= $viewMode === 'cards' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50' ?>">Cards</a>
+            <a href="<?= htmlspecialchars($viewUrl(['view_mode' => 'table', 'page_no' => 1])) ?>"
+               class="px-3 py-2 border-l border-gray-200 <?= $viewMode === 'table' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50' ?>">Table</a>
+        </div>
+        <div class="flex items-center gap-2 ml-auto text-sm text-gray-600">
+            <input type="checkbox" id="customer-orders-select-all" class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
+            <label for="customer-orders-select-all" class="cursor-pointer select-none">Select all on page</label>
+            <span id="customer-selected-count" class="text-xs text-gray-500 tabular-nums">(0 selected)</span>
+            <button type="button" id="customerClearSelectionBtn"
+                    class="hidden rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled>
+                Clear selection
+            </button>
+        </div>
+    </div>
 
     <!-- Orders -->
     <div id="orderCardsWrapper">
@@ -849,12 +854,24 @@ if ($end - $start < $slotSize - 1) {
         });
     }
 
+    function clearCustomerSelection() {
+        localStorage.removeItem(STORAGE_KEY);
+        getOrderCheckboxes().forEach(function(cb) { cb.checked = false; });
+        const selectAll = document.getElementById('customer-orders-select-all');
+        if (selectAll) {
+            selectAll.checked = false;
+            selectAll.indeterminate = false;
+        }
+        updateSelectionUi();
+    }
+
     function updateSelectionUi() {
         const stored = getStoredSelection();
         const countEl = document.getElementById('customer-selected-count');
         const selectAll = document.getElementById('customer-orders-select-all');
         const findBtn = document.getElementById('customerActionFindOrders');
         const clearBtn = document.getElementById('customerActionClearSelection');
+        const clearToolbarBtn = document.getElementById('customerClearSelectionBtn');
         const bulkSelectedBtn = document.getElementById('customerActionBulkDispatchSelected');
         const cbs = getOrderCheckboxes();
         const checkedOnPage = cbs.filter(function(cb) { return cb.checked; });
@@ -867,7 +884,7 @@ if ($end - $start < $slotSize - 1) {
             selectAll.indeterminate = checkedOnPage.length > 0 && checkedOnPage.length < cbs.length;
         }
         const hasSelection = stored.length > 0;
-        [findBtn, clearBtn, bulkSelectedBtn].forEach(function(btn) {
+        [findBtn, clearBtn, clearToolbarBtn, bulkSelectedBtn].forEach(function(btn) {
             if (!btn) return;
             btn.disabled = !hasSelection;
             btn.classList.toggle('hidden', !hasSelection);
@@ -1083,11 +1100,11 @@ if ($end - $start < $slotSize - 1) {
 
     const clearBtn = document.getElementById('customerActionClearSelection');
     if (clearBtn) {
-        clearBtn.addEventListener('click', function() {
-            localStorage.removeItem(STORAGE_KEY);
-            getOrderCheckboxes().forEach(function(cb) { cb.checked = false; });
-            updateSelectionUi();
-        });
+        clearBtn.addEventListener('click', clearCustomerSelection);
+    }
+    const clearToolbarBtn = document.getElementById('customerClearSelectionBtn');
+    if (clearToolbarBtn) {
+        clearToolbarBtn.addEventListener('click', clearCustomerSelection);
     }
 
     restoreCheckedOrders();

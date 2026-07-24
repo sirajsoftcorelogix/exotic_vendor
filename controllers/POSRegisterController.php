@@ -1,6 +1,7 @@
 <?php
 require_once 'models/pos/pos.php';
 require_once 'models/user/user.php';
+require_once dirname(__DIR__) . '/helpers/pos_payment_receipt.php';
 require_once dirname(__DIR__) . '/integrations/exotic/Clients/RetailApiClient.php';
 require_once dirname(__DIR__) . '/integrations/exotic/Support/CartResponseParser.php';
 require_once dirname(__DIR__) . '/integrations/exotic/Support/OrderResponseParser.php';
