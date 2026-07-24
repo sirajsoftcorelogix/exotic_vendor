@@ -1950,8 +1950,15 @@ class PosOrdersController
         is_login();
         global $ordersModel;
         $order_number   = trim($_POST['order_number']   ?? '');
-        $customer_name  = trim($_POST['customer_name']  ?? '');
         $customer_phone = trim($_POST['customer_phone'] ?? '');
+        $first_name = trim($_POST['first_name'] ?? '');
+        $last_name = trim($_POST['last_name'] ?? '');
+        $shipping_first_name = trim($_POST['shipping_first_name'] ?? '');
+        $shipping_last_name = trim($_POST['shipping_last_name'] ?? '');
+        $customer_name  = trim($_POST['customer_name']  ?? '');
+        if ($customer_name === '') {
+            $customer_name = trim($first_name . ' ' . $last_name);
+        }
         $address_line1 = trim($_POST['address_line1'] ?? '');
         $address_line2 = trim($_POST['address_line2'] ?? '');
         $city = trim($_POST['city'] ?? '');
@@ -1966,14 +1973,36 @@ class PosOrdersController
         $shipping_gstin = strtoupper(trim($_POST['shipping_gstin'] ?? ''));
         $state = trim($_POST['state'] ?? '');
         $shipping_state = trim($_POST['shipping_state'] ?? '');
-        if (empty($order_number) || empty($customer_name) || empty($customer_phone)) {
+        if (empty($order_number) || empty($first_name) || empty($last_name) || empty($customer_phone)) {
             echo json_encode([
                 'success' => false,
-                'message' => 'Order number, name, email and phone are required'
+                'message' => 'Order number, billing first name, last name and phone are required'
             ]);
             exit;
         }
-        $result = $ordersModel->updateCustomerNameAndEmail($order_number, $customer_name, $customer_phone, $address_line1, $address_line2, $city, $zipcode, $country, $billing_address_line1, $billing_address_line2, $billing_city, $billing_zipcode, $billing_country, $gstin, $shipping_gstin, $state, $shipping_state);
+        $result = $ordersModel->updateCustomerNameAndEmail(
+            $order_number,
+            $customer_name,
+            $customer_phone,
+            $address_line1,
+            $address_line2,
+            $city,
+            $zipcode,
+            $country,
+            $billing_address_line1,
+            $billing_address_line2,
+            $billing_city,
+            $billing_zipcode,
+            $billing_country,
+            $gstin,
+            $shipping_gstin,
+            $state,
+            $shipping_state,
+            $first_name,
+            $last_name,
+            $shipping_first_name,
+            $shipping_last_name
+        );
         echo json_encode($result);
         exit;
     }
