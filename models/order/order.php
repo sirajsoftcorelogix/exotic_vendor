@@ -1173,6 +1173,136 @@ class Order
         ];
     }
 
+    /**
+     * Build a fully structured payload for importing selected lines into the bulk dispatch UI.
+     * Does not rely on modal HTML scraping.
+     *
+     * @param list<int|string> $orderIds
+     * @return array{
+     *   orders: list<array<string,mixed>>,
+     *   blocked: list<array<string,mixed>>,
+     *   eligible_ids: list<int>
+     * }
+     */
+    public function buildBulkDispatchImportPayload(array $orderIds, int $customerId = 0): array
+    {
+        require_once __DIR__ . '/../../helpers/dispatch/shipping_address_validation.php';
+
+        $split = $this->splitOrderIdsForBulkDispatch($orderIds, $customerId);
+        // Explicit line IDs win: if customer filter matched nothing, retry without it.
+        if ($customerId > 0 && $split['orders'] === [] && $split['blocked'] === []) {
+            $split = $this->splitOrderIdsForBulkDispatch($orderIds, 0);
+        }
+
+        $blocked = $split['blocked'];
+        $ordersOut = [];
+        $eligibleIds = [];
+
+        foreach ($split['orders'] as $group) {
+            $orderNumber = trim((string)($group['order_number'] ?? ''));
+            $itemIds = array_values(array_filter(array_map('intval', $group['item_ids'] ?? [])));
+            if ($orderNumber === '' || $itemIds === []) {
+                continue;
+            }
+
+            $orderInfo = $this->getRemarksByOrderNumber($orderNumber);
+            if (!is_array($orderInfo)) {
+                $orderInfo = [];
+            }
+            $addressCheck = validateShippingAddressForDispatch($orderInfo);
+            if (empty($addressCheck['valid'])) {
+                foreach ($itemIds as $itemId) {
+                    $blocked[] = [
+                        'order_id' => $itemId,
+                        'order_number' => $orderNumber,
+                        'item_code' => '',
+                        'status' => 'invalid_address',
+                        'message' => (string)($addressCheck['message'] ?? 'Missing shipping address/pincode'),
+                    ];
+                }
+                continue;
+            }
+
+            $rows = $this->getOrdersByIds($itemIds);
+            if (!is_array($rows) || $rows === []) {
+                continue;
+            }
+
+            $items = [];
+            foreach ($rows as $row) {
+                $itemId = (int)($row['id'] ?? 0);
+                $itemCode = trim((string)($row['item_code'] ?? $row['sku'] ?? ''));
+                $status = strtolower(trim((string)($row['status'] ?? '')));
+                $invoiceIdRaw = $row['invoice_id'] ?? null;
+                $hasInvoice = $invoiceIdRaw !== null && $invoiceIdRaw !== '' && (int)$invoiceIdRaw > 0;
+
+                if ($itemId <= 0) {
+                    continue;
+                }
+                if ($hasInvoice || in_array($status, ['cancelled', 'returned', 'shipped'], true)) {
+                    $blocked[] = [
+                        'order_id' => $itemId,
+                        'order_number' => $orderNumber,
+                        'item_code' => $itemCode,
+                        'status' => $hasInvoice ? 'invoiced' : $status,
+                        'message' => $hasInvoice ? 'Already invoiced' : ('Status is ' . $status),
+                    ];
+                    continue;
+                }
+
+                $quantity = (int)($row['quantity'] ?? 0);
+                $finalprice = (float)($row['finalprice'] ?? 0);
+                $productWeight = (float)($row['product_weight'] ?? 0);
+                $paymentType = strtolower((string)($row['payment_type'] ?? '')) === 'cod' ? 'COD' : 'Prepaid';
+                $isExpress = strpos(strtolower((string)($row['options'] ?? '')), 'express') !== false;
+
+                $items[] = [
+                    'id' => $itemId,
+                    'order_number' => $orderNumber,
+                    'title' => trim((string)($row['title'] ?? 'Product')),
+                    'item_code' => $itemCode,
+                    'quantity' => $quantity,
+                    'product_weight' => $productWeight,
+                    'gst' => (string)($row['gst'] ?? '0'),
+                    'finalprice' => $finalprice,
+                    'item_total' => $quantity * $finalprice,
+                    'payment_type' => $paymentType,
+                    'groupname' => (string)($row['groupname'] ?? ''),
+                    'is_express' => $isExpress ? 1 : 0,
+                ];
+                $eligibleIds[] = $itemId;
+            }
+
+            if ($items === []) {
+                continue;
+            }
+
+            $shipCountry = strtoupper(trim((string)($orderInfo['shipping_country'] ?? '')));
+            $isInternational = $shipCountry !== '' && !in_array($shipCountry, ['IN', 'IND', 'INDIA'], true);
+            $customerName = trim(
+                trim((string)($orderInfo['first_name'] ?? '')) . ' ' . trim((string)($orderInfo['last_name'] ?? ''))
+            );
+            if ($customerName === '') {
+                $customerName = 'Customer';
+            }
+
+            $ordersOut[] = [
+                'order_number' => $orderNumber,
+                'customer_id' => (int)($orderInfo['customer_id'] ?? ($rows[0]['customer_id'] ?? 0)),
+                'customer_name' => $customerName,
+                'shipping_address' => (string)($addressCheck['address'] ?? ''),
+                'is_international' => $isInternational,
+                'items' => $items,
+            ];
+        }
+
+        return [
+            'orders' => $ordersOut,
+            'blocked' => $blocked,
+            'eligible_ids' => array_values(array_unique($eligibleIds)),
+        ];
+    }
+
     function getRemarksByOrderNumber($order_number)
     {
         $sql = "SELECT * FROM vp_order_info WHERE order_number = ?";

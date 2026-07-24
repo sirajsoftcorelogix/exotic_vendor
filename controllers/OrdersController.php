@@ -1699,6 +1699,53 @@ class OrdersController
         exit;
     }
 
+    /**
+     * Structured import payload for customer-page → bulk dispatch (no modal HTML scraping).
+     */
+    public function getBulkDispatchImportPayload()
+    {
+        is_login();
+        global $ordersModel;
+        header('Content-Type: application/json; charset=UTF-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+            exit;
+        }
+
+        $input = json_decode((string)file_get_contents('php://input'), true);
+        if (!is_array($input)) {
+            $input = [];
+        }
+        $orderIds = $input['order_ids'] ?? [];
+        if (!is_array($orderIds) || $orderIds === []) {
+            echo json_encode(['success' => false, 'message' => 'Invalid order IDs.']);
+            exit;
+        }
+        $customerId = isset($input['customer_id']) ? (int)$input['customer_id'] : 0;
+
+        $payload = $ordersModel->buildBulkDispatchImportPayload($orderIds, $customerId);
+        $orders = $payload['orders'];
+        $blocked = $payload['blocked'];
+        $eligibleIds = $payload['eligible_ids'];
+
+        if ($orders === [] && $blocked === []) {
+            echo json_encode(['success' => false, 'message' => 'No orders found for the selected items.']);
+            exit;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'orders' => $orders,
+            'blocked' => $blocked,
+            'eligible_ids' => $eligibleIds,
+            'eligible_count' => count($eligibleIds),
+            'blocked_count' => count($blocked),
+            'has_blocked' => $blocked !== [],
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     public function invoiceList()
     {
         is_login();

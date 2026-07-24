@@ -768,7 +768,6 @@ if ($end - $start < $slotSize - 1) {
     const SELECTION_KEY = 'customer_bulk_dispatch_selection_' + customerId;
     const HANDOFF_KEY = 'bulk_dispatch_preselect_ids';
     const ordersListBase = <?= json_encode(base_url('?page=orders&action=list')) ?>;
-    const bulkDispatchUrl = <?= json_encode(base_url('?page=dispatch&action=bulk_dispatch')) ?>;
 
     function escapeHtml(text) {
         return String(text ?? '')
@@ -902,12 +901,36 @@ if ($end - $start < $slotSize - 1) {
         }
     }
 
+    function buildBulkDispatchRedirectUrl(lineIds) {
+        const params = [
+            'page=dispatch',
+            'action=bulk_dispatch',
+            'import_ids=' + encodeURIComponent(lineIds.join(','))
+        ];
+        if (customerId > 0) {
+            params.push('customer_id=' + encodeURIComponent(String(customerId)));
+        }
+        return '?' + params.join('&');
+    }
+
     function addSelectionToBulkDispatch() {
         const map = syncPageIntoSelection();
         const items = Object.keys(map).map(function(id) { return map[id]; });
         const ids = items.map(function(item) { return item.id; }).filter(Boolean);
         if (!ids.length) {
             alert('Select at least one order item first.');
+            return;
+        }
+
+        const invalidOnPage = getPageCheckboxes()
+            .filter(function(cb) { return cb.checked; })
+            .map(checkboxToItem)
+            .filter(function(item) { return !item.id || item.id === '0'; });
+        if (invalidOnPage.length) {
+            alert(
+                'Could not read a valid order line ID for the selected item(s).\n'
+                + 'Please hard-refresh this page (Ctrl+F5) and try again.'
+            );
             return;
         }
 
@@ -950,22 +973,8 @@ if ($end - $start < $slotSize - 1) {
         eligible.forEach(function(item) { next[item.id] = item; });
         writeSelection(next);
 
-        // Primary handoff: URL query params (survives redirects; no sessionStorage dependency).
-        try {
-            const url = new URL(bulkDispatchUrl, window.location.origin);
-            url.searchParams.set('page', 'dispatch');
-            url.searchParams.set('action', 'bulk_dispatch');
-            url.searchParams.set('import_ids', handoffIds.join(','));
-            if (customerId > 0) {
-                url.searchParams.set('customer_id', String(customerId));
-            }
-            window.location.href = url.toString();
-        } catch (err) {
-            window.location.href = bulkDispatchUrl
-                + (bulkDispatchUrl.indexOf('?') >= 0 ? '&' : '?')
-                + 'import_ids=' + encodeURIComponent(handoffIds.join(','))
-                + (customerId > 0 ? '&customer_id=' + encodeURIComponent(String(customerId)) : '');
-        }
+        // Direct redirect — no pre-validation API call.
+        window.location.href = buildBulkDispatchRedirectUrl(handoffIds);
     }
 
     document.addEventListener('click', function(event) {
