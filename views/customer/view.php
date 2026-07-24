@@ -85,9 +85,13 @@ $renderAddonBadges = static function (array $order) use ($fmtMoney, $primaryCurr
     return $html !== '' ? $html : '<span class="text-gray-400">—</span>';
 };
 
-$buildStatusOrderPayload = static function (array $order): array {
+$resolveOrderLineId = static function (array $order): int {
+    return (int)($order['order_line_id'] ?? $order['id'] ?? 0);
+};
+
+$buildStatusOrderPayload = static function (array $order) use ($resolveOrderLineId): array {
     return [
-        'order_id' => (int)($order['id'] ?? 0),
+        'order_id' => $resolveOrderLineId($order),
         'order_number' => (string)($order['order_number'] ?? ''),
         'item_code' => (string)($order['item_code'] ?? $order['sku'] ?? ''),
         'vendor_name' => (string)($order['vendor_name'] ?? $order['vendor'] ?? ''),
@@ -390,13 +394,22 @@ if ($end - $start < $slotSize - 1) {
             <button type="button" id="customerActionMenuBtn" class="bg-[#d97706] hover:bg-[#b45309] text-white px-5 py-2 rounded-lg text-sm font-medium" onclick="document.getElementById('actionMenu').classList.toggle('hidden')" aria-label="Action menu">Actions</button>
             <div id="actionMenu" class="hidden absolute left-0 top-full mt-2 w-56 bg-white shadow-lg rounded-lg border py-1 z-50">
                 <a href="<?= htmlspecialchars(base_url('?page=pos_register&action=list')) ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Create POS order</a>
-                <a href="<?= htmlspecialchars(base_url('?page=dispatch&action=bulk_dispatch')) ?>" id="customerActionBulkDispatch" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Bulk dispatch</a>
-                <button type="button" id="customerActionBulkDispatchSelected" class="hidden w-full text-left px-4 py-2 text-sm text-orange-700 hover:bg-orange-50 font-medium" disabled>Bulk dispatch selected</button>
+                <a href="<?= htmlspecialchars(base_url('?page=dispatch&action=bulk_dispatch')) ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Open bulk dispatch</a>
                 <a href="<?= htmlspecialchars($exportUrl()) ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export orders (CSV)</a>
                 <button type="button" id="customerActionFindOrders" class="hidden w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" disabled>Find selected in Orders</button>
-                <button type="button" id="customerActionClearSelection" class="hidden w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100" disabled>Clear selection</button>
             </div>
         </div>
+        <button type="button" id="customerAddToBulkDispatchBtn"
+                class="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled>
+            Add to bulk dispatch
+            <span id="customer-selected-count" class="rounded bg-white/20 px-1.5 py-0.5 text-xs tabular-nums">0</span>
+        </button>
+        <button type="button" id="customerClearSelectionBtn"
+                class="hidden rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled>
+            Clear selection
+        </button>
         <div class="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
             <a href="<?= htmlspecialchars($viewUrl(['view_mode' => 'cards', 'page_no' => 1])) ?>"
                class="px-3 py-2 <?= $viewMode === 'cards' ? 'bg-gray-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50' ?>">Cards</a>
@@ -406,13 +419,14 @@ if ($end - $start < $slotSize - 1) {
         <div class="flex items-center gap-2 ml-auto text-sm text-gray-600">
             <input type="checkbox" id="customer-orders-select-all" class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
             <label for="customer-orders-select-all" class="cursor-pointer select-none">Select all on page</label>
-            <span id="customer-selected-count" class="text-xs text-gray-500 tabular-nums">(0 selected)</span>
-            <button type="button" id="customerClearSelectionBtn"
-                    class="hidden rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled>
-                Clear selection
-            </button>
         </div>
+    </div>
+    <div id="customer-selected-items-panel" class="hidden rounded-lg border border-orange-200 bg-orange-50/70 px-3 py-2 text-sm text-gray-700">
+        <div class="mb-1 flex items-center justify-between gap-2">
+            <span class="font-medium text-orange-900">Selected for bulk dispatch</span>
+            <span class="text-xs text-orange-800">Persists while this browser tab is open</span>
+        </div>
+        <div id="customer-selected-items-list" class="flex flex-wrap gap-1.5"></div>
     </div>
 
     <!-- Orders -->
@@ -445,7 +459,7 @@ if ($end - $start < $slotSize - 1) {
                     </thead>
                     <tbody class="divide-y divide-gray-100">
                         <?php foreach ($orders as $order):
-                            $orderLineId = (int)($order['id'] ?? 0);
+                            $orderLineId = $resolveOrderLineId($order);
                             $orderNumber = (string)($order['order_number'] ?? '');
                             $itemCode = (string)($order['item_code'] ?? $order['sku'] ?? '');
                             $status = (string)($order['status'] ?? 'pending');
@@ -459,7 +473,13 @@ if ($end - $start < $slotSize - 1) {
                         ?>
                         <tr class="hover:bg-gray-50/80">
                             <td class="px-3 py-3">
-                                <input type="checkbox" name="poitem[]" value="<?= $orderLineId ?>" class="customer-order-cb h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500" data-order-number="<?= htmlspecialchars($orderNumber) ?>">
+                                <input type="checkbox"
+                                       value="<?= $orderLineId ?>"
+                                       class="customer-dispatch-cb h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                                       data-order-line-id="<?= $orderLineId ?>"
+                                       data-order-number="<?= htmlspecialchars($orderNumber) ?>"
+                                       data-item-code="<?= htmlspecialchars($itemCode) ?>"
+                                       data-status="<?= htmlspecialchars($status) ?>">
                             </td>
                             <td class="px-3 py-3">
                                 <button type="button" class="js-customer-expand-image block w-12 h-12 rounded border overflow-hidden bg-gray-50 hover:ring-2 hover:ring-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500" data-full-src="<?= htmlspecialchars($imageUrl) ?>" data-image-alt="<?= htmlspecialchars($imageAlt) ?>">
@@ -498,7 +518,7 @@ if ($end - $start < $slotSize - 1) {
             </div>
         <?php else: ?>
             <?php foreach ($orders as $order):
-                $orderLineId = (int)($order['id'] ?? 0);
+                $orderLineId = $resolveOrderLineId($order);
                 $orderNumber = (string)($order['order_number'] ?? 'N/A');
                 $itemCode = (string)($order['item_code'] ?? $order['sku'] ?? 'N/A');
                 $productTitle = trim((string)($order['title'] ?? ''));
@@ -534,7 +554,13 @@ if ($end - $start < $slotSize - 1) {
                 <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start pr-10">
                     <div class="flex gap-3 min-w-0">
                         <div class="flex flex-col items-center gap-2 shrink-0">
-                            <input type="checkbox" name="poitem[]" value="<?= $orderLineId ?>" class="customer-order-cb h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500" data-order-number="<?= htmlspecialchars($orderNumber) ?>">
+                            <input type="checkbox"
+                                   value="<?= $orderLineId ?>"
+                                   class="customer-dispatch-cb h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                                   data-order-line-id="<?= $orderLineId ?>"
+                                   data-order-number="<?= htmlspecialchars($orderNumber) ?>"
+                                   data-item-code="<?= htmlspecialchars($itemCode) ?>"
+                                   data-status="<?= htmlspecialchars($status) ?>">
                             <button type="button" class="js-customer-expand-image w-16 h-16 rounded-lg border overflow-hidden bg-gray-50 hover:ring-2 hover:ring-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500" data-full-src="<?= htmlspecialchars($imageUrl) ?>" data-image-alt="<?= htmlspecialchars($imageAlt) ?>">
                                 <img src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($imageAlt) ?>" loading="lazy" decoding="async" class="w-full h-full object-cover">
                             </button>
@@ -736,44 +762,196 @@ if ($end - $start < $slotSize - 1) {
     <img id="customer-image-lightbox-img" src="" alt="" class="max-h-[90vh] max-w-full rounded-lg object-contain shadow-2xl ring-1 ring-white/10 bg-white">
 </div>
 
-<div id="customer-bulk-dispatch-blocked-modal"
-     class="fixed inset-0 z-[210] hidden items-center justify-center bg-black/50 p-4"
-     role="dialog" aria-modal="true" aria-labelledby="customer-bulk-dispatch-blocked-title">
-    <div class="relative w-full max-w-lg rounded-xl border border-amber-200 bg-white shadow-xl">
-        <div class="flex items-start justify-between gap-3 border-b border-amber-100 px-5 py-4">
-            <div>
-                <h3 id="customer-bulk-dispatch-blocked-title" class="text-lg font-semibold text-gray-900">Cannot dispatch some items</h3>
-                <p id="customer-bulk-dispatch-blocked-summary" class="mt-1 text-sm text-gray-600"></p>
-            </div>
-            <button type="button" id="customer-bulk-dispatch-blocked-close"
-                    class="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100"
-                    aria-label="Close">&times;</button>
-        </div>
-        <div class="max-h-64 overflow-y-auto px-5 py-4">
-            <ul id="customer-bulk-dispatch-blocked-list" class="space-y-2 text-sm"></ul>
-        </div>
-        <div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-5 py-3 rounded-b-xl">
-            <button type="button" id="customer-bulk-dispatch-blocked-cancel"
-                    class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                Cancel
-            </button>
-            <button type="button" id="customer-bulk-dispatch-blocked-continue"
-                    class="rounded-lg bg-[#d97706] px-4 py-2 text-sm font-medium text-white hover:bg-[#b45309] disabled:cursor-not-allowed disabled:opacity-50">
-                Continue with eligible
-            </button>
-        </div>
-    </div>
-</div>
-
 <script>
 (function() {
     const customerId = <?= (int)$customerId ?>;
-    const STORAGE_KEY = 'selected_customer_orders_' + customerId;
-    const ORDERS_LIST_STORAGE_KEY = 'selected_po_orders';
-    const BULK_DISPATCH_PRESELECT_KEY = 'bulk_dispatch_preselect_ids';
+    const SELECTION_KEY = 'customer_bulk_dispatch_selection_' + customerId;
+    const HANDOFF_KEY = 'bulk_dispatch_preselect_ids';
     const ordersListBase = <?= json_encode(base_url('?page=orders&action=list')) ?>;
     const bulkDispatchUrl = <?= json_encode(base_url('?page=dispatch&action=bulk_dispatch')) ?>;
-    const bulkDispatchValidateUrl = <?= json_encode(base_url('?page=orders&action=get_orders_for_bulk_dispatch')) ?>;
+
+    function escapeHtml(text) {
+        return String(text ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function itemLabel(item) {
+        const orderNumber = String(item.order_number || '').trim();
+        const itemCode = String(item.item_code || '').trim();
+        if (orderNumber && itemCode) return orderNumber + '-' + itemCode;
+        return orderNumber || itemCode || ('Line ' + item.id);
+    }
+
+    function readSelection() {
+        try {
+            const raw = sessionStorage.getItem(SELECTION_KEY);
+            const parsed = raw ? JSON.parse(raw) : {};
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+            const out = {};
+            Object.keys(parsed).forEach(function(id) {
+                const row = parsed[id];
+                if (!row || typeof row !== 'object') return;
+                const lineId = String(row.id || id).trim();
+                if (!/^\d+$/.test(lineId) || lineId === '0') return;
+                out[lineId] = {
+                    id: lineId,
+                    order_number: String(row.order_number || '').trim(),
+                    item_code: String(row.item_code || '').trim(),
+                    status: String(row.status || '').trim()
+                };
+            });
+            return out;
+        } catch (err) {
+            return {};
+        }
+    }
+
+    function writeSelection(map) {
+        sessionStorage.setItem(SELECTION_KEY, JSON.stringify(map || {}));
+    }
+
+    function getPageCheckboxes() {
+        return Array.from(document.querySelectorAll('input.customer-dispatch-cb'));
+    }
+
+    function checkboxToItem(cb) {
+        const id = String(cb.getAttribute('data-order-line-id') || cb.value || '').trim();
+        return {
+            id: id,
+            order_number: String(cb.getAttribute('data-order-number') || '').trim(),
+            item_code: String(cb.getAttribute('data-item-code') || '').trim(),
+            status: String(cb.getAttribute('data-status') || '').trim()
+        };
+    }
+
+    function syncPageIntoSelection() {
+        const map = readSelection();
+        getPageCheckboxes().forEach(function(cb) {
+            const item = checkboxToItem(cb);
+            if (!/^\d+$/.test(item.id) || item.id === '0') return;
+            if (cb.checked) {
+                map[item.id] = item;
+            } else {
+                delete map[item.id];
+            }
+        });
+        writeSelection(map);
+        return map;
+    }
+
+    function restoreCheckboxesFromSelection() {
+        const map = readSelection();
+        getPageCheckboxes().forEach(function(cb) {
+            const id = String(cb.getAttribute('data-order-line-id') || cb.value || '').trim();
+            cb.checked = !!map[id];
+        });
+    }
+
+    function clearSelection() {
+        try { sessionStorage.removeItem(SELECTION_KEY); } catch (err) {}
+        getPageCheckboxes().forEach(function(cb) { cb.checked = false; });
+        const selectAll = document.getElementById('customer-orders-select-all');
+        if (selectAll) {
+            selectAll.checked = false;
+            selectAll.indeterminate = false;
+        }
+        updateSelectionUi();
+    }
+
+    function updateSelectionUi() {
+        const map = readSelection();
+        const items = Object.keys(map).map(function(id) { return map[id]; });
+        const count = items.length;
+        const countEl = document.getElementById('customer-selected-count');
+        const addBtn = document.getElementById('customerAddToBulkDispatchBtn');
+        const clearBtn = document.getElementById('customerClearSelectionBtn');
+        const findBtn = document.getElementById('customerActionFindOrders');
+        const panel = document.getElementById('customer-selected-items-panel');
+        const list = document.getElementById('customer-selected-items-list');
+        const selectAll = document.getElementById('customer-orders-select-all');
+        const pageCbs = getPageCheckboxes();
+        const checkedOnPage = pageCbs.filter(function(cb) { return cb.checked; });
+
+        if (countEl) countEl.textContent = String(count);
+        if (addBtn) addBtn.disabled = count === 0;
+        if (clearBtn) {
+            clearBtn.disabled = count === 0;
+            clearBtn.classList.toggle('hidden', count === 0);
+        }
+        if (findBtn) {
+            findBtn.disabled = count === 0;
+            findBtn.classList.toggle('hidden', count === 0);
+        }
+        if (selectAll && pageCbs.length) {
+            selectAll.checked = checkedOnPage.length > 0 && checkedOnPage.length === pageCbs.length;
+            selectAll.indeterminate = checkedOnPage.length > 0 && checkedOnPage.length < pageCbs.length;
+        }
+        if (panel && list) {
+            panel.classList.toggle('hidden', count === 0);
+            list.innerHTML = items.map(function(item) {
+                return '<span class="inline-flex items-center gap-1 rounded-full border border-orange-300 bg-white px-2 py-0.5 text-xs text-gray-800">'
+                    + '<span class="font-medium">' + escapeHtml(itemLabel(item)) + '</span>'
+                    + '<button type="button" class="js-remove-selected-item text-gray-400 hover:text-red-600" data-id="'
+                    + escapeHtml(item.id) + '" aria-label="Remove">&times;</button>'
+                    + '</span>';
+            }).join('');
+        }
+    }
+
+    function addSelectionToBulkDispatch() {
+        const map = syncPageIntoSelection();
+        const items = Object.keys(map).map(function(id) { return map[id]; });
+        const ids = items.map(function(item) { return item.id; }).filter(Boolean);
+        if (!ids.length) {
+            alert('Select at least one order item first.');
+            return;
+        }
+
+        const blocked = items.filter(function(item) {
+            const status = String(item.status || '').toLowerCase();
+            return status === 'shipped' || status === 'cancelled';
+        });
+        const eligible = items.filter(function(item) {
+            const status = String(item.status || '').toLowerCase();
+            return status !== 'shipped' && status !== 'cancelled';
+        });
+        if (!eligible.length) {
+            alert(
+                'None of the selected items can be dispatched.\n\n'
+                + blocked.map(function(item) { return itemLabel(item) + ' (' + item.status + ')'; }).join('\n')
+            );
+            return;
+        }
+        if (blocked.length) {
+            const ok = confirm(
+                blocked.length + ' selected item(s) are shipped/cancelled and will be skipped:\n\n'
+                + blocked.map(function(item) { return itemLabel(item); }).join('\n')
+                + '\n\nContinue with ' + eligible.length + ' eligible item(s)?'
+            );
+            if (!ok) return;
+        }
+
+        const handoffIds = eligible.map(function(item) { return item.id; });
+        try {
+            sessionStorage.setItem(HANDOFF_KEY, JSON.stringify({
+                customer_id: customerId,
+                order_line_ids: handoffIds,
+                items: eligible
+            }));
+        } catch (err) {
+            alert('Unable to prepare bulk dispatch in this browser.');
+            return;
+        }
+
+        const next = {};
+        eligible.forEach(function(item) { next[item.id] = item; });
+        writeSelection(next);
+        window.location.href = bulkDispatchUrl;
+    }
 
     document.addEventListener('click', function(event) {
         const actionMenu = document.getElementById('actionMenu');
@@ -785,6 +963,16 @@ if ($end - $start < $slotSize - 1) {
             document.querySelectorAll('.order-card-menu').forEach(function(menu) {
                 menu.classList.add('hidden');
             });
+        }
+
+        const removeBtn = event.target.closest('.js-remove-selected-item');
+        if (removeBtn) {
+            const id = String(removeBtn.getAttribute('data-id') || '');
+            const map = readSelection();
+            delete map[id];
+            writeSelection(map);
+            restoreCheckboxesFromSelection();
+            updateSelectionUi();
         }
     });
 
@@ -814,388 +1002,52 @@ if ($end - $start < $slotSize - 1) {
         const trigger = e.target.closest('.js-customer-expand-image');
         if (!trigger) return;
         e.preventDefault();
-        const url = trigger.getAttribute('data-full-src') || '';
-        const alt = trigger.getAttribute('data-image-alt') || 'Product image';
-        openCustomerImage(url, alt);
+        openCustomerImage(trigger.getAttribute('data-full-src') || '', trigger.getAttribute('data-image-alt') || 'Product image');
     });
-
     if (lbClose) lbClose.addEventListener('click', closeCustomerImage);
     if (lb) lb.addEventListener('click', function(e) { if (e.target === lb) closeCustomerImage(); });
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' && lb && !lb.classList.contains('hidden')) closeCustomerImage();
     });
 
-    function getOrderCheckboxes() {
-        return Array.from(document.querySelectorAll('input.customer-order-cb[name="poitem[]"]'));
-    }
-
-    function normalizeIds(ids) {
-        const seen = {};
-        const out = [];
-        (Array.isArray(ids) ? ids : []).forEach(function(id) {
-            const value = String(id == null ? '' : id).trim();
-            if (!value || seen[value]) return;
-            seen[value] = true;
-            out.push(value);
-        });
-        return out;
-    }
-
-    function getStoredSelection() {
-        try {
-            return normalizeIds(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'));
-        } catch (err) {
-            return [];
-        }
-    }
-
-    function setStoredSelection(ids) {
-        const normalized = normalizeIds(ids);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
-        return normalized;
-    }
-
-    function saveCheckedOrders() {
-        let checked = getStoredSelection();
-        const allCbs = getOrderCheckboxes();
-        const checkedOnPage = allCbs.filter(function(cb) { return cb.checked; }).map(function(cb) { return String(cb.value); });
-        const uncheckedOnPage = allCbs.filter(function(cb) { return !cb.checked; }).map(function(cb) { return String(cb.value); });
-        checked = checked.filter(function(id) { return uncheckedOnPage.indexOf(id) === -1; });
-        checkedOnPage.forEach(function(id) {
-            if (checked.indexOf(id) === -1) checked.push(id);
-        });
-        return setStoredSelection(checked);
-    }
-
-    function restoreCheckedOrders() {
-        const checked = getStoredSelection();
-        getOrderCheckboxes().forEach(function(cb) {
-            cb.checked = checked.indexOf(String(cb.value)) !== -1;
-        });
-    }
-
-    function clearCustomerSelection() {
-        localStorage.removeItem(STORAGE_KEY);
-        getOrderCheckboxes().forEach(function(cb) { cb.checked = false; });
-        const selectAll = document.getElementById('customer-orders-select-all');
-        if (selectAll) {
-            selectAll.checked = false;
-            selectAll.indeterminate = false;
-        }
-        updateSelectionUi();
-    }
-
-    function updateSelectionUi() {
-        const stored = getStoredSelection();
-        const countEl = document.getElementById('customer-selected-count');
-        const selectAll = document.getElementById('customer-orders-select-all');
-        const findBtn = document.getElementById('customerActionFindOrders');
-        const clearBtn = document.getElementById('customerActionClearSelection');
-        const clearToolbarBtn = document.getElementById('customerClearSelectionBtn');
-        const bulkSelectedBtn = document.getElementById('customerActionBulkDispatchSelected');
-        const cbs = getOrderCheckboxes();
-        const checkedOnPage = cbs.filter(function(cb) { return cb.checked; });
-
-        if (countEl) {
-            countEl.textContent = '(' + stored.length + ' selected)';
-        }
-        if (selectAll && cbs.length) {
-            selectAll.checked = cbs.length > 0 && checkedOnPage.length === cbs.length;
-            selectAll.indeterminate = checkedOnPage.length > 0 && checkedOnPage.length < cbs.length;
-        }
-        const hasSelection = stored.length > 0;
-        [findBtn, clearBtn, clearToolbarBtn, bulkSelectedBtn].forEach(function(btn) {
-            if (!btn) return;
-            btn.disabled = !hasSelection;
-            btn.classList.toggle('hidden', !hasSelection);
-            btn.classList.toggle('opacity-50', !hasSelection);
-        });
-        if (bulkSelectedBtn && hasSelection) {
-            bulkSelectedBtn.textContent = 'Bulk dispatch selected (' + stored.length + ')';
-        }
-    }
-
-    function goToBulkDispatchWithIds(ids) {
-        const normalized = normalizeIds(ids);
-        if (!normalized.length) {
-            alert('No eligible items left to dispatch.');
-            return;
-        }
-        try {
-            sessionStorage.setItem(BULK_DISPATCH_PRESELECT_KEY, JSON.stringify(normalized));
-        } catch (err) {
-            alert('Unable to prepare bulk dispatch selection in this browser.');
-            return;
-        }
-        window.location.href = bulkDispatchUrl;
-    }
-
-    function escapeHtml(text) {
-        return String(text ?? '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-
-    function formatStatusLabel(status) {
-        const value = String(status || '').trim().toLowerCase();
-        if (!value) return 'Unknown';
-        return value.replace(/_/g, ' ').replace(/\b\w/g, function(ch) { return ch.toUpperCase(); });
-    }
-
-    function formatBlockedItemLabel(row) {
-        const orderNumber = String(row.order_number || '').trim();
-        const itemCode = String(row.item_code || '').trim();
-        if (orderNumber && itemCode) return orderNumber + '-' + itemCode;
-        if (orderNumber) return 'Order ' + orderNumber;
-        return itemCode || 'Unknown item';
-    }
-
-    const blockedModal = document.getElementById('customer-bulk-dispatch-blocked-modal');
-    const blockedListEl = document.getElementById('customer-bulk-dispatch-blocked-list');
-    const blockedSummaryEl = document.getElementById('customer-bulk-dispatch-blocked-summary');
-    const blockedContinueBtn = document.getElementById('customer-bulk-dispatch-blocked-continue');
-    let pendingEligibleIds = [];
-
-    function closeBlockedModal() {
-        if (!blockedModal) return;
-        blockedModal.classList.add('hidden');
-        blockedModal.classList.remove('flex');
-        document.body.style.overflow = '';
-        pendingEligibleIds = [];
-    }
-
-    function openBlockedModal(blocked, eligibleIds) {
-        if (!blockedModal || !blockedListEl || !blockedSummaryEl || !blockedContinueBtn) {
-            alert('Some selected items are cancelled or shipped and cannot be dispatched.');
-            return;
-        }
-
-        const cancelledCount = blocked.filter(function(row) {
-            return String(row.status || '').toLowerCase() === 'cancelled';
-        }).length;
-        const shippedCount = blocked.filter(function(row) {
-            return String(row.status || '').toLowerCase() === 'shipped';
-        }).length;
-        const parts = [];
-        if (cancelledCount) parts.push(cancelledCount + ' cancelled');
-        if (shippedCount) parts.push(shippedCount + ' shipped');
-        const eligibleCount = Array.isArray(eligibleIds) ? eligibleIds.length : 0;
-
-        blockedSummaryEl.textContent = parts.join(' and ')
-            + ' item(s) cannot be moved to bulk dispatch.'
-            + (eligibleCount > 0
-                ? ' You can continue with the remaining ' + eligibleCount + ' eligible item(s).'
-                : ' There are no eligible items left to dispatch.');
-
-        blockedListEl.innerHTML = blocked.map(function(row) {
-            const status = String(row.status || '').toLowerCase();
-            const badgeClass = status === 'shipped'
-                ? 'bg-green-100 text-green-800'
-                : 'bg-red-100 text-red-800';
-            return '<li class="flex items-start justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2">'
-                + '<div class="min-w-0">'
-                + '<p class="font-medium text-gray-900 truncate">' + escapeHtml(formatBlockedItemLabel(row)) + '</p>'
-                + '<p class="text-xs text-gray-500 truncate">Line ID ' + escapeHtml(String(row.order_id || '')) + '</p>'
-                + '</div>'
-                + '<span class="shrink-0 rounded px-2 py-0.5 text-xs font-medium ' + badgeClass + '">'
-                + escapeHtml(formatStatusLabel(status))
-                + '</span>'
-                + '</li>';
-        }).join('');
-
-        pendingEligibleIds = Array.isArray(eligibleIds) ? eligibleIds.slice() : [];
-        blockedContinueBtn.disabled = pendingEligibleIds.length === 0;
-        blockedContinueBtn.classList.toggle('hidden', pendingEligibleIds.length === 0);
-        blockedModal.classList.remove('hidden');
-        blockedModal.classList.add('flex');
-        document.body.style.overflow = 'hidden';
-    }
-
-    if (blockedContinueBtn) {
-        blockedContinueBtn.addEventListener('click', function() {
-            const ids = pendingEligibleIds.slice();
-            closeBlockedModal();
-            goToBulkDispatchWithIds(ids);
-        });
-    }
-    const blockedCancelBtn = document.getElementById('customer-bulk-dispatch-blocked-cancel');
-    const blockedCloseBtn = document.getElementById('customer-bulk-dispatch-blocked-close');
-    if (blockedCancelBtn) blockedCancelBtn.addEventListener('click', closeBlockedModal);
-    if (blockedCloseBtn) blockedCloseBtn.addEventListener('click', closeBlockedModal);
-    if (blockedModal) {
-        blockedModal.addEventListener('click', function(e) {
-            if (e.target === blockedModal) closeBlockedModal();
-        });
-    }
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && blockedModal && !blockedModal.classList.contains('hidden')) {
-            closeBlockedModal();
-        }
-    });
-
-    function validateSelectionForBulkDispatch(ids) {
-        return fetch(bulkDispatchValidateUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({ order_ids: ids, customer_id: customerId })
-        }).then(function(response) {
-            return response.text().then(function(text) {
-                let data = null;
-                try {
-                    data = text ? JSON.parse(text) : null;
-                } catch (err) {
-                    throw new Error('Invalid response while validating bulk dispatch selection.');
-                }
-                if (!response.ok) {
-                    throw new Error((data && data.message) || 'Unable to validate bulk dispatch selection.');
-                }
-                return data;
-            });
-        });
-    }
-
-    function removeIdsFromSelection(idsToRemove) {
-        const removeSet = {};
-        normalizeIds(idsToRemove).forEach(function(id) { removeSet[id] = true; });
-        const next = getStoredSelection().filter(function(id) { return !removeSet[id]; });
-        setStoredSelection(next);
-        restoreCheckedOrders();
-        updateSelectionUi();
-        return next;
-    }
-
-    function goToBulkDispatchWithSelection() {
-        const ids = saveCheckedOrders();
-        if (!ids.length) {
-            alert('Please select at least one order item to dispatch.');
-            return;
-        }
-
-        const actionMenu = document.getElementById('actionMenu');
-        if (actionMenu) actionMenu.classList.add('hidden');
-
-        validateSelectionForBulkDispatch(ids)
-            .then(function(data) {
-                if (!data || !data.success) {
-                    alert((data && data.message) || 'Unable to prepare selected items for bulk dispatch.');
-                    return;
-                }
-
-                const blocked = Array.isArray(data.blocked) ? data.blocked : [];
-                const eligibleIds = normalizeIds(data.eligible_ids || []);
-
-                // Drop cancelled/shipped IDs from this customer's selection so the count stays accurate.
-                if (blocked.length) {
-                    removeIdsFromSelection(blocked.map(function(row) { return row.order_id; }));
-                }
-
-                if (blocked.length > 0) {
-                    openBlockedModal(blocked, eligibleIds);
-                    return;
-                }
-
-                goToBulkDispatchWithIds(eligibleIds.length ? eligibleIds : ids);
-            })
-            .catch(function(err) {
-                console.error(err);
-                alert((err && err.message) || 'Failed to validate selected items for bulk dispatch.');
-            });
-    }
-
-    function pruneIneligibleStoredSelection() {
-        const ids = getStoredSelection();
-        if (!ids.length) return;
-
-        validateSelectionForBulkDispatch(ids)
-            .then(function(data) {
-                if (!data || !data.success) return;
-                const blocked = Array.isArray(data.blocked) ? data.blocked : [];
-                const eligibleIds = normalizeIds(data.eligible_ids || []);
-                // Keep only IDs that still exist and are dispatch-eligible for this customer.
-                const keep = eligibleIds.length || blocked.length
-                    ? eligibleIds
-                    : [];
-                if (blocked.length || keep.length !== ids.length) {
-                    setStoredSelection(keep);
-                    restoreCheckedOrders();
-                    updateSelectionUi();
-                }
-            })
-            .catch(function() {
-                // Non-blocking: leave selection as-is if prune fails.
-            });
-    }
-
     const selectAllEl = document.getElementById('customer-orders-select-all');
     if (selectAllEl) {
         selectAllEl.addEventListener('change', function() {
-            getOrderCheckboxes().forEach(function(cb) {
-                cb.checked = selectAllEl.checked;
-            });
-            saveCheckedOrders();
+            getPageCheckboxes().forEach(function(cb) { cb.checked = selectAllEl.checked; });
+            syncPageIntoSelection();
             updateSelectionUi();
         });
     }
 
     document.addEventListener('change', function(e) {
-        if (e.target && e.target.classList && e.target.classList.contains('customer-order-cb')) {
-            saveCheckedOrders();
+        if (e.target && e.target.classList && e.target.classList.contains('customer-dispatch-cb')) {
+            syncPageIntoSelection();
             updateSelectionUi();
         }
     });
 
+    const addBtn = document.getElementById('customerAddToBulkDispatchBtn');
+    if (addBtn) addBtn.addEventListener('click', addSelectionToBulkDispatch);
+
+    const clearBtn = document.getElementById('customerClearSelectionBtn');
+    if (clearBtn) clearBtn.addEventListener('click', clearSelection);
+
     const findBtn = document.getElementById('customerActionFindOrders');
     if (findBtn) {
         findBtn.addEventListener('click', function() {
-            const cbs = getOrderCheckboxes().filter(function(cb) { return cb.checked; });
-            if (!cbs.length) return;
-            const orderNum = cbs[0].getAttribute('data-order-number') || '';
-            const ids = saveCheckedOrders();
-            // Orders list still uses the shared key — sync only when navigating there.
+            const map = syncPageIntoSelection();
+            const items = Object.keys(map).map(function(id) { return map[id]; });
+            if (!items.length) return;
+            const ids = items.map(function(item) { return item.id; });
+            const orderNum = items[0].order_number || '';
             try {
-                localStorage.setItem(ORDERS_LIST_STORAGE_KEY, JSON.stringify(ids));
+                localStorage.setItem('selected_po_orders', JSON.stringify(ids));
             } catch (err) {}
             window.location.href = ordersListBase + (orderNum ? '&search=' + encodeURIComponent(orderNum) : '');
         });
     }
 
-    const bulkSelectedBtn = document.getElementById('customerActionBulkDispatchSelected');
-    if (bulkSelectedBtn) {
-        bulkSelectedBtn.addEventListener('click', function() {
-            goToBulkDispatchWithSelection();
-        });
-    }
-
-    const bulkDispatchLink = document.getElementById('customerActionBulkDispatch');
-    if (bulkDispatchLink) {
-        bulkDispatchLink.addEventListener('click', function(e) {
-            const ids = getStoredSelection();
-            if (!ids.length) {
-                return;
-            }
-            e.preventDefault();
-            goToBulkDispatchWithSelection();
-        });
-    }
-
-    const clearBtn = document.getElementById('customerActionClearSelection');
-    if (clearBtn) {
-        clearBtn.addEventListener('click', clearCustomerSelection);
-    }
-    const clearToolbarBtn = document.getElementById('customerClearSelectionBtn');
-    if (clearToolbarBtn) {
-        clearToolbarBtn.addEventListener('click', clearCustomerSelection);
-    }
-
-    restoreCheckedOrders();
+    restoreCheckboxesFromSelection();
     updateSelectionUi();
-    pruneIneligibleStoredSelection();
 })();
 </script>
