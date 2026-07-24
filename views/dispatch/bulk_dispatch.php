@@ -3291,5 +3291,143 @@
             }
         }
     });
+
+    /**
+     * Prefill from customer/orders selection:
+     * sessionStorage.bulk_dispatch_preselect_ids = ["123","456"]
+     */
+    (async function preloadSelectedOrdersFromCustomerPage() {
+        const PRESELECT_KEY = 'bulk_dispatch_preselect_ids';
+        let raw = null;
+        try {
+            raw = sessionStorage.getItem(PRESELECT_KEY);
+        } catch (err) {
+            return;
+        }
+        if (!raw) {
+            return;
+        }
+        try {
+            sessionStorage.removeItem(PRESELECT_KEY);
+        } catch (err) {}
+
+        let selectedIds = [];
+        try {
+            selectedIds = JSON.parse(raw) || [];
+        } catch (err) {
+            selectedIds = [];
+        }
+        selectedIds = Array.from(new Set(
+            (Array.isArray(selectedIds) ? selectedIds : [])
+                .map(function(id) { return String(id).trim(); })
+                .filter(Boolean)
+        ));
+        if (!selectedIds.length) {
+            return;
+        }
+
+        const addBtn = modal.querySelector('#addToInvoiceBtn');
+        if (!addBtn) {
+            showAlert('Bulk dispatch UI is not ready to import selected items.', 'error');
+            return;
+        }
+
+        showAlert('Loading ' + selectedIds.length + ' selected item(s) into bulk dispatch…', 'success');
+
+        let groups = [];
+        try {
+            const groupResp = await fetch('?page=orders&action=get_orders_for_bulk_dispatch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ order_ids: selectedIds })
+            });
+            const groupData = await groupResp.json();
+            if (!groupData.success || !Array.isArray(groupData.orders) || !groupData.orders.length) {
+                showAlert((groupData && groupData.message) || 'No orders found for selected items.', 'error');
+                return;
+            }
+            groups = groupData.orders;
+        } catch (err) {
+            console.error(err);
+            showAlert('Failed to resolve selected orders for bulk dispatch.', 'error');
+            return;
+        }
+
+        let addedOrders = 0;
+        let skippedOrders = 0;
+
+        for (const group of groups) {
+            const orderNumber = String(group.order_number || '').trim();
+            const itemIds = Array.isArray(group.item_ids)
+                ? group.item_ids.map(function(id) { return String(id); })
+                : [];
+            if (!orderNumber || !itemIds.length) {
+                skippedOrders++;
+                continue;
+            }
+
+            try {
+                const itemResp = await fetch('?page=orders&action=get_order_items_for_dispatch&order_number=' + encodeURIComponent(orderNumber));
+                const data = await itemResp.json();
+                if (!data.success) {
+                    skippedOrders++;
+                    showAlert((data && data.message) || ('Could not load order #' + orderNumber), 'warning');
+                    continue;
+                }
+
+                if (document.querySelector('[data-order-number="' + orderNumber + '"]')) {
+                    skippedOrders++;
+                    showAlert('Order #' + orderNumber + ' is already in bulk dispatch.', 'warning');
+                    continue;
+                }
+
+                currentShippingAddress = data.shipping_address || '';
+                modal.dataset.orderTheme = data.is_international ? 'international' : 'domestic';
+
+                const orderNoLink = modal.querySelector('.flex.justify-between div:first-child a');
+                const customerLink = modal.querySelector('.flex.justify-between div:last-child a');
+                if (orderNoLink) orderNoLink.textContent = data.order_number;
+                if (customerLink) customerLink.textContent = data.customer_name + ' - ' + data.customer_id;
+
+                const tbody = modal.querySelector('tbody');
+                if (tbody) {
+                    tbody.innerHTML = data.items_html;
+                }
+
+                const idSet = new Set(itemIds);
+                let checkedCount = 0;
+                modal.querySelectorAll('tbody tr').forEach(function(row) {
+                    const cb = row.querySelector('input[type="checkbox"]');
+                    if (!cb) return;
+                    const shouldCheck = idSet.has(String(cb.value));
+                    cb.checked = shouldCheck;
+                    if (shouldCheck) checkedCount++;
+                });
+
+                if (checkedCount === 0) {
+                    skippedOrders++;
+                    showAlert('No dispatchable selected items found for order #' + orderNumber + '.', 'warning');
+                    continue;
+                }
+
+                currentBox = null;
+                addBtn.click();
+                addedOrders++;
+            } catch (err) {
+                console.error(err);
+                skippedOrders++;
+                showAlert('Error loading order #' + orderNumber, 'error');
+            }
+        }
+
+        if (addedOrders > 0) {
+            showAlert('Added ' + addedOrders + ' order(s) from selection' + (skippedOrders ? ' (' + skippedOrders + ' skipped)' : '') + '.', 'success');
+            try {
+                localStorage.removeItem('selected_po_orders');
+            } catch (err) {}
+        } else if (skippedOrders > 0) {
+            showAlert('Selected items could not be added. They may already be invoiced/cancelled or missing a shipping address.', 'warning');
+        }
+    })();
 })();
 </script>

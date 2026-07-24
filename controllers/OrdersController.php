@@ -1651,6 +1651,53 @@ class OrdersController
         exit;
     }
 
+    /**
+     * Resolve selected order-line IDs into order_number groups for bulk dispatch preload.
+     * Also reports cancelled/shipped items that cannot be dispatched.
+     */
+    public function getOrdersForBulkDispatch()
+    {
+        is_login();
+        global $ordersModel;
+        header('Content-Type: application/json; charset=UTF-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+            exit;
+        }
+
+        $input = json_decode((string)file_get_contents('php://input'), true);
+        if (!is_array($input)) {
+            $input = [];
+        }
+        $orderIds = $input['order_ids'] ?? [];
+        if (!is_array($orderIds) || $orderIds === []) {
+            echo json_encode(['success' => false, 'message' => 'Invalid order IDs.']);
+            exit;
+        }
+
+        $split = $ordersModel->splitOrderIdsForBulkDispatch($orderIds);
+        $groups = $split['orders'];
+        $blocked = $split['blocked'];
+        $eligibleIds = $split['eligible_ids'];
+
+        if ($groups === [] && $blocked === []) {
+            echo json_encode(['success' => false, 'message' => 'No orders found for the selected items.']);
+            exit;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'orders' => $groups,
+            'eligible_ids' => $eligibleIds,
+            'blocked' => $blocked,
+            'eligible_count' => count($eligibleIds),
+            'blocked_count' => count($blocked),
+            'has_blocked' => $blocked !== [],
+        ]);
+        exit;
+    }
+
     public function invoiceList()
     {
         is_login();

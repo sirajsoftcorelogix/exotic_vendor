@@ -1087,6 +1087,82 @@ class Order
         return null;
     }
 
+    /**
+     * Group selected vp_orders line IDs by order_number for bulk dispatch preload.
+     *
+     * @param list<int|string> $orderIds
+     * @return list<array{order_number:string,item_ids:list<int>}>
+     */
+    public function getOrderNumberGroupsByIds(array $orderIds): array
+    {
+        $split = $this->splitOrderIdsForBulkDispatch($orderIds);
+        return $split['orders'];
+    }
+
+    /**
+     * Split selected line IDs into dispatch-eligible groups vs cancelled/shipped blocked rows.
+     *
+     * @param list<int|string> $orderIds
+     * @return array{
+     *   orders: list<array{order_number:string,item_ids:list<int>}>,
+     *   eligible_ids: list<int>,
+     *   blocked: list<array{order_id:int,order_number:string,item_code:string,status:string}>
+     * }
+     */
+    public function splitOrderIdsForBulkDispatch(array $orderIds): array
+    {
+        $empty = [
+            'orders' => [],
+            'eligible_ids' => [],
+            'blocked' => [],
+        ];
+        $rows = $this->getOrdersByIds($orderIds);
+        if (!is_array($rows) || $rows === []) {
+            return $empty;
+        }
+
+        $blockedStatuses = ['cancelled', 'shipped'];
+        $grouped = [];
+        $eligibleIds = [];
+        $blocked = [];
+
+        foreach ($rows as $row) {
+            $orderNumber = trim((string)($row['order_number'] ?? ''));
+            $itemId = (int)($row['id'] ?? 0);
+            if ($orderNumber === '' || $itemId <= 0) {
+                continue;
+            }
+
+            $status = strtolower(trim((string)($row['status'] ?? '')));
+            if (in_array($status, $blockedStatuses, true)) {
+                $blocked[] = [
+                    'order_id' => $itemId,
+                    'order_number' => $orderNumber,
+                    'item_code' => trim((string)($row['item_code'] ?? $row['sku'] ?? '')),
+                    'status' => $status,
+                ];
+                continue;
+            }
+
+            $eligibleIds[] = $itemId;
+            if (!isset($grouped[$orderNumber])) {
+                $grouped[$orderNumber] = [
+                    'order_number' => $orderNumber,
+                    'item_ids' => [],
+                ];
+            }
+            if (!in_array($itemId, $grouped[$orderNumber]['item_ids'], true)) {
+                $grouped[$orderNumber]['item_ids'][] = $itemId;
+            }
+        }
+
+        return [
+            'orders' => array_values($grouped),
+            'eligible_ids' => array_values(array_unique($eligibleIds)),
+            'blocked' => $blocked,
+        ];
+    }
+
     function getRemarksByOrderNumber($order_number)
     {
         $sql = "SELECT * FROM vp_order_info WHERE order_number = ?";
