@@ -89,6 +89,21 @@ $resolveOrderLineId = static function (array $order): int {
     return (int)($order['order_line_id'] ?? $order['id'] ?? 0);
 };
 
+$isDispatchEligible = static function (array $order) use ($resolveOrderLineId): bool {
+    if ($resolveOrderLineId($order) <= 0) {
+        return false;
+    }
+    if (!empty($order['linked_invoice_id'])) {
+        return false;
+    }
+    $invoiceId = (int)($order['invoice_id'] ?? 0);
+    if ($invoiceId > 0) {
+        return false;
+    }
+    $status = strtolower(trim((string)($order['status'] ?? '')));
+    return !in_array($status, ['cancelled', 'shipped', 'returned'], true);
+};
+
 $buildStatusOrderPayload = static function (array $order) use ($resolveOrderLineId): array {
     return [
         'order_id' => $resolveOrderLineId($order),
@@ -470,9 +485,11 @@ if ($end - $start < $slotSize - 1) {
                             $imageUrl = (string)($order['image'] ?? 'https://via.placeholder.com/60');
                             $imageAlt = trim($itemCode . ' ' . (string)($order['title'] ?? ''));
                             $statusOrderPayload = $buildStatusOrderPayload($order);
+                            $canDispatch = $isDispatchEligible($order);
                         ?>
                         <tr class="hover:bg-gray-50/80">
                             <td class="px-3 py-3">
+                                <?php if ($canDispatch && $orderLineId > 0): ?>
                                 <input type="checkbox"
                                        value="<?= $orderLineId ?>"
                                        class="customer-dispatch-cb h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
@@ -480,6 +497,9 @@ if ($end - $start < $slotSize - 1) {
                                        data-order-number="<?= htmlspecialchars($orderNumber) ?>"
                                        data-item-code="<?= htmlspecialchars($itemCode) ?>"
                                        data-status="<?= htmlspecialchars($status) ?>">
+                                <?php else: ?>
+                                <span class="inline-block h-4 w-4" title="Not eligible for bulk dispatch"></span>
+                                <?php endif; ?>
                             </td>
                             <td class="px-3 py-3">
                                 <button type="button" class="js-customer-expand-image block w-12 h-12 rounded border overflow-hidden bg-gray-50 hover:ring-2 hover:ring-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500" data-full-src="<?= htmlspecialchars($imageUrl) ?>" data-image-alt="<?= htmlspecialchars($imageAlt) ?>">
@@ -537,6 +557,7 @@ if ($end - $start < $slotSize - 1) {
                 $imageUrl = (string)($order['image'] ?? 'https://via.placeholder.com/60');
                 $imageAlt = trim($itemCode . ' ' . $productTitle);
                 $statusOrderPayload = $buildStatusOrderPayload($order);
+                $canDispatch = $isDispatchEligible($order);
             ?>
             <div class="order-card-item bg-white shadow-sm border border-gray-100 rounded-xl p-5 mt-4 relative">
                 <span id="order-id-<?= $orderLineId ?>" class="hidden" data-order='<?= htmlspecialchars(json_encode($statusOrderPayload), ENT_QUOTES, 'UTF-8') ?>'></span>
@@ -554,6 +575,7 @@ if ($end - $start < $slotSize - 1) {
                 <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start pr-10">
                     <div class="flex gap-3 min-w-0">
                         <div class="flex flex-col items-center gap-2 shrink-0">
+                            <?php if ($canDispatch && $orderLineId > 0): ?>
                             <input type="checkbox"
                                    value="<?= $orderLineId ?>"
                                    class="customer-dispatch-cb h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
@@ -561,6 +583,7 @@ if ($end - $start < $slotSize - 1) {
                                    data-order-number="<?= htmlspecialchars($orderNumber) ?>"
                                    data-item-code="<?= htmlspecialchars($itemCode) ?>"
                                    data-status="<?= htmlspecialchars($status) ?>">
+                            <?php endif; ?>
                             <button type="button" class="js-customer-expand-image w-16 h-16 rounded-lg border overflow-hidden bg-gray-50 hover:ring-2 hover:ring-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500" data-full-src="<?= htmlspecialchars($imageUrl) ?>" data-image-alt="<?= htmlspecialchars($imageAlt) ?>">
                                 <img src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($imageAlt) ?>" loading="lazy" decoding="async" class="w-full h-full object-cover">
                             </button>
@@ -902,15 +925,9 @@ if ($end - $start < $slotSize - 1) {
     }
 
     function buildBulkDispatchRedirectUrl(lineIds) {
-        const params = [
-            'page=dispatch',
-            'action=bulk_dispatch',
-            'import_ids=' + encodeURIComponent(lineIds.join(','))
-        ];
-        if (customerId > 0) {
-            params.push('customer_id=' + encodeURIComponent(String(customerId)));
-        }
-        return '?' + params.join('&');
+        return <?= json_encode(base_url('?page=dispatch&action=bulk_dispatch'), JSON_UNESCAPED_UNICODE) ?>
+            + '&import_ids=' + encodeURIComponent(lineIds.join(','))
+            + (customerId > 0 ? ('&customer_id=' + encodeURIComponent(String(customerId))) : '');
     }
 
     function addSelectionToBulkDispatch() {
@@ -936,11 +953,11 @@ if ($end - $start < $slotSize - 1) {
 
         const blocked = items.filter(function(item) {
             const status = String(item.status || '').toLowerCase();
-            return status === 'shipped' || status === 'cancelled';
+            return status === 'shipped' || status === 'cancelled' || status === 'returned';
         });
         const eligible = items.filter(function(item) {
             const status = String(item.status || '').toLowerCase();
-            return status !== 'shipped' && status !== 'cancelled';
+            return status !== 'shipped' && status !== 'cancelled' && status !== 'returned';
         });
         if (!eligible.length) {
             alert(
