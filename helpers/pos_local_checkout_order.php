@@ -303,7 +303,7 @@ function pos_local_checkout_persist_order(
             'currency' => trim((string)($row['currency'] ?? 'INR')),
             'itemprice' => number_format(max(0, $listUnit), 2, '.', ''),
             'finalprice' => number_format(max(0, $finalUnit), 2, '.', ''),
-            'image' => trim((string)($row['image'] ?? '')),
+            'image' => pos_local_checkout_resolve_line_image($conn, $row, $itemCode),
             'marketplace_vendor' => trim((string)($row['marketplace_vendor'] ?? 'exoticindia')),
             'quantity' => (string)$qty,
             'options' => $row['options'] ?? 0,
@@ -508,6 +508,58 @@ function pos_local_checkout_build_variation_from_size_color(string $size, string
     }
 
     return $size . ':' . $color;
+}
+
+function pos_local_checkout_fix_image_url(string $path): string
+{
+    $path = trim($path);
+    if ($path === '') {
+        return '';
+    }
+    if (str_starts_with($path, '//')) {
+        return 'https:' . $path;
+    }
+    if (preg_match('/^https?:\/\//i', $path)) {
+        return $path;
+    }
+    if ($path[0] === '/') {
+        return 'https://www.exoticindia.com' . $path;
+    }
+
+    return 'https://cdn.exoticindia.com/' . ltrim($path, '/');
+}
+
+function pos_local_checkout_resolve_line_image(mysqli $conn, array $row, string $itemCode): string
+{
+    foreach (['imageurl', 'image_url', 'image', 'thumb', 'thumbnail'] as $key) {
+        if (empty($row[$key]) || !is_string($row[$key])) {
+            continue;
+        }
+        $url = pos_local_checkout_fix_image_url(trim($row[$key]));
+        if ($url !== '') {
+            return $url;
+        }
+    }
+
+    $itemCode = trim($itemCode);
+    if ($itemCode === '') {
+        return '';
+    }
+
+    $stmt = $conn->prepare(
+        'SELECT image FROM vp_products
+         WHERE is_active = 1 AND (item_code = ? OR sku = ?) AND TRIM(image) != \'\'
+         ORDER BY id DESC LIMIT 1'
+    );
+    if (!$stmt) {
+        return '';
+    }
+    $stmt->bind_param('ss', $itemCode, $itemCode);
+    $stmt->execute();
+    $product = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return pos_local_checkout_fix_image_url(trim((string)($product['image'] ?? '')));
 }
 
 function pos_local_checkout_map_pos_payment_mode_to_exotic(string $posMode): string
