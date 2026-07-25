@@ -4834,72 +4834,70 @@ class POSRegisterController
     }
 
     /**
-     * POST /api/order/create body (application/x-www-form-urlencoded) per ExoticIndia API:
-     * payment_type, buynow, checkoutdata (verbatim from cart retrieve), cod/codcharges fixed for counter sale,
-     * billing/shipping fields, optional Razorpay / store_payment_details.
+     * Always send shipping on order/create. Short checkoutdata tokens (3049898|INR|34000) do not
+     * embed address; omitting s* fields breaks checkout (regression after Exotic cart API change ~Jul 2026).
      *
-     * @param array<string, mixed> $payload JSON from POS (confirm_* billing/shipping, payment_* , transaction_id, …)
-     * @param array<string, mixed> $cartData Decoded JSON from GET /cart/retrieve (same session as checkout).
-     *
-     * @return array<string, string>
+     * @param array<string, string> $out
+     * @param array<string, mixed>  $payload
      */
-    /**
-     * True when Confirm Billing & Shipping modal has shipping address data filled in.
-     */
-    private function hasPosConfirmShippingFilled(array $payload): bool
+    private function appendOrderCreateShippingFields(array &$out, array $payload): void
     {
-        if (!empty($payload['confirm_shipping_same_as_billing'])
-            && (string)$payload['confirm_shipping_same_as_billing'] === '1') {
-            return true;
+        $sf = trim((string)($payload['confirm_sfirst_name'] ?? ''));
+        $sl = trim((string)($payload['confirm_slast_name'] ?? ''));
+        $sname = trim((string)($payload['confirm_sname'] ?? ''));
+        if ($sname === '') {
+            $sname = trim($sf . ' ' . $sl);
+        }
+        if ($sname === '') {
+            $sname = trim((string)($out['first_name'] ?? '') . ' ' . (string)($out['last_name'] ?? ''));
         }
 
-        foreach ([
-            'confirm_sfirst_name',
-            'confirm_slast_name',
-            'confirm_sname',
-            'confirm_saddress1',
-            'confirm_saddress2',
-            'confirm_scity',
-            'confirm_sstate',
-            'confirm_szip',
-            'confirm_sphone',
-        ] as $key) {
-            if (trim((string)($payload[$key] ?? '')) !== '') {
-                return true;
-            }
+        $saddress1 = trim((string)($payload['confirm_saddress1'] ?? ''));
+        $saddress2 = trim((string)($payload['confirm_saddress2'] ?? ''));
+        $scity = trim((string)($payload['confirm_scity'] ?? ''));
+        $sstate = trim((string)($payload['confirm_sstate'] ?? ''));
+        $szip = trim((string)($payload['confirm_szip'] ?? ''));
+        $sphone = trim((string)($payload['confirm_sphone'] ?? ''));
+        $sgstin = strtoupper(trim((string)($payload['confirm_sgstin'] ?? '')));
+
+        if ($saddress1 === '') {
+            $saddress1 = (string)($out['address1'] ?? '');
+        }
+        if ($saddress2 === '') {
+            $saddress2 = (string)($out['address2'] ?? '');
+        }
+        if ($scity === '') {
+            $scity = (string)($out['city'] ?? '');
+        }
+        if ($sstate === '') {
+            $sstate = (string)($out['state'] ?? '');
+        }
+        if ($szip === '') {
+            $szip = (string)($out['zip'] ?? '');
+        }
+        if ($sphone === '') {
+            $sphone = (string)($out['phone'] ?? '');
+        }
+        if ($sgstin === '') {
+            $sgstin = strtoupper(trim((string)($out['gstin'] ?? '')));
         }
 
-        return false;
-    }
-
-    /**
-     * Short cart token from GET /cart/retrieve (e.g. 3049898|INR|34000) — not the legacy serialized PHP blob.
-     */
-    private function checkoutdataIsShortCartToken(string $checkoutdata): bool
-    {
-        $checkoutdata = trim($checkoutdata);
-        if ($checkoutdata === '' || str_starts_with($checkoutdata, 'a:')) {
-            return false;
+        $scountry = strtoupper(substr(trim((string)($payload['confirm_scountry'] ?? 'IN')), 0, 2));
+        if ($scountry === '') {
+            $scountry = (string)($out['country'] ?? 'IN');
+        }
+        if ($scountry === '') {
+            $scountry = 'IN';
         }
 
-        return substr_count($checkoutdata, '|') >= 2;
-    }
-
-    /**
-     * Legacy serialized checkoutdata embeds cart context; short tokens require explicit billing/shipping on order/create.
-     */
-    private function shouldOmitShippingOnOrderCreate(array $payload, string $checkoutdata): bool
-    {
-        if ($this->checkoutdataIsShortCartToken($checkoutdata)) {
-            return false;
-        }
-
-        if (!empty($payload['confirm_omit_shipping_api'])
-            && (string)$payload['confirm_omit_shipping_api'] === '1') {
-            return true;
-        }
-
-        return $this->hasPosConfirmShippingFilled($payload);
+        $out['sname'] = $sname;
+        $out['saddress1'] = $saddress1;
+        $out['saddress2'] = $saddress2;
+        $out['scity'] = $scity;
+        $out['sstate'] = $sstate;
+        $out['szip'] = $szip;
+        $out['scountry'] = $scountry;
+        $out['sphone'] = $sphone;
     }
 
     /** Exotic store_payment_details third segment when no gateway txn id (counter sale). */
@@ -4939,6 +4937,16 @@ class POSRegisterController
         return $out;
     }
 
+    /**
+     * POST /api/order/create body (application/x-www-form-urlencoded) per ExoticIndia API:
+     * payment_type, buynow, checkoutdata (verbatim from cart retrieve), cod/codcharges fixed for counter sale,
+     * billing/shipping fields, optional Razorpay / store_payment_details.
+     *
+     * @param array<string, mixed> $payload JSON from POS (confirm_* billing/shipping, payment_* , transaction_id, …)
+     * @param array<string, mixed> $cartData Decoded JSON from GET /cart/retrieve (same session as checkout).
+     *
+     * @return array<string, string>
+     */
     private function buildOrderCreatePostFromPayload(array $payload, array $cartData): array
     {
         $posMode = strtolower(trim((string)($payload['payment_mode'] ?? 'cash')));
@@ -4958,12 +4966,10 @@ class POSRegisterController
             $posMode = 'cod';
         }
         $storePaymentMode = $this->mapPosPaymentModeToExoticPaymentType($posMode);
-        $paymentType = 'offline';
+        $paymentType = $codAmount > 0.001 ? 'cod' : $storePaymentMode;
 
         /** Exact string from GET /cart/retrieve JSON — posted as-is (only URL-encoded as form field by HTTP client). */
         $checkoutdata = $this->extractCheckoutDataStringFromCart($cartData);
-
-        $omitShippingOnOrder = $this->shouldOmitShippingOnOrderCreate($payload, $checkoutdata);
 
         $country = strtoupper(substr(trim((string)($payload['confirm_country'] ?? 'IN')), 0, 2));
         if ($country === '') {
@@ -5019,27 +5025,7 @@ class POSRegisterController
             'store_payment_details' => $storeId . '|' . $storePaymentMode . '|' . $txnField,
         ];
 
-        if (!$omitShippingOnOrder) {
-            $sf = trim((string)($payload['confirm_sfirst_name'] ?? ''));
-            $sl = trim((string)($payload['confirm_slast_name'] ?? ''));
-            $sname = trim((string)($payload['confirm_sname'] ?? ''));
-            if ($sname === '') {
-                $sname = trim($sf . ' ' . $sl);
-            }
-            $scountry = strtoupper(substr(trim((string)($payload['confirm_scountry'] ?? 'IN')), 0, 2));
-            if ($scountry === '') {
-                $scountry = 'IN';
-            }
-            $out['sname'] = $sname;
-            $out['saddress1'] = trim((string)($payload['confirm_saddress1'] ?? ''));
-            $out['saddress2'] = trim((string)($payload['confirm_saddress2'] ?? ''));
-            $out['scity'] = trim((string)($payload['confirm_scity'] ?? ''));
-            $out['sstate'] = trim((string)($payload['confirm_sstate'] ?? ''));
-            $out['szip'] = trim((string)($payload['confirm_szip'] ?? ''));
-            $out['scountry'] = $scountry;
-            $out['sphone'] = trim((string)($payload['confirm_sphone'] ?? ''));
-            $out['sgstin'] = strtoupper(trim((string)($payload['confirm_sgstin'] ?? '')));
-        }
+        $this->appendOrderCreateShippingFields($out, $payload);
 
         if ($storePaymentMode === 'razorpay') {
             $rzPay = trim((string)($payload['razorpay_payment_id'] ?? $txn));
