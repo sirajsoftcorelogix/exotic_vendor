@@ -5047,7 +5047,6 @@ class POSRegisterController
             $posMode = 'cod';
         }
         $storePaymentMode = $this->mapPosPaymentModeToExoticPaymentType($posMode);
-        $paymentType = $codAmount > 0.001 ? 'cod' : $storePaymentMode;
 
         /** Exact string from GET /cart/retrieve JSON — posted as-is (only URL-encoded as form field by HTTP client). */
         $checkoutdata = $this->extractCheckoutDataStringFromCart($cartData);
@@ -5079,7 +5078,8 @@ class POSRegisterController
         $txnField = $this->resolveStorePaymentTransactionId($txn);
 
         $out = [
-            'payment_type' => $paymentType,
+            // Exotic order/create requires payment_type=offline for counter sales; POS mode goes in store_payment_details.
+            'payment_type' => 'offline',
             'buynow' => '0',
             'checkoutdata' => $checkoutdata,
             'cod' => $codAmount > 0.001 ? '1' : '0',
