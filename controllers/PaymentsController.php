@@ -19,19 +19,7 @@ class PaymentsController
     ==========================*/
     public function index()
     {
-        $page_no = (int)($_GET['page_no'] ?? 1);
-        $per_page = 20;
-        $offset = ($page_no - 1) * $per_page;
-
-        $total = $this->paymentModel->countAll();
-        $total_pages = (int)ceil($total / $per_page);
-        $rows = $this->paymentModel->getPaginatedList($offset, $per_page);
-
-        renderTemplate('views/payments/index.php', [
-            'payments' => $rows,
-            'total_pages' => $total_pages,
-            'page_no' => $page_no,
-        ]);
+        renderTemplate('views/payments/index.php', []);
     }
 
     /* =========================
