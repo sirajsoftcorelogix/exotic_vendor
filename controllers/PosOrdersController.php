@@ -1119,6 +1119,14 @@ class PosOrdersController
             }
         }
 
+        require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+        $invoiceStatusForGate = is_array($invoiceDisplay)
+            ? strtolower(trim((string)($invoiceDisplay['status'] ?? '')))
+            : '';
+        $canCreateFinalInvoice = $conn instanceof mysqli
+            && pos_payment_is_allocation_complete($conn, $resolvedOrderNumber)
+            && $invoiceStatusForGate !== 'final';
+
         if ($type === 'inner') {
             renderPartial('views/posorders/partial_order_details.php', [
                 'order' => $order,
@@ -1138,6 +1146,7 @@ class PosOrdersController
                 'canPrintProforma' => !empty($proformaPrintAction['can_print']),
                 'canEditInvoiceNumber' => canSrEmpAccess(),
                 'paymentSummary' => $paymentSummary,
+                'canCreateFinalInvoice' => $canCreateFinalInvoice,
                 'linePricingByLineId' => $linePricingByLineId,
                 'order_status_list' => $commanModel->get_order_status(),
                 'staff_list' => $commanModel->get_staff_list(),
@@ -1146,6 +1155,73 @@ class PosOrdersController
         }
         exit;
     }
+
+    public function createInvoiceFromOrderAjax(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        global $conn;
+
+        $orderNumber = trim((string)($_POST['order_number'] ?? $_GET['order_number'] ?? ''));
+        if ($orderNumber === '') {
+            echo json_encode(['success' => false, 'message' => 'Order number missing']);
+            exit;
+        }
+
+        require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+
+        if (!$conn instanceof mysqli) {
+            echo json_encode(['success' => false, 'message' => 'Database unavailable']);
+            exit;
+        }
+
+        if (!pos_payment_is_allocation_complete($conn, $orderNumber)) {
+            echo json_encode(['success' => false, 'message' => 'Order is not fully paid yet.']);
+            exit;
+        }
+
+        require_once __DIR__ . '/../models/PosInvoice/invoice.php';
+        $posInvoiceModel = new POSInvoice($conn);
+        $existing = $posInvoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
+        if ($existing && strtolower(trim((string)($existing['status'] ?? ''))) === 'final') {
+            $invoiceId = (int)($existing['id'] ?? 0);
+            echo json_encode([
+                'success' => true,
+                'invoice_id' => $invoiceId,
+                'created' => false,
+                'invoice_pdf_url' => $invoiceId > 0 ? pos_invoice_pdf_url($invoiceId) : '',
+                'message' => 'Final invoice already exists for this order.',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        try {
+            $invoiceMeta = pos_payment_finalize_invoice_for_order($conn, $orderNumber);
+        } catch (Throwable $e) {
+            echo json_encode(['success' => false, 'message' => 'Invoice could not be created: ' . $e->getMessage()]);
+            exit;
+        }
+
+        $invoiceId = (int)($invoiceMeta['invoice_id'] ?? 0);
+        if (empty($invoiceMeta['success']) || $invoiceId <= 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => (string)($invoiceMeta['message'] ?? 'Invoice could not be created.'),
+            ]);
+            exit;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'invoice_id' => $invoiceId,
+            'created' => !empty($invoiceMeta['created']),
+            'invoice_pdf_url' => pos_invoice_pdf_url($invoiceId),
+            'message' => !empty($invoiceMeta['created']) ? 'Invoice created successfully.' : 'Invoice is ready.',
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
     public function updateImportedOrders()
     {
         global $ordersModel;

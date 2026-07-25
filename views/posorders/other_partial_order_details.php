@@ -92,6 +92,7 @@ $paymentPendingDisplay = number_format((float)($paymentSummary['pending'] ?? 0),
 $paymentIsFullyPaid = !empty($paymentSummary['is_fully_paid']);
 $paymentPendingAmount = (float)($paymentSummary['pending'] ?? 0);
 $canAddOrderPayment = $paymentPendingAmount > 0.02;
+$canCreateFinalInvoice = !empty($canCreateFinalInvoice);
 $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurlencode($displayOrderNumber) . '&order_exact=1');
 $salesReturnUrl = base_url('?page=sales_returns&action=create&order_number=' . rawurlencode($displayOrderNumber));
 $invoiceIdForReturn = is_array($invoiceDisplay) ? (int)($invoiceDisplay['id'] ?? 0) : 0;
@@ -635,6 +636,41 @@ $proformaPrintDisabledReason = $canPrintProforma
                                 Download / Print Invoice
                             </a>
                         <?php endif; ?>
+                        <?php if ($canCreateFinalInvoice): ?>
+                            <p id="order_create_invoice_error" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"></p>
+                            <button type="button"
+                                id="order_create_invoice_btn"
+                                onclick="createOrderFinalInvoice()"
+                                class="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-700">
+                                <?php echo in_array($invoiceStatus, ['proforma', 'draft'], true) ? 'Finalize Invoice' : 'Create Invoice'; ?>
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php elseif ($canCreateFinalInvoice): ?>
+                <div class="overflow-hidden rounded-xl border border-amber-200 bg-white shadow-sm" id="order-create-invoice-card">
+                    <div class="border-b border-amber-100 bg-gradient-to-r from-amber-50 to-white px-5 py-4">
+                        <div class="flex items-center gap-2.5">
+                            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                            </span>
+                            <div>
+                                <h3 class="text-sm font-bold text-gray-900">Tax Invoice</h3>
+                                <p class="text-xs text-gray-500">Payment received in full — invoice not generated yet</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-3 p-5">
+                        <p class="text-sm text-gray-600">Create the final tax invoice for this order now.</p>
+                        <p id="order_create_invoice_error" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"></p>
+                        <button type="button"
+                            id="order_create_invoice_btn"
+                            onclick="createOrderFinalInvoice()"
+                            class="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-700">
+                            Create Invoice
+                        </button>
                     </div>
                 </div>
             <?php endif; ?>
@@ -1635,6 +1671,67 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
             .finally(function() {
                 if (submitBtn) {
                     submitBtn.disabled = false;
+                }
+            });
+    }
+
+    function createOrderFinalInvoice() {
+        var btn = document.getElementById('order_create_invoice_btn');
+        var errEl = document.getElementById('order_create_invoice_error');
+        if (errEl) {
+            errEl.classList.add('hidden');
+            errEl.textContent = '';
+        }
+        if (btn) {
+            btn.disabled = true;
+        }
+
+        var formData = new FormData();
+        formData.append('order_number', orderPaymentState.orderNumber);
+
+        fetch('index.php?page=posorders&action=create_invoice_from_order', {
+            method: 'POST',
+            body: formData,
+        })
+            .then(function(res) { return res.text(); })
+            .then(function(text) {
+                var data;
+                try {
+                    data = JSON.parse(text);
+                } catch (parseErr) {
+                    throw new Error((text || '').trim().slice(0, 200) || 'Invalid server response');
+                }
+                if (!data.success) {
+                    if (errEl) {
+                        errEl.textContent = data.message || 'Invoice could not be created.';
+                        errEl.classList.remove('hidden');
+                    } else {
+                        alert(data.message || 'Invoice could not be created.');
+                    }
+                    return;
+                }
+
+                if (data.invoice_pdf_url) {
+                    window.open(data.invoice_pdf_url, '_blank');
+                } else if (data.invoice_id) {
+                    window.open('?page=posinvoice&action=generate_pdf&invoice_id=' + encodeURIComponent(String(data.invoice_id)), '_blank');
+                }
+
+                setTimeout(function() {
+                    window.location.reload();
+                }, 400);
+            })
+            .catch(function(err) {
+                if (errEl) {
+                    errEl.textContent = err.message || 'Could not create invoice. Please try again.';
+                    errEl.classList.remove('hidden');
+                } else {
+                    alert(err.message || 'Could not create invoice. Please try again.');
+                }
+            })
+            .finally(function() {
+                if (btn) {
+                    btn.disabled = false;
                 }
             });
     }

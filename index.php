@@ -1848,6 +1848,9 @@ switch ($page) {
             case 'get_order_details_html':
                 $controller->getOrderDetailsHTML();
                 break;
+            case 'create_invoice_from_order':
+                $controller->createInvoiceFromOrderAjax();
+                break;
             case 'print_proforma':
                 $controller->printProforma();
                 break;
