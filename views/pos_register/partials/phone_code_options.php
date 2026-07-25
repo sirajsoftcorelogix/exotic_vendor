@@ -28,8 +28,9 @@ foreach ($country_list as $iso => $name):
     if ($dial === '') {
         continue;
     }
-    $label = htmlspecialchars((string)$name, ENT_QUOTES, 'UTF-8') . ' (+' . $dial . ')';
+    $label = '+' . $dial;
+    $title = htmlspecialchars((string)$name, ENT_QUOTES, 'UTF-8') . ' (+' . $dial . ')';
     $selected = ($code === $selectedIso) ? ' selected' : '';
     ?>
-<option value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>"<?= $selected ?>><?= $label ?></option>
+<option value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>" title="<?= $title ?>"<?= $selected ?>><?= $label ?></option>
 <?php endforeach; ?>
