@@ -27,6 +27,9 @@ class PaymentsController
     ==========================*/
     public function list_ajax()
     {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
         $filters = [
             'payment_mode' => $_GET['payment_mode'] ?? '',
             'from_date' => $_GET['from_date'] ?? '',
