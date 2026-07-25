@@ -4,6 +4,7 @@ class Payment
 {
     private const LIST_AJAX_DEFAULT_LIMIT = 250;
     private const LIST_AJAX_EXACT_ORDER_LIMIT = 100;
+    private const ORDER_NUMBER_COLLATE = 'utf8mb4_unicode_ci';
 
     /** @var mysqli */
     private $db;
@@ -260,18 +261,19 @@ class Payment
                 IFNULL((
                     SELECT MIN(o.id)
                     FROM vp_orders o
-                    WHERE o.order_number = ?
+                    WHERE o.order_number COLLATE ' . self::ORDER_NUMBER_COLLATE . ' = CONVERT(? USING utf8mb4) COLLATE ' . self::ORDER_NUMBER_COLLATE . '
                 ), 0) AS order_id,
                 COALESCE(
                     NULLIF((
                         SELECT MAX(pp.order_amount)
                         FROM pos_payments pp
-                        WHERE pp.order_number = ? AND pp.order_amount > 0
+                        WHERE pp.order_number COLLATE ' . self::ORDER_NUMBER_COLLATE . ' = CONVERT(? USING utf8mb4) COLLATE ' . self::ORDER_NUMBER_COLLATE . '
+                          AND pp.order_amount > 0
                     ), 0),
                     NULLIF((
                         SELECT MAX(oi.total)
                         FROM vp_order_info oi
-                        WHERE oi.order_number = ?
+                        WHERE oi.order_number COLLATE ' . self::ORDER_NUMBER_COLLATE . ' = CONVERT(? USING utf8mb4) COLLATE ' . self::ORDER_NUMBER_COLLATE . '
                     ), 0),
                     0
                 ) AS order_grand_total
@@ -311,6 +313,7 @@ class Payment
 
         $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
         $types = str_repeat('s', count($orderNumbers));
+        $orderNumberJoin = ' COLLATE ' . self::ORDER_NUMBER_COLLATE . ' = nums.order_number COLLATE ' . self::ORDER_NUMBER_COLLATE;
 
         $sql = "
             SELECT
@@ -331,19 +334,19 @@ class Payment
                 FROM vp_orders
                 WHERE order_number IN ($placeholders)
                 GROUP BY order_number
-            ) vo ON vo.order_number = nums.order_number
+            ) vo ON vo.order_number{$orderNumberJoin}
             LEFT JOIN (
                 SELECT order_number, MAX(total) AS max_total
                 FROM vp_order_info
                 WHERE order_number IN ($placeholders)
                 GROUP BY order_number
-            ) oi ON oi.order_number = nums.order_number
+            ) oi ON oi.order_number{$orderNumberJoin}
             LEFT JOIN (
                 SELECT order_number, MAX(order_amount) AS max_order_amount
                 FROM pos_payments
                 WHERE order_number IN ($placeholders) AND order_amount > 0
                 GROUP BY order_number
-            ) pay ON pay.order_number = nums.order_number
+            ) pay ON pay.order_number{$orderNumberJoin}
         ";
 
         $stmt = $this->db->prepare($sql);
