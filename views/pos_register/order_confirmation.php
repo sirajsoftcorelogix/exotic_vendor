@@ -47,6 +47,18 @@ if ($receipt_download_filename_base === '') {
           <div class="grid grid-cols-1 gap-8 border-b border-neutral-300 px-4 pb-2 sm:grid-cols-2 sm:px-6">
             <div class="text-[11px] leading-relaxed">
               <div class="font-bold uppercase tracking-wide text-neutral-900"><?= $h($receipt_company_legal_name ?? 'EXOTIC INDIA ART PVT LTD') ?></div>
+              <?php
+              $companyAddressLines = isset($receipt_company_address_lines) && is_array($receipt_company_address_lines)
+                  ? $receipt_company_address_lines
+                  : [];
+              foreach ($companyAddressLines as $companyAddrLine):
+                  $companyAddrLine = trim((string)$companyAddrLine);
+                  if ($companyAddrLine === '') {
+                      continue;
+                  }
+              ?>
+                <div class="mt-0.5 text-neutral-800"><?= $h($companyAddrLine) ?></div>
+              <?php endforeach; ?>
               <div class="mt-1"><span class="font-semibold">GST No:</span> <?= $h($receipt_company_gstin ?? '') ?></div>
               <div><span class="font-semibold">PAN:</span> <?= $h($receipt_company_pan ?? '') ?></div>
             </div>

@@ -3092,6 +3092,119 @@ class POSRegisterController
     }
 
     /**
+     * Company block for POS payment receipt (default warehouse address + firm GST/PAN).
+     *
+     * @return array{
+     *   receipt_company_legal_name: string,
+     *   receipt_company_gstin: string,
+     *   receipt_company_pan: string,
+     *   receipt_company_address_lines: list<string>,
+     *   receipt_office_footer: string
+     * }
+     */
+    private function resolvePosReceiptCompanyHeader(mysqli $conn, string $orderNumber = ''): array
+    {
+        require_once __DIR__ . '/../helpers/app_settings.php';
+        require_once __DIR__ . '/../models/payment/Payment.php';
+
+        $firm = app_setting_firm_details();
+        $legalName = trim((string)($firm['firm_name'] ?? ''));
+        if ($legalName === '') {
+            $legalName = 'EXOTIC INDIA ART PVT LTD';
+        }
+
+        $gstin = trim((string)($firm['gstin'] ?? $firm['gst'] ?? ''));
+        if ($gstin === '') {
+            $gstin = trim((string)app_setting('gstin', '07AADCE1400C1ZJ'));
+        }
+
+        $pan = strtoupper(trim((string)($firm['pan'] ?? '')));
+        if ($pan === '' && strlen($gstin) >= 12) {
+            $pan = strtoupper(substr($gstin, 2, 10));
+        }
+
+        $paymentModel = new Payment($conn);
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber !== '') {
+            $warehouseAddr = $paymentModel->getSaleStoreAddressForOrder($orderNumber);
+        } else {
+            $warehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+            $warehouseAddr = $warehouseId > 0
+                ? $paymentModel->getWarehouseAddressById($warehouseId)
+                : $paymentModel->getDefaultWarehouseAddress();
+            if (($warehouseAddr['title'] ?? '') === '' && ($warehouseAddr['lines'] ?? []) === []) {
+                $warehouseAddr = $paymentModel->getDefaultWarehouseAddress();
+            }
+        }
+
+        $addressLines = [];
+        $title = trim((string)($warehouseAddr['title'] ?? ''));
+        foreach (($warehouseAddr['lines'] ?? []) as $line) {
+            $line = trim((string)$line);
+            if ($line !== '') {
+                $addressLines[] = $line;
+            }
+        }
+        if ($addressLines === [] && $title !== '') {
+            $addressLines[] = $title;
+        }
+
+        $footerParts = [];
+        if ($title !== '') {
+            $footerParts[] = $title;
+        }
+        foreach ($addressLines as $line) {
+            if (!in_array($line, $footerParts, true)) {
+                $footerParts[] = $line;
+            }
+        }
+        if ($footerParts === []) {
+            $firmAddr = trim((string)($firm['address'] ?? ''));
+            if ($firmAddr !== '') {
+                $footerParts[] = preg_replace('/\s+/u', ' ', $firmAddr);
+            } else {
+                $footer = $this->getDefaultExoticAddressFooterString($conn);
+                if ($footer !== '') {
+                    $footerParts[] = $footer;
+                }
+            }
+        }
+
+        return [
+            'receipt_company_legal_name' => $legalName,
+            'receipt_company_gstin' => $gstin,
+            'receipt_company_pan' => $pan,
+            'receipt_company_address_lines' => $addressLines,
+            'receipt_office_footer' => implode(', ', $footerParts),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function applyPosReceiptCompanyHeader(array $row, mysqli $conn): array
+    {
+        $header = $this->resolvePosReceiptCompanyHeader(
+            $conn,
+            trim((string)($row['order_id'] ?? ''))
+        );
+        foreach ($header as $key => $value) {
+            if ($key === 'receipt_company_address_lines') {
+                if (empty($row['receipt_company_address_lines']) || !is_array($row['receipt_company_address_lines'])) {
+                    $row['receipt_company_address_lines'] = $value;
+                }
+                continue;
+            }
+            if (trim((string)($row[$key] ?? '')) === '') {
+                $row[$key] = $value;
+            }
+        }
+
+        return $row;
+    }
+
+    /**
      * Single-line footer text from exotic_address row marked is_default (receipt / printouts).
      */
     private function getDefaultExoticAddressFooterString(mysqli $conn): string
@@ -4615,6 +4728,16 @@ class POSRegisterController
         $receiptGiftDiscount = round((float)($payload['receipt_gift_discount'] ?? 0), 2);
         $receiptLineDiscount = round((float)($payload['receipt_line_discount'] ?? 0), 2);
 
+        $receiptCompanyHeader = $conn instanceof mysqli
+            ? $this->resolvePosReceiptCompanyHeader($conn, $orderNumber)
+            : [
+                'receipt_company_legal_name' => 'EXOTIC INDIA ART PVT LTD',
+                'receipt_company_gstin' => '',
+                'receipt_company_pan' => '',
+                'receipt_company_address_lines' => [],
+                'receipt_office_footer' => '',
+            ];
+
         $_SESSION['pos_last_checkout_receipt'] = [
             'receipt_number' => $receiptNo,
             'receipt_date_formatted' => $dt->format('d M Y, h:i A'),
@@ -4659,17 +4782,18 @@ class POSRegisterController
             'invoice_preview_url' => $invoiceMeta['invoice_preview_url'] ?? '',
             'invoice_pdf_disabled_hint' => $invoiceMeta['invoice_pdf_disabled_hint'],
             'is_payment_in_full' => ($paymentStage === 'final' && !$hasCodPending && (float)($pay['pending_amount'] ?? 0) <= 0.02),
-            'receipt_company_legal_name' => 'EXOTIC INDIA ART PVT LTD',
+            'receipt_company_legal_name' => $receiptCompanyHeader['receipt_company_legal_name'],
             'receipt_company_tagline' => '',
-            'receipt_company_gstin' => '',
-            'receipt_company_pan' => '',
+            'receipt_company_gstin' => $receiptCompanyHeader['receipt_company_gstin'],
+            'receipt_company_pan' => $receiptCompanyHeader['receipt_company_pan'],
+            'receipt_company_address_lines' => $receiptCompanyHeader['receipt_company_address_lines'],
             'receipt_title_main' => 'PAYMENT RECEIPT',
             'receipt_place_of_supply' => '',
             'receipt_terms' => [
                 'Goods once sold will not be taken back.',
                 'Subject to jurisdiction of competent courts at New Delhi.',
             ],
-            'receipt_office_footer' => '',
+            'receipt_office_footer' => $receiptCompanyHeader['receipt_office_footer'],
             'receipt_signature_date' => $dt->format('d M Y'),
             'payment_history_url' => 'index.php?page=payments&order_number=' . rawurlencode($orderNumber) . '&order_exact=1',
             'invoice_poitem_ids' => $this->resolveInvoicePoitemIdsForOrderNumber($conn, $orderNumber),
@@ -4749,6 +4873,7 @@ class POSRegisterController
         if (empty($row['invoice_poitem_ids']) || !is_array($row['invoice_poitem_ids'])) {
             $row['invoice_poitem_ids'] = $this->resolveInvoicePoitemIdsForOrderNumber($conn, $row['order_id'] ?? '');
         }
+        $row = $this->applyPosReceiptCompanyHeader($row, $conn);
         renderTemplateClean('views/pos_register/order_confirmation.php', $row, 'Order confirmation');
     }
 
@@ -5745,6 +5870,8 @@ class POSRegisterController
             0.0
         ), 2);
 
+        $receiptCompanyHeader = $this->resolvePosReceiptCompanyHeader($conn, $orderNumber);
+
         return [
             'receipt_number' => $receiptNo,
             'receipt_date_formatted' => $dt->format('d M Y, h:i A'),
@@ -5789,17 +5916,18 @@ class POSRegisterController
             'invoice_preview_url' => '',
             'invoice_pdf_disabled_hint' => 'Tax invoice is available after payment is received in full.',
             'is_payment_in_full' => ($paymentStage === 'final' && !$hasCodPending && $pendingAmount <= 0.02),
-            'receipt_company_legal_name' => 'EXOTIC INDIA ART PVT LTD',
+            'receipt_company_legal_name' => $receiptCompanyHeader['receipt_company_legal_name'],
             'receipt_company_tagline' => '',
-            'receipt_company_gstin' => '',
-            'receipt_company_pan' => '',
+            'receipt_company_gstin' => $receiptCompanyHeader['receipt_company_gstin'],
+            'receipt_company_pan' => $receiptCompanyHeader['receipt_company_pan'],
+            'receipt_company_address_lines' => $receiptCompanyHeader['receipt_company_address_lines'],
             'receipt_title_main' => 'PAYMENT RECEIPT',
             'receipt_place_of_supply' => '',
             'receipt_terms' => [
                 'Goods once sold will not be taken back.',
                 'Subject to jurisdiction of competent courts at New Delhi.',
             ],
-            'receipt_office_footer' => '',
+            'receipt_office_footer' => $receiptCompanyHeader['receipt_office_footer'],
             'receipt_signature_date' => $dt->format('d M Y'),
             'payment_history_url' => 'index.php?page=payments&order_number=' . rawurlencode($orderNumber) . '&order_exact=1',
             'invoice_poitem_ids' => $this->resolveInvoicePoitemIdsForOrderNumber($conn, $orderNumber),
