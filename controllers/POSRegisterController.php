@@ -475,7 +475,7 @@ class POSRegisterController
         if (!$stmt) {
             return;
         }
-        $stmt->bind_param('ssssss', $gstin, $gstin, $shippingGstin, $shippingGstin, $orderNumber);
+        $stmt->bind_param('sssss', $gstin, $gstin, $shippingGstin, $shippingGstin, $orderNumber);
         $stmt->execute();
         $stmt->close();
     }
