@@ -19,19 +19,7 @@ class PaymentsController
     ==========================*/
     public function index()
     {
-        $page_no = (int)($_GET['page_no'] ?? 1);
-        $per_page = 20;
-        $offset = ($page_no - 1) * $per_page;
-
-        $total = $this->paymentModel->countAll();
-        $total_pages = (int)ceil($total / $per_page);
-        $rows = $this->paymentModel->getPaginatedList($offset, $per_page);
-
-        renderTemplate('views/payments/index.php', [
-            'payments' => $rows,
-            'total_pages' => $total_pages,
-            'page_no' => $page_no,
-        ]);
+        renderTemplate('views/payments/index.php', []);
     }
 
     /* =========================
@@ -155,12 +143,12 @@ class PaymentsController
     {
         global $conn;
 
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
         $postOrderKey = trim((string)($_POST['order_id'] ?? ''));
-        $amount = isset($_POST['amount']) ? (float)$_POST['amount'] : 0;
-        $mode = $_POST['payment_type'] ?? '';
-        $stage = $_POST['payment_stage'] ?? 'final';
-        $transaction = (string)($_POST['transaction_id'] ?? '');
-        $note = (string)($_POST['note'] ?? '');
+        $stage = strtolower(trim((string)($_POST['payment_stage'] ?? 'final')));
+        $note = trim((string)($_POST['note'] ?? ''));
 
         $user_id = pos_payment_resolve_session_user_id();
         $warehouse_id = (int)($_SESSION['warehouse_id'] ?? 0);
@@ -195,6 +183,33 @@ class PaymentsController
             exit;
         }
 
+        $orderTotal = pos_payment_resolve_order_total($conn, $orderNumberStr);
+        $paidTotal = $this->paymentModel->sumPaidByOrderNumber($orderNumberStr);
+        $targetTotal = max(0.0, round($orderTotal - $paidTotal, 2));
+
+        $splitBundle = pos_payment_resolve_splits_from_payload($_POST);
+        $splitErrors = pos_payment_validate_splits($splitBundle, $targetTotal, $stage);
+        if ($splitErrors !== []) {
+            echo json_encode(['success' => false, 'message' => $splitErrors[0]]);
+            exit;
+        }
+
+        $splits = $splitBundle['splits'];
+        if (pos_payment_split_cod_total($splits) > 0.001) {
+            $stage = 'advance';
+        }
+
+        if (count($splits) > 1 && $note !== '') {
+            $note .= "\n";
+        }
+        if (count($splits) > 1) {
+            $parts = [];
+            foreach ($splits as $split) {
+                $parts[] = strtoupper((string)$split['mode']) . ' ₹' . number_format((float)$split['amount'], 2);
+            }
+            $note .= 'Payment split: ' . implode(', ', $parts);
+        }
+
         try {
             $short = pos_payment_resolve_short_code_for_warehouse($conn, $warehouse_id);
             $receiptNumber = pos_payment_generate_next_receipt_number($conn, $short);
@@ -203,53 +218,80 @@ class PaymentsController
             exit;
         }
 
-        $insertRes = pos_payment_insert_row(
-            $conn,
-            $orderNumberStr,
-            $receiptNumber,
-            $customerId,
-            $stage,
-            $mode,
-            $amount,
-            $transaction,
-            $note,
-            $user_id,
-            $warehouse_id,
-            true
-        );
-        if (!$insertRes['success']) {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Payment save failed: ' . ($insertRes['error'] ?? 'unknown'),
-                'warehouse_id_used' => $insertRes['warehouse_id_used'],
-                'order_amount' => $insertRes['order_amount'] ?? null,
-                'pending_amount' => $insertRes['pending_amount'] ?? null,
-            ]);
-            exit;
+        $sortedSplits = $splits;
+        usort($sortedSplits, static function (array $a, array $b): int {
+            $aCod = pos_payment_is_cod_mode((string)($a['mode'] ?? '')) ? 1 : 0;
+            $bCod = pos_payment_is_cod_mode((string)($b['mode'] ?? '')) ? 1 : 0;
+
+            return $aCod <=> $bCod;
+        });
+
+        $paymentIds = [];
+        $lastInsert = null;
+        foreach ($sortedSplits as $split) {
+            $insertRes = pos_payment_insert_row(
+                $conn,
+                $orderNumberStr,
+                $receiptNumber,
+                $customerId,
+                $stage,
+                (string)$split['mode'],
+                (float)$split['amount'],
+                (string)$split['transaction_id'],
+                $note,
+                $user_id,
+                $warehouse_id,
+                true,
+                $orderTotal
+            );
+            if (!$insertRes['success']) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Payment save failed: ' . ($insertRes['error'] ?? 'unknown'),
+                    'warehouse_id_used' => $insertRes['warehouse_id_used'],
+                    'order_amount' => $insertRes['order_amount'] ?? null,
+                    'pending_amount' => $insertRes['pending_amount'] ?? null,
+                ]);
+                exit;
+            }
+            $lastInsert = $insertRes;
+            $paymentIds[] = (int)($insertRes['payment_id'] ?? 0);
         }
 
-        $newPaymentId = $insertRes['payment_id'];
-
         pos_payment_refresh_order_snapshots($conn, $orderNumberStr);
-        $invoiceStatus = pos_payment_resolve_auto_invoice_status($conn, $orderNumberStr);
-        if ($invoiceStatus === 'final') {
-            $invoiceMeta = pos_payment_finalize_invoice_for_order($conn, $orderNumberStr);
-        } elseif ($invoiceStatus === 'proforma') {
-            $invoiceMeta = pos_payment_ensure_proforma_invoice_for_order($conn, $orderNumberStr);
-        } else {
-            $invoiceMeta = ['success' => true, 'invoice_id' => 0, 'created' => false];
+
+        $invoiceMeta = [
+            'success' => true,
+            'invoice_id' => 0,
+            'created' => false,
+        ];
+        try {
+            $invoiceStatus = pos_payment_resolve_auto_invoice_status($conn, $orderNumberStr);
+            if ($invoiceStatus === 'final') {
+                $invoiceMeta = pos_payment_finalize_invoice_for_order($conn, $orderNumberStr);
+            } elseif ($invoiceStatus === 'proforma') {
+                $invoiceMeta = pos_payment_ensure_proforma_invoice_for_order($conn, $orderNumberStr);
+            }
+        } catch (Throwable $invoiceError) {
+            $invoiceMeta = [
+                'success' => false,
+                'invoice_id' => 0,
+                'created' => false,
+                'message' => 'Payment saved but invoice step failed: ' . $invoiceError->getMessage(),
+            ];
         }
 
         echo json_encode([
             'success' => true,
             'receipt_number' => $receiptNumber,
-            'payment_id' => $newPaymentId,
-            'order_amount' => $insertRes['order_amount'] ?? null,
-            'pending_amount' => $insertRes['pending_amount'] ?? null,
+            'payment_id' => $paymentIds[0] ?? 0,
+            'payment_ids' => $paymentIds,
+            'order_amount' => $lastInsert['order_amount'] ?? null,
+            'pending_amount' => $lastInsert['pending_amount'] ?? null,
             'invoice_id' => (int)($invoiceMeta['invoice_id'] ?? 0),
             'invoice_created' => !empty($invoiceMeta['created']),
             'invoice_message' => $invoiceMeta['message'] ?? null,
-        ]);
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
 

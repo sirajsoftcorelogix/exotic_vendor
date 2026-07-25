@@ -90,6 +90,9 @@ $paymentOrderTotalDisplay = number_format((float)($paymentSummary['order_total']
 $paymentPaidTotalDisplay = number_format((float)($paymentSummary['paid_total'] ?? 0), 2);
 $paymentPendingDisplay = number_format((float)($paymentSummary['pending'] ?? 0), 2);
 $paymentIsFullyPaid = !empty($paymentSummary['is_fully_paid']);
+$paymentPendingAmount = (float)($paymentSummary['pending'] ?? 0);
+$canAddOrderPayment = $paymentPendingAmount > 0.02;
+$canCreateFinalInvoice = !empty($canCreateFinalInvoice);
 $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurlencode($displayOrderNumber) . '&order_exact=1');
 $salesReturnUrl = base_url('?page=sales_returns&action=create&order_number=' . rawurlencode($displayOrderNumber));
 $invoiceIdForReturn = is_array($invoiceDisplay) ? (int)($invoiceDisplay['id'] ?? 0) : 0;
@@ -633,6 +636,41 @@ $proformaPrintDisabledReason = $canPrintProforma
                                 Download / Print Invoice
                             </a>
                         <?php endif; ?>
+                        <?php if ($canCreateFinalInvoice): ?>
+                            <p id="order_create_invoice_error" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"></p>
+                            <button type="button"
+                                id="order_create_invoice_btn"
+                                onclick="createOrderFinalInvoice()"
+                                class="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-700">
+                                <?php echo in_array($invoiceStatus, ['proforma', 'draft'], true) ? 'Finalize Invoice' : 'Create Invoice'; ?>
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php elseif ($canCreateFinalInvoice): ?>
+                <div class="overflow-hidden rounded-xl border border-amber-200 bg-white shadow-sm" id="order-create-invoice-card">
+                    <div class="border-b border-amber-100 bg-gradient-to-r from-amber-50 to-white px-5 py-4">
+                        <div class="flex items-center gap-2.5">
+                            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                            </span>
+                            <div>
+                                <h3 class="text-sm font-bold text-gray-900">Tax Invoice</h3>
+                                <p class="text-xs text-gray-500">Payment received in full — invoice not generated yet</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-3 p-5">
+                        <p class="text-sm text-gray-600">Create the final tax invoice for this order now.</p>
+                        <p id="order_create_invoice_error" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"></p>
+                        <button type="button"
+                            id="order_create_invoice_btn"
+                            onclick="createOrderFinalInvoice()"
+                            class="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-700">
+                            Create Invoice
+                        </button>
                     </div>
                 </div>
             <?php endif; ?>
@@ -650,13 +688,25 @@ $proformaPrintDisabledReason = $canPrintProforma
                             <p class="text-xs text-gray-500"><?php echo count($paymentRows); ?> payment<?php echo count($paymentRows) === 1 ? '' : 's'; ?> recorded</p>
                         </div>
                     </div>
-                    <?php if ($paymentIsFullyPaid): ?>
-                        <span class="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">Fully paid</span>
-                    <?php elseif ((float)($paymentSummary['paid_total'] ?? 0) > 0): ?>
-                        <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">Partial</span>
-                    <?php else: ?>
-                        <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">Unpaid</span>
-                    <?php endif; ?>
+                    <div class="flex items-center gap-2">
+                        <?php if ($paymentIsFullyPaid): ?>
+                            <span class="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">Fully paid</span>
+                        <?php elseif ((float)($paymentSummary['paid_total'] ?? 0) > 0): ?>
+                            <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">Partial</span>
+                        <?php else: ?>
+                            <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">Unpaid</span>
+                        <?php endif; ?>
+                        <?php if ($canAddOrderPayment): ?>
+                            <button type="button"
+                                onclick="openOrderAddPayment()"
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700">
+                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                                </svg>
+                                Add Payment
+                            </button>
+                        <?php endif; ?>
+                    </div>
                 </div>
 
                 <div class="space-y-4 p-5">
@@ -709,7 +759,17 @@ $proformaPrintDisabledReason = $canPrintProforma
                                             </a>
                                             <p class="mt-0.5 text-xs text-gray-500"><?php echo htmlspecialchars($paymentDateLabel); ?></p>
                                         </div>
-                                        <p class="shrink-0 text-sm font-bold tabular-nums text-gray-900">₹ <?php echo $paymentAmount; ?></p>
+                                        <div class="flex shrink-0 flex-col items-end gap-1.5">
+                                            <p class="text-sm font-bold tabular-nums text-gray-900">₹ <?php echo $paymentAmount; ?></p>
+                                            <button type="button"
+                                                onclick="printOrderPaymentReceipt(<?php echo $paymentId; ?>)"
+                                                class="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100">
+                                                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                                </svg>
+                                                Print Receipt
+                                            </button>
+                                        </div>
                                     </div>
                                     <div class="mt-2 flex flex-wrap gap-1.5">
                                         <?php if ($paymentMode !== ''): ?>
@@ -732,12 +792,24 @@ $proformaPrintDisabledReason = $canPrintProforma
                         </div>
                     <?php endif; ?>
 
-                    <a href="<?php echo htmlspecialchars($paymentsListUrl, ENT_QUOTES, 'UTF-8'); ?>"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100">
-                        View all payments
-                    </a>
+                    <div class="grid gap-2 <?php echo $canAddOrderPayment ? 'sm:grid-cols-2' : ''; ?>">
+                        <?php if ($canAddOrderPayment): ?>
+                            <button type="button"
+                                onclick="openOrderAddPayment()"
+                                class="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                                </svg>
+                                Add Payment
+                            </button>
+                        <?php endif; ?>
+                        <a href="<?php echo htmlspecialchars($paymentsListUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100">
+                            View all payments
+                        </a>
+                    </div>
                 </div>
             </div>
 
@@ -764,6 +836,17 @@ $proformaPrintDisabledReason = $canPrintProforma
         </div>
     </div>
 </div>
+<?php
+require_once __DIR__ . '/../../helpers/pos_payment_receipt.php';
+renderPartial('views/shared/partials/pos_payment_modal.php', [
+    'posPaymentModalTitle' => 'Record payment',
+    'posPaymentModalIntro' => 'Add one or more payment lines for the pending balance. Each row is saved under the same receipt.',
+    'posPaymentModalSubmitLabel' => 'Confirm payment',
+    'posPaymentModalSubmitId' => 'posOrderPaymentSubmitBtn',
+    'posPaymentModalShowCustomInvoice' => false,
+    'posPaymentModalShowApiDebug' => false,
+]);
+?>
 <div id="noteEditPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
     <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-6 relative">
         <button onclick="closeNotePopup()" class="absolute top-3 right-4 text-black-500 hover:text-black-800">
@@ -996,6 +1079,7 @@ $proformaPrintDisabledReason = $canPrintProforma
     </div>
 </div>
 
+<script src="<?php echo base_url(); ?>assets/js/pos_payment_split.js"></script>
 <script>
     function openInvoiceNumberEditPopup(invoiceId, currentNumber) {
         document.getElementById('edit_invoice_id').value = invoiceId;
@@ -1487,6 +1571,182 @@ $proformaPrintDisabledReason = $canPrintProforma
         if (imageUrl) {
             openImagePopup(imageUrl);
         }
+    });
+
+    let orderPaymentState = {
+        pending: <?php echo json_encode(round($paymentPendingAmount, 2)); ?>,
+        orderTotal: <?php echo json_encode(round((float)($paymentSummary['order_total'] ?? 0), 2)); ?>,
+        orderNumber: <?php echo json_encode($displayOrderNumber); ?>,
+    };
+
+    function printOrderPaymentReceipt(paymentId) {
+        if (!paymentId) {
+            return;
+        }
+        window.open('?page=payments&action=receipt&id=' + encodeURIComponent(String(paymentId)), '_blank');
+    }
+
+    function openOrderAddPayment() {
+        fetch('?page=payments&action=get_payment_summary&order_number=' + encodeURIComponent(orderPaymentState.orderNumber))
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    orderPaymentState.pending = parseFloat(data.pending) || 0;
+                    orderPaymentState.orderTotal = parseFloat(data.order_total) || orderPaymentState.orderTotal;
+                }
+                if (orderPaymentState.pending <= 0.02) {
+                    alert('This order has no pending balance to collect.');
+                    return;
+                }
+                if (window.PosPaymentSplit) {
+                    window.PosPaymentSplit.openModal(orderPaymentState.pending);
+                }
+            })
+            .catch(function() {
+                if (window.PosPaymentSplit) {
+                    window.PosPaymentSplit.openModal(orderPaymentState.pending);
+                }
+            });
+    }
+
+    function saveOrderPaymentFromModal(payInfo) {
+        var submitBtn = document.getElementById('posOrderPaymentSubmitBtn');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+        }
+
+        var formData = new FormData();
+        formData.append('order_id', orderPaymentState.orderNumber);
+        formData.append('payment_stage', payInfo.payment_stage || 'final');
+        formData.append('note', payInfo.payment_note || '');
+        formData.append('payment_date', payInfo.payment_date || '');
+        (payInfo.payment_splits || []).forEach(function(split, idx) {
+            formData.append('payment_splits[' + idx + '][mode]', split.mode);
+            formData.append('payment_splits[' + idx + '][amount]', String(split.amount));
+            formData.append('payment_splits[' + idx + '][transaction_id]', split.transaction_id || '');
+        });
+
+        fetch('index.php?page=payments&action=save_payment', {
+            method: 'POST',
+            body: formData,
+        })
+            .then(function(res) { return res.text(); })
+            .then(function(text) {
+                var data;
+                try {
+                    data = JSON.parse(text);
+                } catch (parseErr) {
+                    throw new Error((text || '').trim().slice(0, 200) || 'Invalid server response');
+                }
+                if (!data.success) {
+                    if (window.PosPaymentSplit) {
+                        window.PosPaymentSplit.showSplitValidationError(data.message || 'Save failed');
+                    }
+                    return;
+                }
+
+                if (window.PosPaymentSplit) {
+                    window.PosPaymentSplit.closeModal();
+                }
+
+                if (data.payment_id) {
+                    printOrderPaymentReceipt(data.payment_id);
+                }
+
+                if (data.invoice_id) {
+                    window.open('?page=posinvoice&action=generate_pdf&invoice_id=' + encodeURIComponent(String(data.invoice_id)), '_blank');
+                } else if (data.invoice_message) {
+                    alert(data.invoice_message);
+                }
+
+                setTimeout(function() {
+                    window.location.reload();
+                }, 400);
+            })
+            .catch(function(err) {
+                if (window.PosPaymentSplit) {
+                    window.PosPaymentSplit.showSplitValidationError(err.message || 'Could not save payment. Please try again.');
+                }
+            })
+            .finally(function() {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                }
+            });
+    }
+
+    function createOrderFinalInvoice() {
+        var btn = document.getElementById('order_create_invoice_btn');
+        var errEl = document.getElementById('order_create_invoice_error');
+        if (errEl) {
+            errEl.classList.add('hidden');
+            errEl.textContent = '';
+        }
+        if (btn) {
+            btn.disabled = true;
+        }
+
+        var formData = new FormData();
+        formData.append('order_number', orderPaymentState.orderNumber);
+
+        fetch('index.php?page=posorders&action=create_invoice_from_order', {
+            method: 'POST',
+            body: formData,
+        })
+            .then(function(res) { return res.text(); })
+            .then(function(text) {
+                var data;
+                try {
+                    data = JSON.parse(text);
+                } catch (parseErr) {
+                    throw new Error((text || '').trim().slice(0, 200) || 'Invalid server response');
+                }
+                if (!data.success) {
+                    if (errEl) {
+                        errEl.textContent = data.message || 'Invoice could not be created.';
+                        errEl.classList.remove('hidden');
+                    } else {
+                        alert(data.message || 'Invoice could not be created.');
+                    }
+                    return;
+                }
+
+                if (data.invoice_pdf_url) {
+                    window.open(data.invoice_pdf_url, '_blank');
+                } else if (data.invoice_id) {
+                    window.open('?page=posinvoice&action=generate_pdf&invoice_id=' + encodeURIComponent(String(data.invoice_id)), '_blank');
+                }
+
+                setTimeout(function() {
+                    window.location.reload();
+                }, 400);
+            })
+            .catch(function(err) {
+                if (errEl) {
+                    errEl.textContent = err.message || 'Could not create invoice. Please try again.';
+                    errEl.classList.remove('hidden');
+                } else {
+                    alert(err.message || 'Could not create invoice. Please try again.');
+                }
+            })
+            .finally(function() {
+                if (btn) {
+                    btn.disabled = false;
+                }
+            });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!window.PosPaymentSplit) {
+            return;
+        }
+        window.PosPaymentSplit.init({
+            modeOptions: <?php echo json_encode(pos_payment_mode_options_for_view(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+            submitButtonId: 'posOrderPaymentSubmitBtn',
+            getTargetTotal: function() { return orderPaymentState.pending; },
+            getDisplayOrderTotal: function() { return orderPaymentState.orderTotal; },
+            onSubmit: saveOrderPaymentFromModal,
+        });
     });
 </script>
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[100]" onclick="closeImagePopup()">
