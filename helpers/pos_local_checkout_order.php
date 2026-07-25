@@ -126,6 +126,37 @@ function pos_local_checkout_has_pending_sync(string $orderNumber): bool
 }
 
 /**
+ * Legacy DBs store vp_order_info.order_number as INT; temp POS orders need VARCHAR.
+ */
+function pos_local_checkout_ensure_order_info_order_number_varchar(mysqli $conn): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    $res = $conn->query("SHOW COLUMNS FROM vp_order_info LIKE 'order_number'");
+    if (!$res instanceof mysqli_result) {
+        return;
+    }
+    $col = $res->fetch_assoc();
+    $res->free();
+    if (!is_array($col)) {
+        return;
+    }
+
+    $type = strtolower(trim((string)($col['Type'] ?? '')));
+    if ($type === '' || !str_contains($type, 'int')) {
+        return;
+    }
+
+    if (!$conn->query('ALTER TABLE vp_order_info MODIFY order_number VARCHAR(100) NOT NULL')) {
+        error_log('[pos_local_checkout] vp_order_info.order_number VARCHAR migration failed: ' . $conn->error);
+    }
+}
+
+/**
  * @param array<string, mixed> $payload
  * @param array<string, mixed> $cartData
  * @param list<array<string, mixed>> $invoiceLinePrices
@@ -234,6 +265,8 @@ function pos_local_checkout_persist_order(
     array $invoiceLinePrices,
     array $listLinePrices
 ): array {
+    pos_local_checkout_ensure_order_info_order_number_varchar($conn);
+
     $items = $cartData['cartitems'] ?? $cartData['cart_items'] ?? $cartData['items'] ?? $cartData['lines'] ?? [];
     if (!is_array($items) || count($items) === 0) {
         return ['success' => false, 'message' => 'Cart has no items to save locally.'];
@@ -256,6 +289,7 @@ function pos_local_checkout_persist_order(
     }
 
     $inserted = 0;
+    $warehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
     foreach ($items as $row) {
         if (!is_array($row)) {
             continue;
@@ -339,6 +373,7 @@ function pos_local_checkout_persist_order(
             'esd' => date('Y-m-d', strtotime($orderDate . ' + 3 days')),
             'agent_id' => 0,
             'customer_id' => $customerId,
+            'store_name' => $warehouseId > 0 ? (string)$warehouseId : '',
             'custom_reduce' => $inserted === 0 ? $cashDiscount : 0,
         ];
 
@@ -365,7 +400,7 @@ function pos_local_checkout_persist_order(
         $txn
     );
     $addrRes = $ordersModel->insertAddressInfo($addressOrder, $customerId);
-    if (empty($addrRes['success'])) {
+    if (is_array($addrRes)) {
         return [
             'success' => false,
             'message' => 'Order lines saved but address failed: ' . (string)($addrRes['message'] ?? 'unknown'),
