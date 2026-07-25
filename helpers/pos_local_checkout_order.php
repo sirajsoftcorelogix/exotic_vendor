@@ -1053,14 +1053,63 @@ function pos_local_checkout_call_order_create_and_edit_prices(
             }
 
             return [
-                'success' => false,
-                'message' => 'Exotic order ' . $apiOrderNumber . ' was created but line prices were rejected: ' . $em,
+                'success' => true,
                 'api_order_number' => $apiOrderNumber,
+                'line_prices_sync_warning' => 'Exotic order ' . $apiOrderNumber . ' was created but line prices were rejected: ' . $em,
             ];
         }
     }
 
     return ['success' => true, 'api_order_number' => $apiOrderNumber];
+}
+
+/**
+ * Rename temp order locally when Exotic returned an order number (even if line prices failed).
+ *
+ * @param array{success?:bool,message?:string,api_order_number?:string,line_prices_sync_warning?:string} $attempt
+ * @return array{success:bool,message?:string,old_order_number?:string,new_order_number?:string,cart_rebuilt?:bool,used_stored_payload?:bool,line_prices_sync_warning?:string}
+ */
+function pos_local_checkout_complete_publish_attempt(
+    mysqli $conn,
+    string $tempOrderNumber,
+    array $attempt,
+    bool $cartRebuilt = false,
+    bool $usedStoredPayload = false
+): array {
+    $apiOrderNumber = trim((string)($attempt['api_order_number'] ?? ''));
+    if ($apiOrderNumber === '') {
+        return [
+            'success' => false,
+            'message' => trim((string)($attempt['message'] ?? '')) !== ''
+                ? trim((string)$attempt['message'])
+                : 'Exotic order/create did not return an order number.',
+            'cart_rebuilt' => $cartRebuilt,
+            'used_stored_payload' => $usedStoredPayload,
+        ];
+    }
+
+    $lineWarning = trim((string)($attempt['line_prices_sync_warning'] ?? ''));
+    if ($lineWarning === '' && empty($attempt['success'])) {
+        $lineWarning = trim((string)($attempt['message'] ?? ''));
+    }
+
+    $final = pos_local_checkout_finalize_publish_rename($conn, $tempOrderNumber, $apiOrderNumber);
+    $final['cart_rebuilt'] = $cartRebuilt;
+    $final['used_stored_payload'] = $usedStoredPayload;
+
+    if ($lineWarning !== '') {
+        $final['line_prices_sync_warning'] = $lineWarning;
+        if (!empty($final['success'])) {
+            $final['message'] = trim((string)($final['message'] ?? '')) . ' ' . $lineWarning;
+        }
+    }
+
+    if ($cartRebuilt && !empty($final['success'])) {
+        $final['message'] = trim((string)($final['message'] ?? ''))
+            . ' Cart was rebuilt from order lines before publishing.';
+    }
+
+    return $final;
 }
 
 /**
@@ -1070,6 +1119,7 @@ function pos_local_checkout_finalize_publish_rename(mysqli $conn, string $tempOr
 {
     if (strcasecmp($tempOrderNumber, $apiOrderNumber) === 0) {
         pos_local_checkout_delete_pending_sync_payload($conn, $tempOrderNumber);
+        pos_local_checkout_exotic_sync_model($conn)->markPublished($apiOrderNumber);
         require_once dirname(__DIR__) . '/models/order/order.php';
         $ordersModel = new Order($conn);
         $ordersModel->updateOrderRemarks(
@@ -1098,6 +1148,7 @@ function pos_local_checkout_finalize_publish_rename(mysqli $conn, string $tempOr
     }
 
     pos_local_checkout_delete_pending_sync_payload($conn, $tempOrderNumber);
+    pos_local_checkout_exotic_sync_model($conn)->markPublished($apiOrderNumber);
 
     require_once dirname(__DIR__) . '/models/order/order.php';
     $ordersModel = new Order($conn);
@@ -1234,21 +1285,16 @@ function pos_local_checkout_publish_to_exotic(mysqli $conn, string $tempOrderNum
             is_array($sync['cart_extra_headers'] ?? null) ? $sync['cart_extra_headers'] : [],
             $listLinePrices
         );
-        if (!empty($attempt['success']) && !empty($attempt['api_order_number'])) {
-            $final = pos_local_checkout_finalize_publish_rename($conn, $tempOrderNumber, (string)$attempt['api_order_number']);
-            $final['used_stored_payload'] = true;
-            $final['cart_rebuilt'] = false;
-
-            return $final;
+        if (!empty($attempt['api_order_number'])) {
+            return pos_local_checkout_complete_publish_attempt(
+                $conn,
+                $tempOrderNumber,
+                $attempt,
+                false,
+                true
+            );
         }
         $lastError = trim((string)($attempt['message'] ?? ''));
-        if (!empty($attempt['api_order_number'])) {
-            return [
-                'success' => false,
-                'message' => $lastError,
-                'new_order_number' => (string)$attempt['api_order_number'],
-            ];
-        }
     }
 
     $prepared = pos_local_checkout_prepare_publish_from_database(
@@ -1277,27 +1323,25 @@ function pos_local_checkout_publish_to_exotic(mysqli $conn, string $tempOrderNum
         [],
         $listLinePrices
     );
-    if (empty($attempt['success']) || empty($attempt['api_order_number'])) {
-        $msg = trim((string)($attempt['message'] ?? ''));
-        if ($usedStoredPayload && $lastError !== '') {
-            $msg = 'Stored checkout failed (' . $lastError . '). After rebuilding cart: ' . $msg;
-        }
-
-        return [
-            'success' => false,
-            'message' => $msg !== '' ? $msg : 'Exotic order/create failed after cart rebuild.',
-            'cart_rebuilt' => true,
-            'used_stored_payload' => $usedStoredPayload,
-            'new_order_number' => (string)($attempt['api_order_number'] ?? ''),
-        ];
+    if (!empty($attempt['api_order_number'])) {
+        return pos_local_checkout_complete_publish_attempt(
+            $conn,
+            $tempOrderNumber,
+            $attempt,
+            true,
+            $usedStoredPayload
+        );
     }
 
-    $final = pos_local_checkout_finalize_publish_rename($conn, $tempOrderNumber, (string)$attempt['api_order_number']);
-    $final['cart_rebuilt'] = $cartRebuilt;
-    $final['used_stored_payload'] = $usedStoredPayload;
-    if ($cartRebuilt && !empty($final['success'])) {
-        $final['message'] = (string)($final['message'] ?? '') . ' Cart was rebuilt from order lines before publishing.';
+    $msg = trim((string)($attempt['message'] ?? ''));
+    if ($usedStoredPayload && $lastError !== '') {
+        $msg = 'Stored checkout failed (' . $lastError . '). After rebuilding cart: ' . $msg;
     }
 
-    return $final;
+    return [
+        'success' => false,
+        'message' => $msg !== '' ? $msg : 'Exotic order/create failed after cart rebuild.',
+        'cart_rebuilt' => true,
+        'used_stored_payload' => $usedStoredPayload,
+    ];
 }
