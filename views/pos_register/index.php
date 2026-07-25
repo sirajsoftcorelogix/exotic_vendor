@@ -680,7 +680,14 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           <span class="font-semibold text-slate-800">Split total: <span id="payment_split_total" class="text-orange-700 tabular-nums">₹ 0.00</span></span>
         </div>
       </div>
-      <div id="payment_split_validation" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"></div>
+      <div id="payment_split_validation" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 pr-8 text-xs text-red-700 relative">
+        <button type="button" id="payment_split_validation_dismiss" class="absolute top-1.5 right-2 text-red-500 hover:text-red-800 leading-none" aria-label="Dismiss error">✕</button>
+        <span id="payment_split_validation_text"></span>
+      </div>
+      <div id="posCheckoutErrorBanner" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 pr-8 text-xs text-red-700 relative">
+        <button type="button" id="posCheckoutErrorBannerDismiss" class="absolute top-1.5 right-2 text-red-500 hover:text-red-800 leading-none" aria-label="Dismiss error">✕</button>
+        <span id="posCheckoutErrorBannerText"></span>
+      </div>
 
       <!-- Legacy single-payment fields kept for scripts that read totals; updated by split UI -->
       <input type="hidden" id="payment_amount" value="">
@@ -744,7 +751,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       <button type="button" onclick="closeAddressConfirmModal()" class="text-lg leading-none text-gray-500 hover:text-gray-800" aria-label="Close">✕</button>
     </div>
     <div class="address-confirm-body flex-1 overflow-y-auto overscroll-contain">
-    <div id="addressConfirmValidationSummary" class="mx-5 mt-3 hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"></div>
+    <div id="addressConfirmValidationSummary" class="mx-5 mt-3 hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 pr-8 text-sm text-red-700 relative">
+      <button type="button" id="addressConfirmValidationDismiss" class="absolute top-2 right-2 text-red-500 hover:text-red-800 leading-none" aria-label="Dismiss error">✕</button>
+      <span id="addressConfirmValidationSummaryText"></span>
+    </div>
     <div id="highValueComplianceBanner" class="mx-5 mt-3 hidden rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-900">High Value Transaction – Compliance Required</div>
     <div class="grid grid-cols-1 gap-5 p-5 md:grid-cols-2">
       <div class="space-y-3">
@@ -910,9 +920,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       <p class="mt-1 text-xs text-slate-500">The website API could not create this order on Exotic India.</p>
     </div>
     <div class="space-y-4 p-5">
-      <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-        <p class="text-xs font-semibold uppercase tracking-wide text-red-800">API error</p>
-        <p id="localFallbackApiError" class="mt-1 text-sm text-red-900 break-words"></p>
+      <div id="localFallbackApiErrorBox" class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 relative">
+        <button type="button" id="localFallbackApiErrorDismiss" class="absolute top-2 right-2 text-red-500 hover:text-red-800 leading-none" aria-label="Dismiss error">✕</button>
+        <p class="text-xs font-semibold uppercase tracking-wide text-red-800 pr-6">API error</p>
+        <p id="localFallbackApiError" class="mt-1 text-sm text-red-900 break-words pr-4"></p>
       </div>
       <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
         <p class="font-semibold">Create order locally in POS?</p>
@@ -1488,18 +1499,24 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 
   function validatePaymentSplitsForCheckout(grandTotal) {
     var box = document.getElementById("payment_split_validation");
+    var boxText = document.getElementById("payment_split_validation_text");
     var hideErr = function() {
       if (box) {
         box.classList.add("hidden");
-        box.textContent = "";
+      }
+      if (boxText) {
+        boxText.textContent = "";
       }
     };
     var showErr = function(msg) {
-      if (box) {
+      if (boxText) {
+        boxText.textContent = msg;
+      } else if (box) {
         box.textContent = msg;
+      }
+      if (box) {
         box.classList.remove("hidden");
       }
-      showToast("⚠ " + msg, "red");
     };
 
     var splits = collectAllPaymentSplitRowsFromUi();
@@ -1683,15 +1700,66 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 
   var pendingLocalFallbackCheckoutPayload = null;
 
+  function showPosCheckoutErrorBanner(msg) {
+    var banner = document.getElementById("posCheckoutErrorBanner");
+    var text = document.getElementById("posCheckoutErrorBannerText");
+    if (!banner || !text) {
+      return;
+    }
+    text.textContent = msg || "Checkout failed.";
+    banner.classList.remove("hidden");
+  }
+
+  function hidePosCheckoutErrorBanner() {
+    var banner = document.getElementById("posCheckoutErrorBanner");
+    var text = document.getElementById("posCheckoutErrorBannerText");
+    if (banner) {
+      banner.classList.add("hidden");
+    }
+    if (text) {
+      text.textContent = "";
+    }
+  }
+
+  function showAddressConfirmValidationError(msg) {
+    var summary = document.getElementById("addressConfirmValidationSummary");
+    var text = document.getElementById("addressConfirmValidationSummaryText");
+    if (!summary || !text) {
+      return;
+    }
+    text.textContent = msg || "";
+    summary.classList.remove("hidden");
+  }
+
+  function hideAddressConfirmValidationError() {
+    var summary = document.getElementById("addressConfirmValidationSummary");
+    var text = document.getElementById("addressConfirmValidationSummaryText");
+    if (summary) {
+      summary.classList.add("hidden");
+    }
+    if (text) {
+      text.textContent = "";
+    }
+  }
+
   function openLocalFallbackConfirmModal(apiErrorMessage, debug, addressPayload) {
     pendingLocalFallbackCheckoutPayload = addressPayload || null;
     var modal = document.getElementById("localFallbackConfirmModal");
     var errEl = document.getElementById("localFallbackApiError");
+    var errBox = document.getElementById("localFallbackApiErrorBox");
     if (errEl) {
       errEl.textContent = apiErrorMessage || "Unknown API error.";
     }
+    if (errBox) {
+      errBox.classList.remove("hidden");
+    }
     if (modal) {
       modal.classList.remove("hidden");
+    }
+    var confirmBtn = document.getElementById("localFallbackConfirmBtn");
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Save order & continue checkout";
     }
     window.__posLastOrderCreateDebug = debug || null;
     if (window.__posLastOrderCreateDebug && typeof showPaymentModalOrderApiRecord === "function") {
@@ -1705,6 +1773,11 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       modal.classList.add("hidden");
     }
     pendingLocalFallbackCheckoutPayload = null;
+    var confirmBtn = document.getElementById("localFallbackConfirmBtn");
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Save order & continue checkout";
+    }
   }
 
   var posCheckoutLoadingActive = false;
@@ -2314,11 +2387,6 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     POS_SHIPPING_ADDRESS_FIELD_IDS.forEach(function(id) {
       setPosFieldInvalid(id, false);
     });
-    var summary = document.getElementById("addressConfirmValidationSummary");
-    if (summary) {
-      summary.classList.add("hidden");
-      summary.textContent = "";
-    }
   }
 
   function getHighValueLimit() {
@@ -2513,25 +2581,15 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var shippingGstin = String(payload.confirm_sgstin || "").trim().toUpperCase();
     if (shippingGstin !== "" && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(shippingGstin)) {
       setPosFieldInvalid("confirm_sgstin", true);
-      var gstinSummary = document.getElementById("addressConfirmValidationSummary");
-      if (gstinSummary) {
-        gstinSummary.textContent = "Shipping GSTIN format is invalid.";
-        gstinSummary.classList.remove("hidden");
-      }
-      showToast("⚠ Shipping GSTIN format is invalid.", "red");
+      showAddressConfirmValidationError("Shipping GSTIN format is invalid.");
       var sgstinEl = document.getElementById("confirm_sgstin");
       if (sgstinEl) sgstinEl.focus();
       return false;
     }
 
     if (missing.length) {
-      var summary = document.getElementById("addressConfirmValidationSummary");
       var message = "Please complete: " + missing.slice(0, 6).join(", ") + (missing.length > 6 ? " and " + (missing.length - 6) + " more" : "") + ".";
-      if (summary) {
-        summary.textContent = message;
-        summary.classList.remove("hidden");
-      }
-      showToast("⚠ " + message, "red");
+      showAddressConfirmValidationError(message);
       var first = firstInvalidId ? document.getElementById(firstInvalidId) : null;
       if (first) first.focus();
       return false;
@@ -2539,16 +2597,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 
     var complianceCheck = validateHighValueCompliancePayload();
     if (!complianceCheck.ok) {
-      var complianceSummary = document.getElementById("addressConfirmValidationSummary");
-      if (complianceSummary) {
-        complianceSummary.textContent = complianceCheck.message;
-        complianceSummary.classList.remove("hidden");
-      }
+      showAddressConfirmValidationError(complianceCheck.message);
       syncHighValueComplianceUi();
       showToast("⚠ " + complianceCheck.message, "red");
       return false;
     }
 
+    hideAddressConfirmValidationError();
     return true;
   }
 
@@ -2796,14 +2851,48 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (localFallbackConfirmBtn) {
       localFallbackConfirmBtn.addEventListener("click", function() {
         if (!pendingLocalFallbackCheckoutPayload) {
-          showToast("Checkout details missing — please try again from delivery status.", "red");
+          showPosCheckoutErrorBanner("Checkout details missing — please try again from delivery status.");
           closeLocalFallbackConfirmModal();
           return;
         }
-        var payload = pendingLocalFallbackCheckoutPayload;
-        closeLocalFallbackConfirmModal();
-        createOrderNow(payload, { confirmLocalFallback: true });
+        localFallbackConfirmBtn.disabled = true;
+        localFallbackConfirmBtn.textContent = "Saving…";
+        createOrderNow(pendingLocalFallbackCheckoutPayload, { confirmLocalFallback: true, keepLocalFallbackModalOpen: true });
       });
+    }
+
+    var localFallbackApiErrorDismiss = document.getElementById("localFallbackApiErrorDismiss");
+    if (localFallbackApiErrorDismiss) {
+      localFallbackApiErrorDismiss.addEventListener("click", function() {
+        var errBox = document.getElementById("localFallbackApiErrorBox");
+        if (errBox) {
+          errBox.classList.add("hidden");
+        }
+      });
+    }
+
+    var paymentSplitValidationDismiss = document.getElementById("payment_split_validation_dismiss");
+    if (paymentSplitValidationDismiss) {
+      paymentSplitValidationDismiss.addEventListener("click", function() {
+        var box = document.getElementById("payment_split_validation");
+        var boxText = document.getElementById("payment_split_validation_text");
+        if (box) {
+          box.classList.add("hidden");
+        }
+        if (boxText) {
+          boxText.textContent = "";
+        }
+      });
+    }
+
+    var posCheckoutErrorBannerDismiss = document.getElementById("posCheckoutErrorBannerDismiss");
+    if (posCheckoutErrorBannerDismiss) {
+      posCheckoutErrorBannerDismiss.addEventListener("click", hidePosCheckoutErrorBanner);
+    }
+
+    var addressConfirmValidationDismiss = document.getElementById("addressConfirmValidationDismiss");
+    if (addressConfirmValidationDismiss) {
+      addressConfirmValidationDismiss.addEventListener("click", hideAddressConfirmValidationError);
     }
 
     var confirmAddressSubmitBtn = document.getElementById("confirmAddressSubmitBtn");
@@ -2982,22 +3071,28 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
             );
             return;
           }
+          if (checkoutOptions.keepLocalFallbackModalOpen) {
+            openLocalFallbackConfirmModal(
+              (data && data.message) ? data.message : "Checkout failed.",
+              data && data.order_create_debug ? data.order_create_debug : null,
+              addressPayload
+            );
+            return;
+          }
           if (window.__posLastOrderCreateDebug && typeof showPaymentModalOrderApiRecord === "function") {
             showPaymentModalOrderApiRecord(window.__posLastOrderCreateDebug);
           }
           if (data && data.requires_compliance) {
             closeDeliveryStatusModal();
             syncHighValueComplianceUi();
-            var summary = document.getElementById("addressConfirmValidationSummary");
-            if (summary) {
-              summary.textContent = data.message || "Additional details required for High Value Transaction.";
-              summary.classList.remove("hidden");
-            }
+            showAddressConfirmValidationError(data.message || "Additional details required for High Value Transaction.");
+          } else {
+            showPosCheckoutErrorBanner(data && data.message ? data.message : "Checkout failed");
           }
-          showToast(data && data.message ? data.message : "Checkout failed", "red");
           return;
         }
         window.__posLastOrderCreateDebug = null;
+        hidePosCheckoutErrorBanner();
         closeLocalFallbackConfirmModal();
         showToast(data.message || "Order placed.", "green");
         closeDeliveryStatusModal();
@@ -3010,7 +3105,15 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       })
       .catch(function (err) {
         console.error(err);
-        showToast(err && err.message ? err.message : "Checkout request failed", "red");
+        if (checkoutOptions.keepLocalFallbackModalOpen) {
+          openLocalFallbackConfirmModal(
+            err && err.message ? err.message : "Checkout request failed.",
+            window.__posLastOrderCreateDebug || null,
+            addressPayload
+          );
+        } else {
+          showPosCheckoutErrorBanner(err && err.message ? err.message : "Checkout request failed");
+        }
       })
       .finally(function () {
         setPosCheckoutLoading(false);

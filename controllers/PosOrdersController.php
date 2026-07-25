@@ -1129,7 +1129,8 @@ class PosOrdersController
             && $invoiceStatusForGate !== 'final';
         $canPublishExoticSync = canSrEmpAccess()
             && pos_local_checkout_is_temp_order_number($resolvedOrderNumber);
-        $hasExoticSyncPayload = pos_local_checkout_has_pending_sync($resolvedOrderNumber);
+        $hasExoticSyncPayload = $conn instanceof mysqli
+            && pos_local_checkout_has_pending_sync($conn, $resolvedOrderNumber);
 
         if ($type === 'inner') {
             renderPartial('views/posorders/partial_order_details.php', [

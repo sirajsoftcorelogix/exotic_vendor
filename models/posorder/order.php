@@ -878,6 +878,7 @@ class POSOrder
             'vp_picklist_items' => 'order_number',
             'courier_shipments' => 'order_number',
             'vp_invoices' => 'order_number',
+            'vp_order_exotic_sync' => 'order_number',
         ];
     }
 

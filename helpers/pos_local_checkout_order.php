@@ -54,75 +54,44 @@ function pos_local_checkout_order_number_exists(mysqli $conn, string $orderNumbe
     return !empty($row);
 }
 
-function pos_local_checkout_sync_storage_dir(): string
+function pos_local_checkout_exotic_sync_model(mysqli $conn): PosOrderExoticSync
 {
-    return dirname(__DIR__) . '/writable/pos_exotic_sync';
+    require_once dirname(__DIR__) . '/models/pos/PosOrderExoticSync.php';
+
+    return new PosOrderExoticSync($conn);
 }
 
-function pos_local_checkout_sync_storage_path(string $orderNumber): string
-{
-    $safe = preg_replace('/[^A-Za-z0-9._-]+/', '_', trim($orderNumber));
-
-    return pos_local_checkout_sync_storage_dir() . '/' . $safe . '.json';
-}
-
-function pos_local_checkout_save_pending_sync_payload(string $orderNumber, array $data): bool
+function pos_local_checkout_save_pending_sync_payload(mysqli $conn, string $orderNumber, array $data): bool
 {
     $orderNumber = trim($orderNumber);
     if ($orderNumber === '') {
         return false;
     }
 
-    $dir = pos_local_checkout_sync_storage_dir();
-    if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
-        error_log('[pos_local_checkout] Could not create sync storage dir: ' . $dir);
-
-        return false;
-    }
+    $apiError = trim((string)($data['api_error'] ?? ''));
+    unset($data['api_error']);
 
     $payload = array_merge($data, [
         'temp_order_number' => $orderNumber,
         'saved_at' => gmdate('c'),
     ]);
-    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-    if ($json === false) {
-        return false;
-    }
 
-    $path = pos_local_checkout_sync_storage_path($orderNumber);
-    $written = file_put_contents($path, $json, LOCK_EX);
-
-    return $written !== false;
+    return pos_local_checkout_exotic_sync_model($conn)->savePending($orderNumber, $payload, $apiError);
 }
 
-function pos_local_checkout_load_pending_sync_payload(string $orderNumber): ?array
+function pos_local_checkout_load_pending_sync_payload(mysqli $conn, string $orderNumber): ?array
 {
-    $path = pos_local_checkout_sync_storage_path($orderNumber);
-    if (!is_file($path)) {
-        return null;
-    }
-
-    $raw = file_get_contents($path);
-    if ($raw === false || trim($raw) === '') {
-        return null;
-    }
-
-    $decoded = json_decode($raw, true);
-
-    return is_array($decoded) ? $decoded : null;
+    return pos_local_checkout_exotic_sync_model($conn)->loadPending($orderNumber);
 }
 
-function pos_local_checkout_delete_pending_sync_payload(string $orderNumber): void
+function pos_local_checkout_delete_pending_sync_payload(mysqli $conn, string $orderNumber): void
 {
-    $path = pos_local_checkout_sync_storage_path($orderNumber);
-    if (is_file($path)) {
-        @unlink($path);
-    }
+    pos_local_checkout_exotic_sync_model($conn)->deletePending($orderNumber);
 }
 
-function pos_local_checkout_has_pending_sync(string $orderNumber): bool
+function pos_local_checkout_has_pending_sync(mysqli $conn, string $orderNumber): bool
 {
-    return pos_local_checkout_load_pending_sync_payload($orderNumber) !== null;
+    return pos_local_checkout_exotic_sync_model($conn)->hasPending($orderNumber);
 }
 
 /**
@@ -225,7 +194,7 @@ function pos_local_checkout_try_create_when_api_fails(
     ];
     $ordersModel->updateOrderRemarks($orderNumber, implode("\n", $remarkLines));
 
-    pos_local_checkout_save_pending_sync_payload($orderNumber, [
+    pos_local_checkout_save_pending_sync_payload($conn, $orderNumber, [
         'post_body' => $postBody,
         'cart_query' => is_array($cartCtx['query'] ?? null) ? $cartCtx['query'] : [],
         'cart_extra_headers' => is_array($cartCtx['extraHeaders'] ?? null) ? $cartCtx['extraHeaders'] : [],
@@ -1048,7 +1017,7 @@ function pos_local_checkout_call_order_create_and_edit_prices(
 function pos_local_checkout_finalize_publish_rename(mysqli $conn, string $tempOrderNumber, string $apiOrderNumber): array
 {
     if (strcasecmp($tempOrderNumber, $apiOrderNumber) === 0) {
-        pos_local_checkout_delete_pending_sync_payload($tempOrderNumber);
+        pos_local_checkout_delete_pending_sync_payload($conn, $tempOrderNumber);
         require_once dirname(__DIR__) . '/models/order/order.php';
         $ordersModel = new Order($conn);
         $ordersModel->updateOrderRemarks(
@@ -1076,7 +1045,7 @@ function pos_local_checkout_finalize_publish_rename(mysqli $conn, string $tempOr
         ];
     }
 
-    pos_local_checkout_delete_pending_sync_payload($tempOrderNumber);
+    pos_local_checkout_delete_pending_sync_payload($conn, $tempOrderNumber);
 
     require_once dirname(__DIR__) . '/models/order/order.php';
     $ordersModel = new Order($conn);
@@ -1191,7 +1160,7 @@ function pos_local_checkout_publish_to_exotic(mysqli $conn, string $tempOrderNum
         return ['success' => false, 'message' => 'Order address info not found in the local database.'];
     }
 
-    $sync = pos_local_checkout_load_pending_sync_payload($tempOrderNumber);
+    $sync = pos_local_checkout_load_pending_sync_payload($conn, $tempOrderNumber);
     $warehouseId = pos_local_checkout_resolve_warehouse_for_order($conn, $tempOrderNumber, $sync);
     if ($warehouseId > 0) {
         $_SESSION['warehouse_id'] = $warehouseId;
