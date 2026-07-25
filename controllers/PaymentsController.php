@@ -259,13 +259,26 @@ class PaymentsController
         }
 
         pos_payment_refresh_order_snapshots($conn, $orderNumberStr);
-        $invoiceStatus = pos_payment_resolve_auto_invoice_status($conn, $orderNumberStr);
-        if ($invoiceStatus === 'final') {
-            $invoiceMeta = pos_payment_finalize_invoice_for_order($conn, $orderNumberStr);
-        } elseif ($invoiceStatus === 'proforma') {
-            $invoiceMeta = pos_payment_ensure_proforma_invoice_for_order($conn, $orderNumberStr);
-        } else {
-            $invoiceMeta = ['success' => true, 'invoice_id' => 0, 'created' => false];
+
+        $invoiceMeta = [
+            'success' => true,
+            'invoice_id' => 0,
+            'created' => false,
+        ];
+        try {
+            $invoiceStatus = pos_payment_resolve_auto_invoice_status($conn, $orderNumberStr);
+            if ($invoiceStatus === 'final') {
+                $invoiceMeta = pos_payment_finalize_invoice_for_order($conn, $orderNumberStr);
+            } elseif ($invoiceStatus === 'proforma') {
+                $invoiceMeta = pos_payment_ensure_proforma_invoice_for_order($conn, $orderNumberStr);
+            }
+        } catch (Throwable $invoiceError) {
+            $invoiceMeta = [
+                'success' => false,
+                'invoice_id' => 0,
+                'created' => false,
+                'message' => 'Payment saved but invoice step failed: ' . $invoiceError->getMessage(),
+            ];
         }
 
         echo json_encode([
