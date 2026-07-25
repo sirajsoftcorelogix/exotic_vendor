@@ -126,6 +126,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     window.POS_COUNTRY_ISO_BY_NAME = <?= json_encode($posCountryIsoByName, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_INDIA_STATES = <?= json_encode($pos_india_states ?? [], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_COUNTRY_STATES = <?= json_encode($pos_country_states ?? ['IN' => ($pos_india_states ?? [])], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
+    window.POS_COUNTRY_PHONE_CODES = <?= json_encode($pos_country_phone_codes ?? ['IN' => '91'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_DEFAULT_STATE = "Delhi";
     window.POS_STORE_PINCODE = <?= json_encode(trim((string)($pos_store_pincode ?? '')), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_ADDRESS_API_DEFAULTS = {
@@ -746,7 +747,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     <div class="flex shrink-0 items-center justify-between border-b px-5 py-3">
       <div>
         <h2 class="text-lg font-semibold text-slate-800">Confirm Billing &amp; Shipping Details</h2>
-        <p class="mt-0.5 text-xs text-slate-500">Required: First name, Last name and State. Other fields use defaults when left blank.</p>
+        <p class="mt-0.5 text-xs text-slate-500">Required: First name, Last name and State. Phone must use the country code matching billing/shipping country (e.g. 91 for India).</p>
       </div>
       <button type="button" onclick="closeAddressConfirmModal()" class="text-lg leading-none text-gray-500 hover:text-gray-800" aria-label="Close">✕</button>
     </div>
@@ -2550,6 +2551,42 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     btn.title = "";
   }
 
+  function posCountryPhoneCode(iso) {
+    var code = String(iso || "").trim().toUpperCase().substring(0, 2);
+    var map = window.POS_COUNTRY_PHONE_CODES || {};
+    return String(map[code] || "").replace(/\D/g, "");
+  }
+
+  function posPhoneDigits(phone) {
+    return String(phone || "").replace(/\D/g, "");
+  }
+
+  function posPhoneMatchesCountry(phone, countryIso) {
+    var digits = posPhoneDigits(phone);
+    var country = String(countryIso || "").trim().toUpperCase().substring(0, 2);
+    if (!digits || !country) {
+      return { ok: true };
+    }
+    var expected = posCountryPhoneCode(country);
+    if (!expected) {
+      return { ok: true };
+    }
+    if (digits.indexOf(expected) === 0) {
+      return { ok: true };
+    }
+    if (country === "IN" && digits.length === 10 && /^[6-9]/.test(digits)) {
+      return { ok: true };
+    }
+    if (country === "US" && digits.length === 10) {
+      return { ok: true };
+    }
+    return {
+      ok: false,
+      message: "Phone country code must match " + posCountryDisplayName(country)
+        + " (+" + expected + " or a valid local number)."
+    };
+  }
+
   function validateAddressConfirmPayload(payload) {
     clearAddressValidationState();
     var missing = [];
@@ -2578,6 +2615,16 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       missing.push("Phone");
       setPosFieldInvalid("confirm_phone", true);
       if (!firstInvalidId) firstInvalidId = "confirm_phone";
+    } else {
+      var billingPhoneCheck = posPhoneMatchesCountry(phone, payload.confirm_country || "IN");
+      if (!billingPhoneCheck.ok) {
+        setPosFieldInvalid("confirm_phone", true);
+        if (!firstInvalidId) firstInvalidId = "confirm_phone";
+        showAddressConfirmValidationError("Billing: " + billingPhoneCheck.message);
+        var billingPhoneEl = document.getElementById("confirm_phone");
+        if (billingPhoneEl) billingPhoneEl.focus();
+        return false;
+      }
     }
     if (!state) {
       missing.push("State");
@@ -2607,6 +2654,20 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       var first = firstInvalidId ? document.getElementById(firstInvalidId) : null;
       if (first) first.focus();
       return false;
+    }
+
+    if (!isShippingSameAsBillingChecked()) {
+      var shippingPhone = String(payload.confirm_sphone || "").trim();
+      if (shippingPhone) {
+        var shippingPhoneCheck = posPhoneMatchesCountry(shippingPhone, payload.confirm_scountry || "IN");
+        if (!shippingPhoneCheck.ok) {
+          setPosFieldInvalid("confirm_sphone", true);
+          showAddressConfirmValidationError("Shipping: " + shippingPhoneCheck.message);
+          var shippingPhoneEl = document.getElementById("confirm_sphone");
+          if (shippingPhoneEl) shippingPhoneEl.focus();
+          return false;
+        }
+      }
     }
 
     var complianceCheck = validateHighValueCompliancePayload();

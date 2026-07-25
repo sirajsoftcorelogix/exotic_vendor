@@ -924,6 +924,24 @@ class POSRegisterController
 
         $posStorePincode = $conn instanceof mysqli ? $this->resolveStorePincodeForPos($conn) : '';
 
+        $countryPhoneCodes = [];
+        if ($conn instanceof mysqli) {
+            $phoneRes = $conn->query(
+                "SELECT country_code, phone_code FROM countries
+                 WHERE phone_code IS NOT NULL AND TRIM(phone_code) <> ''"
+            );
+            if ($phoneRes) {
+                while ($phoneRow = $phoneRes->fetch_assoc()) {
+                    $iso = strtoupper(substr(trim((string)($phoneRow['country_code'] ?? '')), 0, 2));
+                    $phoneCode = preg_replace('/\D+/', '', (string)($phoneRow['phone_code'] ?? ''));
+                    if ($iso !== '' && $phoneCode !== '') {
+                        $countryPhoneCodes[$iso] = $phoneCode;
+                    }
+                }
+                $phoneRes->free();
+            }
+        }
+
         renderTemplate('views/pos_register/index.php', [
             'categories' => $categoryData,
             'warehouse_name' => $warehouseName,
@@ -937,6 +955,7 @@ class POSRegisterController
             'selected_customer' => $selected_customer,
             'high_value_transaction_limit' => $highValueTransactionLimit,
             'country_list' => $countryList,
+            'pos_country_phone_codes' => $countryPhoneCodes,
             'pos_india_states' => $posCountryStates['IN'] ?? [],
             'pos_country_states' => $posCountryStates,
             'pos_payment_mode_options' => $this->posPaymentModeOptionsForView(),
@@ -4125,7 +4144,34 @@ class POSRegisterController
         return $payload;
     }
 
-    private function validatePosCheckoutAddressPayload(array $payload): array
+    private function posPhoneMatchesCountryIso(string $phone, string $countryIso, mysqli $conn): bool
+    {
+        $digits = preg_replace('/\D+/', '', $phone);
+        $countryIso = strtoupper(substr(trim($countryIso), 0, 2));
+        if ($digits === '' || $countryIso === '') {
+            return true;
+        }
+
+        require_once dirname(__DIR__) . '/helpers/courier/country_codes.php';
+        $country = getCountryByIso2($countryIso, $conn);
+        $expected = preg_replace('/\D+/', '', (string)($country['phone_code'] ?? ''));
+        if ($expected === '') {
+            return true;
+        }
+        if (str_starts_with($digits, $expected)) {
+            return true;
+        }
+        if ($countryIso === 'IN' && strlen($digits) === 10 && preg_match('/^[6-9]/', $digits)) {
+            return true;
+        }
+        if ($countryIso === 'US' && strlen($digits) === 10) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function validatePosCheckoutAddressPayload(array $payload, ?mysqli $conn = null): array
     {
         $errors = [];
         if (trim((string)($payload['confirm_first_name'] ?? '')) === '') {
@@ -4142,6 +4188,21 @@ class POSRegisterController
         }
         if (trim((string)($payload['confirm_phone'] ?? '')) === '') {
             $errors[] = 'Phone';
+        } elseif ($conn instanceof mysqli) {
+            $billingCountry = strtoupper(substr(trim((string)($payload['confirm_country'] ?? 'IN')), 0, 2));
+            if (!$this->posPhoneMatchesCountryIso((string)$payload['confirm_phone'], $billingCountry, $conn)) {
+                $errors[] = 'Billing phone country code must match billing country';
+            }
+        }
+
+        $shippingSame = !empty($payload['confirm_shipping_same_as_billing'])
+            || (string)($payload['confirm_shipping_same_as_billing'] ?? '') === '1';
+        $shippingPhone = trim((string)($payload['confirm_sphone'] ?? ''));
+        if (!$shippingSame && $shippingPhone !== '' && $conn instanceof mysqli) {
+            $shippingCountry = strtoupper(substr(trim((string)($payload['confirm_scountry'] ?? 'IN')), 0, 2));
+            if (!$this->posPhoneMatchesCountryIso($shippingPhone, $shippingCountry, $conn)) {
+                $errors[] = 'Shipping phone country code must match shipping country';
+            }
         }
 
         return $errors;
@@ -4219,7 +4280,7 @@ class POSRegisterController
             exit;
         }
 
-        $addressErrors = $this->validatePosCheckoutAddressPayload($payload);
+        $addressErrors = $this->validatePosCheckoutAddressPayload($payload, $conn);
         if (!empty($addressErrors)) {
             echo json_encode([
                 'success' => false,
