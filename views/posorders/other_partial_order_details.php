@@ -800,77 +800,17 @@ $proformaPrintDisabledReason = $canPrintProforma
         </div>
     </div>
 </div>
-<div id="orderPaymentModal" class="fixed inset-0 z-[9999] hidden">
-    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closeOrderPaymentModal()"></div>
-    <div class="relative mx-auto mt-16 w-[95%] max-w-3xl rounded-2xl bg-white shadow-2xl">
-        <div class="flex items-center justify-between border-b px-6 py-4">
-            <h2 class="text-lg font-semibold text-gray-800">Add Payment</h2>
-            <button type="button" onclick="closeOrderPaymentModal()" class="text-xl text-gray-400 hover:text-gray-700" aria-label="Close">✕</button>
-        </div>
-        <div id="order_payment_error_box"
-            class="mx-6 mt-4 hidden rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
-        <div class="space-y-6 p-6">
-            <input type="hidden" id="order_payment_order_id" value="<?php echo htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8'); ?>">
-            <div class="grid grid-cols-2 gap-4 rounded-lg border bg-gray-50 p-4">
-                <div>
-                    <div class="text-xs text-gray-500">Order Number</div>
-                    <div id="order_payment_order_label" class="text-sm font-semibold text-gray-800"><?php echo htmlspecialchars($displayOrderNumber); ?></div>
-                </div>
-                <div>
-                    <div class="text-xs text-gray-500">Pending Amount</div>
-                    <div id="order_payment_pending_label" class="text-sm font-semibold text-red-600">₹ <?php echo $paymentPendingDisplay; ?></div>
-                </div>
-            </div>
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <div>
-                    <label class="text-xs text-gray-500">Payment Stage</label>
-                    <select id="order_payment_stage" class="mt-1 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-orange-500">
-                        <option value="final">Final</option>
-                        <option value="partial">Partial</option>
-                        <option value="advance">Advance</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="text-xs text-gray-500">Payment Mode</label>
-                    <select id="order_payment_type" class="mt-1 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-orange-500">
-                        <option value="cash">Cash</option>
-                        <option value="cod">Cash on Delivery (COD)</option>
-                        <option value="upi">UPI</option>
-                        <option value="offline">Offline</option>
-                        <option value="bank_transfer">Bank Transfer</option>
-                        <option value="pos_machine">POS Machine</option>
-                        <option value="razorpay">Razorpay</option>
-                        <option value="specialpay">SpecialPay</option>
-                        <option value="cheque">Cheque</option>
-                        <option value="demand_draft">Demand Draft</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="text-xs text-gray-500">Payment Date</label>
-                    <input type="date" id="order_payment_date" value="<?php echo date('Y-m-d'); ?>" class="mt-1 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-orange-500">
-                </div>
-            </div>
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                    <label class="text-xs text-gray-500">Amount</label>
-                    <input type="number" id="order_payment_amount" step="0.01" min="0" class="mt-1 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-orange-500">
-                </div>
-                <div>
-                    <label class="text-xs text-gray-500">Transaction ID</label>
-                    <input type="text" id="order_payment_transaction_id" class="mt-1 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-orange-500">
-                </div>
-            </div>
-            <div>
-                <label class="text-xs text-gray-500">Note</label>
-                <textarea id="order_payment_note" class="mt-1 h-24 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-orange-500"></textarea>
-            </div>
-        </div>
-        <div class="flex justify-end gap-3 rounded-b-2xl border-t bg-gray-50 px-6 py-4">
-            <button type="button" onclick="closeOrderPaymentModal()" class="rounded-lg bg-gray-300 px-6 py-2 text-sm hover:bg-gray-400">Cancel</button>
-            <button type="button" onclick="saveOrderPayment()" id="orderPaymentSaveBtn" class="rounded-lg bg-orange-600 px-6 py-2 text-sm font-semibold text-white hover:bg-orange-700">Confirm Payment</button>
-        </div>
-    </div>
-</div>
+<?php
+require_once __DIR__ . '/../../helpers/pos_payment_receipt.php';
+renderPartial('views/shared/partials/pos_payment_modal.php', [
+    'posPaymentModalTitle' => 'Record payment',
+    'posPaymentModalIntro' => 'Add one or more payment lines for the pending balance. Each row is saved under the same receipt.',
+    'posPaymentModalSubmitLabel' => 'Confirm payment',
+    'posPaymentModalSubmitId' => 'posOrderPaymentSubmitBtn',
+    'posPaymentModalShowCustomInvoice' => false,
+    'posPaymentModalShowApiDebug' => false,
+]);
+?>
 <div id="noteEditPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
     <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-6 relative">
         <button onclick="closeNotePopup()" class="absolute top-3 right-4 text-black-500 hover:text-black-800">
@@ -1103,6 +1043,7 @@ $proformaPrintDisabledReason = $canPrintProforma
     </div>
 </div>
 
+<script src="<?php echo base_url(); ?>assets/js/pos_payment_split.js"></script>
 <script>
     function openInvoiceNumberEditPopup(invoiceId, currentNumber) {
         document.getElementById('edit_invoice_id').value = invoiceId;
@@ -1596,61 +1537,11 @@ $proformaPrintDisabledReason = $canPrintProforma
         }
     });
 
-    let ORDER_PAYMENT_PENDING = <?php echo json_encode(round($paymentPendingAmount, 2)); ?>;
-    const ORDER_PAYMENT_NUMBER = <?php echo json_encode($displayOrderNumber); ?>;
-
-    function showOrderPaymentError(message) {
-        const box = document.getElementById('order_payment_error_box');
-        if (!box) {
-            return;
-        }
-        box.textContent = message;
-        box.classList.remove('hidden');
-    }
-
-    function clearOrderPaymentError() {
-        const box = document.getElementById('order_payment_error_box');
-        if (!box) {
-            return;
-        }
-        box.textContent = '';
-        box.classList.add('hidden');
-    }
-
-    function openOrderAddPayment() {
-        const modal = document.getElementById('orderPaymentModal');
-        if (!modal) {
-            return;
-        }
-
-        modal.classList.remove('hidden');
-        clearOrderPaymentError();
-
-        document.getElementById('order_payment_stage').value = 'final';
-        document.getElementById('order_payment_type').value = 'cash';
-        document.getElementById('order_payment_transaction_id').value = '';
-        document.getElementById('order_payment_note').value = '';
-        document.getElementById('order_payment_date').value = new Date().toISOString().split('T')[0];
-
-        fetch('?page=payments&action=get_payment_summary&order_number=' + encodeURIComponent(ORDER_PAYMENT_NUMBER))
-            .then(function(res) { return res.json(); })
-            .then(function(data) {
-                if (!data.success) {
-                    return;
-                }
-                ORDER_PAYMENT_PENDING = parseFloat(data.pending) || 0;
-                document.getElementById('order_payment_pending_label').textContent = '₹ ' + ORDER_PAYMENT_PENDING.toFixed(2);
-                document.getElementById('order_payment_amount').value = ORDER_PAYMENT_PENDING > 0 ? ORDER_PAYMENT_PENDING : '';
-            });
-    }
-
-    function closeOrderPaymentModal() {
-        const modal = document.getElementById('orderPaymentModal');
-        if (modal) {
-            modal.classList.add('hidden');
-        }
-        clearOrderPaymentError();
-    }
+    let orderPaymentState = {
+        pending: <?php echo json_encode(round($paymentPendingAmount, 2)); ?>,
+        orderTotal: <?php echo json_encode(round((float)($paymentSummary['order_total'] ?? 0), 2)); ?>,
+        orderNumber: <?php echo json_encode($displayOrderNumber); ?>,
+    };
 
     function printOrderPaymentReceipt(paymentId) {
         if (!paymentId) {
@@ -1659,48 +1550,68 @@ $proformaPrintDisabledReason = $canPrintProforma
         window.open('?page=payments&action=receipt&id=' + encodeURIComponent(String(paymentId)), '_blank');
     }
 
-    function saveOrderPayment() {
-        clearOrderPaymentError();
+    function openOrderAddPayment() {
+        fetch('?page=payments&action=get_payment_summary&order_number=' + encodeURIComponent(orderPaymentState.orderNumber))
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    orderPaymentState.pending = parseFloat(data.pending) || 0;
+                    orderPaymentState.orderTotal = parseFloat(data.order_total) || orderPaymentState.orderTotal;
+                }
+                if (orderPaymentState.pending <= 0.02) {
+                    alert('This order has no pending balance to collect.');
+                    return;
+                }
+                if (window.PosPaymentSplit) {
+                    window.PosPaymentSplit.openModal(orderPaymentState.pending);
+                }
+            })
+            .catch(function() {
+                if (window.PosPaymentSplit) {
+                    window.PosPaymentSplit.openModal(orderPaymentState.pending);
+                }
+            });
+    }
 
-        const stage = document.getElementById('order_payment_stage').value;
-        const amount = parseFloat(document.getElementById('order_payment_amount').value);
-
-        if (!amount || amount <= 0) {
-            showOrderPaymentError('Amount must be greater than 0');
-            return;
+    function saveOrderPaymentFromModal(payInfo) {
+        var submitBtn = document.getElementById('posOrderPaymentSubmitBtn');
+        if (submitBtn) {
+            submitBtn.disabled = true;
         }
 
-        if (stage === 'final' && amount !== ORDER_PAYMENT_PENDING) {
-            showOrderPaymentError('Final payment must be exactly pending amount ₹ ' + ORDER_PAYMENT_PENDING.toFixed(2));
-            return;
-        }
-
-        const formData = new FormData();
-        formData.append('order_id', document.getElementById('order_payment_order_id').value);
-        formData.append('amount', String(amount));
-        formData.append('payment_type', document.getElementById('order_payment_type').value);
-        formData.append('payment_stage', stage);
-        formData.append('transaction_id', document.getElementById('order_payment_transaction_id').value);
-        formData.append('note', document.getElementById('order_payment_note').value);
-        formData.append('payment_date', document.getElementById('order_payment_date').value);
-
-        const saveBtn = document.getElementById('orderPaymentSaveBtn');
-        if (saveBtn) {
-            saveBtn.disabled = true;
-        }
+        var formData = new FormData();
+        formData.append('order_id', orderPaymentState.orderNumber);
+        formData.append('payment_stage', payInfo.payment_stage || 'final');
+        formData.append('note', payInfo.payment_note || '');
+        formData.append('payment_date', payInfo.payment_date || '');
+        (payInfo.payment_splits || []).forEach(function(split, idx) {
+            formData.append('payment_splits[' + idx + '][mode]', split.mode);
+            formData.append('payment_splits[' + idx + '][amount]', String(split.amount));
+            formData.append('payment_splits[' + idx + '][transaction_id]', split.transaction_id || '');
+        });
 
         fetch('index.php?page=payments&action=save_payment', {
             method: 'POST',
-            body: formData
+            body: formData,
         })
-            .then(function(res) { return res.json(); })
-            .then(function(data) {
+            .then(function(res) { return res.text(); })
+            .then(function(text) {
+                var data;
+                try {
+                    data = JSON.parse(text);
+                } catch (parseErr) {
+                    throw new Error((text || '').trim().slice(0, 200) || 'Invalid server response');
+                }
                 if (!data.success) {
-                    showOrderPaymentError(data.message || 'Save failed');
+                    if (window.PosPaymentSplit) {
+                        window.PosPaymentSplit.showSplitValidationError(data.message || 'Save failed');
+                    }
                     return;
                 }
 
-                closeOrderPaymentModal();
+                if (window.PosPaymentSplit) {
+                    window.PosPaymentSplit.closeModal();
+                }
 
                 if (data.payment_id) {
                     printOrderPaymentReceipt(data.payment_id);
@@ -1712,17 +1623,34 @@ $proformaPrintDisabledReason = $canPrintProforma
                     alert(data.invoice_message);
                 }
 
-                window.location.reload();
+                setTimeout(function() {
+                    window.location.reload();
+                }, 400);
             })
-            .catch(function() {
-                showOrderPaymentError('Could not save payment. Please try again.');
+            .catch(function(err) {
+                if (window.PosPaymentSplit) {
+                    window.PosPaymentSplit.showSplitValidationError(err.message || 'Could not save payment. Please try again.');
+                }
             })
             .finally(function() {
-                if (saveBtn) {
-                    saveBtn.disabled = false;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
                 }
             });
     }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!window.PosPaymentSplit) {
+            return;
+        }
+        window.PosPaymentSplit.init({
+            modeOptions: <?php echo json_encode(pos_payment_mode_options_for_view(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+            submitButtonId: 'posOrderPaymentSubmitBtn',
+            getTargetTotal: function() { return orderPaymentState.pending; },
+            getDisplayOrderTotal: function() { return orderPaymentState.orderTotal; },
+            onSubmit: saveOrderPaymentFromModal,
+        });
+    });
 </script>
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[100]" onclick="closeImagePopup()">
     <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">

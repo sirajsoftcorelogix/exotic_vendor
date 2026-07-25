@@ -371,6 +371,168 @@ function pos_payment_split_cod_total(array $splits): float
     return round($total, 2);
 }
 
+/**
+ * @return list<string>
+ */
+function pos_payment_allowed_modes(): array
+{
+    return ['cash', 'cod', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque'];
+}
+
+/**
+ * @return list<array{0:string,1:string}>
+ */
+function pos_payment_mode_options_for_view(): array
+{
+    $labels = [
+        'cash' => 'Cash',
+        'cod' => 'Cash on Delivery (COD)',
+        'upi' => 'UPI',
+        'bank_transfer' => 'Bank transfer',
+        'pos_machine' => 'POS machine',
+        'razorpay' => 'Razorpay',
+        'cheque' => 'Cheque',
+    ];
+    $options = [];
+    foreach (pos_payment_allowed_modes() as $mode) {
+        $options[] = [$mode, $labels[$mode] ?? ucfirst(str_replace('_', ' ', $mode))];
+    }
+
+    return $options;
+}
+
+/**
+ * @param array<string, mixed> $payload
+ *
+ * @return array{
+ *   splits: list<array{mode:string,amount:float,transaction_id:string}>,
+ *   total: float,
+ *   primary_mode: string,
+ *   primary_txn: string
+ * }
+ */
+function pos_payment_resolve_splits_from_payload(array $payload): array
+{
+    $allowed = pos_payment_allowed_modes();
+    $splits = [];
+    $raw = $payload['payment_splits'] ?? null;
+    if (is_array($raw)) {
+        foreach ($raw as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $mode = strtolower(trim((string)($row['mode'] ?? $row['payment_mode'] ?? '')));
+            if (!in_array($mode, $allowed, true)) {
+                continue;
+            }
+            $amount = round((float)($row['amount'] ?? $row['payment_amount'] ?? 0), 2);
+            if ($amount <= 0) {
+                continue;
+            }
+            $splits[] = [
+                'mode' => $mode,
+                'amount' => $amount,
+                'transaction_id' => trim((string)($row['transaction_id'] ?? '')),
+            ];
+        }
+    }
+
+    if ($splits === []) {
+        $mode = strtolower(trim((string)($payload['payment_type'] ?? $payload['payment_mode'] ?? 'cash')));
+        $amount = round((float)($payload['amount'] ?? $payload['payment_amount'] ?? 0), 2);
+        if ($amount > 0) {
+            $splits[] = [
+                'mode' => in_array($mode, $allowed, true) ? $mode : 'cash',
+                'amount' => $amount,
+                'transaction_id' => trim((string)($payload['transaction_id'] ?? '')),
+            ];
+        }
+    }
+
+    $total = 0.0;
+    foreach ($splits as $split) {
+        $total += (float)$split['amount'];
+    }
+    $total = round($total, 2);
+
+    $primary = $splits[0] ?? ['mode' => 'cash', 'amount' => 0.0, 'transaction_id' => ''];
+    foreach ($splits as $split) {
+        if ((float)$split['amount'] > (float)$primary['amount']) {
+            $primary = $split;
+        }
+    }
+
+    return [
+        'splits' => $splits,
+        'total' => $total,
+        'primary_mode' => (string)($primary['mode'] ?? 'cash'),
+        'primary_txn' => (string)($primary['transaction_id'] ?? ''),
+    ];
+}
+
+/**
+ * @param array{splits?:list<array{mode?:string,amount?:float|int|string,transaction_id?:string}>,total?:float} $splitBundle
+ *
+ * @return list<string>
+ */
+function pos_payment_validate_splits(array $splitBundle, float $targetTotal, string $paymentStage): array
+{
+    $errors = [];
+    $splits = $splitBundle['splits'] ?? [];
+    if ($splits === []) {
+        return ['Add at least one payment line.'];
+    }
+
+    $advanceTotal = pos_payment_split_advance_total($splits);
+    $codTotal = pos_payment_split_cod_total($splits);
+    $splitTotal = round($advanceTotal + $codTotal, 2);
+    $hasCod = $codTotal > 0.001;
+    $paymentStage = strtolower(trim($paymentStage));
+
+    foreach ($splits as $idx => $split) {
+        $amount = round((float)($split['amount'] ?? 0), 2);
+        if ($amount <= 0) {
+            return ['Each payment line must have amount greater than zero (line ' . ($idx + 1) . ').'];
+        }
+    }
+
+    if ($hasCod) {
+        if ($splitTotal + 0.02 < $targetTotal) {
+            $errors[] = 'Advance plus COD must equal order total ₹ ' . $targetTotal . '.';
+        } elseif ($splitTotal - 0.02 > $targetTotal) {
+            $errors[] = 'Advance plus COD exceeds order total.';
+        }
+    } else {
+        $paymentAmount = round((float)($splitBundle['total'] ?? 0), 2);
+        if ($paymentAmount <= 0) {
+            return ['Payment amount must be greater than zero.'];
+        }
+
+        if ($paymentStage === 'final') {
+            if ($paymentAmount + 0.02 < $targetTotal) {
+                $errors[] = 'Final payment must match order total ₹ ' . $targetTotal . '.';
+            } elseif ($paymentAmount - 0.02 > $targetTotal) {
+                $errors[] = 'Over payment is not allowed for final settlement.';
+            }
+        } elseif ($paymentStage === 'partial' || $paymentStage === 'advance') {
+            if ($targetTotal > 0 && $paymentAmount + 0.02 >= $targetTotal) {
+                $errors[] = 'Partial / advance must be less than order total ₹ ' . $targetTotal . '.';
+            }
+        }
+    }
+
+    foreach ($splits as $idx => $split) {
+        $mode = strtolower(trim((string)($split['mode'] ?? '')));
+        $txn = trim((string)($split['transaction_id'] ?? ''));
+        if (($mode === 'razorpay' || $mode === 'cheque') && $txn === '') {
+            $errors[] = ($mode === 'cheque' ? 'Cheque number' : 'Transaction ID')
+                . ' is required for ' . $mode . ' (line ' . ($idx + 1) . ').';
+        }
+    }
+
+    return $errors;
+}
+
 function pos_payment_sum_paid(mysqli $conn, string $orderNumber): float
 {
     $orderNumber = trim($orderNumber);
