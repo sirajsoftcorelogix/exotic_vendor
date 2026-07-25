@@ -94,6 +94,7 @@ $paymentPendingAmount = (float)($paymentSummary['pending'] ?? 0);
 $canAddOrderPayment = $paymentPendingAmount > 0.02;
 $canCreateFinalInvoice = !empty($canCreateFinalInvoice);
 $canPublishExoticSync = !empty($canPublishExoticSync);
+$hasExoticSyncPayload = !empty($hasExoticSyncPayload);
 $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurlencode($displayOrderNumber) . '&order_exact=1');
 $salesReturnUrl = base_url('?page=sales_returns&action=create&order_number=' . rawurlencode($displayOrderNumber));
 $invoiceIdForReturn = is_array($invoiceDisplay) ? (int)($invoiceDisplay['id'] ?? 0) : 0;
@@ -120,8 +121,15 @@ $proformaPrintDisabledReason = $canPrintProforma
         <div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <p class="font-semibold">Local order — not published on Exotic yet</p>
-                    <p class="mt-1 text-xs text-amber-900/90">Payment and invoice work locally. When the Exotic API is available, publish this order to replace the temp number with the real Exotic order ID.</p>
+                    <p class="font-semibold">Local temp order — not on Exotic website yet</p>
+                    <p class="mt-1 text-xs text-amber-900/90">
+                        Use the publish icon next to the order number to send this order to Exotic.
+                        <?php if (!$hasExoticSyncPayload): ?>
+                            Saved checkout data is unavailable; items will be re-added to the Exotic cart automatically before order create.
+                        <?php else: ?>
+                            If the website cart expired, publish will rebuild the cart from these order lines and retry.
+                        <?php endif; ?>
+                    </p>
                 </div>
                 <button type="button"
                     id="publish_exotic_sync_btn"
@@ -137,6 +145,19 @@ $proformaPrintDisabledReason = $canPrintProforma
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-2">
             <h1 class="text-xl font-bold"><?php echo htmlspecialchars($displayOrderNumber); ?></h1>
+            <?php if ($canPublishExoticSync): ?>
+                <button type="button"
+                    id="publish_exotic_sync_icon_btn"
+                    onclick="publishExoticSyncOrder()"
+                    title="Publish to Exotic website (rebuilds cart if expired)"
+                    aria-label="Publish to Exotic website"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-300 bg-amber-50 text-amber-800 transition hover:bg-amber-100 hover:text-amber-950 disabled:cursor-not-allowed disabled:opacity-60">
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0l-4 4m4-4l4 4M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1" />
+                    </svg>
+                </button>
+                <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-900">Local temp</span>
+            <?php endif; ?>
             <!-- <span class="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white">Paid</span>
             <span class="rounded-full bg-red-500 px-3 py-1 text-xs font-semibold text-white">Canceled</span>
             <span class="rounded-full bg-yellow-500 px-3 py-1 text-xs font-semibold text-white">Refunded</span>
@@ -1696,6 +1717,7 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
 
     function publishExoticSyncOrder() {
         var btn = document.getElementById('publish_exotic_sync_btn');
+        var iconBtn = document.getElementById('publish_exotic_sync_icon_btn');
         var errEl = document.getElementById('publish_exotic_sync_error');
         var okEl = document.getElementById('publish_exotic_sync_success');
         if (errEl) {
@@ -1708,6 +1730,10 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
         }
         if (btn) {
             btn.disabled = true;
+            btn.textContent = 'Publishing…';
+        }
+        if (iconBtn) {
+            iconBtn.disabled = true;
         }
 
         var formData = new FormData();
@@ -1726,18 +1752,18 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
                     throw new Error((text || '').trim().slice(0, 200) || 'Invalid server response');
                 }
                 if (!data.success) {
+                    var failMsg = data.message || 'Could not publish to Exotic.';
                     if (errEl) {
-                        errEl.textContent = data.message || 'Could not publish to Exotic.';
+                        errEl.textContent = failMsg;
                         errEl.classList.remove('hidden');
                     } else {
-                        alert(data.message || 'Could not publish to Exotic.');
+                        alert(failMsg);
                     }
                     return;
                 }
 
                 var msg = data.message || 'Published to Exotic.';
                 if (data.new_order_number && data.new_order_number !== orderPaymentState.orderNumber) {
-                    msg += ' Reloading with order ' + data.new_order_number + '.';
                     window.location.href = '?page=posorders&action=get_order_details_html&type=outer&order_number='
                         + encodeURIComponent(data.new_order_number);
                     return;
@@ -1762,6 +1788,10 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
             .finally(function() {
                 if (btn) {
                     btn.disabled = false;
+                    btn.textContent = 'Publish to Exotic';
+                }
+                if (iconBtn) {
+                    iconBtn.disabled = false;
                 }
             });
     }

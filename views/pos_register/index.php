@@ -901,6 +901,35 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   </div>
 </div>
 
+<!-- LOCAL FALLBACK CONFIRM (Exotic order/create failed) -->
+<div id="localFallbackConfirmModal" class="fixed inset-0 z-[10004] hidden">
+  <div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
+  <div class="relative mx-auto mt-[10vh] w-[95%] max-w-lg rounded-2xl bg-white shadow-2xl">
+    <div class="border-b px-5 py-4">
+      <h2 class="text-base font-semibold text-slate-800">Online order export failed</h2>
+      <p class="mt-1 text-xs text-slate-500">The website API could not create this order on Exotic India.</p>
+    </div>
+    <div class="space-y-4 p-5">
+      <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+        <p class="text-xs font-semibold uppercase tracking-wide text-red-800">API error</p>
+        <p id="localFallbackApiError" class="mt-1 text-sm text-red-900 break-words"></p>
+      </div>
+      <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        <p class="font-semibold">Create order locally in POS?</p>
+        <ul class="mt-2 list-disc space-y-1 pl-5 text-xs leading-relaxed text-amber-900">
+          <li>A <strong>temporary order number</strong> (e.g. POS-TMP-…) will be assigned until the website API is working again.</li>
+          <li>You can still <strong>register payment</strong> and <strong>create the tax invoice</strong> as usual.</li>
+          <li>When the website API is active, the order can be <strong>published online</strong> from order details to replace the temp number with the real Exotic order ID.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3 rounded-b-2xl">
+      <button type="button" id="localFallbackCancelBtn" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Cancel</button>
+      <button type="button" id="localFallbackConfirmBtn" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Create local order (temp number)</button>
+    </div>
+  </div>
+</div>
+
 <!-- OVERSEAS GST CONFIRMATION (non-India customers) -->
 <div id="overseasGstModal" class="fixed inset-0 z-[10002] hidden">
   <div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
@@ -1650,6 +1679,32 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       modal.classList.add("hidden");
     }
     setPosCheckoutLoading(false);
+  }
+
+  var pendingLocalFallbackCheckoutPayload = null;
+
+  function openLocalFallbackConfirmModal(apiErrorMessage, debug, addressPayload) {
+    pendingLocalFallbackCheckoutPayload = addressPayload || null;
+    var modal = document.getElementById("localFallbackConfirmModal");
+    var errEl = document.getElementById("localFallbackApiError");
+    if (errEl) {
+      errEl.textContent = apiErrorMessage || "Unknown API error.";
+    }
+    if (modal) {
+      modal.classList.remove("hidden");
+    }
+    window.__posLastOrderCreateDebug = debug || null;
+    if (window.__posLastOrderCreateDebug && typeof showPaymentModalOrderApiRecord === "function") {
+      showPaymentModalOrderApiRecord(window.__posLastOrderCreateDebug);
+    }
+  }
+
+  function closeLocalFallbackConfirmModal() {
+    var modal = document.getElementById("localFallbackConfirmModal");
+    if (modal) {
+      modal.classList.add("hidden");
+    }
+    pendingLocalFallbackCheckoutPayload = null;
   }
 
   var posCheckoutLoadingActive = false;
@@ -2731,6 +2786,26 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       });
     }
 
+    var localFallbackCancelBtn = document.getElementById("localFallbackCancelBtn");
+    if (localFallbackCancelBtn) {
+      localFallbackCancelBtn.addEventListener("click", function() {
+        closeLocalFallbackConfirmModal();
+      });
+    }
+    var localFallbackConfirmBtn = document.getElementById("localFallbackConfirmBtn");
+    if (localFallbackConfirmBtn) {
+      localFallbackConfirmBtn.addEventListener("click", function() {
+        if (!pendingLocalFallbackCheckoutPayload) {
+          showToast("Checkout details missing — please try again from delivery status.", "red");
+          closeLocalFallbackConfirmModal();
+          return;
+        }
+        var payload = pendingLocalFallbackCheckoutPayload;
+        closeLocalFallbackConfirmModal();
+        createOrderNow(payload, { confirmLocalFallback: true });
+      });
+    }
+
     var confirmAddressSubmitBtn = document.getElementById("confirmAddressSubmitBtn");
     if (confirmAddressSubmitBtn) {
       confirmAddressSubmitBtn.addEventListener("click", function() {
@@ -2782,7 +2857,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     });
   });
 
-  function createOrderNow(addressPayload) {
+  function createOrderNow(addressPayload, checkoutOptions) {
+    checkoutOptions = checkoutOptions || {};
     if (posCheckoutLoadingActive) {
       return;
     }
@@ -2875,6 +2951,9 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (Array.isArray(listPricePayload) && listPricePayload.length > 0) {
       body.list_line_prices = listPricePayload;
     }
+    if (checkoutOptions.confirmLocalFallback) {
+      body.confirm_local_fallback = "1";
+    }
     setPosCheckoutLoading(true);
     fetch("index.php?page=pos_register&action=checkout-create", {
       method: "POST",
@@ -2895,6 +2974,14 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       .then(function (data) {
         if (!data || !data.success) {
           window.__posLastOrderCreateDebug = data && data.order_create_debug ? data.order_create_debug : null;
+          if (data && data.requires_local_fallback_confirm) {
+            openLocalFallbackConfirmModal(
+              data.api_error_message || data.message || "Unknown API error.",
+              data.order_create_debug || null,
+              addressPayload
+            );
+            return;
+          }
           if (window.__posLastOrderCreateDebug && typeof showPaymentModalOrderApiRecord === "function") {
             showPaymentModalOrderApiRecord(window.__posLastOrderCreateDebug);
           }
@@ -2911,6 +2998,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           return;
         }
         window.__posLastOrderCreateDebug = null;
+        closeLocalFallbackConfirmModal();
         showToast(data.message || "Order placed.", "green");
         closeDeliveryStatusModal();
         pendingAddressPayloadForCheckout = null;
