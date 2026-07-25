@@ -85,8 +85,16 @@ class DomesticEwbIrnService {
             error_log("Domestic EWB: Prepared IRN payload for invoice #$invoiceId");
             
             // Step 2: Authenticate and get access token
-            $authResponse = $alankitClient->sendRequest('AUTH_ENDPOINT', []);
-            if (!$authResponse || !isset($authResponse['token'])) {
+            $authreq = $alankitClient->authRequest();
+            // call api request to auth
+            // Prepare request with encrypted data
+            $data = [
+                "Data" => $authreq
+            ];
+            //echo "Alankit IRN: Sending authentication request for invoice #$invoiceId\n";
+            $authResponse = $alankitClient->sendRequest('AUTH_ENDPOINT', $data, false);
+            //$authResponse = $alankitClient->sendRequest('AUTH_ENDPOINT', []);
+            if (!$authResponse || !isset($authResponse['Data']['AuthToken'])) {
                 $result['status'] = false;
                 $result['errors'][] = 'Authentication failed: ' . ($authResponse['message'] ?? 'Unknown error');
                 $this->updateIrnStatus($invoiceId, 'failed', $result['errors'][0], $irnPayload, null);
@@ -94,8 +102,8 @@ class DomesticEwbIrnService {
                 return $result;
             }
             echo "Domestic EWB: Authentication successful, received access token\n";
-            $accessToken = $authResponse['token'];
-            $encryptedSek = $authResponse['sek'] ?? null;
+            $accessToken = $authResponse['Data']['AuthToken'];
+            $encryptedSek = $authResponse['Data']['Sek'] ?? null;
             
             if (!$encryptedSek) {
                 $result['status'] = false;
@@ -119,9 +127,27 @@ class DomesticEwbIrnService {
             
             // Step 4: Generate IRN
             error_log("Domestic EWB: Generating IRN for invoice #$invoiceId");
-            $irnResponse = $alankitClient->generateIrn($irnPayload, $accessToken);
-            
-            if (!$irnResponse || !isset($irnResponse['data']['Irn'])) {
+            //$irnResponse = $alankitClient->generateIrn($irnPayload, $accessToken);
+            $payloadreq = base64_encode(json_encode($irnPayload));
+            $encryptedPayload = $alankitClient->encryptBySymmetricKey($payloadreq, $decryptedSek);
+            if (!$encryptedPayload) {
+                error_log("Alankit IRN: Payload encryption failed for invoice #$invoiceId");
+                return false;
+            }
+            //echo '<br><br>'.$encryptedPayload.'<br><br>';
+            // Send IRN generation request with encrypted payload
+            //$irnResponse = $alankitClient->sendRequest('IRN_GENERATE_ENDPOINT', ['Data' => $encryptedPayload], true, $accessToken);
+            $irnResponse = $alankitClient->generateIrn(['Data' => $encryptedPayload], $accessToken);            
+            if ($irnResponse && isset($irnResponse['Data'])) {
+                $decryptedResponse = $alankitClient->decrypt_irn($irnResponse['Data'], $decryptedSek);
+                $irnResponse = json_decode($decryptedResponse, true);
+                echo "Alankit IRN: IRN generation response decrypted for invoice #$invoiceId\n";
+                //print_r($irnResponse);
+            } else {
+                error_log("Alankit IRN: No response data received for invoice #$invoiceId");
+                //$irnResponse = null;
+            }
+            if (!$irnResponse || !isset($irnResponse['Irn'])) {
                 $result['status'] = false;
                 $result['errors'][] = 'IRN generation failed: ' . ($irnResponse['message'] ?? 'Unknown error');
                 $this->updateIrnStatus($invoiceId, 'failed', $result['errors'][0], $irnPayload, $irnResponse);
@@ -130,12 +156,13 @@ class DomesticEwbIrnService {
                 return $result;
             }
             
-            $irn = $irnResponse['data']['Irn'];
-            $result['irn'] = $irn;
-            $result['irn_message'] = 'IRN generated successfully';
-            
-            // Update IRN status in database
-            $this->updateIrnStatus($invoiceId, 'generated', null, $irnPayload, $irnResponse, $irn);
+            if($irnResponse && isset($irnResponse['Status']) && $irnResponse['Status'] === 'ACT') {
+                $irn = $irnResponse['Irn'];
+                $result['irn'] = $irn;
+                $result['irn_message'] = 'IRN generated successfully';                
+                // Update IRN status in database
+                $this->updateIrnStatus($invoiceId, 'generated', null, $irnPayload, $irnResponse, $irn);                
+            }
             
             // Save vehicle data if E-way bill was included
             if (!empty($ewbData['veh_no']) && !empty($ewbData['veh_type'])) {
@@ -197,22 +224,31 @@ class DomesticEwbIrnService {
         $invoiceNumber = end($invoiceNumberParts);
         $buyerAddress = ($customer['address_line1'] ?? '') . ' ' . ($customer['address_line2'] ?? '');
         $shippingAddress = ($customer['shipping_address_line1'] ?? '') . ' ' . ($customer['shipping_address_line2'] ?? '');
+        $buyerDisplayName = trim((string)($customer['first_name'] ?? ''));
+        if ($buyerDisplayName === '') {
+            $buyerDisplayName = 'Buyer';
+        }
+        $buyerTradeName = trim((string)($customer['trade_name'] ?? ''));
+        if ($buyerTradeName === '') {
+            $buyerTradeName = $buyerDisplayName;
+        }
         
         // Determine buyer and shipping details
         $isBusiness = (trim($customer['country'] ?? '') === 'IN');
         $buyerGstin = $isBusiness ? ($customer['gstin'] ?? '') : 'URP';
-        $buyerStateCode = $isBusiness ? (trim($customer['state_code'] ?? '') ?: '96') : '96';
+        $buyerStateCode = $isBusiness ? trim($customer['state_code']) : '';
         $buyerPincode = $isBusiness ? (trim($customer['zipcode'] ?? '') ?: '000000') : '999999';
-        $shippingState = $isBusiness ? (trim($customer['state'] ?? '') ?: '96') : '96';
-        $shippingPincode = $isBusiness ? (trim($customer['zipcode'] ?? '') ?: '000000') : '999999';
-        
+        $shippingState = $isBusiness ? trim($customer['shipping_state'] ?? '') : trim($customer['state'] ?? '');
+        $shippingPincode = $isBusiness ? (trim($customer['shipping_zipcode'] ?? '') ?: trim($customer['zipcode'])) : '999999';
+        $shippingStateCode = $isBusiness ? trim($customer['shipping_state_code']) : trim($customer['state_code']);
         return [
             'Version' => '1.1',
             'TranDtls' => [
                 'TaxSch' => 'GST',
                 'SupTyp' => $isBusiness ? 'B2B' : 'B2C',
                 'RegRev' => 'N',
-                'EcmGstin' => null,
+                //'EcmGstin' => $firm['gst'] ?? '',
+                'EcmGstin' => '07AAGFH1697G1Z8',
                 'IgstOnIntra' => 'N'
             ],
             'DocDtls' => [
@@ -221,37 +257,37 @@ class DomesticEwbIrnService {
                 'Dt' => $invoice['invoice_date'] ? date('d/m/Y', strtotime($invoice['invoice_date'])) : date('d/m/Y')
             ],
             'SellerDtls' => [
-                'Gstin' => $firm['gstin'] ?? '',
-                'LglNm' => $firm['name'] ?? '',
-                'TrdNm' => $firm['name'] ?? '',
+                'Gstin' => $firm['gst'] ?? '',
+                'LglNm' => $firm['firm_name'] ?? '',
+                'TrdNm' => $firm['firm_name'] ?? '',
                 'Addr1' => $firm['address'] ?? '',
                 'Loc' => $firm['city'] ?? '',
-                'Pin' => (int)($firm['pincode'] ?? 0),
+                'Pin' => (int)($firm['pin'] ?? 0),
                 'Stcd' => (string)($firm['state_code'] ?? ''),
                 'Ph' => $firm['phone'] ?? '',
                 'Em' => $firm['email'] ?? ''
             ],
             'BuyerDtls' => [
                 'Gstin' => $buyerGstin,
-                'LglNm' => $customer['first_name'] ?? 'Buyer',
-                'TrdNm' => $customer['first_name'] ?? 'Buyer',
+                'LglNm' => $buyerDisplayName,
+                'TrdNm' => $buyerTradeName,
                 'Pos' => $buyerStateCode,
                 'Addr1' => $buyerAddress,
                 'Loc' => $customer['city'] ?? '',
                 'Pin' => (int)$buyerPincode,
                 'Stcd' => (string)$buyerStateCode,
-                'Ph' => $customer['phone'] ?? '',
+                'Ph' => $customer['mobile'] ?? '',
                 'Em' => $customer['email'] ?? ''
             ],
-            'ShipDtls' => [
-                'Gstin' => $buyerGstin,
-                'LglNm' => $customer['first_name'] ?? 'Buyer',
-                'TrdNm' => $customer['first_name'] ?? 'Buyer',
-                'Addr1' => $shippingAddress ?: $buyerAddress,
-                'Loc' => $customer['city'] ?? '',
-                'Pin' => (int)$shippingPincode,
-                'Stcd' => (string)$shippingState
-            ],
+            // 'ShipDtls' => [
+            //     'Gstin' => $buyerGstin,
+            //     'LglNm' => $buyerDisplayName,
+            //     'TrdNm' => $buyerTradeName,
+            //     'Addr1' => $shippingAddress ?: $buyerAddress,
+            //     'Loc' => $customer['city'] ?? '',
+            //     'Pin' => (int)$shippingPincode,
+            //     'Stcd' => (string)$shippingStateCode
+            // ],
             'ItemList' => $itemList,
             'ValDtls' => [
                 'AssVal' => (float)($invoice['subtotal'] ?? 0),
@@ -268,10 +304,10 @@ class DomesticEwbIrnService {
             'RefDtls' => null,
             'AddlDocDtls' => null,
             'EwbDtls' => !empty($ewbData['veh_no']) && !empty($ewbData['veh_type']) ? [
-                'TransId' => substr(preg_replace('/\s+/', '', (string)($ewbData['trans_id'] ?? '')), 0, 15),
-                'TransName' => (string)($ewbData['trans_name'] ?? 'Transport'),
+                //'TransId' => substr(preg_replace('/\s+/', '', (string)($ewbData['trans_id'] ?? '')), 0, 15),
+                //'TransName' => (string)($ewbData['trans_name'] ?? ''),
                 'Distance' => (int)($ewbData['distance'] ?? 100),
-                'TransDocNo' => (string)($ewbData['trans_doc_no'] ?? date('YmdHis')),
+                'TransDocNo' => (string)$invoiceNumber,
                 'TransDocDt' => (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')),
                 'VehNo' => (string)($ewbData['veh_no'] ?? ''),
                 'VehType' => (string)($ewbData['veh_type'] ?? 'R'),

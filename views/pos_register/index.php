@@ -783,7 +783,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
             </select>
           </label>
         </div>
-        <label class="block text-xs font-medium text-slate-600">GSTIN<input id="confirm_gstin" class="w-full rounded border uppercase" placeholder="GSTIN (optional)" maxlength="15"></label>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block text-xs font-medium text-slate-600">GSTIN<input id="confirm_gstin" class="w-full rounded border uppercase" placeholder="GSTIN (optional)" maxlength="15"></label>
+          <label class="block text-xs font-medium text-slate-600">Trade Name<input id="confirm_trade_name" class="w-full rounded border" placeholder="Trade Name (optional)"></label>
+        </div>
         <div id="highValueCompliancePanel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <div class="mb-2 font-semibold text-amber-950">High Value Transaction – Compliance Required</div>
           <p class="mb-3 text-[11px] leading-snug text-amber-800">Additional details are required for final order completion. GSTIN B2B invoices derive PAN automatically.</p>
@@ -1966,6 +1969,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       confirm_state: firstNonEmpty(billing.state),
       confirm_zip: firstNonEmpty(billing.zip, billing.zipcode, window.POS_STORE_PINCODE || ""),
       confirm_gstin: firstNonEmpty(billing.gstin),
+      confirm_trade_name: firstNonEmpty(billing.trade_name),
 
       // Shipping: support normalized keys + DB/raw aliases.
       confirm_sfirst_name: shippingFirstName,
@@ -2146,6 +2150,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       confirm_zip: read("confirm_zip"),
       confirm_country: read("confirm_country"),
       confirm_gstin: read("confirm_gstin"),
+      confirm_trade_name: read("confirm_trade_name"),
       confirm_sfirst_name: shippingFirstName,
       confirm_slast_name: shippingLastName,
       // Keep combined name for backward compatibility on server side.

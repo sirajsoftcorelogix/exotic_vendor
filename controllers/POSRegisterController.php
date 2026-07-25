@@ -322,6 +322,47 @@ class POSRegisterController
         }
     }
 
+    private function ensureVpOrderInfoTradeNameSchema(mysqli $conn): void
+    {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+        if (!$this->columnExists($conn, 'vp_order_info', 'trade_name')) {
+            @$conn->query("ALTER TABLE vp_order_info ADD COLUMN trade_name VARCHAR(255) NOT NULL DEFAULT '' AFTER gstin");
+        }
+        $done = true;
+    }
+
+    private function persistVpOrderInfoTradeName(mysqli $conn, string $orderNumber, int $customerId, string $tradeName): void
+    {
+        $orderNumber = trim($orderNumber);
+        $tradeName = trim($tradeName);
+        if ($orderNumber === '' || $tradeName === '') {
+            return;
+        }
+
+        $this->ensureVpOrderInfoTradeNameSchema($conn);
+
+        $stmt = $conn->prepare('UPDATE vp_order_info SET trade_name = ? WHERE order_number = ? AND customer_id = ?');
+        if ($stmt) {
+            $stmt->bind_param('ssi', $tradeName, $orderNumber, $customerId);
+            $stmt->execute();
+            $affected = (int)$stmt->affected_rows;
+            $stmt->close();
+            if ($affected > 0) {
+                return;
+            }
+        }
+
+        $stmt = $conn->prepare('UPDATE vp_order_info SET trade_name = ? WHERE order_number = ?');
+        if ($stmt) {
+            $stmt->bind_param('ss', $tradeName, $orderNumber);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+
     private function findInvoiceIdForOrderNumber(mysqli $conn, string $orderNumber): ?int
     {
         $stmt = $conn->prepare(
@@ -631,6 +672,11 @@ class POSRegisterController
             if (!$customer) {
                 error_log("POS EWB: Customer not found for ID $custId");
                 return;
+            }
+
+            $payloadTradeName = trim((string)($payload['confirm_trade_name'] ?? ''));
+            if ($payloadTradeName !== '') {
+                $customer['trade_name'] = $payloadTradeName;
             }
 
             // Get firm details
@@ -1220,6 +1266,7 @@ class POSRegisterController
                         'zip' => trim((string)($info['zipcode'] ?? '')),
                         'country' => trim((string)($info['country'] ?? 'IN')),
                         'gstin' => trim((string)($info['gstin'] ?? '')),
+                        'trade_name' => trim((string)($info['trade_name'] ?? '')),
                     ];
                     $shippingOrder = [
                         'shipping_first_name' => trim((string)($info['shipping_first_name'] ?? '')),
@@ -1253,6 +1300,7 @@ class POSRegisterController
                 'zip' => trim((string)($form['zipcode'] ?? '')),
                 'country' => trim((string)($form['country'] ?? 'IN')),
                 'gstin' => trim((string)($form['gstin'] ?? '')),
+                'trade_name' => trim((string)($form['trade_name'] ?? '')),
             ];
             $shippingSession = [
                 'shipping_first_name' => trim((string)($form['shipping_first_name'] ?? '')),
@@ -1280,6 +1328,12 @@ class POSRegisterController
             'zip' => $pick($billingVc['zip'] ?? '', $billingOrder['zip'] ?? '', $billingSession['zip'] ?? ''),
             'country' => $pick($billingVc['country'] ?? '', $billingOrder['country'] ?? '', $billingSession['country'] ?? ''),
             'gstin' => $pick($billingVc['gstin'] ?? '', $billingOrder['gstin'] ?? '', $billingSession['gstin'] ?? ''),
+            'trade_name' => $pick(
+                $billingVc['trade_name'] ?? '',
+                $billingOrder['trade_name'] ?? '',
+                $billingSession['trade_name'] ?? '',
+                trim((string)($customerRow['trade_name'] ?? ''))
+            ),
         ];
 
         $shipping = [
@@ -4318,6 +4372,7 @@ class POSRegisterController
                     if (!empty($existing['id'])) {
                         $id = (int)$existing['id'];
                         $_SESSION['pos_customer_id'] = $id;
+                        $_POST['trade_name'] = trim((string)($_POST['trade_name'] ?? ''));
                         $_SESSION['pos_customer_form'] = $_POST;
                         $customerModel->upsertPosCustomerDetailsFromPost($id, $_POST);
                         echo json_encode([
@@ -4368,6 +4423,7 @@ class POSRegisterController
 
         /*  STORE FULL BILLING + SHIPPING IN SESSION */
         $_SESSION['pos_customer_id'] = $id;
+        $_POST['trade_name'] = trim((string)($_POST['trade_name'] ?? ''));
         $_SESSION['pos_customer_form'] = $_POST;
         $customerModel->upsertPosCustomerDetailsFromPost($id, $_POST);
 
@@ -4738,6 +4794,13 @@ class POSRegisterController
             exit;
         }
 
+        $this->persistVpOrderInfoTradeName(
+            $conn,
+            $orderNumber,
+            $customerId,
+            (string)($payload['confirm_trade_name'] ?? '')
+        );
+
         $editLinePrices = $payload['list_line_prices'] ?? null;
         if (!is_array($editLinePrices) || count($editLinePrices) === 0) {
             $editLinePrices = $this->buildPosListLinePricesFromCart($cartData);
@@ -4869,6 +4932,13 @@ class POSRegisterController
             'apply_export_gst' => !empty($payload['apply_export_gst']) ? 1 : 0,
         ];
         $invoiceMeta = $this->finalizePosReceiptInvoice($conn, $orderNumber, $paymentStage, $compliance, $customInvoiceNumber);
+
+        $this->persistVpOrderInfoTradeName(
+            $conn,
+            $orderNumber,
+            $customerId,
+            (string)($payload['confirm_trade_name'] ?? '')
+        );
         
         // Generate IRN and E-way bill if requested
         if (!empty($payload['generate_ewb']) && $payload['generate_ewb'] === '1' && !empty($invoiceMeta['invoice_id'])) {
