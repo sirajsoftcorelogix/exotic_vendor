@@ -1466,7 +1466,7 @@
     return out;
   }
 
-  /** Catalog / list unit prices (GST-inclusive) before checkout discounts. */
+  /** Final GST-inclusive unit prices for Exotic pos_editorderprices (after line + cart-level discounts). */
   function buildListLinePricesPayload(data, totalsOverride) {
     var items = getCartItems(data || {});
     var rawT =
@@ -1482,20 +1482,19 @@
       var posExt = linePosExtendedFromRow(row);
       var cut = alloc != null && alloc.length === items.length ? alloc[i] || 0 : 0;
       var effExt = Math.max(0, round2(posExt - cut));
-      // List = discounted row + cart-level share (coupon/custom/gift) allocated to this line.
-      var listInclUnit = qty >= 1 ? round2((effExt + cut) / qty) : round2(effExt + cut);
-      if (!(listInclUnit > 0)) {
+      var unitAfter = qty >= 1 ? round2(effExt / qty) : effExt;
+      if (!(unitAfter > 0)) {
         var listU = lineListUnitNumber(row, qty);
-        listInclUnit = listU != null && !isNaN(listU) ? round2(listU) : 0;
+        unitAfter = listU != null && !isNaN(listU) ? round2(listU) : 0;
       }
       out.push({
         itemcode: lineItemCodeForApi(row),
         size: lineSizeForApi(row),
         color: lineColorForApi(row),
         price:
-          formatMoneyDisplay(listInclUnit) != null
-            ? String(formatMoneyDisplay(listInclUnit))
-            : String(round2(listInclUnit))
+          formatMoneyDisplay(unitAfter) != null
+            ? String(formatMoneyDisplay(unitAfter))
+            : String(round2(unitAfter))
       });
     }
     return out;
@@ -3243,6 +3242,14 @@
       return [];
     }
     return buildListLinePricesPayload(d, getTotalsForCheckoutAlloc());
+  };
+
+  window.hasPosLineLevelPriceOverridesForCheckout = function () {
+    var d = window.__posCartLastRetrieveData;
+    if (!d || typeof d !== 'object') {
+      return false;
+    }
+    return hasLinePriceOverridesActive(d);
   };
 
   window.hasPosLinePriceOverridesForCheckout = function () {

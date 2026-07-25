@@ -3057,7 +3057,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       typeof window.getPosListLinePricesPayloadForCheckout === "function"
         ? window.getPosListLinePricesPayloadForCheckout()
         : [];
-    if (Array.isArray(listPricePayload) && listPricePayload.length > 0) {
+    var needsListLinePriceSync =
+      typeof window.hasPosLineLevelPriceOverridesForCheckout === "function"
+        && window.hasPosLineLevelPriceOverridesForCheckout();
+    if (needsListLinePriceSync && Array.isArray(listPricePayload) && listPricePayload.length > 0) {
       body.list_line_prices = listPricePayload;
     }
     if (checkoutOptions.confirmLocalFallback) {
@@ -3102,6 +3105,12 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           }
           if (window.__posLastOrderCreateDebug && typeof showPaymentModalOrderApiRecord === "function") {
             showPaymentModalOrderApiRecord(window.__posLastOrderCreateDebug);
+          }
+          if (data && data.order_number) {
+            closeAddressConfirmModal();
+            closeDeliveryStatusModal();
+            closeLocalFallbackConfirmModal();
+            closeOverseasGstModal();
           }
           if (data && data.requires_compliance) {
             closeDeliveryStatusModal();
