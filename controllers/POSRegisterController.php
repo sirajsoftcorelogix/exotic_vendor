@@ -4383,14 +4383,15 @@ class POSRegisterController
         }
 
         $editLinePrices = $payload['list_line_prices'] ?? null;
-        if (!is_array($editLinePrices) || count($editLinePrices) === 0) {
-            $editLinePrices = $this->buildPosListLinePricesFromCart($cartData);
+        if (!is_array($editLinePrices)) {
+            $editLinePrices = [];
         }
         $invoiceLinePrices = $payload['pos_line_prices'] ?? [];
         if (!is_array($invoiceLinePrices)) {
             $invoiceLinePrices = [];
         }
-        if (!$exoticSyncPending && is_array($editLinePrices) && count($editLinePrices) > 0) {
+        $linePricesSyncWarning = '';
+        if (!$exoticSyncPending && count($editLinePrices) > 0) {
             if (count($editLinePrices) !== count($items)) {
                 echo json_encode([
                     'success' => false,
@@ -4425,14 +4426,9 @@ class POSRegisterController
                 if ($em === '') {
                     $em = 'HTTP ' . (int)($editRes['code'] ?? 0);
                 }
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'Order ' . $orderNumber . ' was created but Exotic rejected line prices: ' . $em
-                        . ' You may need to fix prices manually or retry before recording payment locally.',
-                    'order_number' => $orderNumber,
-                    'order_create_debug' => $_SESSION['pos_order_create_api_debug'] ?? null,
-                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                exit;
+                $linePricesSyncWarning = 'Order ' . $orderNumber . ' was created but Exotic rejected line prices: ' . $em
+                    . ' Payment was recorded locally; fix line prices on Exotic if needed.';
+                error_log('[POS checkout line prices] ' . $linePricesSyncWarning);
             }
         }
 
@@ -4628,6 +4624,9 @@ class POSRegisterController
         if (!empty($localStockWarnings)) {
             $successMessage .= ' Local stock warning: ' . count($localStockWarnings) . ' item(s) sold above local stock.';
         }
+        if ($linePricesSyncWarning !== '') {
+            $successMessage .= ' ' . $linePricesSyncWarning;
+        }
         if (!empty($fulfillmentStatusMeta['message']) && (empty($fulfillmentStatusMeta['local_updated']) || !empty($fulfillmentStatusMeta['api_failed']))) {
             $successMessage .= ' ' . $fulfillmentStatusMeta['message'];
         }
@@ -4639,6 +4638,7 @@ class POSRegisterController
             'message' => $successMessage,
             'order_number' => $orderNumber,
             'exotic_sync_pending' => $exoticSyncPending,
+            'line_prices_sync_warning' => $linePricesSyncWarning,
             'receipt_number' => $receiptNo,
             'payment_id' => (int)($pay['payment_id'] ?? 0),
             'payment_ids' => $paymentIds,
