@@ -156,6 +156,8 @@ Payment modal submit → checkout-create → order/create (Exotic, payment_type=
 
 Exotic `/order/create` always sends `payment_type=offline`; real POS mode (UPI, cash, COD, …) is in `store_payment_details`. See **`pos-order-payment-invoice.mdc`** §1 (`payment_type` vs `store_payment_details`).
 
+**Address confirm:** Billing/shipping phone dial code must match selected country. See **`pos-order-payment-invoice.mdc`** §1 (Address confirm — phone must match country).
+
 ---
 
 ## Post-checkout
