@@ -797,10 +797,77 @@ class OrdersAPIController
                         ];
                     }
 
+                    $voucherNo = $invoice['invoice_number'] ?? '';
+                    $salesReturns = [];
+                    $salesReturnStmt = $GLOBALS['conn']->prepare(
+                        "SELECT id, return_number, order_number, invoice_id, warehouse_id, return_date, return_type,
+                                remarks, status, stock_applied, created_by, created_at, updated_at
+                         FROM vp_sales_returns
+                         WHERE invoice_id = ?
+                         ORDER BY return_date DESC, id DESC"
+                    );
+                    if ($salesReturnStmt) {
+                        $invoiceId = (int)($invoice['id'] ?? 0);
+                        $salesReturnStmt->bind_param('i', $invoiceId);
+                        $salesReturnStmt->execute();
+                        $salesReturnResult = $salesReturnStmt->get_result();
+                        while ($salesReturn = $salesReturnResult->fetch_assoc()) {
+                            $salesReturnItems = [];
+                            $salesReturnItemsStmt = $GLOBALS['conn']->prepare(
+                                "SELECT id, sales_return_id, invoice_item_id, order_row_id, product_id, item_code,
+                                        size, color, return_qty, stock_applied_qty, sort_order
+                                 FROM vp_sales_return_items
+                                 WHERE sales_return_id = ?
+                                 ORDER BY sort_order ASC, id ASC"
+                            );
+                            if ($salesReturnItemsStmt) {
+                                $salesReturnId = (int)($salesReturn['id'] ?? 0);
+                                $salesReturnItemsStmt->bind_param('i', $salesReturnId);
+                                $salesReturnItemsStmt->execute();
+                                $salesReturnItemsResult = $salesReturnItemsStmt->get_result();
+                                while ($salesReturnItem = $salesReturnItemsResult->fetch_assoc()) {
+                                    $salesReturnItems[] = [
+                                        'id' => (int)($salesReturnItem['id'] ?? 0),
+                                        'sales_return_id' => (int)($salesReturnItem['sales_return_id'] ?? 0),
+                                        'invoice_item_id' => isset($salesReturnItem['invoice_item_id']) ? (int)$salesReturnItem['invoice_item_id'] : null,
+                                        'order_row_id' => isset($salesReturnItem['order_row_id']) ? (int)$salesReturnItem['order_row_id'] : null,
+                                        'product_id' => isset($salesReturnItem['product_id']) ? (int)$salesReturnItem['product_id'] : null,
+                                        'item_code' => (string)($salesReturnItem['item_code'] ?? ''),
+                                        'size' => (string)($salesReturnItem['size'] ?? ''),
+                                        'color' => (string)($salesReturnItem['color'] ?? ''),
+                                        'return_qty' => (float)($salesReturnItem['return_qty'] ?? 0),
+                                        'stock_applied_qty' => (float)($salesReturnItem['stock_applied_qty'] ?? 0),
+                                        'sort_order' => (int)($salesReturnItem['sort_order'] ?? 0),
+                                    ];
+                                }
+                                $salesReturnItemsStmt->close();
+                            }
+
+                            $salesReturns[] = [
+                                'id' => (int)($salesReturn['id'] ?? 0),
+                                'return_number' => (string)($salesReturn['return_number'] ?? ''),
+                                'sales_return_vch_no' => $voucherNo,
+                                'order_number' => (string)($salesReturn['order_number'] ?? ''),
+                                'invoice_id' => isset($salesReturn['invoice_id']) ? (int)$salesReturn['invoice_id'] : null,
+                                'warehouse_id' => (int)($salesReturn['warehouse_id'] ?? 0),
+                                'return_date' => (string)($salesReturn['return_date'] ?? ''),
+                                'return_type' => (string)($salesReturn['return_type'] ?? ''),
+                                'remarks' => (string)($salesReturn['remarks'] ?? ''),
+                                'status' => (string)($salesReturn['status'] ?? ''),
+                                'stock_applied' => (int)($salesReturn['stock_applied'] ?? 0),
+                                'created_by' => isset($salesReturn['created_by']) ? (int)$salesReturn['created_by'] : null,
+                                'created_at' => (string)($salesReturn['created_at'] ?? ''),
+                                'updated_at' => (string)($salesReturn['updated_at'] ?? ''),
+                                'sales_return_items' => $salesReturnItems,
+                            ];
+                        }
+                        $salesReturnStmt->close();
+                    }
+
                     $voucher = [
                         'Series Name'         => 'Main Company',
                         'VchDate'             => $formattedDate,
-                        'VchNo.'              => $invoice['invoice_number'] ?? '',
+                        'VchNo.'              => $voucherNo,
                         'Sales Type'          => 'Sales',
                         'Party Name'          => $firmDetail['firm_name'] ?? '',
                         'GSTIN'               => $firmDetail['gstin'] ?? '',
@@ -811,7 +878,8 @@ class OrdersAPIController
                         'Currency'            => $invoice['currency'] ?? 'INR',
                         'Shipping Details'    => $shippingDetails,
                         'Item Details'        => $itemDetails,
-                        'Bill Sundry Details' => $billSundryDetails
+                        'Bill Sundry Details' => $billSundryDetails,
+                        'sales_return'        => $salesReturns
                         
                     ];
 
