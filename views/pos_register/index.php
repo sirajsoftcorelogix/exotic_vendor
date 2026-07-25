@@ -106,12 +106,21 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       font-weight: 700;
     }
     #addressConfirmModal .pos-phone-row {
+      display: grid;
+      grid-template-columns: 4.5rem minmax(0, 1fr);
+      gap: 0.5rem;
       margin-top: 0.25rem;
     }
     #addressConfirmModal .pos-phone-code-select {
-      padding-left: 0.5rem;
-      padding-right: 0.35rem;
+      width: 100%;
+      min-width: 0;
+      padding-left: 0.35rem;
+      padding-right: 0.25rem;
       font-size: 0.8125rem;
+      text-align: center;
+    }
+    #addressConfirmModal .pos-phone-number-input {
+      min-width: 0;
     }
   </style>
   <?php
@@ -772,20 +781,18 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           <label class="block text-xs font-medium text-slate-600">First Name <span class="field-req-star text-red-600">*</span><input id="confirm_first_name" class="w-full rounded border" placeholder="First Name"></label>
           <label class="block text-xs font-medium text-slate-600">Last Name <span class="field-req-star text-red-600">*</span><input id="confirm_last_name" class="w-full rounded border" placeholder="Last Name"></label>
         </div>
-        <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">Email<input id="confirm_email" type="email" class="w-full rounded border" placeholder="Email"></label>
-          <label class="block text-xs font-medium text-slate-600">Phone <span class="field-req-star text-red-600">*</span>
-            <div class="pos-phone-row flex gap-2">
-              <select id="confirm_phone_code" class="pos-phone-code-select w-[8.75rem] shrink-0 rounded border bg-white" aria-label="Billing phone country code">
-                <?php
-                $selected_phone_iso = 'IN';
-                include __DIR__ . '/partials/phone_code_options.php';
-                ?>
-              </select>
-              <input id="confirm_phone" class="min-w-0 flex-1 rounded border" placeholder="Phone number" inputmode="tel" autocomplete="tel-national">
-            </div>
-          </label>
-        </div>
+        <label class="block text-xs font-medium text-slate-600">Email<input id="confirm_email" type="email" class="w-full rounded border" placeholder="Email"></label>
+        <label class="block text-xs font-medium text-slate-600">Phone <span class="field-req-star text-red-600">*</span>
+          <div class="pos-phone-row">
+            <select id="confirm_phone_code" class="pos-phone-code-select rounded border bg-white" aria-label="Billing phone country code">
+              <?php
+              $selected_phone_iso = 'IN';
+              include __DIR__ . '/partials/phone_code_options.php';
+              ?>
+            </select>
+            <input id="confirm_phone" class="pos-phone-number-input w-full rounded border" placeholder="Phone number" inputmode="tel" autocomplete="tel-national">
+          </div>
+        </label>
         <label class="block text-xs font-medium text-slate-600">Address 1<input id="confirm_address1" class="w-full rounded border" placeholder="Address 1"></label>
         <label class="block text-xs font-medium text-slate-600">Address 2<input id="confirm_address2" class="w-full rounded border" placeholder="Address 2"></label>
         <div class="grid grid-cols-2 gap-3">
@@ -854,14 +861,14 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_slast_name" class="w-full rounded border" placeholder="Last Name"></label>
         </div>
         <label class="block text-xs font-medium text-slate-600">Phone
-          <div class="pos-phone-row flex gap-2">
-            <select id="confirm_sphone_code" class="pos-phone-code-select w-[8.75rem] shrink-0 rounded border bg-white" aria-label="Shipping phone country code">
+          <div class="pos-phone-row">
+            <select id="confirm_sphone_code" class="pos-phone-code-select rounded border bg-white" aria-label="Shipping phone country code">
               <?php
               $selected_phone_iso = 'IN';
               include __DIR__ . '/partials/phone_code_options.php';
               ?>
             </select>
-            <input id="confirm_sphone" class="min-w-0 flex-1 rounded border" placeholder="Phone number" inputmode="tel" autocomplete="tel-national">
+            <input id="confirm_sphone" class="pos-phone-number-input w-full rounded border" placeholder="Phone number" inputmode="tel" autocomplete="tel-national">
           </div>
         </label>
         <label class="block text-xs font-medium text-slate-600">Address 1<input id="confirm_saddress1" class="w-full rounded border" placeholder="Address 1"></label>
