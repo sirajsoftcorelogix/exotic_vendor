@@ -66,9 +66,11 @@ if ($receipt_download_filename_base === '') {
               <div class="text-xl font-black uppercase tracking-tight text-neutral-900"><?= $h($receipt_title_main ?? 'PAYMENT RECEIPT') ?></div>
               <div class="mt-3 space-y-1 text-[11px] text-neutral-800">
                 <div><span class="font-semibold">Receipt No. :</span> <?= $h($receipt_number ?? '') ?></div>
+                <?php if (trim((string)($order_id ?? '')) !== ''): ?>
+                <div><span class="font-semibold">Order No. :</span> <?= $h((string)$order_id) ?></div>
+                <?php endif; ?>
                 <div><span class="font-semibold">Dated :</span> <?= $h($receipt_date_formatted ?? '') ?></div>
                 <div><span class="font-semibold">Place of Supply :</span> <?= $h($receipt_place_of_supply ?? '') ?></div>
-                <div class="sm:hidden"><span class="font-semibold">Order ID :</span> <?= $h($order_id ?? '') ?></div>
               </div>
             </div>
           </div>
