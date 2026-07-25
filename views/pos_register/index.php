@@ -2176,7 +2176,6 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var shippingFirstName = read("confirm_sfirst_name");
     var shippingLastName = read("confirm_slast_name");
     var shippingFullName = [shippingFirstName, shippingLastName].filter(Boolean).join(" ").trim();
-    var omitShippingOnOrder = hasConfirmShippingFieldsFilled();
     return {
       confirm_address_submit: "1",
       confirm_first_name: read("confirm_first_name"),
@@ -2203,7 +2202,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       confirm_sphone: read("confirm_sphone"),
       confirm_sgstin: read("confirm_sgstin").toUpperCase(),
       confirm_shipping_same_as_billing: isShippingSameAsBillingChecked() ? "1" : "0",
-      confirm_omit_shipping_api: omitShippingOnOrder ? "1" : "0",
+      confirm_omit_shipping_api: "0",
       customer_residency_status: read("customer_residency_status") || "INDIAN_RESIDENT",
       customer_pan: read("customer_pan").replace(/\s+/g, "").toUpperCase(),
       customer_aadhaar: read("customer_aadhaar").replace(/\D/g, ""),
