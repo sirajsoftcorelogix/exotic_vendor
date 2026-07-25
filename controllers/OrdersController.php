@@ -657,6 +657,20 @@ class OrdersController
             return ['success' => false, 'message' => 'Order number missing', 'imported' => 0, 'total' => 0, 'attempts' => 0];
         }
 
+        require_once dirname(__DIR__) . '/helpers/pos_local_checkout_order.php';
+        if (pos_local_checkout_is_temp_order_number($orderNumber)) {
+            global $ordersModel;
+            $ready = $ordersModel->hasOrderLines($orderNumber) && $ordersModel->hasOrderInfo($orderNumber);
+
+            return [
+                'success' => $ready,
+                'message' => $ready ? 'Local POS order ready' : 'Local order data missing',
+                'imported' => 0,
+                'total' => 0,
+                'attempts' => 1,
+            ];
+        }
+
         $maxAttempts = max(1, min(6, $maxAttempts));
         $delaySeconds = max(0, min(5, $delaySeconds));
 

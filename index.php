@@ -1851,6 +1851,9 @@ switch ($page) {
             case 'create_invoice_from_order':
                 $controller->createInvoiceFromOrderAjax();
                 break;
+            case 'publish_exotic_sync':
+                $controller->publishExoticSyncAjax();
+                break;
             case 'print_proforma':
                 $controller->printProforma();
                 break;

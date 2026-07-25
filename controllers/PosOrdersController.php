@@ -1120,12 +1120,16 @@ class PosOrdersController
         }
 
         require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+        require_once __DIR__ . '/../helpers/pos_local_checkout_order.php';
         $invoiceStatusForGate = is_array($invoiceDisplay)
             ? strtolower(trim((string)($invoiceDisplay['status'] ?? '')))
             : '';
         $canCreateFinalInvoice = $conn instanceof mysqli
             && pos_payment_is_allocation_complete($conn, $resolvedOrderNumber)
             && $invoiceStatusForGate !== 'final';
+        $canPublishExoticSync = canSrEmpAccess()
+            && pos_local_checkout_is_temp_order_number($resolvedOrderNumber)
+            && pos_local_checkout_has_pending_sync($resolvedOrderNumber);
 
         if ($type === 'inner') {
             renderPartial('views/posorders/partial_order_details.php', [
@@ -1147,6 +1151,7 @@ class PosOrdersController
                 'canEditInvoiceNumber' => canSrEmpAccess(),
                 'paymentSummary' => $paymentSummary,
                 'canCreateFinalInvoice' => $canCreateFinalInvoice,
+                'canPublishExoticSync' => $canPublishExoticSync,
                 'linePricingByLineId' => $linePricingByLineId,
                 'order_status_list' => $commanModel->get_order_status(),
                 'staff_list' => $commanModel->get_staff_list(),
@@ -1219,6 +1224,34 @@ class PosOrdersController
             'invoice_pdf_url' => pos_invoice_pdf_url($invoiceId),
             'message' => !empty($invoiceMeta['created']) ? 'Invoice created successfully.' : 'Invoice is ready.',
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    public function publishExoticSyncAjax(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (!canSrEmpAccess()) {
+            echo json_encode(['success' => false, 'message' => 'Access denied.']);
+            exit;
+        }
+
+        global $conn;
+        if (!$conn instanceof mysqli) {
+            echo json_encode(['success' => false, 'message' => 'Database unavailable']);
+            exit;
+        }
+
+        $orderNumber = trim((string)($_POST['order_number'] ?? $_GET['order_number'] ?? ''));
+        if ($orderNumber === '') {
+            echo json_encode(['success' => false, 'message' => 'Order number missing']);
+            exit;
+        }
+
+        require_once __DIR__ . '/../helpers/pos_local_checkout_order.php';
+        $result = pos_local_checkout_publish_to_exotic($conn, $orderNumber);
+        echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
 
