@@ -618,6 +618,7 @@ class Order
         }
 
         $data = $this->normalizeOrderNumericFields($data);
+        $data = $this->sanitizeOrderImportFields($data);
 
         // Insert
         $table_name = 'vp_orders';
@@ -697,7 +698,7 @@ class Order
         $types = '';
         $values = [];
         foreach ($InsertFields as $field) {
-            if (is_string($data[$field])) {
+            if (isset($data[$field]) && is_string($data[$field])) {
                 if (strlen($data[$field]) > 255) {
                     // Truncate the string to the specified length
                     $data[$field] = substr($data[$field], 0, 255);

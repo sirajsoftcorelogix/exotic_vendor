@@ -925,7 +925,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     </div>
     <div class="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3 rounded-b-2xl">
       <button type="button" id="localFallbackCancelBtn" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Cancel</button>
-      <button type="button" id="localFallbackConfirmBtn" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Create local order (temp number)</button>
+      <button type="button" id="localFallbackConfirmBtn" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Save order &amp; continue checkout</button>
     </div>
   </div>
 </div>
