@@ -1680,8 +1680,14 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       err.classList.add("hidden");
       err.textContent = "";
     }
+    var status = addressPayload && addressPayload.pos_delivery_status ? String(addressPayload.pos_delivery_status) : "";
+    var selectedRadio = status
+      ? document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"][value="' + status + '"]')
+      : null;
     var defaultRadio = document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"][value="collected_from_showroom"]');
-    if (defaultRadio) {
+    if (selectedRadio) {
+      selectedRadio.checked = true;
+    } else if (defaultRadio) {
       defaultRadio.checked = true;
     }
     syncDeliveryStatusOptionStyles();
@@ -1695,6 +1701,14 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (modal) {
       modal.classList.add("hidden");
     }
+  }
+
+  function closeAllPosCheckoutModals() {
+    closeDeliveryStatusModal();
+    closeLocalFallbackConfirmModal();
+    closeOverseasGstModal();
+    closeAddressConfirmModal();
+    closePaymentModal();
     setPosCheckoutLoading(false);
   }
 
@@ -2794,6 +2808,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (deliveryStatusBackBtn) {
       deliveryStatusBackBtn.addEventListener("click", function() {
         closeDeliveryStatusModal();
+        setPosCheckoutLoading(false);
       });
     }
 
@@ -2818,6 +2833,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           openOverseasGstModal(payload);
           return;
         }
+        closeDeliveryStatusModal();
         createOrderNow(payload);
       });
     }
@@ -2844,7 +2860,11 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var localFallbackCancelBtn = document.getElementById("localFallbackCancelBtn");
     if (localFallbackCancelBtn) {
       localFallbackCancelBtn.addEventListener("click", function() {
+        var resumePayload = pendingLocalFallbackCheckoutPayload;
         closeLocalFallbackConfirmModal();
+        if (resumePayload) {
+          openDeliveryStatusModal(resumePayload);
+        }
       });
     }
     var localFallbackConfirmBtn = document.getElementById("localFallbackConfirmBtn");
@@ -3064,6 +3084,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         if (!data || !data.success) {
           window.__posLastOrderCreateDebug = data && data.order_create_debug ? data.order_create_debug : null;
           if (data && data.requires_local_fallback_confirm) {
+            closeDeliveryStatusModal();
             openLocalFallbackConfirmModal(
               data.api_error_message || data.message || "Unknown API error.",
               data.order_create_debug || null,
@@ -3093,15 +3114,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         }
         window.__posLastOrderCreateDebug = null;
         hidePosCheckoutErrorBanner();
-        closeLocalFallbackConfirmModal();
-        showToast(data.message || "Order placed.", "green");
-        closeDeliveryStatusModal();
         pendingAddressPayloadForCheckout = null;
-        closeAddressConfirmModal();
-        closePaymentModal();
+        closeAllPosCheckoutModals();
+        showToast(data.message || "Order placed.", "green");
         if (data.redirect_url) {
-          window.location.href = data.redirect_url;
+          window.location.assign(data.redirect_url);
         }
+        return;
       })
       .catch(function (err) {
         console.error(err);
@@ -3117,6 +3136,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       })
       .finally(function () {
         setPosCheckoutLoading(false);
+        if (checkoutOptions.keepLocalFallbackModalOpen) {
+          var confirmBtn = document.getElementById("localFallbackConfirmBtn");
+          if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = "Save order & continue checkout";
+          }
+        }
       });
   }
 
