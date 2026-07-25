@@ -1128,8 +1128,8 @@ class PosOrdersController
             && pos_payment_is_allocation_complete($conn, $resolvedOrderNumber)
             && $invoiceStatusForGate !== 'final';
         $canPublishExoticSync = canSrEmpAccess()
-            && pos_local_checkout_is_temp_order_number($resolvedOrderNumber)
-            && pos_local_checkout_has_pending_sync($resolvedOrderNumber);
+            && pos_local_checkout_is_temp_order_number($resolvedOrderNumber);
+        $hasExoticSyncPayload = pos_local_checkout_has_pending_sync($resolvedOrderNumber);
 
         if ($type === 'inner') {
             renderPartial('views/posorders/partial_order_details.php', [
@@ -1152,6 +1152,7 @@ class PosOrdersController
                 'paymentSummary' => $paymentSummary,
                 'canCreateFinalInvoice' => $canCreateFinalInvoice,
                 'canPublishExoticSync' => $canPublishExoticSync,
+                'hasExoticSyncPayload' => $hasExoticSyncPayload,
                 'linePricingByLineId' => $linePricingByLineId,
                 'order_status_list' => $commanModel->get_order_status(),
                 'staff_list' => $commanModel->get_staff_list(),

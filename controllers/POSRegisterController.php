@@ -4317,6 +4317,26 @@ class POSRegisterController
         $localFallbackMessage = '';
 
         if (!CartResponseParser::isSuccess($createRes)) {
+            $d = is_array($createRes['data'] ?? null) ? $createRes['data'] : [];
+            $apiMsg = trim((string)($d['message'] ?? $d['error'] ?? $d['errormessage'] ?? ''));
+            if ($apiMsg === '') {
+                $apiMsg = 'Order create failed (HTTP ' . (int)($createRes['code'] ?? 0) . ').';
+            }
+
+            $confirmLocalFallback = !empty($payload['confirm_local_fallback'])
+                || (string)($payload['confirm_local_fallback'] ?? '') === '1';
+
+            if (!$confirmLocalFallback) {
+                echo json_encode([
+                    'success' => false,
+                    'requires_local_fallback_confirm' => true,
+                    'api_error_message' => $apiMsg,
+                    'message' => 'Export to Exotic website failed.',
+                    'order_create_debug' => $_SESSION['pos_order_create_api_debug'],
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+
             require_once dirname(__DIR__) . '/helpers/pos_local_checkout_order.php';
             $invoiceLinePricesForLocal = is_array($payload['pos_line_prices'] ?? null) ? $payload['pos_line_prices'] : [];
             $listLinePricesForLocal = is_array($payload['list_line_prices'] ?? null) ? $payload['list_line_prices'] : [];
@@ -4339,15 +4359,10 @@ class POSRegisterController
                 ]
             );
             if (empty($fallback['success'])) {
-                $d = is_array($createRes['data'] ?? null) ? $createRes['data'] : [];
-                $msg = trim((string)($d['message'] ?? $d['error'] ?? $d['errormessage'] ?? ''));
-                if ($msg === '') {
-                    $msg = 'Order create failed (HTTP ' . (int)($createRes['code'] ?? 0) . ').';
-                }
                 $fallbackDetail = trim((string)($fallback['message'] ?? ''));
                 echo json_encode([
                     'success' => false,
-                    'message' => $fallbackDetail !== '' ? $fallbackDetail : $msg,
+                    'message' => $fallbackDetail !== '' ? $fallbackDetail : $apiMsg,
                     'order_create_debug' => $_SESSION['pos_order_create_api_debug'],
                 ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
                 exit;
