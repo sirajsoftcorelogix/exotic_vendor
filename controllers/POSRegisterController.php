@@ -4873,16 +4873,70 @@ class POSRegisterController
     }
 
     /**
-     * When shipping is filled in POS confirm step, omit s* fields on order/create (checkoutdata + billing only).
+     * Short cart token from GET /cart/retrieve (e.g. 3049898|INR|34000) — not the legacy serialized PHP blob.
      */
-    private function shouldOmitShippingOnOrderCreate(array $payload): bool
+    private function checkoutdataIsShortCartToken(string $checkoutdata): bool
     {
+        $checkoutdata = trim($checkoutdata);
+        if ($checkoutdata === '' || str_starts_with($checkoutdata, 'a:')) {
+            return false;
+        }
+
+        return substr_count($checkoutdata, '|') >= 2;
+    }
+
+    /**
+     * Legacy serialized checkoutdata embeds cart context; short tokens require explicit billing/shipping on order/create.
+     */
+    private function shouldOmitShippingOnOrderCreate(array $payload, string $checkoutdata): bool
+    {
+        if ($this->checkoutdataIsShortCartToken($checkoutdata)) {
+            return false;
+        }
+
         if (!empty($payload['confirm_omit_shipping_api'])
             && (string)$payload['confirm_omit_shipping_api'] === '1') {
             return true;
         }
 
         return $this->hasPosConfirmShippingFilled($payload);
+    }
+
+    /** Exotic store_payment_details third segment when no gateway txn id (counter sale). */
+    private function resolveStorePaymentTransactionId(string $txn): string
+    {
+        $txn = trim($txn);
+
+        return $txn !== '' ? $txn : ('store.' . gmdate('YmdHis'));
+    }
+
+    /**
+     * API doc sends empty strings for unused gateway fields; include them for offline POS checkout.
+     *
+     * @param array<string, string> $out
+     *
+     * @return array<string, string>
+     */
+    private function appendOrderCreateEmptyPaymentFields(array $out): array
+    {
+        foreach ([
+            'cardnumber' => '',
+            'cardexpmonth' => '',
+            'cardexpyear' => '',
+            'card_cvv' => '',
+            'razorpay_order_id' => '',
+            'razorpay_payment_id' => '',
+            'razorpay_signature' => '',
+            'magiccheckout_done' => '',
+            'paypal_transaction_status' => '',
+            'paypal_transaction_id' => '',
+        ] as $key => $empty) {
+            if (!array_key_exists($key, $out)) {
+                $out[$key] = $empty;
+            }
+        }
+
+        return $out;
     }
 
     private function buildOrderCreatePostFromPayload(array $payload, array $cartData): array
@@ -4909,7 +4963,7 @@ class POSRegisterController
         /** Exact string from GET /cart/retrieve JSON — posted as-is (only URL-encoded as form field by HTTP client). */
         $checkoutdata = $this->extractCheckoutDataStringFromCart($cartData);
 
-        $omitShippingOnOrder = $this->shouldOmitShippingOnOrderCreate($payload);
+        $omitShippingOnOrder = $this->shouldOmitShippingOnOrderCreate($payload, $checkoutdata);
 
         $country = strtoupper(substr(trim((string)($payload['confirm_country'] ?? 'IN')), 0, 2));
         if ($country === '') {
@@ -4935,7 +4989,7 @@ class POSRegisterController
         $whId = (int)($_SESSION['warehouse_id'] ?? 0);
         $storeId = $whId > 0 ? (string)$whId : '1';
         $txn = trim((string)($payload['transaction_id'] ?? ''));
-        $txnField = $txn !== '' ? $txn : '0';
+        $txnField = $this->resolveStorePaymentTransactionId($txn);
 
         $out = [
             'payment_type' => $paymentType,
@@ -5006,16 +5060,16 @@ class POSRegisterController
             }
         }
 
-        return $out;
+        return $this->appendOrderCreateEmptyPaymentFields($out);
     }
 
-    /** Use exact payment mode label expected by order/create payload. */
+    /** Use exact payment mode label expected by order/create store_payment_details middle segment. */
     private function mapPosPaymentModeToExoticPaymentType(string $posMode): string
     {
         $m = strtolower(trim($posMode));
         $map = [
-            'cash' => 'cash',
-            'upi' => 'UPI',
+            'cash' => 'offline',
+            'upi' => 'upi',
             'bank_transfer' => 'bank_transfer',
             'pos_machine' => 'pos_machine',
             'cheque' => 'cheque',
@@ -5024,7 +5078,7 @@ class POSRegisterController
             'offline' => 'offline',
         ];
 
-        return $map[$m] ?? 'cash';
+        return $map[$m] ?? 'offline';
     }
 
     /**
