@@ -389,8 +389,22 @@ class POSRegisterController
         }
 
         try {
+            require_once dirname(__DIR__) . '/helpers/pos_local_checkout_order.php';
             $ordersCtrl = $this->getOrdersControllerForImport();
-            $import = $ordersCtrl->importSingleOrderForCheckoutWithRetry($orderNumber, 4, 2);
+            if (pos_local_checkout_is_temp_order_number($orderNumber)) {
+                global $ordersModel;
+                if (!$ordersModel->hasOrderLines($orderNumber) || !$ordersModel->hasOrderInfo($orderNumber)) {
+                    $out['import_status'] = 'failed';
+                    $out['invoice_pdf_disabled_hint'] = 'Local order data is incomplete — contact support.';
+                    return $out;
+                }
+                $import = [
+                    'success' => true,
+                    'message' => 'Local POS order (Exotic publish pending)',
+                ];
+            } else {
+                $import = $ordersCtrl->importSingleOrderForCheckoutWithRetry($orderNumber, 4, 2);
+            }
 
             if (!$ordersCtrl->isOrderReadyForPosCheckout($orderNumber)) {
                 $out['import_status'] = 'failed';
@@ -489,6 +503,21 @@ class POSRegisterController
             $result['message'] = 'Order number missing for fulfillment status sync.';
             return $result;
         }
+
+        require_once dirname(__DIR__) . '/helpers/pos_local_checkout_order.php';
+        if (pos_local_checkout_is_temp_order_number($orderNumber)) {
+            $upd = $conn->prepare('UPDATE vp_orders SET status = ? WHERE order_number = ?');
+            if (!$upd) {
+                $result['message'] = 'Could not prepare local fulfillment status update.';
+                return $result;
+            }
+            $upd->bind_param('ss', $localStatus, $orderNumber);
+            $result['local_updated'] = $upd->execute();
+            $upd->close();
+            $result['message'] = 'Local order — Exotic fulfillment sync skipped until order is published.';
+            return $result;
+        }
+
         if (!in_array($localStatus, ['shipped', 'pending'], true)) {
             $result['message'] = 'Invalid local fulfillment status.';
             return $result;
@@ -4284,28 +4313,58 @@ class POSRegisterController
             ],
         ];
 
-        if (!CartResponseParser::isSuccess($createRes)) {
-            $d = is_array($createRes['data'] ?? null) ? $createRes['data'] : [];
-            $msg = trim((string)($d['message'] ?? $d['error'] ?? $d['errormessage'] ?? ''));
-            if ($msg === '') {
-                $msg = 'Order create failed (HTTP ' . (int)($createRes['code'] ?? 0) . ').';
-            }
-            echo json_encode([
-                'success' => false,
-                'message' => $msg,
-                'order_create_debug' => $_SESSION['pos_order_create_api_debug'],
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
-        }
+        $exoticSyncPending = false;
+        $localFallbackMessage = '';
 
-        $orderNumber = OrderResponseParser::extractOrderNumber(is_array($createRes['data'] ?? null) ? $createRes['data'] : []);
-        if ($orderNumber === '') {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Order was created but no order number was returned. Check Last order-create API in the payment modal.',
-                'order_create_debug' => $_SESSION['pos_order_create_api_debug'],
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
+        if (!CartResponseParser::isSuccess($createRes)) {
+            require_once dirname(__DIR__) . '/helpers/pos_local_checkout_order.php';
+            $invoiceLinePricesForLocal = is_array($payload['pos_line_prices'] ?? null) ? $payload['pos_line_prices'] : [];
+            $listLinePricesForLocal = is_array($payload['list_line_prices'] ?? null) ? $payload['list_line_prices'] : [];
+            $fallback = pos_local_checkout_try_create_when_api_fails(
+                $conn,
+                $payload,
+                $cartData,
+                $orderTotal,
+                $customerId,
+                $paymentMode,
+                $txn,
+                (string)$deliveryStatus['local_status'],
+                $invoiceLinePricesForLocal,
+                $listLinePricesForLocal,
+                $createRes,
+                $postBody,
+                [
+                    'query' => $ctx['query'] ?? [],
+                    'extraHeaders' => $ctx['extraHeaders'] ?? [],
+                ]
+            );
+            if (empty($fallback['success'])) {
+                $d = is_array($createRes['data'] ?? null) ? $createRes['data'] : [];
+                $msg = trim((string)($d['message'] ?? $d['error'] ?? $d['errormessage'] ?? ''));
+                if ($msg === '') {
+                    $msg = 'Order create failed (HTTP ' . (int)($createRes['code'] ?? 0) . ').';
+                }
+                $fallbackDetail = trim((string)($fallback['message'] ?? ''));
+                echo json_encode([
+                    'success' => false,
+                    'message' => $fallbackDetail !== '' ? $fallbackDetail : $msg,
+                    'order_create_debug' => $_SESSION['pos_order_create_api_debug'],
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+            $orderNumber = trim((string)($fallback['order_number'] ?? ''));
+            $exoticSyncPending = true;
+            $localFallbackMessage = trim((string)($fallback['message'] ?? ''));
+        } else {
+            $orderNumber = OrderResponseParser::extractOrderNumber(is_array($createRes['data'] ?? null) ? $createRes['data'] : []);
+            if ($orderNumber === '') {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Order was created but no order number was returned. Check Last order-create API in the payment modal.',
+                    'order_create_debug' => $_SESSION['pos_order_create_api_debug'],
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
         }
 
         $editLinePrices = $payload['list_line_prices'] ?? null;
@@ -4316,7 +4375,7 @@ class POSRegisterController
         if (!is_array($invoiceLinePrices)) {
             $invoiceLinePrices = [];
         }
-        if (is_array($editLinePrices) && count($editLinePrices) > 0) {
+        if (!$exoticSyncPending && is_array($editLinePrices) && count($editLinePrices) > 0) {
             if (count($editLinePrices) !== count($items)) {
                 echo json_encode([
                     'success' => false,
@@ -4542,9 +4601,15 @@ class POSRegisterController
             'receipt_signature_date' => $dt->format('d M Y'),
             'payment_history_url' => 'index.php?page=payments&order_number=' . rawurlencode($orderNumber) . '&order_exact=1',
             'invoice_poitem_ids' => $this->resolveInvoicePoitemIdsForOrderNumber($conn, $orderNumber),
+            'exotic_sync_pending' => $exoticSyncPending,
         ];
 
         $successMessage = 'Order placed.';
+        if ($exoticSyncPending) {
+            $successMessage = $localFallbackMessage !== ''
+                ? $localFallbackMessage
+                : ('Order saved locally as ' . $orderNumber . '. Publish to Exotic when the API is available.');
+        }
         if (!empty($localStockWarnings)) {
             $successMessage .= ' Local stock warning: ' . count($localStockWarnings) . ' item(s) sold above local stock.';
         }
@@ -4558,6 +4623,7 @@ class POSRegisterController
             'success' => true,
             'message' => $successMessage,
             'order_number' => $orderNumber,
+            'exotic_sync_pending' => $exoticSyncPending,
             'receipt_number' => $receiptNo,
             'payment_id' => (int)($pay['payment_id'] ?? 0),
             'payment_ids' => $paymentIds,

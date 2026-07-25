@@ -93,6 +93,7 @@ $paymentIsFullyPaid = !empty($paymentSummary['is_fully_paid']);
 $paymentPendingAmount = (float)($paymentSummary['pending'] ?? 0);
 $canAddOrderPayment = $paymentPendingAmount > 0.02;
 $canCreateFinalInvoice = !empty($canCreateFinalInvoice);
+$canPublishExoticSync = !empty($canPublishExoticSync);
 $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurlencode($displayOrderNumber) . '&order_exact=1');
 $salesReturnUrl = base_url('?page=sales_returns&action=create&order_number=' . rawurlencode($displayOrderNumber));
 $invoiceIdForReturn = is_array($invoiceDisplay) ? (int)($invoiceDisplay['id'] ?? 0) : 0;
@@ -115,6 +116,24 @@ $proformaPrintDisabledReason = $canPrintProforma
 ?>
 
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
+    <?php if ($canPublishExoticSync): ?>
+        <div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <p class="font-semibold">Local order — not published on Exotic yet</p>
+                    <p class="mt-1 text-xs text-amber-900/90">Payment and invoice work locally. When the Exotic API is available, publish this order to replace the temp number with the real Exotic order ID.</p>
+                </div>
+                <button type="button"
+                    id="publish_exotic_sync_btn"
+                    onclick="publishExoticSyncOrder()"
+                    class="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800">
+                    Publish to Exotic
+                </button>
+            </div>
+            <p id="publish_exotic_sync_error" class="mt-2 hidden text-xs text-red-700"></p>
+            <p id="publish_exotic_sync_success" class="mt-2 hidden text-xs text-green-800"></p>
+        </div>
+    <?php endif; ?>
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-2">
             <h1 class="text-xl font-bold"><?php echo htmlspecialchars($displayOrderNumber); ?></h1>
@@ -1671,6 +1690,78 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
             .finally(function() {
                 if (submitBtn) {
                     submitBtn.disabled = false;
+                }
+            });
+    }
+
+    function publishExoticSyncOrder() {
+        var btn = document.getElementById('publish_exotic_sync_btn');
+        var errEl = document.getElementById('publish_exotic_sync_error');
+        var okEl = document.getElementById('publish_exotic_sync_success');
+        if (errEl) {
+            errEl.classList.add('hidden');
+            errEl.textContent = '';
+        }
+        if (okEl) {
+            okEl.classList.add('hidden');
+            okEl.textContent = '';
+        }
+        if (btn) {
+            btn.disabled = true;
+        }
+
+        var formData = new FormData();
+        formData.append('order_number', orderPaymentState.orderNumber);
+
+        fetch('index.php?page=posorders&action=publish_exotic_sync', {
+            method: 'POST',
+            body: formData,
+        })
+            .then(function(res) { return res.text(); })
+            .then(function(text) {
+                var data;
+                try {
+                    data = JSON.parse(text);
+                } catch (parseErr) {
+                    throw new Error((text || '').trim().slice(0, 200) || 'Invalid server response');
+                }
+                if (!data.success) {
+                    if (errEl) {
+                        errEl.textContent = data.message || 'Could not publish to Exotic.';
+                        errEl.classList.remove('hidden');
+                    } else {
+                        alert(data.message || 'Could not publish to Exotic.');
+                    }
+                    return;
+                }
+
+                var msg = data.message || 'Published to Exotic.';
+                if (data.new_order_number && data.new_order_number !== orderPaymentState.orderNumber) {
+                    msg += ' Reloading with order ' + data.new_order_number + '.';
+                    window.location.href = '?page=posorders&action=get_order_details_html&type=outer&order_number='
+                        + encodeURIComponent(data.new_order_number);
+                    return;
+                }
+
+                if (okEl) {
+                    okEl.textContent = msg;
+                    okEl.classList.remove('hidden');
+                } else {
+                    alert(msg);
+                }
+                window.location.reload();
+            })
+            .catch(function(err) {
+                if (errEl) {
+                    errEl.textContent = err && err.message ? err.message : 'Publish request failed.';
+                    errEl.classList.remove('hidden');
+                } else {
+                    alert(err && err.message ? err.message : 'Publish request failed.');
+                }
+            })
+            .finally(function() {
+                if (btn) {
+                    btn.disabled = false;
                 }
             });
     }
