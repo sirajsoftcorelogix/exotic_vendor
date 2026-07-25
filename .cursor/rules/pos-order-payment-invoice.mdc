@@ -32,26 +32,31 @@ Entry: `POST ?page=pos_register&action=checkout-create` → `POSRegisterControll
 
 Modal: **Confirm Billing & Shipping Details** (`#addressConfirmModal` in `views/pos_register/index.php`).
 
+Phone entry uses a **country code selector** (`confirm_phone_code` / `confirm_sphone_code`, default **India +91**) plus a local number field. On submit, JS combines them into `confirm_phone` / `confirm_sphone` via `posBuildFullPhone()` before checkout.
+
 Phone numbers must use a dial code consistent with the selected **billing** and **shipping** country (from `countries.phone_code` in DB).
 
 | Scope | Rule |
 |-------|------|
-| Billing | `confirm_phone` vs `confirm_country` |
-| Shipping (separate address) | `confirm_sphone` vs `confirm_scountry` when shipping phone is filled |
+| Billing | `confirm_phone_code` must match `confirm_country`; combined `confirm_phone` validated |
+| Shipping (separate address) | `confirm_sphone_code` vs `confirm_scountry` when shipping phone is filled |
 | Same as billing | Only billing phone/country checked (shipping fields copied) |
+| Country change | `syncPosPhoneCodeFromCountry()` updates the phone code selector to match |
 
 **Accepted formats** (examples):
 
-| Country | Valid examples |
-|---------|----------------|
-| India (`IN`, +91) | `919810865978`, `9810865978` (10-digit mobile starting 6–9) |
-| US (`US`, +1) | `14155551212`, `4155551212` (10-digit local) |
-| Other | Digits must start with that country’s `phone_code` from `countries` |
+| Country | Valid local number (with +91 selected) |
+|---------|----------------------------------------|
+| India (`IN`, +91) | `9810865978` (10-digit mobile starting 6–9) |
+| US (`US`, +1) | `4155551212` (10-digit local) |
+| Other | Local digits; selector must match address country |
 
 **Implementation:**
 
 | Layer | Location |
 |-------|----------|
+| UI fields | `confirm_phone_code` + `confirm_phone`, `confirm_sphone_code` + `confirm_sphone`; options partial `views/pos_register/partials/phone_code_options.php` |
+| Combine / split | `posBuildFullPhone()`, `posSplitPhoneForCountry()`, `setPosPhoneFields()` |
 | UI validate (submit) | `validateAddressConfirmPayload()` → `posPhoneMatchesCountry()` |
 | Server validate (checkout) | `POSRegisterController::validatePosCheckoutAddressPayload()` → `posPhoneMatchesCountryIso()` |
 | Dial codes to browser | `window.POS_COUNTRY_PHONE_CODES` — built in `POSRegisterController::index()` from `countries.phone_code` |
@@ -59,7 +64,7 @@ Phone numbers must use a dial code consistent with the selected **billing** and 
 
 **Errors:** UI shows e.g. *“Billing: Phone country code must match India (+91 or a valid local number).”* Server returns the same rule in `checkout-create` JSON if bypassed.
 
-**Exotic order/create:** Validated phone is posted as `phone` / `sphone` on `/order/create` (see `buildOrderCreatePostFromPayload()`).
+**Exotic order/create:** Combined validated phone is posted as `phone` / `sphone` on `/order/create` (see `buildOrderCreatePostFromPayload()`).
 
 ### Exotic order/create sequence
 

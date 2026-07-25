@@ -105,6 +105,14 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       color: #dc2626 !important;
       font-weight: 700;
     }
+    #addressConfirmModal .pos-phone-row {
+      margin-top: 0.25rem;
+    }
+    #addressConfirmModal .pos-phone-code-select {
+      padding-left: 0.5rem;
+      padding-right: 0.35rem;
+      font-size: 0.8125rem;
+    }
   </style>
   <?php
   $posCountryList = isset($country_list) && is_array($country_list)
@@ -747,7 +755,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     <div class="flex shrink-0 items-center justify-between border-b px-5 py-3">
       <div>
         <h2 class="text-lg font-semibold text-slate-800">Confirm Billing &amp; Shipping Details</h2>
-        <p class="mt-0.5 text-xs text-slate-500">Required: First name, Last name and State. Phone must use the country code matching billing/shipping country (e.g. 91 for India).</p>
+        <p class="mt-0.5 text-xs text-slate-500">Required: First name, Last name and State. Select phone country code (default +91 India) and enter the number.</p>
       </div>
       <button type="button" onclick="closeAddressConfirmModal()" class="text-lg leading-none text-gray-500 hover:text-gray-800" aria-label="Close">✕</button>
     </div>
@@ -766,7 +774,17 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         </div>
         <div class="grid grid-cols-2 gap-3">
           <label class="block text-xs font-medium text-slate-600">Email<input id="confirm_email" type="email" class="w-full rounded border" placeholder="Email"></label>
-          <label class="block text-xs font-medium text-slate-600">Phone <span class="field-req-star text-red-600">*</span><input id="confirm_phone" class="w-full rounded border" placeholder="Phone"></label>
+          <label class="block text-xs font-medium text-slate-600">Phone <span class="field-req-star text-red-600">*</span>
+            <div class="pos-phone-row flex gap-2">
+              <select id="confirm_phone_code" class="pos-phone-code-select w-[8.75rem] shrink-0 rounded border bg-white" aria-label="Billing phone country code">
+                <?php
+                $selected_phone_iso = 'IN';
+                include __DIR__ . '/partials/phone_code_options.php';
+                ?>
+              </select>
+              <input id="confirm_phone" class="min-w-0 flex-1 rounded border" placeholder="Phone number" inputmode="tel" autocomplete="tel-national">
+            </div>
+          </label>
         </div>
         <label class="block text-xs font-medium text-slate-600">Address 1<input id="confirm_address1" class="w-full rounded border" placeholder="Address 1"></label>
         <label class="block text-xs font-medium text-slate-600">Address 2<input id="confirm_address2" class="w-full rounded border" placeholder="Address 2"></label>
@@ -835,7 +853,17 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           <label class="block text-xs font-medium text-slate-600">First Name<input id="confirm_sfirst_name" class="w-full rounded border" placeholder="First Name"></label>
           <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_slast_name" class="w-full rounded border" placeholder="Last Name"></label>
         </div>
-        <label class="block text-xs font-medium text-slate-600">Phone<input id="confirm_sphone" class="w-full rounded border" placeholder="Phone"></label>
+        <label class="block text-xs font-medium text-slate-600">Phone
+          <div class="pos-phone-row flex gap-2">
+            <select id="confirm_sphone_code" class="pos-phone-code-select w-[8.75rem] shrink-0 rounded border bg-white" aria-label="Shipping phone country code">
+              <?php
+              $selected_phone_iso = 'IN';
+              include __DIR__ . '/partials/phone_code_options.php';
+              ?>
+            </select>
+            <input id="confirm_sphone" class="min-w-0 flex-1 rounded border" placeholder="Phone number" inputmode="tel" autocomplete="tel-national">
+          </div>
+        </label>
         <label class="block text-xs font-medium text-slate-600">Address 1<input id="confirm_saddress1" class="w-full rounded border" placeholder="Address 1"></label>
         <label class="block text-xs font-medium text-slate-600">Address 2<input id="confirm_saddress2" class="w-full rounded border" placeholder="Address 2"></label>
         <div class="grid grid-cols-2 gap-3">
@@ -2143,7 +2171,6 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       confirm_first_name: firstNonEmpty(billing.first_name, billing.billing_first_name),
       confirm_last_name: firstNonEmpty(billing.last_name, billing.billing_last_name),
       confirm_email: firstNonEmpty(billing.email, billing.cus_email, billing.billing_email),
-      confirm_phone: firstNonEmpty(billing.phone, billing.mobile, billing.billing_mobile, (window.POS_ADDRESS_API_DEFAULTS || {}).confirm_phone || "8031404444"),
       confirm_address1: firstNonEmpty(billing.address1, billing.address_line1, billing.billing_address_line1),
       confirm_address2: firstNonEmpty(billing.address2, billing.address_line2, billing.billing_address_line2),
       confirm_city: firstNonEmpty(billing.city),
@@ -2159,9 +2186,20 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       confirm_scity: firstNonEmpty(shipping.scity, shipping.shipping_city, shipping.city),
       confirm_sstate: firstNonEmpty(shipping.sstate, shipping.shipping_state, shipping.state),
       confirm_szip: firstNonEmpty(shipping.szip, shipping.shipping_zipcode, shipping.zip, shipping.zipcode),
-      confirm_sphone: firstNonEmpty(shipping.sphone, shipping.shipping_mobile, shipping.mobile, shipping.phone),
       confirm_sgstin: firstNonEmpty(shipping.sgstin, shipping.shipping_gstin)
     };
+    var billingPhoneFull = firstNonEmpty(
+      billing.phone,
+      billing.mobile,
+      billing.billing_mobile,
+      (window.POS_ADDRESS_API_DEFAULTS || {}).confirm_phone || "8031404444"
+    );
+    var shippingPhoneFull = firstNonEmpty(
+      shipping.sphone,
+      shipping.shipping_mobile,
+      shipping.mobile,
+      shipping.phone
+    );
     var billingCountryRaw = firstNonEmpty(billing.country, billing.billing_country, "IN");
     var shippingCountryRaw = firstNonEmpty(shipping.scountry, shipping.shipping_country, shipping.country, "IN");
     Object.keys(map).forEach(function(id) {
@@ -2170,6 +2208,17 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     });
     setPosCountrySelect("confirm_country", billingCountryRaw);
     setPosCountrySelect("confirm_scountry", shippingCountryRaw);
+    var billingCountry = normalizePosCountryCode(document.getElementById("confirm_country")?.value || "IN", document.getElementById("confirm_country"));
+    var shippingCountry = normalizePosCountryCode(document.getElementById("confirm_scountry")?.value || "IN", document.getElementById("confirm_scountry"));
+    setPosPhoneFields("confirm_phone", "confirm_phone_code", billingPhoneFull, billingCountry);
+    setPosPhoneFields("confirm_sphone", "confirm_sphone_code", shippingPhoneFull, shippingCountry);
+    var defaultState = String(window.POS_DEFAULT_STATE || "Delhi");
+    syncAllPosStateFields({
+      billing: map.confirm_state || (isPosIndiaCountry(billingCountry) ? defaultState : ""),
+      shipping: map.confirm_sstate || (isPosIndiaCountry(shippingCountry) ? defaultState : "")
+    }).then(function() {
+      syncHighValueComplianceUi();
+    });
     var compliance = (payload && payload.compliance) || {};
     [
       ["customer_residency_status", compliance.customer_residency_status || "INDIAN_RESIDENT"],
@@ -2181,20 +2230,12 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       var el = document.getElementById(row[0]);
       if (el) el.value = row[1];
     });
-    var billingCountry = normalizePosCountryCode(document.getElementById("confirm_country")?.value || "IN", document.getElementById("confirm_country"));
-    var shippingCountry = normalizePosCountryCode(document.getElementById("confirm_scountry")?.value || "IN", document.getElementById("confirm_scountry"));
-    var defaultState = String(window.POS_DEFAULT_STATE || "Delhi");
-    syncAllPosStateFields({
-      billing: map.confirm_state || (isPosIndiaCountry(billingCountry) ? defaultState : ""),
-      shipping: map.confirm_sstate || (isPosIndiaCountry(shippingCountry) ? defaultState : "")
-    }).then(function() {
-      syncHighValueComplianceUi();
-    });
   }
 
   var POS_SHIPPING_ADDRESS_FIELD_IDS = [
     "confirm_sfirst_name",
     "confirm_slast_name",
+    "confirm_sphone_code",
     "confirm_sphone",
     "confirm_saddress1",
     "confirm_saddress2",
@@ -2208,6 +2249,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   var POS_BILLING_TO_SHIPPING_FIELDS = [
     ["confirm_first_name", "confirm_sfirst_name"],
     ["confirm_last_name", "confirm_slast_name"],
+    ["confirm_phone_code", "confirm_sphone_code"],
     ["confirm_phone", "confirm_sphone"],
     ["confirm_address1", "confirm_saddress1"],
     ["confirm_address2", "confirm_saddress2"],
@@ -2247,7 +2289,11 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     POS_SHIPPING_ADDRESS_FIELD_IDS.forEach(function(id) {
       var el = document.getElementById(id);
       if (el) {
-        el.readOnly = synced;
+        if (el.tagName === "SELECT") {
+          el.disabled = synced;
+        } else {
+          el.readOnly = synced;
+        }
         el.classList.toggle("bg-slate-100", synced);
         el.classList.toggle("cursor-not-allowed", synced);
       }
@@ -2319,12 +2365,15 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var shippingFirstName = read("confirm_sfirst_name");
     var shippingLastName = read("confirm_slast_name");
     var shippingFullName = [shippingFirstName, shippingLastName].filter(Boolean).join(" ").trim();
+    var billingPhoneCodeIso = read("confirm_phone_code") || "IN";
+    var shippingPhoneCodeIso = read("confirm_sphone_code") || "IN";
     return {
       confirm_address_submit: "1",
       confirm_first_name: read("confirm_first_name"),
       confirm_last_name: read("confirm_last_name"),
       confirm_email: read("confirm_email"),
-      confirm_phone: read("confirm_phone"),
+      confirm_phone: posBuildFullPhone(billingPhoneCodeIso, read("confirm_phone")),
+      confirm_phone_code: billingPhoneCodeIso,
       confirm_address1: read("confirm_address1"),
       confirm_address2: read("confirm_address2"),
       confirm_city: read("confirm_city"),
@@ -2342,7 +2391,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       confirm_sstate: getPosStateValue("confirm_sstate"),
       confirm_szip: read("confirm_szip"),
       confirm_scountry: read("confirm_scountry"),
-      confirm_sphone: read("confirm_sphone"),
+      confirm_sphone: posBuildFullPhone(shippingPhoneCodeIso, read("confirm_sphone")),
+      confirm_sphone_code: shippingPhoneCodeIso,
       confirm_sgstin: read("confirm_sgstin").toUpperCase(),
       confirm_shipping_same_as_billing: isShippingSameAsBillingChecked() ? "1" : "0",
       confirm_omit_shipping_api: "0",
@@ -2396,7 +2446,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   }
 
   function clearAddressValidationState() {
-    ["confirm_first_name", "confirm_last_name", "confirm_phone", "confirm_zip", "confirm_state", "confirm_state_select", "confirm_email", "confirm_gstin", "confirm_sgstin", "customer_pan", "customer_aadhaar", "passport_number", "country_of_residence"].forEach(function(id) {
+    ["confirm_first_name", "confirm_last_name", "confirm_phone_code", "confirm_phone", "confirm_zip", "confirm_state", "confirm_state_select", "confirm_email", "confirm_gstin", "confirm_sgstin", "customer_pan", "customer_aadhaar", "passport_number", "country_of_residence"].forEach(function(id) {
       setPosFieldInvalid(id, false);
     });
     POS_SHIPPING_ADDRESS_FIELD_IDS.forEach(function(id) {
@@ -2557,8 +2607,91 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     return String(map[code] || "").replace(/\D/g, "");
   }
 
+  function posNormalizeCountryIso(iso) {
+    return String(iso || "IN").trim().toUpperCase().substring(0, 2);
+  }
+
   function posPhoneDigits(phone) {
     return String(phone || "").replace(/\D/g, "");
+  }
+
+  function posBuildFullPhone(codeIso, localPhone) {
+    var local = posPhoneDigits(localPhone);
+    if (!local) {
+      return "";
+    }
+    var iso = posNormalizeCountryIso(codeIso);
+    var dial = posCountryPhoneCode(iso);
+    if (!dial) {
+      return local;
+    }
+    if (local.indexOf(dial) === 0) {
+      return local;
+    }
+    return dial + local;
+  }
+
+  function posSplitPhoneForCountry(fullPhone, countryIso) {
+    var digits = posPhoneDigits(fullPhone);
+    var country = posNormalizeCountryIso(countryIso);
+    if (!digits) {
+      return { codeIso: country, local: "" };
+    }
+    var expected = posCountryPhoneCode(country);
+    if (expected && digits.indexOf(expected) === 0) {
+      return { codeIso: country, local: digits.substring(expected.length) };
+    }
+    var map = window.POS_COUNTRY_PHONE_CODES || {};
+    var matchedIso = "";
+    Object.keys(map).forEach(function(iso) {
+      if (matchedIso) {
+        return;
+      }
+      var dial = String(map[iso] || "").replace(/\D/g, "");
+      if (dial && digits.indexOf(dial) === 0) {
+        matchedIso = iso;
+      }
+    });
+    if (matchedIso) {
+      return {
+        codeIso: matchedIso,
+        local: digits.substring(posCountryPhoneCode(matchedIso).length)
+      };
+    }
+    if (country === "IN" && digits.length === 10 && /^[6-9]/.test(digits)) {
+      return { codeIso: "IN", local: digits };
+    }
+    if (country === "US" && digits.length === 10) {
+      return { codeIso: "US", local: digits };
+    }
+    return { codeIso: country, local: digits };
+  }
+
+  function setPosPhoneFields(localInputId, codeSelectId, fullPhone, countryIso) {
+    var split = posSplitPhoneForCountry(fullPhone, countryIso);
+    var phoneEl = document.getElementById(localInputId);
+    var codeEl = document.getElementById(codeSelectId);
+    if (phoneEl) {
+      phoneEl.value = split.local;
+    }
+    if (codeEl) {
+      if (codeEl.querySelector('option[value="' + split.codeIso + '"]')) {
+        codeEl.value = split.codeIso;
+      } else {
+        codeEl.value = "IN";
+      }
+    }
+  }
+
+  function syncPosPhoneCodeFromCountry(countryIso, codeSelectId) {
+    var codeEl = document.getElementById(codeSelectId);
+    if (!codeEl) {
+      return;
+    }
+    var iso = posNormalizeCountryIso(countryIso);
+    if (codeEl.querySelector('option[value="' + iso + '"]')) {
+      codeEl.value = iso;
+    }
   }
 
   function posPhoneMatchesCountry(phone, countryIso) {
@@ -2611,14 +2744,26 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       if (!firstInvalidId) firstInvalidId = "confirm_zip";
     }
     var phone = String(payload.confirm_phone || "").trim();
+    var billingCountry = posNormalizeCountryIso(payload.confirm_country || "IN");
+    var billingPhoneCode = posNormalizeCountryIso(payload.confirm_phone_code || "IN");
     if (!phone) {
       missing.push("Phone");
       setPosFieldInvalid("confirm_phone", true);
+      setPosFieldInvalid("confirm_phone_code", true);
       if (!firstInvalidId) firstInvalidId = "confirm_phone";
+    } else if (billingPhoneCode !== billingCountry) {
+      setPosFieldInvalid("confirm_phone", true);
+      setPosFieldInvalid("confirm_phone_code", true);
+      if (!firstInvalidId) firstInvalidId = "confirm_phone";
+      showAddressConfirmValidationError("Billing: Phone country code must match billing country.");
+      var billingPhoneEl = document.getElementById("confirm_phone");
+      if (billingPhoneEl) billingPhoneEl.focus();
+      return false;
     } else {
-      var billingPhoneCheck = posPhoneMatchesCountry(phone, payload.confirm_country || "IN");
+      var billingPhoneCheck = posPhoneMatchesCountry(phone, billingCountry);
       if (!billingPhoneCheck.ok) {
         setPosFieldInvalid("confirm_phone", true);
+        setPosFieldInvalid("confirm_phone_code", true);
         if (!firstInvalidId) firstInvalidId = "confirm_phone";
         showAddressConfirmValidationError("Billing: " + billingPhoneCheck.message);
         var billingPhoneEl = document.getElementById("confirm_phone");
@@ -2658,10 +2803,21 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 
     if (!isShippingSameAsBillingChecked()) {
       var shippingPhone = String(payload.confirm_sphone || "").trim();
+      var shippingCountry = posNormalizeCountryIso(payload.confirm_scountry || "IN");
+      var shippingPhoneCode = posNormalizeCountryIso(payload.confirm_sphone_code || "IN");
       if (shippingPhone) {
-        var shippingPhoneCheck = posPhoneMatchesCountry(shippingPhone, payload.confirm_scountry || "IN");
+        if (shippingPhoneCode !== shippingCountry) {
+          setPosFieldInvalid("confirm_sphone", true);
+          setPosFieldInvalid("confirm_sphone_code", true);
+          showAddressConfirmValidationError("Shipping: Phone country code must match shipping country.");
+          var shippingPhoneEl = document.getElementById("confirm_sphone");
+          if (shippingPhoneEl) shippingPhoneEl.focus();
+          return false;
+        }
+        var shippingPhoneCheck = posPhoneMatchesCountry(shippingPhone, shippingCountry);
         if (!shippingPhoneCheck.ok) {
           setPosFieldInvalid("confirm_sphone", true);
+          setPosFieldInvalid("confirm_sphone_code", true);
           showAddressConfirmValidationError("Shipping: " + shippingPhoneCheck.message);
           var shippingPhoneEl = document.getElementById("confirm_sphone");
           if (shippingPhoneEl) shippingPhoneEl.focus();
@@ -3004,13 +3160,27 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         el.addEventListener("change", function() {
           setPosFieldInvalid(id, false);
           if (id === "confirm_country") {
+            syncPosPhoneCodeFromCountry(el.value, "confirm_phone_code");
             syncPosStateField("billing", "").then(function() {
               if (isShippingSameAsBillingChecked()) {
                 copyBillingToShippingFields();
               }
             });
           } else {
+            syncPosPhoneCodeFromCountry(el.value, "confirm_sphone_code");
             syncPosStateField("shipping", "");
+          }
+        });
+      }
+    });
+    ["confirm_phone_code", "confirm_sphone_code"].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) {
+        el.addEventListener("change", function() {
+          setPosFieldInvalid(id, false);
+          setPosFieldInvalid(id === "confirm_phone_code" ? "confirm_phone" : "confirm_sphone", false);
+          if (id === "confirm_phone_code" && isShippingSameAsBillingChecked()) {
+            copyBillingToShippingFields();
           }
         });
       }
