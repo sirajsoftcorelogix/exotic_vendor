@@ -90,6 +90,8 @@ $paymentOrderTotalDisplay = number_format((float)($paymentSummary['order_total']
 $paymentPaidTotalDisplay = number_format((float)($paymentSummary['paid_total'] ?? 0), 2);
 $paymentPendingDisplay = number_format((float)($paymentSummary['pending'] ?? 0), 2);
 $paymentIsFullyPaid = !empty($paymentSummary['is_fully_paid']);
+$paymentPendingAmount = (float)($paymentSummary['pending'] ?? 0);
+$canAddOrderPayment = $paymentPendingAmount > 0.02;
 $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurlencode($displayOrderNumber) . '&order_exact=1');
 $salesReturnUrl = base_url('?page=sales_returns&action=create&order_number=' . rawurlencode($displayOrderNumber));
 $invoiceIdForReturn = is_array($invoiceDisplay) ? (int)($invoiceDisplay['id'] ?? 0) : 0;
@@ -650,13 +652,25 @@ $proformaPrintDisabledReason = $canPrintProforma
                             <p class="text-xs text-gray-500"><?php echo count($paymentRows); ?> payment<?php echo count($paymentRows) === 1 ? '' : 's'; ?> recorded</p>
                         </div>
                     </div>
-                    <?php if ($paymentIsFullyPaid): ?>
-                        <span class="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">Fully paid</span>
-                    <?php elseif ((float)($paymentSummary['paid_total'] ?? 0) > 0): ?>
-                        <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">Partial</span>
-                    <?php else: ?>
-                        <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">Unpaid</span>
-                    <?php endif; ?>
+                    <div class="flex items-center gap-2">
+                        <?php if ($paymentIsFullyPaid): ?>
+                            <span class="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">Fully paid</span>
+                        <?php elseif ((float)($paymentSummary['paid_total'] ?? 0) > 0): ?>
+                            <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">Partial</span>
+                        <?php else: ?>
+                            <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">Unpaid</span>
+                        <?php endif; ?>
+                        <?php if ($canAddOrderPayment): ?>
+                            <button type="button"
+                                onclick="openOrderAddPayment()"
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700">
+                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                                </svg>
+                                Add Payment
+                            </button>
+                        <?php endif; ?>
+                    </div>
                 </div>
 
                 <div class="space-y-4 p-5">
@@ -709,7 +723,17 @@ $proformaPrintDisabledReason = $canPrintProforma
                                             </a>
                                             <p class="mt-0.5 text-xs text-gray-500"><?php echo htmlspecialchars($paymentDateLabel); ?></p>
                                         </div>
-                                        <p class="shrink-0 text-sm font-bold tabular-nums text-gray-900">₹ <?php echo $paymentAmount; ?></p>
+                                        <div class="flex shrink-0 flex-col items-end gap-1.5">
+                                            <p class="text-sm font-bold tabular-nums text-gray-900">₹ <?php echo $paymentAmount; ?></p>
+                                            <button type="button"
+                                                onclick="printOrderPaymentReceipt(<?php echo $paymentId; ?>)"
+                                                class="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100">
+                                                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                                </svg>
+                                                Print Receipt
+                                            </button>
+                                        </div>
                                     </div>
                                     <div class="mt-2 flex flex-wrap gap-1.5">
                                         <?php if ($paymentMode !== ''): ?>
@@ -732,12 +756,24 @@ $proformaPrintDisabledReason = $canPrintProforma
                         </div>
                     <?php endif; ?>
 
-                    <a href="<?php echo htmlspecialchars($paymentsListUrl, ENT_QUOTES, 'UTF-8'); ?>"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100">
-                        View all payments
-                    </a>
+                    <div class="grid gap-2 <?php echo $canAddOrderPayment ? 'sm:grid-cols-2' : ''; ?>">
+                        <?php if ($canAddOrderPayment): ?>
+                            <button type="button"
+                                onclick="openOrderAddPayment()"
+                                class="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                                </svg>
+                                Add Payment
+                            </button>
+                        <?php endif; ?>
+                        <a href="<?php echo htmlspecialchars($paymentsListUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100">
+                            View all payments
+                        </a>
+                    </div>
                 </div>
             </div>
 
@@ -761,6 +797,77 @@ $proformaPrintDisabledReason = $canPrintProforma
                     </div>
                 <?php endif; ?>
             </div>
+        </div>
+    </div>
+</div>
+<div id="orderPaymentModal" class="fixed inset-0 z-[9999] hidden">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closeOrderPaymentModal()"></div>
+    <div class="relative mx-auto mt-16 w-[95%] max-w-3xl rounded-2xl bg-white shadow-2xl">
+        <div class="flex items-center justify-between border-b px-6 py-4">
+            <h2 class="text-lg font-semibold text-gray-800">Add Payment</h2>
+            <button type="button" onclick="closeOrderPaymentModal()" class="text-xl text-gray-400 hover:text-gray-700" aria-label="Close">✕</button>
+        </div>
+        <div id="order_payment_error_box"
+            class="mx-6 mt-4 hidden rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700"></div>
+        <div class="space-y-6 p-6">
+            <input type="hidden" id="order_payment_order_id" value="<?php echo htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8'); ?>">
+            <div class="grid grid-cols-2 gap-4 rounded-lg border bg-gray-50 p-4">
+                <div>
+                    <div class="text-xs text-gray-500">Order Number</div>
+                    <div id="order_payment_order_label" class="text-sm font-semibold text-gray-800"><?php echo htmlspecialchars($displayOrderNumber); ?></div>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-500">Pending Amount</div>
+                    <div id="order_payment_pending_label" class="text-sm font-semibold text-red-600">₹ <?php echo $paymentPendingDisplay; ?></div>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                    <label class="text-xs text-gray-500">Payment Stage</label>
+                    <select id="order_payment_stage" class="mt-1 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-orange-500">
+                        <option value="final">Final</option>
+                        <option value="partial">Partial</option>
+                        <option value="advance">Advance</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500">Payment Mode</label>
+                    <select id="order_payment_type" class="mt-1 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-orange-500">
+                        <option value="cash">Cash</option>
+                        <option value="cod">Cash on Delivery (COD)</option>
+                        <option value="upi">UPI</option>
+                        <option value="offline">Offline</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="pos_machine">POS Machine</option>
+                        <option value="razorpay">Razorpay</option>
+                        <option value="specialpay">SpecialPay</option>
+                        <option value="cheque">Cheque</option>
+                        <option value="demand_draft">Demand Draft</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500">Payment Date</label>
+                    <input type="date" id="order_payment_date" value="<?php echo date('Y-m-d'); ?>" class="mt-1 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-orange-500">
+                </div>
+            </div>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                    <label class="text-xs text-gray-500">Amount</label>
+                    <input type="number" id="order_payment_amount" step="0.01" min="0" class="mt-1 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-orange-500">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500">Transaction ID</label>
+                    <input type="text" id="order_payment_transaction_id" class="mt-1 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-orange-500">
+                </div>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500">Note</label>
+                <textarea id="order_payment_note" class="mt-1 h-24 w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-orange-500"></textarea>
+            </div>
+        </div>
+        <div class="flex justify-end gap-3 rounded-b-2xl border-t bg-gray-50 px-6 py-4">
+            <button type="button" onclick="closeOrderPaymentModal()" class="rounded-lg bg-gray-300 px-6 py-2 text-sm hover:bg-gray-400">Cancel</button>
+            <button type="button" onclick="saveOrderPayment()" id="orderPaymentSaveBtn" class="rounded-lg bg-orange-600 px-6 py-2 text-sm font-semibold text-white hover:bg-orange-700">Confirm Payment</button>
         </div>
     </div>
 </div>
@@ -1488,6 +1595,134 @@ $proformaPrintDisabledReason = $canPrintProforma
             openImagePopup(imageUrl);
         }
     });
+
+    let ORDER_PAYMENT_PENDING = <?php echo json_encode(round($paymentPendingAmount, 2)); ?>;
+    const ORDER_PAYMENT_NUMBER = <?php echo json_encode($displayOrderNumber); ?>;
+
+    function showOrderPaymentError(message) {
+        const box = document.getElementById('order_payment_error_box');
+        if (!box) {
+            return;
+        }
+        box.textContent = message;
+        box.classList.remove('hidden');
+    }
+
+    function clearOrderPaymentError() {
+        const box = document.getElementById('order_payment_error_box');
+        if (!box) {
+            return;
+        }
+        box.textContent = '';
+        box.classList.add('hidden');
+    }
+
+    function openOrderAddPayment() {
+        const modal = document.getElementById('orderPaymentModal');
+        if (!modal) {
+            return;
+        }
+
+        modal.classList.remove('hidden');
+        clearOrderPaymentError();
+
+        document.getElementById('order_payment_stage').value = 'final';
+        document.getElementById('order_payment_type').value = 'cash';
+        document.getElementById('order_payment_transaction_id').value = '';
+        document.getElementById('order_payment_note').value = '';
+        document.getElementById('order_payment_date').value = new Date().toISOString().split('T')[0];
+
+        fetch('?page=payments&action=get_payment_summary&order_number=' + encodeURIComponent(ORDER_PAYMENT_NUMBER))
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (!data.success) {
+                    return;
+                }
+                ORDER_PAYMENT_PENDING = parseFloat(data.pending) || 0;
+                document.getElementById('order_payment_pending_label').textContent = '₹ ' + ORDER_PAYMENT_PENDING.toFixed(2);
+                document.getElementById('order_payment_amount').value = ORDER_PAYMENT_PENDING > 0 ? ORDER_PAYMENT_PENDING : '';
+            });
+    }
+
+    function closeOrderPaymentModal() {
+        const modal = document.getElementById('orderPaymentModal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+        clearOrderPaymentError();
+    }
+
+    function printOrderPaymentReceipt(paymentId) {
+        if (!paymentId) {
+            return;
+        }
+        window.open('?page=payments&action=receipt&id=' + encodeURIComponent(String(paymentId)), '_blank');
+    }
+
+    function saveOrderPayment() {
+        clearOrderPaymentError();
+
+        const stage = document.getElementById('order_payment_stage').value;
+        const amount = parseFloat(document.getElementById('order_payment_amount').value);
+
+        if (!amount || amount <= 0) {
+            showOrderPaymentError('Amount must be greater than 0');
+            return;
+        }
+
+        if (stage === 'final' && amount !== ORDER_PAYMENT_PENDING) {
+            showOrderPaymentError('Final payment must be exactly pending amount ₹ ' + ORDER_PAYMENT_PENDING.toFixed(2));
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('order_id', document.getElementById('order_payment_order_id').value);
+        formData.append('amount', String(amount));
+        formData.append('payment_type', document.getElementById('order_payment_type').value);
+        formData.append('payment_stage', stage);
+        formData.append('transaction_id', document.getElementById('order_payment_transaction_id').value);
+        formData.append('note', document.getElementById('order_payment_note').value);
+        formData.append('payment_date', document.getElementById('order_payment_date').value);
+
+        const saveBtn = document.getElementById('orderPaymentSaveBtn');
+        if (saveBtn) {
+            saveBtn.disabled = true;
+        }
+
+        fetch('index.php?page=payments&action=save_payment', {
+            method: 'POST',
+            body: formData
+        })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (!data.success) {
+                    showOrderPaymentError(data.message || 'Save failed');
+                    return;
+                }
+
+                closeOrderPaymentModal();
+
+                if (data.payment_id) {
+                    printOrderPaymentReceipt(data.payment_id);
+                }
+
+                if (data.invoice_id) {
+                    window.open('?page=posinvoice&action=generate_pdf&invoice_id=' + encodeURIComponent(String(data.invoice_id)), '_blank');
+                } else if (data.invoice_message) {
+                    alert(data.invoice_message);
+                }
+
+                window.location.reload();
+            })
+            .catch(function() {
+                showOrderPaymentError('Could not save payment. Please try again.');
+            })
+            .finally(function() {
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                }
+            });
+    }
 </script>
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[100]" onclick="closeImagePopup()">
     <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
