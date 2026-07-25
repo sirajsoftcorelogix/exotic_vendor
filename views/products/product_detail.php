@@ -545,6 +545,22 @@
             <i class="fas fa-edit text-sm"></i>
           </button>
         </div>
+        <?php $productLocationDisplay = trim((string)($products['location'] ?? '')); ?>
+        <!-- Storage location (vp_products.location — synced from API on refresh) -->
+        <div class="<?php echo $invCard; ?> border-teal-100 bg-teal-50/50 pr-6 sm:pr-7" title="Bin, shelf, or storage location. Saved locally and synced to Exotic India on save.">
+          <div class="<?php echo $invBody; ?>">
+            <p class="<?php echo $invLbl; ?>">Location</p>
+            <p id="productLocationDisplay" class="<?php echo $invVal; ?> text-sm sm:text-base break-words leading-snug">
+              <?php echo $productLocationDisplay !== '' ? htmlspecialchars($productLocationDisplay, ENT_QUOTES, 'UTF-8') : '—'; ?>
+            </p>
+          </div>
+          <div class="<?php echo $invIco; ?> bg-teal-100 text-teal-700">
+            <i class="fas fa-map-marker-alt"></i>
+          </div>
+          <button type="button" class="<?php echo $invEdit; ?> text-gray-400 hover:text-teal-700" onclick="openProductLocationModal()" title="Edit location" aria-label="Edit location">
+            <i class="fas fa-pencil-alt text-[10px]"></i>
+          </button>
+        </div>
         <!-- Pending Orders -->
         <a
           href="<?php echo base_url('?page=orders&action=list&options=unshipped&sku=' . rawurlencode((string)($products['sku'] ?? '')) . '&item_code=' . rawurlencode((string)($products['item_code'] ?? ''))); ?>"
@@ -1339,6 +1355,26 @@
     </div>
 </div>
 <?php endif; ?>
+<div id="productLocationModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
+        <button type="button" onclick="closeProductLocationModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700" aria-label="Close">✕</button>
+        <h2 class="text-lg font-semibold text-gray-800 mb-1">Edit location</h2>
+        <p class="text-sm text-gray-500 mb-4">Saved to inventory and pushed to Exotic India. Also updates the latest stock movement at the default warehouse.</p>
+        <div>
+            <label for="input_product_location" class="block text-sm font-medium text-gray-600 mb-1">Location</label>
+            <input
+                type="text"
+                id="input_product_location"
+                value="<?php echo htmlspecialchars($productLocationDisplay, ENT_QUOTES, 'UTF-8'); ?>"
+                placeholder="Bin, shelf, or storage location"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none">
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+            <button type="button" onclick="closeProductLocationModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button type="button" onclick="submitProductLocationUpdate()" class="px-4 py-2 text-sm bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-700">Save</button>
+        </div>
+    </div>
+</div>
 <div id="minMaxModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
     <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
         <button onclick="closeMinMaxModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
@@ -2672,6 +2708,83 @@ function closeImagePopup() {
 }
 </script>
 <script>
+    function openProductLocationModal() {
+        var input = document.getElementById('input_product_location');
+        var display = document.getElementById('productLocationDisplay');
+        if (input && display) {
+            var current = (display.textContent || '').trim();
+            input.value = current === '—' ? '' : current;
+        }
+        document.getElementById('productLocationModal').classList.remove('hidden');
+    }
+
+    function closeProductLocationModal() {
+        document.getElementById('productLocationModal').classList.add('hidden');
+    }
+
+    function submitProductLocationUpdate() {
+        var input = document.getElementById('input_product_location');
+        var data = {
+            product_id: <?php echo json_encode($products['id'] ?? 0); ?>,
+            location: input ? input.value : ''
+        };
+
+        fetch('index.php?page=products&action=update_product_location', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify(data)
+        })
+        .then(function (response) {
+            return response.text().then(function (text) {
+                var parsed = null;
+                try {
+                    parsed = text ? JSON.parse(text) : {};
+                } catch (parseErr) {
+                    var snippet = (text || '').replace(/\s+/g, ' ').trim();
+                    if (snippet.length > 240) {
+                        snippet = snippet.slice(0, 240) + '…';
+                    }
+                    throw new Error(snippet || ('Server returned HTTP ' + response.status));
+                }
+                if (!response.ok && parsed && !parsed.message) {
+                    parsed.message = 'Server returned HTTP ' + response.status;
+                    parsed.success = false;
+                }
+                return parsed;
+            });
+        })
+        .then(function (res) {
+            if (res && res.success) {
+                var display = document.getElementById('productLocationDisplay');
+                var loc = (res.location || '').trim();
+                if (display) {
+                    display.textContent = loc !== '' ? loc : '—';
+                }
+                closeProductLocationModal();
+                if (typeof showProfileStatusModal === 'function') {
+                    showProfileStatusModal(res.message || 'Location updated successfully.', 'success', false);
+                } else {
+                    alert('Location updated successfully.');
+                }
+                return;
+            }
+            var msg = (res && res.message) ? res.message : 'Could not update location.';
+            if (typeof showProfileStatusModal === 'function') {
+                showProfileStatusModal(msg, 'error', false);
+            } else {
+                alert('Failed: ' + msg);
+            }
+        })
+        .catch(function (err) {
+            var msg = (err && err.message) ? err.message : 'Could not update location.';
+            if (typeof showProfileStatusModal === 'function') {
+                showProfileStatusModal(msg, 'error', false);
+            } else {
+                alert('Failed: ' + msg);
+            }
+        });
+    }
+
     function openMinMaxModal() {
     document.getElementById('minMaxModal').classList.remove('hidden');
 }

@@ -158,12 +158,88 @@ function searchOrderFilterPublishers(mysqli $conn, string $query): array
     }, $rows);
 }
 
+/**
+ * @return array<int, array{id:int|string, name:string}>
+ */
+function searchOrderFilterMaterials(mysqli $conn, string $query): array
+{
+    $query = trim($query);
+    if (strlen($query) < orderFilterAutocompleteMinLength()) {
+        return [];
+    }
+
+    $like = '%' . $query . '%';
+    $numericId = ctype_digit($query) ? (int) $query : 0;
+    $stmt = $conn->prepare(
+        'SELECT id, material_name AS name
+         FROM material
+         WHERE is_active = 1 AND (material_name LIKE ? OR material_slug LIKE ? OR id = ?)
+         ORDER BY material_name
+         LIMIT 20'
+    );
+    if (!$stmt) {
+        return [];
+    }
+
+    $stmt->bind_param('ssi', $like, $like, $numericId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+    $stmt->close();
+
+    return array_map(static function (array $row): array {
+        return [
+            'id' => (int) ($row['id'] ?? 0),
+            'name' => (string) ($row['name'] ?? ''),
+        ];
+    }, $rows);
+}
+
+/**
+ * @return array<int, array{id:int|string, name:string}>
+ */
+function searchOrderFilterLanguages(mysqli $conn, string $query): array
+{
+    $query = trim($query);
+    if (strlen($query) < orderFilterAutocompleteMinLength()) {
+        return [];
+    }
+
+    $like = '%' . $query . '%';
+    $numericId = ctype_digit($query) ? (int) $query : 0;
+    $stmt = $conn->prepare(
+        'SELECT id, language_name AS name
+         FROM book_languages
+         WHERE active = 1 AND (language_name LIKE ? OR iso LIKE ? OR id = ?)
+         ORDER BY language_name
+         LIMIT 20'
+    );
+    if (!$stmt) {
+        return [];
+    }
+
+    $stmt->bind_param('ssi', $like, $like, $numericId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+    $stmt->close();
+
+    return array_map(static function (array $row): array {
+        return [
+            'id' => (int) ($row['id'] ?? 0),
+            'name' => (string) ($row['name'] ?? ''),
+        ];
+    }, $rows);
+}
+
 function orderFilterAutocompleteJson(mysqli $conn, string $type, string $query): void
 {
     $results = match ($type) {
         'vendor' => searchOrderFilterVendors($conn, $query),
         'author' => searchOrderFilterAuthors($conn, $query),
         'publisher' => searchOrderFilterPublishers($conn, $query),
+        'material' => searchOrderFilterMaterials($conn, $query),
+        'language' => searchOrderFilterLanguages($conn, $query),
         default => [],
     };
 
@@ -193,6 +269,108 @@ function resolveOrderListAuthorFilter(array $get): string
 function resolveOrderListPublisherFilter(array $get): string
 {
     return !empty($get['publisher']) ? normalizeOrderFilterSearchText($get['publisher']) : '';
+}
+
+function resolveProductListAuthorFilter(array $get): string
+{
+    return !empty($get['author']) ? normalizeOrderFilterSearchText($get['author']) : '';
+}
+
+function resolveProductListPublisherFilter(array $get): string
+{
+    return !empty($get['publisher']) ? normalizeOrderFilterSearchText($get['publisher']) : '';
+}
+
+function resolveProductListMaterialFilter(array $get): string
+{
+    return !empty($get['material']) ? normalizeOrderFilterSearchText($get['material']) : '';
+}
+
+function resolveProductListArtistFilter(array $get): string
+{
+    return !empty($get['artist']) ? normalizeOrderFilterSearchText($get['artist']) : '';
+}
+
+function resolveProductListLanguageFilter(array $get): string
+{
+    return !empty($get['language']) ? normalizeOrderFilterSearchText($get['language']) : '';
+}
+
+function appendProductListAuthorFilterSql(string &$search, mysqli $db, string $author): void
+{
+    $author = normalizeOrderFilterSearchText($author);
+    if ($author === '') {
+        return;
+    }
+
+    $escaped = $db->real_escape_string($author);
+    $parts = ["IFNULL(vp_products.author, '') LIKE '%{$escaped}%'"];
+
+    $authorIds = [];
+    if (ctype_digit($author)) {
+        $authorIds[] = (int) $author;
+    }
+
+    $stmt = $db->prepare('SELECT author_id FROM vp_author WHERE is_active = 1 AND LOWER(TRIM(author)) = LOWER(TRIM(?)) LIMIT 1');
+    if ($stmt) {
+        $stmt->bind_param('s', $author);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+        if (!empty($row['author_id'])) {
+            $authorIds[] = (int) $row['author_id'];
+        }
+    }
+
+    foreach (array_values(array_unique(array_filter($authorIds))) as $authorId) {
+        $authorId = (int) $authorId;
+        if ($authorId <= 0) {
+            continue;
+        }
+        $parts[] = "vp_products.author = '{$authorId}'";
+        $parts[] = "FIND_IN_SET('{$authorId}', REPLACE(IFNULL(vp_products.author, ''), ' ', ''))";
+    }
+
+    $search .= ' AND (' . implode(' OR ', $parts) . ')';
+}
+
+function appendProductListPublisherFilterSql(string &$search, mysqli $db, string $publisher): void
+{
+    $publisher = normalizeOrderFilterSearchText($publisher);
+    if ($publisher === '') {
+        return;
+    }
+
+    $escaped = $db->real_escape_string($publisher);
+    $parts = ["IFNULL(vp_products.publisher, '') LIKE '%{$escaped}%'"];
+
+    $publisherIds = [];
+    if (ctype_digit($publisher)) {
+        $publisherIds[] = (int) $publisher;
+    }
+
+    $stmt = $db->prepare('SELECT publishers_id FROM vp_publishers WHERE is_active = 1 AND LOWER(TRIM(publishers)) = LOWER(TRIM(?)) LIMIT 1');
+    if ($stmt) {
+        $stmt->bind_param('s', $publisher);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+        if (!empty($row['publishers_id'])) {
+            $publisherIds[] = (int) $row['publishers_id'];
+        }
+    }
+
+    foreach (array_values(array_unique(array_filter($publisherIds))) as $publisherId) {
+        $publisherId = (int) $publisherId;
+        if ($publisherId <= 0) {
+            continue;
+        }
+        $parts[] = "vp_products.publisher = '{$publisherId}'";
+    }
+
+    $search .= ' AND (' . implode(' OR ', $parts) . ')';
 }
 
 /** vp_orders.store_name holds exotic_address.id for POS / store-origin orders. */

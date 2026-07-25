@@ -1,0 +1,77 @@
+---
+description: POS register stock, warehouse mapping, search, and cross-store order rules
+globs: controllers/POSRegisterController.php,models/pos/pos.php,assets/js/pos.js,views/pos_register/**/*
+alwaysApply: false
+---
+
+# POS Stock & Store Availability
+
+When changing POS search, product modal, add-to-cart, or warehouse stock behavior, follow this model.
+
+## Core concepts
+
+- **Session store** = `$_SESSION['warehouse_id']` (login warehouse or `exotic_address.is_default = 1` fallback in `POSRegisterController::index()`).
+- **Store mapping is implicit** — no separate map table. A product is “mapped” to a store when it has a **latest row in `vp_stock_movements`** for that `product_id` + `warehouse_id` (via `MAX(id)` subquery).
+- **Single source of truth for POS decisions** = `POSRegisterController::resolvePosStockContext()`. Do not duplicate stock/warning logic in controllers, views, or JS.
+
+## Scenario matrix (order creation)
+
+| Condition | Qty cap | Warning type | User message (banner) |
+|-----------|---------|--------------|------------------------|
+| Mapped at selected store, stock > 0 | Cap at `floor(stock)` | `none` | — |
+| Mapped at selected store, stock ≤ 0 | No cap | `out_of_stock_local` | Out of stock at [store]. You can still create an order. |
+| Mapped at selected store, stock ≤ 0, other store(s) stock > 0 | No cap | `cross_store` | Out of stock at [store]. Stock available at [others]. You can still create an order. |
+| Not mapped at selected store, stock elsewhere > 0 | No cap | `unmapped_current` | Not mapped to [store]. Stock at [others]. You can still create an order for [store]. |
+| Not mapped at selected store, no stock elsewhere | No cap | `unmapped_current` | Not mapped to [store]. You can still create an order for [store]. |
+| In `vp_products`, not mapped to any store | No cap | `unmapped_anywhere` | Treated as default store ([default name]). You can create an order for [selected store]. |
+
+**Rules:** `allow_order` is always `true` for active non-parent VP products. Cap qty **only** when `enforce_qty_cap === true` (mapped at current store AND stock > 0).
+
+## API surfaces
+
+| Endpoint | Method | Role |
+|----------|--------|------|
+| `?page=pos_register&action=get-product-api` | `getProductApi()` | Modal payload; merge `resolvePosStockContext()` fields |
+| `?page=pos_register&action=product-availability` | `productAvailability()` | Same context for search/AJAX checks |
+| `?page=pos_register&action=products-ajax` | `productsAjax()` → `pos::getProductsDataTable()` | Product grid |
+
+### Fields added to `getProductApi` / modal product object
+
+```
+allow_order, enforce_qty_cap, qty_cap,
+stock_warning_message, stock_warning_type,
+mapped_at_current_store, mapped_any_store, alternative_warehouses
+```
+
+## Frontend (`assets/js/pos.js`)
+
+- **Grid search:** when `#searchName` has text → send `stock_filter=all`; browse default → `stock_filter=in`.
+- **Modal qty cap:** use `resolveModalQtyCap(p)` — respects `enforce_qty_cap` / `qty_cap`, not raw `stock_qty` alone.
+- **Warning UI:** `#pmStockWarning` amber banner via `renderStockWarningBanner(p.stock_warning_message)`.
+- **Add to cart:** block only when qty > cap (if cap exists) or qty < 1. Never block solely because current-store stock is 0.
+- **Do not** reintroduce `alert()` for cross-store/unmapped cases; banner + enabled Add to Cart is the pattern.
+
+## Product grid (`models/pos/pos.php::getProductsDataTable()`)
+
+- **Browse (no search):** INNER JOIN movements at session warehouse; default `stock_filter=in`.
+- **Search (product_name / sku / item_code):** LEFT JOIN movements so unmapped or zero-stock SKUs still appear; use `COALESCE(sm.running_stock, 0)`.
+
+## When extending
+
+```php
+// ✅ Extend resolvePosStockContext() for new warning types / caps
+$ctx = $this->resolvePosStockContext($conn, $productId, $warehouseId, $warehouseName);
+
+// ❌ Do not add parallel stock checks in cartApi/checkout or inline SQL in JS
+if ($snap['running_stock'] <= 0) { /* block */ }
+```
+
+- New warning type → add branch in `resolvePosStockContext()`, expose via API fields, render in `#pmStockWarning`.
+- Cart/checkout warehouse notes → append from `$ctx['warning_message']` if needed; do not hard-block checkout on warehouse ledger stock (Exotic `local_stock` warnings are separate).
+
+## Key files
+
+- `controllers/POSRegisterController.php` — `resolvePosStockContext()`, `getProductApi()`, `productAvailability()`
+- `models/pos/pos.php` — grid join + search stock filter
+- `assets/js/pos.js` — `fetchProducts`, `resolveModalQtyCap`, `renderProductModal`
+- `views/pos_register/index.php` — `#pmStockWarning`, `#productModal`

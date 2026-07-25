@@ -4,6 +4,12 @@
         <div class="mx-auto flex max-w-[1500px] items-center justify-between gap-3 px-4 py-3">
             <h1 class="text-lg font-semibold">POS Invoice Listing</h1>
             <div class="flex flex-wrap items-center gap-2">
+                <a href="?page=sales_returns&action=index"
+                   class="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-white px-3 py-2 text-xs font-semibold text-orange-800 hover:bg-orange-50"
+                   title="View sales returns">
+                    <i class="fas fa-rotate-left text-xs" aria-hidden="true"></i>
+                    Sales returns
+                </a>
                 <a href="?page=posinvoice&action=sales_summary"
                    class="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-white px-3 py-2 text-xs font-semibold text-orange-800 hover:bg-orange-50"
                    title="View POS sales summary by store">
@@ -124,10 +130,13 @@
                         <label for="type" class="block text-xs font-semibold text-gray-600 mb-1">Payment type</label>
                         <select id="type" class="pi-filter-input">
                             <option value="">All payment types</option>
-                            <option value="offline">Offline</option>
-                            <option value="cod">Cash</option>
-                            <option value="razorpay">Razorpay</option>
+                            <option value="cash">Cash</option>
+                            <option value="upi">UPI</option>
                             <option value="bank_transfer">Bank transfer</option>
+                            <option value="pos_machine">POS machine</option>
+                            <option value="razorpay">Razorpay</option>
+                            <option value="cheque">Cheque</option>
+                            <option value="offline">Offline</option>
                         </select>
                     </div>
                     <div class="sm:col-span-2">
@@ -332,6 +341,16 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+    }
+
+    function buildOrderNumberLinkHtml(orderNumber) {
+        const label = String(orderNumber ?? '').trim();
+        if (label === '') {
+            return '';
+        }
+
+        const href = `?page=posorders&action=get_order_details_html&type=outer&order_number=${encodeURIComponent(label)}`;
+        return `<a href="${href}" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline font-medium" title="View order details">${escapeHtml(label)}</a>`;
     }
 
     function formatCustomerCell(invoice) {
@@ -597,6 +616,16 @@ stroke-linejoin="round"/>
     Cancel
 </button>`;
 
+                    const orderNum = (i.order_number || '').trim();
+                    const returnBtn = (!isCancelled && orderNum) ? `
+<button type="button"
+   data-sales-return-create
+   data-sales-return-url="?page=sales_returns&action=create&order_number=${encodeURIComponent(orderNum)}&invoice_id=${i.id}"
+   data-order-number="${escapeHtml(orderNum)}"
+   class="inline-flex items-center text-orange-700 hover:text-orange-900 text-xs font-semibold border-0 bg-transparent cursor-pointer p-0">
+    Return
+</button>` : '';
+
                     const deleteBtn = isCancelled ? '' : `
   <button onclick="openDeleteModal(${i.id}, '?page=posinvoice&action=delete', 'Delete this invoice?')"
         class="flex items-center gap-1 text-red-600 hover:text-red-800 text-xs font-semibold"
@@ -609,7 +638,7 @@ stroke-linejoin="round"/>
 
 <td class="p-3">${i.id ?? ''}</td>
 <td class="p-3">${i.invoice_date ?? ''}</td>
-<td class="p-3">${i.order_number ?? ''}</td>
+<td class="p-3">${buildOrderNumberLinkHtml(i.order_number)}</td>
 <td class="p-3">${invoiceCell}</td>
 <td class="p-3 text-gray-700">${i.warehouse_name ?? ''}</td>
 <td class="p-3">${formatCustomerCell(i)}</td>
@@ -624,6 +653,7 @@ stroke-linejoin="round"/>
 
  <td class="p-3 flex flex-wrap gap-3 items-center">
 ${pdfLink}
+${returnBtn}
 ${cancelBtn}
 ${deleteBtn}
 </td>

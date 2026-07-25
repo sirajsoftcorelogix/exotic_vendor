@@ -16,6 +16,11 @@ if (!function_exists('vendorJsonResponse')) {
     }
 }
 
+function namesEqualCi(string $left, string $right): bool
+{
+    return mb_strtolower(trim($left), 'UTF-8') === mb_strtolower(trim($right), 'UTF-8');
+}
+
 function is_login()
 {
 	global $domain;
@@ -94,6 +99,33 @@ function pos_invoice_print_url(int $invoiceId, bool $autoPrint = true): string
 	return $url;
 }
 
+/** Print proforma preview from order details (no invoice DB row). */
+function pos_order_proforma_print_url(string $orderNumber): string
+{
+	$orderNumber = trim($orderNumber);
+	if ($orderNumber === '') {
+		return '';
+	}
+
+	return base_url('?page=posorders&action=print_proforma&order_number=' . rawurlencode($orderNumber));
+}
+
+/** Customer handover print: order lines + payment summary (not tax invoice). */
+function pos_order_print_url(string $orderNumber, bool $autoPrint = false): string
+{
+	$orderNumber = trim($orderNumber);
+	if ($orderNumber === '') {
+		return '';
+	}
+
+	$url = base_url('?page=posorders&action=print_order&order_number=' . rawurlencode($orderNumber));
+	if ($autoPrint) {
+		$url .= '&autoprint=1';
+	}
+
+	return $url;
+}
+
 /** Inbound book shipping fee (INR): MAX(min, billable_kg × rate). Constants in init.php. */
 function book_shipping_fee_inr($weightKg): float
 {
@@ -156,6 +188,20 @@ function renderPartial($viewFile, $data = [])
 {
 	extract($data);
 	include $viewFile;
+}
+
+/**
+ * @return list<array{name: string, price: float}>
+ */
+function order_line_addons_for_display($raw): array
+{
+	static $loaded = false;
+	if (!$loaded) {
+		require_once __DIR__ . '/../models/order/order.php';
+		$loaded = true;
+	}
+
+	return Order::parseVendorOrderLineAddonsList($raw);
 }
 
 // Generates a sortable table header link
@@ -842,7 +888,7 @@ function sanitizeGet(array $input): array
 		// Trim leading/trailing whitespace
 		$value = trim($value);
 
-		$preserveTextSearch = in_array($key, ['author', 'publisher', 'vendor', 'vendor_name', 'item_name', 'title'], true);
+		$preserveTextSearch = in_array($key, ['author', 'publisher', 'vendor', 'vendor_name', 'item_name', 'title', 'order_number'], true);
 		if (!$preserveTextSearch) {
 			// Remove all spaces inside the string
 			$value = str_replace(' ', '', $value);

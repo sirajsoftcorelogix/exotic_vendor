@@ -580,6 +580,7 @@ class Picklist
             if (!$product && $itemCode !== '') {
                 $product = $productModel->getProductByItemCode($itemCode);
             }
+            $product = $this->unwrapProductRow($product);
             if ($product && !empty($product['location'])) {
                 $location = trim((string) $product['location']);
             }
@@ -1015,6 +1016,32 @@ class Picklist
     }
 
     /**
+     * Normalize getProductByskuExact / getProductByItemCode results to a single row.
+     *
+     * @param array<string, mixed>|array<int, array<string, mixed>>|null $product
+     * @return array<string, mixed>|null
+     */
+    private function unwrapProductRow($product): ?array
+    {
+        if (!is_array($product) || $product === []) {
+            return null;
+        }
+        if (isset($product[0]) && is_array($product[0])) {
+            return $product[0];
+        }
+        if (array_key_exists('id', $product)
+            || array_key_exists('sku', $product)
+            || array_key_exists('item_code', $product)
+            || array_key_exists('product_weight', $product)
+        ) {
+            return $product;
+        }
+        $first = reset($product);
+
+        return is_array($first) ? $first : null;
+    }
+
+    /**
      * @param array<string, mixed> $row
      * @return array<string, mixed>
      */
@@ -1027,8 +1054,26 @@ class Picklist
         $itemtype = trim((string) ($row['itemtype'] ?? ''));
         $groupname = trim((string) ($row['groupname'] ?? ''));
         $isBook = !empty($row['is_book']);
+        $dimensions = trim((string) ($row['dimensions'] ?? ''));
+        $productWeight = $row['product_weight'] ?? null;
+        $productWeightUnit = trim((string) ($row['product_weight_unit'] ?? ''));
+        $prodHeight = $row['prod_height'] ?? null;
+        $prodWidth = $row['prod_width'] ?? null;
+        $prodLength = $row['prod_length'] ?? null;
+        $lengthUnit = trim((string) ($row['length_unit'] ?? ''));
 
-        if ($publisher === '' || $coverType === '' || $physicalQty === 0 || !$isBook) {
+        $needsCatalogEnrichment = $publisher === ''
+            || $coverType === ''
+            || $physicalQty === 0
+            || !$isBook
+            || $dimensions === ''
+            || $productWeight === null
+            || $productWeight === ''
+            || $prodHeight === null
+            || $prodWidth === null
+            || $prodLength === null;
+
+        if ($needsCatalogEnrichment) {
             require_once __DIR__ . '/../order/order.php';
             require_once __DIR__ . '/../product/product.php';
             $orderModel = new Order($this->db);
@@ -1044,6 +1089,7 @@ class Picklist
             if (!$product && $itemCode !== '') {
                 $product = $productModel->getProductByItemCode($itemCode);
             }
+            $product = $this->unwrapProductRow($product);
 
             if (is_array($order)) {
                 if ($author === '') {
@@ -1088,6 +1134,27 @@ class Picklist
                 if (trim((string) ($row['warehouse_location'] ?? '')) === '' && !empty($product['location'])) {
                     $row['warehouse_location'] = trim((string) $product['location']);
                 }
+                if ($dimensions === '' && isset($product['dimensions'])) {
+                    $dimensions = trim((string) $product['dimensions']);
+                }
+                if (($productWeight === null || $productWeight === '') && array_key_exists('product_weight', $product)) {
+                    $productWeight = $product['product_weight'];
+                }
+                if ($productWeightUnit === '' && !empty($product['product_weight_unit'])) {
+                    $productWeightUnit = trim((string) $product['product_weight_unit']);
+                }
+                if (($prodHeight === null || $prodHeight === '') && array_key_exists('prod_height', $product)) {
+                    $prodHeight = $product['prod_height'];
+                }
+                if (($prodWidth === null || $prodWidth === '') && array_key_exists('prod_width', $product)) {
+                    $prodWidth = $product['prod_width'];
+                }
+                if (($prodLength === null || $prodLength === '') && array_key_exists('prod_length', $product)) {
+                    $prodLength = $product['prod_length'];
+                }
+                if ($lengthUnit === '' && !empty($product['length_unit'])) {
+                    $lengthUnit = trim((string) $product['length_unit']);
+                }
             }
         }
 
@@ -1102,6 +1169,13 @@ class Picklist
         $row['itemtype'] = $itemtype;
         $row['groupname'] = $groupname;
         $row['is_book'] = $isBook ? 1 : 0;
+        $row['dimensions'] = $dimensions;
+        $row['product_weight'] = $productWeight;
+        $row['product_weight_unit'] = $productWeightUnit;
+        $row['prod_height'] = $prodHeight;
+        $row['prod_width'] = $prodWidth;
+        $row['prod_length'] = $prodLength;
+        $row['length_unit'] = $lengthUnit;
 
         return $row;
     }

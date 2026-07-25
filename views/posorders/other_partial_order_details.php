@@ -22,9 +22,46 @@ $total_price = 0;
 $currency = '';
 
 foreach ($order as $items => $item):
-    $total_price += $item['finalprice'] * $item['quantity'];
+    $lineId = (int)($item['id'] ?? 0);
+    $linePricingRow = ($linePricingByLineId ?? [])[$lineId] ?? null;
+    if (is_array($linePricingRow)) {
+        $total_price += (float)($linePricingRow['chargeable_value'] ?? 0);
+    } else {
+        $total_price += (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
+    }
 endforeach;
 $currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
+$orderremarks = is_array($orderremarks ?? null) ? $orderremarks : [];
+$customerdetails = is_array($customerdetails ?? null) ? $customerdetails : [];
+$statusList = is_array($statusList ?? null) ? $statusList : [];
+$order_status_list = is_array($order_status_list ?? null) ? $order_status_list : [];
+$staff_list = is_array($staff_list ?? null) ? $staff_list : [];
+$showOrderVendorName = (bool)($showOrderVendorName ?? false);
+$buildStatusOrderPayload = static function (array $item): array {
+    return [
+        'order_id' => (int)($item['id'] ?? 0),
+        'order_number' => (string)($item['order_number'] ?? ''),
+        'item_code' => (string)($item['item_code'] ?? ''),
+        'vendor_name' => (string)($item['vendor_name'] ?? $item['vendor'] ?? ''),
+        'groupname' => (string)($item['groupname'] ?? ''),
+        'subcategories' => (string)($item['subcategories'] ?? ''),
+        'title' => (string)($item['title'] ?? ''),
+        'image' => (string)($item['image'] ?? ''),
+        'status' => (string)($item['status'] ?? ''),
+        'priority' => (string)($item['priority'] ?? ''),
+        'agent_id' => (string)($item['agent_id'] ?? ''),
+        'esd' => (string)($item['esd'] ?? ''),
+        'remarks' => (string)($item['remarks'] ?? ''),
+    ];
+};
+$countries = country_array();
+$resolveCountryLabel = static function (?string $code) use ($countries): string {
+    $code = trim((string)$code);
+    if ($code === '') {
+        return '';
+    }
+    return (string)($countries[$code] ?? $code);
+};
 $displayOrderNumber = (string)($orderremarks['order_number'] ?? ($order[0]['order_number'] ?? ''));
 $invoicePdfUrl = trim((string)($invoicePdfUrl ?? ''));
 $invoiceDisplay = is_array($invoiceDisplay ?? null) ? $invoiceDisplay : null;
@@ -42,18 +79,39 @@ $invoiceDateDisplay = !empty($invoiceDisplay['invoice_date'])
     : '—';
 $invoiceSubtotalDisplay = number_format((float)($invoiceDisplay['subtotal'] ?? 0), 2);
 $invoiceTaxDisplay = number_format((float)($invoiceDisplay['tax_amount'] ?? 0), 2);
-$invoiceDiscountLines = (is_array($invoiceDisplay) && is_array($invoiceDisplay['discount_lines'] ?? null))
-    ? $invoiceDisplay['discount_lines']
+$invoiceSummaryRows = (is_array($invoiceDisplay) && is_array($invoiceDisplay['summary_rows'] ?? null))
+    ? $invoiceDisplay['summary_rows']
     : [];
 $invoiceGoodsInclDisplay = number_format((float)($invoiceDisplay['subtotal_goods_incl'] ?? 0), 2);
-$invoiceGrandTotalDisplay = number_format((float)($invoiceDisplay['grand_total'] ?? 0), 2);
+$invoiceGrandTotalDisplay = number_format((float)($invoiceDisplay['pdf_grand_total'] ?? $invoiceDisplay['grand_total'] ?? 0), 2);
 $paymentSummary = is_array($paymentSummary ?? null) ? $paymentSummary : ['order_total' => 0, 'paid_total' => 0, 'pending' => 0, 'is_fully_paid' => false, 'payments' => []];
 $paymentRows = is_array($paymentSummary['payments'] ?? null) ? $paymentSummary['payments'] : [];
 $paymentOrderTotalDisplay = number_format((float)($paymentSummary['order_total'] ?? 0), 2);
 $paymentPaidTotalDisplay = number_format((float)($paymentSummary['paid_total'] ?? 0), 2);
 $paymentPendingDisplay = number_format((float)($paymentSummary['pending'] ?? 0), 2);
 $paymentIsFullyPaid = !empty($paymentSummary['is_fully_paid']);
+$paymentPendingAmount = (float)($paymentSummary['pending'] ?? 0);
+$canAddOrderPayment = $paymentPendingAmount > 0.02;
+$canCreateFinalInvoice = !empty($canCreateFinalInvoice);
 $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurlencode($displayOrderNumber) . '&order_exact=1');
+$salesReturnUrl = base_url('?page=sales_returns&action=create&order_number=' . rawurlencode($displayOrderNumber));
+$invoiceIdForReturn = is_array($invoiceDisplay) ? (int)($invoiceDisplay['id'] ?? 0) : 0;
+if ($invoiceIdForReturn <= 0) {
+    $invoiceIdForReturn = (int)($order[0]['invoice_id'] ?? 0);
+}
+if ($invoiceIdForReturn > 0) {
+    $salesReturnUrl .= '&invoice_id=' . $invoiceIdForReturn;
+}
+$proformaPrintUrl = trim((string)($proformaPrintUrl ?? ''));
+$canPrintProforma = !empty($canPrintProforma);
+$canPrintTaxInvoice = $invoicePdfUrl !== '' && $invoiceStatus === 'final';
+$proformaPrintDisabledReason = $canPrintProforma
+    ? ''
+    : ($paymentIsFullyPaid
+        ? 'Order is fully paid; use Print Invoice.'
+        : ($invoiceStatus === 'final'
+            ? 'This order has a final tax invoice.'
+            : 'Proforma is available when payment is pending.'));
 ?>
 
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
@@ -70,7 +128,13 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
 
         <div class="flex items-center gap-2">
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Restock</button>
-            <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Return</button>
+            <button type="button"
+                data-sales-return-create
+                data-sales-return-url="<?= htmlspecialchars($salesReturnUrl, ENT_QUOTES, 'UTF-8') ?>"
+                data-order-number="<?= htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8') ?>"
+                class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">
+                Return
+            </button>
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Edit</button>
             <div class="relative inline-block text-left">
                 <input type="checkbox" id="dropdown-toggle" class="peer hidden">
@@ -80,23 +144,39 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                     </svg>
                 </label>
-                <div class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden opacity-0 invisible scale-95 transition-all duration-200 peer-checked:opacity-100 peer-checked:visible peer-checked:scale-100">
+                <div class="absolute right-0 mt-2 w-52 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden opacity-0 invisible scale-95 transition-all duration-200 peer-checked:opacity-100 peer-checked:visible peer-checked:scale-100">
                     <div class="py-1">
-                        <?php if ($invoicePdfUrl !== ''): ?>
-                            <a href="<?php echo htmlspecialchars($invoicePdfUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                        <?php if ($canPrintProforma): ?>
+                            <a href="<?php echo htmlspecialchars($proformaPrintUrl, ENT_QUOTES, 'UTF-8'); ?>"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100">
-                                Print Invoice
+                                Print Proforma
                             </a>
                         <?php else: ?>
                             <span class="flex items-center px-4 py-2 text-[13px] text-gray-400 cursor-not-allowed"
-                                title="No invoice exists for this order yet.">
+                                title="<?php echo htmlspecialchars($proformaPrintDisabledReason, ENT_QUOTES, 'UTF-8'); ?>">
+                                Print Proforma
+                            </span>
+                        <?php endif; ?>
+                        <?php if ($canPrintTaxInvoice): ?>
+                            <a href="<?php echo htmlspecialchars($invoicePdfUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100 border-t border-gray-50">
+                                Print Invoice
+                            </a>
+                        <?php else: ?>
+                            <span class="flex items-center px-4 py-2 text-[13px] text-gray-400 cursor-not-allowed border-t border-gray-50"
+                                title="<?php echo $invoiceStatus === 'proforma' ? 'Tax invoice is available after payment in full.' : 'No invoice exists for this order yet.'; ?>">
                                 Print Invoice
                             </span>
                         <?php endif; ?>
-                        <a href="#" class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100 border-t border-gray-50">
-                            print order
+                        <a href="<?php echo htmlspecialchars(pos_order_print_url($displayOrderNumber), ENT_QUOTES, 'UTF-8'); ?>"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="flex items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100 border-t border-gray-50">
+                            Print Order
                         </a>
                     </div>
                 </div>
@@ -155,13 +235,36 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                         } else {
                             $currencysymbol = $currencyCode . ' ';
                         }
+                        $linePricing = ($linePricingByLineId ?? [])[(int)($item['id'] ?? 0)] ?? null;
+                        $netLineAmount = is_array($linePricing)
+                            ? (float)($linePricing['chargeable_value'] ?? 0)
+                            : (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
+                        $listLineAmount = is_array($linePricing)
+                            ? (float)($linePricing['list_price_incl'] ?? 0)
+                            : (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
+                        $headlineLineAmount = $listLineAmount > 0 ? $listLineAmount : $netLineAmount;
+                        $hasExtendedPricing = is_array($linePricing)
+                            && (((float)($linePricing['addons_total'] ?? 0)) > 0.001 || ((float)($linePricing['custom_reduce'] ?? 0)) > 0.001);
+                        $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
+                        $lineId = (int)($item['id'] ?? 0);
+                        $lineStatus = (string)($item['status'] ?? '');
+                        $lineStatusLabel = (string)($statusList[$lineStatus] ?? ucwords(str_replace('_', ' ', $lineStatus)));
+                        $lineAgentId = (int)($item['agent_id'] ?? 0);
+                        $lineAgentName = $lineAgentId > 0 ? (string)($staff_list[$lineAgentId] ?? 'N/A') : 'N/A';
+                        $linePriority = trim((string)($item['priority'] ?? ''));
+                        $lineEsd = trim((string)($item['esd'] ?? ''));
+                        $statusOrderPayload = $buildStatusOrderPayload($item);
                     ?>
                         <div class="flex items-center gap-4 accordion-trigger">
                             <input type="checkbox" class="h-5 w-5 rounded border-gray-300">
                             <div class="flex flex-1 items-start gap-5 rounded-2xl border border-gray-200 p-4">
                                 <div class="h-32 w-32 flex-shrink-0 overflow-hidden rounded-xl border border-gray-100">
-                                    <img src="<?php echo $item['image']; ?>" class="h-full w-full object-cover"
-                                        alt="product">
+                                    <?php $imageUrl = (string)($item['image'] ?? ''); ?>
+                                    <img src="<?php echo htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                        class="h-full w-full object-cover cursor-pointer hover:opacity-90 transition-opacity pos-order-detail-enlarge"
+                                        alt="product"
+                                        title="Click to enlarge"
+                                        data-full-image="<?php echo htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'); ?>">
                                 </div>
 
                                 <div class="flex-1">
@@ -192,36 +295,61 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                                                     <?php echo str_pad($item['quantity'], 2, '0', STR_PAD_LEFT); ?>
                                                 </span>
                                             </div>
+                                            <?php if ($lineAddons !== []): ?>
+                                                <?php foreach ($lineAddons as $addonRow): ?>
+                                                    <p>
+                                                        <span class="inline-block font-bold text-black">Addon</span>
+                                                        <span class="text-black">:</span>
+                                                        <span class="ml-2 text-black-700"><?php echo htmlspecialchars((string)($addonRow['name'] ?? '')); ?></span>
+                                                        <span class="ml-2 tabular-nums text-black-600"><?php echo $currencysymbol . number_format((float)($addonRow['price'] ?? 0), 2); ?></span>
+                                                    </p>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                            <div class="grid grid-cols-1 gap-1 pt-2 text-[12px] text-black-600">
+                                                <p><span class="font-bold text-black">Priority</span>: <?php echo $linePriority !== '' ? htmlspecialchars(ucfirst($linePriority)) : '—'; ?></p>
+                                                <p><span class="font-bold text-black">Agent</span>: <?php echo htmlspecialchars($lineAgentName); ?></p>
+                                                <p><span class="font-bold text-black">Ship by</span>: <?php echo $lineEsd !== '' ? htmlspecialchars(date('d M Y', strtotime($lineEsd))) : '—'; ?></p>
+                                            </div>
                                         </div>
                                         <div class="flex items-center gap-12">
-                                            <div class="flex items-center gap-2 text-[13px] text-black-500">
-                                                <span><?php echo $currencysymbol; ?><?php echo $item['finalprice']; ?> x</span>
-                                                <span class="rounded bg-gray-100 px-2 py-0.5 text-black-700"><?php echo $item['quantity']; ?></span>
-                                            </div>
+                                            <?php if ($hasExtendedPricing): ?>
+                                                <div class="text-right text-[13px] text-black-500">
+                                                    <p class="text-[11px] uppercase tracking-wide text-gray-500">List price</p>
+                                                    <p class="tabular-nums font-bold text-[14px] text-black-900"><?php echo $currencysymbol . number_format($headlineLineAmount, 2); ?></p>
+                                                </div>
+                                            <?php else: ?>
+                                                <div class="flex items-center gap-2 text-[13px] text-black-500">
+                                                    <span><?php echo $currencysymbol; ?><?php echo $item['finalprice']; ?> x</span>
+                                                    <span class="rounded bg-gray-100 px-2 py-0.5 text-black-700"><?php echo $item['quantity']; ?></span>
+                                                </div>
 
-                                            <div class="w-20 text-right text-[14px] font-bold text-black-900">
-                                                <?php echo $currencysymbol; ?><?php echo $item['finalprice'] * $item['quantity']; ?>
-                                            </div>
-                                            <div class="flex-shrink-0">
-                                                <span class="rounded-full bg-green-600 px-3 py-1 text-[11px] font-semibold text-white whitespace-nowrap"><?php echo ucwords(str_replace('_', ' ', $item['status'])); ?></span>
+                                                <div class="w-20 text-right text-[14px] font-bold text-black-900 tabular-nums">
+                                                    <?php echo $currencysymbol . number_format($netLineAmount, 2); ?>
+                                                </div>
+                                            <?php endif; ?>
+                                            <div class="flex-shrink-0 flex flex-col items-end gap-2">
+                                                <span class="rounded-full bg-green-600 px-3 py-1 text-[11px] font-semibold text-white whitespace-nowrap"><?php echo htmlspecialchars($lineStatusLabel); ?></span>
+                                                <button type="button"
+                                                    onclick="openStatusPopup(<?= $lineId ?>)"
+                                                    class="text-[11px] font-semibold text-orange-700 hover:text-orange-900 hover:underline">
+                                                    Update status
+                                                </button>
+                                                <span id="order-id-<?= $lineId ?>" class="hidden" data-order='<?= htmlspecialchars(json_encode($statusOrderPayload), ENT_QUOTES, 'UTF-8') ?>'></span>
                                             </div>
                                         </div>
                                     </div>
+                                    <?php
+                                    if (is_array($linePricing)) {
+                                        renderPartial('views/posorders/partials/line_item_pricing.php', [
+                                            'linePricing' => $linePricing,
+                                            'currencySymbol' => $currencysymbol,
+                                        ]);
+                                    }
+                                    ?>
                                 </div>
                             </div>
                         </div>
                         <div class="accordion-content-details max-h-0 overflow-hidden transition-all duration-300 ease-in-out [&:has(>input:checked)]:max-h-[1200px] bg-gray-50">
-                            <div class="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
-                                <p class="flex flex-wrap items-center gap-2">
-                                    <span class="section-title font-bold text-gray-700 text-sm italic">Addons : </span>
-                                    <span class="section-value text-green-700 font-semibold text-sm bg-green-50 px-2.5 py-1 rounded-lg border border-green-100">
-                                        <?php
-                                        $options = json_decode($item['options'], true);
-                                        echo !empty($options) ? implode(', ', $options) : 'None';
-                                        ?>
-                                    </span>
-                                </p>
-                            </div>
                             <div class="py-6 bg-white border-t border-b border-gray-100">
                                 <div class="overflow-x-auto pb-4 px-4">
                                     <div class="relative flex items-start min-w-max">
@@ -269,126 +397,6 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                         </div>
                     <?php endforeach; ?>
                 </div>
-                <?php
-                /*
-                        $tax_rate = 0.05;
-                        $coupon_reduce      = floatval($orderremarks['coupon_reduce']      ?? 0);
-                        $giftvoucher_reduce = floatval($orderremarks['giftvoucher_reduce'] ?? 0);
-                        $credit             = floatval($orderremarks['credit']             ?? 0);
-                        $all_reductions = $coupon_reduce + $giftvoucher_reduce + $credit;
-                        $final_paid = floatval($orderremarks['total'] ?? 0);
-                        $amount_before_tax = $final_paid / (1 + $tax_rate);
-                        $tax_amount = $final_paid - $amount_before_tax;
-                        $subtotal_before_discounts = $amount_before_tax + $all_reductions;
-                    */
-                $custom_reduce      = floatval($orderremarks['custom_reduce']      ?? 0);
-                $coupon_reduce      = floatval($orderremarks['coupon_reduce']      ?? 0);
-                $giftvoucher_reduce = floatval($orderremarks['giftvoucher_reduce'] ?? 0);
-                $credit             = floatval($orderremarks['credit']             ?? 0);
-                $all_reductions = $custom_reduce + $coupon_reduce + $giftvoucher_reduce + $credit;
-                $final_paid = floatval($orderremarks['total'] ?? 0);
-                $tax_amount = 0.0;
-                foreach ($order as $item) {
-                    $qty        = (int)($item['quantity'] ?? 1);
-                    $unit_price = floatval($item['finalprice'] ?? 0);   // ← Pre-GST unit price
-                    $gst_percent = floatval($item['gst'] ?? 0);         // ← GST percentage from DB
-                    $line_total_excl_gst = $unit_price * $qty;
-                    $line_gst_amount     = $line_total_excl_gst * ($gst_percent / 100);
-                    $tax_amount += $line_gst_amount;
-                }
-                $tax_amount = round($tax_amount, 2);   // clean money value
-                // Derive remaining values (keeps everything 100% consistent with final_paid)
-                $amount_before_tax       = $final_paid - $tax_amount;
-                $subtotal_before_discounts = $amount_before_tax + $all_reductions;
-                ?>
-                <div class="mt-6 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-                    <!-- <div class="mb-5">
-                            <span class="inline-flex items-center gap-2 bg-[#E5E7EB] text-[#5C5F62] px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-medium">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="text-[#5C5F62]">
-                                    <path d="M19 3H5C3.89543 3 3 3.89543 3 5V21L5.5 18.5L8 21L10.5 18.5L13 21L15.5 18.5L18 21L21 18V5C21 3.89543 20.1046 3 19 3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                    <path d="M9 11L11 13L15 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                </svg>
-                                Paid
-                            </span>
-                        </div> -->
-
-                    <div class="border border-gray-200 rounded-xl overflow-hidden">
-
-                        <div class="p-6 space-y-5">
-                            <div class="grid grid-cols-12 items-start text-sm">
-                                <div class="col-span-3 font-bold text-black-800">Subtotal</div>
-                                <div class="col-span-6 text-black-500"><?php echo count($order); ?> items</div>
-                                <div class="col-span-3 text-right font-bold text-black-900">
-                                    <?php echo $currencysymbol; ?><?php echo number_format($subtotal_before_discounts, 2); ?>
-                                </div>
-                            </div>
-                            <!-- Individual discount rows -->
-                            <?php if ($all_reductions > 0): ?>
-                                <?php if ($coupon_reduce > 0 && !empty($orderremarks['coupon'])): ?>
-                                    <div class="grid grid-cols-12 items-start text-sm text-green-700">
-                                        <div class="col-span-3 font-medium">Coupon </div>
-                                        <div class="col-span-6 text-gray-600">
-                                            <?php echo htmlspecialchars($orderremarks['coupon']); ?></div>
-                                        <div class="col-span-3 text-right font-medium">
-                                            -<?php echo $currencysymbol; ?><?php echo number_format($coupon_reduce, 2); ?>
-                                        </div>
-                                    </div>
-                                <?php endif; ?>
-                                <?php if ($giftvoucher_reduce > 0 && !empty($orderremarks['giftvoucher'])): ?>
-                                    <div class="grid grid-cols-12 items-start text-sm text-green-700">
-                                        <div class="col-span-3 font-medium">Gift Voucher </div>
-                                        <div class="col-span-6 text-gray-600">
-                                            <?php echo htmlspecialchars($orderremarks['giftvoucher']); ?></div>
-                                        <div class="col-span-3 text-right font-medium">
-                                            -<?php echo $currencysymbol; ?><?php echo number_format($giftvoucher_reduce, 2); ?>
-                                        </div>
-                                    </div>
-                                <?php endif; ?>
-                                <?php if ($custom_reduce > 0 && !empty($orderremarks['custom_note'])): ?>
-                                    <div class="grid grid-cols-12 items-start text-sm text-green-700">
-                                        <div class="col-span-3 font-medium">Custom Note </div>
-                                        <div class="col-span-6 text-gray-600">
-                                            <?php echo htmlspecialchars($orderremarks['custom_note']); ?></div>
-                                        <div class="col-span-3 text-right font-medium">
-                                            -<?php echo $currencysymbol; ?><?php echo number_format($custom_reduce, 2); ?>
-                                        </div>
-                                    </div>
-                                <?php endif; ?>
-                                <?php if ($credit > 0): ?>
-                                    <div class="grid grid-cols-12 items-start text-sm text-green-700">
-                                        <div class="col-span-3 font-medium">Credit / Wallet</div>
-                                        <div class="col-span-6 text-gray-600"></div>
-                                        <div class="col-span-3 text-right font-medium">
-                                            -<?php echo $currencysymbol; ?><?php echo number_format($credit, 2); ?>
-                                        </div>
-                                    </div>
-                                <?php endif; ?>
-                            <?php endif; ?>
-                            <!-- Taxes -->
-                            <div class="grid grid-cols-12 items-start text-sm">
-                                <div class="col-span-3 font-bold text-black-800">Taxes</div>
-                                <div class="col-span-6 text-black-500">SGST + CGST</div>
-                                <div class="col-span-3 text-right font-bold text-black-900">
-                                    <?php echo $currencysymbol; ?><?php echo number_format($tax_amount, 2); ?>
-                                </div>
-                            </div>
-                            <!-- Final Total -->
-                            <div class="grid grid-cols-12 items-start text-sm pt-1 border-t border-gray-200 pt-3">
-                                <div class="col-span-3 font-bold text-black-800">Total</div>
-                                <div class="col-span-6"></div>
-                                <div class="col-span-3 text-right font-bold text-black-900 text-lg">
-                                    <?php echo $currencysymbol; ?><?php echo number_format($final_paid, 2); ?>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="bg-[#F9FAFB] border-t border-gray-200 p-6 flex justify-between items-center">
-                            <span class="text-sm font-bold text-black-800">Paid</span>
-                            <span class="text-sm font-bold text-black-900">
-                                <?php echo $currencysymbol; ?><?php echo number_format($final_paid, 2); ?>
-                            </span>
-                        </div>
-                    </div>
-                </div>
                 <?php if (!empty($fullOrderJourny)) { ?>
                     <div class="space-y-4 mt-8">
                         <div class="py-6 bg-[#F9FAFB] border border-gray-100 rounded-xl">
@@ -430,6 +438,118 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                         </div>
                     </div>
                 <?php } ?>
+
+                <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm relative mt-8" id="order-address-section">
+                    <button type="button"
+                        onclick="openNameEmailPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '', ENT_QUOTES, 'UTF-8') ?>')"
+                        class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors"
+                        title="Edit addresses">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                    </button>
+                    <h3 class="mb-4 text-sm font-bold text-black-700">Shipping &amp; Billing Address</h3>
+                    <?php
+                    $customerNameParts = preg_split('/\s+/', trim((string)($customerdetails['customer_name'] ?? '')), 2);
+                    $fallbackFirstName = trim((string)($customerNameParts[0] ?? ''));
+                    $fallbackLastName = trim((string)($customerNameParts[1] ?? ''));
+                    $billingFirstName = trim((string)($orderremarks['first_name'] ?? ''));
+                    $billingLastName = trim((string)($orderremarks['last_name'] ?? ''));
+                    $shippingFirstName = trim((string)($orderremarks['shipping_first_name'] ?? ''));
+                    $shippingLastName = trim((string)($orderremarks['shipping_last_name'] ?? ''));
+                    if ($billingFirstName === '' && $billingLastName === '') {
+                        $billingFirstName = $fallbackFirstName;
+                        $billingLastName = $fallbackLastName;
+                    }
+                    if ($shippingFirstName === '' && $shippingLastName === '') {
+                        $shippingFirstName = $billingFirstName;
+                        $shippingLastName = $billingLastName;
+                    }
+                    $billingDisplayName = trim($billingFirstName . ' ' . $billingLastName);
+                    $shippingDisplayName = trim($shippingFirstName . ' ' . $shippingLastName);
+                    ?>
+                    <span id="display-customer-name" class="hidden"><?php echo htmlspecialchars($customerdetails['customer_name'] ?? ''); ?></span>
+                    <span id="display-customer-phone" class="hidden"><?php echo htmlspecialchars($customerdetails['customer_phone'] ?? ''); ?></span>
+                    <span id="billing_first_name" class="hidden"><?php echo htmlspecialchars($billingFirstName); ?></span>
+                    <span id="billing_last_name" class="hidden"><?php echo htmlspecialchars($billingLastName); ?></span>
+                    <span id="shipping_first_name" class="hidden"><?php echo htmlspecialchars($shippingFirstName); ?></span>
+                    <span id="shipping_last_name" class="hidden"><?php echo htmlspecialchars($shippingLastName); ?></span>
+                    <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                        <div>
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Shipping address</h4>
+                            <address class="mt-2 text-sm not-italic text-black-800 leading-relaxed">
+                                <?php if ($shippingDisplayName !== ''): ?>
+                                    <span class="block font-medium" id="shipping_display_name"><?php echo htmlspecialchars($shippingDisplayName); ?></span>
+                                <?php else: ?>
+                                    <span class="block font-medium hidden" id="shipping_display_name"></span>
+                                <?php endif; ?>
+                                <span id="shipping_address1"><?php echo htmlspecialchars($orderremarks['shipping_address_line1'] ?? ''); ?></span>
+                                <?php if (!empty($orderremarks['shipping_address_line2'])): ?>
+                                    <br><span id="shipping_address2"><?php echo htmlspecialchars($orderremarks['shipping_address_line2']); ?></span>
+                                <?php else: ?>
+                                    <span id="shipping_address2" class="hidden"></span>
+                                <?php endif; ?>
+                                <br>
+                                <span id="shipping_city"><?php echo htmlspecialchars($orderremarks['shipping_city'] ?? ''); ?></span><?php if (!empty($orderremarks['shipping_state'])): ?>,
+                                    <span id="shipping_state"><?php echo htmlspecialchars($orderremarks['shipping_state']); ?></span><?php else: ?><span id="shipping_state" class="hidden"></span><?php endif; ?>
+                                <?php if (!empty($orderremarks['shipping_zipcode'])): ?>
+                                    - <span id="shipping_zipcode"><?php echo htmlspecialchars($orderremarks['shipping_zipcode']); ?></span>
+                                <?php else: ?>
+                                    <span id="shipping_zipcode" class="hidden"></span>
+                                <?php endif; ?>
+                                <?php if (!empty($orderremarks['shipping_country'])): ?>
+                                    <br><span id="shipping_country" data-code="<?php echo htmlspecialchars($orderremarks['shipping_country']); ?>"><?php echo htmlspecialchars($resolveCountryLabel($orderremarks['shipping_country'])); ?></span>
+                                <?php else: ?>
+                                    <span id="shipping_country" class="hidden"></span>
+                                <?php endif; ?>
+                                <?php if (!empty($orderremarks['shipping_mobile'])): ?>
+                                    <br><span id="shipping_mobile" class="mt-1 block"><?php echo htmlspecialchars($orderremarks['shipping_mobile']); ?></span>
+                                <?php else: ?>
+                                    <span id="shipping_mobile" class="hidden"></span>
+                                <?php endif; ?>
+                                <?php if (!empty($orderremarks['shipping_gstin'])): ?>
+                                    <br><span class="text-xs text-gray-500">GSTIN:</span> <span id="shipping_gstin"><?php echo htmlspecialchars($orderremarks['shipping_gstin']); ?></span>
+                                <?php else: ?>
+                                    <span id="shipping_gstin" class="hidden"></span>
+                                <?php endif; ?>
+                            </address>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Billing address</h4>
+                            <address class="mt-2 text-sm not-italic text-black-800 leading-relaxed">
+                                <?php if ($billingDisplayName !== ''): ?>
+                                    <span class="block font-medium" id="billing_display_name"><?php echo htmlspecialchars($billingDisplayName); ?></span>
+                                <?php else: ?>
+                                    <span class="block font-medium hidden" id="billing_display_name"></span>
+                                <?php endif; ?>
+                                <span id="billing_address1"><?php echo htmlspecialchars($orderremarks['address_line1'] ?? ''); ?></span>
+                                <?php if (!empty($orderremarks['address_line2'])): ?>
+                                    <br><span id="billing_address2"><?php echo htmlspecialchars($orderremarks['address_line2']); ?></span>
+                                <?php else: ?>
+                                    <span id="billing_address2" class="hidden"></span>
+                                <?php endif; ?>
+                                <br>
+                                <span id="billing_city"><?php echo htmlspecialchars($orderremarks['city'] ?? ''); ?></span><?php if (!empty($orderremarks['state'])): ?>,
+                                    <span id="billing_state"><?php echo htmlspecialchars($orderremarks['state']); ?></span><?php else: ?><span id="billing_state" class="hidden"></span><?php endif; ?>
+                                <?php if (!empty($orderremarks['zipcode'])): ?>
+                                    - <span id="billing_zipcode"><?php echo htmlspecialchars($orderremarks['zipcode']); ?></span>
+                                <?php else: ?>
+                                    <span id="billing_zipcode" class="hidden"></span>
+                                <?php endif; ?>
+                                <?php if (!empty($orderremarks['country'])): ?>
+                                    <br><span id="billing_country" data-code="<?php echo htmlspecialchars($orderremarks['country']); ?>"><?php echo htmlspecialchars($resolveCountryLabel($orderremarks['country'])); ?></span>
+                                <?php else: ?>
+                                    <span id="billing_country" class="hidden"></span>
+                                <?php endif; ?>
+                                <?php if (!empty($orderremarks['gstin'])): ?>
+                                    <br><span class="text-xs text-gray-500">GSTIN:</span> <span id="billing_gstin"><?php echo htmlspecialchars($orderremarks['gstin']); ?></span>
+                                <?php else: ?>
+                                    <span id="billing_gstin" class="hidden"></span>
+                                <?php endif; ?>
+                            </address>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="space-y-6">
@@ -480,59 +600,29 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                             </div>
                         </div>
 
-                        <div class="rounded-lg border border-gray-200 bg-white">
-                            <div class="divide-y divide-gray-100 px-4 py-1 text-sm">
-                                <?php
-                                $goodsIncl = (float)($invoiceDisplay['subtotal_goods_incl'] ?? 0);
-                                $pretaxPlusTax = (float)($invoiceDisplay['subtotal'] ?? 0) + (float)($invoiceDisplay['tax_amount'] ?? 0);
-                                if ($goodsIncl > 0 && abs($goodsIncl - $pretaxPlusTax) > 0.02):
-                                ?>
+                        <?php if ($invoiceSummaryRows !== []): ?>
+                            <?php renderPartial('views/posorders/partials/invoice_pdf_summary.php', [
+                                'summaryRows' => $invoiceSummaryRows,
+                                'currencySymbol' => '₹',
+                            ]); ?>
+                        <?php else: ?>
+                            <div class="rounded-lg border border-gray-200 bg-white">
+                                <div class="divide-y divide-gray-100 px-4 py-1 text-sm">
                                     <div class="flex items-center justify-between gap-4 py-2.5">
-                                        <span class="text-gray-600">Goods Total (incl. GST)</span>
-                                        <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceGoodsInclDisplay; ?></span>
+                                        <span class="text-gray-600">Subtotal</span>
+                                        <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceSubtotalDisplay; ?></span>
                                     </div>
-                                <?php endif; ?>
-                                <div class="flex items-center justify-between gap-4 py-2.5">
-                                    <span class="text-gray-600">Subtotal</span>
-                                    <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceSubtotalDisplay; ?></span>
-                                </div>
-                                <div class="flex items-center justify-between gap-4 py-2.5">
-                                    <span class="text-gray-600">Tax</span>
-                                    <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceTaxDisplay; ?></span>
-                                </div>
-                                <?php if ($invoiceDiscountLines !== []): ?>
-                                    <div class="py-2">
-                                        <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Discounts</p>
-                                        <div class="mt-1 space-y-2">
-                                            <?php foreach ($invoiceDiscountLines as $discountLine):
-                                                $discountLabel = trim((string)($discountLine['label'] ?? 'Discount'));
-                                                $discountAmount = number_format((float)($discountLine['amount'] ?? 0), 2);
-                                                $discountNote = trim((string)($discountLine['note'] ?? ''));
-                                            ?>
-                                                <div class="rounded-md bg-emerald-50/70 px-2.5 py-2">
-                                                    <div class="flex items-start justify-between gap-3">
-                                                        <span class="text-gray-700"><?php echo htmlspecialchars($discountLabel); ?></span>
-                                                        <span class="shrink-0 tabular-nums font-semibold text-emerald-700">- ₹ <?php echo $discountAmount; ?></span>
-                                                    </div>
-                                                    <?php if ($discountNote !== ''): ?>
-                                                        <p class="mt-1 text-[11px] leading-snug text-gray-500"><?php echo htmlspecialchars($discountNote); ?></p>
-                                                    <?php endif; ?>
-                                                </div>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    </div>
-                                <?php else: ?>
                                     <div class="flex items-center justify-between gap-4 py-2.5">
-                                        <span class="text-gray-600">Discount</span>
-                                        <span class="tabular-nums font-medium text-gray-500">₹ 0.00</span>
+                                        <span class="text-gray-600">Tax</span>
+                                        <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceTaxDisplay; ?></span>
                                     </div>
-                                <?php endif; ?>
+                                    <div class="flex items-center justify-between gap-4 border-t border-gray-200 bg-gray-50 px-4 py-3 -mx-4 mt-1">
+                                        <span class="text-sm font-bold text-gray-900">Net chargeable amount</span>
+                                        <span class="text-base font-bold tabular-nums text-gray-900">₹ <?php echo $invoiceGrandTotalDisplay; ?></span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="flex items-center justify-between gap-4 border-t border-gray-200 bg-gray-50 px-4 py-3">
-                                <span class="text-sm font-bold text-gray-900">Grand Total</span>
-                                <span class="text-base font-bold tabular-nums text-gray-900">₹ <?php echo $invoiceGrandTotalDisplay; ?></span>
-                            </div>
-                        </div>
+                        <?php endif; ?>
 
                         <?php if ($invoicePdfUrl !== ''): ?>
                             <a href="<?php echo htmlspecialchars($invoicePdfUrl, ENT_QUOTES, 'UTF-8'); ?>"
@@ -546,6 +636,41 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                                 Download / Print Invoice
                             </a>
                         <?php endif; ?>
+                        <?php if ($canCreateFinalInvoice): ?>
+                            <p id="order_create_invoice_error" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"></p>
+                            <button type="button"
+                                id="order_create_invoice_btn"
+                                onclick="createOrderFinalInvoice()"
+                                class="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-700">
+                                <?php echo in_array($invoiceStatus, ['proforma', 'draft'], true) ? 'Finalize Invoice' : 'Create Invoice'; ?>
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php elseif ($canCreateFinalInvoice): ?>
+                <div class="overflow-hidden rounded-xl border border-amber-200 bg-white shadow-sm" id="order-create-invoice-card">
+                    <div class="border-b border-amber-100 bg-gradient-to-r from-amber-50 to-white px-5 py-4">
+                        <div class="flex items-center gap-2.5">
+                            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                            </span>
+                            <div>
+                                <h3 class="text-sm font-bold text-gray-900">Tax Invoice</h3>
+                                <p class="text-xs text-gray-500">Payment received in full — invoice not generated yet</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-3 p-5">
+                        <p class="text-sm text-gray-600">Create the final tax invoice for this order now.</p>
+                        <p id="order_create_invoice_error" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"></p>
+                        <button type="button"
+                            id="order_create_invoice_btn"
+                            onclick="createOrderFinalInvoice()"
+                            class="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-700">
+                            Create Invoice
+                        </button>
                     </div>
                 </div>
             <?php endif; ?>
@@ -563,13 +688,25 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                             <p class="text-xs text-gray-500"><?php echo count($paymentRows); ?> payment<?php echo count($paymentRows) === 1 ? '' : 's'; ?> recorded</p>
                         </div>
                     </div>
-                    <?php if ($paymentIsFullyPaid): ?>
-                        <span class="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">Fully paid</span>
-                    <?php elseif ((float)($paymentSummary['paid_total'] ?? 0) > 0): ?>
-                        <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">Partial</span>
-                    <?php else: ?>
-                        <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">Unpaid</span>
-                    <?php endif; ?>
+                    <div class="flex items-center gap-2">
+                        <?php if ($paymentIsFullyPaid): ?>
+                            <span class="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">Fully paid</span>
+                        <?php elseif ((float)($paymentSummary['paid_total'] ?? 0) > 0): ?>
+                            <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">Partial</span>
+                        <?php else: ?>
+                            <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">Unpaid</span>
+                        <?php endif; ?>
+                        <?php if ($canAddOrderPayment): ?>
+                            <button type="button"
+                                onclick="openOrderAddPayment()"
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700">
+                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                                </svg>
+                                Add Payment
+                            </button>
+                        <?php endif; ?>
+                    </div>
                 </div>
 
                 <div class="space-y-4 p-5">
@@ -622,7 +759,17 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                                             </a>
                                             <p class="mt-0.5 text-xs text-gray-500"><?php echo htmlspecialchars($paymentDateLabel); ?></p>
                                         </div>
-                                        <p class="shrink-0 text-sm font-bold tabular-nums text-gray-900">₹ <?php echo $paymentAmount; ?></p>
+                                        <div class="flex shrink-0 flex-col items-end gap-1.5">
+                                            <p class="text-sm font-bold tabular-nums text-gray-900">₹ <?php echo $paymentAmount; ?></p>
+                                            <button type="button"
+                                                onclick="printOrderPaymentReceipt(<?php echo $paymentId; ?>)"
+                                                class="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100">
+                                                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                                </svg>
+                                                Print Receipt
+                                            </button>
+                                        </div>
                                     </div>
                                     <div class="mt-2 flex flex-wrap gap-1.5">
                                         <?php if ($paymentMode !== ''): ?>
@@ -645,12 +792,24 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                         </div>
                     <?php endif; ?>
 
-                    <a href="<?php echo htmlspecialchars($paymentsListUrl, ENT_QUOTES, 'UTF-8'); ?>"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100">
-                        View all payments
-                    </a>
+                    <div class="grid gap-2 <?php echo $canAddOrderPayment ? 'sm:grid-cols-2' : ''; ?>">
+                        <?php if ($canAddOrderPayment): ?>
+                            <button type="button"
+                                onclick="openOrderAddPayment()"
+                                class="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                                </svg>
+                                Add Payment
+                            </button>
+                        <?php endif; ?>
+                        <a href="<?php echo htmlspecialchars($paymentsListUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100">
+                            View all payments
+                        </a>
+                    </div>
                 </div>
             </div>
 
@@ -674,60 +833,20 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                     </div>
                 <?php endif; ?>
             </div>
-            <!-- address Section -->
-            <?php /* <div class="rounded-lg border bg-white p-5 shadow-sm relative">
-                <button type="button" onclick="openNameEmailPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit address">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
-                </button>
-                <h3 class="mb-3 text-sm font-bold">Customer</h3>
-                <p class="text-sm font-medium text-blue-600" id="display-customer-name"><?php echo $customerdetails['customer_name'] ?? 'N/A'; ?></p>
-                <p class="text-sm text-black-500">12 orders</p>
-
-                <div class="mt-6">
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Contact information</h4>
-                    <p class="mt-1 text-sm text-blue-600"><?php echo $customerdetails['customer_email'] ?? 'N/A'; ?></p>
-                    <p class="text-sm" id="display-customer-phone"><?php echo $customerdetails['customer_phone'] ?? 'N/A'; ?></p>
-                </div>
-
-                <div class="mt-6">
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Shipping address</h4>
-                    <address class="text-sm not-italic text-black-800 leading-relaxed">
-                        <span class="block font-medium"><?php echo $customerdetails['customer_name'] ?? 'N/A'; ?></span>
-                        <span id="address1"><?php echo $orderremarks['address_line1'] ?? ''; ?></span>
-                        <span id="address2"><?php echo $orderremarks['address_line2'] ?? ''; ?></span>
-                        <br>
-                        <span id="city"><?php echo $orderremarks['city'] ?? ''; ?></span> -
-                        <span id="zipcode"><?php echo $orderremarks['zipcode'] ?? ''; ?></span>,
-                        <span id="country"><?php echo $orderremarks['country'] ?? ''; ?></span>
-                        <br>
-                        <span id="customer_phone" class="mt-1 block"><?php echo $customerdetails['customer_phone'] ?? ''; ?></span>
-                    </address>
-                </div>
-
-                <div class="mt-6">
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Billing Address</h4>
-                    <address class="text-sm not-italic text-black-800 leading-relaxed">
-                        <span id="billing_address1"><?php echo $orderremarks['shipping_address_line1'] ?? ''; ?></span>
-                        <span id="billing_address2"><?php echo $orderremarks['shipping_address_line2'] ?? ''; ?></span>
-                        <br>
-                        <span id="billing_city_city"><?php echo $orderremarks['shipping_city'] ?? ''; ?></span> -
-                        <span id="billing_city_zip"><?php echo $orderremarks['shipping_zipcode'] ?? ''; ?></span>, 
-                        <span id="billing_country"><?php echo $orderremarks['shipping_country'] ?? ''; ?></span><br>
-                        <span id="billing_mobile" class="mt-1 block"><?php echo $orderremarks['shipping_mobile'] ?? ''; ?></span>
-                    </address>
-                </div>
-
-                <div class="mt-6 border-t pt-4">
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Conversion summary</h4>
-                    <p class="mt-1 text-sm">This is their 11th order</p>
-                    <button class="mt-2 text-sm text-blue-600 hover:underline">View map</button>
-                </div>
-            </div> */ ?>
         </div>
     </div>
 </div>
+<?php
+require_once __DIR__ . '/../../helpers/pos_payment_receipt.php';
+renderPartial('views/shared/partials/pos_payment_modal.php', [
+    'posPaymentModalTitle' => 'Record payment',
+    'posPaymentModalIntro' => 'Add one or more payment lines for the pending balance. Each row is saved under the same receipt.',
+    'posPaymentModalSubmitLabel' => 'Confirm payment',
+    'posPaymentModalSubmitId' => 'posOrderPaymentSubmitBtn',
+    'posPaymentModalShowCustomInvoice' => false,
+    'posPaymentModalShowApiDebug' => false,
+]);
+?>
 <div id="noteEditPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
     <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-6 relative">
         <button onclick="closeNotePopup()" class="absolute top-3 right-4 text-black-500 hover:text-black-800">
@@ -757,7 +876,7 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
     </div>
 </div>
 <div id="nameEmailPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-auto flex flex-col max-h-[90vh] relative">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl mx-auto flex flex-col max-h-[90vh] relative">
 
         <div class="p-6 pb-0">
             <button onclick="closeNameEmailPopup()" class="absolute top-3 right-4 text-gray-500 hover:text-gray-800">
@@ -765,50 +884,70 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
-            <h2 class="text-lg font-bold mb-4 text-gray-800">Edit Customer Name & Email</h2>
+            <h2 class="text-lg font-bold mb-4 text-gray-800">Edit Customer &amp; Addresses</h2>
         </div>
 
         <div class="overflow-y-auto p-6 pt-2 custom-scrollbar">
             <form id="nameEmailForm">
                 <input type="hidden" id="edit_order_number" name="order_number">
 
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                        <input type="text" id="edit_name" name="customer_name" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" required>
-                    </div>
+                <div class="space-y-5">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
                         <input type="text" id="edit_phone" name="customer_phone" oninput="this.value = this.value.replace(/[^0-9]/g, '')" maxlength="12" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" required>
                     </div>
 
-                    <hr class="border-gray-100">
-
-                    <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Shipping Address</label>
-                        <div class="space-y-2">
-                            <input type="text" id="edit_address_line1" name="address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                            <input type="text" id="edit_address_line2" name="address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                            <div class="grid grid-cols-2 gap-2">
-                                <input type="text" id="edit_city" name="city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                                <input type="text" id="edit_zipcode" name="zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+                        <div class="rounded-lg border border-gray-200 bg-gray-50/60 p-4">
+                            <label class="block text-sm font-bold text-gray-700 mb-3">Shipping Address</label>
+                            <div class="space-y-2">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <input type="text" id="edit_shipping_first_name" name="shipping_first_name" placeholder="First Name" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                    <input type="text" id="edit_shipping_last_name" name="shipping_last_name" placeholder="Last Name" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <input type="text" id="edit_shipping_address_line1" name="billing_address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_shipping_address_line2" name="billing_address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <input type="text" id="edit_shipping_city" name="billing_city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                    <input type="text" id="edit_shipping_zipcode" name="billing_zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <input type="text" id="edit_shipping_state" name="shipping_state" placeholder="State" class="hidden w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <select id="edit_shipping_state_select" class="hidden w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500"></select>
+                                <select id="edit_shipping_country" name="billing_country" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                    <?php
+                                    $selected_iso = strtoupper(trim((string)($orderremarks['shipping_country'] ?? 'IN')));
+                                    $country_list = $countries;
+                                    include __DIR__ . '/../pos_register/partials/iso_country_options.php';
+                                    ?>
+                                </select>
+                                <input type="text" id="edit_shipping_gstin" name="shipping_gstin" placeholder="GSTIN (optional)" maxlength="15" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white uppercase focus:ring-blue-500 focus:border-blue-500">
                             </div>
-                            <input type="text" id="edit_country" name="country" placeholder="Country" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
                         </div>
-                    </div>
 
-                    <hr class="border-gray-100">
-
-                    <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Billing Address</label>
-                        <div class="space-y-2">
-                            <input type="text" id="edit_billing_address_line1" name="billing_address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                            <input type="text" id="edit_billing_address_line2" name="billing_address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                            <div class="grid grid-cols-2 gap-2">
-                                <input type="text" id="edit_billing_city" name="billing_city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                                <input type="text" id="edit_billing_zipcode" name="billing_zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                        <div class="rounded-lg border border-gray-200 bg-gray-50/60 p-4">
+                            <label class="block text-sm font-bold text-gray-700 mb-3">Billing Address</label>
+                            <div class="space-y-2">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <input type="text" id="edit_billing_first_name" name="first_name" placeholder="First Name *" required class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                    <input type="text" id="edit_billing_last_name" name="last_name" placeholder="Last Name *" required class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <input type="text" id="edit_billing_address_line1" name="address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_billing_address_line2" name="address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <input type="text" id="edit_billing_city" name="city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                    <input type="text" id="edit_billing_zipcode" name="zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <input type="text" id="edit_billing_state" name="state" placeholder="State" class="hidden w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <select id="edit_billing_state_select" class="hidden w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500"></select>
+                                <select id="edit_billing_country" name="country" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                    <?php
+                                    $selected_iso = strtoupper(trim((string)($orderremarks['country'] ?? 'IN')));
+                                    $country_list = $countries;
+                                    include __DIR__ . '/../pos_register/partials/iso_country_options.php';
+                                    ?>
+                                </select>
+                                <input type="text" id="edit_billing_gstin" name="gstin" placeholder="GSTIN (optional)" maxlength="15" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white uppercase focus:ring-blue-500 focus:border-blue-500">
                             </div>
-                            <input type="text" id="edit_billing_country" name="billing_country" placeholder="Country" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
                         </div>
                     </div>
                 </div>
@@ -860,6 +999,87 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
     </div>
 </div>
 <?php endif; ?>
+
+<div id="statusPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50 p-4" onclick="closeStatusPopup(event)">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative" onclick="event.stopPropagation();">
+        <button type="button" onclick="closeStatusPopup()" class="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <div class="grid grid-cols-1 md:grid-cols-[38%_62%] gap-0">
+            <div class="p-6 border-b md:border-b-0 md:border-r border-gray-200">
+                <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md border h-36 w-full max-w-[220px] object-cover mb-4">
+                <p class="text-sm text-gray-600 space-y-1">
+                    <strong>Order Number:</strong> <span id="status_order_number"></span><br>
+                    <strong>Item Code:</strong> <span id="status_item_code"></span><br>
+                    <?php if ($showOrderVendorName): ?>
+                    <strong>Vendor Name:</strong> <span id="status_vendor_name"></span><br>
+                    <?php endif; ?>
+                    <span id="status_category"></span> / <span id="status_sub_category"></span><br>
+                    <span id="status_item" class="font-bold"></span>
+                </p>
+            </div>
+            <div class="p-6">
+                <h2 class="text-2xl font-bold mb-4">Update Order</h2>
+                <form id="statusForm" enctype="multipart/form-data" method="post" action="?page=posorders&action=update_status">
+                    <input type="hidden" name="status_order_id" id="status_order_id">
+                    <div class="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="orderStatus" class="block text-gray-700 font-bold mb-2">Order Status</label>
+                            <select id="orderStatus" name="orderStatus" class="border border-gray-300 rounded px-3 py-2 w-full">
+                                <option value="">-- Order Status --</option>
+                                <?php renderPartial('views/shared/partials/order_status_select_options.php', [
+                                    'order_status_list' => $order_status_list,
+                                ]); ?>
+                            </select>
+                            <input type="hidden" id="previousStatus" name="previousStatus" value="">
+                        </div>
+                        <div>
+                            <label for="statusESD" class="block text-gray-700 font-bold mb-2">Ship By Date</label>
+                            <input type="date" id="statusESD" name="esd" class="border border-gray-300 rounded px-2 py-1.5 w-full">
+                            <input type="hidden" id="previousESD" name="previous_esd" value="">
+                        </div>
+                    </div>
+                    <div class="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="agentId" class="block text-gray-700 font-bold mb-2">Assign agent</label>
+                            <select name="agent_id" id="agentId" class="border border-gray-300 rounded px-3 py-2 w-full">
+                                <option value="">Select User</option>
+                                <?php foreach ($staff_list as $id => $name): ?>
+                                    <option value="<?= (int)$id ?>"><?= htmlspecialchars((string)$name) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <input type="hidden" id="agentName" name="agent_name" value="">
+                            <input type="hidden" id="previousAgent" name="previous_agent" value="">
+                        </div>
+                        <div>
+                            <label for="orderPriority" class="block text-gray-700 font-bold mb-2">Priority</label>
+                            <select id="orderPriority" name="orderPriority" class="border border-gray-300 rounded px-3 py-2 w-full">
+                                <option value="">-Select-</option>
+                                <option value="critical">Critical</option>
+                                <option value="urgent">Urgent</option>
+                                <option value="high">High</option>
+                                <option value="medium">Medium</option>
+                                <option value="low">Low</option>
+                            </select>
+                            <input type="hidden" id="previousPriority" name="previous_priority" value="">
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label for="orderRemarks" class="block text-gray-700 font-bold mb-2">Notes</label>
+                        <textarea id="orderRemarks" name="orderRemarks" class="border border-gray-300 rounded px-3 py-2 w-full" rows="4"></textarea>
+                        <input type="hidden" id="previousRemarks" name="previous_remarks" value="">
+                    </div>
+                    <p class="text-xs text-gray-500 mb-3">Saving updates the local status and syncs to Exotic India when supported for this status.</p>
+                    <div id="orderStatusError" class="text-red-500 text-sm mt-1 hidden">Please select a status.</div>
+                    <div class="flex justify-end gap-3">
+                        <button type="button" onclick="closeStatusPopup()" class="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-600">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="<?php echo base_url(); ?>assets/js/pos_payment_split.js"></script>
 <script>
     function openInvoiceNumberEditPopup(invoiceId, currentNumber) {
         document.getElementById('edit_invoice_id').value = invoiceId;
@@ -992,21 +1212,145 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
         return (str + '').replace(/([^>\r\n]?)(\r\n|\n\r|\r|\n)/g, '$1<br>');
     }
 
+    const ORDER_STATE_FIELD_CONFIG = {
+        shipping: { countryId: 'edit_shipping_country', inputId: 'edit_shipping_state', selectId: 'edit_shipping_state_select' },
+        billing: { countryId: 'edit_billing_country', inputId: 'edit_billing_state', selectId: 'edit_billing_state_select' }
+    };
+
+    function isOrderStateDropdownCountry(code) {
+        const c = String(code || '').trim().toUpperCase().substring(0, 2);
+        return c === 'IN' || c === 'US';
+    }
+
+    function fetchOrderCountryStates(countryCode) {
+        const country = String(countryCode || 'IN').trim().toUpperCase().substring(0, 2) || 'IN';
+        window.ORDER_COUNTRY_STATES = window.ORDER_COUNTRY_STATES || {};
+        if (Array.isArray(window.ORDER_COUNTRY_STATES[country]) && window.ORDER_COUNTRY_STATES[country].length) {
+            return Promise.resolve(window.ORDER_COUNTRY_STATES[country]);
+        }
+
+        return fetch('index.php?page=pos_register&action=states-by-country&country=' + encodeURIComponent(country), {
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json' }
+            })
+            .then(res => res.json())
+            .then(data => {
+                window.ORDER_COUNTRY_STATES[country] = Array.isArray(data) ? data : [];
+                return window.ORDER_COUNTRY_STATES[country];
+            })
+            .catch(() => {
+                window.ORDER_COUNTRY_STATES[country] = [];
+                return [];
+            });
+    }
+
+    function populateOrderStateSelect(selectEl, states, selectedValue) {
+        if (!selectEl) return;
+        const selected = String(selectedValue || '').trim();
+        const selectedLower = selected.toLowerCase();
+        let html = '<option value="">Select state</option>';
+        (states || []).forEach(state => {
+            const name = String((state && state.name) || '').trim();
+            if (!name) return;
+            const esc = name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            html += '<option value="' + esc + '">' + esc + '</option>';
+        });
+        selectEl.innerHTML = html;
+        if (selected) {
+            let matched = false;
+            Array.from(selectEl.options).forEach(opt => {
+                if (opt.value.toLowerCase() === selectedLower) {
+                    opt.selected = true;
+                    matched = true;
+                }
+            });
+            if (!matched) {
+                const opt = document.createElement('option');
+                opt.value = selected;
+                opt.textContent = selected;
+                opt.selected = true;
+                selectEl.appendChild(opt);
+            }
+        }
+    }
+
+    function resetOrderStateSelect(selectEl, message) {
+        if (!selectEl) return;
+        const label = message || 'Select state';
+        const esc = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        selectEl.innerHTML = '<option value="">' + esc + '</option>';
+        selectEl.value = '';
+    }
+
+    function getOrderStateValue(kind) {
+        const cfg = ORDER_STATE_FIELD_CONFIG[kind];
+        if (!cfg) return '';
+        const selectEl = document.getElementById(cfg.selectId);
+        const inputEl = document.getElementById(cfg.inputId);
+        if (selectEl && !selectEl.classList.contains('hidden')) {
+            return String(selectEl.value || '').trim();
+        }
+        return inputEl ? String(inputEl.value || '').trim() : '';
+    }
+
+    function syncOrderStateField(kind, preferredValue) {
+        const cfg = ORDER_STATE_FIELD_CONFIG[kind];
+        if (!cfg) return Promise.resolve();
+        const countryEl = document.getElementById(cfg.countryId);
+        const inputEl = document.getElementById(cfg.inputId);
+        const selectEl = document.getElementById(cfg.selectId);
+        if (!countryEl || !inputEl || !selectEl) return Promise.resolve();
+
+        const country = String(countryEl.value || 'IN').trim().toUpperCase().substring(0, 2) || 'IN';
+        const useDropdown = isOrderStateDropdownCountry(country);
+        const value = preferredValue !== undefined ? String(preferredValue || '').trim() : getOrderStateValue(kind);
+
+        if (!useDropdown) {
+            inputEl.value = value;
+            selectEl.classList.add('hidden');
+            inputEl.classList.remove('hidden');
+            return Promise.resolve();
+        }
+
+        inputEl.value = '';
+        resetOrderStateSelect(selectEl, 'Loading states...');
+        inputEl.classList.add('hidden');
+        selectEl.classList.remove('hidden');
+
+        return fetchOrderCountryStates(country).then(states => {
+            populateOrderStateSelect(selectEl, states, value);
+        });
+    }
+
     function openNameEmailPopup(orderNumber) {
         document.getElementById('edit_order_number').value = orderNumber;
-        document.getElementById('edit_name').value = document.getElementById('display-customer-name')?.textContent.trim() || '';
         document.getElementById('edit_phone').value = document.getElementById('display-customer-phone')?.textContent.trim() || '';
-        document.getElementById('edit_address_line1').value = document.getElementById('address1')?.textContent.trim() || '';
-        document.getElementById('edit_address_line2').value = document.getElementById('address2')?.textContent.trim() || '';
-        document.getElementById('edit_city').value = document.getElementById('city')?.textContent.trim() || '';
-        document.getElementById('edit_zipcode').value = document.getElementById('zipcode')?.textContent.trim() || '';
-        document.getElementById('edit_country').value = document.getElementById('country')?.textContent.trim() || '';
+        document.getElementById('edit_shipping_first_name').value = document.getElementById('shipping_first_name')?.textContent.trim() || '';
+        document.getElementById('edit_shipping_last_name').value = document.getElementById('shipping_last_name')?.textContent.trim() || '';
+        document.getElementById('edit_billing_first_name').value = document.getElementById('billing_first_name')?.textContent.trim() || '';
+        document.getElementById('edit_billing_last_name').value = document.getElementById('billing_last_name')?.textContent.trim() || '';
+        document.getElementById('edit_shipping_address_line1').value = document.getElementById('shipping_address1')?.textContent.trim() || '';
+        document.getElementById('edit_shipping_address_line2').value = document.getElementById('shipping_address2')?.textContent.trim() || '';
+        document.getElementById('edit_shipping_city').value = document.getElementById('shipping_city')?.textContent.trim() || '';
+        document.getElementById('edit_shipping_zipcode').value = document.getElementById('shipping_zipcode')?.textContent.trim() || '';
+        document.getElementById('edit_shipping_country').value = document.getElementById('shipping_country')?.dataset.code || 'IN';
+        document.getElementById('edit_shipping_gstin').value = document.getElementById('shipping_gstin')?.textContent.trim() || '';
         document.getElementById('edit_billing_address_line1').value = document.getElementById('billing_address1')?.textContent.trim() || '';
         document.getElementById('edit_billing_address_line2').value = document.getElementById('billing_address2')?.textContent.trim() || '';
-        document.getElementById('edit_billing_city').value = document.getElementById('billing_city_city')?.textContent.trim() || '';
-        document.getElementById('edit_billing_zipcode').value = document.getElementById('billing_city_zip')?.textContent.trim() || '';
-        document.getElementById('edit_billing_country').value = document.getElementById('billing_country')?.textContent.trim() || '';
-        document.getElementById('nameEmailPopup').classList.remove('hidden');
+        document.getElementById('edit_billing_city').value = document.getElementById('billing_city')?.textContent.trim() || '';
+        document.getElementById('edit_billing_zipcode').value = document.getElementById('billing_zipcode')?.textContent.trim() || '';
+        document.getElementById('edit_billing_country').value = document.getElementById('billing_country')?.dataset.code || 'IN';
+        document.getElementById('edit_billing_gstin').value = document.getElementById('billing_gstin')?.textContent.trim() || '';
+
+        const shippingState = document.getElementById('shipping_state')?.textContent.trim() || '';
+        const billingState = document.getElementById('billing_state')?.textContent.trim() || '';
+
+        Promise.all([
+            syncOrderStateField('shipping', shippingState),
+            syncOrderStateField('billing', billingState)
+        ]).then(() => {
+            document.getElementById('nameEmailPopup').classList.remove('hidden');
+        });
     }
 
     function closeNameEmailPopup() {
@@ -1017,21 +1361,29 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
         e.preventDefault();
 
         const orderNumber = document.getElementById('edit_order_number').value;
-        const name = document.getElementById('edit_name').value.trim();
+        const first_name = document.getElementById('edit_billing_first_name').value.trim();
+        const last_name = document.getElementById('edit_billing_last_name').value.trim();
+        const shipping_first_name = document.getElementById('edit_shipping_first_name').value.trim();
+        const shipping_last_name = document.getElementById('edit_shipping_last_name').value.trim();
+        const name = [first_name, last_name].filter(Boolean).join(' ');
         const phone = document.getElementById('edit_phone').value.trim();
-        const address_line1 = document.getElementById('edit_address_line1').value.trim();
-        const address_line2 = document.getElementById('edit_address_line2').value.trim();
-        const city = document.getElementById('edit_city').value.trim();
-        const zipcode = document.getElementById('edit_zipcode').value.trim();
-        const country = document.getElementById('edit_country').value.trim();
-        const billing_address_line1 = document.getElementById('edit_billing_address_line1').value.trim();
-        const billing_address_line2 = document.getElementById('edit_billing_address_line2').value.trim();
-        const billing_city = document.getElementById('edit_billing_city').value.trim();
-        const billing_zipcode = document.getElementById('edit_billing_zipcode').value.trim();
-        const billing_country = document.getElementById('edit_billing_country').value.trim();
+        const address_line1 = document.getElementById('edit_billing_address_line1').value.trim();
+        const address_line2 = document.getElementById('edit_billing_address_line2').value.trim();
+        const city = document.getElementById('edit_billing_city').value.trim();
+        const state = getOrderStateValue('billing');
+        const zipcode = document.getElementById('edit_billing_zipcode').value.trim();
+        const country = document.getElementById('edit_billing_country').value.trim();
+        const billing_address_line1 = document.getElementById('edit_shipping_address_line1').value.trim();
+        const billing_address_line2 = document.getElementById('edit_shipping_address_line2').value.trim();
+        const billing_city = document.getElementById('edit_shipping_city').value.trim();
+        const shipping_state = getOrderStateValue('shipping');
+        const billing_zipcode = document.getElementById('edit_shipping_zipcode').value.trim();
+        const billing_country = document.getElementById('edit_shipping_country').value.trim();
+        const gstin = document.getElementById('edit_billing_gstin').value.trim().toUpperCase();
+        const shipping_gstin = document.getElementById('edit_shipping_gstin').value.trim().toUpperCase();
 
-        if (!name || !phone) {
-            alert("All fields (Name, Email, Phone) are required.");
+        if (!first_name || !last_name || !phone) {
+            alert("Billing first name, last name and phone are required.");
             return;
         }
 
@@ -1040,28 +1392,13 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: `order_number=${encodeURIComponent(orderNumber)}&customer_name=${encodeURIComponent(name)}&customer_phone=${encodeURIComponent(phone)}&address_line1=${encodeURIComponent(address_line1)}&address_line2=${encodeURIComponent(address_line2)}&city=${encodeURIComponent(city)}&zipcode=${encodeURIComponent(zipcode)}&country=${encodeURIComponent(country)}&billing_address_line1=${encodeURIComponent(billing_address_line1)}&billing_address_line2=${encodeURIComponent(billing_address_line2)}&billing_city=${encodeURIComponent(billing_city)}&billing_zipcode=${encodeURIComponent(billing_zipcode)}&billing_country=${encodeURIComponent(billing_country)}`
+                body: `order_number=${encodeURIComponent(orderNumber)}&customer_name=${encodeURIComponent(name)}&customer_phone=${encodeURIComponent(phone)}&first_name=${encodeURIComponent(first_name)}&last_name=${encodeURIComponent(last_name)}&shipping_first_name=${encodeURIComponent(shipping_first_name)}&shipping_last_name=${encodeURIComponent(shipping_last_name)}&address_line1=${encodeURIComponent(address_line1)}&address_line2=${encodeURIComponent(address_line2)}&city=${encodeURIComponent(city)}&state=${encodeURIComponent(state)}&zipcode=${encodeURIComponent(zipcode)}&country=${encodeURIComponent(country)}&gstin=${encodeURIComponent(gstin)}&billing_address_line1=${encodeURIComponent(billing_address_line1)}&billing_address_line2=${encodeURIComponent(billing_address_line2)}&billing_city=${encodeURIComponent(billing_city)}&shipping_state=${encodeURIComponent(shipping_state)}&billing_zipcode=${encodeURIComponent(billing_zipcode)}&billing_country=${encodeURIComponent(billing_country)}&shipping_gstin=${encodeURIComponent(shipping_gstin)}`
             })
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
-                    document.getElementById('display-customer-name').textContent = name;
-                    document.getElementById('display-customer-phone').textContent = phone;
-                    document.getElementById('address1').textContent = address_line1;
-                    document.getElementById('address2').textContent = address_line2;
-                    document.getElementById('city').textContent = city;
-                    document.getElementById('zipcode').textContent = zipcode;
-                    document.getElementById('country').textContent = country;
-                    document.getElementById('billing_address1').textContent = billing_address_line1;
-                    document.getElementById('billing_address2').textContent = billing_address_line2;
-                    document.getElementById('billing_city_city').textContent = billing_city;
-                    document.getElementById('billing_city_zip').textContent = billing_zipcode;
-                    document.getElementById('billing_country').textContent = billing_country;
-
                     alert("Customer information updated successfully!");
                     closeNameEmailPopup();
-
-                    // Optional – safer for consistency with other parts of the page
                     window.location.reload();
                 } else {
                     alert("Failed to save: " + (data.message || "Unknown error"));
@@ -1071,6 +1408,95 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
                 alert("Connection problem. Please try again.");
             });
     });
+
+    function openStatusPopup(orderId) {
+        document.getElementById('status_order_id').value = orderId;
+        document.getElementById('statusPopup').classList.remove('hidden');
+        document.getElementById('orderStatusError').textContent = '';
+        document.getElementById('orderStatusError').classList.add('hidden');
+        document.getElementById('orderRemarks').value = '';
+        document.getElementById('orderPriority').value = '';
+
+        const orderEl = document.querySelector('#order-id-' + orderId);
+        if (!orderEl) {
+            alert('Order data not found.');
+            return;
+        }
+        const orderData = JSON.parse(orderEl.getAttribute('data-order'));
+        document.getElementById('orderRemarks').value = orderData.remarks || '';
+        document.getElementById('orderStatus').value = orderData.status || '';
+        document.getElementById('status_order_number').textContent = orderData.order_number || 'N/A';
+        document.getElementById('status_item_code').textContent = orderData.item_code || 'N/A';
+        <?php if ($showOrderVendorName): ?>
+        document.getElementById('status_vendor_name').textContent = orderData.vendor_name || orderData.vendor || 'N/A';
+        <?php endif; ?>
+        document.getElementById('status_category').textContent = orderData.groupname || 'N/A';
+        document.getElementById('status_sub_category').textContent = orderData.subcategories || 'N/A';
+        document.getElementById('status_item').textContent = orderData.title || 'N/A';
+        document.getElementById('orderPriority').value = orderData.priority || '';
+        document.getElementById('previousStatus').value = orderData.status || '';
+        document.getElementById('previousAgent').value = orderData.agent_id || '';
+        document.getElementById('agentId').value = orderData.agent_id || '';
+        document.getElementById('previousPriority').value = orderData.priority || '';
+        document.getElementById('previousRemarks').value = orderData.remarks || '';
+        document.getElementById('previousESD').value = orderData.esd || '';
+
+        const statusESD = document.getElementById('statusESD');
+        const raw = orderData.esd || '';
+        if (statusESD) {
+            const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            statusESD.value = m ? raw : (raw || '');
+        }
+
+        const imgElem = document.querySelector('#statusPopup img');
+        if (imgElem) {
+            imgElem.src = orderData.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=Item';
+        }
+    }
+
+    function closeStatusPopup(e) {
+        if (e && e.target && e.currentTarget !== e.target) {
+            return;
+        }
+        document.getElementById('statusPopup').classList.add('hidden');
+    }
+
+    document.getElementById('agentId')?.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        document.getElementById('agentName').value = selectedOption.text;
+    });
+
+    document.getElementById('statusForm')?.addEventListener('submit', function(e) {
+        const statusSelect = document.getElementById('orderStatus');
+        const errorDiv = document.getElementById('orderStatusError');
+        if (statusSelect.value === '') {
+            e.preventDefault();
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+        errorDiv.classList.add('hidden');
+        e.preventDefault();
+        const formData = new FormData(document.getElementById('statusForm'));
+        fetch('index.php?page=posorders&action=update_status', {
+            method: 'POST',
+            body: formData
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Order status updated successfully.');
+                    closeStatusPopup();
+                    window.location.reload();
+                } else {
+                    errorDiv.textContent = data.message || 'Error updating order status.';
+                    errorDiv.classList.remove('hidden');
+                }
+            })
+            .catch(function() {
+                alert('An error occurred while updating order status.');
+            });
+    });
+
     document.addEventListener('DOMContentLoaded', function() {
         const accordionTriggers = document.querySelectorAll('.accordion-trigger');
         accordionTriggers.forEach(trigger => {
@@ -1097,5 +1523,235 @@ $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurle
             trigger.__accordionClick__ = handler;
             trigger.addEventListener('click', handler);
         });
+
+        document.getElementById('edit_shipping_country')?.addEventListener('change', function() {
+            syncOrderStateField('shipping', '');
+        });
+        document.getElementById('edit_billing_country')?.addEventListener('change', function() {
+            syncOrderStateField('billing', '');
+        });
+    });
+
+    function openImagePopup(imageUrl) {
+        const popup = document.getElementById('imagePopup');
+        const img = document.getElementById('popupImage');
+        if (!popup || !img || !imageUrl) {
+            return;
+        }
+        img.src = imageUrl;
+        popup.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeImagePopup() {
+        const popup = document.getElementById('imagePopup');
+        const img = document.getElementById('popupImage');
+        if (popup) {
+            popup.classList.add('hidden');
+        }
+        if (img) {
+            img.src = '';
+        }
+        document.body.style.overflow = '';
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeImagePopup();
+        }
+    });
+
+    document.addEventListener('click', function(e) {
+        const thumb = e.target.closest('.pos-order-detail-enlarge');
+        if (!thumb) {
+            return;
+        }
+        e.stopPropagation();
+        const imageUrl = thumb.getAttribute('data-full-image') || thumb.getAttribute('src') || '';
+        if (imageUrl) {
+            openImagePopup(imageUrl);
+        }
+    });
+
+    let orderPaymentState = {
+        pending: <?php echo json_encode(round($paymentPendingAmount, 2)); ?>,
+        orderTotal: <?php echo json_encode(round((float)($paymentSummary['order_total'] ?? 0), 2)); ?>,
+        orderNumber: <?php echo json_encode($displayOrderNumber); ?>,
+    };
+
+    function printOrderPaymentReceipt(paymentId) {
+        if (!paymentId) {
+            return;
+        }
+        window.open('?page=payments&action=receipt&id=' + encodeURIComponent(String(paymentId)), '_blank');
+    }
+
+    function openOrderAddPayment() {
+        fetch('?page=payments&action=get_payment_summary&order_number=' + encodeURIComponent(orderPaymentState.orderNumber))
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    orderPaymentState.pending = parseFloat(data.pending) || 0;
+                    orderPaymentState.orderTotal = parseFloat(data.order_total) || orderPaymentState.orderTotal;
+                }
+                if (orderPaymentState.pending <= 0.02) {
+                    alert('This order has no pending balance to collect.');
+                    return;
+                }
+                if (window.PosPaymentSplit) {
+                    window.PosPaymentSplit.openModal(orderPaymentState.pending);
+                }
+            })
+            .catch(function() {
+                if (window.PosPaymentSplit) {
+                    window.PosPaymentSplit.openModal(orderPaymentState.pending);
+                }
+            });
+    }
+
+    function saveOrderPaymentFromModal(payInfo) {
+        var submitBtn = document.getElementById('posOrderPaymentSubmitBtn');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+        }
+
+        var formData = new FormData();
+        formData.append('order_id', orderPaymentState.orderNumber);
+        formData.append('payment_stage', payInfo.payment_stage || 'final');
+        formData.append('note', payInfo.payment_note || '');
+        formData.append('payment_date', payInfo.payment_date || '');
+        (payInfo.payment_splits || []).forEach(function(split, idx) {
+            formData.append('payment_splits[' + idx + '][mode]', split.mode);
+            formData.append('payment_splits[' + idx + '][amount]', String(split.amount));
+            formData.append('payment_splits[' + idx + '][transaction_id]', split.transaction_id || '');
+        });
+
+        fetch('index.php?page=payments&action=save_payment', {
+            method: 'POST',
+            body: formData,
+        })
+            .then(function(res) { return res.text(); })
+            .then(function(text) {
+                var data;
+                try {
+                    data = JSON.parse(text);
+                } catch (parseErr) {
+                    throw new Error((text || '').trim().slice(0, 200) || 'Invalid server response');
+                }
+                if (!data.success) {
+                    if (window.PosPaymentSplit) {
+                        window.PosPaymentSplit.showSplitValidationError(data.message || 'Save failed');
+                    }
+                    return;
+                }
+
+                if (window.PosPaymentSplit) {
+                    window.PosPaymentSplit.closeModal();
+                }
+
+                if (data.payment_id) {
+                    printOrderPaymentReceipt(data.payment_id);
+                }
+
+                if (data.invoice_id) {
+                    window.open('?page=posinvoice&action=generate_pdf&invoice_id=' + encodeURIComponent(String(data.invoice_id)), '_blank');
+                } else if (data.invoice_message) {
+                    alert(data.invoice_message);
+                }
+
+                setTimeout(function() {
+                    window.location.reload();
+                }, 400);
+            })
+            .catch(function(err) {
+                if (window.PosPaymentSplit) {
+                    window.PosPaymentSplit.showSplitValidationError(err.message || 'Could not save payment. Please try again.');
+                }
+            })
+            .finally(function() {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                }
+            });
+    }
+
+    function createOrderFinalInvoice() {
+        var btn = document.getElementById('order_create_invoice_btn');
+        var errEl = document.getElementById('order_create_invoice_error');
+        if (errEl) {
+            errEl.classList.add('hidden');
+            errEl.textContent = '';
+        }
+        if (btn) {
+            btn.disabled = true;
+        }
+
+        var formData = new FormData();
+        formData.append('order_number', orderPaymentState.orderNumber);
+
+        fetch('index.php?page=posorders&action=create_invoice_from_order', {
+            method: 'POST',
+            body: formData,
+        })
+            .then(function(res) { return res.text(); })
+            .then(function(text) {
+                var data;
+                try {
+                    data = JSON.parse(text);
+                } catch (parseErr) {
+                    throw new Error((text || '').trim().slice(0, 200) || 'Invalid server response');
+                }
+                if (!data.success) {
+                    if (errEl) {
+                        errEl.textContent = data.message || 'Invoice could not be created.';
+                        errEl.classList.remove('hidden');
+                    } else {
+                        alert(data.message || 'Invoice could not be created.');
+                    }
+                    return;
+                }
+
+                if (data.invoice_pdf_url) {
+                    window.open(data.invoice_pdf_url, '_blank');
+                } else if (data.invoice_id) {
+                    window.open('?page=posinvoice&action=generate_pdf&invoice_id=' + encodeURIComponent(String(data.invoice_id)), '_blank');
+                }
+
+                setTimeout(function() {
+                    window.location.reload();
+                }, 400);
+            })
+            .catch(function(err) {
+                if (errEl) {
+                    errEl.textContent = err.message || 'Could not create invoice. Please try again.';
+                    errEl.classList.remove('hidden');
+                } else {
+                    alert(err.message || 'Could not create invoice. Please try again.');
+                }
+            })
+            .finally(function() {
+                if (btn) {
+                    btn.disabled = false;
+                }
+            });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!window.PosPaymentSplit) {
+            return;
+        }
+        window.PosPaymentSplit.init({
+            modeOptions: <?php echo json_encode(pos_payment_mode_options_for_view(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+            submitButtonId: 'posOrderPaymentSubmitBtn',
+            getTargetTotal: function() { return orderPaymentState.pending; },
+            getDisplayOrderTotal: function() { return orderPaymentState.orderTotal; },
+            onSubmit: saveOrderPaymentFromModal,
+        });
     });
 </script>
+<div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[100]" onclick="closeImagePopup()">
+    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
+        <button type="button" onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm" aria-label="Close">✕</button>
+        <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
+    </div>
+</div>

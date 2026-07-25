@@ -563,6 +563,68 @@ class User
     }
 
     /**
+     * Active, non-deleted users for autocomplete (Select2: id + text).
+     *
+     * @return array<int, array{id:int, text:string}>
+     */
+    public function searchActiveUsers(string $query, int $limit = 20): array
+    {
+        $query = trim($query);
+        if (strlen($query) < 2) {
+            return [];
+        }
+
+        $limit = max(1, min(50, $limit));
+        $like = '%' . $query . '%';
+        $sql = "SELECT id, name FROM vp_users
+                WHERE is_active = 1 AND is_deleted = 0
+                  AND (name LIKE ? OR email LIKE ? OR phone LIKE ?)
+                ORDER BY name ASC
+                LIMIT ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('sssi', $like, $like, $like, $limit);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        $items = [];
+        foreach ($rows as $row) {
+            $id = (int) ($row['id'] ?? 0);
+            $name = trim((string) ($row['name'] ?? ''));
+            if ($id <= 0 || $name === '') {
+                continue;
+            }
+            $items[] = ['id' => $id, 'text' => $name];
+        }
+
+        return $items;
+    }
+
+    public function isActiveUser(int $userId): bool
+    {
+        if ($userId <= 0) {
+            return false;
+        }
+
+        $sql = 'SELECT id FROM vp_users WHERE id = ? AND is_active = 1 AND is_deleted = 0 LIMIT 1';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('i', $userId);
+        $stmt->execute();
+        $stmt->store_result();
+        $ok = $stmt->num_rows > 0;
+        $stmt->close();
+
+        return $ok;
+    }
+
+    /**
      * Active users assigned to a specific warehouse (vp_users.warehouse_id).
      *
      * @return array<int, string> Map of user id => display name

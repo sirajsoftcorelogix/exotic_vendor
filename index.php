@@ -140,8 +140,29 @@ switch ($page) {
             case 'checkName':
                 $controller->checkName();
                 break;
+            case 'searchBrokers':
+                $controller->searchBrokers();
+                break;
             case 'syncFromAdmin':
                 $controller->syncFromAdmin();
+                break;
+            case 'getBankDetails':
+                $controller->getBankDetails();
+                break;
+            case 'bankDetails':
+                $controller->addBankDetails();
+                break;
+            case 'getVendorMappings':
+                $controller->getVendorMappings();
+                break;
+            case 'searchMappingVendors':
+                $controller->searchMappingVendors();
+                break;
+            case 'addVendorMapping':
+                $controller->addVendorMapping();
+                break;
+            case 'removeVendorMapping':
+                $controller->removeVendorMapping();
                 break;
             default:
                 $controller->index();
@@ -261,6 +282,12 @@ switch ($page) {
             case 'import_orders':
                 $controller->importOrders();
                 break;
+            case 'refresh_order_preview':
+                $controller->refreshOrderPreviewAjax();
+                break;
+            case 'refresh_order_apply':
+                $controller->refreshOrderApplyAjax();
+                break;
             case 'update_status':
                 $controller->updateStatus();
                 break;
@@ -300,6 +327,12 @@ switch ($page) {
                 break;
             case 'get_orders_customer_id':
                 $controller->getOrdersCustomerId();
+                break;
+            case 'get_orders_for_bulk_dispatch':
+                $controller->getOrdersForBulkDispatch();
+                break;
+            case 'get_bulk_dispatch_import_payload':
+                $controller->getBulkDispatchImportPayload();
                 break;
             case 'saveSearch':
                 $controller->saveSearch();
@@ -341,6 +374,12 @@ switch ($page) {
                 break;
             case 'search_filter_publishers':
                 $controller->searchFilterPublishers();
+                break;
+            case 'search_filter_materials':
+                $controller->searchFilterMaterials();
+                break;
+            case 'search_filter_languages':
+                $controller->searchFilterLanguages();
                 break;
             default:
                 $controller->index();
@@ -508,6 +547,31 @@ switch ($page) {
                 break;
             case 'return_delete':
                 $controller->returnDelete();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
+
+    case 'sales_returns':
+        require_once 'controllers/SalesReturnController.php';
+        $controller = new SalesReturnController();
+        switch ($action) {
+            case 'index':
+                $controller->index();
+                break;
+            case 'create':
+                $controller->create();
+                break;
+            case 'save':
+                $controller->save();
+                break;
+            case 'view':
+                $controller->view();
+                break;
+            case 'cancel':
+                $controller->cancel();
                 break;
             default:
                 $controller->index();
@@ -807,6 +871,11 @@ switch ($page) {
                 require_once 'controllers/ProductsController.php';
                 $controller = new ProductsController($conn);
                 $controller->updateStockMovementLocation();
+                break;
+            case 'update_product_location':
+                require_once 'controllers/ProductsController.php';
+                $controller = new ProductsController($conn);
+                $controller->updateProductLocation();
                 break;
             case 'update_stock_limits':
                 require_once 'controllers/ProductsController.php';
@@ -1390,6 +1459,9 @@ switch ($page) {
             case 'stock-report-export-finish':
                 $controller->stockReportExportFinish();
                 break;
+            case 'stock-report-export-cancel':
+                $controller->stockReportExportCancel();
+                break;
 
             case 'add-customer':
                 $controller->add_customer();
@@ -1591,6 +1663,9 @@ switch ($page) {
             case 'view':
                 $controller->view();
                 break;
+            case 'export_orders':
+                $controller->export_orders();
+                break;
             case 'delete_customer':
                 $controller->delete_customer();
                 break;
@@ -1656,6 +1731,8 @@ switch ($page) {
                 $controller->index();
                 break;
         }
+        break;
+
     case 'posinvoice':
 
         require_once 'controllers/PosInvoiceController.php';
@@ -1770,6 +1847,15 @@ switch ($page) {
                 break;
             case 'get_order_details_html':
                 $controller->getOrderDetailsHTML();
+                break;
+            case 'create_invoice_from_order':
+                $controller->createInvoiceFromOrderAjax();
+                break;
+            case 'print_proforma':
+                $controller->printProforma();
+                break;
+            case 'print_order':
+                $controller->printOrder();
                 break;
             case 'get_order_details_for_dispatch':
                 $controller->getOrderDetailsForDispatch();

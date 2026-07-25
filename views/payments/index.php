@@ -60,7 +60,9 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                     <select id="payment_mode"
                         class="w-full border rounded px-2 py-2">
                         <option value="">All</option>
-                        <option value="cod">Cash</option>
+                        <option value="cash">Cash</option>
+                        <option value="cod">Cash on Delivery (COD)</option>
+                        <option value="upi">UPI</option>
                         <option value="offline">Offline</option>
                         <option value="bank_transfer">Bank</option>
                         <option value="pos_machine">POS</option>
@@ -188,8 +190,10 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                     <label class="text-xs text-gray-500">Payment Mode</label>
                     <select id="payment_type"
                         class="w-full mt-1 border rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500">
+                        <option value="cash">Cash</option>
+                        <option value="cod">Cash on Delivery (COD)</option>
+                        <option value="upi">UPI</option>
                         <option value="offline">Offline</option>
-                        <option value="cod">Cash</option>
                         <option value="bank_transfer">Bank Transfer</option>
                         <option value="pos_machine">POS Machine</option>
                         <option value="razorpay">Razorpay</option>
@@ -272,7 +276,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
 
     <div class="absolute inset-0 bg-black/40"></div>
 
-    <div class="relative mx-auto mt-40 w-[90%] max-w-md bg-white rounded-2xl shadow-xl">
+    <div class="relative z-10 mx-auto mt-40 w-[90%] max-w-md bg-white rounded-2xl shadow-xl">
 
         <div class="p-6 text-center">
             <h3 class="text-lg font-semibold mb-2">Confirm Delete</h3>
@@ -325,6 +329,23 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         return n.toFixed(2);
     }
 
+    function formatPaymentModeLabel(mode) {
+        const key = String(mode ?? '').trim().toLowerCase();
+        const labels = {
+            cash: 'Cash',
+            cod: 'Cash on Delivery (COD)',
+            upi: 'UPI',
+            offline: 'Offline',
+            bank_transfer: 'Bank transfer',
+            pos_machine: 'POS machine',
+            razorpay: 'Razorpay',
+            specialpay: 'SpecialPay',
+            cheque: 'Cheque',
+            demand_draft: 'Demand draft'
+        };
+        return labels[key] || (key ? key.replace(/_/g, ' ') : '—');
+    }
+
     function escapeJsString(value) {
         return String(value ?? '')
             .replace(/\\/g, '\\\\')
@@ -340,8 +361,26 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
             .replace(/"/g, '&quot;');
     }
 
-    function buildOrderNumberLinkHtml(p) {
-        const label = String(p.order_number ?? '').trim();
+    function normalizePaymentOrderNumber(value) {
+        if (value == null) {
+            return '';
+        }
+        if (typeof value === 'string') {
+            return value.trim();
+        }
+        if (typeof value === 'number' && !Number.isNaN(value)) {
+            return String(value);
+        }
+        if (typeof value === 'object') {
+            if (value.order_number != null) {
+                return normalizePaymentOrderNumber(value.order_number);
+            }
+        }
+        return '';
+    }
+
+    function buildOrderNumberLinkHtml(orderNumber) {
+        const label = normalizePaymentOrderNumber(orderNumber);
         if (label === '') {
             return '';
         }
@@ -351,13 +390,6 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
     }
 
     function buildInvoiceActionHtml(p) {
-        const settled = p.is_settled === true
-            || p.is_settled === 1
-            || parseFloat(p.pending_balance ?? 0) <= 0.02;
-        if (!settled) {
-            return '';
-        }
-
         const invoiceId = parseInt(p.invoice_id, 10);
         if (invoiceId > 0) {
             return `
@@ -369,9 +401,15 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
     </a>`;
         }
 
+        const settled = p.is_settled === true || p.is_settled === 1;
+        const canProforma = p.can_create_proforma === true || p.can_create_proforma === 1;
+        if (!settled && !canProforma) {
+            return '';
+        }
+
         return `
     <button onclick="createInvoiceFromPayment(${p.id})"
-        title="Create invoice"
+        title="${canProforma ? 'Create proforma invoice (partial payment)' : 'Create final invoice'}"
         class="flex items-center gap-1 text-purple-600 hover:text-purple-800 text-xs font-semibold">
         <i class="fa-solid fa-file-circle-plus"></i>
     </button>`;
@@ -406,17 +444,30 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         </tr>`;
                 }
 
+                const receiptRowCounts = {};
+                data.forEach(function (row) {
+                    const rn = String(row.receipt_number || '').trim();
+                    if (rn !== '') {
+                        receiptRowCounts[rn] = (receiptRowCounts[rn] || 0) + 1;
+                    }
+                });
+
                 data.forEach(p => {
 
-                    const orderNumJs = escapeJsString(p.order_number ?? '');
+                    const orderNumJs = escapeJsString(normalizePaymentOrderNumber(p.order_number));
                     const invoiceAction = buildInvoiceActionHtml(p);
+                    const receiptKey = String(p.receipt_number || '').trim();
+                    const receiptCell = receiptKey !== ''
+                        ? receiptKey.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
+                            + ((receiptRowCounts[receiptKey] || 0) > 1
+                                ? ' <span class="text-[10px] font-normal text-slate-400" title="One checkout receipt — each payment mode is stored as its own row">(split)</span>'
+                                : '')
+                        : ('#' + p.id);
 
                     html += `
     <tr class="border-t hover:bg-gray-50">
-        <td class="p-3">${(String(p.receipt_number || '').trim() !== '')
-            ? String(p.receipt_number).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
-            : ('#' + p.id)}</td>
-        <td class="p-3">${buildOrderNumberLinkHtml(p)}</td>
+        <td class="p-3">${receiptCell}</td>
+        <td class="p-3">${buildOrderNumberLinkHtml(p.order_number)}</td>
         <td class="p-3">${p.payment_date ?? ''}</td>
         <td class="p-3">${p.warehouse ?? ''}</td>
         <td class="p-3">${p.order_amount ?? ''}</td>
@@ -425,7 +476,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
    
 </td>
 <td> <span class="text-red-600 text-xs tabular-nums"> ₹ ${formatPaymentAmount(p.pending_balance ?? 0)}</span></td>
-        <td class="p-3">${p.payment_mode ?? ''}</td>
+        <td class="p-3">${formatPaymentModeLabel(p.payment_mode)}</td>
         <td class="p-3">${p.payment_stage ?? ''}</td>
         <td class="p-3">${p.user_name ?? ''}</td>
 
@@ -448,7 +499,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
     </button>
 
     <!-- DELETE -->
-    <button onclick="openDeleteModal(${p.id}, '?page=payments&action=delete', 'Delete this payment ?')"
+    <button onclick="openDeleteModal(${p.id}, 'index.php?page=payments&action=delete', 'Delete this payment ?')"
         class="flex items-center gap-1 text-red-600 hover:text-red-800 text-xs font-semibold">
 
         <i class="fa-solid fa-trash"></i>
@@ -491,6 +542,10 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
     }
 
     function confirmDelete() {
+        if (!deleteId || !deleteUrl) {
+            alert('Nothing selected to delete.');
+            return;
+        }
 
         let form = new FormData();
         form.append("id", deleteId);
@@ -499,18 +554,27 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                 method: "POST",
                 body: form
             })
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error('Delete request failed');
+                }
+                return res.json();
+            })
             .then(data => {
-
                 if (data.success) {
                     closeDeleteModal();
-                    loadPayments(); // reload table
+                    loadPayments();
+                    if (typeof showGlobalToast === 'function') {
+                        showGlobalToast('Payment deleted', 'success');
+                    }
                 } else {
-                    alert(data.message || "Delete failed");
+                    alert(data.message || 'Delete failed');
                 }
-
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Delete failed. Please try again.');
             });
-
     }
     async function editPayment(id) {
 
@@ -533,7 +597,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         document.getElementById("edit_payment_id").value = p.id;
         document.getElementById("payment_order_id").value = p.order_id;
 
-        document.getElementById("payment_order_label").innerText = p.order_number;
+        document.getElementById("payment_order_label").innerText = normalizePaymentOrderNumber(p.order_number);
 
         // ⭐ KEEP ORIGINAL PAYMENT AMOUNT
         document.getElementById("payment_amount").value = (p.payment_amount != null && p.payment_amount !== '') ? p.payment_amount : (p.amount ?? '');
@@ -545,7 +609,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         document.getElementById("payment_date").value = p.payment_date;
 
         // ⭐ NOW LOAD PENDING
-        fetch(`?page=payments&action=get_payment_summary&order_number=${p.order_number}`)
+        fetch(`?page=payments&action=get_payment_summary&order_number=${encodeURIComponent(normalizePaymentOrderNumber(p.order_number))}`)
             .then(res => res.json())
             .then(sum => {
 
@@ -572,7 +636,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         let form = new FormData();
         form.append("id", id);
 
-        let res = await fetch(`?page=payments&action=delete`, {
+        let res = await fetch('index.php?page=payments&action=delete', {
             method: "POST",
             body: form
         });
@@ -580,10 +644,14 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         let data = await res.json();
 
         if (data.success) {
-            alert("Deleted");
             loadPayments();
+            if (typeof showGlobalToast === 'function') {
+                showGlobalToast('Payment deleted', 'success');
+            } else {
+                alert('Deleted');
+            }
         } else {
-            alert("Delete failed");
+            alert(data.message || 'Delete failed');
         }
 
     }
@@ -614,6 +682,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
         document.getElementById("payment_order_label").innerText = orderNumber;
 
         document.getElementById("payment_stage").value = "final";
+        document.getElementById("payment_type").value = "cash";
         document.getElementById("transaction_id").value = "";
         document.getElementById("payment_note").value = "";
         document.getElementById("payment_date").value = new Date().toISOString().split('T')[0];

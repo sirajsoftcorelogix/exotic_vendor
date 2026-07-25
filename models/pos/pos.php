@@ -134,14 +134,16 @@ class pos
             $types .= "d";
         }
 
+        $hasSearch = ($productName !== '' || $searchValue !== '' || $productCode !== '');
+
         // Stock scope: align with stock report (getStockReport) — default is "all" rows with a movement row.
         $stockFilter = strtolower(trim((string)$stockFilter));
         if ($stockFilter === 'out') {
-            $where .= ' AND sm.running_stock = 0 ';
+            $where .= ' AND COALESCE(sm.running_stock, 0) = 0 ';
         } elseif ($stockFilter === 'low') {
             $where .= ' AND sm.running_stock BETWEEN 1 AND 5 ';
         } elseif ($stockFilter === 'in') {
-            $where .= ' AND sm.running_stock > 0 ';
+            $where .= ' AND COALESCE(sm.running_stock, 0) > 0 ';
         }
 
         /* ================= ORDER ================= */
@@ -166,7 +168,7 @@ class pos
         $orderExpr = 'p.' . $orderColumn;
         $orderSuffix = $orderDir;
         if ($orderColumn === 'stock_qty') {
-            $orderExpr = 'sm.running_stock';
+            $orderExpr = 'COALESCE(sm.running_stock, 0)';
         } elseif ($orderColumn === 'price') {
             // GST-inclusive list price; deprioritize rows missing DB price_india (filled via API after query).
             $hasIndiaPrice = "CASE WHEN COALESCE(NULLIF(p.price_india, 0), 0) > 0 THEN 0 ELSE 1 END";
@@ -181,9 +183,11 @@ class pos
             $orderExpr = $baseSell;
         }
 
+        // When searching, LEFT JOIN so products with no movements in this warehouse still appear with 0 stock.
+        $joinType = $hasSearch ? 'LEFT' : 'INNER';
         $stockFrom = "
     FROM vp_products p
-    INNER JOIN (
+    {$joinType} JOIN (
         SELECT sm1.product_id, sm1.running_stock, sm1.location
         FROM vp_stock_movements sm1
         INNER JOIN (
@@ -225,7 +229,7 @@ class pos
         p.gst,
         p.sourcingfee,
         p.shippingfee,
-        sm.running_stock AS stock_qty,
+        COALESCE(sm.running_stock, 0) AS stock_qty,
         sm.location AS warehouse_location,
         {$sellPriceExpr} AS price
     $stockFrom
@@ -400,25 +404,21 @@ class pos
         ];
     }
 
-    public function getStockReport(array $filters = []): array
+    /**
+     * @param array<string, mixed> $filters
+     * @return array{join:string,where:string,params:list<mixed>,types:string}|null
+     */
+    private function buildStockReportQueryContext(array $filters, bool $includeLocation): ?array
     {
-        $warehouseId = isset($filters['warehouse_id']) ? (int)$filters['warehouse_id'] : (isset($_SESSION['warehouse_id']) ? (int)$_SESSION['warehouse_id'] : 0);
-        $search = trim((string)($filters['search'] ?? ''));
-        $category = trim((string)($filters['category'] ?? ''));
-        $stockStatus = trim((string)($filters['stock_status'] ?? 'all'));
-        $limit = isset($filters['limit']) ? (int)$filters['limit'] : 200;
-        $pageNo = isset($filters['page_no']) ? max(1, (int)$filters['page_no']) : 1;
-        if ($limit < 1) {
-            $limit = 200;
-        }
-        if ($limit > 500) {
-            $limit = 500;
-        }
-        $offset = ($pageNo - 1) * $limit;
+        $warehouseId = isset($filters['warehouse_id']) ? (int) $filters['warehouse_id'] : (isset($_SESSION['warehouse_id']) ? (int) $_SESSION['warehouse_id'] : 0);
+        $search = trim((string) ($filters['search'] ?? ''));
+        $category = trim((string) ($filters['category'] ?? ''));
 
         if ($warehouseId <= 0) {
-            return [];
+            return null;
         }
+
+        require_once dirname(__DIR__, 2) . '/helpers/stock_report_filters.php';
 
         // Latest movement row per product in selected warehouse using MAX(id) subquery.
         // When searching, LEFT JOIN so products with no movements in this warehouse still appear with 0 stock.
@@ -458,13 +458,39 @@ class pos
             $types .= 'sss';
         }
 
-        if ($stockStatus === 'out') {
-            $where .= ' AND COALESCE(sm.running_stock, 0) = 0 ';
-        } elseif ($stockStatus === 'low') {
-            $where .= ' AND sm.running_stock BETWEEN 1 AND 5 ';
-        } elseif ($stockStatus === 'in') {
-            $where .= ' AND COALESCE(sm.running_stock, 0) > 0 ';
+        appendStockReportExtraFiltersSql($where, $params, $types, $filters, $this->db);
+        appendStockReportStockStatusFiltersSql($where, $filters);
+        appendStockReportLocationFilterSql($where, $params, $types, $filters);
+
+        return [
+            'join' => $join,
+            'where' => $where,
+            'params' => $params,
+            'types' => $types,
+        ];
+    }
+
+    public function getStockReport(array $filters = []): array
+    {
+        $limit = isset($filters['limit']) ? (int) $filters['limit'] : 200;
+        $pageNo = isset($filters['page_no']) ? max(1, (int) $filters['page_no']) : 1;
+        if ($limit < 1) {
+            $limit = 200;
         }
+        if ($limit > 500) {
+            $limit = 500;
+        }
+        $offset = ($pageNo - 1) * $limit;
+
+        $query = $this->buildStockReportQueryContext($filters, true);
+        if ($query === null) {
+            return [];
+        }
+
+        $join = $query['join'];
+        $where = $query['where'];
+        $params = $query['params'];
+        $types = $query['types'];
 
         $sql = "
             SELECT
@@ -504,56 +530,15 @@ class pos
 
     public function getStockReportCount(array $filters = []): int
     {
-        $warehouseId = isset($filters['warehouse_id']) ? (int)$filters['warehouse_id'] : (isset($_SESSION['warehouse_id']) ? (int)$_SESSION['warehouse_id'] : 0);
-        $search = trim((string)($filters['search'] ?? ''));
-        $category = trim((string)($filters['category'] ?? ''));
-        $stockStatus = trim((string)($filters['stock_status'] ?? 'all'));
-
-        if ($warehouseId <= 0) {
+        $query = $this->buildStockReportQueryContext($filters, false);
+        if ($query === null) {
             return 0;
         }
 
-        $joinType = ($search !== '') ? 'LEFT' : 'INNER';
-        $join = "
-            {$joinType} JOIN (
-                SELECT sm1.product_id, sm1.running_stock
-                FROM vp_stock_movements sm1
-                INNER JOIN (
-                    SELECT product_id, MAX(id) AS max_id
-                    FROM vp_stock_movements
-                    WHERE warehouse_id = ?
-                    GROUP BY product_id
-                ) latest
-                    ON latest.product_id = sm1.product_id
-                    AND latest.max_id = sm1.id
-                WHERE sm1.warehouse_id = ?
-            ) sm ON sm.product_id = p.id
-        ";
-
-        $where = ' WHERE p.is_active = 1 ' . $this->sqlExcludeParentItemLevel('p');
-        $params = [$warehouseId, $warehouseId];
-        $types = 'ii';
-
-        if ($category !== '' && $category !== 'allProducts') {
-            $where .= ' AND p.groupname = ? ';
-            $params[] = $category;
-            $types .= 's';
-        }
-        if ($search !== '') {
-            $where .= ' AND (p.item_code LIKE ? OR p.title LIKE ? OR p.sku LIKE ?) ';
-            $like = '%' . $search . '%';
-            $params[] = $like;
-            $params[] = $like;
-            $params[] = $like;
-            $types .= 'sss';
-        }
-        if ($stockStatus === 'out') {
-            $where .= ' AND COALESCE(sm.running_stock, 0) = 0 ';
-        } elseif ($stockStatus === 'low') {
-            $where .= ' AND sm.running_stock BETWEEN 1 AND 5 ';
-        } elseif ($stockStatus === 'in') {
-            $where .= ' AND COALESCE(sm.running_stock, 0) > 0 ';
-        }
+        $join = $query['join'];
+        $where = $query['where'];
+        $params = $query['params'];
+        $types = $query['types'];
 
         $sql = "
             SELECT COUNT(*) AS cnt

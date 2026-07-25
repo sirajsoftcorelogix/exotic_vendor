@@ -62,94 +62,89 @@ class Payment
      */
     public function searchListAjax(array $filters): array
     {
-        $sql = "
-SELECT
-    p.id,
-    p.order_number,
-    p.receipt_number,
-    p.payment_date,
-    p.payment_amount AS amount,
-    p.order_amount,
-    p.pending_amount AS balance_snapshot,
-    p.payment_mode,
-    p.payment_stage,
-    u.name AS user_name,
-    w.address_title AS warehouse,
-    vo.order_id AS order_id,
-    vo.order_grand_total,
-    inv_map.invoice_id,
+        $where = $this->buildSearchListAjaxWhereClause($filters);
 
-    ROUND(
-        IFNULL(
-            NULLIF(vo.order_grand_total, 0),
-            IFNULL(NULLIF(p.order_amount, 0), IFNULL(vo.order_line_subtotal, 0))
-        )
-        -
-        IFNULL(
-            (
-                SELECT SUM(p2.payment_amount)
-                FROM pos_payments p2
-                WHERE p2.order_number COLLATE utf8mb4_unicode_ci
-                      = p.order_number COLLATE utf8mb4_unicode_ci
-                AND p2.id <= p.id
-            ), 0
-        ),
-        2
-    ) AS pending_balance
+        $sql = '
+            SELECT
+                p.id,
+                p.order_number,
+                p.receipt_number,
+                p.payment_date,
+                p.payment_amount AS amount,
+                p.order_amount,
+                p.payment_mode,
+                p.payment_stage,
+                u.name AS user_name,
+                w.address_title AS warehouse
+            FROM pos_payments p
+            LEFT JOIN vp_users u ON u.id = p.user_id
+            LEFT JOIN exotic_address w ON w.id = p.warehouse_id
+            WHERE 1=1' . $where['sql'] . '
+            ORDER BY p.id DESC
+        ';
 
-FROM pos_payments p
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
 
-LEFT JOIN vp_users u
-    ON u.id = p.user_id
+        if ($where['types'] !== '') {
+            $stmt->bind_param($where['types'], ...$where['params']);
+        }
 
-LEFT JOIN exotic_address w
-    ON w.id = p.warehouse_id
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = [];
+        while ($row = $result->fetch_assoc()) {
+            $rows[] = $row;
+        }
+        $stmt->close();
 
-LEFT JOIN (
-    SELECT
-        agg.order_number,
-        agg.order_id,
-        agg.order_line_subtotal,
-        COALESCE(
-            NULLIF(agg.order_info_total, 0),
-            GREATEST(
-                agg.order_line_subtotal
-                - agg.custom_reduce
-                - agg.coupon_reduce
-                - agg.gift_reduce
-                - agg.credit,
-                0
-            )
-        ) AS order_grand_total
-    FROM (
-        SELECT
-            o.order_number,
-            MIN(o.id) AS order_id,
-            SUM(o.finalprice * o.quantity) AS order_line_subtotal,
-            MAX(CASE WHEN oi.total > 0 THEN oi.total ELSE NULL END) AS order_info_total,
-            IFNULL(MAX(o.custom_reduce), 0) AS custom_reduce,
-            IFNULL(MAX(oi.coupon_reduce), 0) AS coupon_reduce,
-            IFNULL(MAX(oi.giftvoucher_reduce), 0) AS gift_reduce,
-            IFNULL(MAX(oi.credit), 0) AS credit
-        FROM vp_orders o
-        LEFT JOIN vp_order_info oi
-            ON oi.order_number COLLATE utf8mb4_unicode_ci = o.order_number COLLATE utf8mb4_unicode_ci
-        GROUP BY o.order_number
-    ) agg
-) vo ON vo.order_number COLLATE utf8mb4_unicode_ci = p.order_number COLLATE utf8mb4_unicode_ci
+        if ($rows === []) {
+            return [];
+        }
 
-LEFT JOIN (
-    SELECT
-        ii.order_number,
-        MAX(i.id) AS invoice_id
-    FROM vp_invoice_items ii
-    INNER JOIN vp_invoices i ON i.id = ii.invoice_id
-    WHERE LOWER(TRIM(COALESCE(i.status, ''))) <> 'cancelled'
-    GROUP BY ii.order_number
-) inv_map ON inv_map.order_number COLLATE utf8mb4_unicode_ci = p.order_number COLLATE utf8mb4_unicode_ci
+        $orderNumbers = [];
+        foreach ($rows as $row) {
+            $orderNum = trim((string)($row['order_number'] ?? ''));
+            if ($orderNum !== '') {
+                $orderNumbers[$orderNum] = true;
+            }
+        }
 
-WHERE 1=1
-";
+        $orderNumbers = array_keys($orderNumbers);
+        $orderContexts = $this->fetchOrderContextByNumbers($orderNumbers);
+        $invoiceIds = $this->fetchInvoiceIdsByOrderNumbers($orderNumbers);
+        $paymentMetrics = $this->buildPaymentMetricsByOrderNumbers($orderNumbers, $orderContexts);
+
+        $data = [];
+        foreach ($rows as $row) {
+            $orderNum = trim((string)($row['order_number'] ?? ''));
+            $paymentId = (int)($row['id'] ?? 0);
+            $context = $orderContexts[$orderNum] ?? [];
+            $metrics = $paymentMetrics[$orderNum][$paymentId] ?? [];
+
+            $row['order_id'] = (int)($context['order_id'] ?? 0);
+            $row['order_grand_total'] = (float)($context['order_grand_total'] ?? 0);
+            $row['invoice_id'] = (int)($invoiceIds[$orderNum] ?? 0);
+            $row['pending_balance'] = (float)($metrics['pending_balance'] ?? 0);
+            $row['order_collected_paid'] = (float)($metrics['order_collected_paid'] ?? 0);
+            $row['order_cod_pending'] = (float)($metrics['order_cod_pending'] ?? 0);
+            $row['order_receipt_total'] = (float)($metrics['order_receipt_total'] ?? 0);
+
+            $data[] = $this->formatListAjaxRow($row);
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array{sql: string, params: array<int, mixed>, types: string}
+     */
+    private function buildSearchListAjaxWhereClause(array $filters): array
+    {
+        $sql = '';
         $params = [];
         $types = '';
 
@@ -209,27 +204,234 @@ WHERE 1=1
             $types .= 'd';
         }
 
-        $sql .= ' ORDER BY p.id DESC';
+        return ['sql' => $sql, 'params' => $params, 'types' => $types];
+    }
+
+    /**
+     * @param list<string> $orderNumbers
+     * @return array<string, array{order_id: int, order_grand_total: float}>
+     */
+    private function fetchOrderContextByNumbers(array $orderNumbers): array
+    {
+        if ($orderNumbers === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
+        $types = str_repeat('s', count($orderNumbers));
+
+        $sql = "
+            SELECT
+                agg.order_number,
+                agg.order_id,
+                COALESCE(
+                    NULLIF(pay_snap.max_order_amount, 0),
+                    NULLIF(agg.order_info_total, 0),
+                    GREATEST(
+                        agg.order_line_subtotal
+                        - agg.custom_reduce
+                        - agg.coupon_reduce
+                        - agg.gift_reduce
+                        - agg.credit,
+                        0
+                    )
+                ) AS order_grand_total
+            FROM (
+                SELECT
+                    o.order_number,
+                    MIN(o.id) AS order_id,
+                    SUM(o.finalprice * o.quantity) AS order_line_subtotal,
+                    MAX(CASE WHEN oi.total > 0 THEN oi.total ELSE NULL END) AS order_info_total,
+                    IFNULL(MAX(o.custom_reduce), 0) AS custom_reduce,
+                    IFNULL(MAX(oi.coupon_reduce), 0) AS coupon_reduce,
+                    IFNULL(MAX(oi.giftvoucher_reduce), 0) AS gift_reduce,
+                    IFNULL(MAX(oi.credit), 0) AS credit
+                FROM vp_orders o
+                LEFT JOIN vp_order_info oi ON oi.order_number = o.order_number
+                WHERE o.order_number IN ($placeholders)
+                GROUP BY o.order_number
+            ) agg
+            LEFT JOIN (
+                SELECT order_number, MAX(order_amount) AS max_order_amount
+                FROM pos_payments
+                WHERE order_number IN ($placeholders) AND order_amount > 0
+                GROUP BY order_number
+            ) pay_snap ON pay_snap.order_number = agg.order_number
+        ";
 
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
             return [];
         }
 
-        if ($types !== '') {
-            $stmt->bind_param($types, ...$params);
-        }
-
+        $bindParams = array_merge($orderNumbers, $orderNumbers);
+        $stmt->bind_param($types . $types, ...$bindParams);
         $stmt->execute();
         $result = $stmt->get_result();
 
-        $data = [];
+        $contexts = [];
         while ($row = $result->fetch_assoc()) {
-            $data[] = $this->formatListAjaxRow($row);
+            $orderNum = trim((string)($row['order_number'] ?? ''));
+            if ($orderNum === '') {
+                continue;
+            }
+            $contexts[$orderNum] = [
+                'order_id' => (int)($row['order_id'] ?? 0),
+                'order_grand_total' => round((float)($row['order_grand_total'] ?? 0), 2),
+            ];
         }
         $stmt->close();
 
-        return $data;
+        return $contexts;
+    }
+
+    /**
+     * @param list<string> $orderNumbers
+     * @return array<string, int>
+     */
+    private function fetchInvoiceIdsByOrderNumbers(array $orderNumbers): array
+    {
+        if ($orderNumbers === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
+        $types = str_repeat('s', count($orderNumbers));
+
+        $sql = "
+            SELECT ii.order_number, MAX(i.id) AS invoice_id
+            FROM vp_invoice_items ii
+            INNER JOIN vp_invoices i ON i.id = ii.invoice_id
+            WHERE LOWER(TRIM(COALESCE(i.status, ''))) <> 'cancelled'
+              AND ii.order_number IN ($placeholders)
+            GROUP BY ii.order_number
+        ";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+
+        $stmt->bind_param($types, ...$orderNumbers);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $invoiceIds = [];
+        while ($row = $result->fetch_assoc()) {
+            $orderNum = trim((string)($row['order_number'] ?? ''));
+            if ($orderNum !== '') {
+                $invoiceIds[$orderNum] = (int)($row['invoice_id'] ?? 0);
+            }
+        }
+        $stmt->close();
+
+        return $invoiceIds;
+    }
+
+    /**
+     * @param list<string> $orderNumbers
+     * @param array<string, array{order_id: int, order_grand_total: float}> $orderContexts
+     * @return array<string, array<int, array<string, float>>>
+     */
+    private function buildPaymentMetricsByOrderNumbers(array $orderNumbers, array $orderContexts): array
+    {
+        if ($orderNumbers === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
+        $types = str_repeat('s', count($orderNumbers));
+
+        $sql = "
+            SELECT id, order_number, payment_amount, payment_mode, payment_status, order_amount
+            FROM pos_payments
+            WHERE order_number IN ($placeholders)
+            ORDER BY order_number ASC, id ASC
+        ";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+
+        $stmt->bind_param($types, ...$orderNumbers);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $byOrder = [];
+        while ($row = $result->fetch_assoc()) {
+            $orderNum = trim((string)($row['order_number'] ?? ''));
+            if ($orderNum === '') {
+                continue;
+            }
+            $byOrder[$orderNum][] = $row;
+        }
+        $stmt->close();
+
+        $metrics = [];
+        foreach ($byOrder as $orderNum => $payments) {
+            $contextTotal = (float)($orderContexts[$orderNum]['order_grand_total'] ?? 0);
+            $metrics[$orderNum] = $this->computePaymentMetricsForOrder($payments, $contextTotal);
+        }
+
+        return $metrics;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $paymentsAsc
+     * @return array<int, array<string, float>>
+     */
+    private function computePaymentMetricsForOrder(array $paymentsAsc, float $orderGrandTotal): array
+    {
+        $fullCollected = 0.0;
+        $fullCodPending = 0.0;
+        $fullReceipt = 0.0;
+
+        foreach ($paymentsAsc as $payment) {
+            $amount = (float)($payment['payment_amount'] ?? 0);
+            $mode = strtolower(trim((string)($payment['payment_mode'] ?? '')));
+            $status = strtolower(trim((string)($payment['payment_status'] ?? 'pending')));
+
+            $fullReceipt += $amount;
+            if ($mode === 'cod') {
+                if ($status === 'pending') {
+                    $fullCodPending += $amount;
+                }
+            } else {
+                $fullCollected += $amount;
+            }
+        }
+
+        $cumCollected = 0.0;
+        $cumCodPending = 0.0;
+        $byId = [];
+
+        foreach ($paymentsAsc as $payment) {
+            $id = (int)($payment['id'] ?? 0);
+            $amount = (float)($payment['payment_amount'] ?? 0);
+            $storedOrderAmount = round((float)($payment['order_amount'] ?? 0), 2);
+            $resolvedOrderAmount = $storedOrderAmount > 0 ? $storedOrderAmount : $orderGrandTotal;
+
+            $mode = strtolower(trim((string)($payment['payment_mode'] ?? '')));
+            $status = strtolower(trim((string)($payment['payment_status'] ?? 'pending')));
+
+            if ($mode === 'cod') {
+                if ($status === 'pending') {
+                    $cumCodPending += $amount;
+                }
+            } else {
+                $cumCollected += $amount;
+            }
+
+            $byId[$id] = [
+                'pending_balance' => max(0.0, round($resolvedOrderAmount - $cumCollected - $cumCodPending, 2)),
+                'order_collected_paid' => round($fullCollected, 2),
+                'order_cod_pending' => round($fullCodPending, 2),
+                'order_receipt_total' => round($fullReceipt, 2),
+            ];
+        }
+
+        return $byId;
     }
 
     /**
@@ -238,16 +440,26 @@ WHERE 1=1
      */
     private function formatListAjaxRow(array $row): array
     {
-        $resolvedOrderAmount = round((float)($row['order_grand_total'] ?? 0), 2);
+        $storedOrderAmount = round((float)($row['order_amount'] ?? 0), 2);
+        $resolvedOrderAmount = $storedOrderAmount;
         if ($resolvedOrderAmount <= 0) {
-            $resolvedOrderAmount = round((float)($row['order_amount'] ?? 0), 2);
+            $resolvedOrderAmount = round((float)($row['order_grand_total'] ?? 0), 2);
         }
         if ($resolvedOrderAmount > 0) {
             $row['order_amount'] = $resolvedOrderAmount;
         }
+
+        $collectedPaid = round((float)($row['order_collected_paid'] ?? 0), 2);
+        $receiptTotal = round((float)($row['order_receipt_total'] ?? 0), 2);
+        $allocationComplete = $resolvedOrderAmount > 0
+            && ($receiptTotal + 0.02 >= $resolvedOrderAmount);
+        $row['is_settled'] = $allocationComplete;
+        $row['can_create_proforma'] = $receiptTotal > 0.001
+            && !$allocationComplete
+            && (int)($row['invoice_id'] ?? 0) <= 0;
+        $row['order_number'] = trim((string)($row['order_number'] ?? ''));
         $row['invoice_id'] = (int)($row['invoice_id'] ?? 0);
-        $row['is_settled'] = round((float)($row['pending_balance'] ?? 0), 2) <= 0.02;
-        unset($row['order_grand_total'], $row['order_line_subtotal']);
+        unset($row['order_grand_total'], $row['order_line_subtotal'], $row['balance_snapshot'], $row['order_collected_paid'], $row['order_cod_pending'], $row['order_receipt_total']);
 
         return $row;
     }
@@ -280,15 +492,20 @@ WHERE 1=1
 
     public function deleteById(int $id): bool
     {
+        if ($id <= 0) {
+            return false;
+        }
+
         $stmt = $this->db->prepare('DELETE FROM pos_payments WHERE id = ?');
         if (!$stmt) {
             return false;
         }
         $stmt->bind_param('i', $id);
         $ok = $stmt->execute();
+        $deleted = $ok && $stmt->affected_rows > 0;
         $stmt->close();
 
-        return (bool)$ok;
+        return $deleted;
     }
 
     /**
@@ -321,22 +538,105 @@ WHERE 1=1
     }
 
     /**
+     * Warehouse where the POS order was created (first payment row).
+     */
+    public function getSaleWarehouseIdForOrder(string $orderNumber): int
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return 0;
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT warehouse_id FROM pos_payments
+             WHERE order_number = ? AND warehouse_id > 0
+             ORDER BY id ASC
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return (int)($row['warehouse_id'] ?? 0);
+    }
+
+    /**
+     * @return array{title: string, lines: array<int, string>}
+     */
+    public function getWarehouseAddressById(int $warehouseId): array
+    {
+        $empty = ['title' => '', 'lines' => []];
+        if ($warehouseId <= 0) {
+            return $empty;
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT address_title, display_name, address FROM exotic_address WHERE id = ? AND is_active = 1 LIMIT 1'
+        );
+        if (!$stmt) {
+            return $empty;
+        }
+        $stmt->bind_param('i', $warehouseId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return $this->formatWarehouseAddressRow(is_array($row) ? $row : null);
+    }
+
+    /**
+     * Sale store address from the order's checkout payment warehouse.
+     *
+     * @return array{title: string, lines: array<int, string>}
+     */
+    public function getSaleStoreAddressForOrder(string $orderNumber): array
+    {
+        $warehouseId = $this->getSaleWarehouseIdForOrder($orderNumber);
+        if ($warehouseId > 0) {
+            $address = $this->getWarehouseAddressById($warehouseId);
+            if ($address['title'] !== '' || $address['lines'] !== []) {
+                return $address;
+            }
+        }
+
+        return $this->getDefaultWarehouseAddress();
+    }
+
+    /**
      * @return array{title: string, lines: array<int, string>}
      */
     public function getDefaultWarehouseAddress(): array
     {
-        $defaultWarehouseAddress = ['title' => '', 'lines' => []];
         $dwRes = $this->db->query(
             'SELECT address_title, display_name, address FROM exotic_address WHERE is_active = 1 ORDER BY is_default DESC, order_no ASC, id ASC LIMIT 1'
         );
         if (!$dwRes || !($dw = $dwRes->fetch_assoc())) {
-            return $defaultWarehouseAddress;
+            return ['title' => '', 'lines' => []];
         }
 
-        $defaultWarehouseAddress['title'] = trim((string)($dw['address_title'] ?? ''));
-        $addrText = trim((string)($dw['address'] ?? ''));
+        return $this->formatWarehouseAddressRow($dw);
+    }
+
+    /**
+     * @param array<string, mixed>|null $row
+     *
+     * @return array{title: string, lines: array<int, string>}
+     */
+    private function formatWarehouseAddressRow(?array $row): array
+    {
+        $result = ['title' => '', 'lines' => []];
+        if (!is_array($row)) {
+            return $result;
+        }
+
+        $result['title'] = trim((string)($row['address_title'] ?? ''));
+        $addrText = trim((string)($row['address'] ?? ''));
         if ($addrText === '') {
-            $addrText = trim((string)($dw['display_name'] ?? ''));
+            $addrText = trim((string)($row['display_name'] ?? ''));
         }
         $parts = preg_split('/\r\n|\r|\n/', $addrText);
         $lines = [];
@@ -346,9 +646,9 @@ WHERE 1=1
                 $lines[] = $ln;
             }
         }
-        $defaultWarehouseAddress['lines'] = $lines;
+        $result['lines'] = $lines;
 
-        return $defaultWarehouseAddress;
+        return $result;
     }
 
     /**
@@ -438,7 +738,7 @@ WHERE 1=1
     public function sumPaidByOrderNumber(string $orderNumber): float
     {
         $stmt = $this->db->prepare(
-            'SELECT IFNULL(SUM(payment_amount), 0) AS paid FROM pos_payments WHERE order_number = ?'
+            'SELECT IFNULL(SUM(payment_amount), 0) AS paid FROM pos_payments WHERE order_number = ? AND LOWER(TRIM(payment_mode)) <> \'cod\''
         );
         if (!$stmt) {
             return 0.0;
@@ -578,14 +878,7 @@ WHERE 1=1
 
     public function getWarehouseIdForOrder(string $orderNumber): int
     {
-        $orderNumber = trim($orderNumber);
-        if ($orderNumber === '') {
-            return 0;
-        }
-
-        $payment = $this->findLatestByOrderNumber($orderNumber);
-
-        return (int)($payment['warehouse_id'] ?? 0);
+        return $this->getSaleWarehouseIdForOrder($orderNumber);
     }
 
     /**
@@ -621,6 +914,68 @@ WHERE 1=1
             return [];
         }
         $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = [];
+        while ($row = $result->fetch_assoc()) {
+            $rows[] = $row;
+        }
+        $stmt->close();
+
+        return $rows;
+    }
+
+    /**
+     * Payment rows for one POS checkout receipt (same receipt_number group).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function findCheckoutReceiptPayments(string $orderNumber = '', ?string $receiptNumber = null): array
+    {
+        $receiptNumber = trim((string)$receiptNumber);
+        $orderNumber = trim($orderNumber);
+
+        if ($receiptNumber !== '') {
+            if ($orderNumber !== '') {
+                $stmt = $this->db->prepare(
+                    'SELECT * FROM pos_payments
+                     WHERE receipt_number = ? AND order_number = ?
+                     ORDER BY id ASC'
+                );
+                if (!$stmt) {
+                    return [];
+                }
+                $stmt->bind_param('ss', $receiptNumber, $orderNumber);
+            } else {
+                $stmt = $this->db->prepare(
+                    'SELECT * FROM pos_payments WHERE receipt_number = ? ORDER BY id ASC'
+                );
+                if (!$stmt) {
+                    return [];
+                }
+                $stmt->bind_param('s', $receiptNumber);
+            }
+        } elseif ($orderNumber !== '') {
+            $stmt = $this->db->prepare(
+                'SELECT p.*
+                 FROM pos_payments p
+                 INNER JOIN (
+                     SELECT receipt_number
+                     FROM pos_payments
+                     WHERE order_number = ?
+                     ORDER BY id DESC
+                     LIMIT 1
+                 ) latest ON latest.receipt_number = p.receipt_number
+                 ORDER BY p.id ASC'
+            );
+            if (!$stmt) {
+                return [];
+            }
+            $stmt->bind_param('s', $orderNumber);
+        } else {
+            return [];
+        }
+
         $stmt->execute();
         $result = $stmt->get_result();
         $rows = [];

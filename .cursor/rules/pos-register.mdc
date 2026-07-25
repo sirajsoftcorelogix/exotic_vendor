@@ -1,0 +1,229 @@
+---
+description: Full POS register logic — routes, product search, cart, checkout, payments, stock
+globs: controllers/POSRegisterController.php,models/pos/pos.php,assets/js/pos.js,assets/js/pos_cart_hooks.js,views/pos_register/**,helpers/pos_payment_receipt.php,integrations/exotic/**
+alwaysApply: false
+---
+
+# POS Register — Full Logic Reference
+
+Use this when changing POS register, cart, checkout, or related views/JS. Follow MVP: SQL in `models/pos/pos.php`, HTTP in `POSRegisterController`, display in views/JS.
+
+**Related rules:** `pos-stock-availability.mdc` (warehouse stock edge cases), `exotic-india-integration.mdc` (RetailApiClient / vendor-api), **`pos-order-payment-invoice.mdc`** (order create, payments, invoices — full detail).
+
+---
+
+## Architecture
+
+```
+Browser (pos.js + pos_cart_hooks.js + index.php inline JS)
+    ↓ same-origin AJAX
+POSRegisterController (Presenter)
+    ↓
+models/pos/pos.php          → vp_products + vp_stock_movements (local catalog/stock)
+integrations/exotic/      → https://www.exoticindia.com/api (cart, product, order)
+helpers/pos_payment_receipt.php → pos_payments, receipts, invoice eligibility
+views/pos_register/         → UI only
+```
+
+**Cart truth source:** Exotic retail API session cart (`/cart/retrieve`). POS does not maintain a local cart DB — it proxies via `cart-api`.
+
+**Catalog truth source:** `vp_products` (local) enriched with Exotic `/product/code` for price, addons, GST display.
+
+**Warehouse stock truth source:** Latest `vp_stock_movements.running_stock` per `product_id` + `warehouse_id` (see stock rule).
+
+---
+
+## Session keys (critical)
+
+| Key | Purpose |
+|-----|---------|
+| `warehouse_id` | Selected store; set at login or default `exotic_address.is_default=1` |
+| `pos_customer_id` | Checkout customer (`vp_customers.id`) |
+| `x_api_euid`, `x_api_jwt`, `x_api_browsehistory`, `x_api_etd`, `x_api_etd_pincode` | Exotic retail API session (updated by `RetailApiClient`) |
+| `pos_exotic_cart_coupon_details` / `discount_coupon` | Coupon string for cart GET query + header |
+| `pos_exotic_cart_custom_reduce` | Custom/cash discount sent to `/cart/addcustomdiscount` |
+| `pos_last_checkout_receipt` | Last receipt row for confirmation page |
+| `pos_order_create_api_debug` | Last order/create request/response for debug UI |
+
+On `index()` load, legacy cart discount session keys are cleared so each register session starts clean.
+
+---
+
+## Routes (`index.php?page=pos_register&action=…`)
+
+| Action | Controller method | Role |
+|--------|-------------------|------|
+| `list` | `index()` | Main register UI |
+| `products-ajax` | `productsAjax()` | Product grid JSON |
+| `get-product-api` | `getProductApi()` | Modal: Exotic product + VP stock context |
+| `product-availability` | `productAvailability()` | Stock context JSON (search) |
+| `sibling-skus` | `siblingSkusAjax()` | Variant SKUs + warehouse stock |
+| `cart-api` | `cartApi()` | Proxy Exotic cart (`op=` retrieve/add/modifyqty/delete/coupon/customdiscount) |
+| `checkout-create` | `checkout_create()` | Order create + local receipt/payment |
+| `checkout-receipt` | `checkout_receipt()` | Order confirmation view |
+| `create-invoice-from-receipt` | `create_invoice_from_receipt()` | Proforma/final invoice from receipt |
+| `customer-search` | `customer_search()` | Autocomplete |
+| `set-customer` / `add-customer` | `set_customer()` / `add_customer()` | Session customer |
+| `customer-order-info` | `customer_order_info()` | Prior orders for customer panel |
+| `states-by-country` | `states_by_country()` | Address dropdown |
+| `stock-report` (+ refresh/export/otp) | `stockReport*` | Admin stock report (separate view) |
+
+---
+
+## Frontend files
+
+| File | Role |
+|------|------|
+| `assets/js/pos.js` | Product grid, search, modal, qty cap, stock warnings, pagination |
+| `assets/js/pos_cart_hooks.js` | Cart panel, add/modify/delete, coupons, discounts, checkout payload, local_stock confirm |
+| `views/pos_register/index.php` | Layout, payment modal, customer UI, checkout fetch, script includes |
+| `views/pos_register/order_confirmation.php` | Post-checkout receipt |
+| `views/pos_register/stock_report.php` | Stock report workspace |
+
+Load order: `pos_cart_hooks.js` then `pos.js`.
+
+---
+
+## Product discovery flow
+
+### Grid browse (`pos.js` → `products-ajax`)
+
+1. `#searchName` empty → `stock_filter=in` (in-stock only at session warehouse).
+2. `#searchName` has text → `stock_filter=all` (include zero-stock / unmapped when searching).
+3. `models/pos/pos.php::getProductsDataTable()`:
+   - **Browse:** INNER JOIN latest movement for session warehouse.
+   - **Search:** LEFT JOIN (products without movement row still appear, `stock_qty=0`).
+   - Filters: `is_active=1`, excludes `item_level=parent`, category, price range.
+4. `productsAjax()` enriches rows with Exotic `/product/code` batch prices (`enrichPosProductListPricesFromApi`).
+5. Pagination: `page_no`, `per_page=48`, `has_more` from filtered count.
+
+### SKU search (dual path)
+
+| Path | Trigger | Endpoint |
+|------|---------|----------|
+| Grid filter | `#searchName` keyup 400ms | `products-ajax` |
+| Autocomplete | `#searchName` keyup 280ms | `?page=products&action=search_product&by=sku` |
+| Exact + modal | Enter / suggest click | `search_product&exact=1` then `get-product-api` |
+
+Suggest click / Enter opens product modal via `checkAvailabilityAndMaybeOpen()` → `openProductModalByCode()`.
+
+### Product modal (`get-product-api`)
+
+1. Load VP row by sku/item_code (`vp_products`).
+2. Call Exotic `RetailApiClient` `/product/code` for name, addons, express shipping, GST, image.
+3. Merge price via `computePosDisplayUnitPrice()` (India price + book fees + GST).
+4. Attach stock context from `resolvePosStockContext()` → see `pos-stock-availability.mdc`.
+5. JS `resolveModalQtyCap(p)`: cap qty only when `enforce_qty_cap` + `qty_cap > 0`.
+6. `#pmStockWarning` shows `stock_warning_message`.
+7. Parent-level products: Add to Cart disabled (`item_level=parent`).
+
+---
+
+## Cart flow (`cart-api` + `pos_cart_hooks.js`)
+
+```
+Browser handleAddToCart()
+  → POST cart-api?op=add  (JSON: code, qty, variation, options, item_level, …)
+  → POSRegisterController::cartApi()
+  → buildExoticCartAddSplit() + exoticCartDiscountContext()
+  → RetailApiClient POST /cart/add
+  → CartResponseParser → JSON to browser
+  → retrieve cart → render panel from cartitems[]
+```
+
+**Cart ops:** `retrieve`, `add`, `modifyqty`, `delete`, `addcoupon`, `removecoupon`, `customdiscount`.
+
+**Parent block:** `cartAddBlockedIfParentLevelProduct()` rejects parent SKUs on add.
+
+**Discount context:** `discountcoupondetails` + `giftvoucherdetails` query params; optional `x-api-discountcoupondetails` header.
+
+**Local stock confirm (separate from warehouse stock):** Before add, JS may prompt if Exotic cart line `local_stock` < qty (`pos_local_stock_confirmed_v1` in sessionStorage). This is Exotic API field, not `vp_stock_movements`.
+
+**Line price adjustments:** `posLineAdjustByRef` → sent as `list_line_prices` at checkout → `/order/pos_editorderprices` after order create.
+
+---
+
+## Checkout flow (`checkout-create`)
+
+See **`pos-order-payment-invoice.mdc`** for full order creation, payment splits, COD, receipt numbering, vp_orders import, and invoice (proforma/final) logic.
+
+Summary:
+
+```
+Payment modal submit → checkout-create → order/create (Exotic) → pos_payments rows
+  → finalizePosReceiptInvoice (import + auto invoice) → checkout-receipt
+```
+
+---
+
+## Post-checkout
+
+See **`pos-order-payment-invoice.mdc`** §2–3 for payments and invoice details.
+
+| Step | Action | Result |
+|------|--------|--------|
+| Receipt page | `checkout-receipt` | `order_confirmation.php` from session or DB rebuild |
+| Invoice (auto) | `finalizePosReceiptInvoice()` at checkout | Proforma or final via `createAutoInvoiceForOrder()` |
+| Invoice (manual) | `create-invoice-from-receipt` | Redirect to standard invoice create UI |
+| Payments module | `views/payments/` | Additional receipts; may finalize invoice when fully paid |
+
+---
+
+## Stock report (sub-module)
+
+Separate admin UI at `action=stock-report`. Uses `models/pos/pos.php::getStockReport()` with same movement join pattern as grid. OTP-gated bulk refresh/export. Not part of register cart flow.
+
+---
+
+## Related modules (outside register page)
+
+| Module | Controller | Link to POS |
+|--------|------------|-------------|
+| POS Orders list | `PosOrdersController` | Orders created from register; status sync via `ExoticIndiaGateway` |
+| POS Invoice | `PosInvoiceController` | PDF invoices from checkout receipts |
+| Payments | `PaymentsController` | Collect balance / COD against POS orders |
+| Products search | `ProductsController::searchProduct` | SKU autocomplete from register |
+
+---
+
+## Pricing logic (controller private helpers)
+
+- **Display price:** GST-inclusive India sell price; books add `sourcingfee + shippingfee`.
+- **Grid/list:** DB `price_india` first; missing prices filled from Exotic API batch.
+- **Modal:** `mergePosProductSellingBaseExGst`, `mergeGstPercentField`, variant may fetch base `item_code` from API.
+- **Checkout line prices:** Cart retrieve prices or POS-adjusted `pos_line_prices` / `list_line_prices`.
+
+---
+
+## Extension checklist
+
+When adding a POS feature:
+
+1. **New product filter** → `models/pos/pos.php::getProductsDataTable()` + `productsAjax()` params + `pos.js fetchProducts()`.
+2. **New stock rule** → `resolvePosStockContext()` only (see stock rule).
+3. **New cart operation** → `cartApi()` switch case + `pos_cart_hooks.js` + Exotic API docs.
+4. **New checkout field** → validate in `checkout_create()` / `buildOrderCreatePostFromPayload()` / payment modal JS.
+5. **New Exotic HTTP** → `RetailApiClient` or `integrations/exotic/vendor_api.php` — never raw curl in controller.
+6. **Never SQL in controller** — use models/helpers.
+
+---
+
+## Diagram — end-to-end sale
+
+```mermaid
+flowchart TD
+  A[POS Register list] --> B{Find product}
+  B -->|Browse grid| C[products-ajax]
+  B -->|Search SKU| D[get-product-api]
+  C --> E[Product card click]
+  D --> E
+  E --> F[Modal + stock context]
+  F --> G[cart-api add]
+  G --> H[cart-api retrieve]
+  H --> I[Payment modal]
+  I --> J[checkout-create]
+  J --> K[Exotic order/create]
+  K --> L[Local receipt + vp_orders]
+  L --> M[checkout-receipt]
+  M --> N[Optional invoice]
+```

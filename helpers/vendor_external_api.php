@@ -146,6 +146,67 @@ function vendor_external_api_extract_vendor_id(array $data): int
 }
 
 /**
+ * vendormodify returns success=false when submitted fields already match remote (HTTP 200).
+ */
+function vendor_external_api_message_indicates_no_changes(string $message): bool
+{
+    $msg = strtolower(trim($message));
+    $msg = rtrim($msg, '.');
+
+    return $msg === 'no changes detected';
+}
+
+function vendor_external_api_is_no_changes_response(array $data): bool
+{
+    foreach (['message', 'reason'] as $key) {
+        if (isset($data[$key]) && vendor_external_api_message_indicates_no_changes((string) $data[$key])) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * True when local save should proceed after an Exotic India sync attempt (incl. "no changes detected").
+ */
+function vendor_external_api_allows_local_save(array $api): bool
+{
+    if (!empty($api['success'])) {
+        return true;
+    }
+    if (vendor_external_api_is_no_changes_response($api)) {
+        return true;
+    }
+    if (is_array($api['data'] ?? null) && vendor_external_api_is_no_changes_response($api['data'])) {
+        return true;
+    }
+    if (is_array($api['response'] ?? null) && vendor_external_api_is_no_changes_response($api['response'])) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Normalize vendormodify "no changes detected" (and similar) to success for callers + UI.
+ */
+function vendor_external_api_normalize_for_local_save(array $api): array
+{
+    if (!vendor_external_api_allows_local_save($api)) {
+        return $api;
+    }
+
+    $api['success'] = true;
+    $message = (string) ($api['message'] ?? '');
+    if ($message === '' || vendor_external_api_message_indicates_no_changes($message)) {
+        $api['message'] = 'Remote vendor already up to date.';
+    }
+
+    return $api;
+}
+
+/**
  * vendorcreate returns vendor_id for both new vendors and existing duplicate names.
  */
 function vendor_external_api_response_is_failure(array $data): bool
@@ -254,6 +315,21 @@ function vendor_external_api_post(string $action, array $postData): array
         ]);
     }
 
+    if ($action === 'vendormodify'
+        && vendor_external_api_response_is_failure($data)
+        && vendor_external_api_is_no_changes_response($data)) {
+        $existingVendorId = (int) preg_replace('/\D/', '', (string) ($postData['vendor_id'] ?? ''));
+
+        return vendor_external_api_attach_debug($action, $postData, [
+            'success' => true,
+            'message' => 'Remote vendor already up to date.',
+            'http_code' => $httpCode,
+            'vendor_id' => $vendorId > 0 ? $vendorId : ($existingVendorId > 0 ? $existingVendorId : null),
+            'data' => $data,
+            'raw' => (string) $raw,
+        ]);
+    }
+
     if (vendor_external_api_response_is_failure($data)) {
         $msg = !empty($data['message']) ? (string) $data['message'] : (!empty($data['reason']) ? (string) $data['reason'] : 'Remote API returned failure.');
 
@@ -321,7 +397,7 @@ function vendor_external_api_modify(array $postData): array
         ]);
     }
 
-    return vendor_external_api_post('vendormodify', $postData);
+    return vendor_external_api_normalize_for_local_save(vendor_external_api_post('vendormodify', $postData));
 }
 
 /**
@@ -349,28 +425,73 @@ function vendor_external_api_delete(string $vendorId): array
 }
 
 /**
- * POST body for author/publisher vendorcreate.
+ * Map first group slug to Exotic India vendor_type for vendorcreate / vendormodify.
  */
-function vendor_external_api_creator_payload(string $vendorType, string $name, string $webpage = '0'): array
+function vendor_external_api_resolve_vendor_type_from_groups(string $groupsCsv): string
+{
+    $first = trim((string) explode(',', $groupsCsv)[0]);
+    if ($first === '') {
+        return '';
+    }
+    $key = strtolower($first);
+    $map = [
+        'sculptures' => 'vendor_sculptures',
+        'sculpture' => 'vendor_sculptures',
+        'statues' => 'vendor_statues',
+        'homeandliving' => 'vendor_homeandliving',
+        'paintings' => 'vendor_paintings',
+        'textiles' => 'vendor_textiles',
+        'jewelry' => 'vendor_jewelry',
+        'book' => 'vendor_book',
+    ];
+
+    return $map[$key] ?? ('vendor_' . $key);
+}
+
+/**
+ * POST body for catalog vendor vendorcreate / vendormodify (without vendor_id).
+ */
+function vendor_external_api_vendor_sync_payload(string $name, string $groupsCsv, string $webpage = '0'): array
 {
     return [
         'name' => trim($name),
-        'groupname' => 'book',
-        'vendor_type' => $vendorType,
+        'groupname' => trim($groupsCsv),
+        'vendor_type' => vendor_external_api_resolve_vendor_type_from_groups($groupsCsv),
         'webpage' => ((string) $webpage === '1') ? '1' : '0',
     ];
 }
 
 /**
- * POST body for author/publisher vendormodify.
+ * vendorcreate or vendormodify for catalog vendors.
  */
-function vendor_external_api_modify_creator_payload(string $vendorId, string $vendorType, string $name, string $webpage = '0'): array
+function vendor_external_api_sync_catalog(string $name, string $groupsCsv, string $webpage, ?string $remoteVendorId = null): array
 {
-    return [
-        'vendor_id' => trim($vendorId),
+    $payload = vendor_external_api_vendor_sync_payload($name, $groupsCsv, $webpage);
+    if ($remoteVendorId !== null && trim($remoteVendorId) !== '') {
+        $payload['vendor_id'] = trim($remoteVendorId);
+
+        return vendor_external_api_normalize_for_local_save(vendor_external_api_modify($payload));
+    }
+
+    return vendor_external_api_normalize_for_local_save(vendor_external_api_create($payload));
+}
+
+/**
+ * vendorcreate or vendormodify for author / publisher (book group).
+ */
+function vendor_external_api_sync_creator(string $vendorType, string $name, string $webpage, ?int $remoteId = null): array
+{
+    $payload = [
         'name' => trim($name),
         'groupname' => 'book',
         'vendor_type' => $vendorType,
         'webpage' => ((string) $webpage === '1') ? '1' : '0',
     ];
+    if ($remoteId !== null && $remoteId > 0) {
+        $payload['vendor_id'] = (string) $remoteId;
+
+        return vendor_external_api_normalize_for_local_save(vendor_external_api_modify($payload));
+    }
+
+    return vendor_external_api_normalize_for_local_save(vendor_external_api_create($payload));
 }

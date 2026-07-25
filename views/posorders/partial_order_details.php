@@ -3,7 +3,13 @@
     $total_price = 0;
     $courrency = '';
     foreach ($order as $items => $item):
-        $total_price += $item['finalprice'] * $item['quantity'];
+        $lineId = (int)($item['id'] ?? 0);
+        $linePricingRow = ($linePricingByLineId ?? [])[$lineId] ?? null;
+        if (is_array($linePricingRow)) {
+            $total_price += (float)($linePricingRow['chargeable_value'] ?? 0);
+        } else {
+            $total_price += (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
+        }
         $currency = $item['currency'];
     endforeach;
     ?>
@@ -29,14 +35,21 @@
         //print_array($order);
         $countries = country_array();
         //print_array($countries);
-        foreach ($order as $items => $item): ?>
+        foreach ($order as $items => $item):
+            $currencyCode = strtoupper(trim($item['currency'] ?? 'INR'));
+            $currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
+            $lineCurrencySymbol = $currencyIcons[$currencyCode] ?? ($currencyCode !== '' ? $currencyCode . ' ' : '₹');
+        ?>
             <!-- Accordion Item 1 -->
             <div>
                 <div class="accordion-trigger cursor-pointer border-b pb-4">
                     <div class="flex items-start space-x-4">
                         <div class="flex-shrink-0 w-36 h-36">
-                            <img src="<?php echo $item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'; ?>" alt="Product Image"
-                                class="max-w-full max-h-full object-contain rounded-lg object-cover flex-shrink-0">
+                            <?php $imageUrl = (string)($item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'); ?>
+                            <img src="<?php echo htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Product Image"
+                                class="max-w-full max-h-full object-contain rounded-lg object-cover flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity pos-order-detail-enlarge"
+                                title="Click to enlarge"
+                                data-full-image="<?php echo htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'); ?>">
                         </div>
                         <div class="flex-grow">
                             <div>
@@ -64,6 +77,24 @@
                             </div>
                             <p class="item-meta mt-0">Item Code: <?php echo $item['item_code']; ?></p>
                             <p class="item-meta mt-0">Quantity: <?php echo $item['quantity']; ?></p>
+                            <?php
+                            $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
+                            foreach ($lineAddons as $addonRow):
+                                ?>
+                                <p class="item-meta mt-0">
+                                    Addon: <?php echo htmlspecialchars((string)($addonRow['name'] ?? '')); ?>
+                                    · <?php echo htmlspecialchars($lineCurrencySymbol . number_format((float)($addonRow['price'] ?? 0), 2)); ?>
+                                </p>
+                            <?php endforeach; ?>
+                            <?php
+                            $linePricing = ($linePricingByLineId ?? [])[(int)($item['id'] ?? 0)] ?? null;
+                            if (is_array($linePricing)) {
+                                renderPartial('views/posorders/partials/line_item_pricing.php', [
+                                    'linePricing' => $linePricing,
+                                    'currencySymbol' => $lineCurrencySymbol,
+                                ]);
+                            }
+                            ?>
                             <div class="flex justify-between items-center mt-3">
                                 <div class="status-box flex items-center justify-center">
                                     <span class="status-text"><?php echo $statusList[$item['status']] ?? 'Unknown'; ?></span>
@@ -161,9 +192,16 @@
                     </div>
                     <div class="bg-green-200 p-4 rounded-lg grid grid-cols-2 gap-x-8">
                         <div>
-                            <p><span class="section-title">Addons : </span><span class="section-value"><?php $options = json_decode($item['options'], true);
-                                                                                                        echo implode(', ', $options); ?></span>
-                            </p>
+                            <?php if ($lineAddons !== []): ?>
+                                <?php foreach ($lineAddons as $addonRow): ?>
+                                    <p><span class="section-title"><?php echo htmlspecialchars((string)($addonRow['name'] ?? '')); ?> : </span><span class="section-value tabular-nums"><?php echo htmlspecialchars($lineCurrencySymbol . number_format((float)($addonRow['price'] ?? 0), 2)); ?></span></p>
+                                <?php endforeach; ?>
+                            <?php else:
+                                $options = json_decode($item['options'] ?? '[]', true);
+                                $optStr = is_array($options) ? implode(', ', $options) : '';
+                                ?>
+                                <p><span class="section-title">Addons : </span><span class="section-value"><?php echo htmlspecialchars($optStr !== '' ? $optStr : '—'); ?></span></p>
+                            <?php endif; ?>
                         </div>
                     </div>
                     <!-- Stock -->

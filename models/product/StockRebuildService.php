@@ -97,22 +97,9 @@ final class StockRebuildService
     /** @param array<string, mixed> $request */
     public function parseStockReportFilters(array $request): array
     {
-        $limit = (int) ($request['limit'] ?? 200);
-        if ($limit < 50) {
-            $limit = 50;
-        }
-        if ($limit > 500) {
-            $limit = 500;
-        }
+        require_once dirname(__DIR__, 2) . '/helpers/stock_report_filters.php';
 
-        return [
-            'warehouse_id' => (int) ($request['warehouse_id'] ?? 0),
-            'search' => trim((string) ($request['search'] ?? '')),
-            'category' => trim((string) ($request['category'] ?? 'allProducts')),
-            'stock_status' => trim((string) ($request['stock_status'] ?? 'all')),
-            'limit' => $limit,
-            'page_no' => max(1, (int) ($request['page_no'] ?? 1)),
-        ];
+        return parseStockReportFiltersFromRequest($request, (int) ($request['warehouse_id'] ?? 0));
     }
 
     /** @param array<string, mixed> $filters */

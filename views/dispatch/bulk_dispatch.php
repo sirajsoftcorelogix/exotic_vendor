@@ -3291,5 +3291,356 @@
             }
         }
     });
+
+    function appendStructuredItemToBulkDispatchBox(boxElement, item) {
+        const itemId = String(item.id || '').trim();
+        const orderNum = String(item.order_number || '').trim();
+        const itemInfo = String(item.title || 'Product');
+        const itemCode = String(item.item_code || '');
+        const quantity = String(item.quantity ?? '');
+        const weight = Number(item.product_weight || 0).toFixed(3) + ' kg';
+        const gst = String(item.gst || '0') + '%';
+        const itemTotal = '₹ ' + Number(item.item_total || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+        const paymentType = String(item.payment_type || 'Prepaid');
+        const groupname = String(item.groupname || '');
+        const isExpress = item.is_express ? '1' : '';
+
+        if (itemId && boxElement.querySelector('[data-item-id="' + itemId + '"]')) {
+            return false;
+        }
+
+        const itemRow = document.createElement('div');
+        itemRow.className = 'px-4 py-1 text-xs text-gray-700 border-b border-gray-100';
+        if (groupname) itemRow.setAttribute('data-groupname', groupname);
+        if (itemId) itemRow.setAttribute('data-item-id', itemId);
+        itemRow.innerHTML = `
+            <div class="grid grid-cols-12 gap-2 items-center">
+                <div class="col-span-2">${orderNum}</div>
+                <div class="col-span-2">${itemInfo}</div>
+                <div class="col-span-1 text-right">${itemCode}</div>
+                <div class="col-span-1 text-right">${quantity}</div>
+                <div class="col-span-1 text-right">${weight}</div>
+                <div class="col-span-1 text-right">-</div>
+                <div class="col-span-1 text-right">${gst}</div>
+                <div class="col-span-1 text-right">${itemTotal}</div>
+                <div class="col-span-1 text-right">${paymentType}</div>
+                <div class="col-span-1 flex justify-center gap-2 text-lg">
+                    <button class="text-gray-500 hover:text-gray-700 move-item-btn" title="Move">📦</button>
+                    <button class="remove-item-btn text-red-500 hover:text-red-700" title="Remove">🗑</button>
+                </div>
+            </div>
+        `;
+
+        const itemsContainer = boxElement.querySelector('.items-container');
+        if (itemsContainer) {
+            itemsContainer.appendChild(itemRow);
+        } else {
+            const summary = boxElement.querySelector('.px-4.py-3');
+            if (summary) summary.insertAdjacentElement('beforebegin', itemRow);
+        }
+
+        if (itemId) {
+            const existingOrderIds = boxElement.getAttribute('order_ids') || '';
+            const orderIdsArray = existingOrderIds ? existingOrderIds.split(',').filter(function(id) { return id; }) : [];
+            if (orderIdsArray.indexOf(itemId) === -1) {
+                orderIdsArray.push(itemId);
+            }
+            boxElement.setAttribute('order_ids', orderIdsArray.join(','));
+        }
+
+        if (paymentType.toLowerCase().includes('cod')) {
+            boxElement.setAttribute('data-is-cod', '1');
+        }
+        if (isExpress) {
+            boxElement.setAttribute('data-is-express', '1');
+        }
+
+        return true;
+    }
+
+    function importStructuredOrderToBulkDispatch(orderGroup) {
+        const orderNumber = String(orderGroup.order_number || '').trim();
+        const customerId = String(orderGroup.customer_id || '').trim();
+        const customerName = String(orderGroup.customer_name || 'Customer').trim();
+        const shippingAddress = String(orderGroup.shipping_address || '').trim() || 'Address on file';
+        const isInternational = !!orderGroup.is_international;
+        const items = Array.isArray(orderGroup.items) ? orderGroup.items : [];
+
+        if (!orderNumber || !items.length) {
+            return { success: false, reason: 'Missing order data for #' + (orderNumber || '?') };
+        }
+
+        const orderNumEsc = typeof CSS !== 'undefined' && CSS.escape
+            ? CSS.escape(orderNumber)
+            : orderNumber.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        if (document.querySelector('#invDispatchesContainer [data-order-number="' + orderNumEsc + '"]')) {
+            return { success: false, reason: 'Order #' + orderNumber + ' is already in bulk dispatch' };
+        }
+
+        const container = document.getElementById('invDispatchesContainer');
+        if (!container) {
+            return { success: false, reason: 'Bulk dispatch container not found' };
+        }
+
+        const newOrderDiv = document.createElement('div');
+        newOrderDiv.className = 'px-4 pt-4 pb-2';
+        const newBoxUid = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+        const tm = bulkDispatchOrderTheme(isInternational);
+        newOrderDiv.setAttribute('data-order-theme', tm.attr);
+        newOrderDiv.innerHTML = `
+            <div class="${tm.orderHeader} px-4 py-2 flex flex-wrap justify-between items-center gap-2 rounded-t">
+                <div class="flex flex-wrap items-center gap-2 min-w-0">
+                    ${tm.intlPill}
+                    <div class="font-semibold truncate">${orderNumber} · ${customerName}(${customerId})</div>
+                </div>
+                <div class="text-xs sm:text-sm min-w-0">
+                    <span class="font-semibold">Shipping to:</span>
+                    ${shippingAddress}
+                </div>
+            </div>
+            <div class="custom-invoice-strip px-4 py-2 bg-amber-50 border border-amber-200 border-t-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm">
+                <label class="font-semibold text-amber-900 shrink-0">Invoice No (optional)</label>
+                <input type="text" class="custom-invoice-number-input border border-amber-300 rounded px-2 py-1 w-full sm:w-52 text-sm bg-white" maxlength="50" placeholder="Auto-generated if blank" autocomplete="off" />
+                <span class="custom-invoice-hint text-[11px] text-amber-800/80 hidden sm:inline">Letters, numbers, dot, slash, underscore, hyphen</span>
+                <span class="custom-invoice-error text-[11px] text-red-600 hidden w-full sm:w-auto"></span>
+            </div>
+            <div class="bulk-dispatch-box border ${tm.boxBorder} border-t-0 rounded-b bg-white" data-order-number="${orderNumber}" data-customer-id="${customerId}" data-customer-name="${customerName}" data-box-uid="${newBoxUid}">
+                <div class="px-4 py-2 flex flex-wrap items-center justify-between ${tm.boxToolbar} border-b">
+                    <div class="flex items-center gap-2">
+                        <span class="inline-flex items-center justify-center w-8 h-8 rounded-full ${tm.boxIcon} text-white text-sm">📦</span>
+                        <span class="font-semibold text-gray-800">Box 1</span>
+                        <span class="text-xs text-green-500 express-badge hidden">EXPRESS</span>
+                        <span class="text-xs text-blue-500 cod-badge hidden">COD</span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-6 text-xs sm:text-sm">
+                        <div>
+                            <span class="font-semibold text-gray-700">Total Weight (kg):</span>
+                            <input type="text" name="weight" value="0.000" class="weight-input ml-1 border border-gray-300 rounded px-2 py-0.5 w-20 text-xs"/>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-semibold text-gray-700">Box Size:</span>
+                            <select class="BoxSize border border-gray-300 rounded px-2 py-0.5 text-xs w-28">
+                                <option value="R-1" data-length="22" data-width="17" data-height="5">R-1 (22x17x5 inch)</option>
+                                <option value="R-2" data-length="16" data-width="13" data-height="13">R-2 (16x13x13 inch)</option>
+                                <option value="R-3" data-length="16" data-width="11" data-height="7">R-3 (16x11x7 inch)</option>
+                                <option value="R-4" data-length="13" data-width="10" data-height="7">R-4 (13x10x7 inch)</option>
+                                <option value="R-5" data-length="21" data-width="11" data-height="7">R-5 (21x11x7 inch)</option>
+                                <option value="R-6" data-length="11" data-width="10" data-height="8">R-6 (11x10x8 inch)</option>
+                                <option value="R-7" data-length="8" data-width="6" data-height="5">R-7 (8x6x5 inch)</option>
+                                <option value="R-8" data-length="12" data-width="12" data-height="1.5">R-8 (12x12x1.5 inch)</option>
+                                <option value="R-9" data-length="17" data-width="12" data-height="2">R-9 (17x12x2 inch)</option>
+                                <option value="R-10" data-length="12" data-width="9" data-height="2">R-10 (12x9x2 inch)</option>
+                                <option value="R-11" data-length="10" data-width="10" data-height="2">R-11 (10x10x2 inch)</option>
+                                <option value="R-12" data-length="13" data-width="9" data-height="5">R-12 (13x9x5 inch)</option>
+                                <option value="R-13" data-length="11" data-width="8" data-height="5">R-13 (11x8x5 inch)</option>
+                                <option value="R-14" data-length="14" data-width="12" data-height="10">R-14 (14x12x10 inch)</option>
+                                <option value="CUSTOM" data-length="" data-width="" data-height="">Custom Size</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button type="button" data-open-select-items class="${tm.btnItem}">+ Item</button>
+                            <button type="button" class="remove-box-btn text-red-500 hover:text-red-700 text-xs font-semibold px-3 py-1 rounded border border-red-300 bg-white">Remove Box</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="px-4 py-2 text-xs text-gray-500 border-b border-gray-200">
+                    <div class="grid grid-cols-12 gap-2 font-semibold">
+                        <div class="col-span-2">Order</div>
+                        <div class="col-span-2">Item</div>
+                        <div class="col-span-1 text-right">Item Code</div>
+                        <div class="col-span-1 text-right">Quantity</div>
+                        <div class="col-span-1 text-right">Weight</div>
+                        <div class="col-span-1 text-right">Box Size</div>
+                        <div class="col-span-1 text-right">GST</div>
+                        <div class="col-span-1 text-right">Item Total</div>
+                        <div class="col-span-1 text-right">Payment Type</div>
+                        <div class="col-span-1 text-center">Actions</div>
+                    </div>
+                </div>
+                <div class="items-container"></div>
+                <div class="px-4 py-3 flex flex-wrap justify-between items-center text-xs ${tm.boxSummary}">
+                    <div class="flex flex-wrap gap-4 text-gray-700 summary-info">
+                        <span class="order-summary"><span class="font-semibold">Order:-</span> 0</span>
+                        <span class="sku-summary"><span class="font-semibold">SKU Count:</span> 0</span>
+                        <span class="qty-summary"><span class="font-semibold">Total Quantity:</span> 0</span>
+                        <span class="weight-summary"><span class="font-semibold">Total Weight:-</span> 0.000 kg</span>
+                    </div>
+                    <div class="flex flex-wrap gap-4 text-gray-800">
+                        <span class="net-total"><span class="font-semibold">Net Total:</span> ₹ 0</span>
+                    </div>
+                </div>
+            </div>
+            <div id="availableCourierCompanies" class="mt-2 sm:mt-3 border-t border-gray-200 pt-2 sm:pt-3"></div>
+            <div class="mt-2 mb-4 flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                    <button class="${tm.btnAddBox} add-box-btn"><span>+ Add Box</span></button>
+                    <button type="button" class="${tm.btnListCourier} list-couriers-btn">📋 List Couriers</button>
+                </div>
+                <button type="button" class="remove-order-btn text-red-500 hover:text-red-700 text-sm font-semibold px-4 py-2 rounded">🗑 Remove Order</button>
+            </div>
+        `;
+
+        container.appendChild(newOrderDiv);
+        const boxElement = newOrderDiv.querySelector('[data-order-number]');
+        if (!boxElement) {
+            newOrderDiv.remove();
+            return { success: false, reason: 'Failed to create dispatch box for #' + orderNumber };
+        }
+
+        let addedItems = 0;
+        items.forEach(function(item) {
+            if (appendStructuredItemToBulkDispatchBox(boxElement, item)) {
+                addedItems++;
+            }
+        });
+
+        if (addedItems === 0) {
+            newOrderDiv.remove();
+            return { success: false, reason: 'No dispatchable items could be added for #' + orderNumber };
+        }
+
+        updateBoxTotals(boxElement);
+        setTimeout(function() { updateBadgeVisibility(boxElement); }, 100);
+        fetchCouriersForBox(boxElement);
+        updateBlueDartExcelExportButton();
+
+        return { success: true, orderNumber: orderNumber, itemCount: addedItems };
+    }
+
+    /**
+     * Prefill from customer page via structured server payload (no modal scraping).
+     */
+    (async function preloadSelectedOrdersFromCustomerPage() {
+        const PRESELECT_KEY = 'bulk_dispatch_preselect_ids';
+        const serverImportIds = <?= json_encode(array_values(array_map('intval', is_array($bulkImportLineIds ?? null) ? $bulkImportLineIds : [])), JSON_UNESCAPED_UNICODE) ?>;
+        const serverImportCustomerId = <?= (int)($bulkImportCustomerId ?? 0) ?>;
+
+        let selectedIds = [];
+        let customerId = serverImportCustomerId > 0 ? serverImportCustomerId : 0;
+
+        if (Array.isArray(serverImportIds) && serverImportIds.length) {
+            selectedIds = serverImportIds.map(function(id) { return String(id); });
+        } else {
+            let raw = null;
+            try { raw = sessionStorage.getItem(PRESELECT_KEY); } catch (err) { raw = null; }
+            if (!raw) return;
+            try {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    selectedIds = parsed;
+                } else if (parsed && typeof parsed === 'object') {
+                    customerId = parseInt(parsed.customer_id, 10) || customerId;
+                    selectedIds = Array.isArray(parsed.order_line_ids) ? parsed.order_line_ids : [];
+                }
+            } catch (err) {
+                selectedIds = [];
+            }
+        }
+
+        selectedIds = Array.from(new Set(
+            (Array.isArray(selectedIds) ? selectedIds : [])
+                .map(function(id) { return String(id).trim(); })
+                .filter(function(id) { return /^\d+$/.test(id) && id !== '0'; })
+        ));
+        if (!selectedIds.length) return;
+
+        function clearImportHandoffFromBrowser() {
+            try { sessionStorage.removeItem(PRESELECT_KEY); } catch (err) {}
+            try {
+                const cleanUrl = new URL(window.location.href);
+                if (cleanUrl.searchParams.has('import_ids') || cleanUrl.searchParams.has('customer_id')) {
+                    cleanUrl.searchParams.delete('import_ids');
+                    if (serverImportCustomerId > 0) cleanUrl.searchParams.delete('customer_id');
+                    window.history.replaceState({}, document.title, cleanUrl.toString());
+                }
+            } catch (err) {}
+        }
+
+        showAlert('Loading ' + selectedIds.length + ' selected item(s) into bulk dispatch…', 'success');
+
+        let importData = null;
+        try {
+            const payload = { order_ids: selectedIds };
+            if (customerId > 0) payload.customer_id = customerId;
+            const resp = await fetch('?page=orders&action=get_bulk_dispatch_import_payload', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(payload)
+            });
+            const text = await resp.text();
+            try {
+                importData = text ? JSON.parse(text) : null;
+            } catch (err) {
+                throw new Error('Invalid import response from server.');
+            }
+            if (!importData || !importData.success) {
+                showAlert((importData && importData.message) || 'Could not prepare selected items for bulk dispatch.', 'error');
+                return;
+            }
+        } catch (err) {
+            console.error(err);
+            showAlert((err && err.message) || 'Failed to load selected items for bulk dispatch.', 'error');
+            return;
+        }
+
+        const orders = Array.isArray(importData.orders) ? importData.orders : [];
+        const blocked = Array.isArray(importData.blocked) ? importData.blocked : [];
+        if (!orders.length) {
+            clearImportHandoffFromBrowser();
+            const blockedLabels = blocked.map(function(row) {
+                const orderNumber = String(row.order_number || '').trim();
+                const itemCode = String(row.item_code || '').trim();
+                const label = (orderNumber && itemCode) ? (orderNumber + '-' + itemCode) : (orderNumber || itemCode || ('#' + row.order_id));
+                const extra = row.message ? (' — ' + row.message) : '';
+                return label + ' (' + (row.status || 'blocked') + ')' + extra;
+            });
+            showAlert(
+                blockedLabels.length
+                    ? ('Selected items cannot be dispatched: ' + blockedLabels.join(', '))
+                    : 'No dispatchable orders found for the selected items.',
+                'error'
+            );
+            return;
+        }
+
+        if (blocked.length) {
+            const blockedLabels = blocked.map(function(row) {
+                const orderNumber = String(row.order_number || '').trim();
+                const itemCode = String(row.item_code || '').trim();
+                return ((orderNumber && itemCode) ? (orderNumber + '-' + itemCode) : (orderNumber || itemCode)) + ' (' + (row.status || 'blocked') + ')';
+            });
+            showAlert('Skipping ' + blocked.length + ' item(s): ' + blockedLabels.join(', '), 'warning');
+        }
+
+        let addedOrders = 0;
+        const skipReasons = [];
+        orders.forEach(function(orderGroup) {
+            const result = importStructuredOrderToBulkDispatch(orderGroup);
+            if (result.success) {
+                addedOrders++;
+            } else if (result.reason) {
+                skipReasons.push(result.reason);
+            }
+        });
+
+        if (addedOrders > 0) {
+            clearImportHandoffFromBrowser();
+            showAlert('Added ' + addedOrders + ' order(s) from selection' + (skipReasons.length ? ' (' + skipReasons.length + ' skipped)' : '') + '.', 'success');
+            if (customerId > 0) {
+                try { sessionStorage.removeItem('customer_bulk_dispatch_selection_' + customerId); } catch (err) {}
+            }
+        } else {
+            showAlert(
+                skipReasons.length
+                    ? ('Could not add selected items. ' + skipReasons.join(' | '))
+                    : 'Selected items could not be added to bulk dispatch.',
+                'error'
+            );
+        }
+    })();
 })();
 </script>

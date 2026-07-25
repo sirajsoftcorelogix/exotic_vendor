@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../../helpers/order_filter_autocomplete.php';
+require_once __DIR__ . '/../../helpers/order_list_filters.php';
 
 class Order
 {
@@ -49,7 +50,139 @@ class Order
             $data[$field] = is_numeric($data[$field] ?? null) ? (int) $data[$field] : 0;
         }
 
+        return $this->sanitizeOrderImportFields($data);
+    }
+
+    /**
+     * Sanitize string fields to match vp_orders column types (see production schema).
+     */
+    private function sanitizeOrderImportFields(array $data): array
+    {
+        foreach (['order_number', 'item_code', 'sku'] as $field) {
+            if (array_key_exists($field, $data) && $data[$field] !== null && $data[$field] !== '') {
+                $data[$field] = (string) $data[$field];
+            }
+        }
+
+        // location: varchar(255) NOT NULL — warehouse bin codes e.g. B7D3, 38201T
+        if (array_key_exists('location', $data)) {
+            $data['location'] = trim((string) ($data['location'] ?? ''));
+        }
+
+        // store_name: varchar(11) NULL
+        if (array_key_exists('store_name', $data)) {
+            $storeName = trim((string) ($data['store_name'] ?? ''));
+            if ($storeName === '' || strcasecmp($storeName, 'null') === 0) {
+                $data['store_name'] = null;
+            } elseif (strlen($storeName) > 11) {
+                $data['store_name'] = substr($storeName, 0, 11);
+            } else {
+                $data['store_name'] = $storeName;
+            }
+        }
+
+        if (array_key_exists('hsn', $data)) {
+            $data['hsn'] = trim((string) ($data['hsn'] ?? ''));
+        }
+
+        if (array_key_exists('backorder_delay', $data)) {
+            $data['backorder_delay'] = trim((string) ($data['backorder_delay'] ?? ''));
+        }
+
         return $data;
+    }
+
+    /**
+     * Normalize Exotic vendor order/fetch cart line `addons` for vp_orders.addons (JSON text).
+     *
+     * API shape: object map of addon label => price in INR, e.g. {"Add on Frame": 12995}
+     *
+     * @param mixed $raw
+     */
+    public static function normalizeVendorOrderLineAddons($raw): ?string
+    {
+        if ($raw === null || $raw === '' || $raw === [] || $raw === 0 || $raw === '0') {
+            return null;
+        }
+
+        if (is_string($raw)) {
+            $trimmed = trim($raw);
+            if ($trimmed === '' || $trimmed === '0') {
+                return null;
+            }
+            $decoded = json_decode($trimmed, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                return self::normalizeVendorOrderLineAddons($decoded);
+            }
+
+            return $trimmed;
+        }
+
+        if (!is_array($raw)) {
+            return null;
+        }
+
+        $out = [];
+        foreach ($raw as $name => $price) {
+            $label = trim((string) $name);
+            if ($label === '') {
+                continue;
+            }
+            if (is_numeric($price)) {
+                $out[$label] = (float) $price;
+            } elseif ($price !== null && $price !== '') {
+                $out[$label] = $price;
+            }
+        }
+
+        if ($out === []) {
+            return null;
+        }
+
+        return json_encode($out, JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Decode vp_orders.addons JSON for display: list of name + price rows.
+     *
+     * @param mixed $raw
+     * @return list<array{name: string, price: float}>
+     */
+    public static function parseVendorOrderLineAddonsList($raw): array
+    {
+        if ($raw === null || $raw === '' || $raw === [] || $raw === 0 || $raw === '0') {
+            return [];
+        }
+
+        if (is_string($raw)) {
+            $trimmed = trim($raw);
+            if ($trimmed === '' || $trimmed === '0') {
+                return [];
+            }
+            $decoded = json_decode($trimmed, true);
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
+                return [];
+            }
+            $raw = $decoded;
+        }
+
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        $rows = [];
+        foreach ($raw as $name => $price) {
+            $label = trim((string) $name);
+            if ($label === '') {
+                continue;
+            }
+            $rows[] = [
+                'name' => $label,
+                'price' => is_numeric($price) ? (float) $price : 0.0,
+            ];
+        }
+
+        return $rows;
     }
 
     /**
@@ -104,21 +237,7 @@ class Order
 		WHERE 1=1";
 
         $params = [];
-        if (!empty($filters['order_number'])) {
-            // Support comma-separated order numbers
-            $orderNumbers = is_array($filters['order_number'])
-                ? $filters['order_number']
-                : array_map('trim', explode(',', $filters['order_number']));
-            $orderNumbers = array_filter($orderNumbers); // Remove empty values
-
-            if (!empty($orderNumbers)) {
-                $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
-                $sql .= " AND vp_orders.order_number IN ($placeholders)";
-                foreach ($orderNumbers as $orderNum) {
-                    $params[] = $orderNum;
-                }
-            }
-        }
+        appendOrderNumberFilterSql($sql, $params, $filters['order_number'] ?? null);
         if (!empty($filters['item_code'])) {
             $sql .= " AND vp_orders.item_code LIKE ?";
             $params[] = '%' . $filters['item_code'] . '%';
@@ -148,30 +267,7 @@ class Order
             $sql .= " AND vp_orders.total_price <= ?";
             $params[] = $filters['max_amount'];
         }
-        if (!empty($filters['status_filter']) && $filters['status_filter'] !== 'all') {
-            if ($filters['status_filter'] === 'pending') {
-                //$sql .= " AND (vp_orders.po_number IS NULL OR vp_orders.po_number = '')";
-                $sql .= " AND vp_orders.status = 'pending'";
-            } elseif ($filters['status_filter'] === 'processed') {
-                //$sql .= " AND (vp_orders.po_number IS NOT NULL AND vp_orders.po_number != '')";
-                $sql .= " AND vp_orders.status IN ('ready_for_packing','po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
-            } elseif ($filters['status_filter'] === 'dispatch') {
-                $sql .= " AND vp_orders.status IN ('ready_for_dispatch')";
-            } elseif ($filters['status_filter'] === 'shipped') {
-                $sql .= " AND vp_orders.status = 'shipped'";
-            } elseif (!empty($filters['status_filter'])) {
-                //array of statuses
-                if (is_array($filters['status_filter'])) {
-                    $placeholders = implode(',', array_fill(0, count($filters['status_filter']), '?'));
-                    $sql .= " AND vp_orders.status IN ($placeholders)";
-                    foreach ($filters['status_filter'] as $status) {
-                        $params[] = $status;
-                    }
-                } else {
-                    $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
-                }
-            }
-        }
+        appendOrderStatusFilterSql($sql, $params, $filters);
         if (!empty($filters['country'])) {
             if ($filters['country'] == 'overseas') {
                 $sql .= " AND (vp_orders.shipping_country != 'IN' AND vp_orders.country != 'IN')";
@@ -192,19 +288,8 @@ class Order
         if (!empty($filters['options']) && $filters['options'] === 'express') {
             $sql .= " AND vp_orders.options LIKE '%express%' AND vp_orders.status = 'pending'";
         }
-        if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
-            //array of payment types
-            if (is_array($filters['payment_type'])) {
-                $placeholders = implode(',', array_fill(0, count($filters['payment_type']), '?'));
-                $sql .= " AND vp_orders.payment_type IN ($placeholders)";
-                foreach ($filters['payment_type'] as $payment_type) {
-                    $params[] = $payment_type;
-                }
-            } else {
-                $sql .= " AND vp_orders.payment_type = ?";
-                $params[] = $filters['payment_type'];
-            }
-        }
+        appendOrderPaymentTypeFilterSql($sql, $params, $filters);
+        appendOrderStockAvailabilityFilterSql($sql, $params, $filters);
         if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
             //$sql .= " AND vp_users.id = ?";
             //$params[] = $filters['staff_name'];
@@ -316,21 +401,7 @@ class Order
         }
         $sql .= ' WHERE 1=1';
         $params = [];
-        if (!empty($filters['order_number'])) {
-            // Support comma-separated order numbers
-            $orderNumbers = is_array($filters['order_number'])
-                ? $filters['order_number']
-                : array_map('trim', explode(',', $filters['order_number']));
-            $orderNumbers = array_filter($orderNumbers); // Remove empty values
-
-            if (!empty($orderNumbers)) {
-                $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
-                $sql .= " AND vp_orders.order_number IN ($placeholders)";
-                foreach ($orderNumbers as $orderNum) {
-                    $params[] = $orderNum;
-                }
-            }
-        }
+        appendOrderNumberFilterSql($sql, $params, $filters['order_number'] ?? null);
         if (!empty($filters['item_code'])) {
             $sql .= " AND item_code LIKE ?";
             $params[] = '%' . $filters['item_code'] . '%';
@@ -360,30 +431,7 @@ class Order
             $sql .= " AND total_price <= ?";
             $params[] = $filters['max_amount'];
         }
-        if (!empty($filters['status_filter']) && $filters['status_filter'] !== 'all') {
-            if ($filters['status_filter'] === 'pending') {
-                //$sql .= " AND (vp_orders.po_number IS NULL OR vp_orders.po_number = '')";
-                $sql .= " AND vp_orders.status = 'pending'";
-            } elseif ($filters['status_filter'] === 'processed') {
-                //$sql .= " AND (po_number IS NOT NULL AND po_number != '')";
-                $sql .= " AND vp_orders.status IN ('ready_for_packing','po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
-            } elseif ($filters['status_filter'] === 'dispatch') {
-                $sql .= " AND vp_orders.status IN ('ready_for_dispatch')";
-            } elseif ($filters['status_filter'] === 'shipped') {
-                $sql .= " AND vp_orders.status = 'shipped'";
-            } elseif (!empty($filters['status_filter'])) {
-                //array of statuses
-                if (is_array($filters['status_filter'])) {
-                    $placeholders = implode(',', array_fill(0, count($filters['status_filter']), '?'));
-                    $sql .= " AND vp_orders.status IN ($placeholders)";
-                    foreach ($filters['status_filter'] as $status) {
-                        $params[] = $status;
-                    }
-                } else {
-                    $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
-                }
-            }
-        }
+        appendOrderStatusFilterSql($sql, $params, $filters);
         if (!empty($filters['country'])) {
             $sql .= " AND vp_orders.shipping_country = '" . $filters['country'] . "'";
             //$params[] = '%' . $filters['country'] . '%';
@@ -400,18 +448,8 @@ class Order
         if (!empty($filters['options']) && $filters['options'] === 'express') {
             $sql .= " AND options LIKE '%express%' AND vp_orders.status = 'pending'";
         }
-        if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
-            if (is_array($filters['payment_type'])) {
-                $placeholders = implode(',', array_fill(0, count($filters['payment_type']), '?'));
-                $sql .= " AND vp_orders.payment_type IN ($placeholders)";
-                foreach ($filters['payment_type'] as $payment_type) {
-                    $params[] = $payment_type;
-                }
-            } else {
-                $sql .= " AND payment_type = ?";
-                $params[] = $filters['payment_type'];
-            }
-        }
+        appendOrderPaymentTypeFilterSql($sql, $params, $filters, 'payment_type');
+        appendOrderStockAvailabilityFilterSql($sql, $params, $filters);
         if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
             //$sql .= " AND vp_users.id = ?";
             //$params[] = $filters['staff_name'];
@@ -566,10 +604,10 @@ class Order
             }
         }
 
-        // ✅ Check for duplicate combination
-        $checkSql = "SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? AND sku = ? LIMIT 1";
+        // Check for duplicate combination (same key as bulk update / refresh upsert)
+        $checkSql = 'SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? LIMIT 1';
         $checkStmt = $this->db->prepare($checkSql);
-        $checkStmt->bind_param('sss', $data['order_number'], $data['item_code'], $data['sku']);
+        $checkStmt->bind_param('ss', $data['order_number'], $data['item_code']);
         $checkStmt->execute();
         $checkStmt->bind_result($count);
         $checkStmt->fetch();
@@ -636,8 +674,11 @@ class Order
             'sourcingfee',
             'customer_id',
             'store_name',
-            'custom_reduce'
+            'custom_reduce',
         ];
+        if ($this->vpOrdersHasAddonsColumn()) {
+            array_splice($InsertFields, array_search('options', $InsertFields, true) + 1, 0, ['addons']);
+        }
 
         // Build SQL query
         $columns = implode(', ', $InsertFields);
@@ -687,8 +728,14 @@ class Order
         //$this->db->set_charset('utf8mb4');
 
         // After execute
-        if (!$stmt->execute()) {
-            return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+        try {
+            if (!$stmt->execute()) {
+                return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+            }
+        } catch (\Throwable $e) {
+            $stmt->close();
+
+            return ['success' => false, 'message' => 'Database error: ' . $e->getMessage()];
         }
         $insertId = $this->db->insert_id; // ✅ use db object, not stmt
         $stmt->close();
@@ -1040,6 +1087,238 @@ class Order
         return null;
     }
 
+    /**
+     * Group selected vp_orders line IDs by order_number for bulk dispatch preload.
+     *
+     * @param list<int|string> $orderIds
+     * @return list<array{order_number:string,item_ids:list<int>}>
+     */
+    public function getOrderNumberGroupsByIds(array $orderIds): array
+    {
+        $split = $this->splitOrderIdsForBulkDispatch($orderIds);
+        return $split['orders'];
+    }
+
+    /**
+     * Split selected line IDs into dispatch-eligible groups vs cancelled/shipped blocked rows.
+     *
+     * @param list<int|string> $orderIds
+     * @param int $customerId When > 0, only lines for this customer are considered.
+     * @return array{
+     *   orders: list<array{order_number:string,item_ids:list<int>}>,
+     *   eligible_ids: list<int>,
+     *   blocked: list<array{order_id:int,order_number:string,item_code:string,status:string}>
+     * }
+     */
+    public function splitOrderIdsForBulkDispatch(array $orderIds, int $customerId = 0): array
+    {
+        $empty = [
+            'orders' => [],
+            'eligible_ids' => [],
+            'blocked' => [],
+        ];
+        $rows = $this->getOrdersByIds($orderIds);
+        if (!is_array($rows) || $rows === []) {
+            return $empty;
+        }
+
+        if ($customerId > 0) {
+            $filtered = array_values(array_filter($rows, static function (array $row) use ($customerId): bool {
+                return (int)($row['customer_id'] ?? 0) === $customerId;
+            }));
+            if ($filtered !== []) {
+                $rows = $filtered;
+            }
+        }
+
+        $blockedStatuses = ['cancelled', 'shipped', 'returned'];
+        $grouped = [];
+        $eligibleIds = [];
+        $blocked = [];
+
+        foreach ($rows as $row) {
+            $orderNumber = trim((string)($row['order_number'] ?? ''));
+            $itemId = (int)($row['id'] ?? 0);
+            if ($orderNumber === '' || $itemId <= 0) {
+                continue;
+            }
+
+            $invoiceIdRaw = $row['invoice_id'] ?? null;
+            $hasInvoice = $invoiceIdRaw !== null && $invoiceIdRaw !== '' && (int)$invoiceIdRaw > 0;
+            if ($hasInvoice) {
+                $blocked[] = [
+                    'order_id' => $itemId,
+                    'order_number' => $orderNumber,
+                    'item_code' => trim((string)($row['item_code'] ?? $row['sku'] ?? '')),
+                    'status' => 'invoiced',
+                    'message' => 'Already invoiced',
+                ];
+                continue;
+            }
+
+            $status = strtolower(trim((string)($row['status'] ?? '')));
+            if (in_array($status, $blockedStatuses, true)) {
+                $blocked[] = [
+                    'order_id' => $itemId,
+                    'order_number' => $orderNumber,
+                    'item_code' => trim((string)($row['item_code'] ?? $row['sku'] ?? '')),
+                    'status' => $status,
+                ];
+                continue;
+            }
+
+            $eligibleIds[] = $itemId;
+            if (!isset($grouped[$orderNumber])) {
+                $grouped[$orderNumber] = [
+                    'order_number' => $orderNumber,
+                    'item_ids' => [],
+                ];
+            }
+            if (!in_array($itemId, $grouped[$orderNumber]['item_ids'], true)) {
+                $grouped[$orderNumber]['item_ids'][] = $itemId;
+            }
+        }
+
+        return [
+            'orders' => array_values($grouped),
+            'eligible_ids' => array_values(array_unique($eligibleIds)),
+            'blocked' => $blocked,
+        ];
+    }
+
+    /**
+     * Build a fully structured payload for importing selected lines into the bulk dispatch UI.
+     * Does not rely on modal HTML scraping.
+     *
+     * @param list<int|string> $orderIds
+     * @return array{
+     *   orders: list<array<string,mixed>>,
+     *   blocked: list<array<string,mixed>>,
+     *   eligible_ids: list<int>
+     * }
+     */
+    public function buildBulkDispatchImportPayload(array $orderIds, int $customerId = 0): array
+    {
+        require_once __DIR__ . '/../../helpers/dispatch/shipping_address_validation.php';
+
+        $split = $this->splitOrderIdsForBulkDispatch($orderIds, $customerId);
+        // Explicit line IDs win: if customer filter matched nothing, retry without it.
+        if ($customerId > 0 && $split['orders'] === [] && $split['blocked'] === []) {
+            $split = $this->splitOrderIdsForBulkDispatch($orderIds, 0);
+        }
+
+        $blocked = $split['blocked'];
+        $ordersOut = [];
+        $eligibleIds = [];
+
+        foreach ($split['orders'] as $group) {
+            $orderNumber = trim((string)($group['order_number'] ?? ''));
+            $itemIds = array_values(array_filter(array_map('intval', $group['item_ids'] ?? [])));
+            if ($orderNumber === '' || $itemIds === []) {
+                continue;
+            }
+
+            $orderInfo = $this->getRemarksByOrderNumber($orderNumber);
+            if (!is_array($orderInfo)) {
+                $orderInfo = [];
+            }
+            $addressCheck = validateShippingAddressForDispatch($orderInfo);
+            if (empty($addressCheck['valid'])) {
+                foreach ($itemIds as $itemId) {
+                    $blocked[] = [
+                        'order_id' => $itemId,
+                        'order_number' => $orderNumber,
+                        'item_code' => '',
+                        'status' => 'invalid_address',
+                        'message' => (string)($addressCheck['message'] ?? 'Missing shipping address/pincode'),
+                    ];
+                }
+                continue;
+            }
+
+            $rows = $this->getOrdersByIds($itemIds);
+            if (!is_array($rows) || $rows === []) {
+                continue;
+            }
+
+            $items = [];
+            foreach ($rows as $row) {
+                $itemId = (int)($row['id'] ?? 0);
+                $itemCode = trim((string)($row['item_code'] ?? $row['sku'] ?? ''));
+                $status = strtolower(trim((string)($row['status'] ?? '')));
+                $invoiceIdRaw = $row['invoice_id'] ?? null;
+                $hasInvoice = $invoiceIdRaw !== null && $invoiceIdRaw !== '' && (int)$invoiceIdRaw > 0;
+
+                if ($itemId <= 0) {
+                    continue;
+                }
+                if ($hasInvoice || in_array($status, ['cancelled', 'returned', 'shipped'], true)) {
+                    $blocked[] = [
+                        'order_id' => $itemId,
+                        'order_number' => $orderNumber,
+                        'item_code' => $itemCode,
+                        'status' => $hasInvoice ? 'invoiced' : $status,
+                        'message' => $hasInvoice ? 'Already invoiced' : ('Status is ' . $status),
+                    ];
+                    continue;
+                }
+
+                $quantity = (int)($row['quantity'] ?? 0);
+                $finalprice = (float)($row['finalprice'] ?? 0);
+                $productWeight = (float)($row['product_weight'] ?? 0);
+                $paymentType = strtolower((string)($row['payment_type'] ?? '')) === 'cod' ? 'COD' : 'Prepaid';
+                $isExpress = strpos(strtolower((string)($row['options'] ?? '')), 'express') !== false;
+
+                $items[] = [
+                    'id' => $itemId,
+                    'order_number' => $orderNumber,
+                    'title' => trim((string)($row['title'] ?? 'Product')),
+                    'item_code' => $itemCode,
+                    'quantity' => $quantity,
+                    'product_weight' => $productWeight,
+                    'gst' => (string)($row['gst'] ?? '0'),
+                    'finalprice' => $finalprice,
+                    'item_total' => $finalprice,
+                    'payment_type' => $paymentType,
+                    'groupname' => (string)($row['groupname'] ?? ''),
+                    'is_express' => $isExpress ? 1 : 0,
+                ];
+                $eligibleIds[] = $itemId;
+            }
+
+            if ($items === []) {
+                continue;
+            }
+
+            $shipCountry = strtoupper(trim((string)($orderInfo['shipping_country'] ?? '')));
+            if ($shipCountry === '') {
+                $shipCountry = strtoupper(trim((string)($orderInfo['country'] ?? '')));
+            }
+            $isInternational = $shipCountry !== '' && !in_array($shipCountry, ['IN', 'IND', 'INDIA'], true);
+            $customerName = trim(
+                trim((string)($orderInfo['first_name'] ?? '')) . ' ' . trim((string)($orderInfo['last_name'] ?? ''))
+            );
+            if ($customerName === '') {
+                $customerName = 'Customer';
+            }
+
+            $ordersOut[] = [
+                'order_number' => $orderNumber,
+                'customer_id' => (int)($orderInfo['customer_id'] ?? ($rows[0]['customer_id'] ?? 0)),
+                'customer_name' => $customerName,
+                'shipping_address' => (string)($addressCheck['address'] ?? ''),
+                'is_international' => $isInternational,
+                'items' => $items,
+            ];
+        }
+
+        return [
+            'orders' => $ordersOut,
+            'blocked' => $blocked,
+            'eligible_ids' => array_values(array_unique($eligibleIds)),
+        ];
+    }
+
     function getRemarksByOrderNumber($order_number)
     {
         $sql = "SELECT * FROM vp_order_info WHERE order_number = ?";
@@ -1150,7 +1429,7 @@ class Order
             'message'       => $affected > 0 ? 'Remarks updated successfully' : 'No changes made (value was already the same)'
         ];
     }
-    public function updateCustomerNameAndEmail($order_number, $name, $phone, $address_line1 = '', $address_line2 = '', $city = '', $zipcode = '', $country = '', $billing_address_line1 = '', $billing_address_line2 = '', $billing_city = '', $billing_zipcode = '', $billing_country = '')
+    public function updateCustomerNameAndEmail($order_number, $name, $phone, $address_line1 = '', $address_line2 = '', $city = '', $zipcode = '', $country = '', $billing_address_line1 = '', $billing_address_line2 = '', $billing_city = '', $billing_zipcode = '', $billing_country = '', $gstin = '', $shipping_gstin = '', $state = '', $shipping_state = '', $first_name = '', $last_name = '', $shipping_first_name = '', $shipping_last_name = '')
     {
 
         // Update customer (main operation)
@@ -1172,12 +1451,34 @@ class Order
         // Update address – don't fail the whole operation if this fails
         $sql_addr = "
             UPDATE vp_order_info 
-            SET address_line1 = ?, address_line2 = ? , city = ?, zipcode = ?, country = ?, shipping_address_line1 = ?, shipping_address_line2 = ?, shipping_city = ?, shipping_zipcode = ?, shipping_country = ?
+            SET first_name = ?, last_name = ?, address_line1 = ?, address_line2 = ?, city = ?, state = ?, zipcode = ?, country = ?, gstin = ?,
+                shipping_first_name = ?, shipping_last_name = ?, shipping_address_line1 = ?, shipping_address_line2 = ?, shipping_city = ?, shipping_state = ?, shipping_zipcode = ?, shipping_country = ?, shipping_gstin = ?
             WHERE order_number = ?
         ";
         $stmt_addr = $this->db->prepare($sql_addr);
         if ($stmt_addr) {
-            $stmt_addr->bind_param('sssssssssss', $address_line1, $address_line2, $city, $zipcode, $country, $billing_address_line1, $billing_address_line2, $billing_city, $billing_zipcode, $billing_country, $order_number);
+            $stmt_addr->bind_param(
+                'sssssssssssssssssss',
+                $first_name,
+                $last_name,
+                $address_line1,
+                $address_line2,
+                $city,
+                $state,
+                $zipcode,
+                $country,
+                $gstin,
+                $shipping_first_name,
+                $shipping_last_name,
+                $billing_address_line1,
+                $billing_address_line2,
+                $billing_city,
+                $shipping_state,
+                $billing_zipcode,
+                $billing_country,
+                $shipping_gstin,
+                $order_number
+            );
             $stmt_addr->execute();  // ← ignore result
         }
 
@@ -1190,18 +1491,39 @@ class Order
     {
         $sql = "SELECT * FROM vp_order_status WHERE admin_id != 0 ORDER BY id ASC";
         $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
         $stmt->execute();
         $result = $stmt->get_result();
-        if ($result && $result->num_rows > 0) {
-            $result->fetch_all(MYSQLI_ASSOC);
-        }
-        //array list with slug as key
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
         $statusList = [];
-        foreach ($result as $row) {
+        foreach ($rows as $row) {
             $statusList[$row['admin_id']] = $row['slug'];
         }
+
         return $statusList;
     }
+
+    private ?bool $vpOrdersHasAddonsColumn = null;
+
+    public function vpOrdersHasAddonsColumn(): bool
+    {
+        if ($this->vpOrdersHasAddonsColumn !== null) {
+            return $this->vpOrdersHasAddonsColumn;
+        }
+        $has = false;
+        $res = $this->db->query("SHOW COLUMNS FROM vp_orders LIKE 'addons'");
+        if ($res && $res->num_rows > 0) {
+            $has = true;
+            $res->free();
+        }
+        $this->vpOrdersHasAddonsColumn = $has;
+
+        return $has;
+    }
+
     function updateImportedOrder($data)
     {
         // Validate inputs
@@ -1210,12 +1532,18 @@ class Order
         }
 
         $data = $this->normalizeOrderNumericFields($data);
+        if (!isset($data['updated_at']) || trim((string)$data['updated_at']) === '') {
+            $data['updated_at'] = date('Y-m-d H:i:s');
+        }
+
+        $includeAddons = $this->vpOrdersHasAddonsColumn();
+        $addonsSql = $includeAddons ? 'addons = ?, ' : '';
 
         // Prepare SQL statement
         $sql = "UPDATE vp_orders SET 
                 shipping_country = ?, title = ?, description = ?, size = ?, color = ?, 
                 groupname = ?, subcategories = ?, currency = ?, itemprice = ?, finalprice = ?, 
-                image = ?, marketplace_vendor = ?, quantity = ?, options = ?, gst = ?, hsn = ?, 
+                image = ?, marketplace_vendor = ?, quantity = ?, options = ?, {$addonsSql}gst = ?, hsn = ?, 
                 local_stock = ?, cost_price = ?, location = ?, order_date = ?, processed_time = ?,
                 numsold = ?, product_weight = ?, product_weight_unit = ?,
                 prod_height = ?, prod_width = ?, prod_length = ?, length_unit = ?,
@@ -1246,6 +1574,11 @@ class Order
             $data['marketplace_vendor'],
             $data['quantity'],
             json_encode($data['options']),
+        ];
+        if ($includeAddons) {
+            $values[] = $data['addons'] ?? null;
+        }
+        $values = array_merge($values, [
             $data['gst'],
             $data['hsn'],
             $data['local_stock'],
@@ -1276,8 +1609,8 @@ class Order
             $data['esd'],
             $data['updated_at'],
             $data['order_number'],
-            $data['item_code']
-        ];
+            $data['item_code'],
+        ]);
 
         // Build types string dynamically based on actual PHP types
         $types = '';
@@ -1307,12 +1640,161 @@ class Order
         //echo $ref . "\n";
         //}
         //print_r($stmt);
-        //comment the below line after execution on 09-06-2024
-        // if ($stmt->execute()) {
-        //     return ['success' => true, 'message' => 'Order updated successfully.', 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'item_code' => $data['item_code']];
-        // } else {
-        //     return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
-        // }
+        try {
+            if (!$stmt->execute()) {
+                return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
+            }
+        } catch (\Throwable $e) {
+            $stmt->close();
+
+            return ['success' => false, 'message' => 'Database error: ' . $e->getMessage()];
+        }
+        $affected = $stmt->affected_rows;
+        $stmt->close();
+
+        return [
+            'success' => true,
+            'message' => 'Order updated successfully.',
+            'affected_rows' => $affected,
+            'order_number' => $data['order_number'],
+            'item_code' => $data['item_code'],
+        ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function getOrderLinesByOrderNumber(string $orderNumber): array
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return [];
+        }
+        $addonCol = $this->vpOrdersHasAddonsColumn() ? ', addons' : '';
+        $sql = 'SELECT id, order_number, item_code, sku, title, quantity, status' . $addonCol . ', size, color
+                FROM vp_orders WHERE order_number = ? ORDER BY id ASC';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        return is_array($rows) ? $rows : [];
+    }
+
+    public function orderLineExists(string $orderNumber, string $itemCode, string $sku): bool
+    {
+        $checkSql = 'SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? AND sku = ? LIMIT 1';
+        $checkStmt = $this->db->prepare($checkSql);
+        if (!$checkStmt) {
+            return false;
+        }
+        $checkStmt->bind_param('sss', $orderNumber, $itemCode, $sku);
+        $checkStmt->execute();
+        $checkStmt->bind_result($count);
+        $checkStmt->fetch();
+        $checkStmt->close();
+
+        return (int)($count ?? 0) > 0;
+    }
+
+    /**
+     * Match imported lines the same way bulk update does (order_number + item_code).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findOrderLineByOrderNumberAndItemCode(string $orderNumber, string $itemCode): ?array
+    {
+        $orderNumber = trim($orderNumber);
+        $itemCode = trim($itemCode);
+        if ($orderNumber === '' || $itemCode === '') {
+            return null;
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT id, order_number, item_code, sku, status FROM vp_orders WHERE order_number = ? AND item_code = ? LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('ss', $orderNumber, $itemCode);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return is_array($row) ? $row : null;
+    }
+
+    /**
+     * @return array<string, string> slug => title
+     */
+    public function orderStatusSlugTitleMap(): array
+    {
+        $map = [];
+        $res = $this->db->query('SELECT slug, title FROM vp_order_status WHERE slug IS NOT NULL AND slug != ""');
+        if (!$res) {
+            return $map;
+        }
+        while ($row = $res->fetch_assoc()) {
+            $slug = trim((string)($row['slug'] ?? ''));
+            if ($slug !== '') {
+                $map[$slug] = trim((string)($row['title'] ?? $slug));
+            }
+        }
+        $res->free();
+
+        return $map;
+    }
+
+    /**
+     * Insert new line or update existing row from vendor refresh.
+     */
+    public function upsertRefreshedOrderLine(array $data, bool $updateStatus): array
+    {
+        $orderNumber = trim((string)($data['order_number'] ?? ''));
+        $itemCode = trim((string)($data['item_code'] ?? ''));
+        $sku = trim((string)($data['sku'] ?? ''));
+
+        if ($orderNumber === '' || $itemCode === '') {
+            return ['success' => false, 'message' => 'Order number and item code are required.', 'action' => 'none'];
+        }
+
+        $existingLine = $this->findOrderLineByOrderNumberAndItemCode($orderNumber, $itemCode);
+        $exists = $existingLine !== null;
+        if ($exists && !$updateStatus && isset($existingLine['status'])) {
+            $data['status'] = $existingLine['status'];
+        }
+
+        if ($exists) {
+            $data['updated_at'] = date('Y-m-d H:i:s');
+            $result = $this->updateImportedOrder($data);
+            if (!is_array($result)) {
+                return [
+                    'success' => false,
+                    'message' => 'Update did not return a valid response.',
+                    'action' => 'failed',
+                ];
+            }
+            $result['action'] = 'updated';
+
+            return $result;
+        }
+
+        $result = $this->insertOrder($data);
+        if (!is_array($result)) {
+            return [
+                'success' => false,
+                'message' => 'Insert did not return a valid response.',
+                'action' => 'failed',
+            ];
+        }
+        $result['action'] = !empty($result['success']) ? 'inserted' : 'failed';
+
+        return $result;
     }
     function skuUpdateImportedOrder($data)
     {
@@ -1584,6 +2066,7 @@ class Order
             'shipping_zipcode',
             'shipping_mobile',
             'shipping_email',
+            'shipping_gstin',
             'total',
             'giftvoucher',
             'giftvoucher_reduce',
@@ -1959,5 +2442,78 @@ class Order
         } else {
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }
+    }
+
+    public function hasOrderLines(string $orderNumber): bool
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return false;
+        }
+
+        $stmt = $this->db->prepare('SELECT 1 FROM vp_orders WHERE order_number = ? LIMIT 1');
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $hasLines = (bool)$stmt->get_result()->fetch_row();
+        $stmt->close();
+
+        return $hasLines;
+    }
+
+    public function hasOrderInfo(string $orderNumber): bool
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return false;
+        }
+
+        $stmt = $this->db->prepare('SELECT 1 FROM vp_order_info WHERE order_number = ? LIMIT 1');
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $hasInfo = (bool)$stmt->get_result()->fetch_row();
+        $stmt->close();
+
+        return $hasInfo;
+    }
+
+    /**
+     * POS checkout uses WZ… receipt numbers; vendor import may store the numeric API orderid instead.
+     *
+     * @return array{success: bool, orders: int, info: int}
+     */
+    public function rekeyOrderNumber(string $fromOrderNumber, string $toOrderNumber): array
+    {
+        $from = trim($fromOrderNumber);
+        $to = trim($toOrderNumber);
+        if ($from === '' || $to === '' || strcasecmp($from, $to) === 0) {
+            return ['success' => true, 'orders' => 0, 'info' => 0];
+        }
+
+        $ordersUpdated = 0;
+        $infoUpdated = 0;
+
+        $stmt = $this->db->prepare('UPDATE vp_orders SET order_number = ? WHERE order_number = ?');
+        if ($stmt) {
+            $stmt->bind_param('ss', $to, $from);
+            $stmt->execute();
+            $ordersUpdated = (int)$stmt->affected_rows;
+            $stmt->close();
+        }
+
+        $stmtInfo = $this->db->prepare('UPDATE vp_order_info SET order_number = ? WHERE order_number = ?');
+        if ($stmtInfo) {
+            $stmtInfo->bind_param('ss', $to, $from);
+            $stmtInfo->execute();
+            $infoUpdated = (int)$stmtInfo->affected_rows;
+            $stmtInfo->close();
+        }
+
+        return ['success' => true, 'orders' => $ordersUpdated, 'info' => $infoUpdated];
     }
 }

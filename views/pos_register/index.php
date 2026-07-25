@@ -349,6 +349,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         </div>
 
         <div>
+          <div id="pmStockWarning" class="hidden mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-900"></div>
           <div class="flex flex-wrap gap-2" id="pmBadges"></div>
 
           <div
@@ -464,8 +465,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         </div>
 
         <div>
-          <label class="text-gray-500">Last Name</label>
-          <input name="last_name" class="w-full border rounded px-2 py-1.5" placeholder="Optional">
+          <label class="text-gray-500">Last Name <span class="text-red-600">*</span></label>
+          <input name="last_name" required class="w-full border rounded px-2 py-1.5">
         </div>
 
         <div>
@@ -650,7 +651,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
             <div id="payment_summary_paid" class="mt-0.5 text-lg font-bold text-orange-700 tabular-nums">₹ 0.00</div>
           </div>
           <div>
-            <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Balance</div>
+            <div id="payment_summary_balance_label" class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Balance</div>
             <div id="payment_summary_balance" class="mt-0.5 text-lg font-bold text-emerald-700 tabular-nums">₹ 0.00</div>
           </div>
         </div>
@@ -714,14 +715,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   <div class="payment-split-row px-4 py-3 sm:grid sm:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_2.5rem] sm:gap-2 sm:items-start space-y-2 sm:space-y-0">
     <div>
       <label class="sm:hidden text-[10px] font-semibold text-slate-500 uppercase">Mode</label>
-      <select class="payment-split-mode mt-0.5 sm:mt-0 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
-        <option value="cash">Cash</option>
-        <option value="upi">UPI</option>
-        <option value="bank_transfer">Bank transfer</option>
-        <option value="pos_machine">POS machine</option>
-        <option value="razorpay">Razorpay</option>
-        <option value="cheque">Cheque</option>
-      </select>
+      <select class="payment-split-mode mt-0.5 sm:mt-0 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></select>
     </div>
     <div>
       <label class="sm:hidden text-[10px] font-semibold text-slate-500 uppercase">Amount (₹)</label>
@@ -745,7 +739,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     <div class="flex shrink-0 items-center justify-between border-b px-5 py-3">
       <div>
         <h2 class="text-lg font-semibold text-slate-800">Confirm Billing &amp; Shipping Details</h2>
-        <p class="mt-0.5 text-xs text-slate-500">Required: First name and State. Other fields use defaults when left blank.</p>
+        <p class="mt-0.5 text-xs text-slate-500">Required: First name, Last name and State. Other fields use defaults when left blank.</p>
       </div>
       <button type="button" onclick="closeAddressConfirmModal()" class="text-lg leading-none text-gray-500 hover:text-gray-800" aria-label="Close">✕</button>
     </div>
@@ -757,7 +751,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         <h3 class="text-sm font-semibold text-slate-800">Billing Information</h3>
         <div class="grid grid-cols-2 gap-3">
           <label class="block text-xs font-medium text-slate-600">First Name <span class="field-req-star text-red-600">*</span><input id="confirm_first_name" class="w-full rounded border" placeholder="First Name"></label>
-          <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_last_name" class="w-full rounded border" placeholder="Last Name"></label>
+          <label class="block text-xs font-medium text-slate-600">Last Name <span class="field-req-star text-red-600">*</span><input id="confirm_last_name" class="w-full rounded border" placeholder="Last Name"></label>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <label class="block text-xs font-medium text-slate-600">Email<input id="confirm_email" type="email" class="w-full rounded border" placeholder="Email"></label>
@@ -854,6 +848,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
             </select>
           </label>
         </div>
+        <label class="block text-xs font-medium text-slate-600">GSTIN<input id="confirm_sgstin" class="w-full rounded border uppercase" placeholder="GSTIN (optional)" maxlength="15"></label>
       </div>
     </div>
     </div>
@@ -961,8 +956,19 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     </div>
     <div class="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3 rounded-b-2xl flex-shrink-0">
       <button type="button" id="deliveryStatusBackBtn" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Back</button>
-      <button type="button" id="deliveryStatusSubmitBtn" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Submit order</button>
+      <button type="button" id="deliveryStatusSubmitBtn" class="inline-flex items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-70">
+        <span id="deliveryStatusSubmitBtnLabel">Submit order</span>
+      </button>
     </div>
+  </div>
+</div>
+
+<!-- POS checkout loading (covers screen after delivery/GST steps) -->
+<div id="posCheckoutLoadingOverlay" class="fixed inset-0 z-[10003] hidden items-center justify-center bg-black/40 backdrop-blur-sm" role="status" aria-live="polite" aria-busy="true">
+  <div class="mx-4 flex max-w-sm flex-col items-center rounded-2xl bg-white px-8 py-7 text-center shadow-2xl">
+    <i class="fas fa-spinner fa-spin text-3xl text-orange-600" aria-hidden="true"></i>
+    <p id="posCheckoutLoadingTitle" class="mt-4 text-base font-semibold text-slate-800">Creating order…</p>
+    <p id="posCheckoutLoadingHint" class="mt-1 text-sm text-slate-500">Your request was accepted. Order creation is in progress.</p>
   </div>
 </div>
 
@@ -1274,14 +1280,49 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     }
   }
 
-  var POS_PAYMENT_MODE_OPTIONS = [
-    ["cash", "Cash"],
-    ["upi", "UPI"],
-    ["bank_transfer", "Bank transfer"],
-    ["pos_machine", "POS machine"],
-    ["razorpay", "Razorpay"],
-    ["cheque", "Cheque"]
-  ];
+  var POS_PAYMENT_MODE_OPTIONS = <?= json_encode(
+      $pos_payment_mode_options ?? [],
+      JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+  ) ?>;
+
+  function populatePaymentSplitModeSelect(selectEl, selectedMode) {
+    if (!selectEl) return;
+    var prev = String(selectedMode || selectEl.value || "cash").toLowerCase();
+    selectEl.innerHTML = "";
+    var options = Array.isArray(POS_PAYMENT_MODE_OPTIONS) ? POS_PAYMENT_MODE_OPTIONS : [];
+    if (!options.length) {
+      options = [
+        ["cash", "Cash"],
+        ["cod", "Cash on Delivery (COD)"],
+        ["upi", "UPI"],
+        ["bank_transfer", "Bank transfer"],
+        ["pos_machine", "POS machine"],
+        ["razorpay", "Razorpay"],
+        ["cheque", "Cheque"]
+      ];
+    }
+    options.forEach(function(pair) {
+      if (!Array.isArray(pair) || !pair[0]) return;
+      var opt = document.createElement("option");
+      opt.value = String(pair[0]);
+      opt.textContent = String(pair[1] || pair[0]);
+      selectEl.appendChild(opt);
+    });
+    if (prev && selectEl.querySelector('option[value="' + prev.replace(/"/g, "") + '"]')) {
+      selectEl.value = prev;
+    } else if (selectEl.options.length) {
+      selectEl.selectedIndex = 0;
+    }
+  }
+
+  function refreshAllPaymentSplitModeSelects() {
+    var container = getPaymentSplitRowsContainer();
+    if (!container) return;
+    container.querySelectorAll(".payment-split-row").forEach(function(row) {
+      var modeEl = row.querySelector(".payment-split-mode");
+      populatePaymentSplitModeSelect(modeEl, modeEl ? modeEl.value : "cash");
+    });
+  }
 
   function formatPaymentInr(amount) {
     var n = parseFloat(String(amount));
@@ -1345,6 +1386,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var modeEl = row.querySelector(".payment-split-mode");
     var amtEl = row.querySelector(".payment-split-amount");
     var txnEl = row.querySelector(".payment-split-txn");
+    populatePaymentSplitModeSelect(modeEl, mode || "cash");
     if (modeEl && mode) modeEl.value = mode;
     if (amtEl != null && amount != null && amount !== "") amtEl.value = String(amount);
     if (txnEl && txn) txnEl.value = txn;
@@ -1360,7 +1402,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     addPaymentSplitRow("cash", isFinite(total) && total > 0 ? total : "", "");
   }
 
-  function collectPaymentSplitsFromUi() {
+  function collectAllPaymentSplitRowsFromUi() {
     var container = getPaymentSplitRowsContainer();
     if (!container) return [];
     var out = [];
@@ -1374,9 +1416,33 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     return out;
   }
 
+  function getPaymentSplitAdvanceTotalFromUi() {
+    var total = 0;
+    collectAllPaymentSplitRowsFromUi().forEach(function(s) {
+      if (s.mode !== "cod") total += s.amount;
+    });
+    return Math.round(total * 100) / 100;
+  }
+
+  function getPaymentSplitCodTotalFromUi() {
+    var total = 0;
+    collectAllPaymentSplitRowsFromUi().forEach(function(s) {
+      if (s.mode === "cod") total += s.amount;
+    });
+    return Math.round(total * 100) / 100;
+  }
+
+  function paymentSplitHasCodFromUi() {
+    return getPaymentSplitCodTotalFromUi() > 0.001;
+  }
+
+  function collectPaymentSplitsFromUi() {
+    return collectAllPaymentSplitRowsFromUi();
+  }
+
   function getPaymentSplitTotalFromUi() {
     var total = 0;
-    collectPaymentSplitsFromUi().forEach(function(s) {
+    collectAllPaymentSplitRowsFromUi().forEach(function(s) {
       total += s.amount;
     });
     return Math.round(total * 100) / 100;
@@ -1396,27 +1462,34 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   }
 
   function recalcPaymentSplitUi() {
-    var splits = collectPaymentSplitsFromUi();
+    var splits = collectAllPaymentSplitRowsFromUi();
     var splitTotal = getPaymentSplitTotalFromUi();
+    var advanceTotal = getPaymentSplitAdvanceTotalFromUi();
+    var codTotal = getPaymentSplitCodTotalFromUi();
+    var hasCod = paymentSplitHasCodFromUi();
     var orderTotal = getCurrentCheckoutTotal();
     var stage = String(document.getElementById("payment_stage")?.value || "final").toLowerCase();
-    var target = stage === "final" ? orderTotal : orderTotal;
+    var target = orderTotal;
     var balance = Math.round((target - splitTotal) * 100) / 100;
 
-    syncLegacyPaymentHiddenFields(splits, splitTotal);
+    syncLegacyPaymentHiddenFields(splits, hasCod ? advanceTotal : splitTotal);
 
     var orderEl = document.getElementById("payment_summary_order");
     var paidEl = document.getElementById("payment_summary_paid");
     var balEl = document.getElementById("payment_summary_balance");
+    var balLabelEl = document.getElementById("payment_summary_balance_label");
     var hintEl = document.getElementById("payment_summary_hint");
     var countEl = document.getElementById("payment_split_count");
     var totalEl = document.getElementById("payment_split_total");
 
     if (orderEl) orderEl.textContent = formatPaymentInr(target);
-    if (paidEl) paidEl.textContent = formatPaymentInr(splitTotal);
+    if (paidEl) paidEl.textContent = formatPaymentInr(hasCod ? advanceTotal : splitTotal);
+    if (balLabelEl) balLabelEl.textContent = hasCod ? "COD pending" : "Balance";
     if (balEl) {
-      balEl.textContent = formatPaymentInr(balance);
-      if (stage === "final" && Math.abs(balance) < 0.02) {
+      balEl.textContent = formatPaymentInr(hasCod ? codTotal : balance);
+      if (hasCod) {
+        balEl.className = "mt-0.5 text-lg font-bold text-amber-700 tabular-nums";
+      } else if (stage === "final" && Math.abs(balance) < 0.02) {
         balEl.className = "mt-0.5 text-lg font-bold text-emerald-700 tabular-nums";
       } else if (balance > 0.01) {
         balEl.className = "mt-0.5 text-lg font-bold text-amber-700 tabular-nums";
@@ -1429,7 +1502,17 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (countEl) countEl.textContent = String(splits.length);
     if (totalEl) totalEl.textContent = formatPaymentInr(splitTotal);
     if (hintEl) {
-      if (stage === "final" && balance > 0.02) {
+      if (hasCod) {
+        if (Math.abs(splitTotal - orderTotal) > 0.02) {
+          hintEl.textContent = "Advance plus COD must equal order total (" + formatPaymentInr(orderTotal) + ").";
+          hintEl.classList.remove("hidden");
+        } else if (codTotal > 0.001) {
+          hintEl.textContent = formatPaymentInr(codTotal) + " will be collected on delivery.";
+          hintEl.classList.remove("hidden");
+        } else {
+          hintEl.classList.add("hidden");
+        }
+      } else if (stage === "final" && balance > 0.02) {
         hintEl.textContent = "Add " + formatPaymentInr(balance) + " more to match order total.";
         hintEl.classList.remove("hidden");
       } else if (stage === "final" && balance < -0.02) {
@@ -1461,33 +1544,55 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       showToast("⚠ " + msg, "red");
     };
 
-    var splits = collectPaymentSplitsFromUi();
+    var splits = collectAllPaymentSplitRowsFromUi();
     if (!splits.length) {
-      showErr("Add at least one payment line with amount greater than zero.");
+      showErr("Add at least one payment line.");
       return null;
     }
 
     var paymentStage = String(document.getElementById("payment_stage")?.value || "final").toLowerCase();
+    var advanceTotal = getPaymentSplitAdvanceTotalFromUi();
+    var codTotal = getPaymentSplitCodTotalFromUi();
     var paymentAmount = getPaymentSplitTotalFromUi();
+    var hasCod = codTotal > 0.001;
 
-    if (paymentAmount <= 0) {
-      showErr("Payment amount must be greater than zero.");
-      return null;
+    for (var i = 0; i < splits.length; i++) {
+      if (!isFinite(splits[i].amount) || splits[i].amount <= 0) {
+        showErr("Each payment line must have amount greater than zero.");
+        return null;
+      }
     }
 
-    if (paymentStage === "final") {
+    if (hasCod) {
       if (paymentAmount + 0.02 < grandTotal) {
-        showErr("Final payment must be FULL amount ₹ " + grandTotal);
+        showErr("Advance plus COD must equal order total ₹ " + grandTotal);
         return null;
       }
       if (paymentAmount - 0.02 > grandTotal) {
-        showErr("Over payment not allowed");
+        showErr("Advance plus COD exceeds order total.");
         return null;
       }
-    } else if (paymentStage === "partial" || paymentStage === "advance") {
-      if (paymentAmount + 0.02 >= grandTotal) {
-        showErr("Partial payment must be less than total ₹ " + grandTotal);
+      paymentStage = "advance";
+    } else {
+      if (paymentAmount <= 0) {
+        showErr("Payment amount must be greater than zero.");
         return null;
+      }
+
+      if (paymentStage === "final") {
+        if (paymentAmount + 0.02 < grandTotal) {
+          showErr("Final payment must be FULL amount ₹ " + grandTotal);
+          return null;
+        }
+        if (paymentAmount - 0.02 > grandTotal) {
+          showErr("Over payment not allowed");
+          return null;
+        }
+      } else if (paymentStage === "partial" || paymentStage === "advance") {
+        if (paymentAmount + 0.02 >= grandTotal) {
+          showErr("Partial payment must be less than total ₹ " + grandTotal);
+          return null;
+        }
       }
     }
 
@@ -1519,7 +1624,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     hideErr();
     return {
       payment_stage: paymentStage,
-      payment_amount: paymentAmount,
+      payment_amount: hasCod ? advanceTotal : paymentAmount,
       payment_splits: splits,
       sec269st_cash_warning_confirmed: cashLegNeeds269 ? "1" : "0",
       primary_mode: splits.reduce(function(best, s) { return s.amount > best.amount ? s : best; }, splits[0]).mode,
@@ -1659,6 +1764,54 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (modal) {
       modal.classList.add("hidden");
     }
+    setPosCheckoutLoading(false);
+  }
+
+  var posCheckoutLoadingActive = false;
+
+  function setPosCheckoutLoading(isLoading, options) {
+    options = options || {};
+    posCheckoutLoadingActive = !!isLoading;
+
+    var globalOverlay = document.getElementById("posCheckoutLoadingOverlay");
+    var submitBtn = document.getElementById("deliveryStatusSubmitBtn");
+    var backBtn = document.getElementById("deliveryStatusBackBtn");
+    var submitLabel = document.getElementById("deliveryStatusSubmitBtnLabel");
+    var titleEl = document.getElementById("posCheckoutLoadingTitle");
+    var hintEl = document.getElementById("posCheckoutLoadingHint");
+
+    if (titleEl && options.title) {
+      titleEl.textContent = options.title;
+    } else if (titleEl && !isLoading) {
+      titleEl.textContent = "Creating order…";
+    }
+    if (hintEl && options.hint) {
+      hintEl.textContent = options.hint;
+    } else if (hintEl && !isLoading) {
+      hintEl.textContent = "Your request was accepted. Order creation is in progress.";
+    }
+
+    if (globalOverlay) {
+      globalOverlay.classList.toggle("hidden", !isLoading);
+      globalOverlay.classList.toggle("flex", !!isLoading);
+      globalOverlay.setAttribute("aria-busy", isLoading ? "true" : "false");
+    }
+    if (submitBtn) {
+      submitBtn.disabled = !!isLoading;
+    }
+    if (backBtn) {
+      backBtn.disabled = !!isLoading;
+    }
+    if (submitLabel) {
+      submitLabel.textContent = isLoading ? "Creating order…" : "Submit order";
+    }
+
+    ["overseasGstBackBtn", "overseasGstNoBtn", "overseasGstYesBtn"].forEach(function(id) {
+      var btn = document.getElementById(id);
+      if (btn) {
+        btn.disabled = !!isLoading;
+      }
+    });
   }
 
   function openAddressConfirmModal() {
@@ -1979,7 +2132,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       confirm_scity: firstNonEmpty(shipping.scity, shipping.shipping_city, shipping.city),
       confirm_sstate: firstNonEmpty(shipping.sstate, shipping.shipping_state, shipping.state),
       confirm_szip: firstNonEmpty(shipping.szip, shipping.shipping_zipcode, shipping.zip, shipping.zipcode),
-      confirm_sphone: firstNonEmpty(shipping.sphone, shipping.shipping_mobile, shipping.mobile, shipping.phone)
+      confirm_sphone: firstNonEmpty(shipping.sphone, shipping.shipping_mobile, shipping.mobile, shipping.phone),
+      confirm_sgstin: firstNonEmpty(shipping.sgstin, shipping.shipping_gstin)
     };
     var billingCountryRaw = firstNonEmpty(billing.country, billing.billing_country, "IN");
     var shippingCountryRaw = firstNonEmpty(shipping.scountry, shipping.shipping_country, shipping.country, "IN");
@@ -2020,7 +2174,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     "confirm_scity",
     "confirm_sstate",
     "confirm_szip",
-    "confirm_scountry"
+    "confirm_scountry",
+    "confirm_sgstin"
   ];
 
   var POS_BILLING_TO_SHIPPING_FIELDS = [
@@ -2032,7 +2187,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     ["confirm_city", "confirm_scity"],
     ["confirm_state", "confirm_sstate"],
     ["confirm_zip", "confirm_szip"],
-    ["confirm_country", "confirm_scountry"]
+    ["confirm_country", "confirm_scountry"],
+    ["confirm_gstin", "confirm_sgstin"]
   ];
 
   function isShippingSameAsBillingChecked() {
@@ -2136,7 +2292,6 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var shippingFirstName = read("confirm_sfirst_name");
     var shippingLastName = read("confirm_slast_name");
     var shippingFullName = [shippingFirstName, shippingLastName].filter(Boolean).join(" ").trim();
-    var omitShippingOnOrder = hasConfirmShippingFieldsFilled();
     return {
       confirm_address_submit: "1",
       confirm_first_name: read("confirm_first_name"),
@@ -2162,8 +2317,9 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       confirm_szip: read("confirm_szip"),
       confirm_scountry: read("confirm_scountry"),
       confirm_sphone: read("confirm_sphone"),
+      confirm_sgstin: read("confirm_sgstin").toUpperCase(),
       confirm_shipping_same_as_billing: isShippingSameAsBillingChecked() ? "1" : "0",
-      confirm_omit_shipping_api: omitShippingOnOrder ? "1" : "0",
+      confirm_omit_shipping_api: "0",
       customer_residency_status: read("customer_residency_status") || "INDIAN_RESIDENT",
       customer_pan: read("customer_pan").replace(/\s+/g, "").toUpperCase(),
       customer_aadhaar: read("customer_aadhaar").replace(/\D/g, ""),
@@ -2214,7 +2370,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   }
 
   function clearAddressValidationState() {
-    ["confirm_first_name", "confirm_phone", "confirm_zip", "confirm_state", "confirm_state_select", "confirm_email", "confirm_gstin", "customer_pan", "customer_aadhaar", "passport_number", "country_of_residence"].forEach(function(id) {
+    ["confirm_first_name", "confirm_last_name", "confirm_phone", "confirm_zip", "confirm_state", "confirm_state_select", "confirm_email", "confirm_gstin", "confirm_sgstin", "customer_pan", "customer_aadhaar", "passport_number", "country_of_residence"].forEach(function(id) {
       setPosFieldInvalid(id, false);
     });
     POS_SHIPPING_ADDRESS_FIELD_IDS.forEach(function(id) {
@@ -2379,12 +2535,18 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var missing = [];
     var firstInvalidId = "";
     var firstName = String(payload.confirm_first_name || "").trim();
+    var lastName = String(payload.confirm_last_name || "").trim();
     var state = String(payload.confirm_state || "").trim();
     var zip = String(payload.confirm_zip || "").trim();
     if (!firstName) {
       missing.push("First name");
       setPosFieldInvalid("confirm_first_name", true);
       firstInvalidId = "confirm_first_name";
+    }
+    if (!lastName) {
+      missing.push("Last name");
+      setPosFieldInvalid("confirm_last_name", true);
+      if (!firstInvalidId) firstInvalidId = "confirm_last_name";
     }
     if (!zip) {
       missing.push("ZIP / Pincode");
@@ -2408,6 +2570,20 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         setPosFieldInvalid("confirm_state", true);
         if (!firstInvalidId) firstInvalidId = "confirm_state";
       }
+    }
+
+    var shippingGstin = String(payload.confirm_sgstin || "").trim().toUpperCase();
+    if (shippingGstin !== "" && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(shippingGstin)) {
+      setPosFieldInvalid("confirm_sgstin", true);
+      var gstinSummary = document.getElementById("addressConfirmValidationSummary");
+      if (gstinSummary) {
+        gstinSummary.textContent = "Shipping GSTIN format is invalid.";
+        gstinSummary.classList.remove("hidden");
+      }
+      showToast("⚠ Shipping GSTIN format is invalid.", "red");
+      var sgstinEl = document.getElementById("confirm_sgstin");
+      if (sgstinEl) sgstinEl.focus();
+      return false;
     }
 
     if (missing.length) {
@@ -2858,6 +3034,9 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   });
 
   function createOrderNow(addressPayload) {
+    if (posCheckoutLoadingActive) {
+      return;
+    }
     var customerId = getSelectedCustomerId();
     var live = typeof window.getPosCartTotalsForCheckout === "function" ? window.getPosCartTotalsForCheckout() : null;
     var disc =
@@ -2947,6 +3126,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (Array.isArray(listPricePayload) && listPricePayload.length > 0) {
       body.list_line_prices = listPricePayload;
     }
+    setPosCheckoutLoading(true);
     fetch("index.php?page=pos_register&action=checkout-create", {
       method: "POST",
       credentials: "same-origin",
@@ -2994,6 +3174,9 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       .catch(function (err) {
         console.error(err);
         showToast(err && err.message ? err.message : "Checkout request failed", "red");
+      })
+      .finally(function () {
+        setPosCheckoutLoading(false);
       });
   }
 

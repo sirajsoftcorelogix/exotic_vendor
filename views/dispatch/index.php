@@ -6,6 +6,13 @@
     
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-3xl font-bold">Customer Invoices</h1>
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="<?php echo base_url('?page=sales_returns&action=index'); ?>"
+               class="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-white px-4 py-2 text-sm font-semibold text-orange-800 hover:bg-orange-50">
+                <i class="fas fa-rotate-left text-xs" aria-hidden="true"></i>
+                Sales returns
+            </a>
+        </div>
         <!-- <a href="<?php //echo base_url('?page=invoices&action=create'); ?>" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700">+ Create Invoice</a> -->
     </div>
     
@@ -224,7 +231,7 @@
                     if (!empty($orderNumbers)):
                         $orderLinks = [];
                         foreach (array_keys($orderNumbers) as $num) {
-                            $orderLinks[] = '<a href="' . base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . urlencode($num)) . '" class="text-blue-600 hover:underline">' . htmlspecialchars($num) . '</a>';
+                            $orderLinks[] = '<a href="' . base_url('?page=posorders&action=get_order_details_html&type=outer&order_number=' . rawurlencode($num)) . '" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline" title="View order details">' . htmlspecialchars($num) . '</a>';
                         }
                     ?>
                     <p class="text-xs text-gray-500 mt-1">Order No.</p>
@@ -294,7 +301,20 @@
                 <div class="flex flex-col gap-2">
                   <div>
                     <p class="text-xs text-gray-500">Customer</p>
-                    <p class="font-semibold text-gray-800"><?php echo htmlspecialchars($invoice['name'] ?? '-'); ?></p>
+                    <?php
+                      $customerName = trim((string)($invoice['name'] ?? ''));
+                      $customerId = (int)($invoice['customer_id'] ?? 0);
+                      if ($customerName === '') {
+                          $customerName = '-';
+                      }
+                    ?>
+                    <p class="font-semibold text-gray-800">
+                      <?php if ($customerId > 0 && $customerName !== '-'): ?>
+                        <a href="<?php echo htmlspecialchars(base_url('?page=customer&action=view&customer_id=' . $customerId)); ?>" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline" title="View customer details"><?php echo htmlspecialchars($customerName); ?></a>
+                      <?php else: ?>
+                        <?php echo htmlspecialchars($customerName); ?>
+                      <?php endif; ?>
+                    </p>
                     <p class="text-xs text-gray-500"><?php echo htmlspecialchars($invoice['email'] ?? ''); ?></p>
                     <p class="text-xs text-gray-500"><?php echo htmlspecialchars($invoice['phone'] ?? ''); ?></p>
                   </div>
@@ -504,6 +524,25 @@
                     <?php endif; ?>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="updateStatusAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Update Status</button>
                     <?php if (strtolower(trim((string)($invoice['status'] ?? ''))) !== 'cancelled'): ?>
+                    <?php
+                      $salesReturnHref = base_url('?page=sales_returns&action=create&invoice_id=' . (int) $invoice['id']);
+                      if (!empty($orderNumbers)) {
+                          $firstOrderNum = (string) array_key_first($orderNumbers);
+                          if ($firstOrderNum !== '') {
+                              $salesReturnHref = base_url(
+                                  '?page=sales_returns&action=create&order_number=' . rawurlencode($firstOrderNum)
+                                  . '&invoice_id=' . (int) $invoice['id']
+                              );
+                          }
+                      }
+                    ?>
+                    <a href="<?php echo htmlspecialchars($salesReturnHref, ENT_QUOTES, 'UTF-8'); ?>"
+                       data-sales-return-create
+                       data-sales-return-url="<?php echo htmlspecialchars($salesReturnHref, ENT_QUOTES, 'UTF-8'); ?>"
+                       <?php if (!empty($orderNumbers)): ?>
+                       data-order-number="<?php echo htmlspecialchars((string) array_key_first($orderNumbers), ENT_QUOTES, 'UTF-8'); ?>"
+                       <?php endif; ?>
+                       class="block px-4 py-2 text-orange-700 hover:bg-orange-50 font-medium">Sales return</a>
                     <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelInvoiceAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Invoice</button>
                     <?php endif; ?>
                   </div>

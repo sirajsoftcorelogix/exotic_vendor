@@ -1,0 +1,47 @@
+---
+description: Exotic India API integration layout (vendor-api + retail-api)
+globs: integrations/exotic/**,helpers/exotic_india_api.php,controllers/POSRegisterController.php
+alwaysApply: false
+---
+
+# Exotic India Integrations (`integrations/exotic/`)
+
+All Exotic India HTTP clients live here. Do not add new cURL blocks in controllers.
+
+## Layout
+
+| Path | API base | Purpose |
+|------|----------|---------|
+| `vendor_api.php` | `https://www.exoticindia.com/vendor-api` | Product fetch/modify, order modify, group-fetch |
+| `Clients/RetailApiClient.php` | `https://www.exoticindia.com/api` | POS cart, `/product/code`, `/order/create` |
+| `Clients/OrderClient.php` | vendor-api | `/order/modify` |
+| `Support/CartResponseParser.php` | — | Parse retail cart JSON success/messages |
+| `Support/OrderResponseParser.php` | — | Parse order/create order number |
+| `Support/RetailApiDeviceIdResolver.php` | — | `x-api-deviceid` from warehouse name |
+| `ExoticIndiaGateway.php` | both | Facade: `create()`, `retail()`, order status sync |
+
+## Usage
+
+```php
+// Retail (POS)
+require_once 'integrations/exotic/Clients/RetailApiClient.php';
+$retail = RetailApiClient::create($conn);
+$res = $retail->call('/cart/retrieve', 'GET', $query, null, null, $extraHeaders);
+
+// Vendor-api (legacy procedural — still supported)
+require_once 'helpers/exotic_india_api.php'; // shim → integrations/exotic/vendor_api.php
+$result = exotic_india_api_post('/order/modify', $postBody);
+
+// Gateway (order status sync + retail accessor)
+$gateway = ExoticIndiaGateway::create($conn);
+$gateway->updateOrderLineFromSlug($slug, $orderRow);
+$gateway->retail()->call('/product/code', 'GET', ['code' => $sku]);
+```
+
+## Rules
+
+- **New retail endpoints** → `RetailApiClient::call()` only.
+- **New vendor-api endpoints** → add to `vendor_api.php` or a new `Clients/*Client.php`.
+- **Cart response parsing** → `CartResponseParser` (never duplicate in controllers).
+- `helpers/exotic_india_api.php` is a **shim** — implement in `integrations/exotic/vendor_api.php`.
+- `POSRegisterController::exotic_api_call()` is deprecated; delegates to `RetailApiClient`.

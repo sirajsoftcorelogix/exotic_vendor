@@ -1,15 +1,21 @@
 <?php
 require_once 'models/pos/pos.php';
 require_once 'models/user/user.php';
+require_once dirname(__DIR__) . '/helpers/pos_payment_receipt.php';
+require_once dirname(__DIR__) . '/integrations/exotic/Clients/RetailApiClient.php';
+require_once dirname(__DIR__) . '/integrations/exotic/Support/CartResponseParser.php';
+require_once dirname(__DIR__) . '/integrations/exotic/Support/OrderResponseParser.php';
 
 class POSRegisterController
 {
     private $product;
     private $pos;
+    private RetailApiClient $retailApiClient;
 
     public function __construct($conn)
     {
-        $this->pos     = new pos($conn);
+        $this->pos = new pos($conn);
+        $this->retailApiClient = RetailApiClient::create($conn instanceof mysqli ? $conn : null);
     }
 
     /**
@@ -403,7 +409,7 @@ class POSRegisterController
     /**
      * After full payment: import order from vendor API and create tax invoice for receipt screen.
      */
-    private function finalizePosReceiptInvoice(mysqli $conn, string $orderNumber, string $paymentStage, array $compliance, string $customInvoiceNumber = ''): array
+    private function finalizePosReceiptInvoice(mysqli $conn, string $orderNumber, string $paymentStage, array $compliance, string $customInvoiceNumber = '', bool $createAdvanceInvoice = false): array
     {
         $out = [
             'import_status' => '',
@@ -415,7 +421,11 @@ class POSRegisterController
             'invoice_pdf_disabled_hint' => 'Tax invoice is available after payment is received in full.',
         ];
 
-        if ($paymentStage !== 'final') {
+        $invoiceStatus = pos_payment_resolve_auto_invoice_status($conn, $orderNumber);
+        if ($invoiceStatus === null) {
+            $out['invoice_pdf_disabled_hint'] = pos_payment_has_recorded_payments($conn, $orderNumber)
+                ? 'Invoice could not be determined for this order.'
+                : 'No payments recorded — order receipt only.';
             return $out;
         }
 
@@ -434,7 +444,11 @@ class POSRegisterController
             }
 
             $posInv = $this->getPosInvoiceControllerForCheckout();
-            $invRes = $posInv->createAutoInvoiceForOrder($orderNumber, $customInvoiceNumber);
+            $invRes = $posInv->createAutoInvoiceForOrder(
+                $orderNumber,
+                $customInvoiceNumber,
+                $invoiceStatus === 'final'
+            );
 
             if (!empty($invRes['success']) && !empty($invRes['invoice_id'])) {
                 $invoiceId = (int)$invRes['invoice_id'];
@@ -462,6 +476,35 @@ class POSRegisterController
             error_log('[POS checkout finalize invoice] ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             return $out;
         }
+    }
+
+    /**
+     * Persist billing/shipping GSTIN from checkout confirm payload onto vp_order_info after import.
+     */
+    private function patchPosCheckoutOrderInfoFromConfirmPayload(mysqli $conn, string $orderNumber, array $payload): void
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return;
+        }
+
+        $gstin = strtoupper(trim((string)($payload['confirm_gstin'] ?? '')));
+        $shippingGstin = strtoupper(trim((string)($payload['confirm_sgstin'] ?? '')));
+        if ($gstin === '' && $shippingGstin === '') {
+            return;
+        }
+
+        $sql = 'UPDATE vp_order_info SET
+            gstin = CASE WHEN ? <> "" THEN ? ELSE gstin END,
+            shipping_gstin = CASE WHEN ? <> "" THEN ? ELSE shipping_gstin END
+            WHERE order_number = ?';
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return;
+        }
+        $stmt->bind_param('ssssss', $gstin, $gstin, $shippingGstin, $shippingGstin, $orderNumber);
+        $stmt->execute();
+        $stmt->close();
     }
 
     /**
@@ -509,8 +552,11 @@ class POSRegisterController
             return $result;
         }
 
+        require_once __DIR__ . '/../integrations/exotic/ExoticIndiaGateway.php';
+        $exoticGateway = ExoticIndiaGateway::create($conn);
+
         foreach ($rows as $row) {
-            $apiRes = $this->updateExoticVendorOrderItemStatus([
+            $apiRes = $exoticGateway->updateOrderItemStatus([
                 'orderid' => $orderNumber,
                 'level' => 'item',
                 'order_status' => $exoticAdminCode,
@@ -521,7 +567,7 @@ class POSRegisterController
             ++$result['api_called'];
             if (empty($apiRes['success'])) {
                 ++$result['api_failed'];
-                error_log('[POS fulfillment status API] Order ' . $orderNumber . ' item ' . (string)($row['id'] ?? '') . ': ' . (string)($apiRes['error'] ?? 'failed'));
+                error_log('[POS fulfillment status API] Order ' . $orderNumber . ' item ' . (string)($row['id'] ?? '') . ': ' . (string)($apiRes['message'] ?? 'failed'));
             }
         }
 
@@ -786,50 +832,6 @@ class POSRegisterController
         return trim($note) !== '' ? trim($note) . "\n" . $line : $line;
     }
 
-    /**
-     * Mirrors models/comman/tables.php::updateExoticIndiaOrderStatus for POS checkout.
-     *
-     * @param array{orderid:string,level:string,order_status:int,itemcode:string,size:string,color:string} $apiData
-     * @return array{success:bool,http_code:int,raw:string,error:string}
-     */
-    private function updateExoticVendorOrderItemStatus(array $apiData): array
-    {
-        $postData = [
-            'makeRequestOf' => 'vendors-orderjson',
-            'orderid' => $apiData['orderid'],
-            'level' => $apiData['level'],
-            'order_status' => (string)$apiData['order_status'],
-            'itemcode' => $apiData['itemcode'],
-            'size' => $apiData['size'],
-            'color' => $apiData['color'],
-        ];
-        $headers = [
-            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-            'x-adminapitest: 1',
-            'Content-Type: application/x-www-form-urlencoded',
-        ];
-
-        $ch = curl_init('https://www.exoticindia.com/vendor-api/order/modify');
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        $response = curl_exec($ch);
-        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        $raw = (string)$response;
-        $ok = ($error === '' && $httpCode >= 200 && $httpCode < 300);
-        return [
-            'success' => $ok,
-            'http_code' => $httpCode,
-            'raw' => $raw,
-            'error' => $error !== '' ? $error : ($ok ? '' : 'HTTP ' . $httpCode . ' ' . substr($raw, 0, 500)),
-        ];
-    }
-
     private function appendHighValueComplianceToNote(string $note, float $invoiceAmount, string $paymentMode, array $compliance): string
     {
         if (empty($compliance['is_high_value'])) {
@@ -954,6 +956,7 @@ class POSRegisterController
             $_SESSION['discount_coupon'],
             $_SESSION['gift_voucher'],
             $_SESSION['custom_discount'],
+            $_SESSION['pos_exotic_cart_custom_reduce'],
             $_SESSION['pos_coupon_api_debug'],
             $_SESSION['pos_order_create_api_debug']
         );
@@ -1116,6 +1119,7 @@ class POSRegisterController
             'country_list' => $countryList,
             'pos_india_states' => $posCountryStates['IN'] ?? [],
             'pos_country_states' => $posCountryStates,
+            'pos_payment_mode_options' => $this->posPaymentModeOptionsForView(),
         ]);
     }
 
@@ -1279,6 +1283,8 @@ class POSRegisterController
                         'szip' => trim((string)($info['shipping_zipcode'] ?? '')),
                         'scountry' => trim((string)($info['shipping_country'] ?? 'IN')),
                         'sphone' => trim((string)($info['shipping_mobile'] ?? '')),
+                        'sgstin' => trim((string)($info['shipping_gstin'] ?? '')),
+                        'shipping_gstin' => trim((string)($info['shipping_gstin'] ?? '')),
                     ];
                 }
             }
@@ -1347,6 +1353,8 @@ class POSRegisterController
             'szip' => $pick($shippingVc['szip'] ?? '', $shippingOrder['szip'] ?? '', $shippingSession['szip'] ?? ''),
             'scountry' => $pick($shippingVc['scountry'] ?? '', $shippingOrder['scountry'] ?? '', $shippingSession['scountry'] ?? ''),
             'sphone' => $pick($shippingVc['sphone'] ?? '', $shippingOrder['sphone'] ?? '', $shippingSession['sphone'] ?? ''),
+            'sgstin' => $pick($shippingVc['sgstin'] ?? '', $shippingOrder['sgstin'] ?? '', $shippingOrder['shipping_gstin'] ?? '', $shippingSession['sgstin'] ?? ''),
+            'shipping_gstin' => $pick($shippingVc['shipping_gstin'] ?? '', $shippingOrder['shipping_gstin'] ?? '', $shippingOrder['sgstin'] ?? '', $shippingSession['shipping_gstin'] ?? ''),
         ];
 
         echo json_encode([
@@ -1367,6 +1375,7 @@ class POSRegisterController
     {
         is_login();
         require_once 'models/user/user.php';
+        require_once 'helpers/stock_report_filters.php';
         global $conn;
         $usersModel = new User($conn);
 
@@ -1391,14 +1400,7 @@ class POSRegisterController
             $warehouseName = $warehouse['address_title'] ?? 'No Warehouse';
         }
 
-        $filters = [
-            'search' => $_GET['search'] ?? '',
-            'category' => $_GET['category'] ?? 'allProducts',
-            'stock_status' => $_GET['stock_status'] ?? 'all',
-            'limit' => $_GET['limit'] ?? 200,
-            'page_no' => isset($_GET['page_no']) ? max(1, (int)$_GET['page_no']) : 1,
-            'warehouse_id' => $reportWh,
-        ];
+        $filters = parseStockReportFiltersFromRequest($_GET, $reportWh);
 
         $categories = ['allProducts' => 'All Products'] + getCategories();
         $totalRows = $this->pos->getStockReportCount($filters);
@@ -1416,6 +1418,7 @@ class POSRegisterController
             'warehouse_name' => $warehouseName,
             'categories' => $categories,
             'filters' => $filters,
+            'group_filter_fields' => getStockReportGroupFilterFieldDefinitions(),
             'rows' => $rows,
             'page_no' => $pageNo,
             'limit' => $limit,
@@ -1872,6 +1875,40 @@ class POSRegisterController
         exit;
     }
 
+    /**
+     * Cancel an in-progress stock report export and remove temp files from session.
+     */
+    public function stockReportExportCancel(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $payload = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $exportId = trim((string) ($payload['export_id'] ?? ''));
+        if ($exportId === '') {
+            echo json_encode(['success' => true, 'message' => 'Export cancelled.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $job = $this->loadStockReportExportJob($exportId);
+        if ($job) {
+            $this->cleanupStockReportExportJob($exportId);
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Export cancelled.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
     /** @param array<string, mixed> $payload @return array<string, mixed> */
     private function resolveStockReportFiltersFromPayload(array $payload): array
     {
@@ -1893,14 +1930,19 @@ class POSRegisterController
             }
         }
 
-        return [
-            'search' => trim((string) ($payload['search'] ?? '')),
-            'category' => trim((string) ($payload['category'] ?? 'allProducts')),
-            'stock_status' => trim((string) ($payload['stock_status'] ?? 'all')),
-            'warehouse_id' => $reportWh,
-            'limit' => self::STOCK_REPORT_EXPORT_BATCH_SIZE,
-            'page_no' => 1,
-        ];
+        return $this->parseStockReportFiltersFromPayload($payload, $reportWh);
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function parseStockReportFiltersFromPayload(array $payload, int $reportWh): array
+    {
+        require_once 'helpers/stock_report_filters.php';
+
+        $filters = parseStockReportFiltersFromRequest($payload, $reportWh);
+        $filters['limit'] = self::STOCK_REPORT_EXPORT_BATCH_SIZE;
+        $filters['page_no'] = 1;
+
+        return $filters;
     }
 
     /** @return array<string, mixed>|null */
@@ -1956,7 +1998,7 @@ class POSRegisterController
 
         fputcsv($handle, [
             'SKU',
-            'Category',
+            'Group Name',
             'Location',
             'Stock Qty',
         ]);
@@ -2134,6 +2176,13 @@ class POSRegisterController
         }
 
         $localStock = max(0, (int) ($product['local_stock'] ?? 0));
+        $stockLocation = trim((string) ($product['location'] ?? ''));
+        if ($stockLocation === '') {
+            $stockLocation = $defaultWarehouseName;
+        }
+        if ($stockLocation !== '') {
+            $productModel->syncProductLocation($productId, $stockLocation);
+        }
 
         $conn->begin_transaction();
         try {
@@ -2145,7 +2194,7 @@ class POSRegisterController
                     'size' => trim((string) ($product['size'] ?? '')),
                     'color' => trim((string) ($product['color'] ?? '')),
                     'warehouse_id' => $defaultWarehouseId,
-                    'location' => $defaultWarehouseName,
+                    'location' => $stockLocation,
                     'movement_type' => 'OPENING_STOCK',
                     'quantity' => $localStock,
                     'ref_type' => 'STOCK_REPORT_REFRESH',
@@ -2207,7 +2256,7 @@ class POSRegisterController
     private function loadStockReportRefreshProduct(mysqli $conn, int $productId): ?array
     {
         $stmt = $conn->prepare(
-            'SELECT id, sku, item_code, size, color, IFNULL(local_stock, 0) AS local_stock
+            'SELECT id, sku, item_code, size, color, IFNULL(local_stock, 0) AS local_stock, IFNULL(location, \'\') AS location
              FROM vp_products WHERE id = ? AND is_active = 1 LIMIT 1'
         );
         if (!$stmt) {
@@ -2827,7 +2876,7 @@ class POSRegisterController
             return [];
         }
 
-        $headers = $this->buildExoticPosApiRequestHeaders();
+        $headers = $this->retailApiClient->buildRequestHeaders();
         $baseUrl = 'https://www.exoticindia.com/api/product/code';
         $out = [];
 
@@ -2871,34 +2920,6 @@ class POSRegisterController
         }
 
         return $out;
-    }
-
-    /** @return list<string> */
-    private function buildExoticPosApiRequestHeaders(): array
-    {
-        $deviceId = $this->resolveApiDeviceId();
-        $headers = [
-            'x-api-key: aeRGoUvQLCxztK0Wzxmv9O2VRJ2H1B44',
-            'x-api-deviceid: ' . $deviceId,
-            'x-api-appplayerid: POS-Web-Terminal',
-            'x-api-countrycode: IN',
-            'x-api-euid:' . (string)($_SESSION['x_api_euid'] ?? ''),
-            'User-Agent: ExoticPOS',
-        ];
-        if (!empty($_SESSION['x_api_jwt'])) {
-            $headers[] = 'x-api-jwt:' . (string)$_SESSION['x_api_jwt'];
-        }
-        if (!empty($_SESSION['x_api_browsehistory'])) {
-            $headers[] = 'x-api-browsehistory:' . (string)$_SESSION['x_api_browsehistory'];
-        }
-        if (!empty($_SESSION['x_api_etd'])) {
-            $headers[] = 'x-api-etd:' . (string)$_SESSION['x_api_etd'];
-        }
-        if (!empty($_SESSION['x_api_etd_pincode'])) {
-            $headers[] = 'x-api-etd-pincode:' . (string)$_SESSION['x_api_etd_pincode'];
-        }
-
-        return $headers;
     }
 
     /**
@@ -3103,6 +3124,143 @@ class POSRegisterController
     }
 
     /**
+     * POS stock context for a VP product at the session warehouse.
+     * Allows order creation even when current-store stock is zero, unmapped, or fulfilled elsewhere.
+     *
+     * @return array{
+     *   current_warehouse_id:int,
+     *   current_warehouse_name:string,
+     *   current_stock_qty:float,
+     *   mapped_at_current:bool,
+     *   mapped_anywhere:bool,
+     *   alternative_warehouses:list<array{warehouse_id:int,warehouse_name:string,stock_qty:float}>,
+     *   default_warehouse:?array{id:int,address_title:string},
+     *   allow_order:bool,
+     *   enforce_qty_cap:bool,
+     *   qty_cap:?int,
+     *   warning_message:string,
+     *   warning_type:string
+     * }
+     */
+    private function resolvePosStockContext($conn, int $productId, int $currentWarehouseId, string $currentWarehouseName = ''): array
+    {
+        $currentWarehouseName = trim($currentWarehouseName);
+        $empty = [
+            'current_warehouse_id' => $currentWarehouseId,
+            'current_warehouse_name' => $currentWarehouseName,
+            'current_stock_qty' => 0.0,
+            'mapped_at_current' => false,
+            'mapped_anywhere' => false,
+            'alternative_warehouses' => [],
+            'default_warehouse' => null,
+            'allow_order' => true,
+            'enforce_qty_cap' => false,
+            'qty_cap' => null,
+            'warning_message' => '',
+            'warning_type' => 'none',
+        ];
+
+        if ($productId <= 0 || !$conn) {
+            return $empty;
+        }
+
+        $stockSql = "
+            SELECT sm.warehouse_id,
+                   COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
+                   sm.running_stock AS stock_qty
+            FROM vp_stock_movements sm
+            INNER JOIN (
+                SELECT warehouse_id, product_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE product_id = ?
+                GROUP BY warehouse_id, product_id
+            ) latest ON latest.max_id = sm.id
+            LEFT JOIN exotic_address ea ON ea.id = sm.warehouse_id
+            WHERE sm.product_id = ?
+            ORDER BY warehouse_name ASC";
+
+        $stockStmt = $conn->prepare($stockSql);
+        if (!$stockStmt) {
+            return $empty;
+        }
+        $stockStmt->bind_param('ii', $productId, $productId);
+        $stockStmt->execute();
+        $rows = $stockStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stockStmt->close();
+
+        $mappedAtCurrent = false;
+        $currentStock = 0.0;
+        $alternativeWarehouses = [];
+        foreach ($rows as $row) {
+            $wid = (int)($row['warehouse_id'] ?? 0);
+            $stockQty = (float)($row['stock_qty'] ?? 0);
+            $entry = [
+                'warehouse_id' => $wid,
+                'warehouse_name' => trim((string)($row['warehouse_name'] ?? '')),
+                'stock_qty' => $stockQty,
+            ];
+            if ($wid === $currentWarehouseId) {
+                $mappedAtCurrent = true;
+                $currentStock = $stockQty;
+            } elseif ($stockQty > 0) {
+                $alternativeWarehouses[] = $entry;
+            }
+        }
+
+        $mappedAnywhere = !empty($rows);
+        $defaultWarehouse = $this->getDefaultWarehouseRow($conn);
+        $storeLabel = $currentWarehouseName !== '' ? $currentWarehouseName : 'this store';
+
+        $altNames = array_values(array_filter(array_map(static function (array $w): string {
+            return trim((string)($w['warehouse_name'] ?? ''));
+        }, $alternativeWarehouses)));
+
+        $warningMessage = '';
+        $warningType = 'none';
+
+        if (!$mappedAnywhere) {
+            $warningType = 'unmapped_anywhere';
+            $defaultName = trim((string)($defaultWarehouse['address_title'] ?? ''));
+            if ($defaultName === '') {
+                $defaultName = 'Default Store';
+            }
+            $warningMessage = 'This item is not mapped to any store. It will be treated as mapped to the default store ('
+                . $defaultName . '). You can create an order for ' . $storeLabel . '.';
+        } elseif (!$mappedAtCurrent && !empty($altNames)) {
+            $warningType = 'unmapped_current';
+            $warningMessage = 'This item is not mapped to ' . $storeLabel . '. Stock is available at '
+                . implode(', ', $altNames) . '. You can still create an order for ' . $storeLabel . '.';
+        } elseif (!$mappedAtCurrent) {
+            $warningType = 'unmapped_current';
+            $warningMessage = 'This item is not mapped to ' . $storeLabel . '. You can still create an order for ' . $storeLabel . '.';
+        } elseif ($currentStock <= 0 && !empty($altNames)) {
+            $warningType = 'cross_store';
+            $warningMessage = 'Out of stock at ' . $storeLabel . '. Stock is available at '
+                . implode(', ', $altNames) . '. You can still create an order.';
+        } elseif ($mappedAtCurrent && $currentStock <= 0) {
+            $warningType = 'out_of_stock_local';
+            $warningMessage = 'This item is out of stock at ' . $storeLabel . '. You can still create an order.';
+        }
+
+        $enforceQtyCap = $mappedAtCurrent && $currentStock > 0;
+
+        return [
+            'current_warehouse_id' => $currentWarehouseId,
+            'current_warehouse_name' => $currentWarehouseName,
+            'current_stock_qty' => $currentStock,
+            'mapped_at_current' => $mappedAtCurrent,
+            'mapped_anywhere' => $mappedAnywhere,
+            'alternative_warehouses' => $alternativeWarehouses,
+            'default_warehouse' => $defaultWarehouse,
+            'allow_order' => true,
+            'enforce_qty_cap' => $enforceQtyCap,
+            'qty_cap' => $enforceQtyCap ? (int) floor($currentStock) : null,
+            'warning_message' => $warningMessage,
+            'warning_type' => $warningType,
+        ];
+    }
+
+    /**
      * Single-line footer text from exotic_address row marked is_default (receipt / printouts).
      */
     private function getDefaultExoticAddressFooterString(mysqli $conn): string
@@ -3299,7 +3457,7 @@ class POSRegisterController
             }
         }
 
-        $res = $this->exotic_api_call('/product/code', 'GET', ['code' => $code]);
+        $res = $this->retailApiClient->call('/product/code', 'GET', ['code' => $code]);
 
         $data = $this->unwrapProductApiResponse($res['data'] ?? []);
         $apiImageRaw = $this->pickRawImageFromProductApiArray($data);
@@ -3323,7 +3481,7 @@ class POSRegisterController
                 || ($mrpFromVariant <= 0)
                 || ($gstFromVariant <= 0);
             if ($needBaseFetch) {
-                $res2 = $this->exotic_api_call('/product/code', 'GET', ['code' => $dbItemCode]);
+                $res2 = $this->retailApiClient->call('/product/code', 'GET', ['code' => $dbItemCode]);
                 $data2 = $this->unwrapProductApiResponse($res2['data'] ?? []);
                 if ($imageResolved === '') {
                     $imgBase = $this->fixImageUrl($this->pickRawImageFromProductApiArray($data2));
@@ -3391,6 +3549,19 @@ class POSRegisterController
             $stockQtyOut = $data['stock'] ?? 0;
         }
 
+        $stockContext = ($vpId > 0)
+            ? $this->resolvePosStockContext($conn, $vpId, $warehouseId, $currentWarehouseName)
+            : [
+                'allow_order' => true,
+                'enforce_qty_cap' => false,
+                'qty_cap' => null,
+                'warning_message' => '',
+                'warning_type' => 'none',
+                'alternative_warehouses' => [],
+                'mapped_at_current' => false,
+                'mapped_anywhere' => false,
+            ];
+
         $siblingSkus = [];
         if ($dbItemCode !== '') {
             $siblingSkus = $this->fetchSiblingSkusByItemCode($conn, $dbItemCode, trim($code), $warehouseId);
@@ -3439,6 +3610,14 @@ class POSRegisterController
             'current_warehouse_name' => $currentWarehouseName,
             'default_store_qty' => $defaultStoreQty,
             'default_store_name' => $defaultStoreName,
+            'allow_order' => (bool)($stockContext['allow_order'] ?? true),
+            'enforce_qty_cap' => (bool)($stockContext['enforce_qty_cap'] ?? false),
+            'qty_cap' => $stockContext['qty_cap'] ?? null,
+            'stock_warning_message' => (string)($stockContext['warning_message'] ?? ''),
+            'stock_warning_type' => (string)($stockContext['warning_type'] ?? 'none'),
+            'mapped_at_current_store' => (bool)($stockContext['mapped_at_current'] ?? false),
+            'mapped_any_store' => (bool)($stockContext['mapped_anywhere'] ?? false),
+            'alternative_warehouses' => $stockContext['alternative_warehouses'] ?? [],
             'maincategory' => $data['maincategory'] ?? '',
             'dimensions' => $dimensionsMerged,
             'weight' => $wKgApi,
@@ -3477,6 +3656,15 @@ class POSRegisterController
         $productId = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
         $q = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
         $currentWarehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+        $currentWarehouseName = '';
+        if ($currentWarehouseId > 0 && !empty($conn)) {
+            require_once 'models/user/user.php';
+            $usersModel = new User($conn);
+            $whRow = $usersModel->getWarehouseById($currentWarehouseId);
+            if (!empty($whRow)) {
+                $currentWarehouseName = trim((string)($whRow['address_title'] ?? ''));
+            }
+        }
 
         if ($productId <= 0 && $q === '') {
             echo json_encode(['success' => false, 'message' => 'Missing product identifier.']);
@@ -3518,64 +3706,13 @@ class POSRegisterController
             }
         }
 
-        $stockSql = "
-            SELECT sm.warehouse_id,
-                   COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
-                   sm.running_stock AS stock_qty
-            FROM vp_stock_movements sm
-            INNER JOIN (
-                SELECT warehouse_id, product_id, MAX(id) AS max_id
-                FROM vp_stock_movements
-                WHERE product_id = ?
-                GROUP BY warehouse_id, product_id
-            ) latest ON latest.max_id = sm.id
-            LEFT JOIN exotic_address ea ON ea.id = sm.warehouse_id
-            WHERE sm.product_id = ?
-            ORDER BY warehouse_name ASC";
-
-        $stockStmt = $conn->prepare($stockSql);
-        if (!$stockStmt) {
-            echo json_encode(['success' => false, 'message' => 'Could not prepare stock query.']);
-            exit;
-        }
-        $stockStmt->bind_param('ii', $productId, $productId);
-        $stockStmt->execute();
-        $rows = $stockStmt->get_result()->fetch_all(MYSQLI_ASSOC);
-        $stockStmt->close();
-
-        $currentWarehouse = null;
-        $alternativeWarehouses = [];
-        foreach ($rows as $row) {
-            $wid = (int)($row['warehouse_id'] ?? 0);
-            $stockQty = (float)($row['stock_qty'] ?? 0);
-            $entry = [
-                'warehouse_id' => $wid,
-                'warehouse_name' => (string)($row['warehouse_name'] ?? ''),
-                'stock_qty' => $stockQty,
-            ];
-            if ($wid === $currentWarehouseId) {
-                $currentWarehouse = $entry;
-            } elseif ($stockQty > 0) {
-                $alternativeWarehouses[] = $entry;
-            }
-        }
-
-        if ($currentWarehouse === null) {
-            $currentWarehouse = [
-                'warehouse_id' => $currentWarehouseId,
-                'warehouse_name' => 'Current Store',
-                'stock_qty' => 0,
-            ];
-        }
-
+        $stockContext = $this->resolvePosStockContext($conn, $productId, $currentWarehouseId, $currentWarehouseName);
+        $currentWarehouse = [
+            'warehouse_id' => $currentWarehouseId,
+            'warehouse_name' => $currentWarehouseName !== '' ? $currentWarehouseName : 'Current Store',
+            'stock_qty' => (float)($stockContext['current_stock_qty'] ?? 0),
+        ];
         $currentAvailable = ((float)$currentWarehouse['stock_qty']) > 0;
-        $message = '';
-        if (!$currentAvailable && !empty($alternativeWarehouses)) {
-            $altNames = array_values(array_filter(array_map(static function ($w) {
-                return trim((string)($w['warehouse_name'] ?? ''));
-            }, $alternativeWarehouses)));
-            $message = 'Product not available in this store, but you still can create an order from another store (' . implode(', ', $altNames) . ')';
-        }
 
         echo json_encode([
             'success' => true,
@@ -3587,14 +3724,18 @@ class POSRegisterController
             ],
             'current_warehouse' => $currentWarehouse,
             'current_available' => $currentAvailable,
-            'alternative_warehouses' => $alternativeWarehouses,
-            'message' => $message,
+            'alternative_warehouses' => $stockContext['alternative_warehouses'] ?? [],
+            'allow_order' => (bool)($stockContext['allow_order'] ?? true),
+            'enforce_qty_cap' => (bool)($stockContext['enforce_qty_cap'] ?? false),
+            'qty_cap' => $stockContext['qty_cap'] ?? null,
+            'warning_type' => (string)($stockContext['warning_type'] ?? 'none'),
+            'message' => (string)($stockContext['warning_message'] ?? ''),
         ]);
         exit;
     }
     /**
      * Same-origin JSON proxy for Exotic retail cart endpoints (browser cannot send x-api-* headers / CORS).
-     * Forwards to https://www.exoticindia.com/api via exotic_api_call().
+     * Forwards to https://www.exoticindia.com/api via RetailApiClient.
      */
     public function cartApi(): void
     {
@@ -3607,7 +3748,7 @@ class POSRegisterController
             case 'retrieve':
                 // Same discount / gift query + header as add/modifyqty so cart totals reflect applied coupon.
                 $ctx = $this->exoticCartDiscountContext();
-                $this->emitCartApiResponse($this->exotic_api_call(
+                $this->emitCartApiResponse($this->retailApiClient->call(
                     '/cart/retrieve',
                     'GET',
                     $ctx['query'],
@@ -3640,7 +3781,7 @@ class POSRegisterController
                 }
                 $split = $this->buildExoticCartAddSplit(is_array($body) ? $body : []);
                 $ctxAdd = $this->exoticCartDiscountContext();
-                $primaryRes = $this->exotic_api_call(
+                $primaryRes = $this->retailApiClient->call(
                     '/cart/add',
                     'POST',
                     $split['query'],
@@ -3658,9 +3799,9 @@ class POSRegisterController
                     'attempts' => [
                         [
                             'label' => 'primary',
-                            'request_url' => $this->exoticCartAddPublicUrl($split['query']),
+                            'request_url' => CartResponseParser::cartAddPublicUrl($split['query']),
                             'post_body' => $split['post'],
-                            'response' => $this->compactUpstreamCartSnapshot($primaryRes),
+                            'response' => CartResponseParser::compactUpstreamSnapshot($primaryRes),
                         ],
                     ],
                 ];
@@ -3688,22 +3829,22 @@ class POSRegisterController
                 $extraHeaders = $discountStr !== ''
                     ? ['x-api-discountcoupondetails:' . $discountStr]
                     : [];
-                $this->emitCartApiResponse($this->exotic_api_call('/cart/modifyqty', 'GET', $query, null, null, $extraHeaders));
+                $this->emitCartApiResponse($this->retailApiClient->call('/cart/modifyqty', 'GET', $query, null, null, $extraHeaders));
                 return;
 
             case 'delete':
                 $cartid = $this->resolveCartLineIdFromRequest();
-                $this->emitCartApiResponse($this->exotic_api_call('/cart/delete', 'GET', [
+                $this->emitCartApiResponse($this->retailApiClient->call('/cart/delete', 'GET', [
                     'cartid' => $cartid,
                 ]));
                 return;
 
             case 'addcoupon':
                 $couponId = trim((string)($_GET['couponid'] ?? $_REQUEST['couponid'] ?? ''));
-                $res = $this->exotic_api_call('/cart/addcoupon', 'GET', [
+                $res = $this->retailApiClient->call('/cart/addcoupon', 'GET', [
                     'couponid' => $couponId,
                 ]);
-                if ($this->isExoticCartSuccess($res)) {
+                if (CartResponseParser::isSuccess($res)) {
                     $data = is_array($res['data'] ?? null) ? $res['data'] : [];
                     $details = $data['discountcoupondetails'] ?? $data['discount_coupon_details'] ?? null;
                     if ($details !== null && $details !== '') {
@@ -3725,8 +3866,8 @@ class POSRegisterController
 
             case 'removecoupon':
                 unset($_SESSION['pos_exotic_cart_coupon_details'], $_SESSION['discount_coupon']);
-                $remoteRm = $this->exotic_api_call('/cart/removecoupon', 'GET', []);
-                if ($this->isExoticCartSuccess($remoteRm)) {
+                $remoteRm = $this->retailApiClient->call('/cart/removecoupon', 'GET', []);
+                if (CartResponseParser::isSuccess($remoteRm)) {
                     $this->emitCartApiResponse($remoteRm);
 
                     return;
@@ -3751,7 +3892,7 @@ class POSRegisterController
                 } else {
                     $_SESSION['pos_exotic_cart_custom_reduce'] = $customReduce;
                 }
-                $this->emitCartApiResponse($this->exotic_api_call('/cart/addcustomdiscount', 'GET', [
+                $this->emitCartApiResponse($this->retailApiClient->call('/cart/addcustomdiscount', 'GET', [
                     'custom_reduce' => $customReduce,
                 ]));
                 return;
@@ -3813,6 +3954,13 @@ class POSRegisterController
      *
      * @return array{query: array<string, string>, extraHeaders: list<string>}
      */
+    /** Reset custom discount on Exotic cart and in PHP session (after checkout or when cart has no discount). */
+    private function clearPosExoticCartCustomDiscount(): void
+    {
+        unset($_SESSION['pos_exotic_cart_custom_reduce']);
+        $this->retailApiClient->call('/cart/addcustomdiscount', 'GET', ['custom_reduce' => '0']);
+    }
+
     private function exoticCartDiscountContext(): array
     {
         $discountStr = trim($this->getSessionDiscountCouponDetailsString());
@@ -3873,449 +4021,24 @@ class POSRegisterController
 
     /**
      * @param array{data?: mixed, code?: int, raw?: string} $res
-     */
-    private function isExoticCartSuccess(array $res): bool
-    {
-        $c = (int)($res['code'] ?? 0);
-        if ($c < 200 || $c >= 300) {
-            return false;
-        }
-        $d = $res['data'] ?? [];
-        if (!is_array($d)) {
-            return true;
-        }
-        if (array_key_exists('success', $d)) {
-            $sv = $d['success'];
-            if ($sv === false || $sv === 0 || $sv === '0' || $sv === 'false' || $sv === 'False') {
-                return false;
-            }
-        }
-        if (isset($d['status'])) {
-            $st = strtolower((string)$d['status']);
-            if (in_array($st, ['error', 'fail', 'failed'], true)) {
-                return false;
-            }
-        }
-        if (isset($d['error'])) {
-            $ev = $d['error'];
-            if ($ev === true) {
-                return false;
-            }
-            if (is_string($ev) && trim($ev) !== '') {
-                return false;
-            }
-            if (is_array($ev) && $ev !== []) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Turn API "error" payloads (string, list, or nested assoc) into one user-visible line.
-     *
-     * @param mixed $value
-     */
-    private function humanizeExoticApiMixedValue($value, int $depth = 0): string
-    {
-        if ($depth > 10) {
-            return '';
-        }
-        if (is_string($value)) {
-            $t = trim($value);
-
-            return $t;
-        }
-        if (is_int($value) || is_float($value)) {
-            return trim((string)$value);
-        }
-        if (!is_array($value)) {
-            return '';
-        }
-        if ($value === []) {
-            return '';
-        }
-        // List: join first few human-readable parts.
-        if ($value === [] || array_keys($value) === range(0, count($value) - 1)) {
-            $parts = [];
-            foreach ($value as $item) {
-                $s = $this->humanizeExoticApiMixedValue($item, $depth + 1);
-                if ($s !== '') {
-                    $parts[] = $s;
-                }
-                if (count($parts) >= 5) {
-                    break;
-                }
-            }
-
-            return implode('; ', $parts);
-        }
-        $msgKeys = [
-            'message', 'Message', 'error', 'Error', 'errormessage', 'msg', 'reason', 'detail',
-            'description', 'error_description', 'title', 'text', 'errorMessage',
-            'UserMessage', 'userMessage', 'statusMessage', 'StatusMessage', 'exceptionMessage',
-        ];
-        foreach ($msgKeys as $k) {
-            if (!array_key_exists($k, $value)) {
-                continue;
-            }
-            $s = $this->humanizeExoticApiMixedValue($value[$k], $depth + 1);
-            if ($s !== '') {
-                return $s;
-            }
-        }
-        foreach (['errors', 'Errors', 'validation', 'ValidationErrors'] as $ek) {
-            if (empty($value[$ek])) {
-                continue;
-            }
-            $s = $this->humanizeExoticApiMixedValue($value[$ek], $depth + 1);
-            if ($s !== '') {
-                return $s;
-            }
-        }
-        foreach (['data', 'result', 'payload', 'response'] as $wrap) {
-            if (empty($value[$wrap]) || !is_array($value[$wrap])) {
-                continue;
-            }
-            $inner = $this->extractExoticMessageFromAssoc($value[$wrap], $depth + 1);
-            if ($inner !== '') {
-                return $inner;
-            }
-        }
-        foreach ($value as $sub) {
-            if (!is_array($sub)) {
-                continue;
-            }
-            $nested = $this->humanizeExoticApiMixedValue($sub, $depth + 1);
-            if ($nested !== '') {
-                return $nested;
-            }
-        }
-        foreach ($value as $item) {
-            if (!is_string($item)) {
-                continue;
-            }
-            $t = trim($item);
-            if ($t !== '') {
-                return $t;
-            }
-        }
-
-        return '';
-    }
-
-    /**
-     * @param array<string, mixed> $arr
-     */
-    private function extractExoticMessageFromAssoc(array $arr, int $depth = 0): string
-    {
-        if ($depth > 10) {
-            return '';
-        }
-
-        return $this->humanizeExoticApiMixedValue($arr, $depth);
-    }
-
-    /**
-     * Best-effort user-facing message from Exotic cart JSON (shape varies by endpoint).
-     *
-     * @param array{data?: mixed, raw?: string} $res
-     */
-    private function extractExoticCartUserMessage(array $res): string
-    {
-        $d = $res['data'] ?? null;
-        if (is_array($d)) {
-            $msg = $this->extractExoticMessageFromAssoc($d, 0);
-            if ($msg !== '') {
-                return $msg;
-            }
-        }
-        $raw = trim((string)($res['raw'] ?? ''));
-        if ($raw !== '' && strpos($raw, '{') !== false) {
-            $decoded = json_decode($raw, true);
-            if (is_array($decoded)) {
-                $msg = $this->extractExoticMessageFromAssoc($decoded, 0);
-                if ($msg !== '') {
-                    return $msg;
-                }
-            }
-        }
-        if ($raw !== '' && strlen($raw) < 400 && strpos($raw, '<') === false) {
-            return $raw;
-        }
-
-        return '';
-    }
-
-    /**
-     * Full URL as sent to Exotic (GET query on /cart/add).
-     *
-     * @param array<string, string|int|float> $queryParams
-     */
-    private function exoticCartAddPublicUrl(array $queryParams): string
-    {
-        $base = 'https://www.exoticindia.com/api';
-        $url = rtrim($base, '/') . '/cart/add';
-        if ($queryParams !== []) {
-            $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($queryParams);
-        }
-
-        return $url;
-    }
-
-    /**
-     * Trimmed upstream response for debug JSON (same limits as proxy raw).
-     *
-     * @param array{data?: mixed, code?: int, raw?: string} $res
-     *
-     * @return array<string, mixed>
-     */
-    private function compactUpstreamCartSnapshot(array $res): array
-    {
-        $raw = (string)($res['raw'] ?? '');
-        if (strlen($raw) > 65536) {
-            $raw = substr($raw, 0, 65536) . '…(truncated)';
-        }
-
-        return [
-            'http_code' => (int)($res['code'] ?? 0),
-            'success_evaluated' => $this->isExoticCartSuccess($res),
-            'message_extracted' => $this->extractExoticCartUserMessage($res),
-            'data' => $res['data'] ?? [],
-            'raw' => $raw,
-        ];
-    }
-
-    /**
-     * @param array{data?: mixed, code?: int, raw?: string} $res
      * @param array<string, mixed> $extra Merged into JSON (e.g. upstream Exotic request/response for /cart/add)
      */
     private function emitCartApiResponse(array $res, array $extra = []): void
     {
-        $raw = (string)($res['raw'] ?? '');
-        if (strlen($raw) > 65536) {
-            $raw = substr($raw, 0, 65536) . '…(truncated)';
-        }
-        $ok = $this->isExoticCartSuccess($res);
-        $msg = $this->extractExoticCartUserMessage($res);
-        if (!$ok && $msg === '' && $raw !== '' && strpos(trim($raw), '<') !== false) {
-            $plain = trim(preg_replace('/\s+/', ' ', strip_tags($raw)));
-            if (strlen($plain) >= 12 && strlen($plain) <= 4000) {
-                $msg = $plain;
-            }
-        }
-        if (!$ok && $msg === '') {
-            $msg = 'Cart request failed (HTTP ' . (int)($res['code'] ?? 0) . ').';
-        }
-        $payload = array_merge([
-            'success' => $ok,
-            'message' => $msg,
-            'http_code' => (int)($res['code'] ?? 0),
-            'data' => $res['data'] ?? [],
-            'raw' => $raw,
-        ], $extra);
+        $payload = CartResponseParser::buildEmitPayload($res, $extra);
         echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
 
     /**
      * @param list<string> $extraHttpHeaders Additional request headers (full "Name:value" lines).
+     * @deprecated Use RetailApiClient via $this->retailApiClient
      */
     public function exotic_api_call($endpoint, $method = 'GET', $params = [], $postData = null, ?string $apiBaseUrl = null, array $extraHttpHeaders = [])
     {
-        require_once dirname(__DIR__) . '/helpers/api_call_logger.php';
-
-        // echo "<pre>";
-        // print_r($_SESSION['discount_coupon']['discountcoupondetails']);
-        // exit;
-
-        $ep = '/' . ltrim((string)$endpoint, '/');
-        if (strtoupper((string)$method) === 'POST' && rtrim($ep, '/') === '/order/create'
-                && is_file(dirname(__DIR__) . '/.pos_skip_exotic_order_create_api')) {
-            $d = ['orderid' => 'LOCAL-' . gmdate('YmdHis')];
-            $j = json_encode($d);
-            api_call_log_write([
-                'kind' => 'exotic_api_local_stub',
-                'endpoint' => $ep,
-                'method' => strtoupper((string)$method),
-                'note' => '.pos_skip_exotic_order_create_api present — order/create not sent remotely',
-                'response_http_code' => 200,
-                'response_raw' => $j,
-                'response_decoded' => $d,
-            ]);
-
-            return ['data' => $d, 'code' => 200, 'raw' => $j];
-        }
-
-
-        $base = $apiBaseUrl ?? 'https://www.exoticindia.com/api';
-        $url = rtrim($base, '/') . $endpoint;
-        if ($params) {
-            $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($params);
-        }
-
-        $encodedPostData = null;
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-
-        // $headers = [
-        //     'x-api-key: aeRGoUvQLCxztK0Wzxmv9O2VRJ2H1B44',
-        //     'x-api-deviceid: POS-Store_1',
-        //     'x-api-appplayerid: POS-Web-Terminal',
-        //     'x-api-countrycode: IN',
-        //     'x-api-euid:' . ($_SESSION['user']['id'] ?? ''),
-        //     'User-Agent: ExoticPOS-Web/1.0'
-        // ];
-        $deviceId = $this->resolveApiDeviceId();
-        $headers = [
-            'x-api-key: aeRGoUvQLCxztK0Wzxmv9O2VRJ2H1B44',
-            'x-api-deviceid: ' . $deviceId,
-            'x-api-appplayerid: POS-Web-Terminal',
-            'x-api-countrycode: IN',
-            // Keep API-issued euid in session; do not use local user id here.
-            'x-api-euid:' . (string)($_SESSION['x_api_euid'] ?? ''),
-            'User-Agent: ExoticPOS'
-        ];
-        // Forward optional evolving API session headers when available.
-        if (!empty($_SESSION['x_api_jwt'])) {
-            $headers[] = 'x-api-jwt:' . (string)$_SESSION['x_api_jwt'];
-        }
-        if (!empty($_SESSION['x_api_browsehistory'])) {
-            $headers[] = 'x-api-browsehistory:' . (string)$_SESSION['x_api_browsehistory'];
-        }
-        if (!empty($_SESSION['x_api_etd'])) {
-            $headers[] = 'x-api-etd:' . (string)$_SESSION['x_api_etd'];
-        }
-        if (!empty($_SESSION['x_api_etd_pincode'])) {
-            $headers[] = 'x-api-etd-pincode:' . (string)$_SESSION['x_api_etd_pincode'];
-        }
-        foreach ($extraHttpHeaders as $line) {
-            if (is_string($line) && $line !== '') {
-                $headers[] = $line;
-            }
-        }
-
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-        $capturedHeaders = [];
-        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $headerLine) use (&$capturedHeaders) {
-            $len = strlen($headerLine);
-            $header = explode(':', $headerLine, 2);
-            if (count($header) < 2) {
-                return $len;
-            }
-            $name = strtolower(trim($header[0]));
-            if (in_array($name, ['x-api-euid', 'x-api-jwt', 'x-api-browsehistory', 'x-api-etd', 'x-api-etd-pincode'], true)) {
-                $capturedHeaders[$name] = trim($header[1]);
-            }
-            return $len;
-        });
-
-        if ($method === 'POST' && $postData !== null) {
-            $headers[] = 'Content-Type: application/x-www-form-urlencoded';
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_POST, true);
-            if (is_array($postData)) {
-                $encodedPostData = http_build_query($postData);
-            } elseif (is_string($postData)) {
-                $encodedPostData = $postData;
-            } else {
-                $encodedPostData = (string)$postData;
-            }
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $encodedPostData);
-        }
-
-        $response = curl_exec($ch);
-        //   echo '<pre>';
-        // print_r($response);
-        // exit;
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlErr = curl_error($ch);
-
-        curl_close($ch);
-
-        if (!empty($capturedHeaders['x-api-euid'])) {
-            $_SESSION['x_api_euid'] = $capturedHeaders['x-api-euid'];
-        }
-        if (!empty($capturedHeaders['x-api-jwt'])) {
-            $_SESSION['x_api_jwt'] = $capturedHeaders['x-api-jwt'];
-        }
-        if (!empty($capturedHeaders['x-api-browsehistory'])) {
-            $_SESSION['x_api_browsehistory'] = $capturedHeaders['x-api-browsehistory'];
-        }
-        if (!empty($capturedHeaders['x-api-etd'])) {
-            $_SESSION['x_api_etd'] = $capturedHeaders['x-api-etd'];
-        }
-        if (!empty($capturedHeaders['x-api-etd-pincode'])) {
-            $_SESSION['x_api_etd_pincode'] = $capturedHeaders['x-api-etd-pincode'];
-        }
-
-        $body = (string)$response;
-        $decoded = json_decode($body, true);
-        $data = (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) ? $decoded : [];
-
-        api_call_log_write([
-            'kind' => 'exotic_api_http',
-            'endpoint' => $ep,
-            'method' => strtoupper((string)$method),
-            'base_url' => $base,
-            'request_url' => $url,
-            'request_headers' => api_call_log_sanitize_header_lines($headers),
-            'request_query_params' => $params,
-            'request_post_body' => $encodedPostData,
-            'curl_error' => $curlErr !== '' ? $curlErr : null,
-            'response_http_code' => $httpCode,
-            'response_session_headers_from_api' => $capturedHeaders,
-            'response_raw' => $body,
-            'response_decoded' => $data,
-        ]);
-
-        return [
-            'data' => $data,
-            'code' => $httpCode,
-            'raw' => $body,
-        ];
+        return $this->retailApiClient->call($endpoint, $method, $params, $postData, $apiBaseUrl, $extraHttpHeaders);
     }
 
-    /**
-     * Use real store/warehouse label for x-api-deviceid.
-     * Falls back to POS-Store_<warehouse_id> / POS-Store_1.
-     */
-    private function resolveApiDeviceId(): string
-    {
-        $fallbackId = (int)($_SESSION['warehouse_id'] ?? 0);
-        if ($fallbackId <= 0) {
-            $fallbackId = 1;
-        }
-        $fallback = 'POS-Store_' . $fallbackId;
-
-        if (empty($_SESSION['warehouse_id'])) {
-            return $fallback;
-        }
-
-        global $conn;
-        if (empty($conn)) {
-            return $fallback;
-        }
-
-        try {
-            $usersModel = new User($conn);
-            $warehouse = $usersModel->getWarehouseById((int)$_SESSION['warehouse_id']);
-            $name = trim((string)($warehouse['address_title'] ?? ''));
-            if ($name === '') {
-                return $fallback;
-            }
-            // Header-safe normalization.
-            $name = preg_replace('/\s+/', '_', $name);
-            $name = preg_replace('/[^A-Za-z0-9_\-]/', '', (string)$name);
-            return $name !== '' ? $name : $fallback;
-        } catch (\Throwable $e) {
-            return $fallback;
-        }
-    }
     public function add_customer()
     {
         global $conn;
@@ -4331,10 +4054,10 @@ class POSRegisterController
         $phone = $_POST['mobile'] ?? '';
         $email = $_POST['cus_email'] ?? '';
 
-        if (!$first || !$phone) {
+        if (!$first || !$last || !$phone) {
             echo json_encode([
                 "success" => false,
-                "message" => "Name and phone required"
+                "message" => "First name, last name and phone required"
             ]);
             exit;
         }
@@ -4598,6 +4321,9 @@ class POSRegisterController
         if (trim((string)($payload['confirm_first_name'] ?? '')) === '') {
             $errors[] = 'First name';
         }
+        if (trim((string)($payload['confirm_last_name'] ?? '')) === '') {
+            $errors[] = 'Last name';
+        }
         if (trim((string)($payload['confirm_state'] ?? '')) === '') {
             $errors[] = 'State';
         }
@@ -4644,6 +4370,14 @@ class POSRegisterController
 
         $paymentStage = strtolower(trim((string)($payload['payment_stage'] ?? 'final')));
         $splitBundle = $this->resolvePosPaymentSplitsFromPayload($payload);
+        $advanceAmount = pos_payment_split_advance_total($splitBundle['splits']);
+        $codAmount = pos_payment_split_cod_total($splitBundle['splits']);
+        $hasCodPending = $codAmount > 0.001;
+
+        if ($hasCodPending) {
+            $paymentStage = 'advance';
+        }
+
         $splitErrors = $this->validatePosPaymentSplits($splitBundle, $orderTotal, $paymentStage);
         if (!empty($splitErrors)) {
             echo json_encode([
@@ -4657,10 +4391,14 @@ class POSRegisterController
         $paymentAmount = (float)$splitBundle['total'];
         $paymentMode = (string)$splitBundle['primary_mode'];
         $txn = (string)$splitBundle['primary_txn'];
-        $payload['payment_amount'] = $paymentAmount;
+        $payload['payment_amount'] = $advanceAmount;
+        $payload['advance_amount'] = $advanceAmount;
+        $payload['cod_amount'] = $codAmount;
+        $payload['has_cod_pending'] = $hasCodPending;
         $payload['payment_mode'] = $paymentMode;
         $payload['transaction_id'] = $txn;
         $payload['payment_splits'] = $splitBundle['splits'];
+        $payload['payment_stage'] = $paymentStage;
 
         $deliveryStatus = $this->resolvePosDeliveryStatusFromPayload($payload, $conn);
         if (!$deliveryStatus['ok']) {
@@ -4682,7 +4420,7 @@ class POSRegisterController
             exit;
         }
 
-        $compliance = $this->evaluateHighValueCompliance($payload, $orderTotal, $paymentAmount, $paymentMode, $conn);
+        $compliance = $this->evaluateHighValueCompliance($payload, $orderTotal, $advanceAmount, $paymentMode, $conn);
         if (!$compliance['ok']) {
             echo json_encode([
                 'success' => false,
@@ -4694,22 +4432,17 @@ class POSRegisterController
         }
 
         $cashDiscount = round((float)($payload['receipt_cash_discount'] ?? 0), 2);
-        $sessionCustom = round((float)($_SESSION['pos_exotic_cart_custom_reduce'] ?? 0), 2);
-        if ($cashDiscount <= 0 && $sessionCustom > 0) {
-            $cashDiscount = $sessionCustom;
-        }
         if ($cashDiscount > 0.001) {
-            $this->exotic_api_call('/cart/addcustomdiscount', 'GET', [
+            $this->retailApiClient->call('/cart/addcustomdiscount', 'GET', [
                 'custom_reduce' => number_format($cashDiscount, 2, '.', ''),
             ]);
             $_SESSION['pos_exotic_cart_custom_reduce'] = number_format($cashDiscount, 2, '.', '');
-        } elseif ($sessionCustom > 0.001) {
-            $this->exotic_api_call('/cart/addcustomdiscount', 'GET', ['custom_reduce' => '0']);
-            unset($_SESSION['pos_exotic_cart_custom_reduce']);
+        } else {
+            $this->clearPosExoticCartCustomDiscount();
         }
 
         $ctx = $this->exoticCartDiscountContext();
-        $retrieve = $this->exotic_api_call(
+        $retrieve = $this->retailApiClient->call(
             '/cart/retrieve',
             'GET',
             $ctx['query'],
@@ -4717,7 +4450,7 @@ class POSRegisterController
             null,
             $ctx['extraHeaders']
         );
-        if (!$this->isExoticCartSuccess($retrieve)) {
+        if (!CartResponseParser::isSuccess($retrieve)) {
             echo json_encode([
                 'success' => false,
                 'message' => 'Could not load cart before checkout. Try refreshing the cart.',
@@ -4740,7 +4473,7 @@ class POSRegisterController
             ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
-        $createRes = $this->exotic_api_call(
+        $createRes = $this->retailApiClient->call(
             '/order/create',
             'POST',
             $ctx['query'],
@@ -4770,7 +4503,7 @@ class POSRegisterController
             ],
         ];
 
-        if (!$this->isExoticCartSuccess($createRes)) {
+        if (!CartResponseParser::isSuccess($createRes)) {
             $d = is_array($createRes['data'] ?? null) ? $createRes['data'] : [];
             $msg = trim((string)($d['message'] ?? $d['error'] ?? $d['errormessage'] ?? ''));
             if ($msg === '') {
@@ -4784,7 +4517,7 @@ class POSRegisterController
             exit;
         }
 
-        $orderNumber = $this->extractExoticOrderNumberFromCreateResponse(is_array($createRes['data'] ?? null) ? $createRes['data'] : []);
+        $orderNumber = OrderResponseParser::extractOrderNumber(is_array($createRes['data'] ?? null) ? $createRes['data'] : []);
         if ($orderNumber === '') {
             echo json_encode([
                 'success' => false,
@@ -4839,8 +4572,8 @@ class POSRegisterController
                 }
             }
             $editRes = $this->exoticPosEditOrderPrices($orderNumber, $editLinePrices);
-            if (!$this->isExoticCartSuccess($editRes)) {
-                $em = $this->extractExoticCartUserMessage($editRes);
+            if (!CartResponseParser::isSuccess($editRes)) {
+                $em = CartResponseParser::extractUserMessage($editRes);
                 if ($em === '') {
                     $em = 'HTTP ' . (int)($editRes['code'] ?? 0);
                 }
@@ -4877,7 +4610,15 @@ class POSRegisterController
 
         $pay = null;
         $paymentIds = [];
-        foreach ($splitBundle['splits'] as $split) {
+        $sortedSplits = $splitBundle['splits'];
+        usort($sortedSplits, static function (array $a, array $b): int {
+            $aCod = (($a['mode'] ?? '') === 'cod') ? 1 : 0;
+            $bCod = (($b['mode'] ?? '') === 'cod') ? 1 : 0;
+
+            return $aCod <=> $bCod;
+        });
+
+        foreach ($sortedSplits as $split) {
             $pay = pos_payment_insert_row(
                 $conn,
                 $orderNumber,
@@ -4930,8 +4671,17 @@ class POSRegisterController
             'custom_discount_value' => round((float)($payload['custom_discount_value'] ?? 0), 2),
             'coupon_display_name' => trim((string)($payload['coupon_display_name'] ?? '')),
             'apply_export_gst' => !empty($payload['apply_export_gst']) ? 1 : 0,
+            'advance_received' => $advanceAmount,
+            'cod_pending' => $codAmount,
         ];
-        $invoiceMeta = $this->finalizePosReceiptInvoice($conn, $orderNumber, $paymentStage, $compliance, $customInvoiceNumber);
+        $invoiceMeta = $this->finalizePosReceiptInvoice(
+            $conn,
+            $orderNumber,
+            $paymentStage,
+            $compliance,
+            $customInvoiceNumber
+        );
+        $this->patchPosCheckoutOrderInfoFromConfirmPayload($conn, $orderNumber, $payload);
 
         $this->persistVpOrderInfoTradeName(
             $conn,
@@ -4984,7 +4734,12 @@ class POSRegisterController
             'payment_splits' => $receiptPaymentSplits,
             'receipt_payment_splits' => $receiptPaymentSplits,
             'transaction_id' => $txn,
-            'receipt_banner_text' => 'Thank you. Payment of ₹ ' . number_format($paymentAmount, 2, '.', ',') . ' recorded for order ' . $orderNumber . '.',
+            'receipt_banner_text' => $hasCodPending
+                ? ($advanceAmount > 0.001
+                    ? 'Order ' . $orderNumber . ' placed. Advance ₹ ' . number_format($advanceAmount, 2, '.', ',')
+                        . ' received. COD ₹ ' . number_format($codAmount, 2, '.', ',') . ' pending on delivery.'
+                    : 'Order ' . $orderNumber . ' placed on COD. ₹ ' . number_format($codAmount, 2, '.', ',') . ' to collect on delivery.')
+                : 'Thank you. Payment of ₹ ' . number_format($paymentAmount, 2, '.', ',') . ' recorded for order ' . $orderNumber . '.',
             'receipt_billing_block' => $this->formatAddressLinesFromPayload($payload, 'billing'),
             'receipt_shipping_block' => $this->formatAddressLinesFromPayload($payload, 'shipping'),
             'receipt_lines' => [],
@@ -5000,8 +4755,10 @@ class POSRegisterController
             'receipt_agg_cgst' => 0.0,
             'receipt_agg_igst' => 0.0,
             'receipt_amount_in_words' => '',
-            'receipt_amount_received' => $paymentAmount,
-            'receipt_pending_amount' => (float)($pay['pending_amount'] ?? 0),
+            'receipt_amount_received' => $advanceAmount,
+            'receipt_cod_pending_amount' => $codAmount,
+            'receipt_pending_amount' => $hasCodPending ? $codAmount : (float)($pay['pending_amount'] ?? 0),
+            'has_cod_pending' => $hasCodPending,
             'import_status' => $invoiceMeta['import_status'],
             'show_invoice_pdf_button' => $invoiceMeta['show_invoice_pdf_button'],
             'show_invoice_preview_button' => $invoiceMeta['show_invoice_preview_button'] ?? false,
@@ -5009,7 +4766,7 @@ class POSRegisterController
             'invoice_pdf_url' => $invoiceMeta['invoice_pdf_url'],
             'invoice_preview_url' => $invoiceMeta['invoice_preview_url'] ?? '',
             'invoice_pdf_disabled_hint' => $invoiceMeta['invoice_pdf_disabled_hint'],
-            'is_payment_in_full' => ($paymentStage === 'final' && (float)($pay['pending_amount'] ?? 0) <= 0.02),
+            'is_payment_in_full' => ($paymentStage === 'final' && !$hasCodPending && (float)($pay['pending_amount'] ?? 0) <= 0.02),
             'receipt_company_legal_name' => 'EXOTIC INDIA ART PVT LTD',
             'receipt_company_tagline' => '',
             'receipt_company_gstin' => '',
@@ -5034,6 +4791,8 @@ class POSRegisterController
             $successMessage .= ' ' . $fulfillmentStatusMeta['message'];
         }
 
+        $this->clearPosExoticCartCustomDiscount();
+
         echo json_encode([
             'success' => true,
             'message' => $successMessage,
@@ -5044,7 +4803,9 @@ class POSRegisterController
             'local_stock_warnings' => $localStockWarnings,
             'fulfillment_status_sync' => $fulfillmentStatusMeta,
             'shipped_status_sync' => $fulfillmentStatusMeta,
-            'redirect_url' => 'index.php?page=pos_register&action=checkout-receipt',
+            'redirect_url' => 'index.php?page=pos_register&action=checkout-receipt'
+                . '&order_number=' . rawurlencode($orderNumber)
+                . '&receipt_number=' . rawurlencode($receiptNo),
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
@@ -5053,12 +4814,34 @@ class POSRegisterController
     {
         is_login();
         global $conn;
-        $row = $_SESSION['pos_last_checkout_receipt'] ?? null;
+
+        $orderNumber = trim((string)($_GET['order_number'] ?? ''));
+        $receiptNumber = trim((string)($_GET['receipt_number'] ?? ''));
+
+        $row = null;
+        $sessionRow = $_SESSION['pos_last_checkout_receipt'] ?? null;
+        if (is_array($sessionRow) && !empty($sessionRow['receipt_number'])) {
+            $sessionOrder = trim((string)($sessionRow['order_id'] ?? ''));
+            $sessionReceipt = trim((string)($sessionRow['receipt_number'] ?? ''));
+            $matchesRequest = ($orderNumber === '' && $receiptNumber === '')
+                || ($orderNumber !== '' && $orderNumber === $sessionOrder)
+                || ($receiptNumber !== '' && $receiptNumber === $sessionReceipt);
+            if ($matchesRequest) {
+                $row = $sessionRow;
+            }
+        }
+
+        if (!is_array($row) || empty($row['receipt_number'])) {
+            $row = $this->rebuildCheckoutReceiptFromDb($conn, $orderNumber, $receiptNumber);
+        }
+
         if (!is_array($row) || empty($row['receipt_number'])) {
             header('Location: index.php?page=pos_register&action=list');
             exit;
         }
-        unset($_SESSION['pos_last_checkout_receipt']);
+
+        $_SESSION['pos_last_checkout_receipt'] = $row;
+
         $row = $this->fillReceiptInvoicePdfFromDb($conn, $row);
         if (empty($row['invoice_poitem_ids']) || !is_array($row['invoice_poitem_ids'])) {
             $row['invoice_poitem_ids'] = $this->resolveInvoicePoitemIdsForOrderNumber($conn, $row['order_id'] ?? '');
@@ -5219,7 +5002,8 @@ class POSRegisterController
     {
         $stage = strtolower(trim((string)($row['payment_stage'] ?? '')));
         $pending = (float)($row['receipt_pending_amount'] ?? 0);
-        $row['is_payment_in_full'] = ($stage === 'final' && $pending <= 0.02);
+        $hasCodPending = !empty($row['has_cod_pending']) || (float)($row['receipt_cod_pending_amount'] ?? 0) > 0.001;
+        $row['is_payment_in_full'] = ($stage === 'final' && $pending <= 0.02 && !$hasCodPending);
 
         $invoiceId = (int)($row['invoice_id'] ?? 0);
         if ($invoiceId <= 0 && !empty($row['invoice_pdf_url'])) {
@@ -5229,8 +5013,13 @@ class POSRegisterController
             }
         }
 
-        if ($row['is_payment_in_full'] && $invoiceId > 0) {
+        if ($invoiceId > 0) {
             $row = $this->applyPosReceiptInvoiceLinks($row, $invoiceId);
+            if ($hasCodPending && !$row['is_payment_in_full']) {
+                $row['show_invoice_pdf_button'] = true;
+                $row['show_invoice_preview_button'] = true;
+                $row['invoice_pdf_disabled_hint'] = '';
+            }
         } elseif (!$row['is_payment_in_full']) {
             $row['show_invoice_pdf_button'] = false;
             $row['show_invoice_preview_button'] = false;
@@ -5252,7 +5041,28 @@ class POSRegisterController
             return $this->enrichPosCheckoutReceiptRow($row);
         }
         $invoiceId = $this->findInvoiceIdForOrderNumber($conn, $orderNum);
-        if ($invoiceId) {
+        if ($invoiceId <= 0) {
+            $invoiceStatus = pos_payment_resolve_auto_invoice_status($conn, $orderNum);
+            if ($invoiceStatus !== null) {
+                try {
+                    $ordersCtrl = $this->getOrdersControllerForImport();
+                    if ($ordersCtrl->isOrderReadyForPosCheckout($orderNum)) {
+                        $posInv = $this->getPosInvoiceControllerForCheckout();
+                        $invRes = $posInv->createAutoInvoiceForOrder(
+                            $orderNum,
+                            '',
+                            $invoiceStatus === 'final'
+                        );
+                        if (!empty($invRes['success']) && !empty($invRes['invoice_id'])) {
+                            $invoiceId = (int)$invRes['invoice_id'];
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    error_log('[POS checkout receipt invoice retry] ' . $e->getMessage());
+                }
+            }
+        }
+        if ($invoiceId > 0) {
             if (trim((string)($row['import_status'] ?? '')) === '') {
                 $row['import_status'] = 'success';
             }
@@ -5260,6 +5070,110 @@ class POSRegisterController
         }
 
         return $this->enrichPosCheckoutReceiptRow($row);
+    }
+
+    /**
+     * Always send shipping on order/create. Short checkoutdata tokens (3049898|INR|34000) do not
+     * embed address; omitting s* fields breaks checkout (regression after Exotic cart API change ~Jul 2026).
+     *
+     * @param array<string, string> $out
+     * @param array<string, mixed>  $payload
+     */
+    private function appendOrderCreateShippingFields(array &$out, array $payload): void
+    {
+        $sf = trim((string)($payload['confirm_sfirst_name'] ?? ''));
+        $sl = trim((string)($payload['confirm_slast_name'] ?? ''));
+        $sname = trim((string)($payload['confirm_sname'] ?? ''));
+        if ($sname === '') {
+            $sname = trim($sf . ' ' . $sl);
+        }
+        if ($sname === '') {
+            $sname = trim((string)($out['first_name'] ?? '') . ' ' . (string)($out['last_name'] ?? ''));
+        }
+
+        $saddress1 = trim((string)($payload['confirm_saddress1'] ?? ''));
+        $saddress2 = trim((string)($payload['confirm_saddress2'] ?? ''));
+        $scity = trim((string)($payload['confirm_scity'] ?? ''));
+        $sstate = trim((string)($payload['confirm_sstate'] ?? ''));
+        $szip = trim((string)($payload['confirm_szip'] ?? ''));
+        $sphone = trim((string)($payload['confirm_sphone'] ?? ''));
+        $sgstin = strtoupper(trim((string)($payload['confirm_sgstin'] ?? '')));
+
+        if ($saddress1 === '') {
+            $saddress1 = (string)($out['address1'] ?? '');
+        }
+        if ($saddress2 === '') {
+            $saddress2 = (string)($out['address2'] ?? '');
+        }
+        if ($scity === '') {
+            $scity = (string)($out['city'] ?? '');
+        }
+        if ($sstate === '') {
+            $sstate = (string)($out['state'] ?? '');
+        }
+        if ($szip === '') {
+            $szip = (string)($out['zip'] ?? '');
+        }
+        if ($sphone === '') {
+            $sphone = (string)($out['phone'] ?? '');
+        }
+        if ($sgstin === '') {
+            $sgstin = strtoupper(trim((string)($out['gstin'] ?? '')));
+        }
+
+        $scountry = strtoupper(substr(trim((string)($payload['confirm_scountry'] ?? 'IN')), 0, 2));
+        if ($scountry === '') {
+            $scountry = (string)($out['country'] ?? 'IN');
+        }
+        if ($scountry === '') {
+            $scountry = 'IN';
+        }
+
+        $out['sname'] = $sname;
+        $out['saddress1'] = $saddress1;
+        $out['saddress2'] = $saddress2;
+        $out['scity'] = $scity;
+        $out['sstate'] = $sstate;
+        $out['szip'] = $szip;
+        $out['scountry'] = $scountry;
+        $out['sphone'] = $sphone;
+    }
+
+    /** Exotic store_payment_details third segment when no gateway txn id (counter sale). */
+    private function resolveStorePaymentTransactionId(string $txn): string
+    {
+        $txn = trim($txn);
+
+        return $txn !== '' ? $txn : ('store.' . gmdate('YmdHis'));
+    }
+
+    /**
+     * API doc sends empty strings for unused gateway fields; include them for offline POS checkout.
+     *
+     * @param array<string, string> $out
+     *
+     * @return array<string, string>
+     */
+    private function appendOrderCreateEmptyPaymentFields(array $out): array
+    {
+        foreach ([
+            'cardnumber' => '',
+            'cardexpmonth' => '',
+            'cardexpyear' => '',
+            'card_cvv' => '',
+            'razorpay_order_id' => '',
+            'razorpay_payment_id' => '',
+            'razorpay_signature' => '',
+            'magiccheckout_done' => '',
+            'paypal_transaction_status' => '',
+            'paypal_transaction_id' => '',
+        ] as $key => $empty) {
+            if (!array_key_exists($key, $out)) {
+                $out[$key] = $empty;
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -5272,58 +5186,29 @@ class POSRegisterController
      *
      * @return array<string, string>
      */
-    /**
-     * True when Confirm Billing & Shipping modal has shipping address data filled in.
-     */
-    private function hasPosConfirmShippingFilled(array $payload): bool
-    {
-        if (!empty($payload['confirm_shipping_same_as_billing'])
-            && (string)$payload['confirm_shipping_same_as_billing'] === '1') {
-            return true;
-        }
-
-        foreach ([
-            'confirm_sfirst_name',
-            'confirm_slast_name',
-            'confirm_sname',
-            'confirm_saddress1',
-            'confirm_saddress2',
-            'confirm_scity',
-            'confirm_sstate',
-            'confirm_szip',
-            'confirm_sphone',
-        ] as $key) {
-            if (trim((string)($payload[$key] ?? '')) !== '') {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * When shipping is filled in POS confirm step, omit s* fields on order/create (checkoutdata + billing only).
-     */
-    private function shouldOmitShippingOnOrderCreate(array $payload): bool
-    {
-        if (!empty($payload['confirm_omit_shipping_api'])
-            && (string)$payload['confirm_omit_shipping_api'] === '1') {
-            return true;
-        }
-
-        return $this->hasPosConfirmShippingFilled($payload);
-    }
-
     private function buildOrderCreatePostFromPayload(array $payload, array $cartData): array
     {
         $posMode = strtolower(trim((string)($payload['payment_mode'] ?? 'cash')));
+        $codAmount = round((float)($payload['cod_amount'] ?? 0), 2);
+        if ($codAmount <= 0.001) {
+            foreach ($payload['payment_splits'] ?? [] as $splitRow) {
+                if (!is_array($splitRow)) {
+                    continue;
+                }
+                if (strtolower(trim((string)($splitRow['mode'] ?? ''))) === 'cod') {
+                    $codAmount += round((float)($splitRow['amount'] ?? 0), 2);
+                }
+            }
+            $codAmount = round($codAmount, 2);
+        }
+        if ($codAmount > 0.001) {
+            $posMode = 'cod';
+        }
         $storePaymentMode = $this->mapPosPaymentModeToExoticPaymentType($posMode);
-        $paymentType = 'offline';
+        $paymentType = $codAmount > 0.001 ? 'cod' : $storePaymentMode;
 
         /** Exact string from GET /cart/retrieve JSON — posted as-is (only URL-encoded as form field by HTTP client). */
         $checkoutdata = $this->extractCheckoutDataStringFromCart($cartData);
-
-        $omitShippingOnOrder = $this->shouldOmitShippingOnOrderCreate($payload);
 
         $country = strtoupper(substr(trim((string)($payload['confirm_country'] ?? 'IN')), 0, 2));
         if ($country === '') {
@@ -5349,13 +5234,13 @@ class POSRegisterController
         $whId = (int)($_SESSION['warehouse_id'] ?? 0);
         $storeId = $whId > 0 ? (string)$whId : '1';
         $txn = trim((string)($payload['transaction_id'] ?? ''));
-        $txnField = $txn !== '' ? $txn : '0';
+        $txnField = $this->resolveStorePaymentTransactionId($txn);
 
         $out = [
             'payment_type' => $paymentType,
             'buynow' => '0',
             'checkoutdata' => $checkoutdata,
-            'cod' => '0',
+            'cod' => $codAmount > 0.001 ? '1' : '0',
             'codcharges' => '0.00',
             'first_name' => trim((string)($payload['confirm_first_name'] ?? '')),
             'last_name' => trim((string)($payload['confirm_last_name'] ?? '')),
@@ -5379,26 +5264,7 @@ class POSRegisterController
             'store_payment_details' => $storeId . '|' . $storePaymentMode . '|' . $txnField,
         ];
 
-        if (!$omitShippingOnOrder) {
-            $sf = trim((string)($payload['confirm_sfirst_name'] ?? ''));
-            $sl = trim((string)($payload['confirm_slast_name'] ?? ''));
-            $sname = trim((string)($payload['confirm_sname'] ?? ''));
-            if ($sname === '') {
-                $sname = trim($sf . ' ' . $sl);
-            }
-            $scountry = strtoupper(substr(trim((string)($payload['confirm_scountry'] ?? 'IN')), 0, 2));
-            if ($scountry === '') {
-                $scountry = 'IN';
-            }
-            $out['sname'] = $sname;
-            $out['saddress1'] = trim((string)($payload['confirm_saddress1'] ?? ''));
-            $out['saddress2'] = trim((string)($payload['confirm_saddress2'] ?? ''));
-            $out['scity'] = trim((string)($payload['confirm_scity'] ?? ''));
-            $out['sstate'] = trim((string)($payload['confirm_sstate'] ?? ''));
-            $out['szip'] = trim((string)($payload['confirm_szip'] ?? ''));
-            $out['scountry'] = $scountry;
-            $out['sphone'] = trim((string)($payload['confirm_sphone'] ?? ''));
-        }
+        $this->appendOrderCreateShippingFields($out, $payload);
 
         if ($storePaymentMode === 'razorpay') {
             $rzPay = trim((string)($payload['razorpay_payment_id'] ?? $txn));
@@ -5419,16 +5285,16 @@ class POSRegisterController
             }
         }
 
-        return $out;
+        return $this->appendOrderCreateEmptyPaymentFields($out);
     }
 
-    /** Use exact payment mode label expected by order/create payload. */
+    /** Use exact payment mode label expected by order/create store_payment_details middle segment. */
     private function mapPosPaymentModeToExoticPaymentType(string $posMode): string
     {
         $m = strtolower(trim($posMode));
         $map = [
-            'cash' => 'cash',
-            'upi' => 'UPI',
+            'cash' => 'offline',
+            'upi' => 'upi',
             'bank_transfer' => 'bank_transfer',
             'pos_machine' => 'pos_machine',
             'cheque' => 'cheque',
@@ -5437,7 +5303,7 @@ class POSRegisterController
             'offline' => 'offline',
         ];
 
-        return $map[$m] ?? 'cash';
+        return $map[$m] ?? 'offline';
     }
 
     /**
@@ -5544,24 +5410,7 @@ class POSRegisterController
             ++$i;
         }
 
-        return $this->exotic_api_call('/order/pos_editorderprices', 'POST', [], $post);
-    }
-
-    private function extractExoticOrderNumberFromCreateResponse(array $data): string
-    {
-        foreach (['orderid', 'order_id', 'OrderId', 'ordernumber', 'order_number', 'order_no', 'orderNo'] as $k) {
-            if (!empty($data[$k])) {
-                return trim((string)$data[$k]);
-            }
-        }
-        if (!empty($data['order']) && is_array($data['order'])) {
-            return $this->extractExoticOrderNumberFromCreateResponse($data['order']);
-        }
-        if (!empty($data['data']) && is_array($data['data'])) {
-            return $this->extractExoticOrderNumberFromCreateResponse($data['data']);
-        }
-
-        return '';
+        return $this->retailApiClient->call('/order/pos_editorderprices', 'POST', [], $post);
     }
 
     private function mapPosPaymentModeLabel(string $mode): string
@@ -5569,7 +5418,7 @@ class POSRegisterController
         $m = strtolower(trim($mode));
         $map = [
             'cash' => 'Cash',
-            'cod' => 'Cash',
+            'cod' => 'Cash on Delivery',
             'upi' => 'UPI',
             'bank_transfer' => 'Bank transfer',
             'pos_machine' => 'POS machine',
@@ -5581,11 +5430,34 @@ class POSRegisterController
     }
 
     /**
+     * @return list<array{0:string,1:string}>
+     */
+    public function posPaymentModeOptionsForView(): array
+    {
+        $labels = [
+            'cash' => 'Cash',
+            'cod' => 'Cash on Delivery (COD)',
+            'upi' => 'UPI',
+            'bank_transfer' => 'Bank transfer',
+            'pos_machine' => 'POS machine',
+            'razorpay' => 'Razorpay',
+            'cheque' => 'Cheque',
+        ];
+
+        $options = [];
+        foreach ($this->allowedPosPaymentModes() as $mode) {
+            $options[] = [$mode, $labels[$mode] ?? ucfirst(str_replace('_', ' ', $mode))];
+        }
+
+        return $options;
+    }
+
+    /**
      * @return list<string>
      */
     private function allowedPosPaymentModes(): array
     {
-        return ['cash', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque'];
+        return ['cash', 'cod', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque'];
     }
 
     /**
@@ -5660,27 +5532,49 @@ class POSRegisterController
         $errors = [];
         $splits = $splitBundle['splits'] ?? [];
         if ($splits === []) {
-            $errors[] = 'Add at least one payment line with amount greater than zero.';
+            $errors[] = 'Add at least one payment line.';
 
             return $errors;
         }
 
-        $paymentAmount = (float)($splitBundle['total'] ?? 0);
-        if ($paymentAmount <= 0) {
-            $errors[] = 'Payment amount must be greater than zero.';
+        $advanceTotal = pos_payment_split_advance_total($splits);
+        $codTotal = pos_payment_split_cod_total($splits);
+        $splitTotal = round($advanceTotal + $codTotal, 2);
+        $hasCod = $codTotal > 0.001;
 
-            return $errors;
-        }
+        foreach ($splits as $idx => $split) {
+            $amount = round((float)($split['amount'] ?? 0), 2);
+            if ($amount <= 0) {
+                $errors[] = 'Each payment line must have amount greater than zero (line ' . ($idx + 1) . ').';
 
-        if ($paymentStage === 'final') {
-            if ($paymentAmount + 0.02 < $orderTotal) {
-                $errors[] = 'Final payment must match order total ₹ ' . $orderTotal . '.';
-            } elseif ($paymentAmount - 0.02 > $orderTotal) {
-                $errors[] = 'Over payment is not allowed for final settlement.';
+                return $errors;
             }
-        } elseif ($paymentStage === 'partial' || $paymentStage === 'advance') {
-            if ($paymentAmount + 0.02 >= $orderTotal) {
-                $errors[] = 'Partial / advance must be less than order total ₹ ' . $orderTotal . '.';
+        }
+
+        if ($hasCod) {
+            if ($splitTotal + 0.02 < $orderTotal) {
+                $errors[] = 'Advance plus COD must equal order total ₹ ' . $orderTotal . '.';
+            } elseif ($splitTotal - 0.02 > $orderTotal) {
+                $errors[] = 'Advance plus COD exceeds order total.';
+            }
+        } else {
+            $paymentAmount = (float)($splitBundle['total'] ?? 0);
+            if ($paymentAmount <= 0) {
+                $errors[] = 'Payment amount must be greater than zero.';
+
+                return $errors;
+            }
+
+            if ($paymentStage === 'final') {
+                if ($paymentAmount + 0.02 < $orderTotal) {
+                    $errors[] = 'Final payment must match order total ₹ ' . $orderTotal . '.';
+                } elseif ($paymentAmount - 0.02 > $orderTotal) {
+                    $errors[] = 'Over payment is not allowed for final settlement.';
+                }
+            } elseif ($paymentStage === 'partial' || $paymentStage === 'advance') {
+                if ($paymentAmount + 0.02 >= $orderTotal) {
+                    $errors[] = 'Partial / advance must be less than order total ₹ ' . $orderTotal . '.';
+                }
             }
         }
 
@@ -5774,8 +5668,238 @@ class POSRegisterController
             ];
         }
 
+        return $this->filterReceiptAddressLines($lines);
+    }
+
+    /**
+     * @param array<string, mixed>|null $info
+     * @param 'billing'|'shipping' $which
+     *
+     * @return list<string>
+     */
+    private function formatAddressLinesFromOrderInfo(?array $info, string $which): array
+    {
+        if (!is_array($info)) {
+            return ['—'];
+        }
+
+        if ($which === 'shipping') {
+            $name = trim((string)($info['sname'] ?? ''));
+            if ($name === '') {
+                $name = trim((string)($info['shipping_first_name'] ?? '') . ' ' . (string)($info['shipping_last_name'] ?? ''));
+            }
+            $lines = [
+                $name,
+                trim((string)($info['saddress1'] ?? $info['shipping_address1'] ?? '')),
+                trim((string)($info['saddress2'] ?? $info['shipping_address2'] ?? '')),
+                trim((string)($info['scity'] ?? $info['shipping_city'] ?? ''))
+                    . ', ' . trim((string)($info['sstate'] ?? $info['shipping_state'] ?? ''))
+                    . ' ' . trim((string)($info['szip'] ?? $info['shipping_zip'] ?? '')),
+                trim((string)($info['scountry'] ?? $info['shipping_country'] ?? '')),
+                'Ph: ' . trim((string)($info['sphone'] ?? $info['shipping_mobile'] ?? $info['shipping_phone'] ?? '')),
+            ];
+        } else {
+            $name = trim((string)($info['first_name'] ?? '') . ' ' . (string)($info['last_name'] ?? ''));
+            $lines = [
+                $name,
+                trim((string)($info['address1'] ?? '')),
+                trim((string)($info['address2'] ?? '')),
+                trim((string)($info['city'] ?? ''))
+                    . ', ' . trim((string)($info['state'] ?? ''))
+                    . ' ' . trim((string)($info['zip'] ?? '')),
+                trim((string)($info['country'] ?? '')),
+                'Ph: ' . trim((string)($info['mobile'] ?? $info['phone'] ?? '')),
+            ];
+        }
+
+        $filtered = $this->filterReceiptAddressLines($lines);
+
+        return $filtered !== [] ? $filtered : ['—'];
+    }
+
+    /**
+     * @param list<string> $lines
+     *
+     * @return list<string>
+     */
+    private function filterReceiptAddressLines(array $lines): array
+    {
         return array_values(array_filter(array_map('trim', $lines), static function ($x) {
             return $x !== '' && !preg_match('/^Ph:\s*$/', $x);
         }));
+    }
+
+    private function parseDeliveryStatusLabelFromPaymentNote(string $note): string
+    {
+        if (preg_match('/Delivery status:\s*(.+)$/mi', $note, $matches)) {
+            return trim((string)$matches[1]);
+        }
+
+        return '';
+    }
+
+    /**
+     * Rebuild checkout receipt view data from pos_payments when session is missing (page refresh/bookmark).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function rebuildCheckoutReceiptFromDb(mysqli $conn, string $orderNumber, string $receiptNumber = ''): ?array
+    {
+        require_once __DIR__ . '/../models/payment/Payment.php';
+        require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+
+        $paymentModel = new Payment($conn);
+        $payments = $paymentModel->findCheckoutReceiptPayments($orderNumber, $receiptNumber !== '' ? $receiptNumber : null);
+        if ($payments === []) {
+            return null;
+        }
+
+        $first = $payments[0];
+        $orderNumber = trim((string)($first['order_number'] ?? $orderNumber));
+        $receiptNo = trim((string)($first['receipt_number'] ?? ''));
+        if ($orderNumber === '' || $receiptNo === '') {
+            return null;
+        }
+
+        $splits = [];
+        $advanceAmount = 0.0;
+        $codAmount = 0.0;
+        $paymentAmount = 0.0;
+        foreach ($payments as $paymentRow) {
+            $mode = strtolower(trim((string)($paymentRow['payment_mode'] ?? '')));
+            $amount = round((float)($paymentRow['payment_amount'] ?? 0), 2);
+            $paymentAmount += $amount;
+            if (pos_payment_is_cod_mode($mode)) {
+                $codAmount += $amount;
+            } else {
+                $advanceAmount += $amount;
+            }
+            $splits[] = [
+                'mode' => $mode,
+                'amount' => $amount,
+                'transaction_id' => trim((string)($paymentRow['transaction_id'] ?? '')),
+            ];
+        }
+        $advanceAmount = round($advanceAmount, 2);
+        $codAmount = round($codAmount, 2);
+        $paymentAmount = round($paymentAmount, 2);
+        $hasCodPending = $codAmount > 0.001;
+
+        $receiptPaymentSplits = [];
+        foreach ($splits as $splitRow) {
+            $receiptPaymentSplits[] = [
+                'mode' => (string)$splitRow['mode'],
+                'mode_label' => $this->mapPosPaymentModeLabel((string)$splitRow['mode']),
+                'amount' => (float)$splitRow['amount'],
+                'transaction_id' => (string)$splitRow['transaction_id'],
+            ];
+        }
+
+        $orderTotal = round((float)($first['order_amount'] ?? 0), 2);
+        if ($orderTotal <= 0) {
+            $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
+        }
+
+        $paymentStage = strtolower(trim((string)($first['payment_stage'] ?? 'final')));
+        $pendingAmount = round((float)($first['pending_amount'] ?? 0), 2);
+        $txn = trim((string)($first['transaction_id'] ?? ''));
+        $note = trim((string)($first['note'] ?? ''));
+
+        $createdRaw = trim((string)($first['created_at'] ?? ''));
+        if ($createdRaw === '') {
+            $createdRaw = trim((string)($first['payment_date'] ?? '')) . ' 00:00:00';
+        }
+        try {
+            $dt = new \DateTime($createdRaw, new \DateTimeZone('Asia/Kolkata'));
+        } catch (\Throwable $e) {
+            $dt = new \DateTime('now', new \DateTimeZone('Asia/Kolkata'));
+        }
+
+        $this->bootstrapOrderImportGlobals();
+        global $ordersModel;
+        $orderInfo = $ordersModel->getAddressInfoByOrderNumber($orderNumber);
+
+        $deliveryLabel = $this->parseDeliveryStatusLabelFromPaymentNote($note);
+        if ($deliveryLabel === '' && is_array($orderInfo)) {
+            $localStatus = strtolower(trim((string)($orderInfo['remarks'] ?? '')));
+            if ($localStatus === 'shipped') {
+                $deliveryLabel = 'Collected from showroom by Customer';
+            }
+        }
+
+        $importStatus = '';
+        try {
+            $ordersCtrl = $this->getOrdersControllerForImport();
+            $importStatus = $ordersCtrl->isOrderReadyForPosCheckout($orderNumber) ? 'success' : 'failed';
+        } catch (\Throwable $e) {
+            $importStatus = 'failed';
+        }
+
+        $couponDiscount = round((float)($orderInfo['coupon_reduce'] ?? 0), 2);
+        $giftDiscount = round((float)($orderInfo['giftvoucher_reduce'] ?? 0), 2);
+        $cashDiscount = round(max(
+            (float)($orderInfo['custom_reduce'] ?? 0),
+            0.0
+        ), 2);
+
+        return [
+            'receipt_number' => $receiptNo,
+            'receipt_date_formatted' => $dt->format('d M Y, h:i A'),
+            'order_id' => $orderNumber,
+            'payment_stage' => $paymentStage,
+            'payment_mode_label' => $this->formatPosPaymentSplitsLabel($splits),
+            'pos_delivery_status_label' => $deliveryLabel,
+            'pos_delivery_local_status' => '',
+            'payment_splits' => $receiptPaymentSplits,
+            'receipt_payment_splits' => $receiptPaymentSplits,
+            'transaction_id' => $txn,
+            'receipt_banner_text' => $hasCodPending
+                ? ($advanceAmount > 0.001
+                    ? 'Order ' . $orderNumber . ' placed. Advance ₹ ' . number_format($advanceAmount, 2, '.', ',')
+                        . ' received. COD ₹ ' . number_format($codAmount, 2, '.', ',') . ' pending on delivery.'
+                    : 'Order ' . $orderNumber . ' placed on COD. ₹ ' . number_format($codAmount, 2, '.', ',') . ' to collect on delivery.')
+                : 'Thank you. Payment of ₹ ' . number_format($paymentAmount, 2, '.', ',') . ' recorded for order ' . $orderNumber . '.',
+            'receipt_billing_block' => $this->formatAddressLinesFromOrderInfo($orderInfo, 'billing'),
+            'receipt_shipping_block' => $this->formatAddressLinesFromOrderInfo($orderInfo, 'shipping'),
+            'receipt_lines' => [],
+            'receipt_subtotal_goods' => $orderTotal,
+            'receipt_gst_total' => 0.0,
+            'receipt_coupon_discount' => $couponDiscount,
+            'receipt_gift_discount' => $giftDiscount,
+            'receipt_line_discount' => 0.0,
+            'receipt_cash_discount' => $cashDiscount,
+            'receipt_grand_total' => $orderTotal,
+            'receipt_qty_total' => 0.0,
+            'receipt_agg_sgst' => 0.0,
+            'receipt_agg_cgst' => 0.0,
+            'receipt_agg_igst' => 0.0,
+            'receipt_amount_in_words' => '',
+            'receipt_amount_received' => $advanceAmount,
+            'receipt_cod_pending_amount' => $codAmount,
+            'receipt_pending_amount' => $hasCodPending ? $codAmount : $pendingAmount,
+            'has_cod_pending' => $hasCodPending,
+            'import_status' => $importStatus,
+            'show_invoice_pdf_button' => false,
+            'show_invoice_preview_button' => false,
+            'invoice_id' => 0,
+            'invoice_pdf_url' => '',
+            'invoice_preview_url' => '',
+            'invoice_pdf_disabled_hint' => 'Tax invoice is available after payment is received in full.',
+            'is_payment_in_full' => ($paymentStage === 'final' && !$hasCodPending && $pendingAmount <= 0.02),
+            'receipt_company_legal_name' => 'EXOTIC INDIA ART PVT LTD',
+            'receipt_company_tagline' => '',
+            'receipt_company_gstin' => '',
+            'receipt_company_pan' => '',
+            'receipt_title_main' => 'PAYMENT RECEIPT',
+            'receipt_place_of_supply' => '',
+            'receipt_terms' => [
+                'Goods once sold will not be taken back.',
+                'Subject to jurisdiction of competent courts at New Delhi.',
+            ],
+            'receipt_office_footer' => '',
+            'receipt_signature_date' => $dt->format('d M Y'),
+            'payment_history_url' => 'index.php?page=payments&order_number=' . rawurlencode($orderNumber) . '&order_exact=1',
+            'invoice_poitem_ids' => $this->resolveInvoicePoitemIdsForOrderNumber($conn, $orderNumber),
+        ];
     }
 }

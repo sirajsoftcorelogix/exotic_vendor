@@ -1,0 +1,280 @@
+---
+description: POS order creation, payment recording, and invoice generation logic
+globs: controllers/POSRegisterController.php,controllers/PosInvoiceController.php,controllers/OrdersController.php,helpers/pos_payment_receipt.php,helpers/invoice/**,views/pos_register/order_confirmation.php,views/payments/**
+alwaysApply: false
+---
+
+# POS Order Creation, Payments & Invoices
+
+Deep reference for checkout → Exotic order → local payment → vp_orders import → tax invoice.
+
+**Related:** `pos-register.mdc` (overall POS), `exotic-india-integration.mdc` (RetailApiClient).
+
+---
+
+## 1. Order creation logic
+
+Entry: `POST ?page=pos_register&action=checkout-create` → `POSRegisterController::checkout_create()`.
+
+### Preconditions (validated before any API call)
+
+| Check | Method / rule |
+|-------|----------------|
+| Logged in | `is_login()` |
+| Customer selected | `customer_id` must match `$_SESSION['pos_customer_id']` |
+| Order total > 0 | From payment modal (`order_total`) |
+| Payment splits valid | `validatePosPaymentSplits()` |
+| Address complete | `validatePosCheckoutAddressPayload()` |
+| Delivery status | `resolvePosDeliveryStatusFromPayload()` |
+| High-value compliance | `evaluateHighValueCompliance()` (PAN/Aadhaar/OTP thresholds) |
+
+### Exotic order/create sequence
+
+```
+1. Optional cash discount → RetailApiClient GET /cart/addcustomdiscount
+2. GET /cart/retrieve (must succeed; needs checkoutdata + cart items)
+3. detectLocalStockWarningsFromCart() → appended to payment note (warn only, no block)
+4. buildOrderCreatePostFromPayload($payload, $cartData)
+5. RetailApiClient POST /order/create (+ discount query + headers from exoticCartDiscountContext)
+6. OrderResponseParser::extractOrderNumber()
+7. If list_line_prices → POST /order/pos_editorderprices (Exotic line price sync)
+```
+
+### `buildOrderCreatePostFromPayload()` — key fields
+
+| Field | Source |
+|-------|--------|
+| `checkoutdata` | **Exact string** from cart retrieve JSON (required) |
+| `payment_type` | `'offline'` (counter sale) |
+| `buynow` | `'0'` |
+| `cod` / `codcharges` | `'1'` if COD split amount > 0 |
+| Billing | `confirm_*` fields from payment modal; dummies if empty (`POS_DUMMY_*` constants) |
+| Shipping | `confirm_s*` unless `shouldOmitShippingOnOrderCreate()` |
+| `store_payment_details` | `{warehouse_id}|{Exotic payment type}|{txn}` |
+| Razorpay | Optional `razorpay_payment_id`, `razorpay_order_id`, `razorpay_signature` |
+
+**Payment mode mapping:** POS mode → Exotic type via `mapPosPaymentModeToExoticPaymentType()` (cash, cod, upi, etc.).
+
+### After Exotic order number exists (local side)
+
+1. **Receipt number** — `pos_payment_generate_next_receipt_number($conn, $warehouseShortCode)`.
+2. **Payment rows** — one `pos_payments` row per split (COD rows sorted last).
+3. **Customer** — `upsertPosCustomerDetailsFromConfirmPayload()`, compliance persisted.
+4. **Invoice snapshot** — `$_SESSION['pos_checkout_invoice_snapshot']` (totals, discounts, line prices for invoice builder).
+5. **Auto invoice attempt** — `finalizePosReceiptInvoice()`.
+6. **Fulfillment sync** — `syncPosCheckoutOrderFulfillmentStatus()` → local `vp_orders` + `ExoticIndiaGateway` item status.
+7. **Session receipt** — `$_SESSION['pos_last_checkout_receipt']` for confirmation page.
+8. **Response** — JSON with `redirect_url` → `checkout-receipt`.
+
+### Local order lines (`vp_orders`)
+
+Exotic creates the remote order immediately. Local lines arrive via **vendor-api import**:
+
+- `OrdersController::importSingleOrderForCheckoutWithRetry()` during `finalizePosReceiptInvoice()`.
+- Fetches `https://www.exoticindia.com/vendor-api/order/fetch` → `importVendorOrdersFromApiPayload()`.
+- Ready when `isOrderReadyForPosCheckout()`: `vp_orders` lines **and** `vp_order_info` exist.
+- Vendor API may lag seconds after `order/create` — retry with sleep (default 4×2s at checkout).
+
+**Dev stub:** file `.pos_skip_exotic_order_create_api` → fake `LOCAL-{timestamp}` order id (no remote call).
+
+---
+
+## 2. Payment logic
+
+All payment persistence: **`helpers/pos_payment_receipt.php`** → table **`pos_payments`**.
+
+Link orders by **`order_number`** only (no `order_id` FK on payments).
+
+### Payment modes (`allowedPosPaymentModes()`)
+
+`cash`, `cod`, `upi`, `bank_transfer`, `pos_machine`, `razorpay`, `cheque`
+
+### Payment splits
+
+Parsed by `resolvePosPaymentSplitsFromPayload()`:
+
+- Preferred: `payment_splits[]` with `{ mode, amount, transaction_id }`.
+- Fallback: single `payment_mode` + `payment_amount`.
+
+**Validation (`validatePosPaymentSplits`):**
+
+| Scenario | Rule |
+|----------|------|
+| No COD | `payment_stage=final` → split total must match `order_total` (±₹0.02) |
+| No COD, partial | `advance`/`partial` → total must be **less than** order total |
+| COD present | advance + COD must equal order total; forces `payment_stage=advance` |
+
+Each split → **`pos_payment_insert_row()`** with same `receipt_number` (one receipt, multiple mode rows).
+
+### Payment stages
+
+| Stage | When | Meaning |
+|-------|------|---------|
+| `final` | Full non-COD payment | Order fully paid at counter |
+| `advance` | Partial pay or COD checkout | Advance received; balance pending (COD on delivery) |
+
+### COD-specific behavior
+
+- `pos_payment_is_cod_mode('cod')` → row `payment_status = 'pending'`.
+- Non-COD rows → `payment_status = 'success'`.
+- `pos_payment_split_cod_total()` / `pos_payment_split_advance_total()` separate obligations.
+- When fully paid later → `pos_payment_mark_cod_collected_if_fully_paid()` flips COD rows to success.
+
+### Snapshots on insert (`pos_payment_compute_order_snapshots`)
+
+Per row stores:
+
+- `order_amount` — from `orderTotalOverride` at checkout (Exotic total) or `vp_orders` sum later.
+- `pending_amount` — balance after this row applied.
+- COD rows increase COD obligation; non-COD rows increase collected amount.
+
+### Receipt numbering
+
+Format: `{warehouseShortCode}-{YYYYMMDD}-{seq}` via `pos_payment_generate_next_receipt_number()`.
+
+Short code from `exotic_address` row for session warehouse (`pos_payment_resolve_short_code_for_warehouse()`).
+
+### Payment notes (appended at checkout)
+
+- High-value compliance block
+- Local stock warnings (Exotic `local_stock` from cart, not warehouse ledger)
+- Split breakdown (multi-mode)
+- Delivery status label
+
+### Additional payments (after checkout)
+
+**`views/payments/`** + `PaymentsController` — record further receipts against same `order_number` (e.g. COD collection, balance). Uses same `pos_payment_*` helpers; may trigger `pos_payment_finalize_invoice_for_order()` when allocation completes.
+
+### Key payment helpers
+
+| Function | Purpose |
+|----------|---------|
+| `pos_payment_insert_row()` | Insert one receipt row |
+| `pos_payment_sum_receipt_total()` | Sum all payment_amount for order |
+| `pos_payment_sum_paid()` | Non-COD collected only |
+| `pos_payment_sum_cod_pending()` | Pending COD obligation |
+| `pos_payment_is_allocation_complete()` | Receipt total ≥ order total |
+| `pos_payment_is_fully_paid()` | Non-COD collected ≥ order total |
+| `pos_payment_resolve_auto_invoice_status()` | `null` / `proforma` / `final` |
+| `pos_payment_finalize_invoice_for_order()` | Upgrade/create final invoice when fully allocated |
+
+---
+
+## 3. Invoice creation logic
+
+Two paths: **automatic at checkout** and **manual from receipt / payments**.
+
+### Invoice status decision
+
+`pos_payment_resolve_auto_invoice_status($conn, $orderNumber)`:
+
+| Condition | Status |
+|-----------|--------|
+| No `pos_payments` rows | `null` (no invoice) |
+| Receipt total < order total | `proforma` |
+| Receipt total ≥ order total (incl. COD rows) | `final` |
+
+COD receipt rows count toward allocation — proforma until advance+COD covers full order.
+
+### Automatic at checkout — `finalizePosReceiptInvoice()`
+
+```
+pos_payment_resolve_auto_invoice_status()
+  → if null: skip (show "payment not in full" hint)
+  → importSingleOrderForCheckoutWithRetry()  // vp_orders + vp_order_info
+  → if not ready: import_status=failed, no PDF button
+  → PosInvoiceController::createAutoInvoiceForOrder($orderNumber, $customInvoiceNumber, $forceFinal)
+  → applyPosReceiptInvoiceLinks() → invoice_id, PDF/preview URLs
+```
+
+**Custom invoice number:** only when `payment_stage=final` and payment matches order total.
+
+### `createAutoInvoiceForOrder()` — invoice builder
+
+Location: `PosInvoiceController.php`
+
+1. Return existing active invoice if present (`getActiveInvoiceForOrderNumber`).
+2. Resolve status: `$forceFinal` → `final`; else `pos_payment_resolve_auto_invoice_status()`.
+3. Load `vp_orders` lines; import if missing.
+4. Load `vp_order_info` (billing/shipping/GST).
+5. Build `$_POST` for invoice creation:
+   - **Preferred:** `$_SESSION['pos_checkout_invoice_snapshot']` (exact checkout totals, coupon/cash/line discounts, `pos_line_prices`).
+   - **Fallback:** `buildPosInvoiceSnapshotFromOrder()` or line-by-line from `vp_orders` + GST helpers.
+6. `invoiceCreationService()->createFromPost()` with `source=pos`, discount meta, duplicate check.
+7. Clears `pos_checkout_invoice_snapshot` after create.
+
+Snapshot fields (set in `checkout_create`):
+
+```
+order_number, subtotal_goods, gst_total, coupon_discount, cash_discount,
+gift_discount, line_discount, grand_total, line_prices, list_line_prices,
+discounts_absorbed, custom_discount_mode/value, coupon_display_name,
+apply_export_gst, advance_received, cod_pending
+```
+
+### Manual invoice — `create_invoice_from_receipt`
+
+`GET ?page=pos_register&action=create-invoice-from-receipt&order_number=…`
+
+1. Import order if not ready (`importSingleOrderForCheckoutWithRetry`).
+2. Resolve `vp_orders` poitem ids → `$_SESSION['invoice_items']`.
+3. Redirect to `?page=invoices&action=create` (standard invoice UI).
+
+### Receipt page invoice retry — `fillReceiptInvoicePdfFromDb()`
+
+On `checkout-receipt`, if invoice PDF not linked:
+
+1. Look up existing invoice by order number.
+2. If none and `pos_payment_resolve_auto_invoice_status()` allows → retry `createAutoInvoiceForOrder()`.
+3. `enrichPosCheckoutReceiptRow()` — hide PDF buttons until paid in full (unless proforma exists).
+
+### Proforma → final upgrade
+
+When later payments complete allocation:
+
+- `pos_payment_finalize_invoice_for_order()` upgrades `vp_invoices.status` from `proforma`/`draft` → `final`, or creates new final invoice.
+
+### Invoice UI gates on receipt
+
+| Flag | Meaning |
+|------|---------|
+| `show_invoice_pdf_button` | PDF available |
+| `is_payment_in_full` | `payment_stage=final` and no COD pending |
+| `invoice_pdf_disabled_hint` | User message when blocked |
+
+---
+
+## Diagram — checkout to invoice
+
+```mermaid
+flowchart TD
+  A[checkout-create] --> B[Validate customer payment address]
+  B --> C[cart/retrieve + checkoutdata]
+  C --> D[POST order/create Exotic]
+  D --> E[Extract order_number]
+  E --> F[pos_editorderprices optional]
+  F --> G[pos_payment_insert_row per split]
+  G --> H[Store pos_checkout_invoice_snapshot]
+  H --> I[importSingleOrderForCheckoutWithRetry]
+  I --> J{vp_orders ready?}
+  J -->|yes| K[createAutoInvoiceForOrder]
+  J -->|no| L[Receipt only import_status failed]
+  K --> M{allocation complete?}
+  M -->|final| N[Tax invoice PDF]
+  M -->|partial| O[Proforma invoice]
+  G --> P[checkout-receipt page]
+  P --> Q[Later payments via Payments module]
+  Q --> R[pos_payment_finalize_invoice_for_order]
+  R --> N
+```
+
+---
+
+## Extension rules
+
+1. **New checkout field for Exotic** → `buildOrderCreatePostFromPayload()` + payment modal JS + validation.
+2. **New payment mode** → `allowedPosPaymentModes()`, `mapPosPaymentModeToExoticPaymentType()`, payments UI.
+3. **New invoice line/discount field** → `pos_checkout_invoice_snapshot` in `checkout_create()` + `buildInvoicePostFromCheckoutSnapshot()` in PosInvoiceController.
+4. **Block checkout** → add validation in `checkout_create()` before `order/create`.
+5. **Never insert payments outside** `pos_payment_insert_row()` — keeps snapshots consistent.
+6. **Order import** → always use `OrdersController::importSingleOrderForCheckout*` (vendor-api), not duplicate fetch logic.

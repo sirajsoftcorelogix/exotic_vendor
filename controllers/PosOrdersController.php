@@ -2,10 +2,16 @@
 require_once 'models/posorder/order.php';
 require_once 'models/comman/tables.php';
 require_once 'models/searches/saved_search.php';
-require_once 'models/posorder/po_invoice.php';
+if (!class_exists('POInvoice', false)) {
+    require_once 'models/posorder/po_invoice.php';
+}
 require_once 'models/product/product.php';
 require_once 'helpers/payment_type_groups.php';
 require_once 'helpers/order_filter_autocomplete.php';
+require_once 'helpers/order_list_filters.php';
+if (!class_exists('Order', false)) {
+    require_once 'models/order/order.php';
+}
 $ordersModel = new POSOrder($conn);
 $commanModel = new Tables($conn);
 $savedSearchModel = new SavedSearch($conn);
@@ -30,93 +36,7 @@ class PosOrdersController
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page
         $offset = ($page - 1) * $limit;
 
-        //Advanced Search Filters
-        $filters = [];
-        if (!empty($_GET['order_number'])) {
-            $filters['order_number'] = $_GET['order_number'];
-        }
-        if (!empty($_GET['item_code'])) {
-            $filters['item_code'] = $_GET['item_code'];
-        }
-        if (!empty($_GET['order_from']) && !empty($_GET['order_till'])) {
-            $filters['order_from'] = $_GET['order_from'];
-            $filters['order_till'] = $_GET['order_till'];
-        }
-
-        // if(!empty($_GET['daterange'])){
-        //     echo urldecode($_GET['daterange']);
-        //     $dateRange = explode(' - ', $_GET['daterange']);       
-        //     print_array($dateRange);     
-        //     if (count($dateRange) === 2) {
-        //         $filters['order_from'] = date('Y-m-d', strtotime($dateRange[0]));
-        //         $filters['order_till'] = date('Y-m-d', strtotime($dateRange[1]));
-        //     }
-        // }
-        if (!empty($_GET['item_name'])) {
-            $filters['title'] = $_GET['item_name'];
-        }
-        if (!empty($_GET['min_amount'])) {
-            $filters['min_amount'] = $_GET['min_amount'];
-        }
-        if (!empty($_GET['max_amount'])) {
-            $filters['max_amount'] = $_GET['max_amount'];
-        }
-        if (!empty($_GET['po_no'])) {
-            $filters['po_no'] = $_GET['po_no'];
-        }
-        if (!empty($_GET['status'])) {
-            $filters['status_filter'] = $_GET['status'];
-        }
-
-        if (!empty($_GET['category']) && $_GET['category'] != 'all') {
-            $filters['category'] = $_GET['category'];
-        } else {
-            $filters['category'] = 'all';
-        }
-        if (!empty($_GET['country'])) {
-            $filters['country'] = $_GET['country'];
-        }
-        if (!empty($_GET['options']) && $_GET['options'] == 'express') {
-            $filters['options'] = 'express';
-        }
-        if (!empty($_GET['sort']) && in_array(strtolower($_GET['sort']), ['asc', 'desc'])) {
-            $filters['sort'] = strtolower($_GET['sort']);
-        } else {
-            $filters['sort'] = 'desc'; // Default sort order
-        }
-        if (!empty($_GET['payment_type']) && $_GET['payment_type'] != 'all') {
-            $filters['payment_type'] = $_GET['payment_type'];
-        } else {
-            $filters['payment_type'] = 'all';
-        }
-        if (!empty($_GET['staff_name'])) {
-            $filters['staff_name'] = $_GET['staff_name'];
-        }
-        if (!empty($_GET['priority'])) {
-            $filters['priority'] = $_GET['priority'];
-        }
-        $vendorFilter = resolveOrderListVendorFilter($_GET);
-        if ($vendorFilter !== '') {
-            $filters['vendor'] = $vendorFilter;
-        }
-        if (!empty($_GET['agent'])) {
-            $filters['agent'] = $_GET['agent'];
-        }
-        $publisherFilter = resolveOrderListPublisherFilter($_GET);
-        if ($publisherFilter !== '') {
-            $filters['publisher'] = $publisherFilter;
-        }
-        $authorFilter = resolveOrderListAuthorFilter($_GET);
-        if ($authorFilter !== '') {
-            $filters['author'] = $authorFilter;
-        }
-        //unshipped
-        if (!empty($_GET['options']) && $_GET['options'] == 'unshipped') {
-            $filters['unshipped'] = true;
-        }
-
-
-
+        $filters = buildOrderListFiltersFromRequest($_GET);
         //order status list
         $statusList = $commanModel->get_order_status_list();
         $order_status_row = $commanModel->get_order_status();
@@ -170,6 +90,8 @@ class PosOrdersController
                 'staff_list' => $commanModel->get_staff_list(),
                 'filters' => $filters,
                 'saved_searches' => $saved_searches,
+                'warehouses' => $commanModel->get_exotic_address(),
+                'default_warehouse_id' => resolveOrderListDefaultWarehouseId(),
             ],
             preparePaymentTypeFilterData($paymentTypes, $_GET['payment_type'] ?? null)
         ), 'Manage Orders');
@@ -376,6 +298,7 @@ class PosOrdersController
                     'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
                     'quantity' => $item['qty'] ?? '',
                     'options' => $item['options'] ?? 0,
+                    'addons' => Order::normalizeVendorOrderLineAddons($item['addons'] ?? null),
                     'gst' => $item['gst'] ?? '',
                     'hsn' => $item['hscode'] ?? '',
                     'local_stock' => is_numeric($item['local_stock'] ?? null) ? (float) $item['local_stock'] : 0.0,
@@ -805,6 +728,28 @@ class PosOrdersController
             }
         }
 
+        require_once __DIR__ . '/../helpers/invoice/pos_invoice_amount_summary.php';
+        require_once __DIR__ . '/../models/PosInvoice/invoice.php';
+        $posInvoiceModelForSummary = new POSInvoice($conn);
+        $invoiceItemsForSummary = $posInvoiceModelForSummary->getInvoiceItems((int)($invoice['id'] ?? 0));
+        $invoiceLineTotalSum = 0.0;
+        foreach ($invoiceItemsForSummary as $invoiceItemRow) {
+            $invoiceLineTotalSum += round((float)($invoiceItemRow['line_total'] ?? 0), 2);
+        }
+        $pdfSummaryInputs = pos_invoice_resolve_pdf_summary_inputs($invoice, $invoiceLineTotalSum);
+        $summaryRows = pos_invoice_build_amount_summary_rows(
+            $pdfSummaryInputs['pos_meta'],
+            $pdfSummaryInputs['grand_total'],
+            $pdfSummaryInputs['tax_amount']
+        );
+        $pdfGrandTotal = $pdfSummaryInputs['grand_total'];
+        if ($summaryRows !== []) {
+            $lastRow = $summaryRows[count($summaryRows) - 1];
+            if (!empty($lastRow['is_grand'])) {
+                $pdfGrandTotal = round((float)($lastRow['amount'] ?? $pdfGrandTotal), 2);
+            }
+        }
+
         return [
             'id' => (int)$invoice['id'],
             'invoice_number' => (string)($invoice['invoice_number'] ?? ''),
@@ -818,6 +763,8 @@ class PosOrdersController
             'discount_lines' => $discountLines,
             'discounts_absorbed' => is_array($posDiscounts) && !empty($posDiscounts['discounts_absorbed']),
             'grand_total' => $grandTotal,
+            'pdf_grand_total' => $pdfGrandTotal,
+            'summary_rows' => $summaryRows,
             'status' => (string)($invoice['status'] ?? ''),
         ];
     }
@@ -965,6 +912,140 @@ class PosOrdersController
         ];
     }
 
+    /**
+     * @param array<string, mixed>|null $activeInvoice
+     * @param array{is_fully_paid?:bool} $paymentSummary
+     *
+     * @return array{url:string,can_print:bool}
+     */
+    private function resolveProformaPrintAction(string $orderNumber, ?array $activeInvoice, array $paymentSummary): array
+    {
+        if (!empty($paymentSummary['is_fully_paid'])) {
+            return ['url' => '', 'can_print' => false];
+        }
+
+        $invoiceId = is_array($activeInvoice) ? (int)($activeInvoice['id'] ?? 0) : 0;
+        $status = is_array($activeInvoice)
+            ? strtolower(trim((string)($activeInvoice['status'] ?? '')))
+            : '';
+
+        if ($invoiceId > 0 && $status === 'final') {
+            return ['url' => '', 'can_print' => false];
+        }
+
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return ['url' => '', 'can_print' => false];
+        }
+
+        return [
+            'url' => pos_order_proforma_print_url($orderNumber),
+            'can_print' => true,
+        ];
+    }
+
+    /**
+     * Render proforma print preview from order details (no invoice DB row).
+     */
+    public function printProforma(): void
+    {
+        global $conn;
+        require_once __DIR__ . '/PosInvoiceController.php';
+        $posInv = new PosInvoiceController();
+        $posInv->printProformaPreviewFromOrder();
+    }
+
+    /**
+     * Customer handover print: order summary + payment details (not tax invoice).
+     */
+    public function printOrder(): void
+    {
+        is_login();
+        global $ordersModel, $commanModel, $conn;
+
+        $orderRef = trim((string)($_GET['order_number'] ?? ''));
+        if ($orderRef === '') {
+            http_response_code(400);
+            echo '<p>Invalid order number.</p>';
+            exit;
+        }
+
+        $order = $ordersModel->getOrderLineItemsByRef($orderRef);
+        if (!$order) {
+            http_response_code(404);
+            echo '<p>Order not found.</p>';
+            exit;
+        }
+
+        $resolvedOrderNumber = (string)($order[0]['order_number'] ?? $orderRef);
+        $orderremarks = $ordersModel->getRemarksByOrderNumber($resolvedOrderNumber);
+        $customerdetails = $ordersModel->getCustomerNameAndEmailByOrderNumber($resolvedOrderNumber);
+        $orderInfo = $ordersModel->getAddressInfoByOrderNumber($resolvedOrderNumber);
+
+        $invoiceId = (int)($order[0]['invoice_id'] ?? 0);
+        require_once __DIR__ . '/../models/PosInvoice/invoice.php';
+        $posInvoiceModel = new POSInvoice($conn);
+
+        $activeInvoice = null;
+        if ($invoiceId > 0) {
+            $activeInvoice = $posInvoiceModel->getInvoiceById($invoiceId);
+            if ($activeInvoice && strtolower(trim((string)($activeInvoice['status'] ?? ''))) === 'cancelled') {
+                $activeInvoice = null;
+            }
+        }
+        if (!$activeInvoice) {
+            $activeInvoice = $posInvoiceModel->getActiveInvoiceForOrderNumber($resolvedOrderNumber);
+        }
+
+        $invoiceDisplay = $this->buildOrderInvoiceDisplaySummary($activeInvoice, $resolvedOrderNumber);
+        $paymentSummary = $this->buildOrderPaymentSummary(
+            $resolvedOrderNumber,
+            is_array($orderremarks) ? $orderremarks : null
+        );
+
+        require_once __DIR__ . '/../helpers/invoice/pos_order_pricing.php';
+        $linePricingByLineId = pos_order_build_line_display_pricing_map(
+            $order,
+            is_array($activeInvoice) ? $activeInvoice : null,
+            is_array($orderInfo) ? $orderInfo : null,
+            $commanModel
+        );
+
+        if (is_array($invoiceDisplay) && pos_order_line_pricing_should_override_invoice_summary($linePricingByLineId, is_array($orderInfo) ? $orderInfo : null)) {
+            $pricingAggregate = pos_order_aggregate_line_pricing_summary(
+                $linePricingByLineId,
+                is_array($orderInfo) ? $orderInfo : null
+            );
+            if (is_array($pricingAggregate)) {
+                $posMeta = is_array($activeInvoice)
+                    ? pos_invoice_parse_discount_meta($activeInvoice['notes'] ?? null)
+                    : [];
+                $invoiceDisplay['summary_rows'] = pos_order_build_summary_rows_from_line_pricing($pricingAggregate, $posMeta);
+                $invoiceDisplay['pdf_grand_total'] = $pricingAggregate['net_chargeable'];
+                $invoiceDisplay['grand_total'] = $pricingAggregate['net_chargeable'];
+            }
+        }
+
+        require_once __DIR__ . '/../helpers/app_settings.php';
+        $firmDetails = app_settings_model() ? app_settings_model()->getFirmDetailsRow() : [];
+
+        require_once __DIR__ . '/../models/payment/Payment.php';
+        $paymentModel = new Payment($conn);
+        $storeAddress = $paymentModel->getSaleStoreAddressForOrder($resolvedOrderNumber);
+
+        renderTemplateClean('views/posorders/print_order.php', [
+            'order' => $order,
+            'orderremarks' => is_array($orderremarks) ? $orderremarks : [],
+            'customerdetails' => is_array($customerdetails) ? $customerdetails : [],
+            'invoiceDisplay' => $invoiceDisplay,
+            'paymentSummary' => $paymentSummary,
+            'linePricingByLineId' => $linePricingByLineId,
+            'orderNumber' => $resolvedOrderNumber,
+            'firmDetails' => is_array($firmDetails) ? $firmDetails : [],
+            'storeAddress' => is_array($storeAddress) ? $storeAddress : ['title' => '', 'lines' => []],
+        ], 'Order ' . $resolvedOrderNumber);
+    }
+
     public function getOrderDetailsHTML()
     {
         is_login();
@@ -1011,11 +1092,46 @@ class PosOrdersController
         $invoicePdfUrl = $invoiceId > 0 ? pos_invoice_pdf_url($invoiceId) : '';
         $invoiceDisplay = $this->buildOrderInvoiceDisplaySummary($activeInvoice, $resolvedOrderNumber);
         $paymentSummary = $this->buildOrderPaymentSummary($resolvedOrderNumber, is_array($orderremarks) ? $orderremarks : null);
+        $proformaPrintAction = $this->resolveProformaPrintAction($resolvedOrderNumber, $activeInvoice, $paymentSummary);
+        $orderInfo = $ordersModel->getAddressInfoByOrderNumber($resolvedOrderNumber);
+        require_once __DIR__ . '/../helpers/invoice/pos_order_pricing.php';
+        $linePricingByLineId = pos_order_build_line_display_pricing_map(
+            $order,
+            is_array($activeInvoice) ? $activeInvoice : null,
+            is_array($orderInfo) ? $orderInfo : null,
+            $commanModel
+        );
+
+        if (is_array($invoiceDisplay) && pos_order_line_pricing_should_override_invoice_summary($linePricingByLineId, is_array($orderInfo) ? $orderInfo : null)) {
+            $pricingAggregate = pos_order_aggregate_line_pricing_summary(
+                $linePricingByLineId,
+                is_array($orderInfo) ? $orderInfo : null
+            );
+            if (is_array($pricingAggregate)) {
+                $posMeta = is_array($activeInvoice)
+                    ? pos_invoice_parse_discount_meta($activeInvoice['notes'] ?? null)
+                    : [];
+                $invoiceDisplay['summary_rows'] = pos_order_build_summary_rows_from_line_pricing($pricingAggregate, $posMeta);
+                $invoiceDisplay['pdf_grand_total'] = $pricingAggregate['net_chargeable'];
+                $invoiceDisplay['grand_total'] = $pricingAggregate['net_chargeable'];
+                $invoiceDisplay['subtotal_goods_incl'] = $pricingAggregate['gross_incl'];
+                $invoiceDisplay['tax_amount'] = $pricingAggregate['total_gst'];
+            }
+        }
+
+        require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+        $invoiceStatusForGate = is_array($invoiceDisplay)
+            ? strtolower(trim((string)($invoiceDisplay['status'] ?? '')))
+            : '';
+        $canCreateFinalInvoice = $conn instanceof mysqli
+            && pos_payment_is_allocation_complete($conn, $resolvedOrderNumber)
+            && $invoiceStatusForGate !== 'final';
 
         if ($type === 'inner') {
             renderPartial('views/posorders/partial_order_details.php', [
                 'order' => $order,
                 'statusList' => $statusList,
+                'linePricingByLineId' => $linePricingByLineId,
             ]);
         } else {
             renderTemplate('views/posorders/other_partial_order_details.php', [
@@ -1026,12 +1142,86 @@ class PosOrdersController
                 'customerdetails' => $customerdetails,
                 'invoiceDisplay' => $invoiceDisplay,
                 'invoicePdfUrl' => $invoicePdfUrl,
+                'proformaPrintUrl' => (string)($proformaPrintAction['url'] ?? ''),
+                'canPrintProforma' => !empty($proformaPrintAction['can_print']),
                 'canEditInvoiceNumber' => canSrEmpAccess(),
                 'paymentSummary' => $paymentSummary,
+                'canCreateFinalInvoice' => $canCreateFinalInvoice,
+                'linePricingByLineId' => $linePricingByLineId,
+                'order_status_list' => $commanModel->get_order_status(),
+                'staff_list' => $commanModel->get_staff_list(),
+                'showOrderVendorName' => function_exists('canViewOrderVendorName') && canViewOrderVendorName(),
             ], 'Order Details');
         }
         exit;
     }
+
+    public function createInvoiceFromOrderAjax(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        global $conn;
+
+        $orderNumber = trim((string)($_POST['order_number'] ?? $_GET['order_number'] ?? ''));
+        if ($orderNumber === '') {
+            echo json_encode(['success' => false, 'message' => 'Order number missing']);
+            exit;
+        }
+
+        require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+
+        if (!$conn instanceof mysqli) {
+            echo json_encode(['success' => false, 'message' => 'Database unavailable']);
+            exit;
+        }
+
+        if (!pos_payment_is_allocation_complete($conn, $orderNumber)) {
+            echo json_encode(['success' => false, 'message' => 'Order is not fully paid yet.']);
+            exit;
+        }
+
+        require_once __DIR__ . '/../models/PosInvoice/invoice.php';
+        $posInvoiceModel = new POSInvoice($conn);
+        $existing = $posInvoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
+        if ($existing && strtolower(trim((string)($existing['status'] ?? ''))) === 'final') {
+            $invoiceId = (int)($existing['id'] ?? 0);
+            echo json_encode([
+                'success' => true,
+                'invoice_id' => $invoiceId,
+                'created' => false,
+                'invoice_pdf_url' => $invoiceId > 0 ? pos_invoice_pdf_url($invoiceId) : '',
+                'message' => 'Final invoice already exists for this order.',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        try {
+            $invoiceMeta = pos_payment_finalize_invoice_for_order($conn, $orderNumber);
+        } catch (Throwable $e) {
+            echo json_encode(['success' => false, 'message' => 'Invoice could not be created: ' . $e->getMessage()]);
+            exit;
+        }
+
+        $invoiceId = (int)($invoiceMeta['invoice_id'] ?? 0);
+        if (empty($invoiceMeta['success']) || $invoiceId <= 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => (string)($invoiceMeta['message'] ?? 'Invoice could not be created.'),
+            ]);
+            exit;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'invoice_id' => $invoiceId,
+            'created' => !empty($invoiceMeta['created']),
+            'invoice_pdf_url' => pos_invoice_pdf_url($invoiceId),
+            'message' => !empty($invoiceMeta['created']) ? 'Invoice created successfully.' : 'Invoice is ready.',
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
     public function updateImportedOrders()
     {
         global $ordersModel;
@@ -1168,6 +1358,7 @@ class PosOrdersController
                     'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
                     'quantity' => $item['qty'] ?? '',
                     'options' => $item['options'] ?? 0,
+                    'addons' => Order::normalizeVendorOrderLineAddons($item['addons'] ?? null),
                     'gst' => $item['gst'] ?? '',
                     'hsn' => $item['hscode'] ?? '',
                     'local_stock' => is_numeric($item['local_stock'] ?? null) ? (float) $item['local_stock'] : 0.0,
@@ -1835,8 +2026,15 @@ class PosOrdersController
         is_login();
         global $ordersModel;
         $order_number   = trim($_POST['order_number']   ?? '');
-        $customer_name  = trim($_POST['customer_name']  ?? '');
         $customer_phone = trim($_POST['customer_phone'] ?? '');
+        $first_name = trim($_POST['first_name'] ?? '');
+        $last_name = trim($_POST['last_name'] ?? '');
+        $shipping_first_name = trim($_POST['shipping_first_name'] ?? '');
+        $shipping_last_name = trim($_POST['shipping_last_name'] ?? '');
+        $customer_name  = trim($_POST['customer_name']  ?? '');
+        if ($customer_name === '') {
+            $customer_name = trim($first_name . ' ' . $last_name);
+        }
         $address_line1 = trim($_POST['address_line1'] ?? '');
         $address_line2 = trim($_POST['address_line2'] ?? '');
         $city = trim($_POST['city'] ?? '');
@@ -1847,14 +2045,40 @@ class PosOrdersController
         $billing_city = trim($_POST['billing_city'] ?? '');
         $billing_zipcode = trim($_POST['billing_zipcode'] ?? '');
         $billing_country = trim($_POST['billing_country'] ?? '');
-        if (empty($order_number) || empty($customer_name) || empty($customer_phone)) {
+        $gstin = strtoupper(trim($_POST['gstin'] ?? ''));
+        $shipping_gstin = strtoupper(trim($_POST['shipping_gstin'] ?? ''));
+        $state = trim($_POST['state'] ?? '');
+        $shipping_state = trim($_POST['shipping_state'] ?? '');
+        if (empty($order_number) || empty($first_name) || empty($last_name) || empty($customer_phone)) {
             echo json_encode([
                 'success' => false,
-                'message' => 'Order number, name, email and phone are required'
+                'message' => 'Order number, billing first name, last name and phone are required'
             ]);
             exit;
         }
-        $result = $ordersModel->updateCustomerNameAndEmail($order_number, $customer_name, $customer_phone, $address_line1, $address_line2, $city, $zipcode, $country, $billing_address_line1, $billing_address_line2, $billing_city, $billing_zipcode, $billing_country);
+        $result = $ordersModel->updateCustomerNameAndEmail(
+            $order_number,
+            $customer_name,
+            $customer_phone,
+            $address_line1,
+            $address_line2,
+            $city,
+            $zipcode,
+            $country,
+            $billing_address_line1,
+            $billing_address_line2,
+            $billing_city,
+            $billing_zipcode,
+            $billing_country,
+            $gstin,
+            $shipping_gstin,
+            $state,
+            $shipping_state,
+            $first_name,
+            $last_name,
+            $shipping_first_name,
+            $shipping_last_name
+        );
         echo json_encode($result);
         exit;
     }
@@ -2156,7 +2380,7 @@ class PosOrdersController
      */
     private function syncOrderStatusToExoticApi(int $orderId, string $statusSlug): array
     {
-        global $ordersModel, $commanModel;
+        global $ordersModel, $conn;
 
         $orderval = $ordersModel->getOrderById($orderId);
         if (!$orderval) {
@@ -2169,28 +2393,21 @@ class PosOrdersController
             ];
         }
 
-        $statusRow = $commanModel->getExoticIndiaOrderStatusCode($statusSlug);
-        $adminId = (int) ($statusRow['admin_id'] ?? 0);
-        if ($adminId <= 0) {
+        require_once __DIR__ . '/../integrations/exotic/ExoticIndiaGateway.php';
+        $gateway = ExoticIndiaGateway::create($conn);
+        $result = $gateway->updateOrderLineFromSlug($statusSlug, $orderval);
+
+        if (!empty($result['skipped'])) {
             return [
                 'attempted' => false,
                 'success' => true,
                 'skipped' => true,
-                'message' => 'This status is not synced to Exotic India.',
+                'message' => (string) ($result['message'] ?? 'This status is not synced to Exotic India.'),
                 'order_id' => $orderId,
                 'order_number' => (string) ($orderval['order_number'] ?? ''),
                 'item_code' => (string) ($orderval['item_code'] ?? ''),
             ];
         }
-
-        $result = $commanModel->updateExoticIndiaOrderStatus([
-            'orderid' => $orderval['order_number'],
-            'level' => 'item',
-            'order_status' => $adminId,
-            'size' => trim((string) ($orderval['size'] ?? '')),
-            'color' => trim((string) ($orderval['color'] ?? '')),
-            'itemcode' => trim((string) ($orderval['item_code'] ?? '')),
-        ]);
 
         return array_merge([
             'attempted' => true,
@@ -2198,11 +2415,6 @@ class PosOrdersController
             'order_id' => $orderId,
             'order_number' => (string) ($orderval['order_number'] ?? ''),
             'item_code' => (string) ($orderval['item_code'] ?? ''),
-        ], is_array($result) ? $result : [
-            'success' => false,
-            'http_code' => 0,
-            'message' => 'Unexpected API response.',
-            'raw' => (string) $result,
-        ]);
+        ], $result);
     }
 }

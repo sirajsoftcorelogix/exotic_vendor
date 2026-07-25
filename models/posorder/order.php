@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../../helpers/order_filter_autocomplete.php';
+require_once __DIR__ . '/../../helpers/order_list_filters.php';
 
 class POSOrder
 {
@@ -25,21 +26,7 @@ class POSOrder
 		LEFT JOIN vp_invoices inv ON inv.id = vp_orders.invoice_id
 		WHERE store_name != 'null'  AND store_name > 0";
         $params = [];
-        if (!empty($filters['order_number'])) {
-            // Support comma-separated order numbers
-            $orderNumbers = is_array($filters['order_number'])
-                ? $filters['order_number']
-                : array_map('trim', explode(',', $filters['order_number']));
-            $orderNumbers = array_filter($orderNumbers); // Remove empty values
-
-            if (!empty($orderNumbers)) {
-                $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
-                $sql .= " AND vp_orders.order_number IN ($placeholders)";
-                foreach ($orderNumbers as $orderNum) {
-                    $params[] = $orderNum;
-                }
-            }
-        }
+        appendOrderNumberFilterSql($sql, $params, $filters['order_number'] ?? null);
         if (!empty($filters['item_code'])) {
             $sql .= " AND vp_orders.item_code LIKE ?";
             $params[] = '%' . $filters['item_code'] . '%';
@@ -69,30 +56,7 @@ class POSOrder
             $sql .= " AND vp_orders.total_price <= ?";
             $params[] = $filters['max_amount'];
         }
-        if (!empty($filters['status_filter']) && $filters['status_filter'] !== 'all') {
-            if ($filters['status_filter'] === 'pending') {
-                //$sql .= " AND (vp_orders.po_number IS NULL OR vp_orders.po_number = '')";
-                $sql .= " AND vp_orders.status = 'pending'";
-            } elseif ($filters['status_filter'] === 'processed') {
-                //$sql .= " AND (vp_orders.po_number IS NOT NULL AND vp_orders.po_number != '')";
-                $sql .= " AND vp_orders.status IN ('ready_for_packing','po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
-            } elseif ($filters['status_filter'] === 'dispatch') {
-                $sql .= " AND vp_orders.status IN ('ready_for_dispatch')";
-            } elseif ($filters['status_filter'] === 'shipped') {
-                $sql .= " AND vp_orders.status = 'shipped'";
-            } elseif (!empty($filters['status_filter'])) {
-                //array of statuses
-                if (is_array($filters['status_filter'])) {
-                    $placeholders = implode(',', array_fill(0, count($filters['status_filter']), '?'));
-                    $sql .= " AND vp_orders.status IN ($placeholders)";
-                    foreach ($filters['status_filter'] as $status) {
-                        $params[] = $status;
-                    }
-                } else {
-                    $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
-                }
-            }
-        }
+        appendOrderStatusFilterSql($sql, $params, $filters);
         if (!empty($filters['country'])) {
             if ($filters['country'] == 'overseas') {
                 $sql .= " AND (vp_orders.shipping_country != 'IN' AND vp_orders.country != 'IN')";
@@ -113,19 +77,8 @@ class POSOrder
         if (!empty($filters['options']) && $filters['options'] === 'express') {
             $sql .= " AND vp_orders.options LIKE '%express%' AND vp_orders.status = 'pending'";
         }
-        if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
-            //array of payment types
-            if (is_array($filters['payment_type'])) {
-                $placeholders = implode(',', array_fill(0, count($filters['payment_type']), '?'));
-                $sql .= " AND vp_orders.payment_type IN ($placeholders)";
-                foreach ($filters['payment_type'] as $payment_type) {
-                    $params[] = $payment_type;
-                }
-            } else {
-                $sql .= " AND vp_orders.payment_type = ?";
-                $params[] = $filters['payment_type'];
-            }
-        }
+        appendOrderPaymentTypeFilterSql($sql, $params, $filters);
+        appendOrderStockAvailabilityFilterSql($sql, $params, $filters);
         if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
             //$sql .= " AND vp_users.id = ?";
             //$params[] = $filters['staff_name'];
@@ -251,21 +204,7 @@ class POSOrder
         }
         $sql .= " WHERE store_name != 'null' AND store_name > 0";
         $params = [];
-        if (!empty($filters['order_number'])) {
-            // Support comma-separated order numbers
-            $orderNumbers = is_array($filters['order_number'])
-                ? $filters['order_number']
-                : array_map('trim', explode(',', $filters['order_number']));
-            $orderNumbers = array_filter($orderNumbers); // Remove empty values
-
-            if (!empty($orderNumbers)) {
-                $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
-                $sql .= " AND vp_orders.order_number IN ($placeholders)";
-                foreach ($orderNumbers as $orderNum) {
-                    $params[] = $orderNum;
-                }
-            }
-        }
+        appendOrderNumberFilterSql($sql, $params, $filters['order_number'] ?? null);
         if (!empty($filters['item_code'])) {
             $sql .= " AND item_code LIKE ?";
             $params[] = '%' . $filters['item_code'] . '%';
@@ -295,30 +234,7 @@ class POSOrder
             $sql .= " AND total_price <= ?";
             $params[] = $filters['max_amount'];
         }
-        if (!empty($filters['status_filter']) && $filters['status_filter'] !== 'all') {
-            if ($filters['status_filter'] === 'pending') {
-                //$sql .= " AND (vp_orders.po_number IS NULL OR vp_orders.po_number = '')";
-                $sql .= " AND vp_orders.status = 'pending'";
-            } elseif ($filters['status_filter'] === 'processed') {
-                //$sql .= " AND (po_number IS NOT NULL AND po_number != '')";
-                $sql .= " AND vp_orders.status IN ('ready_for_packing','po_pending','po_approved','po_inprogress','item_received','added_to_picklist','store_transfer','ready_for_qc','sent_for_repair')";
-            } elseif ($filters['status_filter'] === 'dispatch') {
-                $sql .= " AND vp_orders.status IN ('ready_for_dispatch')";
-            } elseif ($filters['status_filter'] === 'shipped') {
-                $sql .= " AND vp_orders.status = 'shipped'";
-            } elseif (!empty($filters['status_filter'])) {
-                //array of statuses
-                if (is_array($filters['status_filter'])) {
-                    $placeholders = implode(',', array_fill(0, count($filters['status_filter']), '?'));
-                    $sql .= " AND vp_orders.status IN ($placeholders)";
-                    foreach ($filters['status_filter'] as $status) {
-                        $params[] = $status;
-                    }
-                } else {
-                    $sql .= " AND vp_orders.status = '" . $filters['status_filter'] . "'";
-                }
-            }
-        }
+        appendOrderStatusFilterSql($sql, $params, $filters);
         if (!empty($filters['country'])) {
             $sql .= " AND vp_orders.shipping_country = '" . $filters['country'] . "'";
             //$params[] = '%' . $filters['country'] . '%';
@@ -335,18 +251,8 @@ class POSOrder
         if (!empty($filters['options']) && $filters['options'] === 'express') {
             $sql .= " AND options LIKE '%express%' AND vp_orders.status = 'pending'";
         }
-        if (!empty($filters['payment_type']) && $filters['payment_type'] !== 'all') {
-            if (is_array($filters['payment_type'])) {
-                $placeholders = implode(',', array_fill(0, count($filters['payment_type']), '?'));
-                $sql .= " AND vp_orders.payment_type IN ($placeholders)";
-                foreach ($filters['payment_type'] as $payment_type) {
-                    $params[] = $payment_type;
-                }
-            } else {
-                $sql .= " AND payment_type = ?";
-                $params[] = $filters['payment_type'];
-            }
-        }
+        appendOrderPaymentTypeFilterSql($sql, $params, $filters, 'payment_type');
+        appendOrderStockAvailabilityFilterSql($sql, $params, $filters);
         if (!empty($filters['staff_name']) && $filters['staff_name'] !== 'all') {
             //$sql .= " AND vp_users.id = ?";
             //$params[] = $filters['staff_name'];
@@ -552,6 +458,7 @@ class POSOrder
             'marketplace_vendor',
             'quantity',
             'options',
+            'addons',
             'gst',
             'hsn',
             'local_stock',
@@ -1496,7 +1403,7 @@ class POSOrder
             'message'       => $affected > 0 ? 'Remarks updated successfully' : 'No changes made (value was already the same)'
         ];
     }
-    public function updateCustomerNameAndEmail($order_number, $name, $phone, $address_line1 = '', $address_line2 = '', $city = '', $zipcode = '', $country = '', $billing_address_line1 = '', $billing_address_line2 = '', $billing_city = '', $billing_zipcode = '', $billing_country = '')
+    public function updateCustomerNameAndEmail($order_number, $name, $phone, $address_line1 = '', $address_line2 = '', $city = '', $zipcode = '', $country = '', $billing_address_line1 = '', $billing_address_line2 = '', $billing_city = '', $billing_zipcode = '', $billing_country = '', $gstin = '', $shipping_gstin = '', $state = '', $shipping_state = '', $first_name = '', $last_name = '', $shipping_first_name = '', $shipping_last_name = '')
     {
 
         // Update customer (main operation)
@@ -1518,12 +1425,34 @@ class POSOrder
         // Update address – don't fail the whole operation if this fails
         $sql_addr = "
             UPDATE vp_order_info 
-            SET address_line1 = ?, address_line2 = ? , city = ?, zipcode = ?, country = ?, shipping_address_line1 = ?, shipping_address_line2 = ?, shipping_city = ?, shipping_zipcode = ?, shipping_country = ?
+            SET first_name = ?, last_name = ?, address_line1 = ?, address_line2 = ?, city = ?, state = ?, zipcode = ?, country = ?, gstin = ?,
+                shipping_first_name = ?, shipping_last_name = ?, shipping_address_line1 = ?, shipping_address_line2 = ?, shipping_city = ?, shipping_state = ?, shipping_zipcode = ?, shipping_country = ?, shipping_gstin = ?
             WHERE order_number = ?
         ";
         $stmt_addr = $this->db->prepare($sql_addr);
         if ($stmt_addr) {
-            $stmt_addr->bind_param('sssssssssss', $address_line1, $address_line2, $city, $zipcode, $country, $billing_address_line1, $billing_address_line2, $billing_city, $billing_zipcode, $billing_country, $order_number);
+            $stmt_addr->bind_param(
+                'sssssssssssssssssss',
+                $first_name,
+                $last_name,
+                $address_line1,
+                $address_line2,
+                $city,
+                $state,
+                $zipcode,
+                $country,
+                $gstin,
+                $shipping_first_name,
+                $shipping_last_name,
+                $billing_address_line1,
+                $billing_address_line2,
+                $billing_city,
+                $shipping_state,
+                $billing_zipcode,
+                $billing_country,
+                $shipping_gstin,
+                $order_number
+            );
             $stmt_addr->execute();  // ← ignore result
         }
 
@@ -1559,7 +1488,7 @@ class POSOrder
         $sql = "UPDATE vp_orders SET 
                 shipping_country = ?, title = ?, description = ?, size = ?, color = ?, 
                 groupname = ?, subcategories = ?, currency = ?, itemprice = ?, finalprice = ?, 
-                image = ?, marketplace_vendor = ?, quantity = ?, options = ?, gst = ?, hsn = ?, 
+                image = ?, marketplace_vendor = ?, quantity = ?, options = ?, addons = ?, gst = ?, hsn = ?, 
                 local_stock = ?, cost_price = ?, location = ?, order_date = ?, processed_time = ?,
                 numsold = ?, product_weight = ?, product_weight_unit = ?,
                 prod_height = ?, prod_width = ?, prod_length = ?, length_unit = ?,
@@ -1590,6 +1519,7 @@ class POSOrder
             $data['marketplace_vendor'],
             $data['quantity'],
             json_encode($data['options']),
+            $data['addons'] ?? null,
             $data['gst'],
             $data['hsn'],
             $data['local_stock'],
@@ -1913,6 +1843,7 @@ class POSOrder
             'shipping_zipcode',
             'shipping_mobile',
             'shipping_email',
+            'shipping_gstin',
             'total',
             'giftvoucher',
             'giftvoucher_reduce',

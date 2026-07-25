@@ -458,6 +458,11 @@
                                 <span id="addGroupnameMsg" class="text-sm text-red-500"></span>
                                 <p class="mt-1 text-xs text-gray-500">Required for Exotic India API sync. Select at least one group.</p>
                             </div>
+                            <div id="addBookDiscountField" class="mt-2 hidden">
+                                <label class="text-sm font-medium text-gray-700">Discount (%)</label>
+                                <input type="number" class="form-input w-full mt-1" name="discount" id="add_discount" min="0" step="0.01" placeholder="e.g. 10" />
+                                <p class="mt-1 text-xs text-gray-500">Default discount percentage for book vendors. Leave empty or 0 if not set.</p>
+                            </div>
                             <div class="mt-2">
                                 <label for="addWebpage" class="text-sm font-medium text-gray-700">Webpage <span class="text-red-500">*</span></label>
                                 <div class="mt-1 flex items-center gap-2">
@@ -693,6 +698,11 @@
                                 </div>
                                 <span id="editGroupnameMsg" class="text-sm text-red-500"></span>
                                 <p class="mt-1 text-xs text-gray-500">Required for Exotic India API sync. Select at least one group.</p>
+                            </div>
+                            <div id="editBookDiscountField" class="mt-2 hidden">
+                                <label class="text-sm font-medium text-gray-700">Discount (%)</label>
+                                <input type="number" class="form-input w-full mt-1" name="discount" id="edit_discount" min="0" step="0.01" placeholder="e.g. 10" />
+                                <p class="mt-1 text-xs text-gray-500">Default discount percentage for book vendors. Leave empty or 0 if not set.</p>
                             </div>
                             <div class="mt-2">
                                 <label for="editWebpage" class="text-sm font-medium text-gray-700">Webpage <span class="text-red-500">*</span></label>
@@ -953,6 +963,30 @@
         }
     }
 
+    function vendorApiMessageIsNoChanges(message) {
+        const msg = String(message || '').trim().toLowerCase().replace(/\.$/, '');
+        return msg === 'no changes detected';
+    }
+
+    function isVendorApiResponseOk(apiData) {
+        if (!apiData || typeof apiData !== 'object') {
+            return true;
+        }
+        if (apiData.success === true) {
+            return true;
+        }
+        if (vendorApiMessageIsNoChanges(apiData.message)) {
+            return true;
+        }
+        if (apiData.data && vendorApiMessageIsNoChanges(apiData.data.message)) {
+            return true;
+        }
+        if (apiData.response && vendorApiMessageIsNoChanges(apiData.response.message)) {
+            return true;
+        }
+        return false;
+    }
+
     function parseVendorApiResponse(data) {
         let apiSuccess = true;
         let apiErrorMessage = '';
@@ -962,7 +996,7 @@
         }
         try {
             const apiData = typeof data.api_response === 'string' ? JSON.parse(data.api_response) : data.api_response;
-            apiSuccess = !!(apiData && apiData.success === true);
+            apiSuccess = isVendorApiResponseOk(apiData);
             if (!apiSuccess && apiData && apiData.message) {
                 apiErrorMessage = String(apiData.message);
             }
@@ -1245,6 +1279,46 @@
             .filter(Boolean);
     }
 
+    function vendorHasBookGroup(containerId) {
+        return getSelectedVendorGroups(containerId).some(function (g) {
+            return g.toLowerCase() === 'book';
+        });
+    }
+
+    function updateVendorBookDiscountVisibility() {
+        const addVisible = vendorHasBookGroup('groupname');
+        const editVisible = vendorHasBookGroup('editGroupname');
+        const addBlock = document.getElementById('addBookDiscountField');
+        const editBlock = document.getElementById('editBookDiscountField');
+
+        if (addBlock) {
+            addBlock.classList.toggle('hidden', !addVisible);
+        }
+        if (editBlock) {
+            editBlock.classList.toggle('hidden', !editVisible);
+        }
+    }
+
+    function clearVendorDiscountIfNotBook(isEdit) {
+        const containerId = isEdit ? 'editGroupname' : 'groupname';
+        const inputId = isEdit ? 'edit_discount' : 'add_discount';
+        if (vendorHasBookGroup(containerId)) {
+            return;
+        }
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.value = '';
+        }
+    }
+
+    function bindVendorBookDiscountToggle(containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+            cb.addEventListener('change', updateVendorBookDiscountVisibility);
+        });
+    }
+
     function validateVendorApiFormFields(isEdit) {
         const nameInput = document.getElementById(isEdit ? 'editVendorName' : 'addVendorName');
         const nameMsg = document.getElementById(isEdit ? 'editVendorNameMsg' : 'addVendorNameMsg');
@@ -1293,6 +1367,9 @@
 
     bindVendorGroupCheckboxValidation('groupname', 'addGroupnameMsg');
     bindVendorGroupCheckboxValidation('editGroupname', 'editGroupnameMsg');
+    bindVendorBookDiscountToggle('groupname');
+    bindVendorBookDiscountToggle('editGroupname');
+    updateVendorBookDiscountVisibility();
 
     const addForm = document.getElementById('addVendorForm');
     addForm.addEventListener('submit', (e) => {
@@ -1304,6 +1381,7 @@
             e.preventDefault();
             alert('Duplicate vendor details detected. Please use a different vendor name, phone, or email.');
         }
+        clearVendorDiscountIfNotBook(false);
     });
 
     function fillTeamAgent(teamId, formType) {
@@ -1557,6 +1635,7 @@
 
     function openVendorPopup() {
         popupWrapper.classList.remove('hidden');
+        updateVendorBookDiscountVisibility();
         setTimeout(() => {
             modalSlider.classList.remove('translate-x-full');
         }, 10);
@@ -1585,6 +1664,7 @@
             alert('Duplicate vendor details detected. Please use a different vendor name, phone, or email.');
             return;
         }
+        clearVendorDiscountIfNotBook(false);
         var form = new FormData(this);
         var params = new URLSearchParams(form).toString();
         fetch('?page=vendors&action=addPost', {
@@ -1725,6 +1805,11 @@
             document.querySelectorAll('#editGroupname input[name="editGroupname[]"]').forEach(function (cb) {
                 cb.checked = selectedGroups.includes(cb.value);
             });
+            updateVendorBookDiscountVisibility();
+            document.getElementById('edit_discount').value =
+                vendor.discount != null && vendor.discount !== 0
+                    ? String(vendor.discount)
+                    : '';
             
             document.getElementById("editAgentIds").value = vendor.agent_id;
             
@@ -1837,6 +1922,7 @@
             alert('Duplicate vendor details detected. Please use a different vendor name, phone, or email.');
             return;
         }
+        clearVendorDiscountIfNotBook(true);
         var form = new FormData(this);        
         var params = new URLSearchParams(form).toString();
         fetch('?page=vendors&action=addPost', {

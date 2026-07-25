@@ -142,7 +142,7 @@ function pos_payment_resolve_session_user_id(): int
 
 /**
  * Payable order total after discounts (grand total), not raw line list prices.
- * Priority: vp_order_info.total → pos_payments.order_amount → vp_invoices.total_amount → line subtotal minus reductions.
+ * Priority: pos_payments.order_amount → vp_order_info.total → vp_invoices → line subtotal minus reductions.
  */
 function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): float
 {
@@ -151,18 +151,8 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
         return 0.0;
     }
 
-    $stmt = $conn->prepare('SELECT total FROM vp_order_info WHERE order_number = ? LIMIT 1');
-    if ($stmt) {
-        $stmt->bind_param('s', $orderNumber);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        $total = round((float)($row['total'] ?? 0), 2);
-        if ($total > 0) {
-            return $total;
-        }
-    }
-
+    // POS checkout stores the payable total on payment rows — prefer over imported vp_order_info
+    // when custom_reduce on vp_orders makes imported totals stale (e.g. 7.28 vs 11.20).
     $stmt = $conn->prepare(
         'SELECT MAX(order_amount) AS order_total FROM pos_payments WHERE order_number = ? AND order_amount > 0'
     );
@@ -172,6 +162,18 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
         $total = round((float)($row['order_total'] ?? 0), 2);
+        if ($total > 0) {
+            return $total;
+        }
+    }
+
+    $stmt = $conn->prepare('SELECT total FROM vp_order_info WHERE order_number = ? LIMIT 1');
+    if ($stmt) {
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $total = round((float)($row['total'] ?? 0), 2);
         if ($total > 0) {
             return $total;
         }
@@ -223,6 +225,314 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
     return 0.0;
 }
 
+/**
+ * Align imported vp_orders / vp_order_info with POS checkout payable (vendor import often stores net API total).
+ *
+ * @param list<array{itemcode?:string,size?:string,color?:string,price?:float|int|string}> $linePrices
+ */
+function pos_payment_sync_checkout_order_payable(
+    mysqli $conn,
+    string $orderNumber,
+    float $checkoutGrandTotal,
+    array $linePrices = []
+): void {
+    $orderNumber = trim($orderNumber);
+    $checkoutGrandTotal = round($checkoutGrandTotal, 2);
+    if ($orderNumber === '' || $checkoutGrandTotal <= 0) {
+        return;
+    }
+
+    $stmt = $conn->prepare('UPDATE vp_order_info SET total = ? WHERE order_number = ? LIMIT 1');
+    if ($stmt) {
+        $stmt->bind_param('ds', $checkoutGrandTotal, $orderNumber);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    $stmt = $conn->prepare(
+        'UPDATE vp_orders SET custom_reduce = 0 WHERE order_number = ? AND IFNULL(custom_reduce, 0) > 0'
+    );
+    if ($stmt) {
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    $updatedLines = 0;
+    foreach ($linePrices as $linePriceRow) {
+        if (!is_array($linePriceRow)) {
+            continue;
+        }
+        $itemCode = trim((string)($linePriceRow['itemcode'] ?? $linePriceRow['item_code'] ?? ''));
+        $unitPrice = round((float)($linePriceRow['price'] ?? 0), 2);
+        if ($itemCode === '' || $unitPrice <= 0) {
+            continue;
+        }
+
+        $size = trim((string)($linePriceRow['size'] ?? ''));
+        $color = trim((string)($linePriceRow['color'] ?? ''));
+
+        if ($size !== '' || $color !== '') {
+            $upd = $conn->prepare(
+                'UPDATE vp_orders
+                 SET finalprice = ?
+                 WHERE order_number = ?
+                   AND item_code = ?
+                   AND TRIM(COALESCE(size, \'\')) = ?
+                   AND TRIM(COALESCE(color, \'\')) = ?'
+            );
+            if ($upd) {
+                $upd->bind_param('dssss', $unitPrice, $orderNumber, $itemCode, $size, $color);
+                $upd->execute();
+                $updatedLines += $upd->affected_rows;
+                $upd->close();
+                continue;
+            }
+        }
+
+        $upd = $conn->prepare(
+            'UPDATE vp_orders SET finalprice = ? WHERE order_number = ? AND item_code = ? LIMIT 1'
+        );
+        if ($upd) {
+            $upd->bind_param('dss', $unitPrice, $orderNumber, $itemCode);
+            $upd->execute();
+            $updatedLines += $upd->affected_rows;
+            $upd->close();
+        }
+    }
+
+    if ($updatedLines <= 0) {
+        $lineStmt = $conn->prepare(
+            'SELECT id, quantity FROM vp_orders WHERE order_number = ? ORDER BY id ASC'
+        );
+        if ($lineStmt) {
+            $lineStmt->bind_param('s', $orderNumber);
+            $lineStmt->execute();
+            $lineRes = $lineStmt->get_result();
+            $lines = [];
+            while ($lineRow = $lineRes->fetch_assoc()) {
+                $lines[] = $lineRow;
+            }
+            $lineStmt->close();
+
+            if (count($lines) === 1) {
+                $qty = max(1, (int)($lines[0]['quantity'] ?? 1));
+                $unit = round($checkoutGrandTotal / $qty, 2);
+                $lineId = (int)($lines[0]['id'] ?? 0);
+                if ($lineId > 0 && $unit > 0) {
+                    $upd = $conn->prepare('UPDATE vp_orders SET finalprice = ? WHERE id = ? LIMIT 1');
+                    if ($upd) {
+                        $upd->bind_param('di', $unit, $lineId);
+                        $upd->execute();
+                        $upd->close();
+                    }
+                }
+            }
+        }
+    }
+
+    pos_payment_refresh_order_snapshots($conn, $orderNumber);
+}
+
+function pos_payment_is_cod_mode(string $mode): bool
+{
+    return strtolower(trim($mode)) === 'cod';
+}
+
+/**
+ * @param list<array{mode?:string,amount?:float|int|string}> $splits
+ */
+function pos_payment_split_advance_total(array $splits): float
+{
+    $total = 0.0;
+    foreach ($splits as $split) {
+        if (!is_array($split) || pos_payment_is_cod_mode((string)($split['mode'] ?? ''))) {
+            continue;
+        }
+        $total += round((float)($split['amount'] ?? 0), 2);
+    }
+
+    return round($total, 2);
+}
+
+/**
+ * @param list<array{mode?:string,amount?:float|int|string}> $splits
+ */
+function pos_payment_split_cod_total(array $splits): float
+{
+    $total = 0.0;
+    foreach ($splits as $split) {
+        if (!is_array($split) || !pos_payment_is_cod_mode((string)($split['mode'] ?? ''))) {
+            continue;
+        }
+        $total += round((float)($split['amount'] ?? 0), 2);
+    }
+
+    return round($total, 2);
+}
+
+/**
+ * @return list<string>
+ */
+function pos_payment_allowed_modes(): array
+{
+    return ['cash', 'cod', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque'];
+}
+
+/**
+ * @return list<array{0:string,1:string}>
+ */
+function pos_payment_mode_options_for_view(): array
+{
+    $labels = [
+        'cash' => 'Cash',
+        'cod' => 'Cash on Delivery (COD)',
+        'upi' => 'UPI',
+        'bank_transfer' => 'Bank transfer',
+        'pos_machine' => 'POS machine',
+        'razorpay' => 'Razorpay',
+        'cheque' => 'Cheque',
+    ];
+    $options = [];
+    foreach (pos_payment_allowed_modes() as $mode) {
+        $options[] = [$mode, $labels[$mode] ?? ucfirst(str_replace('_', ' ', $mode))];
+    }
+
+    return $options;
+}
+
+/**
+ * @param array<string, mixed> $payload
+ *
+ * @return array{
+ *   splits: list<array{mode:string,amount:float,transaction_id:string}>,
+ *   total: float,
+ *   primary_mode: string,
+ *   primary_txn: string
+ * }
+ */
+function pos_payment_resolve_splits_from_payload(array $payload): array
+{
+    $allowed = pos_payment_allowed_modes();
+    $splits = [];
+    $raw = $payload['payment_splits'] ?? null;
+    if (is_array($raw)) {
+        foreach ($raw as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $mode = strtolower(trim((string)($row['mode'] ?? $row['payment_mode'] ?? '')));
+            if (!in_array($mode, $allowed, true)) {
+                continue;
+            }
+            $amount = round((float)($row['amount'] ?? $row['payment_amount'] ?? 0), 2);
+            if ($amount <= 0) {
+                continue;
+            }
+            $splits[] = [
+                'mode' => $mode,
+                'amount' => $amount,
+                'transaction_id' => trim((string)($row['transaction_id'] ?? '')),
+            ];
+        }
+    }
+
+    if ($splits === []) {
+        $mode = strtolower(trim((string)($payload['payment_type'] ?? $payload['payment_mode'] ?? 'cash')));
+        $amount = round((float)($payload['amount'] ?? $payload['payment_amount'] ?? 0), 2);
+        if ($amount > 0) {
+            $splits[] = [
+                'mode' => in_array($mode, $allowed, true) ? $mode : 'cash',
+                'amount' => $amount,
+                'transaction_id' => trim((string)($payload['transaction_id'] ?? '')),
+            ];
+        }
+    }
+
+    $total = 0.0;
+    foreach ($splits as $split) {
+        $total += (float)$split['amount'];
+    }
+    $total = round($total, 2);
+
+    $primary = $splits[0] ?? ['mode' => 'cash', 'amount' => 0.0, 'transaction_id' => ''];
+    foreach ($splits as $split) {
+        if ((float)$split['amount'] > (float)$primary['amount']) {
+            $primary = $split;
+        }
+    }
+
+    return [
+        'splits' => $splits,
+        'total' => $total,
+        'primary_mode' => (string)($primary['mode'] ?? 'cash'),
+        'primary_txn' => (string)($primary['transaction_id'] ?? ''),
+    ];
+}
+
+/**
+ * @param array{splits?:list<array{mode?:string,amount?:float|int|string,transaction_id?:string}>,total?:float} $splitBundle
+ *
+ * @return list<string>
+ */
+function pos_payment_validate_splits(array $splitBundle, float $targetTotal, string $paymentStage): array
+{
+    $errors = [];
+    $splits = $splitBundle['splits'] ?? [];
+    if ($splits === []) {
+        return ['Add at least one payment line.'];
+    }
+
+    $advanceTotal = pos_payment_split_advance_total($splits);
+    $codTotal = pos_payment_split_cod_total($splits);
+    $splitTotal = round($advanceTotal + $codTotal, 2);
+    $hasCod = $codTotal > 0.001;
+    $paymentStage = strtolower(trim($paymentStage));
+
+    foreach ($splits as $idx => $split) {
+        $amount = round((float)($split['amount'] ?? 0), 2);
+        if ($amount <= 0) {
+            return ['Each payment line must have amount greater than zero (line ' . ($idx + 1) . ').'];
+        }
+    }
+
+    if ($hasCod) {
+        if ($splitTotal + 0.02 < $targetTotal) {
+            $errors[] = 'Advance plus COD must equal order total ₹ ' . $targetTotal . '.';
+        } elseif ($splitTotal - 0.02 > $targetTotal) {
+            $errors[] = 'Advance plus COD exceeds order total.';
+        }
+    } else {
+        $paymentAmount = round((float)($splitBundle['total'] ?? 0), 2);
+        if ($paymentAmount <= 0) {
+            return ['Payment amount must be greater than zero.'];
+        }
+
+        if ($paymentStage === 'final') {
+            if ($paymentAmount + 0.02 < $targetTotal) {
+                $errors[] = 'Final payment must match order total ₹ ' . $targetTotal . '.';
+            } elseif ($paymentAmount - 0.02 > $targetTotal) {
+                $errors[] = 'Over payment is not allowed for final settlement.';
+            }
+        } elseif ($paymentStage === 'partial' || $paymentStage === 'advance') {
+            if ($targetTotal > 0 && $paymentAmount + 0.02 >= $targetTotal) {
+                $errors[] = 'Partial / advance must be less than order total ₹ ' . $targetTotal . '.';
+            }
+        }
+    }
+
+    foreach ($splits as $idx => $split) {
+        $mode = strtolower(trim((string)($split['mode'] ?? '')));
+        $txn = trim((string)($split['transaction_id'] ?? ''));
+        if (($mode === 'razorpay' || $mode === 'cheque') && $txn === '') {
+            $errors[] = ($mode === 'cheque' ? 'Cheque number' : 'Transaction ID')
+                . ' is required for ' . $mode . ' (line ' . ($idx + 1) . ').';
+        }
+    }
+
+    return $errors;
+}
+
 function pos_payment_sum_paid(mysqli $conn, string $orderNumber): float
 {
     $orderNumber = trim($orderNumber);
@@ -230,7 +540,9 @@ function pos_payment_sum_paid(mysqli $conn, string $orderNumber): float
         return 0.0;
     }
 
-    $stmt = $conn->prepare('SELECT IFNULL(SUM(payment_amount), 0) AS paid FROM pos_payments WHERE order_number = ?');
+    $stmt = $conn->prepare(
+        'SELECT IFNULL(SUM(payment_amount), 0) AS paid FROM pos_payments WHERE order_number = ? AND LOWER(TRIM(payment_mode)) <> \'cod\''
+    );
     if (!$stmt) {
         return 0.0;
     }
@@ -240,6 +552,91 @@ function pos_payment_sum_paid(mysqli $conn, string $orderNumber): float
     $stmt->close();
 
     return round((float)($row['paid'] ?? 0), 2);
+}
+
+function pos_payment_sum_cod_pending(mysqli $conn, string $orderNumber): float
+{
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return 0.0;
+    }
+
+    $stmt = $conn->prepare(
+        'SELECT IFNULL(SUM(payment_amount), 0) AS cod
+         FROM pos_payments
+         WHERE order_number = ?
+           AND LOWER(TRIM(payment_mode)) = \'cod\'
+           AND LOWER(TRIM(COALESCE(payment_status, \'pending\'))) = \'pending\''
+    );
+    if (!$stmt) {
+        return 0.0;
+    }
+    $stmt->bind_param('s', $orderNumber);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return round((float)($row['cod'] ?? 0), 2);
+}
+
+function pos_payment_sum_receipt_total(mysqli $conn, string $orderNumber): float
+{
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return 0.0;
+    }
+
+    $stmt = $conn->prepare(
+        'SELECT IFNULL(SUM(payment_amount), 0) AS receipt_total FROM pos_payments WHERE order_number = ?'
+    );
+    if (!$stmt) {
+        return 0.0;
+    }
+    $stmt->bind_param('s', $orderNumber);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return round((float)($row['receipt_total'] ?? 0), 2);
+}
+
+function pos_payment_sum_allocated(mysqli $conn, string $orderNumber): float
+{
+    return pos_payment_sum_receipt_total($conn, $orderNumber);
+}
+
+/**
+ * When non-COD payments complete the order, COD obligation rows are fulfilled.
+ */
+function pos_payment_mark_cod_collected_if_fully_paid(mysqli $conn, string $orderNumber): void
+{
+    if (!pos_payment_is_fully_paid($conn, $orderNumber)) {
+        return;
+    }
+
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return;
+    }
+
+    $stmt = $conn->prepare(
+        'UPDATE pos_payments
+         SET payment_status = \'success\'
+         WHERE order_number = ?
+           AND LOWER(TRIM(payment_mode)) = \'cod\'
+           AND LOWER(TRIM(COALESCE(payment_status, \'pending\'))) = \'pending\''
+    );
+    if (!$stmt) {
+        return;
+    }
+    $stmt->bind_param('s', $orderNumber);
+    $stmt->execute();
+    $stmt->close();
+}
+
+function pos_payment_compute_pending_amount(float $orderTotal, float $collectedNonCod, float $codObligation): float
+{
+    return max(0.0, round($orderTotal - $collectedNonCod - $codObligation, 2));
 }
 
 function pos_payment_is_fully_paid(mysqli $conn, string $orderNumber): bool
@@ -253,6 +650,126 @@ function pos_payment_is_fully_paid(mysqli $conn, string $orderNumber): bool
 }
 
 /**
+ * Receipt plan complete: sum of all payment receipt rows (including COD) covers order total.
+ */
+function pos_payment_is_allocation_complete(mysqli $conn, string $orderNumber): bool
+{
+    $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
+    if ($orderTotal <= 0) {
+        return false;
+    }
+
+    return pos_payment_sum_receipt_total($conn, $orderNumber) + 0.02 >= $orderTotal;
+}
+
+/**
+ * POS checkout order exists only after at least one payment receipt row is saved.
+ */
+function pos_payment_has_recorded_payments(mysqli $conn, string $orderNumber): bool
+{
+    return pos_payment_sum_receipt_total($conn, $orderNumber) > 0.001;
+}
+
+/** @deprecated Use pos_payment_has_recorded_payments() */
+function pos_payment_is_invoice_eligible(mysqli $conn, string $orderNumber): bool
+{
+    return pos_payment_has_recorded_payments($conn, $orderNumber);
+}
+
+/**
+ * Invoice type from receipt total vs order total.
+ *
+ * No payment receipts → no order (null).
+ * Receipt total >= order → final (COD receipt rows count).
+ * Receipt total > 0 but below order → proforma only.
+ *
+ * @return 'final'|'proforma'|null null when no payments recorded
+ */
+function pos_payment_resolve_auto_invoice_status(mysqli $conn, string $orderNumber): ?string
+{
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return null;
+    }
+
+    if (!pos_payment_has_recorded_payments($conn, $orderNumber)) {
+        return null;
+    }
+
+    if (pos_payment_is_allocation_complete($conn, $orderNumber)) {
+        return 'final';
+    }
+
+    return 'proforma';
+}
+
+/**
+ * Create or return a proforma invoice for partial payment (receipt total below order amount).
+ *
+ * @return array{success:bool,attempted:bool,fully_paid:bool,invoice_id:int,created:bool,message?:string}
+ */
+function pos_payment_ensure_proforma_invoice_for_order(mysqli $conn, string $orderNumber): array
+{
+    $orderNumber = trim($orderNumber);
+    $empty = [
+        'success' => false,
+        'attempted' => true,
+        'fully_paid' => false,
+        'invoice_id' => 0,
+        'created' => false,
+    ];
+    if ($orderNumber === '') {
+        $empty['message'] = 'Order number missing';
+        return $empty;
+    }
+
+    if (pos_payment_is_allocation_complete($conn, $orderNumber)) {
+        return pos_payment_finalize_invoice_for_order($conn, $orderNumber);
+    }
+
+    if (!pos_payment_has_recorded_payments($conn, $orderNumber)) {
+        $empty['message'] = 'No payments recorded for this order.';
+        return $empty;
+    }
+
+    require_once __DIR__ . '/../models/PosInvoice/invoice.php';
+    $invoiceModel = new POSInvoice($conn);
+    $existing = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
+    if ($existing) {
+        $invoiceId = (int)($existing['id'] ?? 0);
+        if ($invoiceId > 0) {
+            require_once __DIR__ . '/../controllers/PosInvoiceController.php';
+            $posInv = new PosInvoiceController();
+            $posInv->repairPosInvoiceMetadataForOrder($invoiceId, $orderNumber);
+        }
+
+        return [
+            'success' => true,
+            'attempted' => true,
+            'fully_paid' => false,
+            'invoice_id' => $invoiceId,
+            'created' => false,
+        ];
+    }
+
+    require_once __DIR__ . '/../controllers/PosInvoiceController.php';
+    $posInv = new PosInvoiceController();
+    $created = $posInv->createAutoInvoiceForOrder($orderNumber, '', false);
+    if (!empty($created['success']) && !empty($created['invoice_id'])) {
+        return [
+            'success' => true,
+            'attempted' => true,
+            'fully_paid' => false,
+            'invoice_id' => (int)$created['invoice_id'],
+            'created' => true,
+        ];
+    }
+
+    $empty['message'] = (string)($created['message'] ?? 'Proforma invoice could not be created.');
+    return $empty;
+}
+
+/**
  * Recompute order_amount / pending_amount on every pos_payments row for an order (after edits).
  */
 function pos_payment_refresh_order_snapshots(mysqli $conn, string $orderNumber): void
@@ -262,12 +779,16 @@ function pos_payment_refresh_order_snapshots(mysqli $conn, string $orderNumber):
         return;
     }
 
+    pos_payment_mark_cod_collected_if_fully_paid($conn, $orderNumber);
+
     $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
     if ($orderTotal <= 0) {
         return;
     }
 
-    $stmt = $conn->prepare('SELECT id, payment_amount FROM pos_payments WHERE order_number = ? ORDER BY id ASC');
+    $stmt = $conn->prepare(
+        'SELECT id, payment_mode, payment_amount, payment_status FROM pos_payments WHERE order_number = ? ORDER BY id ASC'
+    );
     if (!$stmt) {
         return;
     }
@@ -276,15 +797,23 @@ function pos_payment_refresh_order_snapshots(mysqli $conn, string $orderNumber):
     $res = $stmt->get_result();
     $stmt->close();
 
-    $cumulative = 0.0;
+    $collected = 0.0;
+    $codObligation = 0.0;
     $upd = $conn->prepare('UPDATE pos_payments SET order_amount = ?, pending_amount = ? WHERE id = ?');
     if (!$upd) {
         return;
     }
 
     while ($row = $res->fetch_assoc()) {
-        $cumulative += round((float)($row['payment_amount'] ?? 0), 2);
-        $pending = round($orderTotal - $cumulative, 2);
+        $amount = round((float)($row['payment_amount'] ?? 0), 2);
+        if (pos_payment_is_cod_mode((string)($row['payment_mode'] ?? ''))) {
+            if (strtolower(trim((string)($row['payment_status'] ?? 'pending'))) === 'pending') {
+                $codObligation += $amount;
+            }
+        } else {
+            $collected += $amount;
+        }
+        $pending = pos_payment_compute_pending_amount($orderTotal, $collected, $codObligation);
         $id = (int)($row['id'] ?? 0);
         $upd->bind_param('ddi', $orderTotal, $pending, $id);
         $upd->execute();
@@ -323,7 +852,7 @@ function pos_payment_find_invoice_id(mysqli $conn, string $orderNumber): int
 }
 
 /**
- * When order is fully paid: finalize proforma or create a final tax invoice.
+ * When receipt total covers the order: finalize proforma or create a final tax invoice.
  *
  * @return array{success:bool,attempted:bool,fully_paid:bool,invoice_id:int,created:bool,message?:string}
  */
@@ -341,7 +870,7 @@ function pos_payment_finalize_invoice_for_order(mysqli $conn, string $orderNumbe
         return $empty;
     }
 
-    if (!pos_payment_is_fully_paid($conn, $orderNumber)) {
+    if (!pos_payment_is_allocation_complete($conn, $orderNumber)) {
         return $empty;
     }
 
@@ -419,7 +948,13 @@ function pos_payment_finalize_invoice_for_order(mysqli $conn, string $orderNumbe
  *
  * @return array{order_amount: float, pending_amount: float}
  */
-function pos_payment_compute_order_snapshots(mysqli $conn, string $orderNumber, float $thisPaymentAmount, ?float $orderTotalOverride = null): array
+function pos_payment_compute_order_snapshots(
+    mysqli $conn,
+    string $orderNumber,
+    float $thisPaymentAmount,
+    ?float $orderTotalOverride = null,
+    string $paymentMode = ''
+): array
 {
     $orderNumber = trim($orderNumber);
     if ($orderNumber === '') {
@@ -433,17 +968,23 @@ function pos_payment_compute_order_snapshots(mysqli $conn, string $orderNumber, 
         $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
     }
 
-    $paidPrior = 0.0;
-    $stmt2 = $conn->prepare('SELECT IFNULL(SUM(payment_amount), 0) AS s FROM pos_payments WHERE order_number = ?');
-    if ($stmt2) {
-        $stmt2->bind_param('s', $orderNumber);
-        $stmt2->execute();
-        $row2 = $stmt2->get_result()->fetch_assoc();
-        $stmt2->close();
-        $paidPrior = round((float)($row2['s'] ?? 0), 2);
-    }
+    $collectedPrior = pos_payment_sum_paid($conn, $orderNumber);
+    $codObligationPrior = pos_payment_sum_cod_pending($conn, $orderNumber);
+    $amount = round($thisPaymentAmount, 2);
 
-    $pendingAfter = round($orderTotal - $paidPrior - $thisPaymentAmount, 2);
+    if (pos_payment_is_cod_mode($paymentMode)) {
+        $pendingAfter = pos_payment_compute_pending_amount(
+            $orderTotal,
+            $collectedPrior,
+            $codObligationPrior + $amount
+        );
+    } else {
+        $pendingAfter = pos_payment_compute_pending_amount(
+            $orderTotal,
+            $collectedPrior + $amount,
+            $codObligationPrior
+        );
+    }
 
     return [
         'order_amount' => $orderTotal,
@@ -500,14 +1041,15 @@ function pos_payment_insert_row(
         ];
     }
 
-    $snap = pos_payment_compute_order_snapshots($conn, $orderNumber, $amount, $orderTotalOverride);
+    $snap = pos_payment_compute_order_snapshots($conn, $orderNumber, $amount, $orderTotalOverride, $paymentMode);
     $orderAmtSnap = $snap['order_amount'];
     $pendingAmtSnap = $snap['pending_amount'];
+    $paymentStatus = pos_payment_is_cod_mode($paymentMode) ? 'pending' : 'success';
 
     if ($customerId > 0) {
         $stmt = $conn->prepare(
             'INSERT INTO pos_payments (order_number, receipt_number, customer_id, payment_stage, payment_mode, payment_amount, order_amount, pending_amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
-             VALUES (?,?,?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', \'success\', NOW())'
+             VALUES (?,?,?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', ?, NOW())'
         );
         if (!$stmt) {
             return [
@@ -521,7 +1063,7 @@ function pos_payment_insert_row(
         }
         $cid = $customerId;
         $stmt->bind_param(
-            'ssissdddssii',
+            'ssissdddssiis',
             $orderNumber,
             $receiptNumber,
             $cid,
@@ -533,7 +1075,8 @@ function pos_payment_insert_row(
             $transactionId,
             $note,
             $userId,
-            $whEff
+            $whEff,
+            $paymentStatus
         );
 
         if (!$stmt->execute()) {
@@ -584,7 +1127,7 @@ function pos_payment_insert_row(
 
     $stmt = $conn->prepare(
         'INSERT INTO pos_payments (order_number, receipt_number, payment_stage, payment_mode, payment_amount, order_amount, pending_amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', \'success\', NOW())'
+         VALUES (?,?,?,?,?,?,?,?,?,NOW(),?,?, \'INR\', ?, NOW())'
     );
     if (!$stmt) {
         return [
@@ -597,7 +1140,7 @@ function pos_payment_insert_row(
         ];
     }
     $stmt->bind_param(
-        'ssssdddssii',
+        'ssssdddssiis',
         $orderNumber,
         $receiptNumber,
         $paymentStage,
@@ -608,7 +1151,8 @@ function pos_payment_insert_row(
         $transactionId,
         $note,
         $userId,
-        $whEff
+        $whEff,
+        $paymentStatus
     );
 
     if (!$stmt->execute()) {

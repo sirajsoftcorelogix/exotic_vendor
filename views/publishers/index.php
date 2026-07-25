@@ -112,8 +112,8 @@ $queryBase = [
                     Total publishers: <span class="font-semibold text-gray-900"><?php echo number_format($totalRecords); ?></span>
                 </div>
             </div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full text-left">
+            <div class="overflow-x-auto overflow-y-visible">
+                <table id="publisher-list-table" class="min-w-full text-left">
                     <thead>
                     <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
                         <th class="px-5 py-3.5 whitespace-nowrap">#</th>
@@ -123,6 +123,7 @@ $queryBase = [
                         <th class="px-5 py-3.5 whitespace-nowrap">Phone</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">City</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">State</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Broker</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Status</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Updated</th>
                         <th class="px-5 py-3.5 whitespace-nowrap text-right">Action</th>
@@ -141,15 +142,21 @@ $queryBase = [
                             $phone = (string)($publisher['publisher_phone'] ?? '');
                             $city = (string)($publisher['city'] ?? '');
                             $state = (string)($publisher['state'] ?? '');
+                            $brokerName = (string)($publisher['broker_name'] ?? '');
                             $publisherPayload = [
                                 'id' => $id,
                                 'publishers_id' => $publisherExternalId,
                                 'publishers' => $name,
+                                'display_name' => (string)($publisher['display_name'] ?? ''),
+                                'website' => (string)($publisher['website'] ?? ''),
                                 'contact_name' => $contactName,
                                 'publisher_email' => (string)($publisher['publisher_email'] ?? ''),
+                                'publisher_email_is_primary' => (int)($publisher['publisher_email_is_primary'] ?? 0),
                                 'country_code' => (string)($publisher['country_code'] ?? ''),
                                 'publisher_phone' => $phone,
-                                'alt_phone' => (string)($publisher['alt_phone'] ?? ''),
+                                'publisher_phone_is_whatsapp' => (int)($publisher['publisher_phone_is_whatsapp'] ?? 0),
+                                'alt_phones' => $publisher['alt_phones'] ?? [],
+                                'alt_emails' => $publisher['alt_emails'] ?? [],
                                 'gst_number' => (string)($publisher['gst_number'] ?? ''),
                                 'pan_number' => (string)($publisher['pan_number'] ?? ''),
                                 'address' => (string)($publisher['address'] ?? ''),
@@ -159,6 +166,9 @@ $queryBase = [
                                 'postal_code' => (string)($publisher['postal_code'] ?? ''),
                                 'webpage' => (int)($publisher['webpage'] ?? 0),
                                 'stock_replenishment_months' => (int)($publisher['stock_replenishment_months'] ?? 0),
+                                'discount' => (float)($publisher['discount'] ?? 0),
+                                'broker_id' => (int)($publisher['broker_id'] ?? 0),
+                                'broker_name' => $brokerName,
                                 'is_active' => $active ? 1 : 0,
                             ];
                             ?>
@@ -170,31 +180,30 @@ $queryBase = [
                                 <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($phone, ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($city, ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($state, ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($brokerName !== '' ? $brokerName : '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm">
                                     <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold <?php echo $active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200'; ?>">
                                         <?php echo $active ? 'Active' : 'Inactive'; ?>
                                     </span>
                                 </td>
                                 <td class="px-5 py-4 text-sm text-gray-600"><?php echo htmlspecialchars((string)($publisher['update_at'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td class="px-5 py-4 text-sm text-right whitespace-nowrap">
-                                    <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                                        onclick='openPublisherModal(<?php echo json_encode($publisherPayload, JSON_HEX_APOS | JSON_HEX_QUOT); ?>)'>
-                                        Edit
-                                    </button>
-                                    <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50"
-                                        onclick="setPublisherStatus(<?php echo $id; ?>, <?php echo $active ? 0 : 1; ?>)">
-                                        <?php echo $active ? 'Deactivate' : 'Activate'; ?>
-                                    </button>
-                                    <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
-                                        onclick="deletePublisher(<?php echo $id; ?>)">
-                                        Delete
-                                    </button>
+                                <td class="px-5 py-4 text-sm whitespace-nowrap font-medium">
+                                    <div class="menu-wrapper">
+                                        <button type="button" class="menu-button" aria-label="Publisher actions">&#x22EE;</button>
+                                        <ul class="menu-popup text-left">
+                                            <li data-action="edit" data-publisher="<?php echo htmlspecialchars(json_encode($publisherPayload), ENT_QUOTES, 'UTF-8'); ?>"><i class="fa-solid fa-pencil"></i> Edit</li>
+                                            <li data-action="status" data-id="<?php echo $id; ?>" data-active="<?php echo $active ? 0 : 1; ?>"><i class="fa-solid fa-power-off"></i> <?php echo $active ? 'Deactivate' : 'Activate'; ?></li>
+                                            <li data-action="bank" data-id="<?php echo $id; ?>"><i class="fa-solid fa-building-columns"></i> Bank Details</li>
+                                            <li data-action="distributors" data-id="<?php echo $id; ?>" data-name="<?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?>"><i class="fa-solid fa-truck"></i> Manage Distributors</li>
+                                            <li class="text-red-700" data-action="delete" data-id="<?php echo $id; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
+                                        </ul>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="10" class="px-5 py-12 text-center text-sm text-gray-500">No publishers found.</td>
+                            <td colspan="11" class="px-5 py-12 text-center text-sm text-gray-500">No publishers found.</td>
                         </tr>
                     <?php endif; ?>
                     </tbody>
@@ -225,67 +234,141 @@ $queryBase = [
 </div>
 
 <div id="publisherModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4 py-6">
-    <div class="w-full max-w-3xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col">
-        <div class="flex items-center justify-between border-b px-6 py-4 shrink-0">
-            <h2 id="publisherModalTitle" class="text-lg font-semibold text-gray-900">Add Publisher</h2>
-            <button type="button" onclick="closePublisherModal()" class="text-gray-400 hover:text-gray-700">x</button>
+    <div class="w-full max-w-4xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col">
+        <div class="flex items-center justify-between border-b border-gray-200 bg-gradient-to-r from-amber-50/60 to-white px-6 py-4 shrink-0">
+            <div>
+                <h2 id="publisherModalTitle" class="text-lg font-semibold text-gray-900">Add Publisher</h2>
+                <p class="mt-0.5 text-xs text-gray-500">Publisher profile, contacts, address, and tax details</p>
+            </div>
+            <button type="button" onclick="closePublisherModal()" class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition" aria-label="Close">&times;</button>
         </div>
-        <form id="publisherForm" class="overflow-y-auto px-6 py-5 space-y-5">
+        <form id="publisherForm" class="overflow-y-auto px-4 py-5 sm:px-6 space-y-5">
             <input type="hidden" name="id" id="publisher_id">
 
-            <div>
-                <h3 class="text-sm font-bold text-gray-800 mb-3">Basic Information</h3>
+            <section class="rounded-xl border border-gray-200/90 bg-gradient-to-b from-gray-50/70 to-white p-4 sm:p-5 space-y-4">
+                <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                        <i class="fas fa-building text-sm" aria-hidden="true"></i>
+                    </span>
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-900">Publisher profile</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">Legal name synced with Exotic India, plus display and web presence.</p>
+                    </div>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Publisher Name</label>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Publisher name <span class="text-red-500 normal-case">*</span></label>
                         <input type="text" name="publishers" id="publisher_name" required
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                            placeholder="Official publisher name">
                         <span id="publisherNameMsg" class="text-sm text-red-500"></span>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Status</label>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Display name</label>
+                        <input type="text" name="display_name" id="publisher_display_name"
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                            placeholder="Friendly name shown in listings">
+                        <p class="mt-1 text-xs text-gray-500">Optional. Use when the display label differs from the official name.</p>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Status</label>
                         <select name="is_active" id="publisher_is_active"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
                             <option value="1">Active</option>
                             <option value="0">Inactive</option>
                         </select>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Stock Replenishment Months</label>
-                        <input type="number" name="stock_replenishment_months" id="publisher_stock_replenishment_months" min="0" step="1"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none"
-                            placeholder="e.g. 30">
-                        <p class="mt-1 text-xs text-gray-500">Expected months to replenish stock for this publisher. Leave empty or 0 if not set.</p>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Broker</label>
+                        <select name="broker_id" id="publisher_broker_id"
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
+                            <option value="">Select broker...</option>
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">Search active portal users. Leave empty if not assigned.</p>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Website</label>
+                        <div class="relative">
+                            <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                <i class="fas fa-globe text-xs" aria-hidden="true"></i>
+                            </span>
+                            <input type="url" name="website" id="publisher_website"
+                                class="w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-9 pr-3 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                                placeholder="https://example.com">
+                        </div>
                     </div>
                 </div>
-                <div class="mt-3">
-                    <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                        <input type="checkbox" name="webpage" id="publisher_webpage" value="1"
-                            class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
-                        <span>Allow webpage on Exotic India</span>
-                    </label>
-                    <p class="mt-1 text-xs text-gray-500">Maps to the <code>webpage</code> parameter (0 or 1) on the vendor API.</p>
-                </div>
-            </div>
+                <label class="flex items-start gap-3 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2.5 cursor-pointer">
+                    <input type="checkbox" name="webpage" id="publisher_webpage" value="1"
+                        class="mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                    <span>
+                        <span class="block text-sm font-medium text-gray-800">Allow webpage on Exotic India</span>
+                        <span class="block text-xs text-gray-500 mt-0.5">Maps to the <code class="text-[11px] bg-white/80 px-1 rounded">webpage</code> parameter (0 or 1) on the vendor API.</span>
+                    </span>
+                </label>
+            </section>
 
-            <div>
-                <h3 class="text-sm font-bold text-gray-800 mb-3">Contact Details</h3>
+            <section class="rounded-xl border border-gray-200/90 bg-gradient-to-b from-gray-50/70 to-white p-4 sm:p-5 space-y-4">
+                <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                        <i class="fas fa-handshake text-sm" aria-hidden="true"></i>
+                    </span>
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-900">Commercial terms</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">Default discount and stock replenishment settings.</p>
+                    </div>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Contact Person</label>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Stock replenishment (months)</label>
+                        <input type="number" name="stock_replenishment_months" id="publisher_stock_replenishment_months" min="0" step="1"
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                            placeholder="e.g. 30">
+                        <p class="mt-1 text-xs text-gray-500">Expected months to replenish stock. Leave empty or 0 if not set.</p>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Discount (%)</label>
+                        <input type="number" name="discount" id="publisher_discount" min="0" step="0.01"
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                            placeholder="e.g. 10">
+                        <p class="mt-1 text-xs text-gray-500">Default discount percentage. Leave empty or 0 if not set.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="rounded-xl border border-gray-200/90 bg-gradient-to-b from-gray-50/70 to-white p-4 sm:p-5 space-y-4">
+                <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+                        <i class="fas fa-address-book text-sm" aria-hidden="true"></i>
+                    </span>
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-900">Contact details</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">Primary contact plus optional alternate emails and phones.</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="md:col-span-2">
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Contact person</label>
                         <input type="text" name="contact_name" id="publisher_contact_name"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                            placeholder="Primary contact name">
                     </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Email</label>
+                    <div class="md:col-span-2 rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+                        <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Primary email</label>
                         <input type="email" name="publisher_email" id="publisher_email"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                            placeholder="name@publisher.com">
+                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                            <input type="checkbox" name="publisher_email_is_primary" id="publisher_email_is_primary" value="1"
+                                class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                            <span>Mark as primary email</span>
+                        </label>
                     </div>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Country Code</label>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Country code</label>
                         <select name="country_code" id="publisher_country_code"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
-                            <option value="">Select Code</option>
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
+                            <option value="">Select code</option>
                             <?php foreach ($countryList as $cl): ?>
                                 <option value="<?php echo htmlspecialchars((string)($cl['phone_code'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" <?php echo (($cl['name'] ?? '') === 'India') ? 'selected' : ''; ?>>
                                     <?php echo htmlspecialchars((string)($cl['name'] ?? ''), ENT_QUOTES, 'UTF-8') . ' (+' . (string)($cl['phone_code'] ?? '') . ')'; ?>
@@ -293,38 +376,76 @@ $queryBase = [
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Phone</label>
-                        <input type="number" name="publisher_phone" id="publisher_phone" oninput="limitPublisherPhoneDigits(this)"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Alternate Phone (optional)</label>
-                        <input type="number" name="alt_phone" id="publisher_alt_phone" oninput="limitPublisherPhoneDigits(this)"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                    <div class="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+                        <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Primary phone</label>
+                        <input type="text" name="publisher_phone" id="publisher_phone" oninput="limitPublisherPhoneDigits(this)"
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                            placeholder="Phone number">
+                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                            <input type="checkbox" name="publisher_phone_is_whatsapp" id="publisher_phone_is_whatsapp" value="1"
+                                class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                            <span>WhatsApp number</span>
+                        </label>
                     </div>
                 </div>
-            </div>
 
-            <div>
-                <h3 class="text-sm font-bold text-gray-800 mb-3">Address</h3>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-1">
+                    <div class="rounded-lg border border-dashed border-gray-300 bg-white/80 p-3">
+                        <div class="mb-2 flex items-center justify-between gap-3">
+                            <h4 class="text-sm font-semibold text-gray-800">Additional emails</h4>
+                            <button type="button" id="addPublisherAltEmailBtn"
+                                class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                                Add email
+                            </button>
+                        </div>
+                        <div id="publisherAltEmailsList" class="space-y-2"></div>
+                        <p class="mt-2 text-xs text-gray-500">Up to 5 alternate emails.</p>
+                    </div>
+                    <div class="rounded-lg border border-dashed border-gray-300 bg-white/80 p-3">
+                        <div class="mb-2 flex items-center justify-between gap-3">
+                            <h4 class="text-sm font-semibold text-gray-800">Additional phones</h4>
+                            <button type="button" id="addPublisherAltPhoneBtn"
+                                class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                                Add phone
+                            </button>
+                        </div>
+                        <div id="publisherAltPhonesList" class="space-y-2"></div>
+                        <p class="mt-2 text-xs text-gray-500">Up to 5 alternate phones. Tick WhatsApp where applicable.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="rounded-xl border border-gray-200/90 bg-gradient-to-b from-gray-50/70 to-white p-4 sm:p-5 space-y-4">
+                <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
+                        <i class="fas fa-location-dot text-sm" aria-hidden="true"></i>
+                    </span>
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-900">Address</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">Business or correspondence address.</p>
+                    </div>
+                </div>
                 <div class="space-y-4">
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">Address</label>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Street address</label>
                         <input type="text" name="address" id="publisher_address"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
+                            placeholder="Building, street, area">
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label class="mb-1 block text-sm font-semibold text-gray-700">City</label>
+                            <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">City</label>
                             <input type="text" name="city" id="publisher_city"
-                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                                class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
                         </div>
                         <div>
-                            <label class="mb-1 block text-sm font-semibold text-gray-700">State</label>
+                            <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">State</label>
                             <span id="publisherStateBlock">
                                 <select name="state" id="publisher_state"
-                                    class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                                    class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
+                                    <option value="">Select state...</option>
                                     <?php foreach ($stateList as $item): ?>
                                         <option value="<?php echo htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
                                             <?php echo htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
@@ -334,9 +455,9 @@ $queryBase = [
                             </span>
                         </div>
                         <div>
-                            <label class="mb-1 block text-sm font-semibold text-gray-700">Country</label>
+                            <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Country</label>
                             <select name="country" id="publisher_country" onchange="fetchPublisherStates(this.value);"
-                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                                class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
                                 <?php foreach ($countryList as $item): ?>
                                     <option value="<?php echo htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" <?php echo (($item['name'] ?? '') === 'India') ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
@@ -345,40 +466,143 @@ $queryBase = [
                             </select>
                         </div>
                         <div>
-                            <label class="mb-1 block text-sm font-semibold text-gray-700">Zip Code</label>
+                            <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Zip code</label>
                             <input type="text" name="postal_code" id="publisher_postal_code"
-                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                                class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
                         </div>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <div>
-                <h3 class="text-sm font-bold text-gray-800 mb-3">Tax Information</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <section class="rounded-xl border border-gray-200/90 bg-gradient-to-b from-gray-50/70 to-white p-4 sm:p-5 space-y-4">
+                <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-700">
+                        <i class="fas fa-file-invoice text-sm" aria-hidden="true"></i>
+                    </span>
                     <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">GST Number</label>
-                        <input type="text" name="gst_number" id="publisher_gst_number"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-sm font-semibold text-gray-700">PAN Number</label>
-                        <input type="text" name="pan_number" id="publisher_pan_number"
-                            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                        <h3 class="text-sm font-bold text-gray-900">Tax information</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">GST and PAN for invoicing and compliance.</p>
                     </div>
                 </div>
-            </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">GST number</label>
+                        <input type="text" name="gst_number" id="publisher_gst_number"
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">PAN number</label>
+                        <input type="text" name="pan_number" id="publisher_pan_number"
+                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
+                    </div>
+                </div>
+            </section>
 
-            <div class="flex justify-end gap-3 border-t pt-4">
-                <button type="button" onclick="closePublisherModal()" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button type="submit" id="publisherSaveBtn" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Save Publisher</button>
+            <div class="sticky bottom-0 -mx-4 sm:-mx-6 flex justify-end gap-3 border-t border-gray-200 bg-white/95 px-4 sm:px-6 py-4 backdrop-blur-sm">
+                <button type="button" onclick="closePublisherModal()" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
+                <button type="submit" id="publisherSaveBtn" class="rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 transition">Save Publisher</button>
             </div>
         </form>
     </div>
 </div>
 
+<div id="publisherBankDetailModal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/50 px-4 py-6">
+    <div class="w-full max-w-xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col">
+        <div class="flex items-center justify-between border-b px-6 py-4 shrink-0">
+            <h2 class="text-lg font-semibold text-gray-900">Add / Edit Publisher Bank Details</h2>
+            <button type="button" onclick="closePublisherBankDetailModal()" class="text-gray-400 hover:text-gray-700">✕</button>
+        </div>
+        <form id="publisherBankDetailForm" class="overflow-y-auto px-6 py-5 space-y-4">
+            <input type="hidden" name="publisher_id" id="publisher_bank_publisher_id" value="">
+            <div id="publisherBankDetailMsg" class="hidden rounded-lg border px-4 py-3 text-sm font-medium"></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="mb-1 block text-sm font-semibold text-gray-700">Account Name <span class="text-red-500">*</span></label>
+                    <input type="text" name="account_name" id="publisher_account_name" required
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                </div>
+                <div>
+                    <label class="mb-1 block text-sm font-semibold text-gray-700">Account Number <span class="text-red-500">*</span></label>
+                    <input type="text" name="account_number" id="publisher_account_number" required
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                </div>
+                <div>
+                    <label class="mb-1 block text-sm font-semibold text-gray-700">Bank Name <span class="text-red-500">*</span></label>
+                    <input type="text" name="bank_name" id="publisher_bank_name" required
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                </div>
+                <div>
+                    <label class="mb-1 block text-sm font-semibold text-gray-700">Branch Name</label>
+                    <input type="text" name="branch_name" id="publisher_branch_name"
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="mb-1 block text-sm font-semibold text-gray-700">IFSC Code <span class="text-red-500">*</span></label>
+                    <input type="text" name="ifsc_code" id="publisher_ifsc_code" required
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 border-t pt-4">
+                <button type="button" onclick="closePublisherBankDetailModal()" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button type="submit" id="publisherBankSaveBtn" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Save Bank Details</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="publisherVendorMappingModal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/50 px-4 py-6">
+    <div class="w-full max-w-2xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col">
+        <div class="flex items-center justify-between border-b border-gray-200 bg-gradient-to-r from-sky-50/70 to-white px-6 py-4 shrink-0">
+            <div class="min-w-0 pr-4">
+                <h2 class="text-lg font-semibold text-gray-900">Manage Distributors</h2>
+                <p id="publisherVendorMappingSubtitle" class="mt-0.5 text-xs text-gray-500 truncate">Map vendors used when buying from distributors instead of the publisher directly.</p>
+            </div>
+            <button type="button" onclick="closePublisherVendorMappingModal()" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition" aria-label="Close">&times;</button>
+        </div>
+        <div class="overflow-y-auto px-6 py-5 space-y-5">
+            <input type="hidden" id="publisher_vendor_mapping_publisher_id" value="">
+            <div id="publisherVendorMappingMsg" class="hidden rounded-lg border px-4 py-3 text-sm font-medium"></div>
+
+            <div class="rounded-xl border border-gray-200 bg-gray-50/60 p-4 space-y-3">
+                <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Add distributor (vendor)</label>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <div class="min-w-0 flex-1">
+                        <select id="publisher_vendor_mapping_lookup" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+                            <option value="">Search vendor...</option>
+                        </select>
+                    </div>
+                    <button type="button" id="publisherVendorMappingAddBtn"
+                        class="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 transition whitespace-nowrap">
+                        <i class="fas fa-plus text-xs" aria-hidden="true"></i>
+                        Add
+                    </button>
+                </div>
+                <p class="text-xs text-gray-500">Type at least 2 characters to search active vendors not already mapped.</p>
+            </div>
+
+            <div>
+                <div class="mb-3 flex items-center justify-between gap-3">
+                    <h3 class="text-sm font-bold text-gray-900">Mapped distributors</h3>
+                    <span id="publisherVendorMappingCount" class="text-xs font-semibold text-gray-500">0 mapped</span>
+                </div>
+                <div id="publisherVendorMappingList" class="space-y-2"></div>
+                <p id="publisherVendorMappingEmpty" class="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+                    No distributors mapped yet. Search and add vendors above.
+                </p>
+            </div>
+        </div>
+        <div class="flex justify-end gap-3 border-t border-gray-200 px-6 py-4 shrink-0">
+            <button type="button" onclick="closePublisherVendorMappingModal()" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Close</button>
+        </div>
+    </div>
+</div>
+
+<script src="<?php echo base_url('assets/js/creator_form.js'); ?>"></script>
 <script>
 let publisherNameExists = false;
+let publisherEditOriginalName = '';
+const PUBLISHER_MAX_ALT_PHONES = 5;
+const PUBLISHER_MAX_ALT_EMAILS = 5;
 
 function limitPublisherPhoneDigits(input) {
     if (!input) return;
@@ -406,6 +630,13 @@ function setPublisherStateControl(countryName, stateValue) {
             select.id = 'publisher_state';
             select.name = 'state';
             select.className = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none';
+            const blankOption = document.createElement('option');
+            blankOption.value = '';
+            blankOption.textContent = 'Select state...';
+            if (!stateValue) {
+                blankOption.selected = true;
+            }
+            select.appendChild(blankOption);
             states.forEach(function (state) {
                 const option = document.createElement('option');
                 option.value = state.name;
@@ -425,6 +656,103 @@ function fetchPublisherStates(countryName) {
     setPublisherStateControl(countryName, '');
 }
 
+function publisherAltRowClass() {
+    return 'grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_auto] gap-2 items-center rounded-lg border border-gray-200 bg-gray-50/60 p-3';
+}
+
+function publisherAltInputClass() {
+    return 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none';
+}
+
+function updatePublisherAltAddButtons() {
+    const phoneBtn = document.getElementById('addPublisherAltPhoneBtn');
+    const emailBtn = document.getElementById('addPublisherAltEmailBtn');
+    const phoneCount = document.querySelectorAll('#publisherAltPhonesList .publisher-alt-phone-row').length;
+    const emailCount = document.querySelectorAll('#publisherAltEmailsList .publisher-alt-email-row').length;
+    if (phoneBtn) phoneBtn.disabled = phoneCount >= PUBLISHER_MAX_ALT_PHONES;
+    if (emailBtn) emailBtn.disabled = emailCount >= PUBLISHER_MAX_ALT_EMAILS;
+}
+
+function addPublisherAltPhoneRow(data) {
+    const list = document.getElementById('publisherAltPhonesList');
+    if (!list || list.querySelectorAll('.publisher-alt-phone-row').length >= PUBLISHER_MAX_ALT_PHONES) {
+        return;
+    }
+    data = data || {};
+    const index = list.querySelectorAll('.publisher-alt-phone-row').length;
+    const row = document.createElement('div');
+    row.className = 'publisher-alt-phone-row ' + publisherAltRowClass();
+    row.innerHTML =
+        '<input type="text" name="alt_phones[' + index + '][phone]" value="' + String(data.phone || '').replace(/"/g, '&quot;') + '" oninput="limitPublisherPhoneDigits(this)" placeholder="10-digit phone" class="' + publisherAltInputClass() + '">' +
+        '<label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer whitespace-nowrap">' +
+            '<input type="checkbox" name="alt_phones[' + index + '][is_whatsapp]" value="1"' + (data.is_whatsapp === 1 || data.is_whatsapp === '1' ? ' checked' : '') + ' class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">' +
+            '<span>WhatsApp</span>' +
+        '</label>' +
+        '<button type="button" class="publisher-alt-remove inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">Remove</button>';
+    list.appendChild(row);
+    reindexPublisherAltPhoneRows();
+    updatePublisherAltAddButtons();
+}
+
+function addPublisherAltEmailRow(data) {
+    const list = document.getElementById('publisherAltEmailsList');
+    if (!list || list.querySelectorAll('.publisher-alt-email-row').length >= PUBLISHER_MAX_ALT_EMAILS) {
+        return;
+    }
+    data = data || {};
+    const index = list.querySelectorAll('.publisher-alt-email-row').length;
+    const row = document.createElement('div');
+    row.className = 'publisher-alt-email-row ' + publisherAltRowClass();
+    row.innerHTML =
+        '<input type="email" name="alt_emails[' + index + '][email]" value="' + String(data.email || '').replace(/"/g, '&quot;') + '" placeholder="email@example.com" class="' + publisherAltInputClass() + '">' +
+        '<label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer whitespace-nowrap">' +
+            '<input type="checkbox" name="alt_emails[' + index + '][is_primary]" value="1"' + (data.is_primary === 1 || data.is_primary === '1' ? ' checked' : '') + ' class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">' +
+            '<span>Primary</span>' +
+        '</label>' +
+        '<button type="button" class="publisher-alt-remove inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">Remove</button>';
+    list.appendChild(row);
+    reindexPublisherAltEmailRows();
+    updatePublisherAltAddButtons();
+}
+
+function reindexPublisherAltPhoneRows() {
+    document.querySelectorAll('#publisherAltPhonesList .publisher-alt-phone-row').forEach(function (row, index) {
+        const phoneInput = row.querySelector('input[type="text"]');
+        const whatsappInput = row.querySelector('input[type="checkbox"]');
+        if (phoneInput) phoneInput.name = 'alt_phones[' + index + '][phone]';
+        if (whatsappInput) whatsappInput.name = 'alt_phones[' + index + '][is_whatsapp]';
+    });
+}
+
+function reindexPublisherAltEmailRows() {
+    document.querySelectorAll('#publisherAltEmailsList .publisher-alt-email-row').forEach(function (row, index) {
+        const emailInput = row.querySelector('input[type="email"]');
+        const primaryInput = row.querySelector('input[type="checkbox"]');
+        if (emailInput) emailInput.name = 'alt_emails[' + index + '][email]';
+        if (primaryInput) primaryInput.name = 'alt_emails[' + index + '][is_primary]';
+    });
+}
+
+function renderPublisherAltPhones(rows) {
+    const list = document.getElementById('publisherAltPhonesList');
+    if (!list) return;
+    list.innerHTML = '';
+    (Array.isArray(rows) ? rows : []).forEach(function (row) {
+        addPublisherAltPhoneRow(row);
+    });
+    updatePublisherAltAddButtons();
+}
+
+function renderPublisherAltEmails(rows) {
+    const list = document.getElementById('publisherAltEmailsList');
+    if (!list) return;
+    list.innerHTML = '';
+    (Array.isArray(rows) ? rows : []).forEach(function (row) {
+        addPublisherAltEmailRow(row);
+    });
+    updatePublisherAltAddButtons();
+}
+
 function setSelectValueByTextOrValue(selectEl, value) {
     if (!selectEl || value == null || value === '') return;
     const normalized = String(value);
@@ -436,35 +764,6 @@ function setSelectValueByTextOrValue(selectEl, value) {
     }
 }
 
-function bindCreatorNameDuplicateCheck(inputEl, msgEl, page, existsFlagSetter, excludeIdGetter, duplicateMessage) {
-    if (!inputEl || !msgEl) return;
-    inputEl.addEventListener('keyup', function () {
-        const value = inputEl.value.trim();
-        if (value.length < 2) {
-            existsFlagSetter(false);
-            msgEl.textContent = '';
-            return;
-        }
-        const excludeId = excludeIdGetter ? excludeIdGetter() : 0;
-        let url = 'index.php?page=' + page + '&action=checkName&name=' + encodeURIComponent(value);
-        if (excludeId && parseInt(excludeId, 10) > 0) {
-            url += '&excludeId=' + encodeURIComponent(String(excludeId));
-        }
-        fetch(url, { credentials: 'same-origin' })
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-                if (data.exists) {
-                    msgEl.textContent = duplicateMessage;
-                    existsFlagSetter(true);
-                } else {
-                    msgEl.textContent = '';
-                    existsFlagSetter(false);
-                }
-            })
-            .catch(function (err) { console.error('Duplicate check error:', err); });
-    });
-}
-
 function showPublisherAlert(message, success) {
     const box = document.getElementById('publisherAlert');
     if (!box) return;
@@ -473,21 +772,83 @@ function showPublisherAlert(message, success) {
     box.classList.add(success ? 'border-green-200' : 'border-red-200', success ? 'bg-green-50' : 'bg-red-50', success ? 'text-green-700' : 'text-red-700');
 }
 
+function destroyPublisherBrokerSelect2() {
+    if (!window.jQuery || !jQuery.fn.select2) {
+        return;
+    }
+    const $broker = jQuery('#publisher_broker_id');
+    if ($broker.length && $broker.hasClass('select2-hidden-accessible')) {
+        $broker.select2('destroy');
+    }
+}
+
+function initPublisherBrokerSelect2(brokerId, brokerName) {
+    if (!window.jQuery || !jQuery.fn.select2) {
+        return;
+    }
+
+    const $broker = jQuery('#publisher_broker_id');
+    if (!$broker.length) {
+        return;
+    }
+
+    destroyPublisherBrokerSelect2();
+    $broker.empty().append(new Option('Select broker...', '', true, false));
+
+    const selectedId = parseInt(String(brokerId || '0'), 10);
+    const selectedName = String(brokerName || '').trim();
+    if (selectedId > 0 && selectedName !== '') {
+        $broker.append(new Option(selectedName, String(selectedId), true, true));
+    }
+
+    $broker.select2({
+        width: '100%',
+        placeholder: 'Type at least 2 characters to search...',
+        allowClear: true,
+        minimumInputLength: 2,
+        dropdownParent: jQuery('#publisherModal'),
+        ajax: {
+            url: 'index.php?page=publishers&action=searchBrokers',
+            type: 'GET',
+            dataType: 'json',
+            delay: 300,
+            data: function (params) {
+                return { q: params.term || '' };
+            },
+            processResults: function (data) {
+                return { results: Array.isArray(data) ? data : [] };
+            },
+            cache: true
+        }
+    });
+}
+
 function openPublisherModal(publisher) {
+    if (typeof closeAllMenus === 'function') {
+        closeAllMenus();
+    }
     publisher = publisher || {};
     publisherNameExists = false;
+    publisherEditOriginalName = publisher.id ? String(publisher.publishers || '').trim() : '';
     const publisherNameMsg = document.getElementById('publisherNameMsg');
     if (publisherNameMsg) publisherNameMsg.textContent = '';
     document.getElementById('publisherModalTitle').textContent = publisher.id ? 'Edit Publisher' : 'Add Publisher';
     document.getElementById('publisher_id').value = publisher.id || '';
     document.getElementById('publisher_name').value = publisher.publishers || '';
+    document.getElementById('publisher_display_name').value = publisher.display_name || '';
+    document.getElementById('publisher_website').value = publisher.website || '';
     document.getElementById('publisher_is_active').value = publisher.is_active != null ? String(publisher.is_active) : '1';
     document.getElementById('publisher_webpage').checked = publisher.webpage === 1 || publisher.webpage === '1';
     document.getElementById('publisher_contact_name').value = publisher.contact_name || '';
     document.getElementById('publisher_email').value = publisher.publisher_email || '';
+    document.getElementById('publisher_email_is_primary').checked =
+        publisher.publisher_email_is_primary === 1 || publisher.publisher_email_is_primary === '1';
     setSelectValueByTextOrValue(document.getElementById('publisher_country_code'), publisher.country_code || '');
     document.getElementById('publisher_phone').value = publisher.publisher_phone || '';
-    document.getElementById('publisher_alt_phone').value = publisher.alt_phone || '';
+    document.getElementById('publisher_phone_is_whatsapp').checked =
+        publisher.publisher_phone_is_whatsapp === 1 || publisher.publisher_phone_is_whatsapp === '1';
+    renderPublisherAltEmails(publisher.alt_emails || []);
+    renderPublisherAltPhones(publisher.alt_phones || []);
     document.getElementById('publisher_address').value = publisher.address || '';
     document.getElementById('publisher_city').value = publisher.city || '';
     document.getElementById('publisher_postal_code').value = publisher.postal_code || '';
@@ -497,6 +858,10 @@ function openPublisherModal(publisher) {
         publisher.stock_replenishment_months != null && publisher.stock_replenishment_months !== 0
             ? String(publisher.stock_replenishment_months)
             : '';
+    document.getElementById('publisher_discount').value =
+        publisher.discount != null && publisher.discount !== 0
+            ? String(publisher.discount)
+            : '';
 
     const countrySelect = document.getElementById('publisher_country');
     const countryValue = publisher.country || 'India';
@@ -505,12 +870,15 @@ function openPublisherModal(publisher) {
     }
     setPublisherStateControl(countryValue, publisher.state || '');
 
+    initPublisherBrokerSelect2(publisher.broker_id, publisher.broker_name);
+
     document.getElementById('publisherModal').classList.remove('hidden');
     document.getElementById('publisherModal').classList.add('flex');
     setTimeout(function () { document.getElementById('publisher_name').focus(); }, 50);
 }
 
 function closePublisherModal() {
+    destroyPublisherBrokerSelect2();
     document.getElementById('publisherModal').classList.add('hidden');
     document.getElementById('publisherModal').classList.remove('flex');
 }
@@ -527,24 +895,41 @@ document.getElementById('openPublisherModalBtn')?.addEventListener('click', func
     openPublisherModal();
 });
 
-bindCreatorNameDuplicateCheck(
-    document.getElementById('publisher_name'),
-    document.getElementById('publisherNameMsg'),
-    'publishers',
-    function (v) { publisherNameExists = v; },
-    function () { return document.getElementById('publisher_id') ? document.getElementById('publisher_id').value : 0; },
-    'Publisher name already exists'
-);
+CreatorFormUtils.bindNameDuplicateCheck({
+    inputEl: document.getElementById('publisher_name'),
+    msgEl: document.getElementById('publisherNameMsg'),
+    page: 'publishers',
+    setExists: function (v) { publisherNameExists = v; },
+    getExcludeId: function () { return document.getElementById('publisher_id') ? document.getElementById('publisher_id').value : 0; },
+    duplicateMessage: 'Publisher name already exists',
+    isUnchanged: function () {
+        return CreatorFormUtils.isEditNameUnchanged(
+            function () { return document.getElementById('publisher_id')?.value; },
+            function () { return document.getElementById('publisher_name')?.value; },
+            publisherEditOriginalName
+        );
+    }
+});
 
 document.getElementById('publisherForm')?.addEventListener('submit', function (e) {
     e.preventDefault();
-    if (publisherNameExists) {
+    if (publisherNameExists && !CreatorFormUtils.isEditNameUnchanged(
+        function () { return document.getElementById('publisher_id')?.value; },
+        function () { return document.getElementById('publisher_name')?.value; },
+        publisherEditOriginalName
+    )) {
         showPublisherAlert('Publisher name already exists', false);
         return;
     }
     const form = new FormData(this);
     if (!document.getElementById('publisher_webpage').checked) {
         form.set('webpage', '0');
+    }
+    if (!document.getElementById('publisher_phone_is_whatsapp').checked) {
+        form.set('publisher_phone_is_whatsapp', '0');
+    }
+    if (!document.getElementById('publisher_email_is_primary').checked) {
+        form.set('publisher_email_is_primary', '0');
     }
     const btn = document.getElementById('publisherSaveBtn');
     const oldLabel = btn ? btn.textContent : '';
@@ -569,6 +954,9 @@ document.getElementById('publisherForm')?.addEventListener('submit', function (e
 });
 
 function setPublisherStatus(id, isActive) {
+    if (typeof closeAllMenus === 'function') {
+        closeAllMenus();
+    }
     const form = new FormData();
     form.append('id', id);
     form.append('is_active', isActive);
@@ -581,6 +969,9 @@ function setPublisherStatus(id, isActive) {
 }
 
 function deletePublisher(id) {
+    if (typeof closeAllMenus === 'function') {
+        closeAllMenus();
+    }
     if (!confirm('Delete this publisher on Exotic India and locally? This cannot be undone.')) return;
     const form = new FormData();
     form.append('id', id);
@@ -609,6 +1000,536 @@ document.getElementById('syncPublishersBtn')?.addEventListener('click', function
     }).finally(function () {
         btn.disabled = false;
         btn.innerHTML = oldHtml;
+    });
+});
+
+function showPublisherBankDetailAlert(message, success) {
+    const box = document.getElementById('publisherBankDetailMsg');
+    if (!box) return;
+    box.textContent = message || '';
+    box.classList.remove('hidden', 'border-green-200', 'bg-green-50', 'text-green-700', 'border-red-200', 'bg-red-50', 'text-red-700');
+    box.classList.add(success ? 'border-green-200' : 'border-red-200', success ? 'bg-green-50' : 'bg-red-50', success ? 'text-green-700' : 'text-red-700');
+}
+
+function openPublisherBankDtlsModal(id) {
+    if (typeof closeAllMenus === 'function') {
+        closeAllMenus();
+    }
+
+    const modal = document.getElementById('publisherBankDetailModal');
+    const msgBox = document.getElementById('publisherBankDetailMsg');
+    if (!modal) {
+        return;
+    }
+
+    document.getElementById('publisher_bank_publisher_id').value = String(id);
+    ['publisher_account_name', 'publisher_account_number', 'publisher_ifsc_code', 'publisher_bank_name', 'publisher_branch_name'].forEach(function (fieldId) {
+        const el = document.getElementById(fieldId);
+        if (el) el.value = '';
+    });
+    if (msgBox) {
+        msgBox.textContent = '';
+        msgBox.classList.add('hidden');
+    }
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    fetch('index.php?page=publishers&action=getBankDetails&id=' + encodeURIComponent(String(id)), { credentials: 'same-origin' })
+        .then(function (res) { return res.json(); })
+        .then(function (bankdtls) {
+            if (!bankdtls || typeof bankdtls !== 'object') {
+                showPublisherBankDetailAlert('Could not load bank details.', false);
+                return;
+            }
+            if (bankdtls.status === 'error') {
+                showPublisherBankDetailAlert(bankdtls.message || 'Could not load bank details.', false);
+                return;
+            }
+            if (bankdtls.success === false && bankdtls.message) {
+                showPublisherBankDetailAlert(bankdtls.message, false);
+                return;
+            }
+            if (bankdtls.account_name) {
+                document.getElementById('publisher_account_name').value = bankdtls.account_name || '';
+                document.getElementById('publisher_account_number').value = bankdtls.account_number || '';
+                document.getElementById('publisher_ifsc_code').value = bankdtls.ifsc_code || '';
+                document.getElementById('publisher_bank_name').value = bankdtls.bank_name || '';
+                document.getElementById('publisher_branch_name').value = bankdtls.branch_name || '';
+            }
+        })
+        .catch(function () {
+            showPublisherBankDetailAlert('Could not load bank details.', false);
+        });
+}
+
+function closePublisherBankDetailModal() {
+    document.getElementById('publisherBankDetailModal').classList.add('hidden');
+    document.getElementById('publisherBankDetailModal').classList.remove('flex');
+}
+
+let publisherVendorMappingSelectInitialized = false;
+
+function destroyPublisherVendorMappingSelect2() {
+    if (!window.jQuery || !jQuery.fn.select2) {
+        return;
+    }
+    const $lookup = jQuery('#publisher_vendor_mapping_lookup');
+    if ($lookup.length && $lookup.hasClass('select2-hidden-accessible')) {
+        $lookup.select2('destroy');
+    }
+    publisherVendorMappingSelectInitialized = false;
+}
+
+function initPublisherVendorMappingSelect2(publisherId) {
+    if (!window.jQuery || !jQuery.fn.select2) {
+        return;
+    }
+
+    const $lookup = jQuery('#publisher_vendor_mapping_lookup');
+    if (!$lookup.length) {
+        return;
+    }
+
+    destroyPublisherVendorMappingSelect2();
+    $lookup.empty().append(new Option('Search vendor...', '', true, false));
+
+    $lookup.select2({
+        width: '100%',
+        placeholder: 'Type at least 2 characters to search...',
+        allowClear: true,
+        minimumInputLength: 2,
+        dropdownParent: jQuery('#publisherVendorMappingModal'),
+        ajax: {
+            url: 'index.php?page=publishers&action=searchMappingVendors',
+            type: 'GET',
+            dataType: 'json',
+            delay: 300,
+            data: function (params) {
+                return {
+                    q: params.term || '',
+                    publisher_id: publisherId
+                };
+            },
+            processResults: function (data) {
+                return { results: Array.isArray(data) ? data : [] };
+            },
+            cache: true
+        }
+    });
+    publisherVendorMappingSelectInitialized = true;
+}
+
+function formatPublisherVendorMappingLabel(row) {
+    row = row || {};
+    const exoticId = String(row.exotic_vendor_id || '').trim();
+    const localId = String(row.vendor_id || '').trim();
+    const name = String(row.vendor_name || '').trim();
+    const contact = String(row.contact_name || '').trim();
+    const city = String(row.city || '').trim();
+    let label = '';
+
+    if (exoticId !== '' && name !== '') {
+        label = exoticId + '-' + name;
+    } else if (name !== '') {
+        label = name;
+    } else if (exoticId !== '') {
+        label = exoticId;
+    } else {
+        label = 'Vendor #' + localId;
+    }
+
+    const meta = [];
+    if (contact !== '') meta.push(contact);
+    if (city !== '') meta.push(city);
+    if (meta.length) {
+        label += ' (' + meta.join(', ') + ')';
+    }
+    return label;
+}
+
+function showPublisherVendorMappingAlert(message, success) {
+    const box = document.getElementById('publisherVendorMappingMsg');
+    if (!box) return;
+    box.textContent = message || '';
+    box.classList.remove('hidden', 'border-green-200', 'bg-green-50', 'text-green-700', 'border-red-200', 'bg-red-50', 'text-red-700');
+    box.classList.add(success ? 'border-green-200' : 'border-red-200', success ? 'bg-green-50' : 'bg-red-50', success ? 'text-green-700' : 'text-red-700');
+}
+
+function renderPublisherVendorMappings(mappings) {
+    const list = document.getElementById('publisherVendorMappingList');
+    const empty = document.getElementById('publisherVendorMappingEmpty');
+    const countEl = document.getElementById('publisherVendorMappingCount');
+    if (!list) return;
+
+    mappings = Array.isArray(mappings) ? mappings : [];
+    list.innerHTML = '';
+
+    if (countEl) {
+        countEl.textContent = mappings.length + ' mapped';
+    }
+    if (empty) {
+        empty.classList.toggle('hidden', mappings.length > 0);
+    }
+
+    mappings.forEach(function (row) {
+        const item = document.createElement('div');
+        item.className = 'flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm';
+        item.setAttribute('data-mapping-id', String(row.mapping_id || ''));
+
+        const label = formatPublisherVendorMappingLabel(row);
+        const state = String(row.state || '').trim();
+        const metaParts = [];
+        if (state !== '') metaParts.push(state);
+        const activeVal = String(row.is_active ?? '').toLowerCase();
+        const isActive = activeVal === '1' || activeVal === 'active';
+        metaParts.push(isActive ? 'Active' : 'Inactive');
+
+        item.innerHTML =
+            '<div class="min-w-0">' +
+                '<div class="text-sm font-semibold text-gray-900 break-words">' + label.replace(/</g, '&lt;') + '</div>' +
+                '<div class="mt-0.5 text-xs text-gray-500">' + metaParts.join(' · ').replace(/</g, '&lt;') + '</div>' +
+            '</div>' +
+            '<button type="button" class="publisher-vendor-mapping-remove inline-flex shrink-0 items-center gap-1 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 transition">' +
+                '<i class="fas fa-trash text-[10px]" aria-hidden="true"></i> Remove' +
+            '</button>';
+
+        list.appendChild(item);
+    });
+}
+
+function loadPublisherVendorMappings(publisherId) {
+    return fetch('index.php?page=publishers&action=getVendorMappings&id=' + encodeURIComponent(String(publisherId)), {
+        credentials: 'same-origin'
+    })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (!data || !data.success) {
+                showPublisherVendorMappingAlert((data && data.message) || 'Could not load distributor mappings.', false);
+                renderPublisherVendorMappings([]);
+                return null;
+            }
+            renderPublisherVendorMappings(data.mappings || []);
+            return data;
+        })
+        .catch(function () {
+            showPublisherVendorMappingAlert('Could not load distributor mappings.', false);
+            renderPublisherVendorMappings([]);
+            return null;
+        });
+}
+
+function openPublisherVendorMappingModal(id, publisherName) {
+    if (typeof closeAllMenus === 'function') {
+        closeAllMenus();
+    }
+
+    const modal = document.getElementById('publisherVendorMappingModal');
+    const msgBox = document.getElementById('publisherVendorMappingMsg');
+    if (!modal) {
+        return;
+    }
+
+    publisherName = String(publisherName || '').trim();
+    document.getElementById('publisher_vendor_mapping_publisher_id').value = String(id);
+    const subtitle = document.getElementById('publisherVendorMappingSubtitle');
+    if (subtitle) {
+        subtitle.textContent = publisherName !== ''
+            ? 'Publisher: ' + publisherName
+            : 'Map vendors used when buying from distributors instead of the publisher directly.';
+    }
+    if (msgBox) {
+        msgBox.textContent = '';
+        msgBox.classList.add('hidden');
+    }
+
+    renderPublisherVendorMappings([]);
+    initPublisherVendorMappingSelect2(id);
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    loadPublisherVendorMappings(id);
+}
+
+function closePublisherVendorMappingModal() {
+    destroyPublisherVendorMappingSelect2();
+    const modal = document.getElementById('publisherVendorMappingModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+}
+
+document.getElementById('publisherVendorMappingAddBtn')?.addEventListener('click', function () {
+    const publisherId = parseInt(document.getElementById('publisher_vendor_mapping_publisher_id')?.value || '0', 10);
+    const lookup = document.getElementById('publisher_vendor_mapping_lookup');
+    const vendorId = parseInt(String(lookup?.value || '0'), 10);
+    const btn = document.getElementById('publisherVendorMappingAddBtn');
+
+    if (!publisherId) {
+        showPublisherVendorMappingAlert('Invalid publisher.', false);
+        return;
+    }
+    if (!vendorId) {
+        showPublisherVendorMappingAlert('Select a vendor to add.', false);
+        return;
+    }
+
+    const oldLabel = btn ? btn.textContent : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Adding...';
+    }
+
+    const body = new URLSearchParams();
+    body.set('publisher_id', String(publisherId));
+    body.set('vendor_id', String(vendorId));
+
+    fetch('index.php?page=publishers&action=addVendorMapping', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString()
+    })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            showPublisherVendorMappingAlert(data.message || (data.success ? 'Distributor added.' : 'Could not add distributor.'), !!data.success);
+            if (data.success) {
+                renderPublisherVendorMappings(data.mappings || []);
+                if (window.jQuery && jQuery.fn.select2) {
+                    jQuery('#publisher_vendor_mapping_lookup').val(null).trigger('change');
+                } else if (lookup) {
+                    lookup.value = '';
+                }
+            }
+        })
+        .catch(function () {
+            showPublisherVendorMappingAlert('Could not add distributor.', false);
+        })
+        .finally(function () {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = oldLabel || 'Add';
+            }
+        });
+});
+
+document.getElementById('publisherVendorMappingList')?.addEventListener('click', function (event) {
+    const btn = event.target.closest('.publisher-vendor-mapping-remove');
+    if (!btn || !event.currentTarget.contains(btn)) {
+        return;
+    }
+
+    const row = btn.closest('[data-mapping-id]');
+    const mappingId = parseInt(row?.getAttribute('data-mapping-id') || '0', 10);
+    const publisherId = parseInt(document.getElementById('publisher_vendor_mapping_publisher_id')?.value || '0', 10);
+    if (!publisherId || !mappingId) {
+        return;
+    }
+
+    if (!window.confirm('Remove this distributor mapping?')) {
+        return;
+    }
+
+    btn.disabled = true;
+    const body = new URLSearchParams();
+    body.set('publisher_id', String(publisherId));
+    body.set('mapping_id', String(mappingId));
+
+    fetch('index.php?page=publishers&action=removeVendorMapping', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString()
+    })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            showPublisherVendorMappingAlert(data.message || (data.success ? 'Distributor removed.' : 'Could not remove distributor.'), !!data.success);
+            if (data.success) {
+                renderPublisherVendorMappings(data.mappings || []);
+            } else {
+                btn.disabled = false;
+            }
+        })
+        .catch(function () {
+            showPublisherVendorMappingAlert('Could not remove distributor.', false);
+            btn.disabled = false;
+        });
+});
+
+document.getElementById('publisherBankDetailForm')?.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const form = new FormData(this);
+    const btn = document.getElementById('publisherBankSaveBtn');
+    const oldLabel = btn ? btn.textContent : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+    }
+    fetch('index.php?page=publishers&action=bankDetails', {
+        method: 'POST',
+        credentials: 'same-origin',
+        body: new URLSearchParams(form).toString(),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            showPublisherBankDetailAlert(data.message || (data.success ? 'Bank details saved.' : 'Could not save bank details.'), !!data.success);
+            if (data.success) {
+                setTimeout(function () {
+                    closePublisherBankDetailModal();
+                }, 900);
+            }
+        })
+        .catch(function () {
+            showPublisherBankDetailAlert('Could not save bank details.', false);
+        })
+        .finally(function () {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = oldLabel;
+            }
+        });
+});
+
+function handlePublisherMenuAction(item) {
+    if (!item) return;
+    const action = item.getAttribute('data-action');
+    if (!action) return;
+
+    if (typeof closeAllMenus === 'function') {
+        closeAllMenus();
+    }
+
+    if (action === 'edit') {
+        const payloadRaw = item.getAttribute('data-publisher') || '{}';
+        try {
+            openPublisherModal(JSON.parse(payloadRaw));
+        } catch (err) {
+            showPublisherAlert('Could not open publisher editor.', false);
+        }
+        return;
+    }
+
+    const id = parseInt(item.getAttribute('data-id') || '0', 10);
+    if (!id) return;
+
+    if (action === 'status') {
+        setPublisherStatus(id, parseInt(item.getAttribute('data-active') || '0', 10));
+        return;
+    }
+    if (action === 'bank') {
+        openPublisherBankDtlsModal(id);
+        return;
+    }
+    if (action === 'distributors') {
+        openPublisherVendorMappingModal(id, item.getAttribute('data-name') || '');
+        return;
+    }
+    if (action === 'delete') {
+        deletePublisher(id);
+    }
+}
+
+document.getElementById('addPublisherAltPhoneBtn')?.addEventListener('click', function () {
+    addPublisherAltPhoneRow();
+});
+
+document.getElementById('addPublisherAltEmailBtn')?.addEventListener('click', function () {
+    addPublisherAltEmailRow();
+});
+
+document.getElementById('publisherAltPhonesList')?.addEventListener('click', function (event) {
+    const btn = event.target.closest('.publisher-alt-remove');
+    if (!btn || !event.currentTarget.contains(btn)) return;
+    btn.closest('.publisher-alt-phone-row')?.remove();
+    reindexPublisherAltPhoneRows();
+    updatePublisherAltAddButtons();
+});
+
+document.getElementById('publisherAltEmailsList')?.addEventListener('click', function (event) {
+    const btn = event.target.closest('.publisher-alt-remove');
+    if (!btn || !event.currentTarget.contains(btn)) return;
+    btn.closest('.publisher-alt-email-row')?.remove();
+    reindexPublisherAltEmailRows();
+    updatePublisherAltAddButtons();
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    const menuButtons = document.querySelectorAll('#publisher-list-table .menu-button, .menu-wrapper .menu-button');
+    window.currentOpenMenu = null;
+    const menuMargin = 8;
+
+    window.closeAllMenus = function () {
+        if (window.currentOpenMenu) {
+            window.currentOpenMenu.classList.remove('active');
+            window.currentOpenMenu.removeAttribute('style');
+            window.currentOpenMenu = null;
+        }
+        document.querySelectorAll('.menu-popup').forEach(function (menu) {
+            menu.style.display = 'none';
+        });
+    };
+
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('.menu-button') || e.target.closest('.menu-popup')) {
+            return;
+        }
+        closeAllMenus();
+    });
+
+    document.querySelectorAll('.menu-popup').forEach(function (menu) {
+        menu.addEventListener('click', function (e) {
+            const item = e.target.closest('li[data-action]');
+            if (!item || !menu.contains(item)) {
+                return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+            handlePublisherMenuAction(item);
+        });
+    });
+
+    menuButtons.forEach(function (button) {
+        button.addEventListener('click', function (event) {
+            event.stopPropagation();
+            const dropdown = button.nextElementSibling;
+            if (!dropdown) return;
+
+            const isActive = dropdown.classList.contains('active');
+            if (window.currentOpenMenu && window.currentOpenMenu !== dropdown) {
+                closeAllMenus();
+            }
+
+            if (!isActive) {
+                dropdown.style.display = 'block';
+                const buttonRect = button.getBoundingClientRect();
+                const dropdownWidth = dropdown.offsetWidth;
+                const dropdownHeight = dropdown.offsetHeight;
+                const viewportHeight = window.innerHeight;
+                const viewportWidth = window.innerWidth;
+
+                dropdown.style.position = 'fixed';
+                dropdown.style.top = '';
+                dropdown.style.left = '';
+                if (buttonRect.bottom + dropdownHeight + menuMargin < viewportHeight) {
+                    dropdown.style.top = (buttonRect.bottom + menuMargin) + 'px';
+                } else {
+                    dropdown.style.top = (buttonRect.top - dropdownHeight - menuMargin) + 'px';
+                }
+                if (buttonRect.left + dropdownWidth < viewportWidth) {
+                    dropdown.style.left = buttonRect.left + 'px';
+                } else {
+                    dropdown.style.left = (buttonRect.left - dropdownWidth + buttonRect.width) + 'px';
+                }
+
+                dropdown.classList.add('active');
+                window.currentOpenMenu = dropdown;
+            } else {
+                closeAllMenus();
+            }
+        });
     });
 });
 </script>

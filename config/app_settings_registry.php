@@ -11,6 +11,26 @@
  * 2. INSERT the row into app_settings (setting_key, setting_value)
  */
 return [
+    'firm_name' => [
+        'label' => 'Firm name',
+        'description' => 'Legal name of the company as printed on invoices and documents.',
+        'input' => 'text',
+        'type' => 'string',
+        'default' => 'EXOTIC INDIA ART PVT LTD',
+        'editable' => true,
+        'active' => true,
+        'sort' => 1,
+    ],
+    'gstin' => [
+        'label' => 'GSTIN',
+        'description' => 'Company GST identification number (15 characters).',
+        'input' => 'text',
+        'type' => 'string',
+        'default' => '07AADCE1400C1ZJ',
+        'editable' => true,
+        'active' => true,
+        'sort' => 2,
+    ],
     'stock_replenishment_months' => [
         'label' => 'Stock replenishment lookback (months)',
         'description' => 'Number of months of sales history used to calculate average demand and recommended stock levels.',

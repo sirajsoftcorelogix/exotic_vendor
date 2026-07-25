@@ -19,7 +19,7 @@ if ($receiptNo === '') {
 $modeRaw = strtolower(trim((string)($payment['payment_mode'] ?? '')));
 $modeLabels = [
     'cash' => 'Cash',
-    'cod' => 'Cash',
+    'cod' => 'Cash on Delivery (COD)',
     'upi' => 'UPI',
     'bank_transfer' => 'Bank transfer',
     'pos_machine' => 'POS machine',

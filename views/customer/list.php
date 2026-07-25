@@ -1,6 +1,7 @@
 <?php
 $qBase = ['page' => 'customer', 'action' => 'list'];
 $searchVal = $filters['search'] ?? '';
+$orderNumberVal = $filters['order_number'] ?? '';
 $limit = isset($limit) ? (int)$limit : 50;
 $limit = in_array($limit, [10, 20, 50, 100], true) ? $limit : 50;
 $page_no = isset($page_no) ? max(1, (int)$page_no) : 1;
@@ -8,6 +9,7 @@ $total_pages = isset($total_pages) ? max(1, (int)$total_pages) : 1;
 $total_records = isset($total_records) ? (int)$total_records : 0;
 $is_admin_customer_list = !empty($is_admin_customer_list);
 $has_list_scope = true;
+$hasActiveFilters = $searchVal !== '' || $orderNumberVal !== '';
 $clearSearchParams = $qBase + ['limit' => $limit];
 $viewUrl = function (int $id) {
     return base_url('?page=customer&action=view&customer_id=' . $id);
@@ -40,7 +42,7 @@ $viewUrl = function (int $id) {
                         <?php endif; ?>
                     </div>
                     <p class="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">
-                        Full customer directory. Search by name, email, or phone. Purchase totals include all linked orders.
+                        Full customer directory. Search by name, email, phone, or order number. Purchase totals include all linked orders.
                     </p>
                 </div>
             </div>
@@ -59,35 +61,49 @@ $viewUrl = function (int $id) {
     <form method="GET" action="<?= htmlspecialchars(base_url('')) ?>" class="mb-8">
         <input type="hidden" name="page" value="customer">
         <input type="hidden" name="action" value="list">
-        <div class="flex flex-wrap items-center gap-3">
-            <div class="flex w-full sm:w-auto grow sm:grow-0 shadow-sm rounded-md">
-                <input type="text" name="search" value="<?= htmlspecialchars($searchVal) ?>" placeholder="Search name, email, phone…"
-                       class="pl-4 pr-4 py-2.5 border border-gray-200 border-r-0 rounded-l-md text-sm focus:outline-none focus:ring-1 focus:ring-orange-500 w-full sm:w-72">
-                <button type="submit" class="bg-gray-100 border border-gray-200 hover:bg-gray-200 text-gray-600 px-4 rounded-r-md transition-colors" title="Search">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                    </svg>
-                </button>
-            </div>
-            <div class="relative w-auto">
-                <select name="limit" onchange="this.form.submit()" class="appearance-none bg-white border border-gray-200 text-gray-800 py-2.5 pl-3 pr-8 rounded shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer">
-                    <?php foreach ([10, 20, 50, 100] as $opt): ?>
-                        <option value="<?= $opt ?>" <?= $limit === $opt ? 'selected' : '' ?>><?= $opt ?> per page</option>
-                    <?php endforeach; ?>
-                </select>
-                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+        <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                    <label for="customer-search" class="block text-xs font-medium text-gray-600 mb-1">Name, email, or phone</label>
+                    <input type="text" id="customer-search" name="search" value="<?= htmlspecialchars($searchVal) ?>" placeholder="Search customer…"
+                           class="w-full px-3 py-2.5 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-orange-500">
+                </div>
+                <div>
+                    <label for="customer-order-number" class="block text-xs font-medium text-gray-600 mb-1">Order number</label>
+                    <input type="text" id="customer-order-number" name="order_number" value="<?= htmlspecialchars($orderNumberVal) ?>" placeholder="Search by order number…"
+                           class="w-full px-3 py-2.5 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-orange-500">
+                </div>
+                <div>
+                    <label for="customer-limit" class="block text-xs font-medium text-gray-600 mb-1">Rows per page</label>
+                    <div class="relative">
+                        <select id="customer-limit" name="limit" class="appearance-none w-full bg-white border border-gray-200 text-gray-800 py-2.5 pl-3 pr-8 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer">
+                            <?php foreach ([10, 20, 50, 100] as $opt): ?>
+                                <option value="<?= $opt ?>" <?= $limit === $opt ? 'selected' : '' ?>><?= $opt ?> per page</option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-end gap-2">
+                    <button type="submit" class="inline-flex items-center justify-center gap-2 bg-[#d97706] hover:bg-[#b45309] text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        Search
+                    </button>
+                    <?php if ($hasActiveFilters): ?>
+                        <a href="<?= htmlspecialchars(base_url('?' . http_build_query($clearSearchParams))) ?>" class="text-red-500 hover:text-red-700 text-sm font-medium px-2 py-2.5 whitespace-nowrap">Clear</a>
+                    <?php endif; ?>
                 </div>
             </div>
-            <?php if ($searchVal !== ''): ?>
-                <a href="<?= htmlspecialchars(base_url('?' . http_build_query($clearSearchParams))) ?>" class="text-red-500 hover:text-red-700 text-sm font-medium px-2 py-2.5 whitespace-nowrap">Clear search</a>
-            <?php endif; ?>
         </div>
     </form>
 
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
         <?php if (empty($customers)): ?>
-            <div class="col-span-full text-center py-12 text-gray-500 bg-white rounded-lg border border-dashed border-gray-200"><?= $searchVal !== '' ? 'No customers match your search.' : 'No customers found.' ?></div>
+            <div class="col-span-full text-center py-12 text-gray-500 bg-white rounded-lg border border-dashed border-gray-200"><?= $hasActiveFilters ? 'No customers match your search.' : 'No customers found.' ?></div>
         <?php else: ?>
             <?php foreach ($customers as $c): ?>
                 <?php

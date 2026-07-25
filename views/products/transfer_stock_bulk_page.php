@@ -411,7 +411,7 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                     </div>
                 </div>
                 <p id="stockTransferNoticeStockMore" class="hidden mt-2 text-xs font-medium text-amber-900/90"></p>
-                <p class="mt-3 text-xs text-amber-900/80 leading-relaxed">Reduce transfer quantity for these lines, or add stock at the <strong>source warehouse</strong> before retrying.</p>
+                <p class="mt-3 text-xs text-amber-900/80 leading-relaxed">Reduce transfer quantity for these lines, add stock at the <strong>source warehouse</strong>, or click <strong>Refresh from Exotic</strong> to pull the latest local stock from Exotic and sync it into the default warehouse.</p>
             </div>
             <div id="stockTransferNoticeListWrap" class="mt-3 hidden">
                 <div id="stockTransferNoticeListBox" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
@@ -420,8 +420,9 @@ $toWhId = isset($transfer['to_warehouse']) ? (int)$transfer['to_warehouse'] : 0;
                 </div>
             </div>
         </div>
-        <div class="px-5 py-4 border-t border-gray-100 flex justify-end shrink-0">
-            <button type="button" id="stockTransferNoticeRefreshApi" class="hidden mr-2 inline-flex items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">Refresh from API</button>
+        <div class="px-5 py-4 border-t border-gray-100 flex flex-wrap justify-end gap-2 shrink-0">
+            <button type="button" id="stockTransferNoticeRefreshExotic" class="hidden inline-flex items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">Refresh from Exotic</button>
+            <button type="button" id="stockTransferNoticeRefreshApi" class="hidden inline-flex items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">Refresh from API</button>
             <button type="button" id="stockTransferNoticeOk" class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">OK</button>
         </div>
     </div>
@@ -477,8 +478,13 @@ tr.bulk-grid-row-error td {
     const stockTransferNoticeIconWrap = document.getElementById('stockTransferNoticeIconWrap');
     const stockTransferNoticeIcon = document.getElementById('stockTransferNoticeIcon');
     const stockTransferNoticeRefreshApi = document.getElementById('stockTransferNoticeRefreshApi');
+    const stockTransferNoticeRefreshExotic = document.getElementById('stockTransferNoticeRefreshExotic');
     const stockTransferNoticeOk = document.getElementById('stockTransferNoticeOk');
     let refreshCodesPending = [];
+    let refreshSkusPending = [];
+    let refreshInsufficientItemsPending = [];
+    let refreshExoticPending = false;
+    let refreshInFlight = false;
 
     const bulkTransferProcessingOverlay = document.getElementById('bulkTransferProcessingOverlay');
 
@@ -607,6 +613,79 @@ tr.bulk-grid-row-error td {
         }
     }
 
+    function extractItemCodesFromInsufficient(items) {
+        const seen = {};
+        const codes = [];
+        (Array.isArray(items) ? items : []).forEach(function (row) {
+            const ic = String(row && row.item_code != null ? row.item_code : '').trim();
+            if (!ic) {
+                return;
+            }
+            const key = ic.toUpperCase();
+            if (!seen[key]) {
+                seen[key] = true;
+                codes.push(ic);
+            }
+        });
+        return codes;
+    }
+
+    function extractSkusFromInsufficient(items) {
+        const seen = {};
+        const skus = [];
+        (Array.isArray(items) ? items : []).forEach(function (row) {
+            const sku = String(row && row.sku != null ? row.sku : '').trim();
+            if (!sku) {
+                return;
+            }
+            const key = sku.toUpperCase();
+            if (!seen[key]) {
+                seen[key] = true;
+                skus.push(sku);
+            }
+        });
+        return skus;
+    }
+
+    function skusForItemCodeChunk(items, codesInChunk) {
+        const codeSet = {};
+        (codesInChunk || []).forEach(function (code) {
+            const key = String(code || '').trim().toUpperCase();
+            if (key) {
+                codeSet[key] = true;
+            }
+        });
+        return extractSkusFromInsufficient((Array.isArray(items) ? items : []).filter(function (row) {
+            const ic = String(row && row.item_code != null ? row.item_code : '').trim().toUpperCase();
+            return ic && codeSet[ic];
+        }));
+    }
+
+    function chunkArray(items, size) {
+        const chunks = [];
+        const list = Array.isArray(items) ? items.slice() : [];
+        const chunkSize = Math.max(1, parseInt(size, 10) || 1);
+        for (let i = 0; i < list.length; i += chunkSize) {
+            chunks.push(list.slice(i, i + chunkSize));
+        }
+        return chunks;
+    }
+
+    function setTransferRefreshButtonsDisabled(disabled) {
+        refreshInFlight = !!disabled;
+        [stockTransferNoticeRefreshApi, stockTransferNoticeRefreshExotic, stockTransferNoticeOk].forEach(function (btn) {
+            if (!btn) {
+                return;
+            }
+            btn.disabled = !!disabled;
+            if (disabled) {
+                btn.classList.add('opacity-70', 'cursor-not-allowed');
+            } else {
+                btn.classList.remove('opacity-70', 'cursor-not-allowed');
+            }
+        });
+    }
+
     function summarizeInsufficientStockMessage(items) {
         const count = Array.isArray(items) ? items.length : 0;
         if (count === 0) {
@@ -723,13 +802,25 @@ tr.bulk-grid-row-error td {
         }
 
         refreshCodesPending = Array.isArray(opts.refreshableCodes) ? opts.refreshableCodes : [];
+        refreshSkusPending = Array.isArray(opts.refreshableSkus) ? opts.refreshableSkus : [];
+        refreshInsufficientItemsPending = Array.isArray(opts.insufficientItems) ? opts.insufficientItems : [];
+        refreshExoticPending = !!opts.showRefreshExotic;
         if (stockTransferNoticeRefreshApi) {
-            if (refreshCodesPending.length > 0) {
+            if (refreshCodesPending.length > 0 && !refreshExoticPending) {
                 stockTransferNoticeRefreshApi.classList.remove('hidden');
                 stockTransferNoticeRefreshApi.textContent = String(opts.refreshButtonLabel || 'Refresh from API');
             } else {
                 stockTransferNoticeRefreshApi.classList.add('hidden');
                 stockTransferNoticeRefreshApi.textContent = 'Refresh from API';
+            }
+        }
+        if (stockTransferNoticeRefreshExotic) {
+            if (refreshExoticPending && refreshCodesPending.length > 0) {
+                stockTransferNoticeRefreshExotic.classList.remove('hidden');
+                stockTransferNoticeRefreshExotic.textContent = String(opts.refreshExoticButtonLabel || 'Refresh from Exotic');
+            } else {
+                stockTransferNoticeRefreshExotic.classList.add('hidden');
+                stockTransferNoticeRefreshExotic.textContent = 'Refresh from Exotic';
             }
         }
 
@@ -805,6 +896,10 @@ tr.bulk-grid-row-error td {
             extraList = clampNoticeList(preview.details, 20);
         }
 
+        const refreshableCodes = Array.isArray(preview && preview.refreshable_item_codes) && preview.refreshable_item_codes.length > 0
+            ? preview.refreshable_item_codes
+            : (isInsufficientStock ? extractItemCodesFromInsufficient(insufficientItems) : []);
+
         showTransferNotice(message, {
             title: title,
             subtitle: subtitle,
@@ -813,8 +908,161 @@ tr.bulk-grid-row-error td {
             notFoundItems: notFoundItems,
             insufficientItems: isInsufficientStock ? insufficientItems : [],
             listItems: extraList,
-            refreshableCodes: Array.isArray(preview && preview.refreshable_item_codes) ? preview.refreshable_item_codes : [],
+            refreshableCodes: refreshableCodes,
+            refreshableSkus: isInsufficientStock ? extractSkusFromInsufficient(insufficientItems) : [],
+            insufficientItems: isInsufficientStock ? insufficientItems : [],
+            showRefreshExotic: isInsufficientStock && refreshableCodes.length > 0,
         });
+    }
+
+    function postTransferItemsRefreshBatch(codes, syncStock, skus) {
+        const fd = new FormData();
+        fd.append('item_codes_json', JSON.stringify(codes));
+        if (syncStock) {
+            fd.append('sync_stock', '1');
+            fd.append('skus_json', JSON.stringify(Array.isArray(skus) ? skus : []));
+        }
+        return fetch(apiUrl('refresh_transfer_items_from_api'), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+            body: fd
+        }).then(function (r) { return parseFetchJsonResponse(r); });
+    }
+
+    function runTransferItemsApiRefresh(syncStock, btn, previousLabel) {
+        if (refreshInFlight || !Array.isArray(refreshCodesPending) || refreshCodesPending.length === 0) {
+            return;
+        }
+
+        const chunkSize = syncStock ? 5 : 25;
+        const codeChunks = chunkArray(refreshCodesPending, chunkSize);
+        const totalCodes = refreshCodesPending.length;
+        let processedCodes = 0;
+        let failedCodes = [];
+        let lastMessage = '';
+
+        setTransferRefreshButtonsDisabled(true);
+        if (syncStock) {
+            showBulkTransferProcessingOverlay();
+        }
+
+        function updateProgressLabel() {
+            if (!btn) {
+                return;
+            }
+            btn.textContent = 'Refreshing ' + Math.min(processedCodes + chunkSize, totalCodes) + '/' + totalCodes + '…';
+        }
+
+        updateProgressLabel();
+
+        function runNextChunk(index) {
+            if (index >= codeChunks.length) {
+                setTransferRefreshButtonsDisabled(false);
+                if (syncStock) {
+                    hideBulkTransferProcessingOverlay();
+                }
+                if (btn) {
+                    btn.textContent = previousLabel;
+                }
+
+                failedCodes = failedCodes.filter(function (code, idx, arr) {
+                    return arr.indexOf(code) === idx;
+                });
+                const hadFailures = failedCodes.length > 0;
+                const success = processedCodes > 0 && !hadFailures;
+                const partial = processedCodes > 0 && hadFailures;
+                let message = lastMessage;
+                if (!message) {
+                    if (success) {
+                        message = syncStock
+                            ? ('Exotic refresh completed for ' + processedCodes + ' item code(s). Please submit again.')
+                            : ('API refresh completed for ' + processedCodes + ' item code(s). Please submit again.');
+                    } else if (partial) {
+                        message = 'Refreshed ' + processedCodes + ' of ' + totalCodes + ' item code(s). Some batches failed.';
+                    } else {
+                        message = 'API refresh failed.';
+                    }
+                }
+
+                if (success || partial) {
+                    if (partial && failedCodes.length > 0) {
+                        refreshCodesPending = failedCodes.slice();
+                        refreshSkusPending = skusForItemCodeChunk(refreshInsufficientItemsPending, refreshCodesPending);
+                    }
+                    showTransferNotice(message, {
+                        title: syncStock ? 'Exotic Refresh Completed' : 'API Refresh Completed',
+                        subtitle: partial
+                            ? 'Some item codes could not be refreshed. Retry for the remainder, then submit again.'
+                            : (syncStock
+                                ? 'Latest local stock and default-warehouse physical stock were synced from Exotic.'
+                                : 'Latest stock and product mapping were synced.'),
+                        tone: partial ? 'warning' : 'success',
+                        listItems: hadFailures ? clampNoticeList(failedCodes.map(function (code) {
+                            return 'Failed: ' + code;
+                        }), 20) : [],
+                        refreshableCodes: partial ? refreshCodesPending : [],
+                        refreshableSkus: partial ? refreshSkusPending : [],
+                        insufficientItems: partial ? refreshInsufficientItemsPending : [],
+                        showRefreshExotic: partial && syncStock,
+                        refreshExoticButtonLabel: partial ? 'Retry Failed' : undefined,
+                    });
+                    return;
+                }
+
+                showTransferNotice(message, {
+                    title: syncStock ? 'Exotic Refresh Failed' : 'API Refresh Failed',
+                    subtitle: 'Please fix the listed codes and retry.',
+                    tone: 'error',
+                    refreshableCodes: refreshCodesPending,
+                    refreshableSkus: refreshSkusPending,
+                    insufficientItems: refreshInsufficientItemsPending,
+                    showRefreshExotic: syncStock,
+                    refreshButtonLabel: 'Retry Again',
+                    refreshExoticButtonLabel: 'Retry Again',
+                });
+                return;
+            }
+
+            const chunk = codeChunks[index];
+            const chunkSkus = syncStock
+                ? skusForItemCodeChunk(refreshInsufficientItemsPending, chunk)
+                : [];
+
+            return postTransferItemsRefreshBatch(chunk, syncStock, chunkSkus)
+                .then(function (res) {
+                    const batchProcessed = parseInt((res && res.processed_codes) ? res.processed_codes : chunk.length, 10);
+                    if (res && res.success) {
+                        processedCodes += Math.max(0, batchProcessed);
+                        if (res.message) {
+                            lastMessage = String(res.message);
+                        }
+                    } else {
+                        if (Array.isArray(res && res.failed_codes) && res.failed_codes.length) {
+                            failedCodes = failedCodes.concat(res.failed_codes);
+                        } else {
+                            failedCodes = failedCodes.concat(chunk);
+                        }
+                        if (res && res.message) {
+                            lastMessage = String(res.message);
+                        }
+                    }
+                    if (Array.isArray(res && res.failed_codes) && res.success) {
+                        failedCodes = failedCodes.concat(res.failed_codes);
+                    }
+                })
+                .catch(function (err) {
+                    failedCodes = failedCodes.concat(chunk);
+                    lastMessage = 'API refresh failed: ' + err.message;
+                })
+                .then(function () {
+                    processedCodes = Math.min(processedCodes, totalCodes);
+                    updateProgressLabel();
+                    return runNextChunk(index + 1);
+                });
+        }
+
+        runNextChunk(0);
     }
 
     function closeTransferNotice() {
@@ -831,51 +1079,15 @@ tr.bulk-grid-row-error td {
             if (!Array.isArray(refreshCodesPending) || refreshCodesPending.length === 0) {
                 return;
             }
-            const btn = stockTransferNoticeRefreshApi;
-            const previousLabel = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = 'Refreshing...';
-
-            const fd = new FormData();
-            fd.append('item_codes_json', JSON.stringify(refreshCodesPending));
-            fetch(apiUrl('refresh_transfer_items_from_api'), {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
-                body: fd
-            })
-                .then(function (r) { return parseFetchJsonResponse(r); })
-                .then(function (res) {
-                    if (res && res.success) {
-                        showTransferNotice(res.message || 'API refresh completed. Please submit again.', {
-                            title: 'API Refresh Completed',
-                            subtitle: 'Latest stock and product mapping were synced.',
-                            tone: 'success',
-                            listItems: [],
-                        });
-                    } else {
-                        showTransferNotice((res && res.message) ? res.message : 'API refresh failed.', {
-                            title: 'API Refresh Failed',
-                            subtitle: 'Please fix the listed codes and retry.',
-                            tone: 'error',
-                            refreshableCodes: refreshCodesPending,
-                            refreshButtonLabel: 'Retry Again',
-                        });
-                    }
-                })
-                .catch(function (err) {
-                    showTransferNotice('API refresh failed: ' + err.message, {
-                        title: 'API Refresh Failed',
-                        subtitle: 'Please try again.',
-                        tone: 'error',
-                        refreshableCodes: refreshCodesPending,
-                        refreshButtonLabel: 'Retry Again',
-                    });
-                })
-                .finally(function () {
-                    btn.disabled = false;
-                    btn.textContent = previousLabel;
-                });
+            runTransferItemsApiRefresh(false, stockTransferNoticeRefreshApi, stockTransferNoticeRefreshApi.textContent);
+        });
+    }
+    if (stockTransferNoticeRefreshExotic) {
+        stockTransferNoticeRefreshExotic.addEventListener('click', function () {
+            if (!Array.isArray(refreshCodesPending) || refreshCodesPending.length === 0) {
+                return;
+            }
+            runTransferItemsApiRefresh(true, stockTransferNoticeRefreshExotic, stockTransferNoticeRefreshExotic.textContent);
         });
     }
     if (stockTransferNoticeModal) {

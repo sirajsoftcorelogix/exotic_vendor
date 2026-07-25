@@ -4,9 +4,85 @@ class Author
 {
     private mysqli $conn;
 
+    private const LIST_COLUMNS = 'author_id, author, contact_name, author_email, country_code, author_phone, alt_phone, address, city, state, country, postal_code, webpage, is_active, created_at, updated_at';
+
     public function __construct(mysqli $conn)
     {
         $this->conn = $conn;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function normalizeAuthorFormData(array $data): array
+    {
+        return [
+            'contact_name' => trim((string)($data['contact_name'] ?? '')),
+            'author_email' => trim((string)($data['author_email'] ?? '')),
+            'country_code' => trim((string)($data['country_code'] ?? '')),
+            'author_phone' => trim((string)($data['author_phone'] ?? '')),
+            'alt_phone' => trim((string)($data['alt_phone'] ?? '')),
+            'address' => trim((string)($data['address'] ?? '')),
+            'city' => trim((string)($data['city'] ?? '')),
+            'state' => trim((string)($data['state'] ?? '')),
+            'country' => trim((string)($data['country'] ?? '')),
+            'postal_code' => trim((string)($data['postal_code'] ?? '')),
+            'webpage' => (string)($data['webpage'] ?? '0') === '1' ? '1' : '0',
+        ];
+    }
+
+    private function authorFieldExists(string $column, string $value, ?int $excludeAuthorId = null): bool
+    {
+        $allowed = ['author_phone', 'author_email'];
+        if (!in_array($column, $allowed, true)) {
+            return false;
+        }
+
+        $value = trim($value);
+        if ($value === '') {
+            return false;
+        }
+
+        if ($column === 'author_email') {
+            $sql = "SELECT author_id FROM vp_author WHERE LOWER(TRIM(author_email)) = LOWER(TRIM(?)) AND TRIM(COALESCE(author_email, '')) <> ''";
+        } else {
+            $sql = 'SELECT author_id FROM vp_author WHERE ' . $column . ' = ?';
+        }
+
+        if ($excludeAuthorId !== null && $excludeAuthorId > 0) {
+            $sql .= ' AND author_id != ? LIMIT 1';
+            $stmt = $this->conn->prepare($sql);
+            $stmt->bind_param('si', $value, $excludeAuthorId);
+        } else {
+            $sql .= ' LIMIT 1';
+            $stmt = $this->conn->prepare($sql);
+            $stmt->bind_param('s', $value);
+        }
+
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->execute();
+        $stmt->store_result();
+        $exists = $stmt->num_rows > 0;
+        $stmt->close();
+
+        return $exists;
+    }
+
+    private function validateAuthorUniqueness(
+        ?string $phone,
+        ?string $email,
+        ?int $excludeAuthorId = null
+    ): ?array {
+        if ($phone !== null && trim($phone) !== '' && $this->authorFieldExists('author_phone', trim($phone), $excludeAuthorId)) {
+            return ['success' => false, 'message' => 'Phone number already exists. Please use a different phone number.'];
+        }
+        if ($email !== null && trim($email) !== '' && $this->authorFieldExists('author_email', trim($email), $excludeAuthorId)) {
+            return ['success' => false, 'message' => 'Email already exists. Please use a different email.'];
+        }
+
+        return null;
     }
 
     public function getAuthors(int $page = 1, int $limit = 20, string $search = '', string $status = ''): array
@@ -20,10 +96,14 @@ class Author
         $params = [];
 
         if ($search !== '') {
-            $where[] = '(author LIKE ? OR author_id = ?)';
-            $types .= 'si';
+            $where[] = '(author LIKE ? OR author_id = ? OR city LIKE ? OR state LIKE ? OR contact_name LIKE ? OR author_phone LIKE ?)';
+            $types .= 'sissss';
             $params[] = '%' . $search . '%';
             $params[] = (int)$search;
+            $params[] = '%' . $search . '%';
+            $params[] = '%' . $search . '%';
+            $params[] = '%' . $search . '%';
+            $params[] = '%' . $search . '%';
         }
 
         if ($status === 'active') {
@@ -46,7 +126,7 @@ class Author
         $totalRecords = (int)(($countStmt->get_result()->fetch_assoc()['total'] ?? 0));
         $countStmt->close();
 
-        $sql = 'SELECT author_id, author, is_active, created_at, updated_at
+        $sql = 'SELECT ' . self::LIST_COLUMNS . '
                 FROM vp_author' . $whereSql . '
                 ORDER BY author ASC
                 LIMIT ? OFFSET ?';
@@ -73,7 +153,7 @@ class Author
 
     public function getAuthorById(int $id): ?array
     {
-        $stmt = $this->conn->prepare('SELECT author_id, author, is_active, created_at, updated_at FROM vp_author WHERE author_id = ? LIMIT 1');
+        $stmt = $this->conn->prepare('SELECT ' . self::LIST_COLUMNS . ' FROM vp_author WHERE author_id = ? LIMIT 1');
         if (!$stmt) {
             return null;
         }
@@ -116,13 +196,31 @@ class Author
 
     public function checkAuthorName(string $name, ?int $excludeAuthorId = null): array
     {
-        return ['exists' => $this->authorNameExists($name, $excludeAuthorId)];
+        return ['exists' => $this->isDuplicateAuthorName($name, $excludeAuthorId)];
     }
 
-    public function saveAuthor(?int $id, string $name, int $isActive): array
+    public function isDuplicateAuthorName(string $name, ?int $excludeAuthorId = null): bool
+    {
+        if ($excludeAuthorId !== null && $excludeAuthorId > 0) {
+            $existing = $this->getAuthorById($excludeAuthorId);
+            if ($existing && namesEqualCi($name, (string)($existing['author'] ?? ''))) {
+                return false;
+            }
+        }
+
+        return $this->authorNameExists($name, $excludeAuthorId);
+    }
+
+    private function authorFieldValuesEqual(string $left, string $right): bool
+    {
+        return trim($left) === trim($right);
+    }
+
+    public function saveAuthor(?int $id, string $name, int $isActive, array $extra = []): array
     {
         $name = trim($name);
         $isActive = $isActive ? 1 : 0;
+        $fields = $this->normalizeAuthorFormData($extra);
         if ($name === '') {
             return ['success' => false, 'message' => 'Author name is required.'];
         }
@@ -131,15 +229,61 @@ class Author
             return ['success' => false, 'message' => 'Author id is required for update.'];
         }
 
-        if ($this->authorNameExists($name, $id)) {
+        $existing = $this->getAuthorById($id);
+        if (!$existing) {
+            return ['success' => false, 'message' => 'Author not found.'];
+        }
+
+        if (!namesEqualCi($name, (string)($existing['author'] ?? ''))
+            && $this->authorNameExists($name, $id)) {
             return ['success' => false, 'message' => 'Author name already exists'];
         }
 
-        $stmt = $this->conn->prepare('UPDATE vp_author SET author = ?, is_active = ? WHERE author_id = ?');
+        $phoneToCheck = $fields['author_phone'];
+        if ($this->authorFieldValuesEqual($phoneToCheck, (string)($existing['author_phone'] ?? ''))) {
+            $phoneToCheck = null;
+        }
+        $emailToCheck = $fields['author_email'];
+        if ($this->authorFieldValuesEqual(
+            mb_strtolower($emailToCheck, 'UTF-8'),
+            mb_strtolower((string)($existing['author_email'] ?? ''), 'UTF-8')
+        )) {
+            $emailToCheck = null;
+        }
+
+        $duplicate = $this->validateAuthorUniqueness(
+            $phoneToCheck,
+            $emailToCheck,
+            $id
+        );
+        if ($duplicate !== null) {
+            return $duplicate;
+        }
+
+        $stmt = $this->conn->prepare(
+            'UPDATE vp_author SET author = ?, contact_name = ?, author_email = ?, country_code = ?, author_phone = ?, alt_phone = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, is_active = ? WHERE author_id = ?'
+        );
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
         }
-        $stmt->bind_param('sii', $name, $isActive, $id);
+        $webpage = (int)$fields['webpage'];
+        $stmt->bind_param(
+            'sssssssssssiii',
+            $name,
+            $fields['contact_name'],
+            $fields['author_email'],
+            $fields['country_code'],
+            $fields['author_phone'],
+            $fields['alt_phone'],
+            $fields['address'],
+            $fields['city'],
+            $fields['state'],
+            $fields['country'],
+            $fields['postal_code'],
+            $webpage,
+            $isActive,
+            $id
+        );
 
         try {
             $ok = $stmt->execute();
@@ -155,11 +299,12 @@ class Author
             : ['success' => false, 'message' => 'Could not save author: ' . $error];
     }
 
-    public function insertAuthor(int $authorId, string $name, int $isActive): array
+    public function insertAuthor(int $authorId, string $name, int $isActive, array $extra = []): array
     {
         $authorId = (int) $authorId;
         $name = trim($name);
         $isActive = $isActive ? 1 : 0;
+        $fields = $this->normalizeAuthorFormData($extra);
 
         if ($authorId <= 0) {
             return ['success' => false, 'message' => 'Remote author vendor_id is required.'];
@@ -172,11 +317,38 @@ class Author
             return ['success' => false, 'message' => 'Author name already exists'];
         }
 
-        $stmt = $this->conn->prepare('INSERT INTO vp_author (author_id, author, is_active) VALUES (?, ?, ?)');
+        $duplicate = $this->validateAuthorUniqueness(
+            $fields['author_phone'],
+            $fields['author_email']
+        );
+        if ($duplicate !== null) {
+            return $duplicate;
+        }
+
+        $stmt = $this->conn->prepare(
+            'INSERT INTO vp_author (author_id, author, contact_name, author_email, country_code, author_phone, alt_phone, address, city, state, country, postal_code, webpage, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
         }
-        $stmt->bind_param('isi', $authorId, $name, $isActive);
+        $webpage = (int)$fields['webpage'];
+        $stmt->bind_param(
+            'isssssssssssii',
+            $authorId,
+            $name,
+            $fields['contact_name'],
+            $fields['author_email'],
+            $fields['country_code'],
+            $fields['author_phone'],
+            $fields['alt_phone'],
+            $fields['address'],
+            $fields['city'],
+            $fields['state'],
+            $fields['country'],
+            $fields['postal_code'],
+            $webpage,
+            $isActive
+        );
 
         try {
             $ok = $stmt->execute();
@@ -344,5 +516,54 @@ class Author
         $stmt->close();
 
         return ['imported' => $imported, 'skipped' => $skipped];
+    }
+
+    /**
+     * @return array{id:string,name:string}|null
+     */
+    public function findBestMatchByName(string $name): ?array
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return null;
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT author_id AS id, author AS name
+             FROM vp_author
+             WHERE is_active = 1 AND author = ?
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('s', $name);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (is_array($row) && !empty($row['id'])) {
+            return ['id' => (string) $row['id'], 'name' => (string) $row['name']];
+        }
+
+        $search = '%' . $name . '%';
+        $stmt = $this->conn->prepare(
+            'SELECT author_id AS id, author AS name
+             FROM vp_author
+             WHERE is_active = 1 AND author LIKE ?
+             ORDER BY CHAR_LENGTH(author) ASC
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('s', $search);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (is_array($row) && !empty($row['id'])) {
+            return ['id' => (string) $row['id'], 'name' => (string) $row['name']];
+        }
+
+        return null;
     }
 }

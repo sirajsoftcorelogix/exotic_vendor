@@ -48,7 +48,17 @@ $startIndex = (int) ($startIndex ?? 0);
                 <td class="loc"><?= htmlspecialchars((string) ($item['warehouse_location'] ?: '—')) ?></td>
                 <td><?= htmlspecialchars((string) ($item['order_number'] ?? '')) ?></td>
                 <td><?= htmlspecialchars(picklist_item_sku($item) ?: '—') ?></td>
-                <td><?= htmlspecialchars((string) ($item['title'] ?? '')) ?></td>
+                <td>
+                    <div><?= htmlspecialchars((string) ($item['title'] ?? '')) ?></div>
+                    <?php $titleMetaLines = picklist_item_title_meta_lines($item, $isBook); ?>
+                    <?php if ($titleMetaLines !== []): ?>
+                        <div class="title-meta">
+                            <?php foreach ($titleMetaLines as $metaLine): ?>
+                                <div><?= htmlspecialchars($metaLine) ?></div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </td>
                 <td>
                     <?php if ($imageUrl !== ''): ?>
                         <img src="<?= htmlspecialchars($imageUrl) ?>" alt="" class="item-img">

@@ -7,6 +7,7 @@ require_once 'models/product/product.php';
 require_once 'models/picklist/Picklist.php';
 require_once 'helpers/payment_type_groups.php';
 require_once 'helpers/order_filter_autocomplete.php';
+require_once 'helpers/order_list_filters.php';
 $ordersModel = new Order($conn);
 $commanModel = new Tables($conn);
 $savedSearchModel = new SavedSearch($conn);
@@ -16,6 +17,27 @@ global $root_path;
 global $domain;
 class OrdersController
 {
+
+    private function clearBufferedHttpOutput(): void
+    {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function sendRefreshOrderJson(array $payload, int $httpCode = 200): void
+    {
+        $this->clearBufferedHttpOutput();
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code($httpCode);
+        }
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
 
     public function index()
     {
@@ -32,7 +54,7 @@ class OrdersController
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50; // Orders per page
         $offset = ($page - 1) * $limit;
 
-        $filters = $this->buildOrderListFiltersFromRequest($_GET);
+        $filters = buildOrderListFiltersFromRequest($_GET);
 
         //order status list
         $statusList = $commanModel->get_order_status_list();
@@ -124,6 +146,8 @@ class OrdersController
                 'suggested_picklist_number' => $picklistModel->generatePicklistNumber(),
                 'filters' => $filters,
                 'saved_searches' => $saved_searches,
+                'warehouses' => $commanModel->get_exotic_address(),
+                'default_warehouse_id' => resolveOrderListDefaultWarehouseId(),
             ],
             preparePaymentTypeFilterData($paymentTypes, $_GET['payment_type'] ?? null)
         ), 'Manage Orders');
@@ -314,11 +338,20 @@ class OrdersController
 
         foreach ($ordersList as $order) {
             $orderId = (string)($order['orderid'] ?? '');
-            if ($onlyOrderNumber !== null && $orderId !== $onlyOrderNumber) {
+            if ($orderId === '') {
                 continue;
             }
-            if (in_array($orderId, $skipIds, true)) {
+
+            $storeOrderNumber = ($onlyOrderNumber !== null && trim($onlyOrderNumber) !== '')
+                ? trim($onlyOrderNumber)
+                : $orderId;
+
+            if ($onlyOrderNumber === null && in_array($orderId, $skipIds, true)) {
                 continue;
+            }
+
+            if (strcasecmp($storeOrderNumber, $orderId) !== 0) {
+                $ordersModel->rekeyOrderNumber($orderId, $storeOrderNumber);
             }
 
             $customerdata = $ordersModel->addCustomerIfNotExists($order);
@@ -366,7 +399,7 @@ class OrdersController
                 }
                 $rdata = [
                     'sku' => $item['sku'] ?? '',
-                    'order_number' => $order['orderid'] ?? '',
+                    'order_number' => $storeOrderNumber,
                     'shipping_country' => $order['shipping_country'] ?? '',
                     'title' => !empty($item['title']) ? preg_replace('/[^a-zA-Z0-9\s\-_]/', '', $item['title']) : '',
                     'description' => $item['description'] ?? '',
@@ -382,6 +415,7 @@ class OrdersController
                     'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
                     'quantity' => $item['qty'] ?? '',
                     'options' => $item['options'] ?? 0,
+                    'addons' => Order::normalizeVendorOrderLineAddons($item['addons'] ?? null),
                     'gst' => $item['gst'] ?? '',
                     'hsn' => $item['hscode'] ?? '',
                     'local_stock' => is_numeric($item['local_stock'] ?? null) ? (float) $item['local_stock'] : 0.0,
@@ -458,7 +492,9 @@ class OrdersController
             }
 
             try {
-                $addressdata[] = $ordersModel->insertAddressInfo($order, $customerdata['customer_id'] ?? 0);
+                $orderForAddress = $order;
+                $orderForAddress['orderid'] = $storeOrderNumber;
+                $addressdata[] = $ordersModel->insertAddressInfo($orderForAddress, $customerdata['customer_id'] ?? 0);
             } catch (\Throwable $e) {
                 error_log('[order import insertAddressInfo] ' . $e->getMessage());
                 $addressdata[] = ['success' => false, 'message' => $e->getMessage()];
@@ -479,35 +515,34 @@ class OrdersController
      */
     public function isOrderReadyForPosCheckout(string $orderNumber): bool
     {
-        global $conn;
+        global $ordersModel;
 
         $orderNumber = trim($orderNumber);
         if ($orderNumber === '') {
             return false;
         }
 
-        $hasLines = false;
-        $stmt = $conn->prepare('SELECT 1 FROM vp_orders WHERE order_number = ? LIMIT 1');
-        if ($stmt) {
-            $stmt->bind_param('s', $orderNumber);
-            $stmt->execute();
-            $hasLines = (bool)$stmt->get_result()->fetch_row();
-            $stmt->close();
-        }
-        if (!$hasLines) {
-            return false;
+        if ($ordersModel->hasOrderLines($orderNumber) && $ordersModel->hasOrderInfo($orderNumber)) {
+            return true;
         }
 
-        $hasInfo = false;
-        $stmtInfo = $conn->prepare('SELECT 1 FROM vp_order_info WHERE order_number = ? LIMIT 1');
-        if ($stmtInfo) {
-            $stmtInfo->bind_param('s', $orderNumber);
-            $stmtInfo->execute();
-            $hasInfo = (bool)$stmtInfo->get_result()->fetch_row();
-            $stmtInfo->close();
+        $fetch = $this->fetchVendorOrderPayloadForCheckout($orderNumber);
+        if (!$fetch['ok']) {
+            return $ordersModel->hasOrderLines($orderNumber) && $ordersModel->hasOrderInfo($orderNumber);
         }
 
-        return $hasInfo;
+        foreach ($fetch['orders'] as $order) {
+            $apiId = trim((string)($order['orderid'] ?? ''));
+            if ($apiId === '' || strcasecmp($apiId, $orderNumber) === 0) {
+                continue;
+            }
+            if ($ordersModel->hasOrderLines($apiId) || $ordersModel->hasOrderInfo($apiId)) {
+                $ordersModel->rekeyOrderNumber($apiId, $orderNumber);
+                break;
+            }
+        }
+
+        return $ordersModel->hasOrderLines($orderNumber) && $ordersModel->hasOrderInfo($orderNumber);
     }
 
     /**
@@ -550,7 +585,26 @@ class OrdersController
             return ['ok' => false, 'orders' => [], 'error' => 'No order data from vendor API'];
         }
 
-        return ['ok' => true, 'orders' => $decoded['orders'], 'error' => ''];
+        return ['ok' => true, 'orders' => $this->normalizeVendorOrdersList($decoded['orders']), 'error' => ''];
+    }
+
+    /**
+     * Vendor API returns orders as a list or as an object keyed by order id.
+     *
+     * @param array<int|string, array<string, mixed>> $orders
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeVendorOrdersList(array $orders): array
+    {
+        if ($orders === []) {
+            return [];
+        }
+
+        if (array_is_list($orders)) {
+            return $orders;
+        }
+
+        return array_values($orders);
     }
 
     /**
@@ -774,18 +828,9 @@ class OrdersController
                 // commented out on 09-11-2025 as per request
                 // call exotic india API to update order status
                 $orderval = $ordersModel->getOrderById($order_id);
-                $apidata = [
-                    'orderid' => $orderval['order_number'],
-                    'level' => 'item',
-                    'order_status' => $commanModel->getExoticIndiaOrderStatusCode($new_status)['admin_id'],
-                    'size' => trim($orderval['size']),
-                    'color' => trim($orderval['color']),
-                    'itemcode' => trim($orderval['item_code'])
-                ];
-                //run update if admin id not 0
-                if ($apidata['order_status'] > 0) {
-                    $resp = $commanModel->updateExoticIndiaOrderStatus($apidata);
-                }
+                require_once __DIR__ . '/../integrations/exotic/ExoticIndiaGateway.php';
+                global $conn;
+                ExoticIndiaGateway::create($conn)->updateOrderLineFromSlug($new_status, is_array($orderval) ? $orderval : []);
                 //log status change
                 $logData = [
                     'order_id' => $order_id,
@@ -880,36 +925,10 @@ class OrdersController
     }
     public function getOrderDetailsHTML()
     {
-        is_login();
-        global $ordersModel, $commanModel;
-        $orderRef = trim((string)($_GET['order_number'] ?? ''));
-        $type = isset($_GET['type']) ? $_GET['type'] : 'inner';
-        if ($orderRef === '') {
-            echo '<p>Invalid Order Number.</p>';
-            exit;
-        }
-
-        $order = $ordersModel->getOrderLineItemsByRef($orderRef);
-        if (!$order) {
-            echo '<p>Order details not found.</p>';
-            exit;
-        }
-
-        $resolvedOrderNumber = (string)($order[0]['order_number'] ?? $orderRef);
-        $orderremarks = $ordersModel->getRemarksByOrderNumber($resolvedOrderNumber);
-        $fullOrderJourny = $ordersModel->getfullOrderJournyByNumber($resolvedOrderNumber);
-        $customerdetails = $ordersModel->getCustomerNameAndEmailByOrderNumber($resolvedOrderNumber);
-        $statusList = $commanModel->get_order_status_list();
-        foreach ($order as $key => $orders) {
-            $order[$key]['status_log'] = $commanModel->get_order_status_log($orders['id']);
-        }
-
-        if ($type === 'inner') {
-            renderPartial('views/orders/partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks]);
-        } else {
-            renderTemplate('views/orders/other_partial_order_details.php', ['order' => $order, 'statusList' => $statusList, 'orderremarks' => $orderremarks, 'fullOrderJourny' => $fullOrderJourny, 'customerdetails' => $customerdetails], 'Order Details');
-        }
-        exit;
+        global $conn;
+        require_once __DIR__ . '/PosOrdersController.php';
+        $posController = new PosOrdersController();
+        $posController->getOrderDetailsHTML();
     }
     public function updateImportedOrders()
     {
@@ -1047,6 +1066,7 @@ class OrdersController
                     'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
                     'quantity' => $item['qty'] ?? '',
                     'options' => $item['options'] ?? 0,
+                    'addons' => Order::normalizeVendorOrderLineAddons($item['addons'] ?? null),
                     'gst' => $item['gst'] ?? '',
                     'hsn' => $item['hscode'] ?? '',
                     'local_stock' => is_numeric($item['local_stock'] ?? null) ? (float) $item['local_stock'] : 0.0,
@@ -1515,18 +1535,9 @@ class OrdersController
                     $commanModel->add_order_status_log($logData);
                     //call exotic india API to update order status
                     $orderval = $ordersModel->getOrderById($oid);
-                    $apidata = [
-                        'orderid' => $orderval['order_number'],
-                        'level' => 'item',
-                        'order_status' => $commanModel->getExoticIndiaOrderStatusCode($new_status)['admin_id'],
-                        'size' => trim($orderval['size']),
-                        'color' => trim($orderval['color']),
-                        'itemcode' => trim($orderval['item_code'])
-                    ];
-                    //run update if admin id not 0
-                    if ($apidata['order_status'] > 0) {
-                        $resp = $commanModel->updateExoticIndiaOrderStatus($apidata);
-                    }
+                    require_once __DIR__ . '/../integrations/exotic/ExoticIndiaGateway.php';
+                    global $conn;
+                    ExoticIndiaGateway::create($conn)->updateOrderLineFromSlug($new_status, is_array($orderval) ? $orderval : []);
                     //notify agent if assigned
                     $orderval = $ordersModel->getOrderById($oid);
                     if (!empty($orderval['agent_id']) && $orderval['agent_id'] > 0) {
@@ -1637,6 +1648,114 @@ class OrdersController
         } else {
             echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
         }
+        exit;
+    }
+
+    /**
+     * Resolve selected order-line IDs into order_number groups for bulk dispatch preload.
+     * Also reports cancelled/shipped items that cannot be dispatched.
+     */
+    public function getOrdersForBulkDispatch()
+    {
+        is_login();
+        global $ordersModel;
+        header('Content-Type: application/json; charset=UTF-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+            exit;
+        }
+
+        $input = json_decode((string)file_get_contents('php://input'), true);
+        if (!is_array($input)) {
+            $input = [];
+        }
+        $orderIds = $input['order_ids'] ?? [];
+        if (!is_array($orderIds) || $orderIds === []) {
+            echo json_encode(['success' => false, 'message' => 'Invalid order IDs.']);
+            exit;
+        }
+        $customerId = isset($input['customer_id']) ? (int)$input['customer_id'] : 0;
+
+        $split = $ordersModel->splitOrderIdsForBulkDispatch($orderIds, $customerId);
+        if ($customerId > 0 && $split['orders'] === [] && $split['blocked'] === []) {
+            $split = $ordersModel->splitOrderIdsForBulkDispatch($orderIds, 0);
+        }
+        $groups = $split['orders'];
+        $blocked = $split['blocked'];
+        $eligibleIds = $split['eligible_ids'];
+
+        if ($groups === [] && $blocked === []) {
+            echo json_encode(['success' => false, 'message' => 'No orders found for the selected items.']);
+            exit;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'orders' => $groups,
+            'eligible_ids' => $eligibleIds,
+            'blocked' => $blocked,
+            'eligible_count' => count($eligibleIds),
+            'blocked_count' => count($blocked),
+            'has_blocked' => $blocked !== [],
+        ]);
+        exit;
+    }
+
+    /**
+     * Structured import payload for customer-page → bulk dispatch (no modal HTML scraping).
+     */
+    public function getBulkDispatchImportPayload()
+    {
+        is_login();
+        global $ordersModel;
+        header('Content-Type: application/json; charset=UTF-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+            exit;
+        }
+
+        $input = json_decode((string)file_get_contents('php://input'), true);
+        if (!is_array($input)) {
+            $input = [];
+        }
+        $orderIds = $input['order_ids'] ?? [];
+        if (!is_array($orderIds) || $orderIds === []) {
+            echo json_encode(['success' => false, 'message' => 'Invalid order IDs.']);
+            exit;
+        }
+        $customerId = isset($input['customer_id']) ? (int)$input['customer_id'] : 0;
+
+        $requestedIds = array_values(array_filter(array_map('intval', $orderIds)));
+        $foundRows = $ordersModel->getOrdersByIds($requestedIds);
+        if (!is_array($foundRows) || $foundRows === []) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'No matching order lines found for the selected IDs. Hard-refresh the customer page and select the item again.',
+            ]);
+            exit;
+        }
+
+        $payload = $ordersModel->buildBulkDispatchImportPayload($orderIds, $customerId);
+        $orders = $payload['orders'];
+        $blocked = $payload['blocked'];
+        $eligibleIds = $payload['eligible_ids'];
+
+        if ($orders === [] && $blocked === []) {
+            echo json_encode(['success' => false, 'message' => 'No orders found for the selected items.']);
+            exit;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'orders' => $orders,
+            'blocked' => $blocked,
+            'eligible_ids' => $eligibleIds,
+            'eligible_count' => count($eligibleIds),
+            'blocked_count' => count($blocked),
+            'has_blocked' => $blocked !== [],
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
@@ -1763,8 +1882,15 @@ class OrdersController
         is_login();
         global $ordersModel;
         $order_number   = trim($_POST['order_number']   ?? '');
-        $customer_name  = trim($_POST['customer_name']  ?? '');
         $customer_phone = trim($_POST['customer_phone'] ?? '');
+        $first_name = trim($_POST['first_name'] ?? '');
+        $last_name = trim($_POST['last_name'] ?? '');
+        $shipping_first_name = trim($_POST['shipping_first_name'] ?? '');
+        $shipping_last_name = trim($_POST['shipping_last_name'] ?? '');
+        $customer_name  = trim($_POST['customer_name']  ?? '');
+        if ($customer_name === '') {
+            $customer_name = trim($first_name . ' ' . $last_name);
+        }
         $address_line1 = trim($_POST['address_line1'] ?? '');
         $address_line2 = trim($_POST['address_line2'] ?? '');
         $city = trim($_POST['city'] ?? '');
@@ -1775,14 +1901,40 @@ class OrdersController
         $billing_city = trim($_POST['billing_city'] ?? '');
         $billing_zipcode = trim($_POST['billing_zipcode'] ?? '');
         $billing_country = trim($_POST['billing_country'] ?? '');
-        if (empty($order_number) || empty($customer_name) || empty($customer_phone)) {
+        $gstin = strtoupper(trim($_POST['gstin'] ?? ''));
+        $shipping_gstin = strtoupper(trim($_POST['shipping_gstin'] ?? ''));
+        $state = trim($_POST['state'] ?? '');
+        $shipping_state = trim($_POST['shipping_state'] ?? '');
+        if (empty($order_number) || empty($first_name) || empty($last_name) || empty($customer_phone)) {
             echo json_encode([
                 'success' => false,
-                'message' => 'Order number, name, email and phone are required'
+                'message' => 'Order number, billing first name, last name and phone are required'
             ]);
             exit;
         }
-        $result = $ordersModel->updateCustomerNameAndEmail($order_number, $customer_name, $customer_phone, $address_line1, $address_line2, $city, $zipcode, $country, $billing_address_line1, $billing_address_line2, $billing_city, $billing_zipcode, $billing_country);
+        $result = $ordersModel->updateCustomerNameAndEmail(
+            $order_number,
+            $customer_name,
+            $customer_phone,
+            $address_line1,
+            $address_line2,
+            $city,
+            $zipcode,
+            $country,
+            $billing_address_line1,
+            $billing_address_line2,
+            $billing_city,
+            $billing_zipcode,
+            $billing_country,
+            $gstin,
+            $shipping_gstin,
+            $state,
+            $shipping_state,
+            $first_name,
+            $last_name,
+            $shipping_first_name,
+            $shipping_last_name
+        );
         echo json_encode($result);
         exit;
     }
@@ -1793,9 +1945,9 @@ class OrdersController
         global $ordersModel;
         header('Content-Type: application/json');
 
-        $order_number = isset($_GET['order_number']) ? (int)$_GET['order_number'] : 0;
+        $order_number = isset($_GET['order_number']) ? trim((string)$_GET['order_number']) : '';
 
-        if ($order_number <= 0) {
+        if ($order_number === '') {
             echo json_encode([
                 'success' => false,
                 'message' => 'Invalid order number'
@@ -1974,9 +2126,9 @@ class OrdersController
         global $ordersModel;
         header('Content-Type: application/json');
 
-        $order_number = isset($_GET['order_number']) ? (int)$_GET['order_number'] : 0;
+        $order_number = isset($_GET['order_number']) ? trim((string)$_GET['order_number']) : '';
 
-        if ($order_number <= 0) {
+        if ($order_number === '') {
             echo json_encode([
                 'success' => false,
                 'message' => 'Invalid order number'
@@ -2025,7 +2177,10 @@ class OrdersController
 
             $items_html = '';
             foreach ($orders as $order) {
-                if (in_array(strtolower($order['order_status'] ?? ''), ['cancelled', 'returned']) || $order['invoice_id'] > 0 || $order['invoice_id'] !== null) {
+                $lineStatus = strtolower(trim((string)($order['status'] ?? $order['order_status'] ?? '')));
+                $invoiceIdRaw = $order['invoice_id'] ?? null;
+                $hasInvoice = $invoiceIdRaw !== null && $invoiceIdRaw !== '' && (int)$invoiceIdRaw > 0;
+                if ($hasInvoice || in_array($lineStatus, ['cancelled', 'returned', 'shipped'], true)) {
                     continue;
                 }
                 $quantity = $order['quantity'] ?? 0;
@@ -2036,9 +2191,9 @@ class OrdersController
                 $payment_type = strtolower($order['payment_type'] ?? '') === 'cod' ? 'COD' : 'Prepaid';
                 $is_express = strpos(strtolower($order['options'] ?? ''), 'express') !== false;
                 $items_html .= '
-                <tr class="border-b border-gray-100" data-groupname="' . htmlspecialchars($order['groupname'] ?? '') . '" data-item-id="' . htmlspecialchars($order['id'] ?? '') . '" data-is-express="' . ($is_express ? '1' : '0') . '">
+                <tr class="border-b border-gray-100" data-groupname="' . htmlspecialchars($order['groupname'] ?? '') . '" data-item-id="' . htmlspecialchars((string)($order['id'] ?? '')) . '" data-is-express="' . ($is_express ? '1' : '0') . '">
                     <td class="p-2">
-                        <input type="checkbox" name="order_ids[]" value="' . htmlspecialchars($order['id'] ?? '') . '"/>
+                        <input type="checkbox" name="order_ids[]" value="' . htmlspecialchars((string)($order['id'] ?? '')) . '"/>
                     </td>
                     <td class="p-2">' . htmlspecialchars($order['order_number'] ?? '') . '</td>
                     <td class="p-2">' . htmlspecialchars($order['title'] ?? 'Product') . '</td>
@@ -2329,6 +2484,22 @@ class OrdersController
         orderFilterAutocompleteJson($conn, 'publisher', (string) ($_GET['q'] ?? $_GET['query'] ?? ''));
     }
 
+    public function searchFilterMaterials()
+    {
+        is_login();
+        global $conn;
+        require_once 'helpers/order_filter_autocomplete.php';
+        orderFilterAutocompleteJson($conn, 'material', (string) ($_GET['q'] ?? $_GET['query'] ?? ''));
+    }
+
+    public function searchFilterLanguages()
+    {
+        is_login();
+        global $conn;
+        require_once 'helpers/order_filter_autocomplete.php';
+        orderFilterAutocompleteJson($conn, 'language', (string) ($_GET['q'] ?? $_GET['query'] ?? ''));
+    }
+
     public function getFilteredOrderIds()
     {
         is_login();
@@ -2336,7 +2507,7 @@ class OrdersController
 
         header('Content-Type: application/json');
         $_GET = sanitizeGet($_GET);
-        $filters = $this->buildOrderListFiltersFromRequest($_GET);
+        $filters = buildOrderListFiltersFromRequest($_GET);
         $orderIds = $ordersModel->getFilteredOrderIds($filters);
 
         echo json_encode([
@@ -2347,88 +2518,528 @@ class OrdersController
         exit;
     }
 
-    private function buildOrderListFiltersFromRequest(array $request): array
+    private function assertCanRefreshOrdersFromVendor(): void
     {
-        $filters = [];
-        if (!empty($request['order_number'])) {
-            $filters['order_number'] = $request['order_number'];
+        is_login();
+        require_once __DIR__ . '/../helpers/html_helpers.php';
+        $userId = (int)($_SESSION['user']['id'] ?? 0);
+        if (!hasTieredAccess($userId, 'Sr Emp Access', ['Orders', 'POS Orders'])) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => 'Access denied.'], JSON_UNESCAPED_UNICODE);
+            exit;
         }
-        if (!empty($request['item_code'])) {
-            $filters['item_code'] = $request['item_code'];
-        }
-        if (!empty($request['sku'])) {
-            $filters['sku'] = $request['sku'];
-        }
-        if (!empty($request['order_from']) && !empty($request['order_till'])) {
-            $filters['order_from'] = $request['order_from'];
-            $filters['order_till'] = $request['order_till'];
-        }
-        if (!empty($request['item_name'])) {
-            $filters['title'] = $request['item_name'];
-        }
-        if (!empty($request['min_amount'])) {
-            $filters['min_amount'] = $request['min_amount'];
-        }
-        if (!empty($request['max_amount'])) {
-            $filters['max_amount'] = $request['max_amount'];
-        }
-        if (!empty($request['po_no'])) {
-            $filters['po_no'] = $request['po_no'];
-        }
-        if (!empty($request['status'])) {
-            $filters['status_filter'] = $request['status'];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function readRefreshOrderJsonPayload(): array
+    {
+        $payload = [];
+
+        $raw = (string)file_get_contents('php://input');
+        if ($raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $payload = $decoded;
+            }
         }
 
-        if (!empty($request['category']) && $request['category'] != 'all') {
-            $filters['category'] = $request['category'];
-        } else {
-            $filters['category'] = 'all';
-        }
-        if (!empty($request['country'])) {
-            $filters['country'] = $request['country'];
-        }
-        if (!empty($request['options']) && $request['options'] == 'express') {
-            $filters['options'] = 'express';
-        }
-        if (!empty($request['sort'])) {
-            $filters['sort'] = strtolower($request['sort']);
-        } else {
-            $filters['sort'] = 'desc';
-        }
-        if (!empty($request['payment_type']) && $request['payment_type'] != 'all') {
-            $filters['payment_type'] = $request['payment_type'];
-        } else {
-            $filters['payment_type'] = 'all';
-        }
-        if (!empty($request['staff_name'])) {
-            $filters['staff_name'] = $request['staff_name'];
-        }
-        if (!empty($request['priority'])) {
-            $filters['priority'] = $request['priority'];
-        }
-        $vendorFilter = resolveOrderListVendorFilter($request);
-        if ($vendorFilter !== '') {
-            $filters['vendor'] = $vendorFilter;
-        }
-        if (!empty($request['agent'])) {
-            $filters['agent'] = $request['agent'];
-        }
-        $publisherFilter = resolveOrderListPublisherFilter($request);
-        if ($publisherFilter !== '') {
-            $filters['publisher'] = $publisherFilter;
-        }
-        $authorFilter = resolveOrderListAuthorFilter($request);
-        if ($authorFilter !== '') {
-            $filters['author'] = $authorFilter;
-        }
-        if (!empty($request['options']) && $request['options'] == 'unshipped') {
-            $filters['unshipped'] = true;
-        }
-        if (!empty($request['sortdaterange'])) {
-            $filters['sortdaterange'] = $request['sortdaterange'];
+        if ($payload === [] && !empty($_POST) && is_array($_POST)) {
+            $payload = $_POST;
         }
 
-        return $filters;
+        foreach (['order_number', 'orderid', 'update_status'] as $key) {
+            if (!array_key_exists($key, $payload) || trim((string)$payload[$key]) === '') {
+                if (isset($_GET[$key]) && trim((string)$_GET[$key]) !== '') {
+                    $payload[$key] = $_GET[$key];
+                }
+            }
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function extractRefreshOrderNumber(array $payload): string
+    {
+        foreach ([
+            $payload['order_number'] ?? null,
+            $payload['orderid'] ?? null,
+            $_GET['order_number'] ?? null,
+            $_GET['orderid'] ?? null,
+            $_POST['order_number'] ?? null,
+            $_POST['orderid'] ?? null,
+        ] as $candidate) {
+            $n = trim((string)$candidate);
+            if ($n !== '') {
+                return $n;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function extractRefreshUpdateStatusFlag(array $payload): bool
+    {
+        $raw = $payload['update_status'] ?? $_GET['update_status'] ?? $_POST['update_status'] ?? null;
+        if ($raw === null || $raw === '') {
+            return false;
+        }
+
+        return in_array(strtolower(trim((string)$raw)), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    private static function vendorOrderLineMatchKey(string $itemCode, string $sku = ''): string
+    {
+        unset($sku);
+
+        return strtolower(trim($itemCode));
+    }
+
+    /**
+     * @param array<string, mixed> $order
+     * @param array<string, mixed> $item
+     */
+    private function resolveVendorImportStatus(array $order, array $item, array $statusList): string
+    {
+        $status = (strtoupper((string)($order['payment_type'] ?? '')) === 'AMAZONFBA')
+            ? 'shipped'
+            : (!empty($statusList[$item['order_status'] ?? null])
+                ? $statusList[$item['order_status']]
+                : 'pending');
+        if (strtoupper((string)($order['payment_type'] ?? '')) === 'COD' && (float)($item['itemprice'] ?? 0) >= 5000) {
+            $status = 'cod_confirmation_required';
+        }
+
+        return $status;
+    }
+
+    /**
+     * @param array<string, mixed> $order
+     * @param array<string, mixed> $item
+     */
+    private function computeVendorItemEsd(array $order, array $item): string
+    {
+        $orderdate = !empty($order['processed_time'])
+            ? date('Y-m-d H:i:s', (int)$order['processed_time'])
+            : date('Y-m-d H:i:s');
+        $local_stock_int = (int)floatval($item['local_stock'] ?? 0);
+        $lead_time_int = (int)floatval($item['leadtime'] ?? 0);
+
+        if (($item['marketplace_vendor'] ?? '') === 'exoticindia' || empty($item['marketplace_vendor'])) {
+            if (!empty($local_stock_int) && $local_stock_int > 0) {
+                return date('Y-m-d', strtotime($orderdate . ' + 3 days'));
+            }
+            $hasExpress = false;
+            $options = $item['options'] ?? null;
+            if (!empty($options)) {
+                if (is_string($options)) {
+                    $decoded = json_decode($options, true);
+                    if (is_array($decoded)) {
+                        $hasExpress = in_array('express', $decoded, true);
+                    } else {
+                        $hasExpress = stripos($options, 'express') !== false;
+                    }
+                } elseif (is_array($options)) {
+                    $hasExpress = in_array('express', $options, true);
+                }
+            }
+
+            return $hasExpress
+                ? date('Y-m-d', strtotime($orderdate . ' + 0 days'))
+                : date('Y-m-d', strtotime($orderdate . ' + ' . $lead_time_int . ' days'));
+        }
+
+        if (!empty($local_stock_int) && $local_stock_int > 0) {
+            return date('Y-m-d', strtotime($orderdate . ' + ' . $local_stock_int . ' days'));
+        }
+
+        return date('Y-m-d', strtotime($orderdate . ' + ' . $lead_time_int . ' days'));
+    }
+
+    /**
+     * Map one vendor cart line to vp_orders row (same fields as import).
+     *
+     * @param array<string, mixed> $order
+     * @param array<string, mixed> $item
+     * @param array<int|string, string> $statusList
+     * @return array<string, mixed>
+     */
+    private function mapVendorApiItemToOrderRow(array $order, array $item, array $statusList, int $customerId = 0): array
+    {
+        return [
+            'sku' => $item['sku'] ?? '',
+            'order_number' => $order['orderid'] ?? '',
+            'shipping_country' => $order['shipping_country'] ?? '',
+            'title' => !empty($item['title']) ? preg_replace('/[^a-zA-Z0-9\s\-_]/', '', (string)$item['title']) : '',
+            'description' => $item['description'] ?? '',
+            'item_code' => $item['itemcode'] ?? '',
+            'size' => $item['size'] ?? '',
+            'color' => $item['color'] ?? '',
+            'groupname' => $item['groupname'] ?? '',
+            'subcategories' => !empty($item['subcategories'])
+                ? preg_replace('/[^a-zA-Z0-9\s\-_]/', '', (string)$item['subcategories'])
+                : '',
+            'currency' => $item['currency'] ?? '',
+            'itemprice' => $item['itemprice'] ?? '',
+            'finalprice' => $item['finalprice'] ?? '',
+            'image' => $item['image'] ?? '',
+            'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
+            'quantity' => $item['qty'] ?? '',
+            'options' => $item['options'] ?? 0,
+            'addons' => Order::normalizeVendorOrderLineAddons($item['addons'] ?? null),
+            'gst' => $item['gst'] ?? '',
+            'hsn' => $item['hscode'] ?? '',
+            'local_stock' => is_numeric($item['local_stock'] ?? null) ? (float)$item['local_stock'] : 0.0,
+            'cost_price' => is_numeric($item['cp'] ?? null) ? (float)$item['cp'] : 0.0,
+            'location' => $item['location'] ?? '',
+            'order_date' => date('Y-m-d H:i:s', $order['processed_time'] ?? time()),
+            'processed_time' => $order['processed_time'] ?? 0,
+            'numsold' => $item['numsold'] ?? 0,
+            'product_weight' => $item['product_weight'] ?? 0.0,
+            'product_weight_unit' => $item['product_weight_unit'] ?? '',
+            'prod_height' => $item['prod_height'] ?? 0.0,
+            'prod_width' => $item['prod_width'] ?? 0.0,
+            'prod_length' => $item['prod_length'] ?? 0.0,
+            'length_unit' => $item['length_unit'] ?? '',
+            'backorder_status' => $item['backorder_status'] ?? 0,
+            'backorder_percent' => $item['backorder_percent'] ?? 0,
+            'backorder_delay' => $item['backorder_delay'] ?? '',
+            'payment_type' => $order['payment_type'] ?? '',
+            'coupon' => $order['coupon'] ?? '',
+            'coupon_reduce' => $order['coupon_reduce'] ?? '',
+            'giftvoucher' => $order['giftvoucher'] ?? '',
+            'giftvoucher_reduce' => $order['giftvoucher_reduce'] ?? '',
+            'credit' => $order['credit'] ?? '',
+            'vendor' => $item['vendor'] ?? '',
+            'country' => $order['country'] ?? '',
+            'material' => $item['material'] ?? '',
+            'publisher' => $item['publisher'] ?? '',
+            'author' => $item['author'] ?? '',
+            'shippingfee' => $item['shippingfee'] ?? '',
+            'sourcingfee' => $item['sourcingfee'] ?? '',
+            'status' => $this->resolveVendorImportStatus($order, $item, $statusList),
+            'esd' => $this->computeVendorItemEsd($order, $item),
+            'agent_id' => 0,
+            'customer_id' => $customerId,
+            'store_name' => $order['store_name'] ?? '',
+            'custom_reduce' => $order['custom_reduce'] ?? 0,
+        ];
+    }
+
+    /**
+     * @return array{success: bool, message?: string, order_number?: string, lines?: list<array<string, mixed>>, has_status_diff?: bool}
+     */
+    private function buildRefreshOrderPreviewData(string $orderNumber): array
+    {
+        global $ordersModel;
+
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return ['success' => false, 'message' => 'Order number is required.'];
+        }
+
+        $fetch = $this->fetchVendorOrderPayloadForCheckout($orderNumber);
+        if (!$fetch['ok']) {
+            return ['success' => false, 'message' => $fetch['error']];
+        }
+
+        $vendorOrder = null;
+        foreach ($fetch['orders'] as $order) {
+            if ((string)($order['orderid'] ?? '') === $orderNumber) {
+                $vendorOrder = $order;
+                break;
+            }
+        }
+        if ($vendorOrder === null && !empty($fetch['orders'][0])) {
+            $vendorOrder = $fetch['orders'][0];
+        }
+        if ($vendorOrder === null) {
+            return ['success' => false, 'message' => 'Order not found in vendor API response.'];
+        }
+
+        $cart = $vendorOrder['cart'] ?? [];
+        if (!is_array($cart) || count($cart) === 0) {
+            return ['success' => false, 'message' => 'Vendor API returned no cart lines for this order.'];
+        }
+
+        $statusList = $ordersModel->adminOrderStatusList('true');
+        $statusLabels = $ordersModel->orderStatusSlugTitleMap();
+        $dbLines = $ordersModel->getOrderLinesByOrderNumber($orderNumber);
+        $dbByKey = [];
+        foreach ($dbLines as $row) {
+            $key = self::vendorOrderLineMatchKey((string)($row['item_code'] ?? ''), (string)($row['sku'] ?? ''));
+            $dbByKey[$key] = $row;
+        }
+
+        $previewLines = [];
+        $hasStatusDiff = false;
+        foreach ($cart as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $itemCode = trim((string)($item['itemcode'] ?? ''));
+            $sku = trim((string)($item['sku'] ?? ''));
+            $key = self::vendorOrderLineMatchKey($itemCode, $sku);
+            $apiStatus = $this->resolveVendorImportStatus($vendorOrder, $item, $statusList);
+            $dbRow = $dbByKey[$key] ?? null;
+            $dbStatus = $dbRow ? trim((string)($dbRow['status'] ?? '')) : '';
+            $statusDiffers = $dbRow !== null && $dbStatus !== '' && strcasecmp($dbStatus, $apiStatus) !== 0;
+            if ($statusDiffers) {
+                $hasStatusDiff = true;
+            }
+
+            $previewLines[] = [
+                'item_code' => $itemCode,
+                'sku' => $sku,
+                'title' => trim((string)($item['title'] ?? '')),
+                'quantity' => (int)($item['qty'] ?? 0),
+                'in_db' => $dbRow !== null,
+                'db_status' => $dbStatus !== '' ? $dbStatus : null,
+                'db_status_label' => $dbStatus !== '' ? ($statusLabels[$dbStatus] ?? $dbStatus) : '— (new line)',
+                'api_status' => $apiStatus,
+                'api_status_label' => $statusLabels[$apiStatus] ?? $apiStatus,
+                'status_differs' => $statusDiffers,
+                'addons' => Order::normalizeVendorOrderLineAddons($item['addons'] ?? null),
+            ];
+        }
+
+        return [
+            'success' => true,
+            'order_number' => $orderNumber,
+            'line_count' => count($previewLines),
+            'db_line_count' => count($dbLines),
+            'lines' => $previewLines,
+            'has_status_diff' => $hasStatusDiff,
+        ];
+    }
+
+    /**
+     * @return array{success: bool, message: string, inserted: int, updated: int, failed: int, total: int, results: list<array<string, mixed>>}
+     */
+    private function applyRefreshOrderFromVendor(string $orderNumber, bool $updateStatus): array
+    {
+        global $ordersModel, $productModel, $conn;
+
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return [
+                'success' => false,
+                'message' => 'Order number is required.',
+                'inserted' => 0,
+                'updated' => 0,
+                'failed' => 0,
+                'total' => 0,
+                'results' => [],
+            ];
+        }
+
+        $fetch = $this->fetchVendorOrderPayloadForCheckout($orderNumber);
+        if (!$fetch['ok']) {
+            return [
+                'success' => false,
+                'message' => $fetch['error'],
+                'inserted' => 0,
+                'updated' => 0,
+                'failed' => 0,
+                'total' => 0,
+                'results' => [],
+            ];
+        }
+
+        $vendorOrder = null;
+        foreach ($fetch['orders'] as $order) {
+            if ((string)($order['orderid'] ?? '') === $orderNumber) {
+                $vendorOrder = $order;
+                break;
+            }
+        }
+        if ($vendorOrder === null && !empty($fetch['orders'][0])) {
+            $vendorOrder = $fetch['orders'][0];
+        }
+        if ($vendorOrder === null) {
+            return [
+                'success' => false,
+                'message' => 'Order not found in vendor API response.',
+                'inserted' => 0,
+                'updated' => 0,
+                'failed' => 0,
+                'total' => 0,
+                'results' => [],
+            ];
+        }
+
+        $cart = $vendorOrder['cart'] ?? [];
+        if (!is_array($cart) || count($cart) === 0) {
+            return [
+                'success' => false,
+                'message' => 'Vendor API returned no cart lines for this order.',
+                'inserted' => 0,
+                'updated' => 0,
+                'failed' => 0,
+                'total' => 0,
+                'results' => [],
+            ];
+        }
+
+        $statusList = $ordersModel->adminOrderStatusList('true');
+        $customerdata = $ordersModel->addCustomerIfNotExists($vendorOrder);
+        $customerId = (int)($customerdata['customer_id'] ?? 0);
+
+        $inserted = 0;
+        $updated = 0;
+        $failed = 0;
+        $results = [];
+
+        foreach ($cart as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            try {
+                $rdata = $this->mapVendorApiItemToOrderRow($vendorOrder, $item, $statusList, $customerId);
+                if (strtoupper((string)($vendorOrder['payment_type'] ?? '')) === 'COD' && (float)($item['itemprice'] ?? 0) >= 5000) {
+                    $rdata['agent_id'] = 31;
+                }
+
+                $res = $ordersModel->upsertRefreshedOrderLine($rdata, $updateStatus);
+            } catch (\Throwable $e) {
+                $res = [
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                    'action' => 'failed',
+                    'item_code' => trim((string)($item['itemcode'] ?? '')),
+                    'sku' => trim((string)($item['sku'] ?? '')),
+                ];
+            }
+            if (!is_array($res)) {
+                $res = [
+                    'success' => false,
+                    'message' => 'Upsert returned an invalid response.',
+                    'action' => 'failed',
+                ];
+            }
+            $results[] = $res;
+
+            $action = (string)($res['action'] ?? '');
+            if (!empty($res['success'])) {
+                if ($action === 'inserted') {
+                    $inserted++;
+                    require_once __DIR__ . '/../helpers/BookPurchaseReplenishment.php';
+                    BookPurchaseReplenishment::tryProcessImportedOrderLine($conn, $productModel, $rdata);
+                    $ordersModel->addProducts($rdata);
+                } elseif ($action === 'updated') {
+                    $updated++;
+                }
+
+                $vendorRaw = trim((string)($item['vendor'] ?? ''));
+                $vendorNames = array_values(array_unique(array_filter(array_map(
+                    static function ($v) {
+                        return trim((string)$v);
+                    },
+                    preg_split('/\s*,\s*/', $vendorRaw)
+                ))));
+                $firstVendorId = 0;
+                foreach ($vendorNames as $vendorname) {
+                    $vendorsuccess = $ordersModel->addVendorIfNotExists($vendorname);
+                    $currentVendorId = (int)($vendorsuccess['vendor_id'] ?? 0);
+                    if ($firstVendorId <= 0 && $currentVendorId > 0) {
+                        $firstVendorId = $currentVendorId;
+                    }
+                }
+                if ($firstVendorId > 0) {
+                    $productModel->saveProductVendor($rdata['item_code'], $firstVendorId, '');
+                }
+            } else {
+                $failed++;
+            }
+        }
+
+        try {
+            $ordersModel->insertAddressInfo($vendorOrder, $customerId);
+        } catch (\Throwable $e) {
+            error_log('[order refresh insertAddressInfo] ' . $e->getMessage());
+        }
+
+        $total = $inserted + $updated + $failed;
+        $ok = ($inserted + $updated) > 0 && $failed === 0;
+
+        return [
+            'success' => $ok,
+            'message' => $ok
+                ? sprintf(
+                    'Refreshed order %s: %d inserted, %d updated%s.',
+                    $orderNumber,
+                    $inserted,
+                    $updated,
+                    $updateStatus ? ' (status updated from API)' : ' (status kept from DB)'
+                )
+                : ($failed > 0
+                    ? 'Refresh completed with errors. Check line results.'
+                    : 'No lines were refreshed.'),
+            'inserted' => $inserted,
+            'updated' => $updated,
+            'failed' => $failed,
+            'total' => $total,
+            'results' => $results,
+        ];
+    }
+
+    public function refreshOrderPreviewAjax(): void
+    {
+        $this->assertCanRefreshOrdersFromVendor();
+        try {
+            $payload = $this->readRefreshOrderJsonPayload();
+            $orderNumber = $this->extractRefreshOrderNumber($payload);
+            $this->sendRefreshOrderJson($this->buildRefreshOrderPreviewData($orderNumber));
+        } catch (\Throwable $e) {
+            error_log('[refresh_order_preview] ' . $e->getMessage());
+            $this->sendRefreshOrderJson([
+                'success' => false,
+                'message' => 'Preview failed: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function refreshOrderApplyAjax(): void
+    {
+        $this->assertCanRefreshOrdersFromVendor();
+        try {
+            $payload = $this->readRefreshOrderJsonPayload();
+            $orderNumber = $this->extractRefreshOrderNumber($payload);
+            $updateStatus = $this->extractRefreshUpdateStatusFlag($payload);
+
+            if ($orderNumber === '') {
+                $this->sendRefreshOrderJson([
+                    'success' => false,
+                    'message' => 'Order number is required. Pass order_number in the JSON body, form POST, or query string (e.g. &order_number=1234567890).',
+                    'inserted' => 0,
+                    'updated' => 0,
+                    'failed' => 0,
+                    'total' => 0,
+                    'results' => [],
+                ], 400);
+            }
+
+            $this->sendRefreshOrderJson($this->applyRefreshOrderFromVendor($orderNumber, $updateStatus));
+        } catch (\Throwable $e) {
+            error_log('[refresh_order_apply] ' . $e->getMessage());
+            $this->sendRefreshOrderJson([
+                'success' => false,
+                'message' => 'Refresh failed: ' . $e->getMessage(),
+                'inserted' => 0,
+                'updated' => 0,
+                'failed' => 0,
+                'total' => 0,
+                'results' => [],
+            ], 500);
+        }
     }
     
 }

@@ -2,6 +2,7 @@
 require_once 'models/publisher/Publisher.php';
 require_once 'models/country/country.php';
 require_once 'models/country/state.php';
+require_once 'models/user/user.php';
 require_once __DIR__ . '/../helpers/vendor_external_api.php';
 
 class PublishersController
@@ -9,12 +10,14 @@ class PublishersController
     private Publisher $publisherModel;
     private Country $countryModel;
     private State $stateModel;
+    private User $userModel;
 
     public function __construct(mysqli $conn)
     {
         $this->publisherModel = new Publisher($conn);
         $this->countryModel = new Country($conn);
         $this->stateModel = new State($conn);
+        $this->userModel = new User($conn);
     }
 
     public function index(): void
@@ -63,7 +66,13 @@ class PublishersController
             exit;
         }
 
-        if ($this->publisherModel->publisherNameExists($name, ($id && $id > 0) ? $id : null)) {
+        $existing = ($id && $id > 0) ? $this->publisherModel->getPublisherById($id) : null;
+        if ($id && !$existing) {
+            echo json_encode(['success' => false, 'message' => 'Publisher not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        if ($this->publisherModel->isDuplicatePublisherName($name, $id)) {
             echo json_encode(['success' => false, 'message' => 'Publisher name already exists'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
@@ -71,34 +80,18 @@ class PublishersController
         $webpage = $extra['webpage'];
 
         if ($id && $id > 0) {
-            $existing = $this->publisherModel->getPublisherById($id);
-            if (!$existing) {
-                echo json_encode(['success' => false, 'message' => 'Publisher not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                exit;
-            }
-
             $remoteId = (int) ($existing['publishers_id'] ?? 0);
-            if ($remoteId > 0) {
-                $api = vendor_external_api_modify(
-                    vendor_external_api_modify_creator_payload((string) $remoteId, 'publisher', $name, $webpage)
-                );
-            } else {
-                $api = vendor_external_api_create(vendor_external_api_creator_payload('publisher', $name, $webpage));
-                if ($api['success']) {
-                    $remoteId = (int) ($api['vendor_id'] ?? 0);
-                    if ($remoteId > 0) {
-                        $link = $this->publisherModel->updatePublisherRemoteId($id, $remoteId);
-                        if (!$link['success']) {
-                            echo json_encode($link, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                            exit;
-                        }
-                    }
-                }
-            }
-
-            if (!$api['success']) {
+            $api = vendor_external_api_sync_creator('publisher', $name, $webpage, $remoteId > 0 ? $remoteId : null);
+            if (!vendor_external_api_allows_local_save($api)) {
                 echo json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
                 exit;
+            }
+            if ($remoteId <= 0 && !empty($api['vendor_id'])) {
+                $link = $this->publisherModel->updatePublisherRemoteId($id, (int) $api['vendor_id']);
+                if (!$link['success']) {
+                    echo json_encode($link, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                    exit;
+                }
             }
 
             $result = $this->publisherModel->savePublisher($id, $name, $isActive, $extra);
@@ -109,7 +102,7 @@ class PublishersController
             exit;
         }
 
-        $api = vendor_external_api_create(vendor_external_api_creator_payload('publisher', $name, $webpage));
+        $api = vendor_external_api_sync_creator('publisher', $name, $webpage, null);
         if (!$api['success']) {
             echo json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
@@ -209,6 +202,161 @@ class PublishersController
         $excludeId = isset($_GET['excludeId']) ? (int) $_GET['excludeId'] : 0;
         echo json_encode(
             $this->publisherModel->checkPublisherName($name, $excludeId > 0 ? $excludeId : null),
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        exit;
+    }
+
+    public function searchBrokers(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $query = trim((string)($_GET['q'] ?? ''));
+        echo json_encode(
+            $this->userModel->searchActiveUsers($query),
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        exit;
+    }
+
+    public function getBankDetails(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $id = (int)($_GET['id'] ?? 0);
+        if ($id <= 0) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid publisher ID.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $bankDetails = $this->publisherModel->getBankDetailsById($id);
+        if (is_array($bankDetails) && isset($bankDetails['success']) && $bankDetails['success'] === false) {
+            echo json_encode($bankDetails, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+        if (!empty($bankDetails) && is_array($bankDetails)) {
+            echo json_encode($bankDetails, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        echo json_encode(['status' => 'success', 'message' => ''], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    public function addBankDetails(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+            exit;
+        }
+
+        $data = $_POST;
+        $data['bdStatus'] = 1;
+        $publisherId = isset($data['publisher_id']) ? (int)$data['publisher_id'] : 0;
+        if ($publisherId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid publisher ID.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $existing = $this->publisherModel->getBankDetailsById($publisherId);
+        if (is_array($existing) && isset($existing['success']) && $existing['success'] === false) {
+            echo json_encode($existing, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $result = $existing
+            ? $this->publisherModel->updateBankDetails($data)
+            : $this->publisherModel->saveBankDetails($data);
+        echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    public function getVendorMappings(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $publisherId = (int) ($_GET['id'] ?? 0);
+        if ($publisherId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid publisher ID.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $publisher = $this->publisherModel->getPublisherById($publisherId);
+        if (!$publisher) {
+            echo json_encode(['success' => false, 'message' => 'Publisher not found.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'publisher' => [
+                'id' => (int) ($publisher['id'] ?? 0),
+                'publishers' => (string) ($publisher['publishers'] ?? ''),
+                'display_name' => (string) ($publisher['display_name'] ?? ''),
+            ],
+            'mappings' => $this->publisherModel->getVendorMappingsByPublisherId($publisherId),
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    public function searchMappingVendors(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $publisherId = (int) ($_GET['publisher_id'] ?? 0);
+        $query = trim((string) ($_GET['q'] ?? ''));
+        if ($publisherId <= 0) {
+            echo json_encode([], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        echo json_encode(
+            $this->publisherModel->searchVendorsForPublisherMapping($query, $publisherId),
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        exit;
+    }
+
+    public function addVendorMapping(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+            exit;
+        }
+
+        $publisherId = (int) ($_POST['publisher_id'] ?? 0);
+        $vendorId = (int) ($_POST['vendor_id'] ?? 0);
+        echo json_encode(
+            $this->publisherModel->addPublisherVendorMapping($publisherId, $vendorId),
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        exit;
+    }
+
+    public function removeVendorMapping(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+            exit;
+        }
+
+        $publisherId = (int) ($_POST['publisher_id'] ?? 0);
+        $mappingId = (int) ($_POST['mapping_id'] ?? 0);
+        echo json_encode(
+            $this->publisherModel->removePublisherVendorMapping($publisherId, $mappingId),
             JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
         );
         exit;

@@ -593,14 +593,6 @@ class product
             $v = $this->db->real_escape_string((string) $filters['sku']);
             $search .= "AND vp_products.sku like '%" . $v . "%'";
         }
-        if (!empty($filters['size'])) {
-            $v = $this->db->real_escape_string((string) $filters['size']);
-            $search .= "AND vp_products.size like '%" . $v . "%'";
-        }
-        if (!empty($filters['color'])) {
-            $v = $this->db->real_escape_string((string) $filters['color']);
-            $search .= "AND vp_products.color like '%" . $v . "%'";
-        }
         if (isset($filters['local_stock']) && $filters['local_stock'] !== '') {
             $search .= "AND vp_products.local_stock = " . (int)$filters['local_stock'];
         }
@@ -622,6 +614,9 @@ class product
                 $search .= "AND vp_products.marketplace like '%" . $mp . "%'";
             }
         }
+        require_once dirname(__DIR__, 2) . '/helpers/stock_report_filters.php';
+        appendProductListStockStatusFiltersSql($search, $filters);
+        appendProductListExtraFiltersSql($search, $this->db, $filters);
 
         $search .= " AND LOWER(TRIM(IFNULL(vp_products.item_level, ''))) <> 'parent' ";
 
@@ -663,14 +658,6 @@ class product
             $v = $this->db->real_escape_string((string) $filters['sku']);
             $search .= "AND vp_products.sku like '%" . $v . "%'";
         }
-        if (!empty($filters['size'])) {
-            $v = $this->db->real_escape_string((string) $filters['size']);
-            $search .= "AND vp_products.size like '%" . $v . "%'";
-        }
-        if (!empty($filters['color'])) {
-            $v = $this->db->real_escape_string((string) $filters['color']);
-            $search .= "AND vp_products.color like '%" . $v . "%'";
-        }
         if (isset($filters['local_stock']) && $filters['local_stock'] !== '') {
             $search .= "AND vp_products.local_stock = " . (int)$filters['local_stock'];
         }
@@ -692,6 +679,9 @@ class product
                 $search .= "AND vp_products.marketplace like '%" . $mp . "%'";
             }
         }
+        require_once dirname(__DIR__, 2) . '/helpers/stock_report_filters.php';
+        appendProductListStockStatusFiltersSql($search, $filters);
+        appendProductListExtraFiltersSql($search, $this->db, $filters);
         $search .= " AND LOWER(TRIM(IFNULL(vp_products.item_level, ''))) <> 'parent' ";
         $stmt = $this->db->prepare("SELECT COUNT(*) AS cnt FROM vp_products WHERE 1=1 $search");
         if ($stmt === false) {
@@ -1815,8 +1805,15 @@ class product
                                 (string) $whereColor,
                                 (int) $localStock,
                                 $syncStockFromApi,
-                                $syncPhysicalStock
+                                $syncPhysicalStock,
+                                (string) $location
                             );
+                            $resolvedProductId = $targetProductId > 0
+                                ? $targetProductId
+                                : (is_array($existingBase) ? (int) ($existingBase['id'] ?? 0) : 0);
+                            if ($resolvedProductId > 0) {
+                                $this->syncProductLocation($resolvedProductId, (string) $location);
+                            }
                         }
                     }
                     if ($stmt->error) {
@@ -1935,8 +1932,13 @@ class product
                                     (string) $color,
                                     (int) $freshStockDecision['local_stock'],
                                     $freshStockDecision['sync_stock'],
-                                    $syncPhysicalStock
+                                    $syncPhysicalStock,
+                                    (string) $location
                                 );
+                                $insertProductId = is_array($freshRow) ? (int) ($freshRow['id'] ?? 0) : (int) $insertId;
+                                if ($insertProductId > 0) {
+                                    $this->syncProductLocation($insertProductId, (string) $location);
+                                }
                             }
                         }
                     }
@@ -1969,7 +1971,7 @@ class product
                             $localStock = $stockDecision['local_stock'];
                             $syncStockFromApi = $stockDecision['sync_stock'];
                             $upc = isset($variation['upc']) ? $variation['upc'] : '';
-                            $location = isset($variation['location']) ? $variation['location'] : '';
+                            $location = isset($variation['location']) ? $variation['location'] : (isset($product['location']) ? $product['location'] : '');
                             $fba_in = isset($variation['fba_in']) ? (int)$variation['fba_in'] : 0;
                             $fba_us = isset($variation['fba_us']) ? (int)$variation['fba_us'] : 0;
                             $leadtime = $this->normalizeIntValue($variation['leadtime'] ?? null, 0);
@@ -2118,8 +2120,13 @@ class product
                                     (string) $whereColor,
                                     (int) $localStock,
                                     $syncStockFromApi,
-                                    $syncPhysicalStock
+                                    $syncPhysicalStock,
+                                    (string) $location
                                 );
+                                $variationProductId = is_array($existingBase) ? (int) ($existingBase['id'] ?? 0) : 0;
+                                if ($variationProductId > 0) {
+                                    $this->syncProductLocation($variationProductId, (string) $location);
+                                }
                             }
                             if ($stmt->error) {
                                 return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
@@ -2237,8 +2244,13 @@ class product
                                             (string) $color,
                                             (int) $freshStockDecision['local_stock'],
                                             $freshStockDecision['sync_stock'],
-                                            $syncPhysicalStock
+                                            $syncPhysicalStock,
+                                            (string) $location
                                         );
+                                        $variationInsertProductId = is_array($freshRow) ? (int) ($freshRow['id'] ?? 0) : (int) $insertId;
+                                        if ($variationInsertProductId > 0) {
+                                            $this->syncProductLocation($variationInsertProductId, (string) $location);
+                                        }
                                     }
                                 }
                             }
@@ -2490,6 +2502,111 @@ class product
     }
 
     /**
+     * Location label for stock movements after API / stock refresh (vp_products.location from vendor API).
+     */
+    private function resolveApiRefreshMovementLocation(string $apiLocation, string $warehouseFallback = ''): string
+    {
+        $location = trim($apiLocation);
+        if ($location !== '') {
+            return $location;
+        }
+
+        return trim($warehouseFallback);
+    }
+
+    /**
+     * Keep vp_products.location and the latest default-warehouse movement location in sync.
+     */
+    public function syncProductLocation(int $productId, string $location): void
+    {
+        $location = trim($location);
+        if ($productId <= 0) {
+            return;
+        }
+
+        $stmt = $this->db->prepare('UPDATE vp_products SET location = ?, updated_at = NOW() WHERE id = ?');
+        if ($stmt) {
+            $stmt->bind_param('si', $location, $productId);
+            $stmt->execute();
+            $stmt->close();
+        }
+
+        $warehouseId = $this->resolveDefaultWarehouseIdForStock();
+        if ($warehouseId <= 0) {
+            $warehouseId = 1;
+        }
+
+        $movStmt = $this->db->prepare(
+            'SELECT id FROM vp_stock_movements
+             WHERE product_id = ? AND warehouse_id = ?
+             ORDER BY id DESC LIMIT 1'
+        );
+        if (!$movStmt) {
+            return;
+        }
+        $movStmt->bind_param('ii', $productId, $warehouseId);
+        $movStmt->execute();
+        $row = $movStmt->get_result()->fetch_assoc();
+        $movStmt->close();
+
+        $movementId = (int) ($row['id'] ?? 0);
+        if ($movementId <= 0) {
+            return;
+        }
+
+        $updMov = $this->db->prepare(
+            'UPDATE vp_stock_movements SET location = ?, updated_at = NOW() WHERE id = ? AND product_id = ?'
+        );
+        if (!$updMov) {
+            return;
+        }
+        $updMov->bind_param('sii', $location, $movementId, $productId);
+        $updMov->execute();
+        $updMov->close();
+    }
+
+    /**
+     * @return array{success:bool,message:string,location?:string,vendor_sync?:array<string,mixed>}
+     */
+    public function setProductLocation(int $productId, string $location): array
+    {
+        if ($productId <= 0) {
+            return ['success' => false, 'message' => 'Invalid product.'];
+        }
+
+        $product = $this->getProduct($productId);
+        if (!$product || !is_array($product)) {
+            return ['success' => false, 'message' => 'Product not found.'];
+        }
+
+        $location = trim($location);
+        try {
+            $this->syncProductLocation($productId, $location);
+            $vendorSync = $this->syncLocationToVendorFrontend($product, $location);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => 'Location update failed: ' . $e->getMessage(),
+            ];
+        }
+
+        $message = 'Location updated successfully.';
+        if (empty($vendorSync['success'])) {
+            $vendorMessage = trim((string) ($vendorSync['message'] ?? 'Vendor sync failed.'));
+            if ($vendorMessage !== '') {
+                $message .= ' ' . $vendorMessage;
+            }
+        }
+
+        return [
+            'success' => true,
+            'message' => $message,
+            'location' => $location,
+            'vendor_sync' => $vendorSync,
+        ];
+    }
+
+    /**
      * Align warehouse ledger + physical_stock to API local_stock (import-style target sync).
      */
     private function applyRefreshApiStockSync(
@@ -2498,7 +2615,8 @@ class product
         string $itemCode,
         string $size,
         string $color,
-        int $targetQty
+        int $targetQty,
+        string $location = ''
     ): void {
         require_once __DIR__ . '/StockMovement.php';
 
@@ -2524,6 +2642,7 @@ class product
 
         $size = trim($size);
         $color = trim($color);
+        $movementLocation = $this->resolveApiRefreshMovementLocation($location);
 
         if (session_status() !== PHP_SESSION_ACTIVE) {
             @session_start();
@@ -2550,7 +2669,7 @@ class product
                     'size' => $size,
                     'color' => $color,
                     'warehouse_id' => $warehouseId,
-                    'location' => 'API refresh',
+                    'location' => $movementLocation,
                     'movement_type' => $movementType,
                     'quantity' => $movementQty,
                     'ref_type' => $refType,
@@ -2567,7 +2686,7 @@ class product
                     'size' => $size,
                     'color' => $color,
                     'warehouse_id' => $warehouseId,
-                    'location' => 'API refresh',
+                    'location' => $movementLocation,
                     'movement_type' => 'OUT',
                     'quantity' => abs($delta),
                     'ref_type' => $refType,
@@ -2578,6 +2697,10 @@ class product
                 ]);
             } else {
                 StockMovement::syncProductPhysicalStock($this->db, $productId);
+            }
+
+            if ($movementLocation !== '') {
+                $this->syncProductLocation($productId, $movementLocation);
             }
 
             $updL = $this->db->prepare('UPDATE vp_products SET local_stock = ? WHERE id = ?');
@@ -2608,7 +2731,8 @@ class product
         string $color,
         int $localStock,
         bool $syncStockFromApi,
-        bool $syncPhysicalStock
+        bool $syncPhysicalStock,
+        string $location = ''
     ): void {
         if (!$syncStockFromApi || !$syncPhysicalStock) {
             return;
@@ -2634,7 +2758,8 @@ class product
                 $itemCode,
                 $size,
                 $color,
-                $localStock
+                $localStock,
+                $location
             );
 
             return;
@@ -2646,7 +2771,8 @@ class product
             $itemCode,
             $size,
             $color,
-            $localStock
+            $localStock,
+            $location
         );
     }
 
@@ -2660,7 +2786,8 @@ class product
         string $itemCode,
         string $size,
         string $color,
-        int $localStock
+        int $localStock,
+        string $location = ''
     ): void {
         if (!$existingBase || empty($existingBase['id']) || $localStock <= 0) {
             return;
@@ -2691,6 +2818,7 @@ class product
         }
         $userId = (int) ($_SESSION['user']['id'] ?? 0);
         $refId = 'api_refresh:' . date('YmdHis');
+        $movementLocation = $this->resolveApiRefreshMovementLocation($location);
 
         try {
             StockMovement::insert($this->db, [
@@ -2700,7 +2828,7 @@ class product
                 'size' => trim($size),
                 'color' => trim($color),
                 'warehouse_id' => $warehouseId,
-                'location' => 'API refresh',
+                'location' => $movementLocation,
                 'movement_type' => 'OPENING_STOCK',
                 'quantity' => $localStock,
                 'ref_type' => 'API_REFRESH',
@@ -2709,6 +2837,9 @@ class product
                 'update_by_user' => $userId,
                 'strict_stock_check' => false,
             ]);
+            if ($movementLocation !== '') {
+                $this->syncProductLocation($productId, $movementLocation);
+            }
         } catch (\Throwable $e) {
             error_log('maybeSeedPhysicalStockOnLocalStockApiUpdate: ' . $e->getMessage());
         }
@@ -4787,6 +4918,20 @@ class product
                 'text_color_class' => 'text-amber-600',
             ];
         }
+        if ($mt === 'IN' && $rt === 'SALES_RETURN') {
+            return [
+                'ledger_type' => 'Sales return',
+                'icon' => 'fa-rotate-left',
+                'text_color_class' => 'text-emerald-600',
+            ];
+        }
+        if ($mt === 'OUT' && $rt === 'SALES_RETURN_CANCEL') {
+            return [
+                'ledger_type' => 'Sales return cancelled',
+                'icon' => 'fa-rotate-right',
+                'text_color_class' => 'text-amber-600',
+            ];
+        }
         if ($mt === 'OPENING_STOCK' && $rt === 'BULK_IMPORT') {
             return [
                 'ledger_type' => 'Bulk Product Import',
@@ -4956,13 +5101,29 @@ class product
                 throw new Exception('Product not found');
             }
 
-            StockMovement::insert($this->db, $data);
+            $movement = StockMovement::insert($this->db, $data);
+
+            $refTypeUpper = strtoupper(trim((string) ($data['ref_type'] ?? '')));
+            if (in_array($refTypeUpper, ['SALES_RETURN', 'SALES_RETURN_CANCEL'], true)) {
+                $sku = trim((string) ($data['sku'] ?? ''));
+                $warehouseId = (int) ($data['warehouse_id'] ?? 0);
+                $lastTransId = (int) ($movement['movement_id'] ?? 0);
+                if ($sku !== '' && $warehouseId > 0) {
+                    StockMovement::syncVpStockFromRunningStock(
+                        $this->db,
+                        $sku,
+                        $warehouseId,
+                        (float) ($movement['running_stock'] ?? 0),
+                        $lastTransId
+                    );
+                }
+            }
 
             $this->db->commit();
 
             $result = ['success' => true, 'message' => 'Stock updated and history recorded.'];
 
-            if (strtoupper(trim((string) ($data['ref_type'] ?? 'MANUAL'))) === 'MANUAL') {
+            if ($this->shouldSyncLocalStockDeltaForMovement($data)) {
                 $movementType = strtoupper(trim((string) ($data['movement_type'] ?? 'OUT')));
                 $qty = (int) ($data['quantity'] ?? 0);
                 $delta = in_array($movementType, ['IN', 'TRANSFER_IN', 'OPENING_STOCK'], true) ? $qty : -$qty;
@@ -4986,6 +5147,18 @@ class product
             $this->db->rollback();
             return ['success' => false, 'message' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Sales returns sync Exotic via order/modify (returned status), not product/modify local_stock_delta.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function shouldSyncLocalStockDeltaForMovement(array $data): bool
+    {
+        $refTypeUpper = strtoupper(trim((string) ($data['ref_type'] ?? 'MANUAL')));
+
+        return $refTypeUpper === 'MANUAL';
     }
     public function updateProductNotes($product_id, $notes)
     {
@@ -5348,7 +5521,32 @@ class product
         if ($stmt->affected_rows < 1) {
             return ['success' => false, 'message' => 'No stock movement row updated.'];
         }
-        return ['success' => true, 'message' => 'Location updated successfully.'];
+
+        $productStmt = $this->db->prepare('UPDATE vp_products SET location = ?, updated_at = NOW() WHERE id = ?');
+        if ($productStmt) {
+            $productStmt->bind_param('si', $location, $productId);
+            $productStmt->execute();
+            $productStmt->close();
+        }
+
+        $product = $this->getProduct($productId);
+        $vendorSync = is_array($product)
+            ? $this->syncLocationToVendorFrontend($product, $location)
+            : ['success' => false, 'message' => 'Updated locally but could not reload product for vendor sync.'];
+
+        $message = 'Location updated successfully.';
+        if (empty($vendorSync['success'])) {
+            $vendorMessage = trim((string) ($vendorSync['message'] ?? 'Vendor sync failed.'));
+            if ($vendorMessage !== '') {
+                $message .= ' ' . $vendorMessage;
+            }
+        }
+
+        return [
+            'success' => true,
+            'message' => $message,
+            'vendor_sync' => $vendorSync,
+        ];
     }
     public function setProductLimits($productId, $minStock, $maxStock)
     {
@@ -5487,12 +5685,40 @@ class product
     }
 
     /**
+     * Push location to exoticindia.com via vendor product/modify.
+     *
+     * @param array<string, mixed> $product
+     * @return array{success:bool,message:string,http_code?:int,response?:array}
+     */
+    public function syncLocationToVendorFrontend(array $product, string $location): array
+    {
+        if (!function_exists('exotic_india_api_post')) {
+            require_once __DIR__ . '/../../helpers/exotic_india_api.php';
+        }
+
+        $itemCode = trim((string) ($product['item_code'] ?? ''));
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Missing item_code for vendor location sync.'];
+        }
+
+        return $this->postProductModifyToVendor(
+            $product,
+            ['location' => trim($location)],
+            'Vendor location sync failed.'
+        );
+    }
+
+    /**
      * @param array<string, mixed> $product
      * @param array<string, int|float|string> $postFields
      * @return array{success:bool,message:string,http_code?:int,response?:array}
      */
     private function postProductModifyToVendor(array $product, array $postFields, string $failureLabel): array
     {
+        if (!function_exists('exotic_india_api_post')) {
+            require_once __DIR__ . '/../../helpers/exotic_india_api.php';
+        }
+
         $itemCode = trim((string) ($product['item_code'] ?? ''));
         $size = trim((string) ($product['size'] ?? ''));
         $color = trim((string) ($product['color'] ?? ''));

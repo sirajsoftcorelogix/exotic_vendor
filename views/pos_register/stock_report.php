@@ -1,9 +1,8 @@
 <?php
-$filtersPanelOpen =
-  trim((string)($filters['search'] ?? '')) !== ''
-  || (($filters['category'] ?? 'allProducts') !== 'allProducts')
-  || (($filters['stock_status'] ?? 'all') !== 'all')
-  || (!empty($can_change_warehouse) && (int)($filters['warehouse_id'] ?? 0) > 0);
+require_once __DIR__ . '/../../helpers/stock_report_filters.php';
+$filtersPanelOpen = stockReportFiltersPanelOpen($filters ?? [], !empty($can_change_warehouse));
+$selectedCategory = (string)($filters['category'] ?? 'allProducts');
+$groupFilterFields = is_array($group_filter_fields ?? null) ? $group_filter_fields : getStockReportGroupFilterFieldDefinitions();
 $rowCount = is_array($rows ?? null) ? count($rows) : 0;
 $pageNo = max(1, (int)($page_no ?? ($filters['page_no'] ?? 1)));
 $limit = max(1, (int)($limit ?? ($filters['limit'] ?? 200)));
@@ -28,7 +27,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         </div>
         <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">Stock report</h1>
         <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
-          Monitor warehouse stock by SKU, category, and status using the same list workspace style as direct purchase.
+          Monitor warehouse stock by SKU, group, and status using the same list workspace style as direct purchase.
         </p>
       </div>
       <div class="flex shrink-0 lg:pl-4 lg:self-center gap-2">
@@ -60,7 +59,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         </span>
         <div class="min-w-0">
           <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
-          <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Warehouse, keyword, category, stock status, and rows limit.</p>
+          <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Warehouse, keyword, location, group name, physical/local stock status, group-specific fields, and rows limit.</p>
         </div>
       </div>
       <span class="shrink-0 inline-flex items-center gap-2 text-xs font-semibold text-amber-800">
@@ -101,10 +100,10 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-gray-600 mb-1">Category</label>
-          <select name="category" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+          <label for="stock_report_group_name" class="block text-xs font-semibold text-gray-600 mb-1">Group Name</label>
+          <select id="stock_report_group_name" name="category" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
             <?php foreach (($categories ?? []) as $slug => $label): ?>
-              <option value="<?= htmlspecialchars($slug) ?>" <?= (($filters['category'] ?? 'allProducts') === $slug) ? 'selected' : '' ?>>
+              <option value="<?= htmlspecialchars($slug) ?>" <?= ($selectedCategory === $slug) ? 'selected' : '' ?>>
                 <?= htmlspecialchars($label) ?>
               </option>
             <?php endforeach; ?>
@@ -112,13 +111,35 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-gray-600 mb-1">Stock status</label>
-          <select name="stock_status" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
-            <option value="all" <?= (($filters['stock_status'] ?? 'all') === 'all') ? 'selected' : '' ?>>All stock</option>
-            <option value="out" <?= (($filters['stock_status'] ?? 'all') === 'out') ? 'selected' : '' ?>>Out of stock</option>
-            <option value="low" <?= (($filters['stock_status'] ?? 'all') === 'low') ? 'selected' : '' ?>>Low stock (1-5)</option>
-            <option value="in" <?= (($filters['stock_status'] ?? 'all') === 'in') ? 'selected' : '' ?>>In stock</option>
+          <label for="stock_report_physical_stock_status" class="block text-xs font-semibold text-gray-600 mb-1">Physical stock</label>
+          <select id="stock_report_physical_stock_status" name="physical_stock_status" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+            <option value="all" <?= (($filters['physical_stock_status'] ?? 'all') === 'all') ? 'selected' : '' ?>>All</option>
+            <option value="out" <?= (($filters['physical_stock_status'] ?? 'all') === 'out') ? 'selected' : '' ?>>Out of stock (0)</option>
+            <option value="low" <?= (($filters['physical_stock_status'] ?? 'all') === 'low') ? 'selected' : '' ?>>Low stock (1-5)</option>
+            <option value="in" <?= (($filters['physical_stock_status'] ?? 'all') === 'in') ? 'selected' : '' ?>>In stock</option>
           </select>
+        </div>
+
+        <div>
+          <label for="stock_report_local_stock_status" class="block text-xs font-semibold text-gray-600 mb-1">Local stock</label>
+          <select id="stock_report_local_stock_status" name="local_stock_status" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+            <option value="all" <?= (($filters['local_stock_status'] ?? 'all') === 'all') ? 'selected' : '' ?>>All</option>
+            <option value="out" <?= (($filters['local_stock_status'] ?? 'all') === 'out') ? 'selected' : '' ?>>Out of stock (0)</option>
+            <option value="low" <?= (($filters['local_stock_status'] ?? 'all') === 'low') ? 'selected' : '' ?>>Low stock (1-5)</option>
+            <option value="in" <?= (($filters['local_stock_status'] ?? 'all') === 'in') ? 'selected' : '' ?>>In stock</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="stock_report_location" class="block text-xs font-semibold text-gray-600 mb-1">Location</label>
+          <input
+            type="text"
+            id="stock_report_location"
+            name="location"
+            value="<?= htmlspecialchars((string)($filters['location'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+            placeholder="Bin, shelf, or storage location"
+            class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition"
+          >
         </div>
 
         <div>
@@ -129,6 +150,74 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
             <?php endforeach; ?>
           </select>
         </div>
+      </div>
+
+      <div id="stockReportGroupFilters" class="mt-5 border-t border-gray-100 pt-5">
+        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Group-specific filters</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-4">
+          <?php
+            $stockReportAutocompleteUrls = [
+              'author' => base_url('?page=orders&action=search_filter_authors&q='),
+              'artist' => base_url('?page=orders&action=search_filter_authors&q='),
+              'publisher' => base_url('?page=orders&action=search_filter_publishers&q='),
+              'material' => base_url('?page=orders&action=search_filter_materials&q='),
+              'language' => base_url('?page=orders&action=search_filter_languages&q='),
+            ];
+          ?>
+          <?php foreach ($groupFilterFields as $fieldKey => $fieldDef): ?>
+            <?php
+              $fieldGroups = $fieldDef['groups'] ?? [];
+              $fieldGroupsJson = htmlspecialchars(json_encode(array_values($fieldGroups), JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+              $fieldValue = htmlspecialchars((string)($filters[$fieldKey] ?? ''), ENT_QUOTES, 'UTF-8');
+              $defaultLabel = (string)($fieldDef['label'] ?? ucfirst($fieldKey));
+              $labelMap = is_array($fieldDef['labels'] ?? null) ? $fieldDef['labels'] : [];
+              $labelMapJson = htmlspecialchars(json_encode($labelMap, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+              $placeholder = htmlspecialchars((string)($fieldDef['placeholder'] ?? ''), ENT_QUOTES, 'UTF-8');
+              $inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition';
+              $autocompleteType = (string)($fieldDef['autocomplete'] ?? '');
+              $autocompleteUrl = $stockReportAutocompleteUrls[$autocompleteType] ?? '';
+            ?>
+            <?php if ($autocompleteUrl !== ''): ?>
+              <div
+                class="stock-report-group-field hidden"
+                data-stock-report-field="<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>"
+                data-stock-report-groups="<?= $fieldGroupsJson ?>"
+                data-stock-report-labels="<?= $labelMapJson ?>"
+                data-stock-report-default-label="<?= htmlspecialchars($defaultLabel, ENT_QUOTES, 'UTF-8') ?>">
+                <?php renderPartial('views/shared/partials/order_filter_autocomplete_field.php', [
+                  'field_id' => 'stock_report_' . $fieldKey,
+                  'field_name' => $fieldKey,
+                  'field_label' => $defaultLabel,
+                  'field_placeholder' => (string)($fieldDef['placeholder'] ?? ''),
+                  'field_value' => $filters[$fieldKey] ?? '',
+                  'search_url' => $autocompleteUrl,
+                  'input_class' => $inputClass,
+                ]); ?>
+              </div>
+            <?php else: ?>
+              <div
+                class="stock-report-group-field hidden"
+                data-stock-report-field="<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>"
+                data-stock-report-groups="<?= $fieldGroupsJson ?>"
+                data-stock-report-labels="<?= $labelMapJson ?>"
+                data-stock-report-default-label="<?= htmlspecialchars($defaultLabel, ENT_QUOTES, 'UTF-8') ?>">
+                <label for="stock_report_<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>" class="stock-report-group-field-label block text-xs font-semibold text-gray-600 mb-1">
+                  <?= htmlspecialchars($defaultLabel) ?>
+                </label>
+                <input
+                  type="text"
+                  id="stock_report_<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>"
+                  name="<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>"
+                  value="<?= $fieldValue ?>"
+                  placeholder="<?= $placeholder ?>"
+                  class="<?= htmlspecialchars($inputClass, ENT_QUOTES, 'UTF-8') ?>">
+              </div>
+            <?php endif; ?>
+          <?php endforeach; ?>
+        </div>
+        <p id="stockReportGroupFiltersHint" class="mt-3 text-xs text-gray-500">
+          Select a group name above to show filters for books, textiles, paintings, and other product types.
+        </p>
       </div>
 
       <div class="mt-5 flex flex-wrap items-center gap-3">
@@ -190,7 +279,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
             </th>
             <th class="px-5 py-3.5 whitespace-nowrap">Image</th>
             <th class="px-5 py-3.5 whitespace-nowrap">SKU</th>
-            <th class="px-5 py-3.5 whitespace-nowrap">Category</th>
+            <th class="px-5 py-3.5 whitespace-nowrap">Group Name</th>
             <th class="px-5 py-3.5 whitespace-nowrap">Location</th>
             <th class="px-5 py-3.5 whitespace-nowrap">Stock</th>
             <th class="px-5 py-3.5 whitespace-nowrap text-right">Sell price</th>
@@ -387,8 +476,15 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
   role="dialog"
   aria-modal="true"
   aria-labelledby="stockReportExportProgressTitle">
-  <div class="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl">
-    <div class="flex items-start gap-3">
+  <div class="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl">
+    <button
+      type="button"
+      id="stockReportExportCloseBtn"
+      class="absolute top-4 right-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+      aria-label="Close">
+      <span class="text-xl leading-none">&times;</span>
+    </button>
+    <div class="flex items-start gap-3 pr-8">
       <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
         <i id="stockReportExportProgressIcon" class="fas fa-file-excel fa-spin text-sm" aria-hidden="true"></i>
       </span>
@@ -408,6 +504,26 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
       <p id="stockReportExportProgressHint" class="mt-3 text-xs text-gray-500">
         Processing in small batches to avoid timeouts. Please keep this page open.
       </p>
+    </div>
+    <div class="mt-6 flex flex-wrap items-center justify-end gap-2">
+      <button
+        type="button"
+        id="stockReportExportStopBtn"
+        class="hidden inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+        Stop
+      </button>
+      <button
+        type="button"
+        id="stockReportExportResumeBtn"
+        class="hidden inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+        Resume
+      </button>
+      <button
+        type="button"
+        id="stockReportExportStartBtn"
+        class="inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+        Start export
+      </button>
     </div>
   </div>
 </div>
@@ -471,17 +587,18 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     'This will delete vp_stock_movements and vp_stock rows, reset physical_stock to 0, '
     + 'fetch the latest local stock from the API, then reseed opening stock in the default warehouse.';
   const STOCK_REPORT_BATCH_SIZE = 5;
-  const STOCK_REPORT_FILTERS = <?= json_encode([
-    'search' => $filters['search'] ?? '',
-    'category' => $filters['category'] ?? 'allProducts',
-    'stock_status' => $filters['stock_status'] ?? 'all',
-    'warehouse_id' => (int)($filters['warehouse_id'] ?? 0),
-  ], JSON_UNESCAPED_UNICODE) ?>;
+  const STOCK_REPORT_FILTERS = <?= json_encode(stockReportFiltersForExportPayload($filters ?? []), JSON_UNESCAPED_UNICODE) ?>;
   const STOCK_REPORT_TOTAL_ROWS = <?= (int)($total_rows ?? 0) ?>;
 
   let stockReportOtpTimer = null;
   let stockReportOtpRemaining = 0;
   let stockReportPendingRefreshIds = [];
+  let stockReportExportPaused = false;
+  let stockReportExportRunning = false;
+  let stockReportExportAbortController = null;
+  let stockReportExportCurrentId = null;
+  let stockReportExportSnapshot = null;
+  let stockReportExportLastProgress = null;
 
   function chunkStockReportIds(ids, size) {
     const chunks = [];
@@ -847,6 +964,21 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     modal.classList.remove('flex');
   }
 
+  function closeStockReportExportModal() {
+    if (stockReportExportRunning && !stockReportExportPaused) {
+      stopStockReportExport();
+    }
+
+    hideStockReportExportProgressModal();
+    setStockReportBulkUiLocked(false);
+
+    const exportBtn = document.getElementById('stockReportExportBtn');
+    const exportBtnLabel = exportBtn ? exportBtn.querySelector('span') : null;
+    if (exportBtnLabel && !stockReportExportRunning) {
+      exportBtnLabel.textContent = 'Export to Excel';
+    }
+  }
+
   function updateStockReportExportProgress(state) {
     const total = Math.max(0, Number(state.total || 0));
     const processed = Math.max(0, Number(state.processed || 0));
@@ -860,11 +992,32 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     const statsEl = document.getElementById('stockReportExportProgressStats');
     const hintEl = document.getElementById('stockReportExportProgressHint');
     const iconEl = document.getElementById('stockReportExportProgressIcon');
+    const titleEl = document.getElementById('stockReportExportProgressTitle');
+
+    if (titleEl) {
+      if (state.done) {
+        titleEl.textContent = 'Export complete';
+      } else if (state.paused) {
+        titleEl.textContent = 'Export paused';
+      } else if (state.idle) {
+        titleEl.textContent = 'Export stock report';
+      } else {
+        titleEl.textContent = 'Exporting stock report';
+      }
+    }
 
     if (textEl) {
-      textEl.textContent = state.done
-        ? 'Export complete. Download starting…'
-        : ('Prepared ' + processed + ' of ' + total + ' row(s)');
+      if (state.paused) {
+        textEl.textContent = 'Export paused — ' + processed + ' of ' + total + ' row(s) prepared';
+      } else if (state.done) {
+        textEl.textContent = 'Export complete. Download starting…';
+      } else if (state.idle) {
+        textEl.textContent = total > 0
+          ? ('Ready to export ' + total + ' row(s) with current filters')
+          : 'Ready to export with current filters';
+      } else {
+        textEl.textContent = 'Prepared ' + processed + ' of ' + total + ' row(s)';
+      }
     }
     if (barEl) barEl.style.width = percent + '%';
     if (batchEl) {
@@ -877,11 +1030,171 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     if (iconEl) {
       iconEl.classList.toggle('fa-spin', !!state.spinning);
       iconEl.classList.toggle('fa-check', !state.spinning && state.done);
-      iconEl.classList.toggle('fa-file-excel', !!state.spinning || !state.done);
+      iconEl.classList.toggle('fa-pause', !!state.paused);
+      iconEl.classList.toggle('fa-file-excel', !state.done && !state.paused);
+    }
+
+    if (state.total >= 0 || state.idle || state.paused) {
+      stockReportExportLastProgress = {
+        total,
+        processed,
+        batchNo,
+        batchTotal,
+        hint: state.hint || '',
+      };
+    }
+
+    setStockReportExportControls(state);
+  }
+
+  function setStockReportExportControls(state) {
+    const startBtn = document.getElementById('stockReportExportStartBtn');
+    const stopBtn = document.getElementById('stockReportExportStopBtn');
+    const resumeBtn = document.getElementById('stockReportExportResumeBtn');
+    const closeBtn = document.getElementById('stockReportExportCloseBtn');
+    const mode = state.controlsMode
+      || (state.done ? 'done' : (state.paused ? 'paused' : (state.idle ? 'idle' : 'running')));
+
+    if (startBtn) {
+      startBtn.classList.toggle('hidden', mode !== 'idle' && mode !== 'paused');
+      startBtn.disabled = !!state.busy;
+      startBtn.textContent = mode === 'paused' ? 'Start over' : 'Start export';
+    }
+    if (stopBtn) {
+      stopBtn.classList.toggle('hidden', mode !== 'running');
+      stopBtn.disabled = !!state.busy;
+    }
+    if (resumeBtn) {
+      resumeBtn.classList.toggle('hidden', mode !== 'paused');
+      resumeBtn.disabled = !!state.busy || !stockReportExportSnapshot;
+    }
+    if (closeBtn) {
+      closeBtn.classList.toggle('hidden', mode === 'done');
+      closeBtn.disabled = !!state.busy;
     }
   }
 
-  async function runStockReportExportBatched() {
+  function resetStockReportExportState() {
+    stockReportExportPaused = false;
+    stockReportExportRunning = false;
+    stockReportExportAbortController = null;
+    stockReportExportCurrentId = null;
+    stockReportExportSnapshot = null;
+    stockReportExportLastProgress = null;
+    setStockReportExportControls({ controlsMode: 'idle', idle: true, total: STOCK_REPORT_TOTAL_ROWS, processed: 0, batchNo: 0, batchTotal: 0 });
+  }
+
+  async function cleanupStockReportExportOnServer(exportId) {
+    if (!exportId) return;
+    try {
+      await fetch('index.php?page=pos_register&action=stock-report-export-cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ export_id: exportId }),
+      });
+    } catch (cleanupErr) {
+      /* ignore cleanup errors */
+    }
+  }
+
+  function openStockReportExportModal() {
+    showStockReportExportProgressModal();
+
+    const hasPausedExport = stockReportExportSnapshot && stockReportExportSnapshot.exportId;
+    const progress = stockReportExportLastProgress || {
+      total: STOCK_REPORT_TOTAL_ROWS,
+      processed: hasPausedExport ? (stockReportExportSnapshot.processedRows || 0) : 0,
+      batchNo: hasPausedExport ? (stockReportExportSnapshot.batchNo || 0) : 0,
+      batchTotal: hasPausedExport ? (stockReportExportSnapshot.totalBatches || 0) : 0,
+      hint: hasPausedExport
+        ? 'Export paused. Resume to continue or start over for a fresh export.'
+        : 'Click Start export to begin. You can stop and resume at any time.',
+    };
+
+    updateStockReportExportProgress({
+      total: progress.total || STOCK_REPORT_TOTAL_ROWS,
+      processed: progress.processed || 0,
+      batchNo: progress.batchNo || 0,
+      batchTotal: progress.batchTotal || 0,
+      spinning: false,
+      done: false,
+      idle: !hasPausedExport,
+      paused: !!hasPausedExport,
+      hint: progress.hint,
+      controlsMode: hasPausedExport ? 'paused' : 'idle',
+    });
+  }
+
+  function stopStockReportExport() {
+    if (!stockReportExportRunning || stockReportExportPaused) return;
+    stockReportExportPaused = true;
+    stockReportExportRunning = false;
+
+    if (stockReportExportAbortController) {
+      stockReportExportAbortController.abort();
+    }
+
+    const exportBtn = document.getElementById('stockReportExportBtn');
+    const exportBtnLabel = exportBtn ? exportBtn.querySelector('span') : null;
+    if (exportBtnLabel) exportBtnLabel.textContent = 'Export to Excel';
+
+    if (!stockReportExportCurrentId) {
+      stockReportExportPaused = false;
+      setStockReportBulkUiLocked(false);
+      updateStockReportExportProgress({
+        total: STOCK_REPORT_TOTAL_ROWS,
+        processed: 0,
+        batchNo: 0,
+        batchTotal: 0,
+        spinning: false,
+        done: false,
+        idle: true,
+        hint: 'Export stopped before it started. Click Start export to try again.',
+        controlsMode: 'idle',
+      });
+      return;
+    }
+
+    const progress = stockReportExportLastProgress || {};
+    stockReportExportSnapshot = {
+      exportId: stockReportExportCurrentId,
+      totalRows: Number(progress.total || STOCK_REPORT_TOTAL_ROWS),
+      totalBatches: Number(progress.batchTotal || 0),
+      processedRows: Number(progress.processed || 0),
+      batchNo: Number(progress.batchNo || 0),
+    };
+
+    setStockReportBulkUiLocked(false);
+
+    updateStockReportExportProgress({
+      total: Number(progress.total || STOCK_REPORT_TOTAL_ROWS),
+      processed: Number(progress.processed || 0),
+      batchNo: Number(progress.batchNo || 0),
+      batchTotal: Number(progress.batchTotal || 0),
+      spinning: false,
+      done: false,
+      paused: true,
+      hint: 'Export paused. Click Resume to continue or Start over to begin again.',
+      controlsMode: 'paused',
+    });
+  }
+
+  async function startStockReportExport() {
+    if (stockReportExportRunning) return;
+
+    const previousExportId = stockReportExportCurrentId
+      || (stockReportExportSnapshot && stockReportExportSnapshot.exportId)
+      || null;
+
+    stockReportExportPaused = false;
+    stockReportExportRunning = true;
+    stockReportExportSnapshot = null;
+
+    if (previousExportId) {
+      await cleanupStockReportExportOnServer(previousExportId);
+    }
+    stockReportExportCurrentId = null;
+
     showStockReportExportProgressModal();
     setStockReportBulkUiLocked(true);
 
@@ -897,116 +1210,220 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
       spinning: true,
       done: false,
       hint: 'Initializing export with current filters…',
+      controlsMode: 'running',
     });
 
     try {
+      stockReportExportAbortController = new AbortController();
       const initRes = await fetch('index.php?page=pos_register&action=stock-report-export-init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify(STOCK_REPORT_FILTERS),
+        signal: stockReportExportAbortController.signal,
       });
+      if (stockReportExportPaused) return;
+
       const initData = await initRes.json();
       if (!initData || !initData.success) {
         throw new Error((initData && initData.message) ? initData.message : 'Could not start export.');
       }
 
       const exportId = initData.export_id;
-      const totalRows = Number(initData.total_rows || 0);
-      const totalBatches = Number(initData.total_batches || 0);
-      let processedRows = 0;
-      let batchNo = 0;
-      let done = false;
+      stockReportExportCurrentId = exportId;
+      stockReportExportSnapshot = {
+        exportId,
+        totalRows: Number(initData.total_rows || 0),
+        totalBatches: Number(initData.total_batches || 0),
+        processedRows: 0,
+        batchNo: 0,
+      };
 
-      while (!done) {
-        batchNo++;
-        updateStockReportExportProgress({
-          total: totalRows,
-          processed: processedRows,
-          batchNo,
-          batchTotal: totalBatches,
-          spinning: true,
-          done: false,
-          hint: 'Fetching batch ' + batchNo + ' of ' + totalBatches + '…',
-        });
-
-        const batchRes = await fetch('index.php?page=pos_register&action=stock-report-export-batch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ export_id: exportId }),
-        });
-        const batchData = await batchRes.json();
-        if (!batchData || !batchData.success) {
-          throw new Error((batchData && batchData.message) ? batchData.message : 'Export batch failed.');
-        }
-
-        processedRows = Number(batchData.processed_rows || processedRows);
-        done = !!batchData.done;
-
-        updateStockReportExportProgress({
-          total: totalRows,
-          processed: processedRows,
-          batchNo: Number(batchData.batch_no || batchNo),
-          batchTotal: totalBatches,
-          spinning: !done,
-          done,
-          hint: done ? 'Building Excel file…' : ('Completed batch ' + batchNo + '. Starting next batch…'),
-        });
-      }
-
-      updateStockReportExportProgress({
-        total: totalRows,
-        processed: processedRows,
-        batchNo: totalBatches,
-        batchTotal: totalBatches,
-        spinning: false,
-        done: true,
-        hint: 'Download starting…',
-      });
-
-      const finishRes = await fetch('index.php?page=pos_register&action=stock-report-export-finish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json' },
-        body: JSON.stringify({ export_id: exportId }),
-      });
-
-      const contentType = finishRes.headers.get('Content-Type') || '';
-      if (!finishRes.ok || contentType.indexOf('application/json') >= 0) {
-        let errMsg = 'Could not download Excel file.';
-        try {
-          const errData = await finishRes.json();
-          if (errData && errData.message) errMsg = errData.message;
-        } catch (parseErr) {
-          /* ignore */
-        }
-        throw new Error(errMsg);
-      }
-
-      const blob = await finishRes.blob();
-      const disposition = finishRes.headers.get('Content-Disposition') || '';
-      let filename = 'stock_report.xlsx';
-      const match = disposition.match(/filename="?([^";]+)"?/i);
-      if (match && match[1]) filename = match[1];
-
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-
-      window.setTimeout(() => {
-        hideStockReportExportProgressModal();
-        setStockReportBulkUiLocked(false);
-        if (exportBtnLabel) exportBtnLabel.textContent = 'Export to Excel';
-      }, 800);
+      await processStockReportExportBatches();
     } catch (err) {
+      if (stockReportExportPaused || (err && err.name === 'AbortError')) {
+        return;
+      }
       hideStockReportExportProgressModal();
       window.alert(err && err.message ? err.message : 'Export failed.');
       setStockReportBulkUiLocked(false);
       if (exportBtnLabel) exportBtnLabel.textContent = 'Export to Excel';
+      resetStockReportExportState();
+    } finally {
+      stockReportExportRunning = false;
     }
+  }
+
+  async function resumeStockReportExport() {
+    if (stockReportExportRunning || !stockReportExportSnapshot || !stockReportExportSnapshot.exportId) return;
+
+    stockReportExportPaused = false;
+    stockReportExportRunning = true;
+    stockReportExportCurrentId = stockReportExportSnapshot.exportId;
+
+    setStockReportBulkUiLocked(true);
+
+    const exportBtn = document.getElementById('stockReportExportBtn');
+    const exportBtnLabel = exportBtn ? exportBtn.querySelector('span') : null;
+    if (exportBtnLabel) exportBtnLabel.textContent = 'Exporting…';
+
+    const snapshot = stockReportExportSnapshot;
+    updateStockReportExportProgress({
+      total: snapshot.totalRows,
+      processed: snapshot.processedRows,
+      batchNo: snapshot.batchNo,
+      batchTotal: snapshot.totalBatches,
+      spinning: true,
+      done: false,
+      hint: 'Resuming export from batch ' + (snapshot.batchNo + 1) + '…',
+      controlsMode: 'running',
+    });
+
+    try {
+      await processStockReportExportBatches();
+    } catch (err) {
+      if (stockReportExportPaused || (err && err.name === 'AbortError')) {
+        return;
+      }
+      hideStockReportExportProgressModal();
+      window.alert(err && err.message ? err.message : 'Export failed.');
+      setStockReportBulkUiLocked(false);
+      if (exportBtnLabel) exportBtnLabel.textContent = 'Export to Excel';
+      resetStockReportExportState();
+    } finally {
+      stockReportExportRunning = false;
+    }
+  }
+
+  async function processStockReportExportBatches() {
+    const snapshot = stockReportExportSnapshot;
+    if (!snapshot || !snapshot.exportId) {
+      throw new Error('Export session not found.');
+    }
+
+    const exportId = snapshot.exportId;
+    let totalRows = Number(snapshot.totalRows || 0);
+    let totalBatches = Number(snapshot.totalBatches || 0);
+    let processedRows = Number(snapshot.processedRows || 0);
+    let batchNo = Number(snapshot.batchNo || 0);
+    let done = false;
+
+    while (!done) {
+      if (stockReportExportPaused) return;
+
+      batchNo++;
+      updateStockReportExportProgress({
+        total: totalRows,
+        processed: processedRows,
+        batchNo,
+        batchTotal: totalBatches,
+        spinning: true,
+        done: false,
+        hint: 'Fetching batch ' + batchNo + ' of ' + totalBatches + '…',
+        controlsMode: 'running',
+      });
+
+      stockReportExportAbortController = new AbortController();
+      const batchRes = await fetch('index.php?page=pos_register&action=stock-report-export-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ export_id: exportId }),
+        signal: stockReportExportAbortController.signal,
+      });
+      if (stockReportExportPaused) return;
+
+      const batchData = await batchRes.json();
+      if (!batchData || !batchData.success) {
+        throw new Error((batchData && batchData.message) ? batchData.message : 'Export batch failed.');
+      }
+
+      processedRows = Number(batchData.processed_rows || processedRows);
+      batchNo = Number(batchData.batch_no || batchNo);
+      done = !!batchData.done;
+
+      stockReportExportSnapshot = {
+        exportId,
+        totalRows,
+        totalBatches,
+        processedRows,
+        batchNo,
+      };
+
+      updateStockReportExportProgress({
+        total: totalRows,
+        processed: processedRows,
+        batchNo,
+        batchTotal: totalBatches,
+        spinning: !done,
+        done,
+        hint: done ? 'Building Excel file…' : ('Completed batch ' + batchNo + '. Starting next batch…'),
+        controlsMode: 'running',
+      });
+    }
+
+    if (stockReportExportPaused) return;
+
+    updateStockReportExportProgress({
+      total: totalRows,
+      processed: processedRows,
+      batchNo: totalBatches,
+      batchTotal: totalBatches,
+      spinning: false,
+      done: true,
+      hint: 'Download starting…',
+      controlsMode: 'done',
+    });
+
+    await downloadStockReportExportFile(exportId);
+  }
+
+  async function downloadStockReportExportFile(exportId) {
+    stockReportExportAbortController = new AbortController();
+    const finishRes = await fetch('index.php?page=pos_register&action=stock-report-export-finish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json' },
+      body: JSON.stringify({ export_id: exportId }),
+      signal: stockReportExportAbortController.signal,
+    });
+    if (stockReportExportPaused) return;
+
+    const contentType = finishRes.headers.get('Content-Type') || '';
+    if (!finishRes.ok || contentType.indexOf('application/json') >= 0) {
+      let errMsg = 'Could not download Excel file.';
+      try {
+        const errData = await finishRes.json();
+        if (errData && errData.message) errMsg = errData.message;
+      } catch (parseErr) {
+        /* ignore */
+      }
+      throw new Error(errMsg);
+    }
+
+    const blob = await finishRes.blob();
+    if (stockReportExportPaused) return;
+
+    const disposition = finishRes.headers.get('Content-Disposition') || '';
+    let filename = 'stock_report.xlsx';
+    const match = disposition.match(/filename="?([^";]+)"?/i);
+    if (match && match[1]) filename = match[1];
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+
+    const exportBtn = document.getElementById('stockReportExportBtn');
+    const exportBtnLabel = exportBtn ? exportBtn.querySelector('span') : null;
+
+    window.setTimeout(() => {
+      hideStockReportExportProgressModal();
+      setStockReportBulkUiLocked(false);
+      if (exportBtnLabel) exportBtnLabel.textContent = 'Export to Excel';
+      resetStockReportExportState();
+    }, 800);
   }
 
   async function verifyStockReportActionOtp(otp) {
@@ -1083,6 +1500,47 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     modal.classList.add('hidden');
     modal.classList.remove('flex');
     modalImg.src = '';
+  }
+
+  function syncStockReportGroupFilters() {
+    const groupSelect = document.getElementById('stock_report_group_name');
+    const hint = document.getElementById('stockReportGroupFiltersHint');
+    const selectedGroup = groupSelect ? groupSelect.value : 'allProducts';
+    let visibleCount = 0;
+
+    document.querySelectorAll('.stock-report-group-field').forEach((fieldEl) => {
+      let groups = [];
+      try {
+        groups = JSON.parse(fieldEl.getAttribute('data-stock-report-groups') || '[]');
+      } catch (err) {
+        groups = [];
+      }
+
+      const show = selectedGroup !== 'allProducts' && groups.indexOf(selectedGroup) !== -1;
+      fieldEl.classList.toggle('hidden', !show);
+      if (!show) {
+        return;
+      }
+
+      visibleCount += 1;
+
+      let labelMap = {};
+      try {
+        labelMap = JSON.parse(fieldEl.getAttribute('data-stock-report-labels') || '{}');
+      } catch (err) {
+        labelMap = {};
+      }
+      const defaultLabel = fieldEl.getAttribute('data-stock-report-default-label') || '';
+      const labelText = labelMap[selectedGroup] || defaultLabel;
+      const labelEl = fieldEl.querySelector('label');
+      if (labelEl) {
+        labelEl.textContent = labelText;
+      }
+    });
+
+    if (hint) {
+      hint.classList.toggle('hidden', visibleCount > 0);
+    }
   }
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -1174,10 +1632,56 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
     if (exportBtn) {
       exportBtn.addEventListener('click', () => {
         if (STOCK_REPORT_TOTAL_ROWS <= 0) return;
-        runStockReportExportBatched();
+        openStockReportExportModal();
       });
     }
 
+    const exportStartBtn = document.getElementById('stockReportExportStartBtn');
+    if (exportStartBtn) {
+      exportStartBtn.addEventListener('click', () => {
+        startStockReportExport();
+      });
+    }
+
+    const exportStopBtn = document.getElementById('stockReportExportStopBtn');
+    if (exportStopBtn) {
+      exportStopBtn.addEventListener('click', () => {
+        stopStockReportExport();
+      });
+    }
+
+    const exportResumeBtn = document.getElementById('stockReportExportResumeBtn');
+    if (exportResumeBtn) {
+      exportResumeBtn.addEventListener('click', () => {
+        resumeStockReportExport();
+      });
+    }
+
+    const exportCloseBtn = document.getElementById('stockReportExportCloseBtn');
+    if (exportCloseBtn) {
+      exportCloseBtn.addEventListener('click', () => {
+        closeStockReportExportModal();
+      });
+    }
+
+    const exportProgressModal = document.getElementById('stockReportExportProgressModal');
+    if (exportProgressModal) {
+      exportProgressModal.addEventListener('click', (event) => {
+        if (event.target === exportProgressModal) {
+          closeStockReportExportModal();
+        }
+      });
+    }
+
+    const groupSelect = document.getElementById('stock_report_group_name');
+    if (groupSelect) {
+      groupSelect.addEventListener('change', syncStockReportGroupFilters);
+    }
+    syncStockReportGroupFilters();
+
     updateStockReportSelectionUi();
   });
+</script>
+<script>
+  <?php renderPartial('views/shared/partials/order_filter_autocomplete_script.php'); ?>
 </script>
