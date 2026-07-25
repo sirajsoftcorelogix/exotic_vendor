@@ -95,34 +95,13 @@ function pos_local_checkout_has_pending_sync(mysqli $conn, string $orderNumber):
 }
 
 /**
- * Legacy DBs store vp_order_info.order_number as INT; temp POS orders need VARCHAR.
+ * Legacy DBs store order_number as INT on some tables; temp POS orders need VARCHAR.
  */
 function pos_local_checkout_ensure_order_info_order_number_varchar(mysqli $conn): void
 {
-    static $checked = false;
-    if ($checked) {
-        return;
-    }
-    $checked = true;
-
-    $res = $conn->query("SHOW COLUMNS FROM vp_order_info LIKE 'order_number'");
-    if (!$res instanceof mysqli_result) {
-        return;
-    }
-    $col = $res->fetch_assoc();
-    $res->free();
-    if (!is_array($col)) {
-        return;
-    }
-
-    $type = strtolower(trim((string)($col['Type'] ?? '')));
-    if ($type === '' || !str_contains($type, 'int')) {
-        return;
-    }
-
-    if (!$conn->query('ALTER TABLE vp_order_info MODIFY order_number VARCHAR(100) NOT NULL')) {
-        error_log('[pos_local_checkout] vp_order_info.order_number VARCHAR migration failed: ' . $conn->error);
-    }
+    require_once dirname(__DIR__) . '/models/posorder/order.php';
+    $posOrderModel = new POSOrder($conn);
+    $posOrderModel->ensureOrderNumberColumnsAreVarchar();
 }
 
 /**

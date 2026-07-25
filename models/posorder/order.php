@@ -1177,6 +1177,54 @@ class POSOrder
     }
 
     /**
+     * Temp POS orders (POS-TMP-*) require VARCHAR order_number columns.
+     * Legacy schemas used INT on some tables and break rename UPDATEs.
+     */
+    public function ensureOrderNumberColumnsAreVarchar(): void
+    {
+        static $checked = false;
+        if ($checked) {
+            return;
+        }
+        $checked = true;
+
+        foreach ($this->getOrderNumberRenameTargets() as $table => $column) {
+            if (!$this->tableHasColumn($table, $column)) {
+                continue;
+            }
+
+            $tableSafe = preg_replace('/[^a-z0-9_]/i', '', $table);
+            $columnSafe = preg_replace('/[^a-z0-9_]/i', '', $column);
+            if ($tableSafe === '' || $columnSafe === '') {
+                continue;
+            }
+
+            $res = $this->db->query("SHOW COLUMNS FROM `{$tableSafe}` LIKE '{$columnSafe}'");
+            if (!$res instanceof mysqli_result) {
+                continue;
+            }
+            $col = $res->fetch_assoc();
+            $res->free();
+            if (!is_array($col)) {
+                continue;
+            }
+
+            $type = strtolower(trim((string)($col['Type'] ?? '')));
+            if ($type === '' || !str_contains($type, 'int')) {
+                continue;
+            }
+
+            $nullable = strtoupper(trim((string)($col['Null'] ?? ''))) === 'YES';
+            $nullClause = $nullable ? 'NULL' : 'NOT NULL';
+            $sql = "ALTER TABLE `{$tableSafe}` MODIFY COLUMN `{$columnSafe}` VARCHAR(100) {$nullClause}";
+            if (!$this->db->query($sql)) {
+                error_log('[POSOrder] order_number VARCHAR migration failed for '
+                    . $tableSafe . '.' . $columnSafe . ': ' . $this->db->error);
+            }
+        }
+    }
+
+    /**
      * Rename order_number across related POS order tables.
      *
      * @return array{success:bool,message:string,order_number?:string,updated?:array<int,array{table:string,column:string,rows:int}>}
@@ -1202,6 +1250,8 @@ class POSOrder
         if (!empty($conflict)) {
             return ['success' => false, 'message' => 'Order number already in use.'];
         }
+
+        $this->ensureOrderNumberColumnsAreVarchar();
 
         $updated = [];
         $ordersUpdated = false;
