@@ -737,7 +737,6 @@ function pos_local_checkout_build_order_create_post(array $payload, array $cartD
     }
 
     $storePaymentMode = pos_local_checkout_map_pos_payment_mode_to_exotic($posMode);
-    $paymentType = $codAmount > 0.001 ? 'cod' : $storePaymentMode;
     $checkoutdata = pos_local_checkout_extract_checkoutdata_from_cart($cartData);
 
     $country = strtoupper(substr(trim((string)($payload['confirm_country'] ?? 'IN')), 0, 2));
@@ -760,7 +759,8 @@ function pos_local_checkout_build_order_create_post(array $payload, array $cartD
     }
 
     $out = [
-        'payment_type' => $paymentType,
+        // Exotic order/create requires payment_type=offline for counter sales; POS mode goes in store_payment_details.
+        'payment_type' => 'offline',
         'buynow' => '0',
         'checkoutdata' => $checkoutdata,
         'cod' => $codAmount > 0.001 ? '1' : '0',
