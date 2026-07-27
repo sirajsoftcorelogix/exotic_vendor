@@ -283,6 +283,9 @@ $(function () {
   let modalWarehouseMaxQty = null;
   let modalStockWarningMessage = '';
   let modalPreselectedAddonEntries = [];
+  /** @type {{ name: string, price: number, cartEntry: string }[]} */
+  let modalCustomAddons = [];
+  const CUSTOM_ADDON_MIDDLE = '_blank_';
 
   function openModal() {
     $modal.removeClass('hidden');
@@ -302,6 +305,7 @@ $(function () {
     $('#modal_stock_check_code').val('');
     $('#modal_options').val('');
     modalPreselectedAddonEntries = [];
+    resetCustomAddonsUi();
     $('#pmQtySummary').empty().addClass('hidden');
     $('#pmModalPrice').addClass('hidden').text('');
   }
@@ -426,14 +430,149 @@ $(function () {
     }
   }
 
+  function formatCustomAddonPriceForCart(price) {
+    const n = parseAddonPriceRupee(price);
+    if (n == null || n < 0) return '';
+    if (Math.abs(n - Math.round(n)) < 0.000001) {
+      return String(Math.round(n));
+    }
+    return n.toFixed(2);
+  }
+
+  function buildCustomAddonCartEntry(name, price) {
+    const n = String(name || '').trim();
+    if (!/^[A-Za-z_]+$/.test(n)) return '';
+    const priceStr = formatCustomAddonPriceForCart(price);
+    if (!priceStr) return '';
+    return n + ':' + CUSTOM_ADDON_MIDDLE + ':' + priceStr;
+  }
+
+  function parseCustomAddonCartEntry(entry) {
+    const s = String(entry || '').trim();
+    const marker = ':' + CUSTOM_ADDON_MIDDLE + ':';
+    const idx = s.indexOf(marker);
+    if (idx <= 0) return null;
+    const name = s.slice(0, idx);
+    const priceStr = s.slice(idx + marker.length);
+    if (!/^[A-Za-z_]+$/.test(name)) return null;
+    const price = parseAddonPriceRupee(priceStr);
+    if (price == null || price < 0) return null;
+    return { name: name, price: price, cartEntry: s };
+  }
+
+  function showCustomAddonError(msg) {
+    const $err = $('#pmCustomAddonError');
+    if (!$err.length) return;
+    $err.text(String(msg || '')).removeClass('hidden');
+  }
+
+  function hideCustomAddonError() {
+    $('#pmCustomAddonError').addClass('hidden').text('');
+  }
+
+  function renderCustomAddonsList() {
+    const $list = $('#pmCustomAddonsList');
+    if (!$list.length) return;
+    if (!modalCustomAddons.length) {
+      $list.empty();
+      return;
+    }
+    let html = '';
+    modalCustomAddons.forEach(function (item, idx) {
+      html +=
+        '<div class="flex items-center justify-between gap-2 rounded-lg bg-[#f5f5f5] px-3 py-2">' +
+        '<div class="text-[10px] text-gray-800">' + siblingHtmlEscape(item.name) + '</div>' +
+        '<div class="flex items-center gap-2">' +
+        '<span class="text-[11px] font-semibold text-gray-700">₹ ' + formatAddonPriceRupee(item.price) + '</span>' +
+        '<button type="button" class="pm-custom-addon-remove text-[10px] text-red-600 hover:underline" data-idx="' + idx + '">Remove</button>' +
+        '</div></div>';
+    });
+    $list.html(html);
+  }
+
+  function resetCustomAddonsUi() {
+    modalCustomAddons = [];
+    $('#pmCustomAddonName').val('');
+    $('#pmCustomAddonPrice').val('');
+    hideCustomAddonError();
+    renderCustomAddonsList();
+  }
+
+  function collectAllModalAddonEntries() {
+    const selected = [];
+    $('#productModal .addon-checkbox:checked').each(function () {
+      const entry = readAddonCartEntry(this);
+      if (entry) selected.push(entry);
+    });
+    modalCustomAddons.forEach(function (item) {
+      if (item.cartEntry) selected.push(item.cartEntry);
+    });
+    return normalizeAddonEntries(selected);
+  }
+
+  function syncModalOptionsFromAddons() {
+    $('#modal_options').val(collectAllModalAddonEntries().join('|'));
+  }
+
+  function addCustomAddonFromInputs() {
+    const name = String($('#pmCustomAddonName').val() || '').trim();
+    const priceRaw = $('#pmCustomAddonPrice').val();
+    if (!name) {
+      showCustomAddonError('Enter an add-on name.');
+      return false;
+    }
+    if (!/^[A-Za-z_]+$/.test(name)) {
+      showCustomAddonError('Name may only contain letters (A–Z) and underscores.');
+      return false;
+    }
+    const price = parseAddonPriceRupee(priceRaw);
+    if (price == null || price < 0) {
+      showCustomAddonError('Enter a valid price (0 or greater).');
+      return false;
+    }
+    const cartEntry = buildCustomAddonCartEntry(name, price);
+    if (!cartEntry) {
+      showCustomAddonError('Could not build add-on. Check name and price.');
+      return false;
+    }
+    const dup = modalCustomAddons.some(function (x) {
+      return x.cartEntry.toLowerCase() === cartEntry.toLowerCase();
+    });
+    if (dup) {
+      showCustomAddonError('This custom add-on is already in the list.');
+      return false;
+    }
+    modalCustomAddons.push({ name: name, price: price, cartEntry: cartEntry });
+    $('#pmCustomAddonName').val('');
+    $('#pmCustomAddonPrice').val('');
+    hideCustomAddonError();
+    renderCustomAddonsList();
+    syncModalOptionsFromAddons();
+    return true;
+  }
+
   function applyPreselectedAddonsToModal(entries) {
     const wanted = normalizeAddonEntries(entries);
-    const wantedLower = new Set(wanted.map(function (x) { return x.toLowerCase(); }));
+    const apiEntries = [];
+    const customItems = [];
+    wanted.forEach(function (entry) {
+      const parsed = parseCustomAddonCartEntry(entry);
+      if (parsed) {
+        customItems.push(parsed);
+      } else {
+        apiEntries.push(entry);
+      }
+    });
+    const wantedLower = new Set(apiEntries.map(function (x) { return x.toLowerCase(); }));
     $('#productModal .addon-checkbox').each(function () {
       const entry = readAddonCartEntry(this).toLowerCase();
       $(this).prop('checked', entry && wantedLower.has(entry));
     });
-    $('#modal_options').val(wanted.join('|'));
+    modalCustomAddons = customItems.map(function (p) {
+      return { name: p.name, price: p.price, cartEntry: p.cartEntry };
+    });
+    renderCustomAddonsList();
+    syncModalOptionsFromAddons();
   }
 
   $pmQtyDec.on('click', function () {
@@ -455,14 +594,7 @@ $(function () {
       notifyParentItemCartBlocked();
       return;
     }
-    const selectedEntries = [];
-    $('#productModal .addon-checkbox:checked').each(function () {
-      const entry = readAddonCartEntry(this);
-      if (entry) {
-        selectedEntries.push(entry);
-      }
-    });
-    $('#modal_options').val(selectedEntries.join('|'));
+    syncModalOptionsFromAddons();
 
     const max = modalWarehouseMaxQty;
     const q = parseInt(String($('#modal_qty').val()), 10);
@@ -492,6 +624,7 @@ $(function () {
 
   function renderProductModal(p, key) {
     activeModalKey = key;
+    resetCustomAddonsUi();
     $('#pmAddons').html('');
     $('#pmAddonsWrapper').addClass('hidden');
     const title = (p.title || '').replace(/\s+/g, ' ').trim();
@@ -1060,14 +1193,28 @@ data-code="${lookupCode}">
   //   $('#modal_options').val(optionsStr);
   // });
   $(document).on('change', '#productModal .addon-checkbox', function () {
-    const selected = [];
-    $('#productModal .addon-checkbox:checked').each(function () {
-      const entry = readAddonCartEntry(this);
-      if (entry) {
-        selected.push(entry);
-      }
-    });
-    $('#modal_options').val(selected.join('|'));
+    syncModalOptionsFromAddons();
+  });
+
+  $('#productModal').on('click', '#pmCustomAddonAddBtn', function (e) {
+    e.preventDefault();
+    addCustomAddonFromInputs();
+  });
+
+  $('#productModal').on('click', '.pm-custom-addon-remove', function (e) {
+    e.preventDefault();
+    const idx = parseInt(String($(this).attr('data-idx')), 10);
+    if (!Number.isFinite(idx) || idx < 0 || idx >= modalCustomAddons.length) return;
+    modalCustomAddons.splice(idx, 1);
+    renderCustomAddonsList();
+    syncModalOptionsFromAddons();
+  });
+
+  $('#productModal').on('keydown', '#pmCustomAddonName, #pmCustomAddonPrice', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addCustomAddonFromInputs();
+    }
   });
   let searchTimeout = null;
   const $searchName = $('#searchName');
