@@ -439,9 +439,28 @@ $(function () {
     return n.toFixed(2);
   }
 
+  function normalizeCustomAddonName(raw) {
+    return String(raw || '').trim().replace(/\s+/g, '_');
+  }
+
+  function isValidCustomAddonName(name) {
+    return /^[A-Za-z_]+$/.test(String(name || ''));
+  }
+
+  function sanitizeCustomAddonNameField() {
+    const $input = $('#pmCustomAddonName');
+    if (!$input.length) return '';
+    const raw = String($input.val() || '');
+    const normalized = normalizeCustomAddonName(raw);
+    if (normalized !== raw) {
+      $input.val(normalized);
+    }
+    return normalized;
+  }
+
   function buildCustomAddonCartEntry(name, price) {
-    const n = String(name || '').trim();
-    if (!/^[A-Za-z_]+$/.test(n)) return '';
+    const n = normalizeCustomAddonName(name);
+    if (!isValidCustomAddonName(n)) return '';
     const priceStr = formatCustomAddonPriceForCart(price);
     if (!priceStr) return '';
     return n + ':' + CUSTOM_ADDON_MIDDLE + ':' + priceStr;
@@ -515,14 +534,14 @@ $(function () {
   }
 
   function addCustomAddonFromInputs() {
-    const name = String($('#pmCustomAddonName').val() || '').trim();
+    const name = sanitizeCustomAddonNameField();
     const priceRaw = $('#pmCustomAddonPrice').val();
     if (!name) {
       showCustomAddonError('Enter an add-on name.');
       return false;
     }
-    if (!/^[A-Za-z_]+$/.test(name)) {
-      showCustomAddonError('Name may only contain letters (A–Z) and underscores.');
+    if (!isValidCustomAddonName(name)) {
+      showCustomAddonError('Name may only contain letters (A–Z) and underscores. Spaces are converted to underscores automatically.');
       return false;
     }
     const price = parseAddonPriceRupee(priceRaw);
@@ -1194,6 +1213,11 @@ data-code="${lookupCode}">
   // });
   $(document).on('change', '#productModal .addon-checkbox', function () {
     syncModalOptionsFromAddons();
+  });
+
+  $('#productModal').on('input', '#pmCustomAddonName', function () {
+    sanitizeCustomAddonNameField();
+    hideCustomAddonError();
   });
 
   $('#productModal').on('click', '#pmCustomAddonAddBtn', function (e) {

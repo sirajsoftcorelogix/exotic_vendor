@@ -391,7 +391,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
             </div>
             <div class="flex flex-wrap items-end gap-2">
               <div class="flex min-w-[140px] flex-1 flex-col gap-0.5">
-                <label for="pmCustomAddonName" class="text-[10px] text-gray-500">Name (letters, underscore)</label>
+                <label for="pmCustomAddonName" class="text-[10px] text-gray-500">Name (letters, underscore; spaces → _)</label>
                 <input
                   type="text"
                   id="pmCustomAddonName"
