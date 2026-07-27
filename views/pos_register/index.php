@@ -384,6 +384,43 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
             <div id="pmAddons" class="space-y-2"></div>
           </div>
 
+          <!-- CUSTOM ADDONS -->
+          <div id="pmCustomAddonsWrapper" class="mt-4">
+            <div class="text-xs font-semibold text-gray-700 mb-2">
+              Custom add-ons
+            </div>
+            <div class="flex flex-wrap items-end gap-2">
+              <div class="flex min-w-[140px] flex-1 flex-col gap-0.5">
+                <label for="pmCustomAddonName" class="text-[10px] text-gray-500">Name (letters, underscore)</label>
+                <input
+                  type="text"
+                  id="pmCustomAddonName"
+                  autocomplete="off"
+                  placeholder="Wooden_Frame"
+                  class="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs" />
+              </div>
+              <div class="flex w-24 flex-col gap-0.5">
+                <label for="pmCustomAddonPrice" class="text-[10px] text-gray-500">Price (₹)</label>
+                <input
+                  type="number"
+                  id="pmCustomAddonPrice"
+                  min="0"
+                  step="0.01"
+                  autocomplete="off"
+                  placeholder="1200"
+                  class="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs" />
+              </div>
+              <button
+                type="button"
+                id="pmCustomAddonAddBtn"
+                class="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                Add
+              </button>
+            </div>
+            <p id="pmCustomAddonError" class="mt-1 hidden text-[10px] text-red-600"></p>
+            <div id="pmCustomAddonsList" class="mt-2 space-y-2"></div>
+          </div>
+
           <!-- Footer -->
           <div class="mt-6 flex flex-wrap items-center justify-end gap-2">
 
