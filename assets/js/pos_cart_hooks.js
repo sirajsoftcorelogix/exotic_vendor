@@ -912,11 +912,75 @@
     return round2(extra);
   }
 
+  /** Parse POS custom add-on segments from cart line options (Name:_blank_:Price). */
+  function parseCustomAddonOptionsFromRow(row) {
+    if (!row || typeof row !== 'object') {
+      return [];
+    }
+    var raw = pickFirst(row, ['options', 'option', 'selected_options']);
+    if (raw == null || String(raw).trim() === '') {
+      return [];
+    }
+    var out = [];
+    String(raw)
+      .split('|')
+      .forEach(function (part) {
+        var s = String(part || '').trim();
+        if (!s) {
+          return;
+        }
+        var marker = ':_blank_:';
+        var idx = s.indexOf(marker);
+        if (idx <= 0) {
+          return;
+        }
+        var name = s.slice(0, idx);
+        var priceStr = s.slice(idx + marker.length);
+        if (!/^[A-Za-z_]+$/.test(name)) {
+          return;
+        }
+        var price = parseMoneyValue(priceStr);
+        if (price == null || price < 0) {
+          return;
+        }
+        out.push({ name: name, price: price });
+      });
+    return out;
+  }
+
+  function addonDisplayPrice(addon) {
+    if (!addon || typeof addon !== 'object') {
+      return null;
+    }
+    return parseMoneyValue(
+      pickFirst(addon, ['value', 'price', 'amount', 'addon_price', 'cost', 'Price', 'Value'])
+    );
+  }
+
+  function formatAddonLabelWithPrice(name, price) {
+    var label = String(name || '').trim();
+    if (!label) {
+      return '';
+    }
+    if (price != null && !isNaN(price) && price > 0) {
+      return label + ' (' + formatRupeeInrDisplay(price) + ')';
+    }
+    return label;
+  }
+
   function lineAddonLabels(row) {
     if (!row || typeof row !== 'object') {
       return [];
     }
     var labels = [];
+    var customFromOptions = parseCustomAddonOptionsFromRow(row);
+    var priceByName = {};
+    customFromOptions.forEach(function (item) {
+      if (item.name) {
+        priceByName[item.name.toLowerCase()] = item.price;
+      }
+    });
+
     var addons = row.addons_selected;
     if (Array.isArray(addons)) {
       addons.forEach(function (addon) {
@@ -924,25 +988,47 @@
           return;
         }
         var name = String(addon.name || addon.title || '').trim();
-        if (name) {
-          labels.push(name);
+        if (!name) {
+          return;
+        }
+        var price = addonDisplayPrice(addon);
+        if ((price == null || price <= 0) && priceByName[name.toLowerCase()] != null) {
+          price = priceByName[name.toLowerCase()];
+        }
+        var label = formatAddonLabelWithPrice(name, price);
+        if (label) {
+          labels.push(label);
         }
       });
     }
+
+    if (!labels.length && customFromOptions.length) {
+      customFromOptions.forEach(function (item) {
+        var label = formatAddonLabelWithPrice(item.name, item.price);
+        if (label) {
+          labels.push(label);
+        }
+      });
+    }
+
     if (!labels.length) {
       var frame = parseMoneyValue(pickFirst(row, ['framevalue', 'frame_value', 'frame_price']));
       if (frame != null && frame > 0) {
-        labels.push('Add-on');
+        labels.push(formatAddonLabelWithPrice('Add-on', frame));
       }
     }
     if (
       labels.indexOf('Express Shipping') === -1 &&
+      !labels.some(function (lbl) {
+        return String(lbl).indexOf('Express Shipping') === 0;
+      }) &&
       (row.express_shipping_chosen === true ||
         row.express_shipping_chosen === 1 ||
         row.express_shipping_chosen === '1' ||
         String(row.express_shipping_chosen || '').toLowerCase() === 'true')
     ) {
-      labels.push('Express Shipping');
+      var expressCost = parseMoneyValue(row.express_shipping_cost);
+      labels.push(formatAddonLabelWithPrice('Express Shipping', expressCost));
     }
     return labels;
   }
