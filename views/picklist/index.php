@@ -106,7 +106,7 @@ $plId = static function (array $pl): int {
                         <th class="px-3 py-3 whitespace-nowrap">Status</th>
                         <th class="px-3 py-3 whitespace-nowrap min-w-[8rem]">Progress</th>
                         <th class="px-3 py-3 whitespace-nowrap">Created</th>
-                        <th class="px-3 py-3 whitespace-nowrap text-center min-w-[18rem]">Actions</th>
+                        <th class="px-3 py-3 whitespace-nowrap text-center w-12"><span class="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
@@ -170,33 +170,39 @@ $plId = static function (array $pl): int {
                                 <td class="px-3 py-3 align-middle text-sm text-gray-700 whitespace-nowrap">
                                     <?= !empty($pl['created_at']) ? date('d M Y, H:i', strtotime($pl['created_at'])) : '—' ?>
                                 </td>
-                                <td class="px-3 py-3 align-middle">
-                                    <div class="flex flex-wrap items-center justify-center gap-2">
-                                        <a href="<?= htmlspecialchars($viewUrl) ?>"
-                                           class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-800 text-xs font-semibold shadow-sm hover:bg-blue-100 hover:border-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 transition"
-                                           title="View picklist details">
-                                            <i class="fas fa-eye text-[11px] opacity-90" aria-hidden="true"></i>
-                                            <span>View</span>
-                                        </a>
-                                        <a href="<?= htmlspecialchars($tabletUrl) ?>"
-                                           class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold shadow-sm hover:bg-emerald-100 hover:border-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-1 transition"
-                                           title="Open tablet picking mode">
-                                            <i class="fas fa-tablet-alt text-[11px] opacity-90" aria-hidden="true"></i>
-                                            <span>Tablet</span>
-                                        </a>
-                                        <a href="<?= htmlspecialchars($printUrl) ?>" target="_blank" rel="noopener noreferrer"
-                                           class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-800 text-xs font-semibold shadow-sm hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-1 transition"
-                                           title="Print picklist">
-                                            <i class="fas fa-print text-[11px] opacity-90" aria-hidden="true"></i>
-                                            <span>Print</span>
-                                        </a>
-                                        <a href="<?= htmlspecialchars($deleteUrl) ?>"
-                                           class="js-picklist-confirm-action inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-semibold shadow-sm hover:bg-red-100 hover:border-red-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1 transition"
-                                           data-confirm="<?= htmlspecialchars($deleteConfirm, ENT_QUOTES, 'UTF-8') ?>"
-                                           title="Delete picklist">
-                                            <i class="fas fa-trash-alt text-[11px] opacity-90" aria-hidden="true"></i>
-                                            <span>Delete</span>
-                                        </a>
+                                <td class="px-3 py-3 align-middle text-center">
+                                    <div class="relative inline-block picklist-row-menu">
+                                        <button type="button"
+                                                class="picklist-row-menu-btn inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                                                aria-haspopup="true"
+                                                aria-expanded="false"
+                                                title="Picklist actions">
+                                            <i class="fas fa-ellipsis-v text-sm" aria-hidden="true"></i>
+                                        </button>
+                                        <div class="picklist-row-menu-panel hidden absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 text-left">
+                                            <a href="<?= htmlspecialchars($viewUrl) ?>"
+                                               class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+                                                <i class="fas fa-eye w-4 text-center text-blue-600" aria-hidden="true"></i>
+                                                View
+                                            </a>
+                                            <a href="<?= htmlspecialchars($tabletUrl) ?>"
+                                               class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+                                                <i class="fas fa-tablet-alt w-4 text-center text-emerald-600" aria-hidden="true"></i>
+                                                Tablet
+                                            </a>
+                                            <a href="<?= htmlspecialchars($printUrl) ?>" target="_blank" rel="noopener noreferrer"
+                                               class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+                                                <i class="fas fa-print w-4 text-center text-gray-500" aria-hidden="true"></i>
+                                                Print
+                                            </a>
+                                            <div class="my-1 border-t border-gray-100"></div>
+                                            <a href="<?= htmlspecialchars($deleteUrl) ?>"
+                                               class="js-picklist-confirm-action block px-4 py-2 text-sm text-red-700 hover:bg-red-50 flex items-center gap-2"
+                                               data-confirm="<?= htmlspecialchars($deleteConfirm, ENT_QUOTES, 'UTF-8') ?>">
+                                                <i class="fas fa-trash-alt w-4 text-center text-red-600" aria-hidden="true"></i>
+                                                Delete
+                                            </a>
+                                        </div>
                                     </div>
                                 </td>
                             </tr>
@@ -231,3 +237,4 @@ $plId = static function (array $pl): int {
     <?php endif; ?>
 </div>
 <?php require_once __DIR__ . '/partials/confirm_delete_script.php'; ?>
+<?php require_once __DIR__ . '/partials/row_menu_script.php'; ?>

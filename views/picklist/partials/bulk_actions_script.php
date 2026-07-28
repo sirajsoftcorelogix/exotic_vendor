@@ -60,6 +60,7 @@
 
     function isRowClickIgnored(target) {
         return !!target.closest('.picklist-row-actions')
+            || !!target.closest('.picklist-row-menu')
             || !!target.closest('.js-picklist-expand-image')
             || !!target.closest('a')
             || !!target.closest('button');
