@@ -31,7 +31,7 @@ function resolveProductIdFromOrderImportLine(product $productModel, array $line)
 
 /**
  * For fresh products (no movements, or one zero-balance movement), run stock report refresh.
- * Failures are logged and do not block order import.
+ * Failures do not block order import.
  *
  * @param array<int, true> $refreshedProductIds Dedupe within a single import batch.
  * @return array<string, mixed>
@@ -76,8 +76,6 @@ function tryRefreshFreshProductStockFromApiForOrderLine(
 
         return array_merge(['attempted' => true, 'skipped' => false], $result);
     } catch (Throwable $e) {
-        error_log('[order import fresh stock refresh] product_id=' . $productId . ': ' . $e->getMessage());
-
         return [
             'attempted' => true,
             'skipped' => false,

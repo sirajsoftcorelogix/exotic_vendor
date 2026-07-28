@@ -471,19 +471,12 @@ class OrdersController
                     require_once __DIR__ . '/../helpers/BookPurchaseReplenishment.php';
                     BookPurchaseReplenishment::tryProcessImportedOrderLine($conn, $productModel, $rdata);
                     require_once __DIR__ . '/../helpers/stock_refresh_from_api.php';
-                    $stockRefreshResult = tryRefreshFreshProductStockFromApiForOrderLine(
+                    tryRefreshFreshProductStockFromApiForOrderLine(
                         $conn,
                         $productModel,
                         $rdata,
                         $refreshedFreshStockProductIds
                     );
-                    if (!empty($stockRefreshResult['attempted']) && empty($stockRefreshResult['success'])) {
-                        error_log(
-                            '[order import fresh stock refresh] order=' . ($rdata['order_number'] ?? '')
-                            . ' product_id=' . (int) ($stockRefreshResult['product_id'] ?? 0)
-                            . ' message=' . (string) ($stockRefreshResult['message'] ?? 'failed')
-                        );
-                    }
                 }
 
                 $vendorRaw = trim((string)($item['vendor'] ?? ''));
@@ -2913,19 +2906,12 @@ class OrdersController
                     BookPurchaseReplenishment::tryProcessImportedOrderLine($conn, $productModel, $rdata);
                     $ordersModel->addProducts($rdata);
                     require_once __DIR__ . '/../helpers/stock_refresh_from_api.php';
-                    $stockRefreshResult = tryRefreshFreshProductStockFromApiForOrderLine(
+                    tryRefreshFreshProductStockFromApiForOrderLine(
                         $conn,
                         $productModel,
                         $rdata,
                         $refreshedFreshStockProductIds
                     );
-                    if (!empty($stockRefreshResult['attempted']) && empty($stockRefreshResult['success'])) {
-                        error_log(
-                            '[order refresh fresh stock] order=' . $orderNumber
-                            . ' product_id=' . (int) ($stockRefreshResult['product_id'] ?? 0)
-                            . ' message=' . (string) ($stockRefreshResult['message'] ?? 'failed')
-                        );
-                    }
                 } elseif ($action === 'updated') {
                     $updated++;
                 }
