@@ -335,6 +335,7 @@ class OrdersController
         $result = [];
         $pdata = [];
         $addressdata = [];
+        $refreshedFreshStockProductIds = [];
 
         foreach ($ordersList as $order) {
             $orderId = (string)($order['orderid'] ?? '');
@@ -469,6 +470,13 @@ class OrdersController
                     $imported++;
                     require_once __DIR__ . '/../helpers/BookPurchaseReplenishment.php';
                     BookPurchaseReplenishment::tryProcessImportedOrderLine($conn, $productModel, $rdata);
+                    require_once __DIR__ . '/../helpers/stock_refresh_from_api.php';
+                    tryRefreshFreshProductStockFromApiForOrderLine(
+                        $conn,
+                        $productModel,
+                        $rdata,
+                        $refreshedFreshStockProductIds
+                    );
                 }
 
                 $vendorRaw = trim((string)($item['vendor'] ?? ''));
@@ -2859,6 +2867,7 @@ class OrdersController
         $updated = 0;
         $failed = 0;
         $results = [];
+        $refreshedFreshStockProductIds = [];
 
         foreach ($cart as $item) {
             if (!is_array($item)) {
@@ -2896,6 +2905,13 @@ class OrdersController
                     require_once __DIR__ . '/../helpers/BookPurchaseReplenishment.php';
                     BookPurchaseReplenishment::tryProcessImportedOrderLine($conn, $productModel, $rdata);
                     $ordersModel->addProducts($rdata);
+                    require_once __DIR__ . '/../helpers/stock_refresh_from_api.php';
+                    tryRefreshFreshProductStockFromApiForOrderLine(
+                        $conn,
+                        $productModel,
+                        $rdata,
+                        $refreshedFreshStockProductIds
+                    );
                 } elseif ($action === 'updated') {
                     $updated++;
                 }
