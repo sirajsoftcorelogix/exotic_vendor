@@ -77,7 +77,7 @@ class ExoticIndiaGateway
      *
      * @return array{success:bool,message:string,http_code:int,raw:string,data:array,orders:list<array<string,mixed>>}
      */
-    public function fetchVendorOrderJson(string $orderNumber): array
+    public function fetchOrderJson(string $orderNumber): array
     {
         return $this->orderClient->fetchOrderByNumber($orderNumber);
     }

@@ -95,7 +95,7 @@ $canAddOrderPayment = $paymentPendingAmount > 0.02;
 $canCreateFinalInvoice = !empty($canCreateFinalInvoice);
 $canPublishExoticSync = !empty($canPublishExoticSync);
 $hasExoticSyncPayload = !empty($hasExoticSyncPayload);
-$canFetchVendorOrderJson = !empty($canFetchVendorOrderJson);
+$canFetchOrderJson = !empty($canFetchOrderJson);
 $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurlencode($displayOrderNumber) . '&order_exact=1');
 $salesReturnUrl = base_url('?page=sales_returns&action=create&order_number=' . rawurlencode($displayOrderNumber));
 $invoiceIdForReturn = is_array($invoiceDisplay) ? (int)($invoiceDisplay['id'] ?? 0) : 0;
@@ -168,10 +168,10 @@ $proformaPrintDisabledReason = $canPrintProforma
         </div>
 
         <div class="flex items-center gap-2">
-            <?php if ($canFetchVendorOrderJson): ?>
+            <?php if ($canFetchOrderJson): ?>
                 <button type="button"
-                    id="fetch_vendor_order_json_btn"
-                    onclick="openVendorOrderJsonModal()"
+                    id="fetch_order_json_btn"
+                    onclick="openOrderJsonModal()"
                     class="rounded border border-orange-200 bg-orange-50 px-4 py-1.5 text-sm font-medium text-orange-800 hover:bg-orange-100">
                     Exotic API JSON
                 </button>
@@ -1049,24 +1049,24 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
 </div>
 <?php endif; ?>
 
-<?php if ($canFetchVendorOrderJson): ?>
-<div id="vendorOrderJsonModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[90] p-4" onclick="closeVendorOrderJsonModal(event)">
+<?php if ($canFetchOrderJson): ?>
+<div id="orderJsonModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[90] p-4" onclick="closeOrderJsonModal(event)">
     <div class="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col relative" onclick="event.stopPropagation();">
-        <button type="button" onclick="closeVendorOrderJsonModal()" class="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-sm z-10">✕</button>
+        <button type="button" onclick="closeOrderJsonModal()" class="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-sm z-10">✕</button>
         <div class="p-5 border-b border-gray-200 pr-14">
             <h2 class="text-lg font-bold text-gray-900">Exotic vendor API JSON</h2>
-            <p class="text-sm text-gray-600 mt-1">Live response from <code class="text-xs bg-gray-100 px-1 rounded">vendor-api/order/fetch</code> for order <strong id="vendorOrderJsonOrderLabel"><?php echo htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8'); ?></strong>. Read-only — does not update local data.</p>
+            <p class="text-sm text-gray-600 mt-1">Live response from <code class="text-xs bg-gray-100 px-1 rounded">vendor-api/order/fetch</code> for order <strong id="orderJsonOrderLabel"><?php echo htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8'); ?></strong>. Read-only — does not update local data.</p>
         </div>
         <div class="p-5 overflow-y-auto flex-1 min-h-0">
-            <div id="vendorOrderJsonLoading" class="hidden text-sm text-gray-600 mb-3">Fetching latest JSON from Exotic…</div>
-            <div id="vendorOrderJsonError" class="hidden text-sm text-red-600 mb-3"></div>
-            <div id="vendorOrderJsonMeta" class="hidden text-xs text-gray-500 mb-2"></div>
-            <pre id="vendorOrderJsonPre" class="hidden text-xs leading-relaxed bg-gray-900 text-green-100 rounded-lg p-4 overflow-x-auto whitespace-pre-wrap break-words max-h-[60vh]"></pre>
+            <div id="orderJsonLoading" class="hidden text-sm text-gray-600 mb-3">Fetching latest JSON from Exotic…</div>
+            <div id="orderJsonError" class="hidden text-sm text-red-600 mb-3"></div>
+            <div id="orderJsonMeta" class="hidden text-xs text-gray-500 mb-2"></div>
+            <pre id="orderJsonPre" class="hidden text-xs leading-relaxed bg-gray-900 text-green-100 rounded-lg p-4 overflow-x-auto whitespace-pre-wrap break-words max-h-[60vh]"></pre>
         </div>
         <div class="p-5 border-t border-gray-200 flex justify-end gap-3">
-            <button type="button" id="vendorOrderJsonCopyBtn" disabled onclick="copyVendorOrderJson()" class="px-4 py-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed">Copy JSON</button>
-            <button type="button" onclick="refetchVendorOrderJson()" class="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700">Refetch</button>
-            <button type="button" onclick="closeVendorOrderJsonModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">Close</button>
+            <button type="button" id="orderJsonCopyBtn" disabled onclick="copyOrderJson()" class="px-4 py-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed">Copy JSON</button>
+            <button type="button" onclick="refetchOrderJson()" class="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700">Refetch</button>
+            <button type="button" onclick="closeOrderJsonModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">Close</button>
         </div>
     </div>
 </div>
@@ -1152,6 +1152,15 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
 </div>
 
 <script src="<?php echo base_url(); ?>assets/js/pos_payment_split.js"></script>
+<?php if ($canFetchOrderJson): ?>
+<script>
+window.orderJsonModalConfig = {
+    orderNumber: <?php echo json_encode($displayOrderNumber, JSON_UNESCAPED_UNICODE); ?>,
+    fetchUrl: <?php echo json_encode(base_url('index.php?page=posorders&action=fetch_order_json'), JSON_UNESCAPED_UNICODE); ?>
+};
+</script>
+<script src="<?php echo base_url('assets/js/order_json_modal.js'); ?>"></script>
+<?php endif; ?>
 <script>
     function openInvoiceNumberEditPopup(invoiceId, currentNumber) {
         document.getElementById('edit_invoice_id').value = invoiceId;
@@ -1650,162 +1659,6 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
         orderTotal: <?php echo json_encode(round((float)($paymentSummary['order_total'] ?? 0), 2)); ?>,
         orderNumber: <?php echo json_encode($displayOrderNumber); ?>,
     };
-
-    let vendorOrderJsonLastPayload = null;
-
-    function closeVendorOrderJsonModal(event) {
-        if (event && event.target && event.currentTarget !== event.target) {
-            return;
-        }
-        var modal = document.getElementById('vendorOrderJsonModal');
-        if (modal) {
-            modal.classList.add('hidden');
-        }
-    }
-
-    function renderVendorOrderJsonResult(data) {
-        var loadingEl = document.getElementById('vendorOrderJsonLoading');
-        var errorEl = document.getElementById('vendorOrderJsonError');
-        var metaEl = document.getElementById('vendorOrderJsonMeta');
-        var preEl = document.getElementById('vendorOrderJsonPre');
-        var copyBtn = document.getElementById('vendorOrderJsonCopyBtn');
-        if (loadingEl) {
-            loadingEl.classList.add('hidden');
-        }
-        if (!data || !data.success) {
-            vendorOrderJsonLastPayload = data && data.response ? data.response : null;
-            if (errorEl) {
-                errorEl.textContent = (data && data.message) ? data.message : 'Could not fetch order JSON.';
-                errorEl.classList.remove('hidden');
-            }
-            if (metaEl) {
-                metaEl.classList.add('hidden');
-            }
-            if (preEl) {
-                if (vendorOrderJsonLastPayload) {
-                    preEl.textContent = JSON.stringify(vendorOrderJsonLastPayload, null, 2);
-                    preEl.classList.remove('hidden');
-                    if (copyBtn) {
-                        copyBtn.disabled = false;
-                    }
-                } else {
-                    preEl.classList.add('hidden');
-                    if (copyBtn) {
-                        copyBtn.disabled = true;
-                    }
-                }
-            }
-            return;
-        }
-
-        vendorOrderJsonLastPayload = data.response || data.order || null;
-        if (errorEl) {
-            errorEl.classList.add('hidden');
-            errorEl.textContent = '';
-        }
-        if (metaEl) {
-            var fetchedAt = data.fetched_at ? ('Fetched at ' + data.fetched_at) : 'Fetched just now';
-            metaEl.textContent = fetchedAt + ' — showing full API response envelope.';
-            metaEl.classList.remove('hidden');
-        }
-        if (preEl) {
-            preEl.textContent = JSON.stringify(vendorOrderJsonLastPayload, null, 2);
-            preEl.classList.remove('hidden');
-        }
-        if (copyBtn) {
-            copyBtn.disabled = !vendorOrderJsonLastPayload;
-        }
-    }
-
-    function refetchVendorOrderJson() {
-        var loadingEl = document.getElementById('vendorOrderJsonLoading');
-        var errorEl = document.getElementById('vendorOrderJsonError');
-        var metaEl = document.getElementById('vendorOrderJsonMeta');
-        var preEl = document.getElementById('vendorOrderJsonPre');
-        var copyBtn = document.getElementById('vendorOrderJsonCopyBtn');
-        if (loadingEl) {
-            loadingEl.classList.remove('hidden');
-        }
-        if (errorEl) {
-            errorEl.classList.add('hidden');
-            errorEl.textContent = '';
-        }
-        if (metaEl) {
-            metaEl.classList.add('hidden');
-        }
-        if (preEl) {
-            preEl.classList.add('hidden');
-            preEl.textContent = '';
-        }
-        if (copyBtn) {
-            copyBtn.disabled = true;
-        }
-
-        var url = 'index.php?page=posorders&action=fetch_vendor_order_json&order_number='
-            + encodeURIComponent(orderPaymentState.orderNumber);
-        return fetch(url, {
-            method: 'GET',
-            credentials: 'same-origin',
-            headers: { Accept: 'application/json' },
-        })
-            .then(function(res) {
-                return res.text().then(function(text) {
-                    var data;
-                    try {
-                        data = JSON.parse(text);
-                    } catch (parseErr) {
-                        throw new Error((text || '').trim().slice(0, 200) || 'Invalid server response');
-                    }
-                    if (!res.ok && data && !data.message) {
-                        data.message = 'Request failed (' + res.status + ')';
-                        data.success = false;
-                    }
-                    return data;
-                });
-            })
-            .then(renderVendorOrderJsonResult)
-            .catch(function(err) {
-                renderVendorOrderJsonResult({
-                    success: false,
-                    message: err.message || 'Could not fetch order JSON.',
-                });
-            });
-    }
-
-    function openVendorOrderJsonModal() {
-        var modal = document.getElementById('vendorOrderJsonModal');
-        if (!modal) {
-            return;
-        }
-        modal.classList.remove('hidden');
-        refetchVendorOrderJson();
-    }
-
-    function copyVendorOrderJson() {
-        if (!vendorOrderJsonLastPayload) {
-            return;
-        }
-        var text = JSON.stringify(vendorOrderJsonLastPayload, null, 2);
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(function() {
-                alert('JSON copied to clipboard.');
-            }).catch(function() {
-                alert('Could not copy to clipboard.');
-            });
-            return;
-        }
-        var ta = document.createElement('textarea');
-        ta.value = text;
-        document.body.appendChild(ta);
-        ta.select();
-        try {
-            document.execCommand('copy');
-            alert('JSON copied to clipboard.');
-        } catch (e) {
-            alert('Could not copy to clipboard.');
-        }
-        document.body.removeChild(ta);
-    }
 
     function printOrderPaymentReceipt(paymentId) {
         if (!paymentId) {
