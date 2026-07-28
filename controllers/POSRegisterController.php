@@ -12,6 +12,9 @@ class POSRegisterController
     private $pos;
     private RetailApiClient $retailApiClient;
 
+    /** @var array{id:int,address_title:string}|null|false */
+    private static $defaultWarehouseCache = false;
+
     public function __construct($conn)
     {
         $this->pos = new pos($conn);
@@ -763,6 +766,7 @@ class POSRegisterController
         if (!empty($_SESSION['warehouse_id'])) {
             $warehouse = $usersModel->getWarehouseById($_SESSION['warehouse_id']);
             $warehouseName = $warehouse['address_title'] ?? 'No Warehouse';
+            $_SESSION['pos_warehouse_name'] = $warehouseName;
         }
         // Add "All Products" (slug => label)
         // Put it first:
@@ -2960,26 +2964,37 @@ class POSRegisterController
     /** Default warehouse row from exotic_address (POS / GRN “default store”). */
     private function getDefaultWarehouseRow($conn): ?array
     {
+        if (self::$defaultWarehouseCache !== false) {
+            return self::$defaultWarehouseCache;
+        }
         if (!$conn) {
+            self::$defaultWarehouseCache = null;
+
             return null;
         }
         $stmt = $conn->prepare(
             'SELECT id, address_title FROM exotic_address WHERE is_active = 1 AND is_default = 1 ORDER BY id ASC LIMIT 1'
         );
         if (!$stmt) {
+            self::$defaultWarehouseCache = null;
+
             return null;
         }
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
         if (empty($row['id'])) {
+            self::$defaultWarehouseCache = null;
+
             return null;
         }
 
-        return [
+        self::$defaultWarehouseCache = [
             'id' => (int)$row['id'],
             'address_title' => trim((string)($row['address_title'] ?? '')),
         ];
+
+        return self::$defaultWarehouseCache;
     }
 
     /**
@@ -3008,6 +3023,10 @@ class POSRegisterController
             'current_warehouse_id' => $currentWarehouseId,
             'current_warehouse_name' => $currentWarehouseName,
             'current_stock_qty' => 0.0,
+            'current_location' => '',
+            'total_qty_all_warehouses' => 0.0,
+            'default_store_qty' => null,
+            'default_store_name' => '',
             'mapped_at_current' => false,
             'mapped_anywhere' => false,
             'alternative_warehouses' => [],
@@ -3026,7 +3045,8 @@ class POSRegisterController
         $stockSql = "
             SELECT sm.warehouse_id,
                    COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
-                   sm.running_stock AS stock_qty
+                   sm.running_stock AS stock_qty,
+                   sm.location AS warehouse_location
             FROM vp_stock_movements sm
             INNER JOIN (
                 SELECT warehouse_id, product_id, MAX(id) AS max_id
@@ -3049,10 +3069,13 @@ class POSRegisterController
 
         $mappedAtCurrent = false;
         $currentStock = 0.0;
+        $currentLocation = '';
+        $totalQtyAll = 0.0;
         $alternativeWarehouses = [];
         foreach ($rows as $row) {
             $wid = (int)($row['warehouse_id'] ?? 0);
             $stockQty = (float)($row['stock_qty'] ?? 0);
+            $totalQtyAll += $stockQty;
             $entry = [
                 'warehouse_id' => $wid,
                 'warehouse_name' => trim((string)($row['warehouse_name'] ?? '')),
@@ -3061,6 +3084,7 @@ class POSRegisterController
             if ($wid === $currentWarehouseId) {
                 $mappedAtCurrent = true;
                 $currentStock = $stockQty;
+                $currentLocation = trim((string)($row['warehouse_location'] ?? ''));
             } elseif ($stockQty > 0) {
                 $alternativeWarehouses[] = $entry;
             }
@@ -3068,6 +3092,17 @@ class POSRegisterController
 
         $mappedAnywhere = !empty($rows);
         $defaultWarehouse = $this->getDefaultWarehouseRow($conn);
+        $defaultStoreName = trim((string)($defaultWarehouse['address_title'] ?? ''));
+        $defaultStoreQty = null;
+        if ($defaultWarehouse !== null && !empty($defaultWarehouse['id'])) {
+            $defWhId = (int)$defaultWarehouse['id'];
+            foreach ($rows as $row) {
+                if ((int)($row['warehouse_id'] ?? 0) === $defWhId) {
+                    $defaultStoreQty = (float)($row['stock_qty'] ?? 0);
+                    break;
+                }
+            }
+        }
         $storeLabel = $currentWarehouseName !== '' ? $currentWarehouseName : 'this store';
 
         $altNames = array_values(array_filter(array_map(static function (array $w): string {
@@ -3107,6 +3142,10 @@ class POSRegisterController
             'current_warehouse_id' => $currentWarehouseId,
             'current_warehouse_name' => $currentWarehouseName,
             'current_stock_qty' => $currentStock,
+            'current_location' => $currentLocation,
+            'total_qty_all_warehouses' => $totalQtyAll,
+            'default_store_qty' => $defaultStoreQty,
+            'default_store_name' => $defaultStoreName,
             'mapped_at_current' => $mappedAtCurrent,
             'mapped_anywhere' => $mappedAnywhere,
             'alternative_warehouses' => $alternativeWarehouses,
@@ -3501,26 +3540,19 @@ class POSRegisterController
         $dbPwu = isset($dbRow['product_weight_unit']) ? trim((string)$dbRow['product_weight_unit']) : '';
 
         $warehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
-        $currentWarehouseName = '';
-        if ($warehouseId > 0 && !empty($conn)) {
-            require_once 'models/user/user.php';
+        $currentWarehouseName = trim((string)($_SESSION['pos_warehouse_name'] ?? ''));
+        if ($currentWarehouseName === '' && $warehouseId > 0 && !empty($conn)) {
             $usersModel = new User($conn);
             $whRow = $usersModel->getWarehouseById($warehouseId);
             if (!empty($whRow)) {
                 $currentWarehouseName = trim((string)($whRow['address_title'] ?? ''));
+                if ($currentWarehouseName !== '') {
+                    $_SESSION['pos_warehouse_name'] = $currentWarehouseName;
+                }
             }
         }
 
         $vpId = isset($dbRow['id']) ? (int)$dbRow['id'] : 0;
-        $warehouseLocationOut = '';
-        if ($vpId > 0 && $warehouseId > 0) {
-            $snap = $this->getWarehouseStockSnapshotForProductId($conn, $vpId, $warehouseId);
-            $stockQtyOut = $snap['running_stock'];
-            $warehouseLocationOut = $snap['location'];
-        } else {
-            $stockQtyOut = $data['stock'] ?? 0;
-        }
-
         $stockContext = ($vpId > 0)
             ? $this->resolvePosStockContext($conn, $vpId, $warehouseId, $currentWarehouseName)
             : [
@@ -3532,24 +3564,20 @@ class POSRegisterController
                 'alternative_warehouses' => [],
                 'mapped_at_current' => false,
                 'mapped_anywhere' => false,
+                'current_stock_qty' => 0.0,
+                'current_location' => '',
+                'total_qty_all_warehouses' => null,
+                'default_store_qty' => null,
+                'default_store_name' => '',
             ];
 
-        $siblingSkus = [];
-        if ($dbItemCode !== '') {
-            $siblingSkus = $this->fetchSiblingSkusByItemCode($conn, $dbItemCode, trim($code), $warehouseId);
-        }
-
-        $totalQtyAllWarehouses = null;
-        $defaultStoreQty = null;
-        $defaultStoreName = '';
-        if ($vpId > 0) {
-            $totalQtyAllWarehouses = $this->getTotalStockAcrossWarehouses($conn, $vpId);
-            $defWh = $this->getDefaultWarehouseRow($conn);
-            if ($defWh !== null) {
-                $defaultStoreName = $defWh['address_title'];
-                $defaultStoreQty = $this->getWarehouseStockSnapshotForProductId($conn, $vpId, (int)$defWh['id'])['running_stock'];
-            }
-        }
+        $stockQtyOut = $vpId > 0
+            ? (float)($stockContext['current_stock_qty'] ?? 0)
+            : ($data['stock'] ?? 0);
+        $warehouseLocationOut = (string)($stockContext['current_location'] ?? '');
+        $totalQtyAllWarehouses = $stockContext['total_qty_all_warehouses'] ?? null;
+        $defaultStoreQty = $stockContext['default_store_qty'] ?? null;
+        $defaultStoreName = (string)($stockContext['default_store_name'] ?? '');
 
         $mrpOut = $this->mergeMrpRupee($data, $dbRow);
         if ($mrpOut <= 0 && $data2 !== null) {
@@ -3602,7 +3630,6 @@ class POSRegisterController
             'express_shipping_cost' => $data['express_shipping_cost'] ?? 0,
             'express_shipping_option' => $data['express_shipping_option'] ?? null,
             'addon_options' => $this->normalizePosAddonOptions(is_array($data['addon_options'] ?? null) ? $data['addon_options'] : []),
-            'sibling_skus' => $siblingSkus,
             'item_level' => trim((string)($dbRow['item_level'] ?? '')),
             'is_parent_level' => $this->isParentItemLevel($dbRow['item_level'] ?? ''),
         ];

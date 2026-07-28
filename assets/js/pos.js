@@ -10,6 +10,8 @@ $(function () {
 
   let loadedKeys = new Set();
   let productsByKey = new Map();
+  /** @type {Record<string, number>} */
+  let productApiRequestSeq = {};
 
   const $cards = $('#productsCards');
   const $listHost = $('#productsListContainer');
@@ -74,8 +76,48 @@ $(function () {
     }
   }
 
+  function buildModalSeedFromGrid(row, code) {
+    if (!row || typeof row !== 'object') return null;
+    const lookup = getLookupCode(row) || String(code || '').trim();
+    return Object.assign({}, row, {
+      requested_code: String(code || lookup || '').trim(),
+      sku: row.sku || lookup,
+      item_code: row.item_code || '',
+      gst_percent: row.gst_percent != null ? row.gst_percent : row.gst,
+      _partial: true
+    });
+  }
+
   function getProductKey(p) {
     return (p.id != null && p.id !== '') ? `id:${p.id}` : `code:${p.item_code || ''}`;
+  }
+
+  function fetchProductApiDetails(code, preselectedAddonEntries) {
+    const reqId = (productApiRequestSeq[code] || 0) + 1;
+    productApiRequestSeq[code] = reqId;
+
+    return $.ajax({
+      url: '?page=pos_register&action=get-product-api',
+      type: 'GET',
+      data: { code: code },
+      dataType: 'json'
+    })
+      .done(function (res) {
+        if (productApiRequestSeq[code] !== reqId) return;
+        const p = (res && res.data) ? res.data : {};
+        productApiCache[code] = p;
+        renderProductModal(p, code);
+        applyPreselectedAddonsToModal(preselectedAddonEntries);
+      })
+      .fail(function () {
+        if (productApiRequestSeq[code] !== reqId) return;
+        if (!productApiCache[code]) {
+          $('#pmTitle').text('Could not load product');
+          $('#pmDetails').html(
+            '<div class="col-span-3 text-xs text-red-600">Failed to load product details. Please try again.</div>'
+          );
+        }
+      });
   }
 
   /** Scan/search lookup (may be variant SKU); cart add uses item_code + size/color instead. */
@@ -728,6 +770,9 @@ $(function () {
       $('#pmAddons').html(addonsHtml);
       $('#pmAddonsWrapper').removeClass('hidden');
 
+    } else if (p._partial) {
+      $('#pmAddonsWrapper').removeClass('hidden');
+      $('#pmAddons').html('<div class="text-[10px] text-gray-500 px-1 py-2">Loading add-on options…</div>');
     } else {
       $('#pmAddonsWrapper').addClass('hidden');
       $('#pmAddons').html('');
@@ -1066,13 +1111,12 @@ data-code="${lookupCode}">
   // EVENT LISTENERS (only products & modal)
   // ────────────────────────────────────────────────
 
-  $cards.on('click', '.product-card1', function () {
+  $cards.on('click', '.product-card', function () {
     const key = $(this).data('pkey');
-    const p = productsByKey.get(key);
-    if (!p) return;
-
-    renderProductModal(p, key);
-    openModal();
+    const code = $(this).data('code');
+    if (!code) return;
+    const seed = key ? productsByKey.get(String(key)) : null;
+    openProductModalByCode(code, [], seed || null);
   });
 
   $('[data-category]').on('click', function () {
@@ -1093,13 +1137,7 @@ data-code="${lookupCode}">
     currentCategory = $(this).data('category') || '';
     resetAndLoad();
   });
-  $(document).on('click', '.product-card', function () {
-
-    let code = $(this).data('code');
-    if (!code) return;
-    openProductModalByCode(code, []);
-  });
-  function openProductModalByCode(code, preselectedAddonEntries = []) {
+  function openProductModalByCode(code, preselectedAddonEntries = [], seedProduct = null) {
     if (!code) return;
     modalPreselectedAddonEntries = normalizeAddonEntries(preselectedAddonEntries);
     openModal();
@@ -1114,30 +1152,21 @@ data-code="${lookupCode}">
       return;
     }
 
-    //  LOADING STATE
-    $('#pmTitle').text('Loading...');
-    $('#pmDetails').html('Loading...');
-    $('#pmModalPrice').addClass('hidden').text('');
-    $('#modal_item_level').val('');
-    $('#pmAddToCartBtn')
-      .prop('disabled', false)
-      .removeClass('opacity-50 cursor-not-allowed')
-      .attr('title', '');
+    const seed = buildModalSeedFromGrid(seedProduct, code);
+    if (seed) {
+      renderProductModal(seed, code);
+    } else {
+      $('#pmTitle').text('Loading...');
+      $('#pmDetails').html('Loading...');
+      $('#pmModalPrice').addClass('hidden').text('');
+      $('#modal_item_level').val('');
+      $('#pmAddToCartBtn')
+        .prop('disabled', false)
+        .removeClass('opacity-50 cursor-not-allowed')
+        .attr('title', '');
+    }
 
-    $.ajax({
-      url: '?page=pos_register&action=get-product-api',
-      type: 'GET',
-      data: { code: code },
-      dataType: 'json',
-      success: function (res) {
-        let p = res.data || {};
-        //  SAVE CACHE
-        productApiCache[code] = p;
-        //  USE EXISTING MODAL FUNCTION
-        renderProductModal(p, code);
-        applyPreselectedAddonsToModal(modalPreselectedAddonEntries);
-      }
-    });
+    fetchProductApiDetails(code, modalPreselectedAddonEntries);
   }
   window.openProductModalByCode = openProductModalByCode;
   function checkAvailabilityAndMaybeOpen(product) {
@@ -1147,7 +1176,7 @@ data-code="${lookupCode}">
     const sku = product.sku != null ? String(product.sku) : '';
     const codeForPopup = sku || itemCode;
     if (!codeForPopup) return;
-    openProductModalByCode(codeForPopup, []);
+    openProductModalByCode(codeForPopup, [], product);
   }
   function renderModalData(p) {
 
