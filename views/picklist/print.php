@@ -29,7 +29,7 @@ $showBookColumns = picklist_any_book_items($items);
         table { width: 100%; border-collapse: collapse; }
         th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; }
         th { background: #f3f4f6; }
-        th.loc, td.loc { width: 6%; max-width: 6%; }
+        th.loc, td.loc { width: 9%; max-width: 9%; }
         .loc { font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .item-img { width: 56px; height: 56px; object-fit: contain; }
         .title-meta { margin-top: 4px; font-size: 10px; color: #555; line-height: 1.35; }

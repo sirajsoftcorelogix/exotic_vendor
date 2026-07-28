@@ -85,7 +85,7 @@ include __DIR__ . '/partials/detail_hero.php';
                 <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
                     <th class="px-3 py-3 w-10"></th>
                     <th class="px-3 py-3 whitespace-nowrap">#</th>
-                    <th class="px-2 py-3 whitespace-nowrap w-24 max-w-24">Location</th>
+                    <th class="px-2 py-3 whitespace-nowrap w-36 max-w-36">Location</th>
                     <th class="px-3 py-3 whitespace-nowrap">Order #</th>
                     <th class="px-3 py-3 whitespace-nowrap">SKU</th>
                     <th class="px-3 py-3 min-w-[12rem]">Item Title</th>
@@ -126,7 +126,7 @@ include __DIR__ . '/partials/detail_hero.php';
                         </td>
                         <td class="px-3 py-3 align-middle tabular-nums text-gray-500"><?= $idx + 1 ?></td>
                         <?php $locationText = (string) ($item['warehouse_location'] ?: '—'); ?>
-                        <td class="px-2 py-3 align-middle font-semibold text-amber-800 truncate max-w-24" title="<?= htmlspecialchars($locationText, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($locationText) ?></td>
+                        <td class="px-2 py-3 align-middle font-semibold text-amber-800 truncate max-w-36" title="<?= htmlspecialchars($locationText, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($locationText) ?></td>
                         <td class="px-3 py-3 align-middle whitespace-nowrap font-mono text-xs text-gray-800">
                             <?php $orderNumber = trim((string) ($item['order_number'] ?? '')); ?>
                             <?php if ($orderNumber !== ''): ?>
