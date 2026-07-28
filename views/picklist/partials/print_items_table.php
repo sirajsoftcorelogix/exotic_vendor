@@ -14,7 +14,7 @@ $startIndex = (int) ($startIndex ?? 0);
     <thead>
         <tr>
             <th>#</th>
-            <th>Location</th>
+            <th class="loc">Location</th>
             <th>Order Number</th>
             <th>SKU</th>
             <th>Item Title</th>
@@ -26,14 +26,13 @@ $startIndex = (int) ($startIndex ?? 0);
             <?php endif; ?>
             <?php if ($showBookColumns): ?>
                 <th>Publisher</th>
-                <th>Cover Type</th>
             <?php endif; ?>
             <th>Picked</th>
         </tr>
     </thead>
     <tbody>
         <?php if ($printItems === []): ?>
-            <?php $emptyColspan = 9 + ($showShortfallColumns ? 1 : 0) + ($showBookColumns ? 2 : 0); ?>
+            <?php $emptyColspan = 9 + ($showShortfallColumns ? 1 : 0) + ($showBookColumns ? 1 : 0); ?>
             <tr>
                 <td colspan="<?= $emptyColspan ?>" style="text-align:center;color:#666;">No items in this section.</td>
             </tr>
@@ -73,7 +72,6 @@ $startIndex = (int) ($startIndex ?? 0);
                 <?php endif; ?>
                 <?php if ($showBookColumns): ?>
                     <td><?= $isBook ? htmlspecialchars((string) ($item['publisher'] ?? '—')) : '—' ?></td>
-                    <td><?= $isBook ? htmlspecialchars((string) ($item['cover_type'] ?? '—')) : '—' ?></td>
                 <?php endif; ?>
                 <td style="width: 48px;">&nbsp;</td>
             </tr>
