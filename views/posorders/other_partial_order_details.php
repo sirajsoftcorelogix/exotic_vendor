@@ -290,10 +290,6 @@ $proformaPrintDisabledReason = $canPrintProforma
                         $lineId = (int)($item['id'] ?? 0);
                         $lineStatus = (string)($item['status'] ?? '');
                         $lineStatusLabel = (string)($statusList[$lineStatus] ?? ucwords(str_replace('_', ' ', $lineStatus)));
-                        $lineAgentId = (int)($item['agent_id'] ?? 0);
-                        $lineAgentName = $lineAgentId > 0 ? (string)($staff_list[$lineAgentId] ?? 'N/A') : 'N/A';
-                        $linePriority = trim((string)($item['priority'] ?? ''));
-                        $lineEsd = trim((string)($item['esd'] ?? ''));
                         $statusOrderPayload = $buildStatusOrderPayload($item);
                     ?>
                         <div class="flex items-center gap-4 accordion-trigger">
@@ -346,11 +342,6 @@ $proformaPrintDisabledReason = $canPrintProforma
                                                     </p>
                                                 <?php endforeach; ?>
                                             <?php endif; ?>
-                                            <div class="grid grid-cols-1 gap-1 pt-2 text-[12px] text-black-600">
-                                                <p><span class="font-bold text-black">Priority</span>: <?php echo $linePriority !== '' ? htmlspecialchars(ucfirst($linePriority)) : '—'; ?></p>
-                                                <p><span class="font-bold text-black">Agent</span>: <?php echo htmlspecialchars($lineAgentName); ?></p>
-                                                <p><span class="font-bold text-black">Ship by</span>: <?php echo $lineEsd !== '' ? htmlspecialchars(date('d M Y', strtotime($lineEsd))) : '—'; ?></p>
-                                            </div>
                                         </div>
                                         <div class="flex items-center gap-12">
                                             <?php if ($hasExtendedPricing): ?>
