@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/../../helpers/stock_report_filters.php';
 $filtersPanelOpen = stockReportFiltersPanelOpen($filters ?? [], !empty($can_change_warehouse));
+$canBulkRefreshStock = !empty($can_bulk_refresh_stock);
+$stockReportTableColspan = $canBulkRefreshStock ? 8 : 7;
 $selectedCategory = (string)($filters['category'] ?? 'allProducts');
 $groupFilterFields = is_array($group_filter_fields ?? null) ? $group_filter_fields : getStockReportGroupFilterFieldDefinitions();
 $rowCount = is_array($rows ?? null) ? count($rows) : 0;
@@ -235,7 +237,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
   <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-gray-50/80 px-5 py-3">
       <p class="text-sm text-gray-600">
-        <?php if (!empty($rows)): ?>
+        <?php if (!empty($rows) && $canBulkRefreshStock): ?>
           <span id="stockReportSelectedCount" class="font-semibold text-gray-900 tabular-nums">0</span>
           <span> selected on this page</span>
         <?php else: ?>
@@ -251,7 +253,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
           <i class="fas fa-file-excel text-xs" aria-hidden="true"></i>
           <span>Export to Excel</span>
         </button>
-        <?php if (!empty($rows)): ?>
+        <?php if ($canBulkRefreshStock && !empty($rows)): ?>
           <button
             type="button"
             id="stockReportBulkRefreshBtn"
@@ -267,6 +269,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
       <table class="min-w-full text-left">
         <thead class="sticky top-0 z-10">
           <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
+            <?php if ($canBulkRefreshStock): ?>
             <th class="px-5 py-3.5 whitespace-nowrap w-12">
               <?php if (!empty($rows)): ?>
                 <input
@@ -277,6 +280,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
                   title="Select all on this page">
               <?php endif; ?>
             </th>
+            <?php endif; ?>
             <th class="px-5 py-3.5 whitespace-nowrap">Image</th>
             <th class="px-5 py-3.5 whitespace-nowrap">SKU</th>
             <th class="px-5 py-3.5 whitespace-nowrap">Group Name</th>
@@ -289,7 +293,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         <tbody class="divide-y divide-gray-100">
           <?php if (empty($rows)): ?>
             <tr>
-              <td colspan="8" class="px-5 py-16 text-center">
+              <td colspan="<?= (int) $stockReportTableColspan ?>" class="px-5 py-16 text-center">
                 <div class="mx-auto flex max-w-sm flex-col items-center">
                   <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
                     <i class="fas fa-inbox" aria-hidden="true"></i>
@@ -317,6 +321,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
                 $canInlineStockRefresh = isStockReportInlineRefreshEligible($movementCount, $soleMovementBalance);
               ?>
               <tr class="odd:bg-white even:bg-gray-50/40 hover:bg-amber-50/50 transition-colors" data-product-id="<?= $productId ?>">
+                <?php if ($canBulkRefreshStock): ?>
                 <td class="px-5 py-4 align-top">
                   <input
                     type="checkbox"
@@ -325,6 +330,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
                     data-sku-label="<?= htmlspecialchars($skuLabel, ENT_QUOTES, 'UTF-8') ?>"
                     aria-label="Select <?= htmlspecialchars($skuLabel, ENT_QUOTES, 'UTF-8') ?>">
                 </td>
+                <?php endif; ?>
                 <td class="px-5 py-4 align-top">
                   <img
                     src="<?= htmlspecialchars($imgUrl) ?>"

@@ -1256,6 +1256,7 @@ class POSRegisterController
             'total_rows' => $totalRows,
             'total_pages' => $totalPages,
             'can_change_warehouse' => $isAdmin,
+            'can_bulk_refresh_stock' => canSrEmpAccess(),
             'warehouses' => $warehouses,
             'user_email' => trim((string) ($_SESSION['user']['email'] ?? '')),
         ]);
@@ -1307,6 +1308,11 @@ class POSRegisterController
 
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
             echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        if (!canSrEmpAccess()) {
+            echo json_encode(['success' => false, 'message' => 'Access denied.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
 
@@ -1393,6 +1399,11 @@ class POSRegisterController
             exit;
         }
 
+        if (!canSrEmpAccess()) {
+            echo json_encode(['success' => false, 'message' => 'Access denied.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
         require_once __DIR__ . '/../helpers/mail_helper.php';
         global $conn;
         $usersModel = new User($conn);
@@ -1469,6 +1480,11 @@ class POSRegisterController
 
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
             echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        if (!canSrEmpAccess()) {
+            echo json_encode(['success' => false, 'message' => 'Access denied.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
 
