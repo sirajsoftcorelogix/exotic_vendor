@@ -159,19 +159,21 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 
       <!-- Search -->
       <div class="relative w-full max-w-lg">
-        <input
-          class="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm focus:border-orange-500 outline-none"
-          placeholder="Search product by Name or SKU"
+        <textarea
+          class="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm focus:border-orange-500 outline-none resize-none min-h-[2.5rem] max-h-24 leading-snug"
+          placeholder="Search by name or SKU — paste multiple SKUs separated by comma or new line"
           id="searchName"
+          rows="2"
           autocomplete="off"
           aria-autocomplete="list"
           aria-controls="skuSuggest"
-          aria-expanded="false" />
+          aria-expanded="false"></textarea>
         <div
           id="skuSuggest"
           class="absolute left-0 right-0 top-full z-[9999] mt-1 hidden max-h-72 overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
         </div>
         <p id="posSkuSearchError" class="hidden mt-2 text-xs font-medium text-red-600"></p>
+        <p class="mt-1 text-[10px] text-slate-500 leading-snug">Paste from Excel — one SKU per row, or comma-separated.</p>
       </div>
 
       <!-- Right -->
