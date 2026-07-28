@@ -1769,9 +1769,14 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
                 <div class="mb-[15px]">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Snippet Description:</label>
-                    <textarea 
-                        class="w-full min-h-[80px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] focus:outline-none focus:border-[#999] resize-y" 
-                        name="snippet_description"><?= htmlspecialchars($data['form2']['snippet_description'] ?? '') ?></textarea>
+                    <textarea
+                        id="snippet_description_input"
+                        name="snippet_description"
+                        class="w-full min-h-[120px] border border-[#ccc] rounded-[4px] px-2.5 py-2 text-[13px] text-[#333] focus:outline-none focus:border-[#999] resize-y"
+                    ><?php
+                        $saved_snippet_description = (string) ($data['form2']['snippet_description'] ?? '');
+                        echo str_replace('</textarea', '&lt;/textarea', $saved_snippet_description);
+                    ?></textarea>
                 </div>
                 <div class="mb-[15px]">
                     <label class="block text-xs font-bold text-[#222] mb-[5px]">Long Description:</label>
@@ -2826,6 +2831,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const desktopInboundForm = document.getElementById('product_form');
         window.syncInboundDesktopFormBeforeSave = function () {
+            CKEDITOR?.instances?.snippet_description_input?.updateElement();
             CKEDITOR?.instances?.long_description_input?.updateElement();
             CKEDITOR?.instances?.long_description_india_input?.updateElement();
             if (authorTomSelect) syncAuthorPipeValue(authorTomSelect);
@@ -2906,6 +2912,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
+        initInboundLongDescriptionEditor('snippet_description_input', 'Snippet Description');
         initInboundLongDescriptionEditor('long_description_input', 'Long Description');
         initInboundLongDescriptionEditor('long_description_india_input', 'Long Description (India)');
 
