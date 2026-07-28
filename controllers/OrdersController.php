@@ -8,6 +8,8 @@ require_once 'models/picklist/Picklist.php';
 require_once 'helpers/payment_type_groups.php';
 require_once 'helpers/order_filter_autocomplete.php';
 require_once 'helpers/order_list_filters.php';
+require_once __DIR__ . '/../integrations/exotic/Clients/OrderClient.php';
+require_once __DIR__ . '/../integrations/exotic/Support/VendorOrderFetchParser.php';
 $ordersModel = new Order($conn);
 $commanModel = new Tables($conn);
 $savedSearchModel = new SavedSearch($conn);
@@ -550,61 +552,61 @@ class OrdersController
      */
     private function fetchVendorOrderPayloadForCheckout(string $orderNumber): array
     {
-        $orderNumber = trim($orderNumber);
-        if ($orderNumber === '') {
-            return ['ok' => false, 'orders' => [], 'error' => 'Order number missing'];
+        $result = (new OrderClient())->fetchOrderByNumber($orderNumber);
+        if (empty($result['success'])) {
+            return ['ok' => false, 'orders' => [], 'error' => (string) ($result['message'] ?? 'No order data from vendor API')];
         }
 
-        $url = 'https://www.exoticindia.com/vendor-api/order/fetch';
-        $postData = [
-            'makeRequestOf' => 'vendors-orderjson',
-            'orderid' => $orderNumber,
-        ];
-        $headers = [
-            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-            'x-adminapitest: 1',
-            'Content-Type: application/x-www-form-urlencoded',
-        ];
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 45);
-        $response = curl_exec($ch);
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        if ($response === false) {
-            return ['ok' => false, 'orders' => [], 'error' => 'Vendor API error: ' . $error];
-        }
-
-        $decoded = json_decode($response, true);
-        if (!is_array($decoded) || empty($decoded['orders']) || !is_array($decoded['orders'])) {
-            return ['ok' => false, 'orders' => [], 'error' => 'No order data from vendor API'];
-        }
-
-        return ['ok' => true, 'orders' => $this->normalizeVendorOrdersList($decoded['orders']), 'error' => ''];
+        return ['ok' => true, 'orders' => $result['orders'], 'error' => ''];
     }
 
     /**
-     * Vendor API returns orders as a list or as an object keyed by order id.
-     *
-     * @param array<int|string, array<string, mixed>> $orders
-     * @return list<array<string, mixed>>
+     * On-demand live JSON from vendor-api/order/fetch (investigation only; does not import).
      */
-    private function normalizeVendorOrdersList(array $orders): array
+    public function fetchVendorOrderJsonAjax(): void
     {
-        if ($orders === []) {
-            return [];
+        $this->assertCanRefreshOrdersFromVendor();
+
+        $orderNumber = trim((string) ($_GET['order_number'] ?? $_POST['order_number'] ?? ''));
+        if ($orderNumber === '') {
+            $payload = $this->readRefreshOrderJsonPayload();
+            $orderNumber = $this->extractRefreshOrderNumber($payload);
         }
 
-        if (array_is_list($orders)) {
-            return $orders;
+        if ($orderNumber === '') {
+            $this->sendRefreshOrderJson([
+                'success' => false,
+                'message' => 'Order number is required.',
+            ], 400);
         }
 
-        return array_values($orders);
+        try {
+            $result = (new OrderClient())->fetchOrderByNumber($orderNumber);
+            if (empty($result['success'])) {
+                $this->sendRefreshOrderJson([
+                    'success' => false,
+                    'message' => (string) ($result['message'] ?? 'No order data from vendor API'),
+                    'order_number' => $orderNumber,
+                    'response' => $result['data'] ?? null,
+                    'response_raw' => !empty($result['raw']) ? $result['raw'] : null,
+                ], 502);
+            }
+
+            $decoded = is_array($result['data'] ?? null) ? $result['data'] : [];
+            $this->sendRefreshOrderJson([
+                'success' => true,
+                'order_number' => $orderNumber,
+                'fetched_at' => date('c'),
+                'order' => VendorOrderFetchParser::findOrder($decoded, $orderNumber),
+                'response' => $decoded,
+            ]);
+        } catch (\Throwable $e) {
+            error_log('[fetch_vendor_order_json] ' . $e->getMessage());
+            $this->sendRefreshOrderJson([
+                'success' => false,
+                'message' => 'Fetch failed: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
