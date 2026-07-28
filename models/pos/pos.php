@@ -411,7 +411,6 @@ class pos
     private function buildStockReportQueryContext(array $filters, bool $includeLocation): ?array
     {
         $warehouseId = isset($filters['warehouse_id']) ? (int) $filters['warehouse_id'] : (isset($_SESSION['warehouse_id']) ? (int) $_SESSION['warehouse_id'] : 0);
-        $search = trim((string) ($filters['search'] ?? ''));
         $category = trim((string) ($filters['category'] ?? ''));
 
         if ($warehouseId <= 0) {
@@ -420,9 +419,12 @@ class pos
 
         require_once dirname(__DIR__, 2) . '/helpers/stock_report_filters.php';
 
+        $search = trim((string) ($filters['search'] ?? ''));
+        $hasSearch = parseStockReportSearchTerms($search) !== [];
+
         // Latest movement row per product in selected warehouse using MAX(id) subquery.
         // When searching, LEFT JOIN so products with no movements in this warehouse still appear with 0 stock.
-        $joinType = ($search !== '') ? 'LEFT' : 'INNER';
+        $joinType = $hasSearch ? 'LEFT' : 'INNER';
         $join = "
             {$joinType} JOIN (
                 SELECT sm1.product_id, sm1.running_stock, sm1.location
@@ -449,13 +451,8 @@ class pos
             $types .= 's';
         }
 
-        if ($search !== '') {
-            $where .= ' AND (p.item_code LIKE ? OR p.title LIKE ? OR p.sku LIKE ?) ';
-            $like = '%' . $search . '%';
-            $params[] = $like;
-            $params[] = $like;
-            $params[] = $like;
-            $types .= 'sss';
+        if ($hasSearch) {
+            appendStockReportSearchFilterSql($where, $params, $types, $search);
         }
 
         appendStockReportExtraFiltersSql($where, $params, $types, $filters, $this->db);

@@ -59,7 +59,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         </span>
         <div class="min-w-0">
           <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
-          <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Warehouse, keyword, location, group name, physical/local stock status, group-specific fields, and rows limit.</p>
+          <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Warehouse, keyword (multiple SKUs supported), location, group name, physical/local stock status, group-specific fields, and rows limit.</p>
         </div>
       </div>
       <span class="shrink-0 inline-flex items-center gap-2 text-xs font-semibold text-amber-800">
@@ -90,13 +90,13 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
 
         <div class="<?= !empty($can_change_warehouse) ? 'sm:col-span-2' : 'sm:col-span-2 lg:col-span-2' ?>">
           <label class="block text-xs font-semibold text-gray-600 mb-1">Keyword</label>
-          <input
-            type="text"
+          <textarea
             name="search"
-            value="<?= htmlspecialchars($filters['search'] ?? '') ?>"
-            placeholder="Item code, SKU, title"
-            class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition"
-          >
+            rows="2"
+            placeholder="Item code, SKU, or title — paste multiple SKUs separated by comma, space, or new line"
+            class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition resize-y min-h-[2.75rem]"
+          ><?= htmlspecialchars($filters['search'] ?? '') ?></textarea>
+          <p class="mt-1 text-[11px] text-gray-500">Paste from Excel or Google Sheets — one SKU per cell/row, or comma/space separated.</p>
         </div>
 
         <div>
