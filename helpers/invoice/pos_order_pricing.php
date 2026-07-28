@@ -95,8 +95,11 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
     $couponReduce = round((float)($meta['coupon_discount'] ?? 0), 2);
     $giftReduce = round((float)($meta['gift_discount'] ?? 0), 2);
     $cashReduce = round((float)($meta['cash_discount'] ?? 0), 2);
-    $couponName = trim((string)($meta['coupon_display_name'] ?? ''));
     $giftName = trim((string)($meta['gift_voucher_name'] ?? ''));
+    $couponCandidates = [
+        $meta['coupon_raw'] ?? '',
+        $meta['coupon_display_name'] ?? '',
+    ];
 
     if (is_array($orderInfo)) {
         if ($couponReduce <= 0) {
@@ -108,9 +111,7 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
         if ($cashReduce <= 0) {
             $cashReduce = round((float)($orderInfo['custom_reduce'] ?? 0), 2);
         }
-        if ($couponName === '') {
-            $couponName = trim((string)($orderInfo['coupon'] ?? ''));
-        }
+        $couponCandidates[] = $orderInfo['coupon'] ?? '';
         if ($giftName === '') {
             $giftName = trim((string)($orderInfo['giftvoucher'] ?? ''));
         }
@@ -129,13 +130,13 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
         if ($cashReduce <= 0) {
             $cashReduce = max($cashReduce, round((float)($orderRow['custom_reduce'] ?? 0), 2));
         }
-        if ($couponName === '') {
-            $couponName = trim((string)($orderRow['coupon'] ?? ''));
-        }
+        $couponCandidates[] = $orderRow['coupon'] ?? '';
         if ($giftName === '') {
             $giftName = trim((string)($orderRow['giftvoucher'] ?? ''));
         }
     }
+
+    $couponRaw = pos_order_pick_best_coupon_raw($couponCandidates);
 
     if ($couponReduce > 0) {
         $meta['coupon_discount'] = $couponReduce;
@@ -146,9 +147,9 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
     if ($cashReduce > 0) {
         $meta['cash_discount'] = $cashReduce;
     }
-    if ($couponName !== '') {
-        $meta['coupon_display_name'] = pos_order_parse_coupon_code($couponName);
-        $meta['coupon_raw'] = $couponName;
+    if ($couponRaw !== '') {
+        $meta['coupon_display_name'] = pos_order_parse_coupon_code($couponRaw);
+        $meta['coupon_raw'] = $couponRaw;
     }
     if ($giftName !== '') {
         $meta['gift_voucher_name'] = $giftName;
@@ -726,13 +727,11 @@ function pos_order_build_order_level_discount_lines(array $discountMeta, ?array 
     }
 
     if ($coupon > 0.001) {
-        $couponRaw = trim((string)($discountMeta['coupon_raw'] ?? ''));
-        if ($couponRaw === '') {
-            $couponRaw = trim((string)($discountMeta['coupon_display_name'] ?? ''));
-        }
-        if ($couponRaw === '' && is_array($orderInfo)) {
-            $couponRaw = trim((string)($orderInfo['coupon'] ?? ''));
-        }
+        $couponRaw = pos_order_pick_best_coupon_raw([
+            $discountMeta['coupon_raw'] ?? '',
+            $discountMeta['coupon_display_name'] ?? '',
+            is_array($orderInfo) ? ($orderInfo['coupon'] ?? '') : '',
+        ]);
         $lines[] = [
             'label' => pos_order_coupon_discount_label($couponRaw),
             'amount' => $coupon,
