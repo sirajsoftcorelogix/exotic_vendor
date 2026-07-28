@@ -47,14 +47,14 @@ $showComponentBreakdown = count($pricingComponents) > 0 && ($customReduce > 0.00
             <?php if ($orderDiscountLines !== []): ?>
                 <?php foreach ($orderDiscountLines as $discountLine): ?>
                     <div class="flex items-center justify-between gap-4 py-1">
-                        <span class="text-gray-600"><?php echo htmlspecialchars((string)($discountLine['label'] ?? 'Custom Discount')); ?></span>
-                        <span class="tabular-nums font-semibold text-emerald-700">- <?php echo $formatAmount((float)($discountLine['amount'] ?? 0)); ?></span>
+                        <span class="text-gray-600"><?php echo htmlspecialchars((string)($discountLine['label'] ?? 'Custom Discount:')); ?></span>
+                        <span class="tabular-nums font-semibold text-emerald-700"><?php echo $formatAmount((float)($discountLine['amount'] ?? 0)); ?></span>
                     </div>
                 <?php endforeach; ?>
             <?php elseif ($customReduce > 0.001): ?>
                 <div class="flex items-center justify-between gap-4 py-1">
-                    <span class="text-gray-600">Custom Discount</span>
-                    <span class="tabular-nums font-semibold text-emerald-700">- <?php echo $formatAmount($customReduce); ?></span>
+                    <span class="text-gray-600">Custom Discount:</span>
+                    <span class="tabular-nums font-semibold text-emerald-700"><?php echo $formatAmount($customReduce); ?></span>
                 </div>
             <?php endif; ?>
         </div>

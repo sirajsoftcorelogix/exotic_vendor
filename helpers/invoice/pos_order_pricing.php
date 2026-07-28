@@ -88,12 +88,15 @@ function pos_invoice_parse_discount_meta(?string $notes): array
  */
 function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, array $orderLines = []): array
 {
+    require_once __DIR__ . '/pos_invoice_amount_summary.php';
+
     $meta = is_array($invoice) ? pos_invoice_parse_discount_meta($invoice['notes'] ?? null) : [];
 
     $couponReduce = round((float)($meta['coupon_discount'] ?? 0), 2);
     $giftReduce = round((float)($meta['gift_discount'] ?? 0), 2);
     $cashReduce = round((float)($meta['cash_discount'] ?? 0), 2);
     $couponName = trim((string)($meta['coupon_display_name'] ?? ''));
+    $giftName = trim((string)($meta['gift_voucher_name'] ?? ''));
 
     if (is_array($orderInfo)) {
         if ($couponReduce <= 0) {
@@ -107,6 +110,9 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
         }
         if ($couponName === '') {
             $couponName = trim((string)($orderInfo['coupon'] ?? ''));
+        }
+        if ($giftName === '') {
+            $giftName = trim((string)($orderInfo['giftvoucher'] ?? ''));
         }
     }
 
@@ -126,6 +132,9 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
         if ($couponName === '') {
             $couponName = trim((string)($orderRow['coupon'] ?? ''));
         }
+        if ($giftName === '') {
+            $giftName = trim((string)($orderRow['giftvoucher'] ?? ''));
+        }
     }
 
     if ($couponReduce > 0) {
@@ -138,7 +147,11 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
         $meta['cash_discount'] = $cashReduce;
     }
     if ($couponName !== '') {
-        $meta['coupon_display_name'] = $couponName;
+        $meta['coupon_display_name'] = pos_order_parse_coupon_code($couponName);
+        $meta['coupon_raw'] = $couponName;
+    }
+    if ($giftName !== '') {
+        $meta['gift_voucher_name'] = $giftName;
     }
 
     return $meta;
@@ -706,27 +719,33 @@ function pos_order_build_order_level_discount_lines(array $discountMeta, ?array 
     $gift = round((float)($discountMeta['gift_discount'] ?? 0), 2);
 
     if ($cash > 0.001) {
-        $mode = trim((string)($discountMeta['custom_discount_mode'] ?? ''));
-        $label = $mode === 'percent'
-            ? pos_invoice_custom_discount_label($discountMeta)
-            : 'Custom Discount';
         $lines[] = [
-            'label' => $label,
+            'label' => pos_order_custom_discount_display_label($discountMeta),
             'amount' => $cash,
         ];
     }
 
     if ($coupon > 0.001) {
+        $couponRaw = trim((string)($discountMeta['coupon_raw'] ?? ''));
+        if ($couponRaw === '') {
+            $couponRaw = trim((string)($discountMeta['coupon_display_name'] ?? ''));
+        }
+        if ($couponRaw === '' && is_array($orderInfo)) {
+            $couponRaw = trim((string)($orderInfo['coupon'] ?? ''));
+        }
         $lines[] = [
-            'label' => pos_invoice_coupon_label($discountMeta),
+            'label' => pos_order_coupon_discount_label($couponRaw),
             'amount' => $coupon,
         ];
     }
 
     if ($gift > 0.001) {
-        $giftName = is_array($orderInfo) ? trim((string)($orderInfo['giftvoucher'] ?? '')) : '';
+        $giftName = trim((string)($discountMeta['gift_voucher_name'] ?? ''));
+        if ($giftName === '' && is_array($orderInfo)) {
+            $giftName = trim((string)($orderInfo['giftvoucher'] ?? ''));
+        }
         $lines[] = [
-            'label' => $giftName !== '' ? 'Gift Voucher (' . $giftName . ')' : 'Gift Voucher',
+            'label' => pos_order_gift_voucher_discount_label($giftName),
             'amount' => $gift,
         ];
     }
@@ -757,7 +776,7 @@ function pos_order_line_discount_lines(array $discountMeta, float $lineAllocated
 
     if (count($sourceLines) === 1) {
         return [[
-            'label' => (string)($sourceLines[0]['label'] ?? 'Custom Discount'),
+            'label' => (string)($sourceLines[0]['label'] ?? 'Custom Discount:'),
             'amount' => round($lineAllocatedDiscount, 2),
         ]];
     }
@@ -772,7 +791,7 @@ function pos_order_line_discount_lines(array $discountMeta, float $lineAllocated
         $allocated += $share;
         if ($share > 0.001) {
             $result[] = [
-                'label' => (string)($row['label'] ?? 'Custom Discount'),
+                'label' => (string)($row['label'] ?? 'Custom Discount:'),
                 'amount' => $share,
             ];
         }
@@ -840,9 +859,10 @@ function pos_order_aggregate_line_pricing_summary(array $linePricingByLineId, ?a
  *
  * @param array{gross_incl: float, custom_reduce: float, total_gst: float, net_chargeable: float} $aggregate
  * @param array<string, mixed> $posMeta
+ * @param array<string, mixed>|null $orderInfo
  * @return list<array{label: string, amount: float, note: string, is_grand: bool}>
  */
-function pos_order_build_summary_rows_from_line_pricing(array $aggregate, array $posMeta = []): array
+function pos_order_build_summary_rows_from_line_pricing(array $aggregate, array $posMeta = [], ?array $orderInfo = null): array
 {
     require_once __DIR__ . '/pos_invoice_amount_summary.php';
 
@@ -854,37 +874,10 @@ function pos_order_build_summary_rows_from_line_pricing(array $aggregate, array 
         'is_grand' => false,
     ]];
 
-    $cash = (float)$aggregate['custom_reduce'];
-    if ($cash <= 0.001) {
-        $cash = round((float)($posMeta['cash_discount'] ?? 0), 2);
-    }
-    if ($cash > 0.001) {
-        $mode = trim((string)($posMeta['custom_discount_mode'] ?? ''));
+    foreach (pos_order_build_order_level_discount_lines($posMeta, $orderInfo) as $discountLine) {
         $rows[] = [
-            'label' => $mode === 'percent'
-                ? pos_invoice_custom_discount_label($posMeta)
-                : 'Custom Discount',
-            'amount' => $cash,
-            'note' => '',
-            'is_grand' => false,
-        ];
-    }
-
-    $coupon = round((float)($posMeta['coupon_discount'] ?? 0), 2);
-    if ($coupon > 0.001) {
-        $rows[] = [
-            'label' => pos_invoice_coupon_label($posMeta),
-            'amount' => $coupon,
-            'note' => '',
-            'is_grand' => false,
-        ];
-    }
-
-    $gift = round((float)($posMeta['gift_discount'] ?? 0), 2);
-    if ($gift > 0.001) {
-        $rows[] = [
-            'label' => 'Gift Voucher',
-            'amount' => $gift,
+            'label' => (string)($discountLine['label'] ?? 'Custom Discount:'),
+            'amount' => (float)($discountLine['amount'] ?? 0),
             'note' => '',
             'is_grand' => false,
         ];
