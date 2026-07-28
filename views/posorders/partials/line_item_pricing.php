@@ -13,7 +13,6 @@ $formatAmount = static function (float $amount) use ($currencySymbol): string {
 
 $pricingComponents = is_array($linePricing['pricing_components'] ?? null) ? $linePricing['pricing_components'] : [];
 $customReduce = (float)($linePricing['custom_reduce'] ?? 0);
-$grossIncl = (float)($linePricing['gross_incl'] ?? 0);
 $orderDiscountLines = is_array($linePricing['order_discount_lines'] ?? null) ? $linePricing['order_discount_lines'] : [];
 $showComponentBreakdown = count($pricingComponents) > 0 && ($customReduce > 0.001 || count($pricingComponents) > 1);
 ?>
@@ -40,10 +39,6 @@ $showComponentBreakdown = count($pricingComponents) > 0 && ($customReduce > 0.00
             </table>
         </div>
         <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-x-8 border-t border-gray-200 pt-3">
-            <div class="flex items-center justify-between gap-4 py-1">
-                <span class="text-gray-600">Total before discount (incl. GST)</span>
-                <span class="tabular-nums font-medium text-gray-900"><?php echo $formatAmount($grossIncl); ?></span>
-            </div>
             <?php if ($orderDiscountLines !== []): ?>
                 <?php foreach ($orderDiscountLines as $discountLine): ?>
                     <div class="flex items-center justify-between gap-4 py-1">
