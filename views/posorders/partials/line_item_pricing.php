@@ -14,6 +14,7 @@ $formatAmount = static function (float $amount) use ($currencySymbol): string {
 $pricingComponents = is_array($linePricing['pricing_components'] ?? null) ? $linePricing['pricing_components'] : [];
 $customReduce = (float)($linePricing['custom_reduce'] ?? 0);
 $grossIncl = (float)($linePricing['gross_incl'] ?? 0);
+$orderDiscountLines = is_array($linePricing['order_discount_lines'] ?? null) ? $linePricing['order_discount_lines'] : [];
 $showComponentBreakdown = count($pricingComponents) > 0 && ($customReduce > 0.001 || count($pricingComponents) > 1);
 ?>
 <div class="mt-5 rounded-xl border border-gray-200 bg-gray-50 px-4 py-4 text-[13px]">
@@ -43,9 +44,16 @@ $showComponentBreakdown = count($pricingComponents) > 0 && ($customReduce > 0.00
                 <span class="text-gray-600">Total before discount (incl. GST)</span>
                 <span class="tabular-nums font-medium text-gray-900"><?php echo $formatAmount($grossIncl); ?></span>
             </div>
-            <?php if ($customReduce > 0.001): ?>
+            <?php if ($orderDiscountLines !== []): ?>
+                <?php foreach ($orderDiscountLines as $discountLine): ?>
+                    <div class="flex items-center justify-between gap-4 py-1">
+                        <span class="text-gray-600"><?php echo htmlspecialchars((string)($discountLine['label'] ?? 'Custom Discount')); ?></span>
+                        <span class="tabular-nums font-semibold text-emerald-700">- <?php echo $formatAmount((float)($discountLine['amount'] ?? 0)); ?></span>
+                    </div>
+                <?php endforeach; ?>
+            <?php elseif ($customReduce > 0.001): ?>
                 <div class="flex items-center justify-between gap-4 py-1">
-                    <span class="text-gray-600">Order discount</span>
+                    <span class="text-gray-600">Custom Discount</span>
                     <span class="tabular-nums font-semibold text-emerald-700">- <?php echo $formatAmount($customReduce); ?></span>
                 </div>
             <?php endif; ?>
