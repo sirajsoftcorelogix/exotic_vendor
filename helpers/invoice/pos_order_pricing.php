@@ -80,6 +80,70 @@ function pos_invoice_parse_discount_meta(?string $notes): array
     return is_array($pos) ? $pos : [];
 }
 
+/**
+ * POS invoice notes take precedence; fill gaps from imported Exotic order fields (vp_order_info / vp_orders).
+ *
+ * @param list<array<string, mixed>> $orderLines
+ * @return array<string, mixed>
+ */
+function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, array $orderLines = []): array
+{
+    $meta = is_array($invoice) ? pos_invoice_parse_discount_meta($invoice['notes'] ?? null) : [];
+
+    $couponReduce = round((float)($meta['coupon_discount'] ?? 0), 2);
+    $giftReduce = round((float)($meta['gift_discount'] ?? 0), 2);
+    $cashReduce = round((float)($meta['cash_discount'] ?? 0), 2);
+    $couponName = trim((string)($meta['coupon_display_name'] ?? ''));
+
+    if (is_array($orderInfo)) {
+        if ($couponReduce <= 0) {
+            $couponReduce = round((float)($orderInfo['coupon_reduce'] ?? 0), 2);
+        }
+        if ($giftReduce <= 0) {
+            $giftReduce = round((float)($orderInfo['giftvoucher_reduce'] ?? 0), 2);
+        }
+        if ($cashReduce <= 0) {
+            $cashReduce = round((float)($orderInfo['custom_reduce'] ?? 0), 2);
+        }
+        if ($couponName === '') {
+            $couponName = trim((string)($orderInfo['coupon'] ?? ''));
+        }
+    }
+
+    foreach ($orderLines as $orderRow) {
+        if (!is_array($orderRow)) {
+            continue;
+        }
+        if ($couponReduce <= 0) {
+            $couponReduce = max($couponReduce, round((float)($orderRow['coupon_reduce'] ?? 0), 2));
+        }
+        if ($giftReduce <= 0) {
+            $giftReduce = max($giftReduce, round((float)($orderRow['giftvoucher_reduce'] ?? 0), 2));
+        }
+        if ($cashReduce <= 0) {
+            $cashReduce = max($cashReduce, round((float)($orderRow['custom_reduce'] ?? 0), 2));
+        }
+        if ($couponName === '') {
+            $couponName = trim((string)($orderRow['coupon'] ?? ''));
+        }
+    }
+
+    if ($couponReduce > 0) {
+        $meta['coupon_discount'] = $couponReduce;
+    }
+    if ($giftReduce > 0) {
+        $meta['gift_discount'] = $giftReduce;
+    }
+    if ($cashReduce > 0) {
+        $meta['cash_discount'] = $cashReduce;
+    }
+    if ($couponName !== '') {
+        $meta['coupon_display_name'] = $couponName;
+    }
+
+    return $meta;
+}
+
 function pos_order_line_meta_lookup_key(string $itemCode, string $size = '', string $color = ''): string
 {
     return strtolower(trim($itemCode)) . '|' . strtolower(trim($size)) . '|' . strtolower(trim($color));
@@ -195,14 +259,13 @@ function pos_order_build_line_display_pricing_map(array $orderLines, ?array $inv
     require_once __DIR__ . '/invoice_gst.php';
 
     $lineItemsMeta = [];
-    $posDiscountMeta = [];
+    $discountMeta = pos_order_resolve_discount_meta($invoice, $orderInfo, $orderLines);
     if (is_array($invoice)) {
         $lineItemsMeta = pos_invoice_parse_line_items_meta($invoice['notes'] ?? null);
-        $posDiscountMeta = pos_invoice_parse_discount_meta($invoice['notes'] ?? null);
     }
 
     $applyGst = is_array($invoice)
-        ? invoice_should_apply_gst_for_invoice($invoice, $commanModel, $posDiscountMeta !== [] ? $posDiscountMeta : null)
+        ? invoice_should_apply_gst_for_invoice($invoice, $commanModel, $discountMeta !== [] ? $discountMeta : null)
         : invoice_should_apply_gst($orderInfo);
     $resolvedUseIgst = is_array($invoice)
         ? invoice_resolve_uses_igst_for_invoice($invoice, $commanModel)
@@ -210,7 +273,7 @@ function pos_order_build_line_display_pricing_map(array $orderLines, ?array $inv
     $useIgst = $resolvedUseIgst ?? invoice_order_info_uses_igst($orderInfo, null, $commanModel);
 
     require_once __DIR__ . '/pos_invoice_line_calculation.php';
-    $orderLevelDisc = pos_invoice_order_level_discount_total($posDiscountMeta);
+    $orderLevelDisc = pos_invoice_order_level_discount_total($discountMeta);
     $excelAdjusted = [];
     if ($orderLevelDisc > 0.001) {
         $calcInput = [];
@@ -272,9 +335,11 @@ function pos_order_build_line_display_pricing_map(array $orderLines, ?array $inv
         ];
     }
 
-    $orderCustomReduce = pos_order_resolve_order_custom_reduce($orderLines, $orderInfo);
+    $orderWideDiscount = $orderLevelDisc > 0.001
+        ? $orderLevelDisc
+        : pos_order_resolve_order_custom_reduce($orderLines, $orderInfo);
     $orderWideComponents = pos_order_build_order_wide_pricing_components($pendingLines, $applyGst);
-    $orderWideComponents = pos_order_apply_proportional_custom_reduce($orderWideComponents, $orderCustomReduce);
+    $orderWideComponents = pos_order_apply_proportional_custom_reduce($orderWideComponents, $orderWideDiscount);
     $orderTaxResult = pos_order_compute_order_component_tax_rows($orderWideComponents, $applyGst);
     $orderWideComponents = $orderTaxResult['components'];
     $componentsByLineId = [];
@@ -291,7 +356,7 @@ function pos_order_build_line_display_pricing_map(array $orderLines, ?array $inv
                 'apply_gst' => $applyGst,
                 'use_igst' => $useIgst,
                 'pricing_components' => $componentsByLineId[$lineId] ?? [],
-                'order_custom_reduce' => $orderCustomReduce,
+                'order_custom_reduce' => $orderWideDiscount,
             ]
         );
     }
@@ -625,7 +690,7 @@ function pos_order_format_pricing_amount(float $amount): string
  */
 function pos_order_line_list_price_incl(array $orderRow): float
 {
-    return pos_order_inclusive_line_total($orderRow, 'disc');
+    return pos_order_inclusive_line_total($orderRow, 'list');
 }
 
 /**
@@ -754,9 +819,13 @@ function pos_order_build_summary_rows_from_line_pricing(array $aggregate, array 
 /**
  * @param array<int, array<string, mixed>> $linePricingByLineId
  */
-function pos_order_line_pricing_should_override_invoice_summary(array $linePricingByLineId, ?array $orderInfo = null): bool
-{
-    if (is_array($orderInfo) && ((float)($orderInfo['custom_reduce'] ?? 0)) > 0.001) {
+function pos_order_line_pricing_should_override_invoice_summary(
+    array $linePricingByLineId,
+    ?array $orderInfo = null,
+    array $orderLines = []
+): bool {
+    $discountMeta = pos_order_resolve_discount_meta(null, $orderInfo, $orderLines);
+    if (pos_invoice_order_level_discount_total($discountMeta) > 0.001) {
         return true;
     }
 

@@ -881,7 +881,7 @@ $proformaPrintDisabledReason = $canPrintProforma
                         id="fetch_order_json_btn"
                         onclick="openOrderJsonModal()"
                         title="Fetch live JSON from Exotic vendor API (read-only)"
-                        class="text-xs font-normal text-gray-400 hover:text-gray-600 underline-offset-2 hover:underline">
+                        class="text-xs font-normal text-red-600 hover:text-red-700 underline-offset-2 hover:underline">
                         Exotic API JSON
                     </button>
                 </div>

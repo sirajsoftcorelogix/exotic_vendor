@@ -45,7 +45,7 @@ $showComponentBreakdown = count($pricingComponents) > 0 && ($customReduce > 0.00
             </div>
             <?php if ($customReduce > 0.001): ?>
                 <div class="flex items-center justify-between gap-4 py-1">
-                    <span class="text-gray-600">Fixed discount (custom reduce)</span>
+                    <span class="text-gray-600">Order discount</span>
                     <span class="tabular-nums font-semibold text-emerald-700">- <?php echo $formatAmount($customReduce); ?></span>
                 </div>
             <?php endif; ?>

@@ -2156,8 +2156,8 @@ class Order
         if (isset($data['coupon'])) {
             $insertCols[]   = 'coupon';
             $placeholders[] = '?';
-            $values[]       = floatval($data['coupon']);
-            $types         .= 'd'; // decimal
+            $values[]       = trim((string) $data['coupon']);
+            $types         .= 's';
         }
         //coupon_reduce add
         if (isset($data['coupon_reduce'])) {
