@@ -86,8 +86,32 @@ include __DIR__ . '/partials/detail_hero.php';
                     <th class="px-3 py-3 w-10"></th>
                     <th class="px-3 py-3 whitespace-nowrap">#</th>
                     <th class="px-2 py-3 whitespace-nowrap w-44 max-w-44">Location</th>
-                    <th class="px-3 py-3 whitespace-nowrap">Order #</th>
-                    <th class="px-3 py-3 whitespace-nowrap">SKU</th>
+                    <th class="px-3 py-3 whitespace-nowrap">
+                        <span class="inline-flex items-center gap-1.5">
+                            Order #
+                            <button type="button"
+                                    class="js-picklist-copy-column shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md border border-gray-200 bg-white text-gray-500 hover:text-amber-700 hover:border-amber-300 hover:bg-amber-50/50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                                    data-copy-column="order"
+                                    data-copy-label="Order numbers"
+                                    title="Copy all order numbers"
+                                    aria-label="Copy all order numbers">
+                                <i class="fas fa-copy text-[10px]" aria-hidden="true"></i>
+                            </button>
+                        </span>
+                    </th>
+                    <th class="px-3 py-3 whitespace-nowrap">
+                        <span class="inline-flex items-center gap-1.5">
+                            SKU
+                            <button type="button"
+                                    class="js-picklist-copy-column shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md border border-gray-200 bg-white text-gray-500 hover:text-amber-700 hover:border-amber-300 hover:bg-amber-50/50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                                    data-copy-column="sku"
+                                    data-copy-label="SKUs"
+                                    title="Copy all SKUs"
+                                    aria-label="Copy all SKUs">
+                                <i class="fas fa-copy text-[10px]" aria-hidden="true"></i>
+                            </button>
+                        </span>
+                    </th>
                     <th class="px-3 py-3 min-w-[12rem]">Item Title</th>
                     <th class="px-3 py-3 whitespace-nowrap">Image</th>
                     <th class="px-3 py-3 whitespace-nowrap">Phys Qty</th>
@@ -175,8 +199,10 @@ include __DIR__ . '/partials/detail_hero.php';
                                 <span class="font-semibold text-amber-800 truncate min-w-0" title="<?= htmlspecialchars($locationText, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($locationText) ?></span>
                             </div>
                         </td>
-                        <td class="px-3 py-3 align-middle whitespace-nowrap font-mono text-xs text-gray-800">
-                            <?php $orderNumber = trim((string) ($item['order_number'] ?? '')); ?>
+                        <?php $orderNumber = trim((string) ($item['order_number'] ?? '')); ?>
+                        <td class="px-3 py-3 align-middle whitespace-nowrap font-mono text-xs text-gray-800"
+                            data-picklist-column="order"
+                            data-picklist-column-value="<?= htmlspecialchars($orderNumber, ENT_QUOTES, 'UTF-8') ?>">
                             <?php if ($orderNumber !== ''): ?>
                                 <span class="inline-flex items-center gap-1.5">
                                     <span><?= htmlspecialchars($orderNumber) ?></span>
@@ -193,8 +219,10 @@ include __DIR__ . '/partials/detail_hero.php';
                                 —
                             <?php endif; ?>
                         </td>
-                        <td class="px-3 py-3 align-middle whitespace-nowrap text-gray-700">
-                            <?php $skuText = picklist_item_sku($item); ?>
+                        <?php $skuText = picklist_item_sku($item); ?>
+                        <td class="px-3 py-3 align-middle whitespace-nowrap text-gray-700"
+                            data-picklist-column="sku"
+                            data-picklist-column-value="<?= htmlspecialchars($skuText, ENT_QUOTES, 'UTF-8') ?>">
                             <?php if ($skuText !== ''): ?>
                                 <span class="inline-flex items-center gap-1.5 max-w-[12rem]">
                                     <span class="truncate font-medium"><?= htmlspecialchars($skuText) ?></span>

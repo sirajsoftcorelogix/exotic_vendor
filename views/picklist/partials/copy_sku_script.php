@@ -69,5 +69,28 @@
             copyText(btn.getAttribute('data-copy-text'), btn);
         });
     });
+
+    document.querySelectorAll('.js-picklist-copy-column').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var column = btn.getAttribute('data-copy-column');
+            if (!column) return;
+
+            var values = [];
+            document.querySelectorAll('[data-picklist-column="' + column + '"]').forEach(function (cell) {
+                values.push(String(cell.getAttribute('data-picklist-column-value') || '').trim());
+            });
+
+            if (!values.length) {
+                if (typeof showAlert === 'function') {
+                    showAlert('No values to copy.', 'warning');
+                }
+                return;
+            }
+
+            copyText(values.join('\n'), btn);
+        });
+    });
 })();
 </script>
