@@ -1,4 +1,7 @@
 <?php
+
+require_once dirname(__DIR__, 2) . '/helpers/stock_report_filters.php';
+
 class pos
 {
     private $db;
@@ -93,13 +96,9 @@ class pos
             $types .= "s";
         }
 
-        // PRODUCT NAME
+        // PRODUCT NAME / SKU search — multiple items when comma/semicolon/newline/tab present.
         if ($productName !== '') {
-            $where .= " AND (p.title LIKE ? OR p.item_code LIKE ? OR p.sku LIKE ?) ";
-            $params[] = "%{$productName}%";
-            $params[] = "%{$productName}%";
-            $params[] = "%{$productName}%";
-            $types .= "sss";
+            appendPosRegisterSearchFilterSql($where, $params, $types, $productName);
         }
 
         // PRODUCT CODE
@@ -134,7 +133,8 @@ class pos
             $types .= "d";
         }
 
-        $hasSearch = ($productName !== '' || $searchValue !== '' || $productCode !== '');
+        $hasSearch = (parsePosRegisterSearchTerms($productName) !== [])
+            || ($searchValue !== '' || $productCode !== '');
 
         // Stock scope: align with stock report (getStockReport) — default is "all" rows with a movement row.
         $stockFilter = strtolower(trim((string)$stockFilter));

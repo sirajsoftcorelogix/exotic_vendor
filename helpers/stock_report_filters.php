@@ -93,6 +93,55 @@ function parseStockReportSearchTerms(string $search): array
 }
 
 /**
+ * POS register search — multi-item when comma/semicolon/newline/tab present; otherwise one phrase.
+ *
+ * @return array<int, string>
+ */
+function parsePosRegisterSearchTerms(string $search): array
+{
+    $search = trim($search);
+    if ($search === '') {
+        return [];
+    }
+    if (preg_match('/[,;\r\n\t]/', $search) === 1) {
+        return parseStockReportSearchTerms($search);
+    }
+
+    return [$search];
+}
+
+/**
+ * Apply POS register keyword filter (item code, SKU, title). Multiple terms are OR-matched.
+ *
+ * @return bool True when at least one search term was applied.
+ */
+function appendPosRegisterSearchFilterSql(
+    string &$where,
+    array &$params,
+    string &$types,
+    string $search
+): bool {
+    $terms = parsePosRegisterSearchTerms($search);
+    if ($terms === []) {
+        return false;
+    }
+
+    $clauses = [];
+    foreach ($terms as $term) {
+        $clauses[] = '(p.item_code LIKE ? OR p.title LIKE ? OR p.sku LIKE ?)';
+        $like = '%' . $term . '%';
+        $params[] = $like;
+        $params[] = $like;
+        $params[] = $like;
+        $types .= 'sss';
+    }
+
+    $where .= ' AND (' . implode(' OR ', $clauses) . ') ';
+
+    return true;
+}
+
+/**
  * Apply keyword filter (item code, SKU, title). Multiple terms are OR-matched.
  *
  * @return bool True when at least one search term was applied.

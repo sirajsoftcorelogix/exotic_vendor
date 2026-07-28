@@ -1073,6 +1073,9 @@ data-code="${lookupCode}">
         // Incremental pagination: append when loading next page.
         renderProducts(rows, append);
         updatePaginationUi(totalPages);
+        if (!append && requestedPage === 1) {
+          reportMissingPosSearchTerms(rows, parsePosSearchTerms(searchVal));
+        }
       },
       error: function (xhr, status, err) {
         console.error('Error loading products', err);
@@ -1276,6 +1279,52 @@ data-code="${lookupCode}">
   const skuSearchBase = '?page=products&action=search_product';
   let activeSuggestRequest = 0;
 
+  /** Split POS search into terms when comma/semicolon/newline/tab present; else one phrase. */
+  function parsePosSearchTerms(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return [];
+    if (/[,;\r\n\t]/.test(s)) {
+      return s
+        .split(/[\s,;]+/)
+        .map(function (part) { return String(part || '').trim(); })
+        .filter(Boolean)
+        .filter(function (term, idx, arr) { return arr.indexOf(term) === idx; });
+    }
+    return [s];
+  }
+
+  /** Last token while typing a comma/newline-separated multi-SKU query. */
+  function activePosSearchFragment(raw) {
+    const s = String(raw || '');
+    if (!/[,;\r\n\t]/.test(s)) {
+      return s.trim();
+    }
+    const parts = s.split(/[\s,;]+/);
+    return String(parts[parts.length - 1] || '').trim();
+  }
+
+  function rowMatchesPosSearchTerm(row, term) {
+    const tl = String(term || '').trim().toLowerCase();
+    if (!tl) return false;
+    const sku = String(row.sku || '').trim().toLowerCase();
+    const itemCode = String(row.item_code || '').trim().toLowerCase();
+    return sku === tl || itemCode === tl;
+  }
+
+  function reportMissingPosSearchTerms(rows, terms) {
+    if (!terms || terms.length <= 1) return;
+    const missing = terms.filter(function (term) {
+      return !rows.some(function (row) { return rowMatchesPosSearchTerm(row, term); });
+    });
+    if (missing.length) {
+      showSearchError(
+        missing.length === 1
+          ? ('SKU not found: ' + missing[0])
+          : ('SKUs not found: ' + missing.join(', '))
+      );
+    }
+  }
+
   function escapeHtml(s) {
     return String(s ?? '').replace(/[&<>"']/g, function (c) {
       return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
@@ -1329,7 +1378,13 @@ data-code="${lookupCode}">
 
   let suggestTimeout = null;
   function fetchSuggest(term) {
-    const t = String(term || '').trim();
+    const terms = parsePosSearchTerms(term);
+    if (terms.length > 1) {
+      hideSuggest();
+      return;
+    }
+
+    const t = activePosSearchFragment(term);
     if (t.length < 2) {
       hideSuggest();
       return;
@@ -1384,15 +1439,23 @@ data-code="${lookupCode}">
       hideSuggest();
       return;
     }
-    if (e.key === 'Enter') {
+    // Enter without Shift: search / open product. Shift+Enter inserts a newline in the textarea.
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       hideSuggest();
       hideSearchError();
       const q = String($searchName.val() || '').trim();
       if (q.length < 1) {
-        showSearchError('Enter a SKU.');
+        showSearchError('Enter a SKU or product name.');
         return;
       }
+
+      const terms = parsePosSearchTerms(q);
+      if (terms.length > 1) {
+        resetAndLoad();
+        return;
+      }
+
       fetch(skuSearchBase + '&q=' + encodeURIComponent(q) + '&exact=1', {
         credentials: 'same-origin',
         headers: { 'Accept': 'application/json' }
