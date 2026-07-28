@@ -86,6 +86,8 @@ $invoiceGoodsInclDisplay = number_format((float)($invoiceDisplay['subtotal_goods
 $invoiceGrandTotalDisplay = number_format((float)($invoiceDisplay['pdf_grand_total'] ?? $invoiceDisplay['grand_total'] ?? 0), 2);
 $paymentSummary = is_array($paymentSummary ?? null) ? $paymentSummary : ['order_total' => 0, 'paid_total' => 0, 'pending' => 0, 'is_fully_paid' => false, 'payments' => []];
 $paymentRows = is_array($paymentSummary['payments'] ?? null) ? $paymentSummary['payments'] : [];
+$creditAmount = (float)($paymentSummary['credit_amount'] ?? 0);
+$creditAmountDisplay = number_format($creditAmount, 2);
 $paymentOrderTotalDisplay = number_format((float)($paymentSummary['order_total'] ?? 0), 2);
 $paymentPaidTotalDisplay = number_format((float)($paymentSummary['paid_total'] ?? 0), 2);
 $paymentPendingDisplay = number_format((float)($paymentSummary['pending'] ?? 0), 2);
@@ -757,12 +759,26 @@ $proformaPrintDisabledReason = $canPrintProforma
                         </div>
                     </div>
 
-                    <?php if ($paymentRows === []): ?>
+                    <?php if ($paymentRows === [] && $creditAmount <= 0.001): ?>
                         <div class="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
                             No payments recorded for this order yet.
                         </div>
                     <?php else: ?>
                         <div class="space-y-2">
+                            <?php if ($creditAmount > 0.001): ?>
+                                <div class="rounded-lg border border-gray-200 bg-white px-3 py-3">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div class="min-w-0">
+                                            <p class="text-sm font-semibold text-gray-900">Credit</p>
+                                            <p class="mt-0.5 text-xs text-gray-500">Store credit applied to this order</p>
+                                        </div>
+                                        <p class="text-sm font-bold tabular-nums text-gray-900">₹ <?php echo $creditAmountDisplay; ?></p>
+                                    </div>
+                                    <div class="mt-2 flex flex-wrap gap-1.5">
+                                        <span class="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">Credit</span>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                             <?php foreach ($paymentRows as $paymentRow):
                                 $paymentId = (int)($paymentRow['id'] ?? 0);
                                 $receiptLabel = trim((string)($paymentRow['receipt_number'] ?? ''));
