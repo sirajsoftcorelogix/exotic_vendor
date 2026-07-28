@@ -288,8 +288,9 @@ switch ($page) {
             case 'refresh_order_apply':
                 $controller->refreshOrderApplyAjax();
                 break;
-            case 'fetch_vendor_order_json':
-                $controller->fetchVendorOrderJsonAjax();
+            case 'fetch_order_json':
+                require_once __DIR__ . '/helpers/order_json_fetch.php';
+                order_json_fetch_handle_ajax();
                 break;
             case 'update_status':
                 $controller->updateStatus();
@@ -1851,9 +1852,9 @@ switch ($page) {
             case 'get_order_details_html':
                 $controller->getOrderDetailsHTML();
                 break;
-            case 'fetch_vendor_order_json':
-                require_once 'controllers/OrdersController.php';
-                (new OrdersController())->fetchVendorOrderJsonAjax();
+            case 'fetch_order_json':
+                require_once __DIR__ . '/helpers/order_json_fetch.php';
+                order_json_fetch_handle_ajax();
                 break;
             case 'create_invoice_from_order':
                 $controller->createInvoiceFromOrderAjax();

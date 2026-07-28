@@ -8,8 +8,6 @@ require_once 'models/picklist/Picklist.php';
 require_once 'helpers/payment_type_groups.php';
 require_once 'helpers/order_filter_autocomplete.php';
 require_once 'helpers/order_list_filters.php';
-require_once __DIR__ . '/../integrations/exotic/Clients/OrderClient.php';
-require_once __DIR__ . '/../integrations/exotic/Support/VendorOrderFetchParser.php';
 $ordersModel = new Order($conn);
 $commanModel = new Tables($conn);
 $savedSearchModel = new SavedSearch($conn);
@@ -552,61 +550,9 @@ class OrdersController
      */
     private function fetchVendorOrderPayloadForCheckout(string $orderNumber): array
     {
-        $result = (new OrderClient())->fetchOrderByNumber($orderNumber);
-        if (empty($result['success'])) {
-            return ['ok' => false, 'orders' => [], 'error' => (string) ($result['message'] ?? 'No order data from vendor API')];
-        }
+        require_once __DIR__ . '/../helpers/order_json_fetch.php';
 
-        return ['ok' => true, 'orders' => $result['orders'], 'error' => ''];
-    }
-
-    /**
-     * On-demand live JSON from vendor-api/order/fetch (investigation only; does not import).
-     */
-    public function fetchVendorOrderJsonAjax(): void
-    {
-        $this->assertCanRefreshOrdersFromVendor();
-
-        $orderNumber = trim((string) ($_GET['order_number'] ?? $_POST['order_number'] ?? ''));
-        if ($orderNumber === '') {
-            $payload = $this->readRefreshOrderJsonPayload();
-            $orderNumber = $this->extractRefreshOrderNumber($payload);
-        }
-
-        if ($orderNumber === '') {
-            $this->sendRefreshOrderJson([
-                'success' => false,
-                'message' => 'Order number is required.',
-            ], 400);
-        }
-
-        try {
-            $result = (new OrderClient())->fetchOrderByNumber($orderNumber);
-            if (empty($result['success'])) {
-                $this->sendRefreshOrderJson([
-                    'success' => false,
-                    'message' => (string) ($result['message'] ?? 'No order data from vendor API'),
-                    'order_number' => $orderNumber,
-                    'response' => $result['data'] ?? null,
-                    'response_raw' => !empty($result['raw']) ? $result['raw'] : null,
-                ], 502);
-            }
-
-            $decoded = is_array($result['data'] ?? null) ? $result['data'] : [];
-            $this->sendRefreshOrderJson([
-                'success' => true,
-                'order_number' => $orderNumber,
-                'fetched_at' => date('c'),
-                'order' => VendorOrderFetchParser::findOrder($decoded, $orderNumber),
-                'response' => $decoded,
-            ]);
-        } catch (\Throwable $e) {
-            error_log('[fetch_vendor_order_json] ' . $e->getMessage());
-            $this->sendRefreshOrderJson([
-                'success' => false,
-                'message' => 'Fetch failed: ' . $e->getMessage(),
-            ], 500);
-        }
+        return order_json_fetch_checkout_payload($orderNumber);
     }
 
     /**

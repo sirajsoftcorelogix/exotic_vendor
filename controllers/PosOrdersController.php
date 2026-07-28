@@ -1134,7 +1134,7 @@ class PosOrdersController
 
         require_once __DIR__ . '/../helpers/html_helpers.php';
         $viewerUserId = (int) ($_SESSION['user']['id'] ?? 0);
-        $canFetchVendorOrderJson = hasTieredAccess($viewerUserId, 'Sr Emp Access', ['Orders', 'POS Orders']);
+        $canFetchOrderJson = hasTieredAccess($viewerUserId, 'Sr Emp Access', ['Orders', 'POS Orders']);
 
         if ($type === 'inner') {
             renderPartial('views/posorders/partial_order_details.php', [
@@ -1162,7 +1162,7 @@ class PosOrdersController
                 'order_status_list' => $commanModel->get_order_status(),
                 'staff_list' => $commanModel->get_staff_list(),
                 'showOrderVendorName' => function_exists('canViewOrderVendorName') && canViewOrderVendorName(),
-                'canFetchVendorOrderJson' => $canFetchVendorOrderJson,
+                'canFetchOrderJson' => $canFetchOrderJson,
             ], 'Order Details');
         }
         exit;
