@@ -5,10 +5,20 @@
  * Keep markup self-contained; parent already provides scroll + padding.
  */
 $orderremarks = is_array($orderremarks ?? null) ? $orderremarks : [];
+$linePricingByLineId = is_array($linePricingByLineId ?? null) ? $linePricingByLineId : [];
 $currency = '';
+$computedOrderTotal = 0.0;
 foreach ($order as $items => $item) {
     $currency = $item['currency'] ?? $currency;
+    $lineId = (int)($item['id'] ?? 0);
+    $linePricingRow = $linePricingByLineId[$lineId] ?? null;
+    if (is_array($linePricingRow)) {
+        $computedOrderTotal += (float)($linePricingRow['chargeable_value'] ?? 0);
+    } else {
+        $computedOrderTotal += (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
+    }
 }
+$displayOrderTotal = $computedOrderTotal > 0 ? $computedOrderTotal : (float)($orderremarks['total'] ?? 0);
 $countries = country_array();
 $odSectionHead = static function (string $label): void {
     echo '<div class="px-3 sm:px-4 pt-3 pb-2.5 bg-gradient-to-b from-slate-100/90 to-slate-50/50 border-b border-slate-200/90">';
@@ -33,7 +43,7 @@ $odSectionHead = static function (string $label): void {
             </div>
             <div class="space-y-1.5 sm:text-right">
                 <p class="font-semibold text-amber-50/95 text-[11px] sm:text-xs uppercase tracking-wide sm:text-right">Totals</p>
-                <p class="text-base sm:text-lg font-semibold leading-snug"><span class="font-semibold text-white/95">Order value:</span> <?php echo htmlspecialchars(number_format((float)($orderremarks['total'] ?? 0), 2)); ?> <span class="font-medium text-amber-50"><?php echo htmlspecialchars((string)$currency); ?></span></p>
+                <p class="text-base sm:text-lg font-semibold leading-snug"><span class="font-semibold text-white/95">Order value:</span> <?php echo htmlspecialchars(number_format($displayOrderTotal, 2)); ?> <span class="font-medium text-amber-50"><?php echo htmlspecialchars((string)$currency); ?></span></p>
                 <p class="text-sm sm:text-[15px]"><span class="font-semibold text-white/95">Payment:</span> <?php echo htmlspecialchars((string)($order[0]['payment_type'] ?? '')); ?></p>
             </div>
         </div>
@@ -60,6 +70,13 @@ $odSectionHead = static function (string $label): void {
                             if ($lineAddons !== []) {
                                 renderPartial('views/shared/partials/order_line_addons_list.php', [
                                     'addons' => $lineAddons,
+                                    'currencySymbol' => $lineCurrencySymbol,
+                                ]);
+                            }
+                            $linePricing = $linePricingByLineId[(int)($item['id'] ?? 0)] ?? null;
+                            if (is_array($linePricing)) {
+                                renderPartial('views/posorders/partials/line_item_pricing.php', [
+                                    'linePricing' => $linePricing,
                                     'currencySymbol' => $lineCurrencySymbol,
                                 ]);
                             }
@@ -172,34 +189,15 @@ $odSectionHead = static function (string $label): void {
                         </div>
 
                         <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
-                            <?php $odSectionHead('Pricing & tax'); ?>
+                            <?php $odSectionHead('Tax & payment'); ?>
                             <div class="px-3 sm:px-4 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
-                                    <p><span class="section-title text-gray-600">Item price</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['itemprice'] ?? '')); ?></span></p>
-                                    <p><span class="section-title text-gray-600">Final price</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['finalprice'] ?? '')); ?></span></p>
-                                    <p><span class="section-title text-gray-600">Currency</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['currency'] ?? '')); ?></span></p>
-                                    <p><span class="section-title text-gray-600">Line total</span><br><span class="section-value font-semibold text-amber-900 tabular-nums"><?php echo htmlspecialchars((string)((float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 0))); ?></span></p>
-                                </div>
                                 <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
                                     <p><span class="section-title text-gray-600">HSN code</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['hsn'] ?? '')); ?></span></p>
                                     <p><span class="section-title text-gray-600">GST</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['gst'] ?? '')); ?></span></p>
+                                </div>
+                                <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
                                     <p><span class="section-title text-gray-600">Credit</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['credit'] ?? '')); ?></span></p>
                                     <p><span class="section-title text-gray-600">Payment type</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['payment_type'] ?? '')); ?></span></p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-black/[0.03]">
-                            <?php $odSectionHead('Discounts'); ?>
-                            <div class="px-3 sm:px-4 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
-                                    <p><span class="section-title text-gray-600">Coupon</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['coupon'] ?? '')); ?></span></p>
-                                    <p><span class="section-title text-gray-600">Coupon reduce</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['coupon_reduce'] ?? '')); ?></span></p>
-                                    <p><span class="section-title text-gray-600">Custom reduce</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['custom_reduce'] ?? '')); ?></span></p>
-                                </div>
-                                <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
-                                    <p><span class="section-title text-gray-600">Gift voucher</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['giftvoucher'] ?? '')); ?></span></p>
-                                    <p><span class="section-title text-gray-600">Gift voucher reduce</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['giftvoucher_reduce'] ?? '')); ?></span></p>
                                 </div>
                             </div>
                         </div>

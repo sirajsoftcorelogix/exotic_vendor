@@ -1174,10 +1174,15 @@ class PosOrdersController
         $canFetchOrderJson = hasTieredAccess($viewerUserId, 'Sr Emp Access', ['Orders', 'POS Orders']);
 
         if ($type === 'inner') {
-            renderPartial('views/posorders/partial_order_details.php', [
+            $page = trim((string)($_GET['page'] ?? ''));
+            $innerPartial = $page === 'orders'
+                ? 'views/orders/partial_order_details.php'
+                : 'views/posorders/partial_order_details.php';
+            renderPartial($innerPartial, [
                 'order' => $order,
                 'statusList' => $statusList,
                 'linePricingByLineId' => $linePricingByLineId,
+                'orderremarks' => is_array($orderremarks) ? $orderremarks : [],
             ]);
         } else {
             renderTemplate('views/posorders/other_partial_order_details.php', [
