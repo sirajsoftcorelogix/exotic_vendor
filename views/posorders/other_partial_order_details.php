@@ -168,14 +168,6 @@ $proformaPrintDisabledReason = $canPrintProforma
         </div>
 
         <div class="flex items-center gap-2">
-            <?php if ($canFetchOrderJson): ?>
-                <button type="button"
-                    id="fetch_order_json_btn"
-                    onclick="openOrderJsonModal()"
-                    class="rounded border border-orange-200 bg-orange-50 px-4 py-1.5 text-sm font-medium text-orange-800 hover:bg-orange-100">
-                    Exotic API JSON
-                </button>
-            <?php endif; ?>
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Restock</button>
             <button type="button"
                 data-sales-return-create
@@ -882,6 +874,18 @@ $proformaPrintDisabledReason = $canPrintProforma
                     </div>
                 <?php endif; ?>
             </div>
+
+            <?php if ($canFetchOrderJson): ?>
+                <div class="flex justify-end">
+                    <button type="button"
+                        id="fetch_order_json_btn"
+                        onclick="openOrderJsonModal()"
+                        title="Fetch live JSON from Exotic vendor API (read-only)"
+                        class="text-xs font-normal text-gray-400 hover:text-gray-600 underline-offset-2 hover:underline">
+                        Exotic API JSON
+                    </button>
+                </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>
