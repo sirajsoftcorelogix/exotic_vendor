@@ -461,6 +461,13 @@ class pos
 
         return [
             'join' => $join,
+            'stats_join' => "
+            LEFT JOIN (
+                SELECT product_id, COUNT(*) AS movement_count, MIN(running_stock) AS min_running_stock
+                FROM vp_stock_movements
+                GROUP BY product_id
+            ) sm_stats ON sm_stats.product_id = p.id
+            ",
             'where' => $where,
             'params' => $params,
             'types' => $types,
@@ -485,6 +492,7 @@ class pos
         }
 
         $join = $query['join'];
+        $statsJoin = $query['stats_join'] ?? '';
         $where = $query['where'];
         $params = $query['params'];
         $types = $query['types'];
@@ -503,9 +511,12 @@ class pos
                 ({$this->sqlPosIndiaSellBaseExpr('p')} * (1 + IFNULL(p.gst, 0) / 100)) AS sell_price,
                 p.cost_price,
                 COALESCE(sm.running_stock, 0) AS stock_qty,
-                sm.location AS location
+                sm.location AS location,
+                COALESCE(sm_stats.movement_count, 0) AS movement_count,
+                sm_stats.min_running_stock AS min_running_stock
             FROM vp_products p
             $join
+            $statsJoin
             LEFT JOIN `category` cat ON cat.category = p.groupname
             $where
             ORDER BY COALESCE(sm.running_stock, 0) ASC, p.title ASC

@@ -123,6 +123,21 @@ function appendStockReportSearchFilterSql(
     return true;
 }
 
+/**
+ * Whether a product may use inline stock-report refresh (no ledger history, or one zero-balance row).
+ */
+function isStockReportInlineRefreshEligible(int $movementCount, ?float $soleMovementRunningStock): bool
+{
+    if ($movementCount <= 0) {
+        return true;
+    }
+    if ($movementCount === 1) {
+        return abs((float) $soleMovementRunningStock) < 0.00001;
+    }
+
+    return false;
+}
+
 function appendStockReportLocationFilterSql(
     string &$where,
     array &$params,

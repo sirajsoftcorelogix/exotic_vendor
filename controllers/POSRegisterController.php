@@ -1916,6 +1916,18 @@ class POSRegisterController
         $itemCode = trim((string) ($product['item_code'] ?? ''));
         $label = $sku !== '' ? $sku : ($itemCode !== '' ? $itemCode : ('#' . $productId));
 
+        $refreshEligibility = $productModel->getStockReportInlineRefreshEligibility($productId);
+        if (empty($refreshEligibility['eligible'])) {
+            return [
+                'success' => false,
+                'message' => 'Stock refresh is only available for items with no stock movements, or a single movement at zero balance.',
+                'product_id' => $productId,
+                'sku' => $sku,
+                'label' => $label,
+                'movement_count' => (int) ($refreshEligibility['movement_count'] ?? 0),
+            ];
+        }
+
         $defaultWarehouseId = $this->resolveDefaultWarehouseIdForStockRefresh($conn);
         if ($defaultWarehouseId <= 0) {
             return [

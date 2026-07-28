@@ -2327,6 +2327,51 @@ class product
     }
 
     /**
+     * Ledger state for stock-report inline refresh (all warehouses, by product_id).
+     *
+     * @return array{eligible:bool,movement_count:int,sole_movement_running_stock:?float}
+     */
+    public function getStockReportInlineRefreshEligibility(int $productId): array
+    {
+        require_once dirname(__DIR__, 2) . '/helpers/stock_report_filters.php';
+
+        $productId = (int) $productId;
+        if ($productId <= 0) {
+            return [
+                'eligible' => false,
+                'movement_count' => 0,
+                'sole_movement_running_stock' => null,
+            ];
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT COUNT(*) AS movement_count, MIN(running_stock) AS min_running_stock
+             FROM vp_stock_movements
+             WHERE product_id = ?'
+        );
+        if (!$stmt) {
+            return [
+                'eligible' => false,
+                'movement_count' => 0,
+                'sole_movement_running_stock' => null,
+            ];
+        }
+        $stmt->bind_param('i', $productId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        $movementCount = (int) ($row['movement_count'] ?? 0);
+        $soleBalance = $movementCount === 1 ? (float) ($row['min_running_stock'] ?? 0) : null;
+
+        return [
+            'eligible' => isStockReportInlineRefreshEligible($movementCount, $soleBalance),
+            'movement_count' => $movementCount,
+            'sole_movement_running_stock' => $soleBalance,
+        ];
+    }
+
+    /**
      * Product detail Refresh from API stock rules (when no ledger history yet).
      */
     private function shouldRefreshApiSyncStock(?array $existingBase, bool $freshlyImportedInThisRun): bool
