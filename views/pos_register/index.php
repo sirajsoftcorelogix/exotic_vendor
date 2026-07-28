@@ -158,22 +158,40 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     <div class="mx-auto flex max-w-[1500px] items-center gap-3 px-4 py-3">
 
       <!-- Search -->
-      <div class="relative w-full max-w-lg">
-        <textarea
-          class="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm focus:border-orange-500 outline-none resize-none min-h-[2.5rem] max-h-24 leading-snug"
-          placeholder="Search by name or SKU — paste multiple SKUs separated by comma or new line"
-          id="searchName"
-          rows="2"
-          autocomplete="off"
-          aria-autocomplete="list"
-          aria-controls="skuSuggest"
-          aria-expanded="false"></textarea>
-        <div
-          id="skuSuggest"
-          class="absolute left-0 right-0 top-full z-[9999] mt-1 hidden max-h-72 overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+      <div class="flex w-full max-w-xl items-start gap-2">
+        <div class="relative min-w-0 flex-1">
+          <textarea
+            class="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm focus:border-orange-500 outline-none resize-none min-h-[2.5rem] max-h-24 leading-snug"
+            placeholder="Search by name or SKU — paste multiple SKUs separated by comma or new line"
+            id="searchName"
+            rows="2"
+            autocomplete="off"
+            aria-autocomplete="list"
+            aria-controls="skuSuggest"
+            aria-expanded="false"></textarea>
+          <div
+            id="skuSuggest"
+            class="absolute left-0 right-0 top-full z-[9999] mt-1 hidden max-h-72 overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+          </div>
+          <p id="posSkuSearchError" class="hidden mt-2 text-xs font-medium text-red-600"></p>
+          <p class="mt-1 text-[10px] text-slate-500 leading-snug">Paste from Excel — one SKU per row, or comma-separated.</p>
         </div>
-        <p id="posSkuSearchError" class="hidden mt-2 text-xs font-medium text-red-600"></p>
-        <p class="mt-1 text-[10px] text-slate-500 leading-snug">Paste from Excel — one SKU per row, or comma-separated.</p>
+        <div class="flex shrink-0 flex-col gap-2 pt-0.5">
+          <button
+            type="button"
+            id="posSearchBtn"
+            class="inline-flex items-center justify-center gap-1.5 rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 transition whitespace-nowrap">
+            <i class="fas fa-search text-xs" aria-hidden="true"></i>
+            Search
+          </button>
+          <button
+            type="button"
+            id="posSearchClearBtn"
+            class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition whitespace-nowrap">
+            <i class="fas fa-times text-xs" aria-hidden="true"></i>
+            Clear
+          </button>
+        </div>
       </div>
 
       <!-- Right -->

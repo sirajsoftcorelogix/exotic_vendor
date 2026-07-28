@@ -1348,6 +1348,51 @@ data-code="${lookupCode}">
     }
   }
 
+  function runPosSearch() {
+    hideSuggest();
+    hideSearchError();
+    const q = String($searchName.val() || '').trim();
+    if (q.length < 1) {
+      showSearchError('Enter a SKU or product name.');
+      return;
+    }
+
+    const terms = parsePosSearchTerms(q);
+    if (terms.length > 1) {
+      resetAndLoad();
+      return;
+    }
+
+    fetch(skuSearchBase + '&q=' + encodeURIComponent(q) + '&exact=1', {
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' }
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data && data.success && data.product) {
+          const sku = (data.product.sku != null ? String(data.product.sku) : '');
+          const itemCode = (data.product.item_code != null ? String(data.product.item_code) : '');
+          const selected = sku || itemCode || q;
+          $searchName.val(selected);
+          hideSearchError();
+          resetAndLoad();
+          checkAvailabilityAndMaybeOpen(data.product);
+          return;
+        }
+        showSearchError((data && data.message) ? data.message : 'No product found with this SKU.');
+      })
+      .catch(function () {
+        showSearchError('Could not verify SKU. Try again.');
+      });
+  }
+
+  function clearPosSearch() {
+    $searchName.val('');
+    hideSuggest();
+    hideSearchError();
+    resetAndLoad();
+  }
+
   function renderSuggest(rows) {
     if (!rows || rows.length === 0) {
       hideSuggest();
@@ -1442,42 +1487,18 @@ data-code="${lookupCode}">
     // Enter without Shift: search / open product. Shift+Enter inserts a newline in the textarea.
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      hideSuggest();
-      hideSearchError();
-      const q = String($searchName.val() || '').trim();
-      if (q.length < 1) {
-        showSearchError('Enter a SKU or product name.');
-        return;
-      }
-
-      const terms = parsePosSearchTerms(q);
-      if (terms.length > 1) {
-        resetAndLoad();
-        return;
-      }
-
-      fetch(skuSearchBase + '&q=' + encodeURIComponent(q) + '&exact=1', {
-        credentials: 'same-origin',
-        headers: { 'Accept': 'application/json' }
-      })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data && data.success && data.product) {
-            const sku = (data.product.sku != null ? String(data.product.sku) : '');
-            const itemCode = (data.product.item_code != null ? String(data.product.item_code) : '');
-            const selected = sku || itemCode || q;
-            $searchName.val(selected);
-            hideSearchError();
-            resetAndLoad();
-            checkAvailabilityAndMaybeOpen(data.product);
-            return;
-          }
-          showSearchError((data && data.message) ? data.message : 'No product found with this SKU.');
-        })
-        .catch(function () {
-          showSearchError('Could not verify SKU. Try again.');
-        });
+      runPosSearch();
     }
+  });
+
+  $('#posSearchBtn').on('click', function (e) {
+    e.preventDefault();
+    runPosSearch();
+  });
+
+  $('#posSearchClearBtn').on('click', function (e) {
+    e.preventDefault();
+    clearPosSearch();
   });
 
   $searchName.on('keyup change', function () {
