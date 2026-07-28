@@ -125,9 +125,13 @@ function pos_invoice_expand_items_with_addons(
  * @param array<int, array<string, mixed>> $pricingMap
  * @return array<string, mixed>
  */
-function pos_invoice_apply_pricing_aggregate_to_pos_meta(array $posMeta, array $pricingMap, ?array $orderInfo = null): array
-{
-    if (!pos_order_line_pricing_should_override_invoice_summary($pricingMap, $orderInfo)) {
+function pos_invoice_apply_pricing_aggregate_to_pos_meta(
+    array $posMeta,
+    array $pricingMap,
+    ?array $orderInfo = null,
+    array $orderLines = []
+): array {
+    if (!pos_order_line_pricing_should_override_invoice_summary($pricingMap, $orderInfo, $orderLines)) {
         return $posMeta;
     }
 
