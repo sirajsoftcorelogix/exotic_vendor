@@ -24,7 +24,10 @@ function pos_invoice_custom_discount_label(array $posMeta): string
 
 function pos_invoice_coupon_label(array $posMeta): string
 {
-    $raw = trim((string)($posMeta['coupon_display_name'] ?? ''));
+    $raw = pos_order_pick_best_coupon_raw([
+        $posMeta['coupon_raw'] ?? '',
+        $posMeta['coupon_display_name'] ?? '',
+    ]);
 
     return pos_order_coupon_discount_label($raw);
 }
@@ -35,19 +38,48 @@ function pos_invoice_coupon_label(array $posMeta): string
 function pos_order_parse_coupon_code(string $couponRaw): string
 {
     $couponRaw = trim($couponRaw);
-    if ($couponRaw === '') {
+    if ($couponRaw === '' || $couponRaw === '0') {
         return '';
     }
 
     if (str_contains($couponRaw, '|')) {
         $parts = explode('|', $couponRaw);
         $code = trim((string)($parts[0] ?? ''));
-        if ($code !== '') {
+        if ($code !== '' && $code !== '0') {
             return $code;
         }
     }
 
     return $couponRaw;
+}
+
+/**
+ * Prefer full Exotic coupon string (UNI37|c|1550) over stale vp_order_info "0".
+ *
+ * @param list<mixed> $candidates
+ */
+function pos_order_pick_best_coupon_raw(array $candidates): string
+{
+    $normalized = [];
+    foreach ($candidates as $candidate) {
+        $raw = trim((string)$candidate);
+        if ($raw === '' || $raw === '0') {
+            continue;
+        }
+        $normalized[] = $raw;
+    }
+
+    if ($normalized === []) {
+        return '';
+    }
+
+    foreach ($normalized as $raw) {
+        if (str_contains($raw, '|')) {
+            return $raw;
+        }
+    }
+
+    return $normalized[0];
 }
 
 function pos_order_coupon_discount_label(string $couponRaw): string
