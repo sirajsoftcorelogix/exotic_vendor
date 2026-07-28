@@ -288,6 +288,9 @@ switch ($page) {
             case 'refresh_order_apply':
                 $controller->refreshOrderApplyAjax();
                 break;
+            case 'fetch_vendor_order_json':
+                $controller->fetchVendorOrderJsonAjax();
+                break;
             case 'update_status':
                 $controller->updateStatus();
                 break;
@@ -1847,6 +1850,10 @@ switch ($page) {
                 break;
             case 'get_order_details_html':
                 $controller->getOrderDetailsHTML();
+                break;
+            case 'fetch_vendor_order_json':
+                require_once 'controllers/OrdersController.php';
+                (new OrdersController())->fetchVendorOrderJsonAjax();
                 break;
             case 'create_invoice_from_order':
                 $controller->createInvoiceFromOrderAjax();
