@@ -312,6 +312,9 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
               <?php
                 $productId = (int)($r['id'] ?? 0);
                 $skuLabel = trim((string)($r['sku'] ?? $r['item_code'] ?? ''));
+                $movementCount = (int)($r['movement_count'] ?? 0);
+                $soleMovementBalance = $movementCount === 1 ? (float)($r['min_running_stock'] ?? 0) : null;
+                $canInlineStockRefresh = isStockReportInlineRefreshEligible($movementCount, $soleMovementBalance);
               ?>
               <tr class="odd:bg-white even:bg-gray-50/40 hover:bg-amber-50/50 transition-colors" data-product-id="<?= $productId ?>">
                 <td class="px-5 py-4 align-top">
@@ -350,14 +353,27 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
                     <span class="inline-flex rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-500">N/A</span>
                   <?php endif; ?>
                 </td>
-                <td class="px-5 py-4 align-top">
-                  <?php if ($qty <= 0): ?>
-                    <span class="inline-flex rounded-full bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700">Out (0)</span>
-                  <?php elseif ($qty <= 5): ?>
-                    <span class="inline-flex rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700">Low (<?= $qty ?>)</span>
-                  <?php else: ?>
-                    <span class="inline-flex rounded-full bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700">In (<?= $qty ?>)</span>
-                  <?php endif; ?>
+                <td class="px-5 py-4 align-top stock-report-stock-cell" data-product-id="<?= $productId ?>">
+                  <div class="inline-flex items-center gap-2 flex-wrap">
+                    <?php if ($qty <= 0): ?>
+                      <span class="stock-report-stock-badge inline-flex rounded-full bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700">Out (0)</span>
+                    <?php elseif ($qty <= 5): ?>
+                      <span class="stock-report-stock-badge inline-flex rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700">Low (<?= $qty ?>)</span>
+                    <?php else: ?>
+                      <span class="stock-report-stock-badge inline-flex rounded-full bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700">In (<?= $qty ?>)</span>
+                    <?php endif; ?>
+                    <?php if ($canInlineStockRefresh): ?>
+                      <button
+                        type="button"
+                        class="stock-report-inline-refresh inline-flex h-7 w-7 items-center justify-center rounded-md border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-1 transition disabled:opacity-50 disabled:pointer-events-none"
+                        data-product-id="<?= $productId ?>"
+                        data-sku-label="<?= htmlspecialchars($skuLabel, ENT_QUOTES, 'UTF-8') ?>"
+                        title="Refresh stock from API (fresh item with no ledger history)"
+                        aria-label="Refresh stock from API for <?= htmlspecialchars($skuLabel, ENT_QUOTES, 'UTF-8') ?>">
+                        <i class="fas fa-sync-alt text-[11px]" aria-hidden="true"></i>
+                      </button>
+                    <?php endif; ?>
+                  </div>
                 </td>
                 <td class="px-5 py-4 align-top text-sm text-right font-semibold text-gray-900 tabular-nums">₹<?= number_format((float)($r['sell_price'] ?? 0), 2) ?></td>
                 <td class="px-5 py-4 align-top text-sm text-gray-800 max-w-[15rem] break-words leading-snug"><?= htmlspecialchars($r['title'] ?? '') ?></td>
@@ -606,6 +622,55 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
       chunks.push(ids.slice(i, i + size));
     }
     return chunks;
+  }
+
+  async function refreshStockReportRowInline(btn) {
+    const productId = parseInt(String(btn.dataset.productId || '0'), 10);
+    const skuLabel = String(btn.dataset.skuLabel || ('#' + productId)).trim();
+    if (productId <= 0) return;
+
+    const confirmed = window.confirm(
+      'Refresh stock for ' + skuLabel + '?\n\n' + STOCK_REPORT_REFRESH_CONFIRM
+    );
+    if (!confirmed) return;
+
+    const iconEl = btn.querySelector('i');
+    btn.disabled = true;
+    btn.classList.add('opacity-70', 'cursor-not-allowed');
+    if (iconEl) {
+      iconEl.classList.remove('fa-sync-alt');
+      iconEl.classList.add('fa-spinner', 'fa-spin');
+    }
+
+    try {
+      const res = await fetch('index.php?page=pos_register&action=stock-report-refresh', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ product_id: productId }),
+      });
+      const rawText = await res.text();
+      let data = null;
+      try {
+        data = rawText ? JSON.parse(rawText) : null;
+      } catch (parseErr) {
+        data = null;
+      }
+      if (!data || !data.success) {
+        throw new Error((data && data.message) ? data.message : 'Stock refresh failed.');
+      }
+
+      window.alert(data.message || ('Stock refreshed for ' + skuLabel + '.'));
+      window.location.reload();
+    } catch (err) {
+      window.alert(err && err.message ? err.message : 'Stock refresh failed.');
+      btn.disabled = false;
+      btn.classList.remove('opacity-70', 'cursor-not-allowed');
+      if (iconEl) {
+        iconEl.classList.remove('fa-spinner', 'fa-spin');
+        iconEl.classList.add('fa-sync-alt');
+      }
+    }
   }
 
   function setStockReportBulkUiLocked(locked) {
@@ -1678,6 +1743,13 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
       groupSelect.addEventListener('change', syncStockReportGroupFilters);
     }
     syncStockReportGroupFilters();
+
+    document.addEventListener('click', (event) => {
+      const refreshBtn = event.target.closest('.stock-report-inline-refresh');
+      if (!refreshBtn || refreshBtn.disabled) return;
+      event.preventDefault();
+      refreshStockReportRowInline(refreshBtn);
+    });
 
     updateStockReportSelectionUi();
   });
