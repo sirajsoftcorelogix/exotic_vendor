@@ -3023,10 +3023,10 @@
     if (isCartTablePage()) {
       html +=
         '<div class="pos-cart-summary-discount-row mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">';
+      html += discountBoxHtml;
       if (summaryBoxHtml) {
         html += summaryBoxHtml;
       }
-      html += discountBoxHtml;
       html += '</div>';
     } else {
       if (summaryBoxHtml) {
