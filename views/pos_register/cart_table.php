@@ -73,6 +73,9 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       #posCartTablePage .pos-cart-line-image-enlarge {
         padding: 0;
       }
+      #posCartImageLightboxImg {
+        transition: opacity 0.15s ease;
+      }
       #posCartTablePage .pos-cart-draft-section,
       #posCartTablePage .pos-cart-table-wrap {
         max-width: none;
@@ -95,6 +98,21 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       }
       #posCartTablePage .pos-cart-draft-suggest:not(.hidden) {
         display: block;
+      }
+      #posCartTablePage .pos-cart-summary-discount-row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        align-items: stretch;
+      }
+      @media (min-width: 768px) {
+        #posCartTablePage .pos-cart-summary-discount-row {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      #posCartTablePage .pos-cart-summary-box,
+      #posCartTablePage .pos-cart-discount-box {
+        min-width: 0;
       }
     </style>
 

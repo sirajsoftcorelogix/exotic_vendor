@@ -1130,21 +1130,51 @@
     return lb;
   }
 
-  function openPosCartImageLightbox(url, alt) {
-    if (!url || !String(url).trim()) {
+  function openPosCartImageLightbox(url, alt, triggerEl) {
+    var urlStr = String(url || '').trim();
+    if (!urlStr) {
       return;
     }
     var lb = ensurePosCartImageLightbox();
-    var img = document.getElementById('posCartImageLightboxImg');
-    if (!img) {
+    var lbImg = document.getElementById('posCartImageLightboxImg');
+    if (!lbImg) {
       return;
     }
-    img.src = String(url).trim();
-    img.alt = alt ? String(alt) : 'Product image';
     lb.classList.remove('hidden');
     lb.classList.add('flex');
     lb.style.display = 'flex';
     document.body.style.overflow = 'hidden';
+    lbImg.alt = alt ? String(alt) : 'Product image';
+
+    function revealLoadedImage(src) {
+      lbImg.style.opacity = '1';
+      lbImg.removeAttribute('aria-busy');
+      lbImg.src = src;
+    }
+
+    var thumbImg = triggerEl && triggerEl.querySelector ? triggerEl.querySelector('img') : null;
+    if (thumbImg && thumbImg.complete && thumbImg.naturalWidth > 0) {
+      revealLoadedImage(thumbImg.currentSrc || thumbImg.src || urlStr);
+      return;
+    }
+    if (lbImg.src === urlStr && lbImg.complete && lbImg.naturalWidth > 0) {
+      lbImg.style.opacity = '1';
+      lbImg.removeAttribute('aria-busy');
+      return;
+    }
+
+    lbImg.style.opacity = isCartTablePage() ? '0.35' : '1';
+    if (isCartTablePage()) {
+      lbImg.setAttribute('aria-busy', 'true');
+    }
+    var pre = new Image();
+    pre.onload = function () {
+      revealLoadedImage(urlStr);
+    };
+    pre.onerror = function () {
+      revealLoadedImage(urlStr);
+    };
+    pre.src = urlStr;
   }
 
   function closePosCartImageLightbox() {
@@ -1159,6 +1189,8 @@
     if (img) {
       img.src = '';
       img.alt = '';
+      img.style.opacity = '';
+      img.removeAttribute('aria-busy');
     }
     document.body.style.overflow = '';
   }
@@ -1170,6 +1202,7 @@
         '<div class="shrink-0 w-14 h-14 rounded-md border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-slate-300 text-sm" title="No image">\u25c7</div>'
       );
     }
+    var imgLoading = isCartTablePage() ? 'eager' : 'lazy';
     return (
       '<button type="button" class="pos-cart-line-image-enlarge shrink-0 w-14 h-14 rounded-md border border-slate-200 bg-white overflow-hidden cursor-pointer hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"' +
       ' data-full-src="' +
@@ -1181,9 +1214,32 @@
       escapeHtml(imgUrl) +
       '" alt="' +
       safeTitle +
-      '" class="pointer-events-none h-full w-full object-contain p-0.5" loading="lazy" decoding="async" />' +
+      '" class="pointer-events-none h-full w-full object-contain p-0.5" loading="' +
+      imgLoading +
+      '" decoding="async" fetchpriority="' +
+      (isCartTablePage() ? 'high' : 'auto') +
+      '" />' +
       '</button>'
     );
+  }
+
+  function prefetchCartTableLineImages(panel) {
+    if (!isCartTablePage() || !panel) {
+      return;
+    }
+    panel.querySelectorAll('.pos-cart-line-image-enlarge img').forEach(function (imgEl) {
+      var src = String(imgEl.getAttribute('src') || '').trim();
+      if (!src || imgEl.dataset.cartImgPrefetched === '1') {
+        return;
+      }
+      imgEl.dataset.cartImgPrefetched = '1';
+      imgEl.loading = 'eager';
+      if (imgEl.complete && imgEl.naturalWidth > 0) {
+        return;
+      }
+      var pre = new Image();
+      pre.src = src;
+    });
   }
 
   function parseMoneyValue(val) {
@@ -2331,7 +2387,9 @@
       item_code: btn.getAttribute('data-item-code'),
       size: btn.getAttribute('data-size'),
       color: btn.getAttribute('data-color'),
-      item_level: btn.getAttribute('data-item-level')
+      item_level: btn.getAttribute('data-item-level'),
+      title: btn.getAttribute('data-title') || '',
+      image: btn.getAttribute('data-image') || ''
     };
   }
 
@@ -2413,7 +2471,7 @@
         size: p.size,
         color: p.color,
         item_level: p.item_level,
-        image: p.image || p.image_url,
+        image: lineImageUrl(p) || p.image || p.image_url,
         price: p.price
       },
       { qty: qty }
@@ -2480,6 +2538,7 @@
               var skuLbl = escapeHtml(String(p.sku || p.item_code || ''));
               var title = String(p.title || p.name || '').trim();
               var titleShort = title.length > 48 ? title.slice(0, 45) + '…' : title;
+              var imgUrl = lineImageUrl(p);
               var activeCls =
                 pickIdx === 0 ? ' pos-cart-draft-sku-pick-active bg-orange-50 ring-1 ring-orange-200/80' : '';
               return (
@@ -2496,7 +2555,11 @@
                 escapeHtml(String(p.color || '')) +
                 '" data-item-level="' +
                 escapeHtml(String(p.item_level || '')) +
-                '" role="option"' +
+                '" data-title="' +
+                escapeHtml(title) +
+                '"' +
+                (imgUrl ? ' data-image="' + escapeHtml(imgUrl) + '"' : '') +
+                ' role="option"' +
                 (pickIdx === 0 ? ' aria-selected="true"' : ' aria-selected="false"') +
                 '>' +
                 '<span class="font-semibold text-slate-800">' +
@@ -2877,14 +2940,17 @@
       isAmountGreaterThanZero(totals.customDeduction) ||
       isAmountGreaterThanZero(totals.giftDeduction) ||
       totals.grandTotal != null;
+    var summaryBoxHtml = '';
     if (showSummary) {
-      html +=
-        '<div class="mt-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">' +
+      summaryBoxHtml =
+        '<div class="pos-cart-summary-box rounded-lg border border-slate-200 bg-white p-3 shadow-sm' +
+        (isCartTablePage() ? ' h-full' : ' mt-4') +
+        '">' +
         '<p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Summary</p>' +
         '<div class="space-y-0.5">';
-      html += moneyRowSummary('Sub total (incl. GST)', totals.subtotal, false);
+      summaryBoxHtml += moneyRowSummary('Sub total (incl. GST)', totals.subtotal, false);
       var manualLineDisc = sumManualLineDiscountFromCartItems(data || {});
-      html += moneyRowSummary(
+      summaryBoxHtml += moneyRowSummary(
         'Line Discount',
         isAmountGreaterThanZero(manualLineDisc) ? manualLineDisc : 0,
         false
@@ -2896,7 +2962,7 @@
         } else if (posCustomDiscountPersist && posCustomDiscountPersist.mode === 'fixed') {
           cdLbl += ' (fixed ₹)';
         }
-        html += moneyRowSummaryNote(
+        summaryBoxHtml += moneyRowSummaryNote(
           cdLbl,
           totals.customDeduction,
           totals.cartDiscountAbsorbed ? '(included in line totals)' : '',
@@ -2909,7 +2975,7 @@
           totals.couponDisplayName && String(totals.couponDisplayName).trim() !== ''
             ? 'Coupon (' + String(totals.couponDisplayName).trim() + ')'
             : 'Coupon';
-        html += moneyRowSummaryNote(
+        summaryBoxHtml += moneyRowSummaryNote(
           couponLbl,
           totals.couponDeduction,
           totals.cartDiscountAbsorbed ? '(included in line totals)' : '',
@@ -2918,7 +2984,7 @@
         );
       }
       if (isAmountGreaterThanZero(totals.giftDeduction)) {
-        html += moneyRowSummaryNote(
+        summaryBoxHtml += moneyRowSummaryNote(
           'Gift Voucher',
           totals.giftDeduction,
           totals.cartDiscountAbsorbed ? '(included in line totals)' : '',
@@ -2926,13 +2992,15 @@
           ''
         );
       }
-      html += moneyRowSummary('GST Total', totals.gstTotal, false);
-      html += moneyRowSummary('GRAND Total', totals.grandTotal, true);
-      html += '</div></div>';
+      summaryBoxHtml += moneyRowSummary('GST Total', totals.gstTotal, false);
+      summaryBoxHtml += moneyRowSummary('GRAND Total', totals.grandTotal, true);
+      summaryBoxHtml += '</div></div>';
     }
 
-    html +=
-      '<div class="mt-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm space-y-3">' +
+    var discountBoxHtml =
+      '<div class="pos-cart-discount-box rounded-lg border border-slate-200 bg-white p-3 shadow-sm space-y-3' +
+      (isCartTablePage() ? ' h-full' : ' mt-4') +
+      '">' +
       '<p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Discount</p>' +
       '<div class="space-y-1">' +
       '<div class="flex gap-2 flex-wrap items-stretch">' +
@@ -2951,6 +3019,21 @@
       '<button type="button" class="pos-cart-customdisc-clear inline-flex h-9 w-9 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:bg-red-50 hover:border-red-200 hover:text-red-700" title="Remove custom discount" aria-label="Remove custom discount">' +
       '<i class="fas fa-trash-alt text-sm" aria-hidden="true"></i></button>' +
       '</div></div></div>';
+
+    if (isCartTablePage()) {
+      html +=
+        '<div class="pos-cart-summary-discount-row mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">';
+      if (summaryBoxHtml) {
+        html += summaryBoxHtml;
+      }
+      html += discountBoxHtml;
+      html += '</div>';
+    } else {
+      if (summaryBoxHtml) {
+        html += summaryBoxHtml;
+      }
+      html += discountBoxHtml;
+    }
 
     if (items.length > 0) {
       html +=
@@ -2980,6 +3063,7 @@
     window.__posCartLocalStockWarnings = getLocalStockWarnings(data || {});
 
     panel.innerHTML = html;
+    prefetchCartTableLineImages(panel);
     var modeSel = panel.querySelector('.pos-cart-customdisc-mode');
     var inpDisc = panel.querySelector('.pos-cart-customdisc-input');
     if (modeSel && inpDisc) {
@@ -3245,7 +3329,8 @@
           e.stopPropagation();
           openPosCartImageLightbox(
             imgEnlarge.getAttribute('data-full-src') || '',
-            imgEnlarge.getAttribute('data-image-alt') || 'Product image'
+            imgEnlarge.getAttribute('data-image-alt') || 'Product image',
+            imgEnlarge
           );
           return;
         }
