@@ -2,6 +2,15 @@
   'use strict';
 
   function posCustomerToast(msg, color) {
+    if (typeof window.showPosMessageModal === 'function') {
+      var tone = color === 'green' ? 'success' : color === 'violet' || color === 'blue' ? 'info' : color === 'red' ? 'error' : 'warning';
+      window.showPosMessageModal({
+        title: tone === 'success' ? 'Success' : tone === 'error' ? 'Error' : 'Notice',
+        message: String(msg || ''),
+        tone: tone
+      });
+      return;
+    }
     if (typeof window.showToast === 'function') {
       window.showToast(msg, color || 'red');
       return;
@@ -10,7 +19,9 @@
       window.toast(msg, color || 'red');
       return;
     }
-    window.alert(String(msg || ''));
+    if (typeof console !== 'undefined' && console.warn) {
+      console.warn('[POS customer]', msg);
+    }
   }
 
   window.getSelectedCustomerId = function () {
@@ -69,8 +80,19 @@
   window.validatePosCustomerSelected = function () {
     var customerId = window.getSelectedCustomerId();
     if (!customerId) {
-      posCustomerToast('Please select customer first', 'red');
-      window.focusPosCustomerSelect();
+      if (typeof window.showPosMessageModal === 'function') {
+        window.showPosMessageModal({
+          title: 'Customer required',
+          message: 'Please select customer first',
+          tone: 'warning',
+          onClose: function () {
+            window.focusPosCustomerSelect();
+          }
+        });
+      } else {
+        posCustomerToast('Please select customer first', 'red');
+        window.focusPosCustomerSelect();
+      }
       return '';
     }
     return customerId;
