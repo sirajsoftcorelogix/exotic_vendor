@@ -27,11 +27,6 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
               <i class="fas fa-store-alt text-orange-600 text-xs" aria-hidden="true"></i>
               <?= htmlspecialchars($warehouse_name ?? 'No Warehouse') ?>
             </span>
-            <span class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-700">
-              <i class="fas fa-user text-slate-500 text-xs" aria-hidden="true"></i>
-              <span class="font-semibold"><?= htmlspecialchars($customerLabel) ?></span>
-              <span class="text-slate-500"><?= htmlspecialchars($customerPhone) ?></span>
-            </span>
           </div>
         </div>
         <div class="flex shrink-0 flex-wrap gap-2 lg:pl-4 lg:self-center">
@@ -139,7 +134,33 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
         cursor: pointer;
         text-align: left;
       }
+      #posCartTablePage .pos-customer-select-card .select2-container {
+        min-width: 0;
+      }
     </style>
+
+    <div class="rounded-2xl bg-white border border-slate-200 shadow-sm p-4 sm:p-5 mb-4 pos-customer-select-card">
+      <label class="text-sm text-gray-500">Customer <span class="text-red-600">*</span></label>
+      <div class="mt-2 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex min-w-0 flex-1 gap-2">
+          <select
+            id="customerSelect"
+            name="customer_id"
+            class="w-full min-w-0 border rounded-lg px-3 py-2.5 text-base"
+            aria-label="Search customer"></select>
+          <button
+            type="button"
+            onclick="openCustomerModal()"
+            class="shrink-0 rounded-lg bg-orange-600 px-3 py-2 text-base text-white hover:bg-orange-700"
+            title="Add customer"
+            aria-label="Add customer">+</button>
+        </div>
+        <div class="shrink-0 text-sm lg:text-right">
+          <div id="posCartTableCustomerName" class="font-semibold text-slate-800"><?= htmlspecialchars($customerLabel) ?></div>
+          <div id="posCartTableCustomerPhone" class="text-slate-500"><?= htmlspecialchars($customerPhone) ?></div>
+        </div>
+      </div>
+    </div>
 
     <div class="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
       <div data-pos-cart-panel-mount class="p-4 sm:p-6">
@@ -154,11 +175,14 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
 </div>
 
 <?php require __DIR__ . '/partials/product_modal.php'; ?>
+<?php require __DIR__ . '/partials/customer_modal.php'; ?>
 
 <script>
   window.POS_CART_TABLE_PAGE = true;
+  window.POS_SESSION_CUSTOMER_ID = <?= json_encode(!empty($_SESSION['pos_customer_id']) ? (string)(int)$_SESSION['pos_customer_id'] : '') ?>;
   window.POS_INITIAL_CUSTOMER = <?= json_encode(isset($selected_customer) ? $selected_customer : null, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
 </script>
+<script src="<?php echo base_url(); ?>assets/js/pos_customer.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos_cart_hooks.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos.js"></script>
 <script>
