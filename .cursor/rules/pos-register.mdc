@@ -139,8 +139,6 @@ Browser handleAddToCart()
 
 **Local stock confirm (separate from warehouse stock):** Before add, JS may prompt if Exotic cart line `local_stock` < qty (`pos_local_stock_confirmed_v1` in sessionStorage). This is Exotic API field, not `vp_stock_movements`.
 
-**Line price adjustments:** `posLineAdjustByRef` → sent as `list_line_prices` at checkout → `/order/pos_editorderprices` after order create.
-
 ---
 
 ## Checkout flow (`checkout-create`)
@@ -195,7 +193,7 @@ Separate admin UI at `action=stock-report`. Uses `models/pos/pos.php::getStockRe
 - **Display price:** GST-inclusive India sell price; books add `sourcingfee + shippingfee`.
 - **Grid/list:** DB `price_india` first; missing prices filled from Exotic API batch.
 - **Modal:** `mergePosProductSellingBaseExGst`, `mergeGstPercentField`, variant may fetch base `item_code` from API.
-- **Checkout line prices:** Cart retrieve prices or POS-adjusted `pos_line_prices` / `list_line_prices`.
+- **Checkout line prices:** Cart retrieve prices or POS-adjusted `pos_line_prices` (cart-level discount allocation for invoices).
 
 ---
 

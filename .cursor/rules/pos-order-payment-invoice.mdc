@@ -75,7 +75,6 @@ Phone numbers must use a dial code consistent with the selected **billing** and 
 4. buildOrderCreatePostFromPayload($payload, $cartData)
 5. RetailApiClient POST /order/create (+ discount query + headers from exoticCartDiscountContext)
 6. OrderResponseParser::extractOrderNumber()
-7. If list_line_prices → POST /order/pos_editorderprices (Exotic line price sync)
 ```
 
 ### `buildOrderCreatePostFromPayload()` — key fields
@@ -265,7 +264,7 @@ Snapshot fields (set in `checkout_create`):
 
 ```
 order_number, subtotal_goods, gst_total, coupon_discount, cash_discount,
-gift_discount, line_discount, grand_total, line_prices, list_line_prices,
+gift_discount, line_discount, grand_total, line_prices,
 discounts_absorbed, custom_discount_mode/value, coupon_display_name,
 apply_export_gst, advance_received, cod_pending
 ```
@@ -310,8 +309,7 @@ flowchart TD
   B --> C[cart/retrieve + checkoutdata]
   C --> D[POST order/create Exotic]
   D --> E[Extract order_number]
-  E --> F[pos_editorderprices optional]
-  F --> G[pos_payment_insert_row per split]
+  E --> G[pos_payment_insert_row per split]
   G --> H[Store pos_checkout_invoice_snapshot]
   H --> I[importSingleOrderForCheckoutWithRetry]
   I --> J{vp_orders ready?}

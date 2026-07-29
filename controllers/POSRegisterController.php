@@ -4617,7 +4617,6 @@ class POSRegisterController
 
             require_once dirname(__DIR__) . '/helpers/pos_local_checkout_order.php';
             $invoiceLinePricesForLocal = is_array($payload['pos_line_prices'] ?? null) ? $payload['pos_line_prices'] : [];
-            $listLinePricesForLocal = is_array($payload['list_line_prices'] ?? null) ? $payload['list_line_prices'] : [];
             $fallback = pos_local_checkout_try_create_when_api_fails(
                 $conn,
                 $payload,
@@ -4628,7 +4627,6 @@ class POSRegisterController
                 $txn,
                 (string)$deliveryStatus['local_status'],
                 $invoiceLinePricesForLocal,
-                $listLinePricesForLocal,
                 $createRes,
                 $postBody,
                 [
@@ -4660,54 +4658,9 @@ class POSRegisterController
             }
         }
 
-        $editLinePrices = $payload['list_line_prices'] ?? null;
-        if (!is_array($editLinePrices)) {
-            $editLinePrices = [];
-        }
         $invoiceLinePrices = $payload['pos_line_prices'] ?? [];
         if (!is_array($invoiceLinePrices)) {
             $invoiceLinePrices = [];
-        }
-        $linePricesSyncWarning = '';
-        if (!$exoticSyncPending && count($editLinePrices) > 0) {
-            if (count($editLinePrices) !== count($items)) {
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'Line price payload does not match the current cart (' . count($editLinePrices) . ' rows vs '
-                        . count($items) . ' items). Refresh the cart and try again.',
-                    'order_number' => $orderNumber,
-                    'order_create_debug' => $_SESSION['pos_order_create_api_debug'] ?? null,
-                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                exit;
-            }
-            foreach ($editLinePrices as $ln) {
-                if (!is_array($ln)) {
-                    echo json_encode([
-                        'success' => false,
-                        'message' => 'Invalid line price row. Refresh the cart and try again.',
-                        'order_number' => $orderNumber,
-                    ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                    exit;
-                }
-                if (trim((string)($ln['itemcode'] ?? '')) === '') {
-                    echo json_encode([
-                        'success' => false,
-                        'message' => 'Line price payload is missing item code for one or more rows.',
-                        'order_number' => $orderNumber,
-                    ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                    exit;
-                }
-            }
-            $editRes = $this->exoticPosEditOrderPrices($orderNumber, $editLinePrices);
-            if (!CartResponseParser::isSuccess($editRes)) {
-                $em = CartResponseParser::extractUserMessage($editRes);
-                if ($em === '') {
-                    $em = 'HTTP ' . (int)($editRes['code'] ?? 0);
-                }
-                $linePricesSyncWarning = 'Order ' . $orderNumber . ' was created but Exotic rejected line prices: ' . $em
-                    . ' Payment was recorded locally; fix line prices on Exotic if needed.';
-                error_log('[POS checkout line prices] ' . $linePricesSyncWarning);
-            }
         }
 
         $short = pos_payment_resolve_short_code_for_warehouse($conn, (int)($_SESSION['warehouse_id'] ?? 0));
@@ -4785,9 +4738,6 @@ class POSRegisterController
             'line_discount' => round((float)($payload['receipt_line_discount'] ?? 0), 2),
             'grand_total' => $orderTotal,
             'line_prices' => $invoiceLinePrices,
-            'list_line_prices' => is_array($payload['list_line_prices'] ?? null)
-                ? $payload['list_line_prices']
-                : (is_array($editLinePrices) ? $editLinePrices : []),
             'discounts_absorbed' => !empty($payload['receipt_discounts_absorbed']),
             'custom_discount_mode' => trim((string)($payload['custom_discount_mode'] ?? '')),
             'custom_discount_value' => round((float)($payload['custom_discount_value'] ?? 0), 2),
@@ -4913,9 +4863,6 @@ class POSRegisterController
         if (!empty($localStockWarnings)) {
             $successMessage .= ' Local stock warning: ' . count($localStockWarnings) . ' item(s) sold above local stock.';
         }
-        if ($linePricesSyncWarning !== '') {
-            $successMessage .= ' ' . $linePricesSyncWarning;
-        }
         if (!empty($fulfillmentStatusMeta['message']) && (empty($fulfillmentStatusMeta['local_updated']) || !empty($fulfillmentStatusMeta['api_failed']))) {
             $successMessage .= ' ' . $fulfillmentStatusMeta['message'];
         }
@@ -4927,7 +4874,6 @@ class POSRegisterController
             'message' => $successMessage,
             'order_number' => $orderNumber,
             'exotic_sync_pending' => $exoticSyncPending,
-            'line_prices_sync_warning' => $linePricesSyncWarning,
             'receipt_number' => $receiptNo,
             'payment_id' => (int)($pay['payment_id'] ?? 0),
             'payment_ids' => $paymentIds,
@@ -5482,67 +5428,6 @@ class POSRegisterController
         $debugBody['checkoutdata_length'] = $len;
 
         return $debugBody;
-    }
-
-    /**
-     * GST-inclusive list unit (`itemprice`) for pos_editorderprices; order-level discounts apply separately.
-     *
-     * @return list<array{itemcode: string, size: string, color: string, price: string}>
-     */
-    private function buildPosListLinePricesFromCart(array $cartData): array
-    {
-        $items = $cartData['cartitems'] ?? $cartData['cart_items'] ?? $cartData['items'] ?? $cartData['lines'] ?? [];
-        if (!is_array($items) || count($items) === 0) {
-            return [];
-        }
-
-        $out = [];
-        foreach ($items as $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-            $itemcode = trim((string)($row['code'] ?? $row['item_code'] ?? $row['itemcode'] ?? ''));
-            if ($itemcode === '') {
-                continue;
-            }
-            $unit = (float)($row['itemprice'] ?? $row['item_price'] ?? $row['unit_price'] ?? $row['price'] ?? 0);
-            if ($unit <= 0) {
-                $qty = max(1, (int)($row['qty'] ?? $row['quantity'] ?? 1));
-                $lineTotal = (float)($row['linetotal'] ?? $row['line_total'] ?? $row['finalprice'] ?? 0);
-                if ($lineTotal > 0) {
-                    $unit = $lineTotal / $qty;
-                }
-            }
-            if ($unit <= 0) {
-                continue;
-            }
-            $out[] = [
-                'itemcode' => $itemcode,
-                'size' => trim((string)($row['size'] ?? '')),
-                'color' => trim((string)($row['color'] ?? '')),
-                'price' => number_format($unit, 2, '.', ''),
-            ];
-        }
-
-        return $out;
-    }
-
-    private function exoticPosEditOrderPrices(string $orderId, array $lines): array
-    {
-        $post = ['orderid' => $orderId];
-        $i = 0;
-        foreach ($lines as $ln) {
-            if (!is_array($ln)) {
-                continue;
-            }
-            $post['itemcode[' . $i . ']'] = trim((string)($ln['itemcode'] ?? ''));
-            $post['size[' . $i . ']'] = trim((string)($ln['size'] ?? ''));
-            $post['color[' . $i . ']'] = trim((string)($ln['color'] ?? ''));
-            $post['price[' . $i . ']'] = trim((string)($ln['price'] ?? ''));
-            ++$i;
-        }
-
-        return $this->retailApiClient->call('/order/pos_editorderprices', 'POST', [], $post);
     }
 
     private function mapPosPaymentModeLabel(string $mode): string

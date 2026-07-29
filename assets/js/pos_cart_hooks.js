@@ -17,8 +17,6 @@
   var lastCartAddApiDebug = null;
   /** After a successful apply: fixed = INR entered; percent = 0–100, re-synced to API after each retrieve. */
   var posCustomDiscountPersist = null;
-  /** Per cart line (cartref): line-level discount toward POST /order/pos_editorderprices after checkout. */
-  var posLineAdjustByRef = {};
   /** Stable keys (sku+qty+local stock) persisted in sessionStorage across page reload. */
   var POS_LOCAL_STOCK_CONFIRM_SS_KEY = 'pos_local_stock_confirmed_v1';
 
@@ -1233,48 +1231,11 @@
     return v != null && String(v).trim() !== '' ? String(v).trim() : '';
   }
 
-  function adjustmentIsActive(adj) {
-    if (!adj || typeof adj !== 'object') {
-      return false;
-    }
-    var v = parseFloat(String(adj.value));
-    return !isNaN(v) && v > 0;
-  }
-
-  /** @returns {{ mode: string, value: number }|null} */
-  function getLineAdjust(ref) {
-    if (!ref) {
-      return null;
-    }
-    var adj = posLineAdjustByRef[ref];
-    if (!adj || typeof adj !== 'object') {
-      return null;
-    }
-    var mode = adj.mode === 'fixed_line' ? 'fixed_line' : 'percent';
-    var val = parseFloat(String(adj.value));
-    val = isNaN(val) || val < 0 ? 0 : val;
-    if (mode === 'percent') {
-      val = val > 100 ? 100 : val;
-    }
-    return { mode: mode, value: val };
-  }
-
-  function computePosUnitFromList(listUnit, qty, cartRef) {
-    if (listUnit == null || isNaN(listUnit) || listUnit < 0 || qty == null || qty < 1) {
+  function computePosUnitFromList(listUnit) {
+    if (listUnit == null || isNaN(listUnit) || listUnit < 0) {
       return 0;
     }
-    var a = getLineAdjust(cartRef);
-    if (!adjustmentIsActive(a)) {
-      return round2(listUnit);
-    }
-    if (a.mode === 'percent') {
-      var pct = Math.min(100, Math.max(0, a.value));
-      return round2(listUnit * (1 - pct / 100));
-    }
-    var lineWas = listUnit * qty;
-    var off = a.value > lineWas ? lineWas : a.value;
-    var newLineTotal = Math.max(0, lineWas - off);
-    return round2(newLineTotal / qty);
+    return round2(listUnit);
   }
 
   /** Extended line ₹ after user-defined line discounts (GST-inclusive POS total for the row). */
@@ -1285,7 +1246,7 @@
       listU = 0;
     }
     var ref = lineCartRef(row);
-    var posU = computePosUnitFromList(listU, qty, ref);
+    var posU = computePosUnitFromList(listU);
     return round2(posU * qty);
   }
 
@@ -1599,20 +1560,6 @@
     return out;
   }
 
-  function hasLinePriceOverridesActive(data) {
-    var items = getCartItems(data || {});
-    for (var i = 0; i < items.length; i++) {
-      var ref = lineCartRef(items[i]);
-      if (!ref) {
-        continue;
-      }
-      if (adjustmentIsActive(posLineAdjustByRef[ref])) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   /**
    * Totals used to allocate coupon/custom discount to lines at checkout (API fields may omit custom_reduce).
    * @returns {Record<string, unknown>|null}
@@ -1677,54 +1624,6 @@
       });
     }
     return out;
-  }
-
-  /** Final GST-inclusive unit prices for Exotic pos_editorderprices (after line + cart-level discounts). */
-  function buildListLinePricesPayload(data, totalsOverride) {
-    var items = getCartItems(data || {});
-    var rawT =
-      totalsOverride && typeof totalsOverride === 'object'
-        ? totalsOverride
-        : totalsFromRetrieve(data && typeof data === 'object' ? data : {});
-    var alloc =
-      cartDeductionPoolFromTotals(rawT) > 0.001 ? computePerLineCartAllocations(data || {}, rawT) : null;
-    var out = [];
-    for (var i = 0; i < items.length; i++) {
-      var row = items[i];
-      var qty = lineQty(row);
-      var posExt = linePosExtendedFromRow(row);
-      var cut = alloc != null && alloc.length === items.length ? alloc[i] || 0 : 0;
-      var effExt = Math.max(0, round2(posExt - cut));
-      var unitAfter = qty >= 1 ? round2(effExt / qty) : effExt;
-      if (!(unitAfter > 0)) {
-        var listU = lineListUnitNumber(row, qty);
-        unitAfter = listU != null && !isNaN(listU) ? round2(listU) : 0;
-      }
-      out.push({
-        itemcode: lineItemCodeForApi(row),
-        size: lineSizeForApi(row),
-        color: lineColorForApi(row),
-        price:
-          formatMoneyDisplay(unitAfter) != null
-            ? String(formatMoneyDisplay(unitAfter))
-            : String(round2(unitAfter))
-      });
-    }
-    return out;
-  }
-
-  function pruneLineAdjustMaps(refsUsed) {
-    var next = {};
-    for (var i = 0; i < refsUsed.length; i++) {
-      var r = refsUsed[i];
-      if (!r) {
-        continue;
-      }
-      if (posLineAdjustByRef[r]) {
-        next[r] = posLineAdjustByRef[r];
-      }
-    }
-    posLineAdjustByRef = next;
   }
 
   /** Unit price from cart line (API fields vary). */
@@ -2773,11 +2672,9 @@
       }
     }
     if (!items.length) {
-      posLineAdjustByRef = {};
       lastRetrieveCartDataSnapshot = null;
       clearAllLocalStockConfirmed();
     } else {
-      pruneLineAdjustMaps(refsUsed);
       pruneLocalStockConfirmed(refsUsed, data);
       lastRetrieveCartDataSnapshot =
         data && typeof data === 'object' ? data : {};
@@ -2824,10 +2721,7 @@
         var unitPrice = lineUnitPriceStr(row);
         var lineTotal = lineLineTotalStr(row, qty);
         var listUNum = lineListUnitNumber(row, qty);
-        var posUNum =
-          listUNum != null ? computePosUnitFromList(listUNum, qty, ref) : null;
-        var hasAdj =
-          !!(ref && adjustmentIsActive(getLineAdjust(ref)));
+        var posUNum = listUNum != null ? computePosUnitFromList(listUNum) : null;
         var imgUrl = lineImageUrl(row);
         var productCode = String(pickFirst(row, ['code', 'item_code', 'sku']) || '').trim();
         var codeLbl = String(sub || productCode || '').trim() || '\u2014';
@@ -2908,15 +2802,6 @@
           ' = <span class="font-bold text-orange-600">' +
           lineDisp +
           '</span>';
-        if (
-          hasAdj &&
-          listUNum != null &&
-          posUNum != null &&
-          Math.abs(listUNum - posUNum) > 0.000001
-        ) {
-          html +=
-            ' <span class="text-[10px] font-semibold uppercase text-amber-700">Adj</span>';
-        }
         html += '</div>';
         if (localStockShort && ref && !isLocalStockConfirmed(ref, qty, localStockQty, row)) {
           html +=
@@ -2979,71 +2864,6 @@
             '<span class="text-[10px] text-amber-700">Missing cart reference \u2014 cannot update line.</span>';
         }
         html += '</div>';
-        if (ref) {
-          var cartShare =
-            lineCartAllocs != null && lineCartAllocs.length === items.length ? round2(lineCartAllocs[idx] || 0) : 0;
-          if (isNaN(cartShare) || cartShare < 0) {
-            cartShare = 0;
-          }
-
-          var gadj = posLineAdjustByRef[ref] || { mode: 'percent', value: 0 };
-          var storedMode = String(gadj.mode) === 'fixed_line' ? 'fixed_line' : 'percent';
-          var storedVal =
-            typeof gadj.value === 'number' && !isNaN(gadj.value)
-              ? gadj.value
-              : parseFloat(String(gadj.value));
-          if (isNaN(storedVal) || storedVal < 0) {
-            storedVal = 0;
-          }
-
-          // Display rule: when cart-share exists, show a fixed ₹ field that includes it.
-          // Stored rule: we only store the "manual extra" portion in posLineAdjustByRef to avoid double applying.
-          var showMode = cartShare > 0.001 ? 'fixed_line' : storedMode;
-          var manualFixed = 0;
-          if (storedVal > 0.001) {
-            if (storedMode === 'fixed_line') {
-              manualFixed = storedVal;
-            } else {
-              // percent → convert to ₹ off this line based on list/catalog extended.
-              var baseLine = listUNum != null && !isNaN(listUNum) ? Math.max(0, round2(listUNum * qty)) : 0;
-              manualFixed = round2((baseLine * Math.min(100, Math.max(0, storedVal))) / 100);
-            }
-          }
-          var showValFixed = round2(Math.max(0, manualFixed) + Math.max(0, cartShare));
-          html +=
-            '<div class="pos-cart-line-adjust mt-3" data-cartshare="' +
-            escapeHtml(String(cartShare)) +
-            '">' +
-            '<div class="text-[11px] font-bold text-red-600 mb-1.5">Line Discount</div>' +
-            '<div class="flex flex-wrap items-stretch gap-2">' +
-            '<select class="pos-cart-line-disc-mode shrink-0 rounded border border-slate-300 bg-white px-2 py-2 text-xs font-medium text-slate-800 shadow-sm outline-none focus:border-orange-500" data-cartref="' +
-            escapeHtml(ref) +
-            '">' +
-            (cartShare > 0.001
-              ? ''
-              : '<option value="percent"' + (showMode === 'percent' ? ' selected' : '') + '>% Off</option>') +
-            '<option value="fixed_line"' +
-            (showMode === 'fixed_line' ? ' selected' : '') +
-            '>Fixed \u20b9 off line</option>' +
-            '</select>' +
-            '<input type="number" step="0.01" min="0"' +
-            (showMode === 'percent' ? ' max="100"' : '') +
-            ' class="pos-cart-line-disc-val min-w-[4.5rem] flex-1 rounded border border-slate-300 bg-white px-2 py-2 text-xs tabular-nums shadow-sm outline-none focus:border-orange-500"' +
-            ' data-cartref="' +
-            escapeHtml(ref) +
-            '" placeholder="' +
-            (showMode === 'percent' ? '%' : '\u20b9') +
-            '" value="' +
-            (showMode === 'fixed_line' && showValFixed > 0.001 ? escapeHtml(String(showValFixed)) : storedVal > 0.001 ? escapeHtml(String(storedVal)) : '') +
-            '" />' +
-            '<button type="button" class="pos-cart-line-disc-apply shrink-0 rounded bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800" data-cartref="' +
-            escapeHtml(ref) +
-            '">Apply</button>' +
-            '<button type="button" class="pos-cart-line-disc-reset shrink-0 rounded border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50" data-cartref="' +
-            escapeHtml(ref) +
-            '">Clear</button>' +
-            '</div></div>';
-        }
         html += '</div></div>';
       });
       html += '</div>';
@@ -3243,32 +3063,6 @@
       function (e) {
         var t = e.target;
         if (!t || !t.matches) {
-          return;
-        }
-        var panelLine = document.getElementById(PANEL_ID);
-
-        if (t.matches('.pos-cart-line-disc-mode')) {
-          if (!panelLine || !panelLine.contains(t)) {
-            return;
-          }
-          var wrapLm = t.closest('.pos-cart-line-adjust');
-          if (wrapLm) {
-            var cs = parseFloat(String(wrapLm.getAttribute('data-cartshare') || '0'));
-            if (!isNaN(cs) && cs > 0.001 && t.value === 'percent') {
-              // Cart-share display uses fixed ₹. Don't allow switching to percent while a cart pool exists.
-              t.value = 'fixed_line';
-            }
-          }
-          var inpLm = wrapLm ? wrapLm.querySelector('.pos-cart-line-disc-val') : null;
-          if (inpLm) {
-            if (t.value === 'percent') {
-              inpLm.setAttribute('max', '100');
-              inpLm.placeholder = '%';
-            } else {
-              inpLm.removeAttribute('max');
-              inpLm.placeholder = '\u20b9';
-            }
-          }
           return;
         }
 
@@ -3532,57 +3326,6 @@
         var sumRmD = e.target && e.target.closest ? e.target.closest('.pos-cart-summary-remove-custom') : null;
         if (sumRmD && panel.contains(sumRmD)) {
           window.applyCustomDiscount(0);
-          return;
-        }
-        var discApply = e.target && e.target.closest ? e.target.closest('.pos-cart-line-disc-apply') : null;
-        if (discApply && panel.contains(discApply)) {
-          e.preventDefault();
-          e.stopPropagation();
-          var rA = String(discApply.getAttribute('data-cartref') || '').trim();
-          var wrapA = discApply.closest('.pos-cart-line-adjust');
-          var selA = wrapA ? wrapA.querySelector('.pos-cart-line-disc-mode') : null;
-          var inpA = wrapA ? wrapA.querySelector('.pos-cart-line-disc-val') : null;
-          if (!rA) {
-            return;
-          }
-          var modeA = selA && String(selA.value) === 'fixed_line' ? 'fixed_line' : 'percent';
-          var vA = inpA ? parseFloat(String(inpA.value)) : NaN;
-          vA = isNaN(vA) || vA < 0 ? 0 : vA;
-
-          // When cart-level discounts are being absorbed into lines, the UI shows (manual + cartShare).
-          // Only store the manual extra portion so we don't double-apply the cart pool.
-          var cartShareA = 0;
-          if (wrapA) {
-            var rawCsA = parseFloat(String(wrapA.getAttribute('data-cartshare') || '0'));
-            if (!isNaN(rawCsA) && rawCsA > 0) {
-              cartShareA = rawCsA;
-            }
-          }
-          if (cartShareA > 0.001 && modeA === 'fixed_line') {
-            vA = round2(Math.max(0, vA - cartShareA));
-          }
-          if (vA <= 0) {
-            delete posLineAdjustByRef[rA];
-            renderCartUI(lastRetrieveCartDataSnapshot || {});
-            return;
-          }
-          if (modeA === 'percent' && vA > 100) {
-            toast('Percentage must be between 0 and 100.', 'red');
-            return;
-          }
-          posLineAdjustByRef[rA] = { mode: modeA, value: modeA === 'percent' && vA > 100 ? 100 : vA };
-          renderCartUI(lastRetrieveCartDataSnapshot || {});
-          return;
-        }
-        var discRst = e.target && e.target.closest ? e.target.closest('.pos-cart-line-disc-reset') : null;
-        if (discRst && panel.contains(discRst)) {
-          e.preventDefault();
-          e.stopPropagation();
-          var rR = String(discRst.getAttribute('data-cartref') || '').trim();
-          if (rR) {
-            delete posLineAdjustByRef[rR];
-            renderCartUI(lastRetrieveCartDataSnapshot || {});
-          }
           return;
         }
         var stockYes = e.target && e.target.closest ? e.target.closest('.pos-local-stock-yes') : null;
@@ -4128,29 +3871,10 @@
     return buildPosLinePricesPayload(d, getTotalsForCheckoutAlloc());
   };
 
-  window.getPosListLinePricesPayloadForCheckout = function () {
-    var d = window.__posCartLastRetrieveData;
-    if (!d || typeof d !== 'object') {
-      return [];
-    }
-    return buildListLinePricesPayload(d, getTotalsForCheckoutAlloc());
-  };
-
-  window.hasPosLineLevelPriceOverridesForCheckout = function () {
-    var d = window.__posCartLastRetrieveData;
-    if (!d || typeof d !== 'object') {
-      return false;
-    }
-    return hasLinePriceOverridesActive(d);
-  };
-
   window.hasPosLinePriceOverridesForCheckout = function () {
     var d = window.__posCartLastRetrieveData;
     if (!d || typeof d !== 'object') {
       return false;
-    }
-    if (hasLinePriceOverridesActive(d)) {
-      return true;
     }
     var allocTotals = getTotalsForCheckoutAlloc();
     if (allocTotals && cartDeductionPoolFromTotals(allocTotals) > 0.001) {
