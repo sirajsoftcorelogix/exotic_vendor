@@ -377,12 +377,21 @@ $(function () {
     return null;
   }
 
-  function renderStockWarningBanner(message) {
+  function renderStockWarningBanner(message, warningType) {
     const $banner = $('#pmStockWarning');
     modalStockWarningMessage = String(message || '').trim();
     if (!$banner.length) return;
+
+    const amberClasses = ['border-amber-200', 'bg-amber-50', 'text-amber-900', 'font-normal'];
+    const redClasses = ['border-red-600', 'bg-red-200', 'text-red-950', 'font-semibold'];
+    $banner.removeClass(amberClasses.concat(redClasses).join(' '));
+
     if (modalStockWarningMessage) {
-      $banner.text(modalStockWarningMessage).removeClass('hidden');
+      const isUnmappedAnywhere = String(warningType || '').trim() === 'unmapped_anywhere';
+      $banner
+        .text(modalStockWarningMessage)
+        .removeClass('hidden')
+        .addClass((isUnmappedAnywhere ? redClasses : amberClasses).join(' '));
     } else {
       $banner.addClass('hidden').text('');
     }
@@ -714,7 +723,10 @@ $(function () {
 
     const sqRaw = p.stock_qty;
     modalWarehouseMaxQty = resolveModalQtyCap(p);
-    renderStockWarningBanner(p.stock_warning_message || p.stock_warning || '');
+    renderStockWarningBanner(
+      p.stock_warning_message || p.stock_warning || '',
+      p.stock_warning_type || ''
+    );
     const $hint = $('#pmQtyMaxHint');
     if ($hint.length) {
       if (modalWarehouseMaxQty !== null && modalWarehouseMaxQty > 0) {
