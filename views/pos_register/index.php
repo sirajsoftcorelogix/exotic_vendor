@@ -3007,6 +3007,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 <script>
   document.addEventListener("DOMContentLoaded", function() {
 
+    if (window.location.hash === "#checkout") {
+      window.__posOpenCheckoutAfterCartLoad = true;
+    }
+
     var fullOrderApiBtn = document.getElementById("paymentModalOrderApiFullBtn");
     if (fullOrderApiBtn) {
       fullOrderApiBtn.addEventListener("click", function () {

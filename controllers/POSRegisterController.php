@@ -1206,6 +1206,55 @@ class POSRegisterController
         exit;
     }
 
+    public function cartTable()
+    {
+        is_login();
+        require_once 'models/user/user.php';
+        require_once 'models/customer/Customer.php';
+        global $conn;
+        $usersModel = new User($conn);
+
+        if ((int)($_SESSION['warehouse_id'] ?? 0) <= 0 && $conn instanceof mysqli) {
+            $defWh = $this->getDefaultWarehouseRow($conn);
+            if ($defWh !== null && !empty($defWh['id'])) {
+                $_SESSION['warehouse_id'] = $defWh['id'];
+            }
+        }
+
+        $warehouseName = 'No Warehouse';
+        if (!empty($_SESSION['warehouse_id'])) {
+            $warehouse = $usersModel->getWarehouseById($_SESSION['warehouse_id']);
+            $warehouseName = $warehouse['address_title'] ?? 'No Warehouse';
+            $_SESSION['pos_warehouse_name'] = $warehouseName;
+        }
+
+        $selectedCustomer = null;
+        if ($conn instanceof mysqli && !empty($_SESSION['pos_customer_id'])) {
+            $cid = (int)$_SESSION['pos_customer_id'];
+            if ($cid > 0) {
+                $customerModel = new Customer($conn);
+                $row = $customerModel->getCustomerById($cid);
+                if (!empty($row['id'])) {
+                    $nm = (string)($row['name'] ?? '');
+                    $ph = (string)($row['phone'] ?? '');
+                    $em = (string)($row['email'] ?? '');
+                    $selectedCustomer = [
+                        'id' => (int)$row['id'],
+                        'name' => $nm,
+                        'phone' => $ph,
+                        'email' => $em,
+                        'text' => trim($nm . ' | ' . $ph . ($em !== '' ? ' | ' . $em : '')),
+                    ];
+                }
+            }
+        }
+
+        renderTemplate('views/pos_register/cart_table.php', [
+            'warehouse_name' => $warehouseName,
+            'selected_customer' => $selectedCustomer,
+        ], 'POS Cart — Table View');
+    }
+
     public function stockReport()
     {
         is_login();

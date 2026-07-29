@@ -49,12 +49,38 @@
   var CART_VIEW_SS_KEY = 'pos_cart_view_mode';
   var cartViewMode = 'card';
   var posCartDraftSuggestTimer = null;
-  try {
-    var storedCartView = sessionStorage.getItem(CART_VIEW_SS_KEY);
-    if (storedCartView === 'table' || storedCartView === 'card') {
-      cartViewMode = storedCartView;
+
+  function isCartTablePage() {
+    return !!(
+      window.POS_CART_TABLE_PAGE ||
+      document.getElementById('posCartTablePage') ||
+      document.querySelector('[data-pos-cart-table-page]')
+    );
+  }
+
+  function posCartTablePageUrl() {
+    return '?page=pos_register&action=cart-table';
+  }
+
+  function posRegisterListUrl(extraHash) {
+    var url = '?page=pos_register&action=list';
+    if (extraHash) {
+      url += extraHash.charAt(0) === '#' ? extraHash : '#' + extraHash;
     }
-  } catch (eCartView) {
+    return url;
+  }
+
+  if (isCartTablePage()) {
+    cartViewMode = 'table';
+  } else {
+    try {
+      var storedCartView = sessionStorage.getItem(CART_VIEW_SS_KEY);
+      if (storedCartView === 'table') {
+        sessionStorage.setItem(CART_VIEW_SS_KEY, 'card');
+      }
+    } catch (eClearTableView) {
+      /* ignore */
+    }
     cartViewMode = 'card';
   }
 
@@ -2165,18 +2191,25 @@
   }
 
   function buildCartViewToggleHtml() {
-    var cardActive = cartViewMode !== 'table';
-    var tableActive = cartViewMode === 'table';
+    if (isCartTablePage()) {
+      return (
+        '<div class="pos-cart-view-toggle flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100">' +
+        '<span class="text-xs font-bold uppercase tracking-wider text-slate-500">Cart lines</span>' +
+        '<a href="' +
+        escapeHtml(posRegisterListUrl()) +
+        '" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 transition">' +
+        '<i class="fas fa-th-large text-[10px]" aria-hidden="true"></i> Cards view on POS</a>' +
+        '</div>'
+      );
+    }
     return (
       '<div class="pos-cart-view-toggle flex items-center justify-between gap-2 mb-3 pb-2 border-b border-slate-100">' +
       '<span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cart</span>' +
       '<div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">' +
-      '<button type="button" class="pos-cart-view-toggle-btn rounded-md px-2.5 py-1 text-[10px] font-semibold transition ' +
-      (cardActive ? 'bg-white text-orange-700 shadow-sm' : 'text-slate-600 hover:text-slate-800') +
-      '" data-view="card">Cards</button>' +
-      '<button type="button" class="pos-cart-view-toggle-btn rounded-md px-2.5 py-1 text-[10px] font-semibold transition ' +
-      (tableActive ? 'bg-white text-orange-700 shadow-sm' : 'text-slate-600 hover:text-slate-800') +
-      '" data-view="table">Table</button>' +
+      '<button type="button" class="pos-cart-view-toggle-btn rounded-md px-2.5 py-1 text-[10px] font-semibold transition bg-white text-orange-700 shadow-sm" data-view="card">Cards</button>' +
+      '<a href="' +
+      escapeHtml(posCartTablePageUrl()) +
+      '" target="_blank" rel="noopener noreferrer" class="pos-cart-view-table-link rounded-md px-2.5 py-1 text-[10px] font-semibold transition text-slate-600 hover:text-slate-800 hover:bg-white/80">Table</a>' +
       '</div></div>'
     );
   }
@@ -2551,8 +2584,9 @@
     if (!panel) {
       return;
     }
-    panel.className =
-      'pos-exotic-cart-panel rounded-2xl border border-slate-200/90 bg-gradient-to-b from-slate-50 to-white shadow-sm px-3 py-4 text-sm text-slate-800 mx-0.5 mb-2';
+    panel.className = isCartTablePage()
+      ? 'pos-exotic-cart-panel pos-cart-table-page-panel text-sm text-slate-800'
+      : 'pos-exotic-cart-panel rounded-2xl border border-slate-200/90 bg-gradient-to-b from-slate-50 to-white shadow-sm px-3 py-4 text-sm text-slate-800 mx-0.5 mb-2';
     var items = getCartItems(data);
     var refsUsed = [];
     for (var ri = 0; ri < items.length; ri++) {
@@ -2585,12 +2619,12 @@
     var totals = mergeTotalsWithLineAdjustments(data || {}, rawTotalsForAlloc);
     var existingPanel = document.getElementById(PANEL_ID);
     var draftSnapshot =
-      cartViewMode === 'table' ? captureCartDraftRows(existingPanel) : null;
+      isCartTablePage() || cartViewMode === 'table' ? captureCartDraftRows(existingPanel) : null;
     var html = '';
 
     html += buildCartViewToggleHtml();
 
-    if (cartViewMode === 'table') {
+    if (isCartTablePage() || cartViewMode === 'table') {
       html += buildCartTableCartHtml(items, data, lineCartAllocs);
       html += buildCartDraftSectionHtml(draftSnapshot);
     } else if (!items.length) {
@@ -2978,6 +3012,18 @@
         inpDisc.placeholder = 'Amount (₹)';
       }
     }
+
+    if (window.__posOpenCheckoutAfterCartLoad) {
+      window.__posOpenCheckoutAfterCartLoad = false;
+      try {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+      } catch (eHash) {
+        /* ignore */
+      }
+      if (typeof window.openPaymentModal === 'function') {
+        window.openPaymentModal();
+      }
+    }
   }
 
   function bindCartDelegatesOnce() {
@@ -3188,8 +3234,8 @@
         if (viewBtn && panel.contains(viewBtn)) {
           e.preventDefault();
           var nextView = String(viewBtn.getAttribute('data-view') || '').trim();
-          if (nextView === 'table' || nextView === 'card') {
-            cartViewMode = nextView;
+          if (nextView === 'card') {
+            cartViewMode = 'card';
             try {
               sessionStorage.setItem(CART_VIEW_SS_KEY, cartViewMode);
             } catch (eSetView) {
@@ -3238,6 +3284,18 @@
           }
           if (typeof window.openPaymentModal === 'function') {
             window.openPaymentModal();
+          } else {
+            var checkoutUrl = posRegisterListUrl('checkout');
+            if (window.opener && !window.opener.closed) {
+              try {
+                window.opener.location.href = checkoutUrl;
+                window.opener.focus();
+                return;
+              } catch (eOpener) {
+                /* fall through */
+              }
+            }
+            window.location.href = checkoutUrl;
           }
           return;
         }
