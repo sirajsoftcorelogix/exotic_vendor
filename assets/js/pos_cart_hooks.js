@@ -2859,6 +2859,36 @@
     }, 180);
   }
 
+  function lineAdjustedGstRupees(row, idx, items, lineCartAllocs) {
+    var qty = lineQty(row);
+    var listU = lineListUnitNumber(row, qty);
+    if (listU == null) {
+      listU = 0;
+    }
+    var ref = lineCartRef(row);
+    var posU = computePosUnitFromList(listU, qty, ref);
+    var posExtLine = round2(posU * qty);
+    var allocCut =
+      lineCartAllocs != null && lineCartAllocs.length === items.length ? lineCartAllocs[idx] || 0 : 0;
+    var adjLine = Math.max(0, round2(posExtLine - allocCut));
+    if (!(adjLine > 0)) {
+      return null;
+    }
+    var rate = lineGstRatePercent(row);
+    if (rate != null && rate > 0 && rate <= 40) {
+      var gstByRate = adjLine - adjLine / (1 + rate / 100);
+      if (!isNaN(gstByRate) && gstByRate >= 0) {
+        return round2(gstByRate);
+      }
+    }
+    var origLine = parseMoneyValue(lineLineTotalStr(row, qty));
+    var origG = lineResolvedGstRupees(row, qty);
+    if (origLine != null && origLine > 0 && origG != null && !isNaN(origG) && origG >= 0) {
+      return round2(origG * (adjLine / origLine));
+    }
+    return lineResolvedGstRupees(row, qty);
+  }
+
   function computeCartLineDisplay(row, idx, items, data, lineCartAllocs) {
     var ref = lineCartRef(row);
     var qty = lineQty(row);
@@ -2886,15 +2916,22 @@
         effLineNum = round2(effUnitNum * qty);
       }
     }
+    var gstNum = lineAdjustedGstRupees(row, idx, items, lineCartAllocs);
     return {
       ref: ref,
       qty: qty,
+      listUnitDisp:
+        listUNum != null && !isNaN(listUNum)
+          ? formatRupeeInrDisplay(listUNum)
+          : '\u2014',
       unitDisp:
         effUnitNum != null && !isNaN(effUnitNum)
           ? formatRupeeInrDisplay(effUnitNum)
           : unitPrice
             ? '\u20b9 ' + escapeHtml(String(unitPrice))
             : '\u2014',
+      gstDisp:
+        gstNum != null && !isNaN(gstNum) ? formatRupeeInrDisplay(gstNum) : '\u2014',
       lineDisp:
         effLineNum != null && !isNaN(effLineNum)
           ? formatRupeeInrDisplay(effLineNum)
@@ -2911,14 +2948,16 @@
       '<th class="py-1.5 pr-1 font-semibold">SKU</th>' +
       '<th class="py-1.5 pr-1 font-semibold">Product</th>' +
       '<th class="py-1.5 px-1 font-semibold w-12 text-center">Qty</th>' +
+      '<th class="py-1.5 px-1 font-semibold w-[4.5rem] text-right whitespace-nowrap">Item List Price</th>' +
       '<th class="py-1.5 px-1 font-semibold w-14 text-right">Price</th>' +
+      '<th class="py-1.5 px-1 font-semibold w-[4.25rem] text-right whitespace-nowrap">Total GST</th>' +
       '<th class="py-1.5 pl-1 font-semibold w-14 text-right">Total</th>' +
       '<th class="py-1.5 w-7"></th>' +
       '</tr></thead><tbody>';
 
     if (!items.length) {
       html +=
-        '<tr><td colspan="7" class="py-4 text-center text-[11px] text-slate-400 italic">No items in cart yet — add SKUs below.</td></tr>';
+        '<tr><td colspan="9" class="py-4 text-center text-[11px] text-slate-400 italic">No items in cart yet — add SKUs below.</td></tr>';
     } else {
       items.forEach(function (row, idx) {
         var disp = computeCartLineDisplay(row, idx, items, data, lineCartAllocs);
@@ -2976,8 +3015,14 @@
         }
         html +=
           '</td>' +
+          '<td class="py-2 px-1 align-top text-right tabular-nums text-slate-500 whitespace-nowrap">' +
+          disp.listUnitDisp +
+          '</td>' +
           '<td class="py-2 px-1 align-top text-right tabular-nums text-slate-600 whitespace-nowrap">' +
           disp.unitDisp +
+          '</td>' +
+          '<td class="py-2 px-1 align-top text-right tabular-nums text-slate-600 whitespace-nowrap">' +
+          disp.gstDisp +
           '</td>' +
           '<td class="py-2 pl-1 align-top text-right tabular-nums font-semibold text-orange-600 whitespace-nowrap">' +
           disp.lineDisp +
