@@ -2947,8 +2947,8 @@
       '<th class="py-1.5 pr-2 font-semibold w-16">Image</th>' +
       '<th class="py-1.5 pr-1 font-semibold">SKU</th>' +
       '<th class="py-1.5 pr-1 font-semibold">Product</th>' +
-      '<th class="py-1.5 px-1 font-semibold w-12 text-center">Qty</th>' +
       '<th class="py-1.5 px-1 font-semibold w-[4.5rem] text-right whitespace-nowrap">Item List Price</th>' +
+      '<th class="py-1.5 px-1 font-semibold w-12 text-center">Qty</th>' +
       '<th class="py-1.5 px-1 font-semibold w-14 text-right">Price</th>' +
       '<th class="py-1.5 px-1 font-semibold w-[4.25rem] text-right whitespace-nowrap">Total GST</th>' +
       '<th class="py-1.5 pl-1 font-semibold w-14 text-right">Total</th>' +
@@ -3000,6 +3000,9 @@
           '</div>' +
           buildCartLineAddonsBlockHtml(row, ref) +
           '</td>' +
+          '<td class="py-2 px-1 align-top text-right tabular-nums text-slate-500 whitespace-nowrap">' +
+          disp.listUnitDisp +
+          '</td>' +
           '<td class="py-2 px-1 align-top text-center">';
         if (ref) {
           html +=
@@ -3014,9 +3017,6 @@
           html += escapeHtml(String(qty));
         }
         html +=
-          '</td>' +
-          '<td class="py-2 px-1 align-top text-right tabular-nums text-slate-500 whitespace-nowrap">' +
-          disp.listUnitDisp +
           '</td>' +
           '<td class="py-2 px-1 align-top text-right tabular-nums text-slate-600 whitespace-nowrap">' +
           disp.unitDisp +
