@@ -1547,6 +1547,19 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       showToast("Please confirm local stock for cart items (Y or N) before checkout.", "violet");
       return;
     }
+    var customerId = typeof window.getSelectedCustomerId === "function" ? window.getSelectedCustomerId() : "";
+    if (!customerId) {
+      showToast("Please select customer first", "red");
+      if (typeof window.focusPosCustomerSelect === "function") {
+        window.focusPosCustomerSelect();
+      } else if (typeof jQuery !== "undefined" && jQuery("#customerSelect").data("select2")) {
+        jQuery("#customerSelect").select2("open");
+      } else {
+        var cs = document.getElementById("customerSelect");
+        if (cs) cs.focus();
+      }
+      return;
+    }
     var pm = document.getElementById("paymentModal");
     if (!pm) {
       return;

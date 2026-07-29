@@ -60,6 +60,37 @@
     );
   }
 
+  function ensureCustomerSelectedForCheckout() {
+    if (typeof window.validatePosCustomerSelected === 'function') {
+      return !!window.validatePosCustomerSelected();
+    }
+    var customerId =
+      typeof window.getSelectedCustomerId === 'function' ? window.getSelectedCustomerId() : '';
+    if (!customerId) {
+      toast('Please select customer first', 'red');
+      if (typeof window.focusPosCustomerSelect === 'function') {
+        window.focusPosCustomerSelect();
+      } else if (typeof window.jQuery !== 'undefined' && window.jQuery.fn && window.jQuery.fn.select2) {
+        var $cust = window.jQuery('#customerSelect');
+        if ($cust.length && $cust.data('select2')) {
+          $cust.select2('open');
+        } else {
+          var cs = document.getElementById('customerSelect');
+          if (cs) {
+            cs.focus();
+          }
+        }
+      } else {
+        var csEl = document.getElementById('customerSelect');
+        if (csEl) {
+          csEl.focus();
+        }
+      }
+      return false;
+    }
+    return true;
+  }
+
   function posCartTablePageUrl() {
     return '?page=pos_register&action=cart-table';
   }
@@ -4200,6 +4231,9 @@
           e.stopPropagation();
           if (typeof window.hasUnconfirmedLocalStockWarnings === 'function' && window.hasUnconfirmedLocalStockWarnings()) {
             toast('Please confirm local stock for cart items (Y or N) before checkout.', 'violet');
+            return;
+          }
+          if (!ensureCustomerSelectedForCheckout()) {
             return;
           }
           if (typeof window.openPaymentModal === 'function') {
