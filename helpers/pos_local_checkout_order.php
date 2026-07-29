@@ -108,7 +108,6 @@ function pos_local_checkout_ensure_order_info_order_number_varchar(mysqli $conn)
  * @param array<string, mixed> $payload
  * @param array<string, mixed> $cartData
  * @param list<array<string, mixed>> $invoiceLinePrices
- * @param list<array<string, mixed>> $listLinePrices
  * @param array<string, mixed> $createRes
  * @param array<string, string> $postBody
  * @param array{query?:array,extraHeaders?:list<string>} $cartCtx
@@ -125,7 +124,6 @@ function pos_local_checkout_try_create_when_api_fails(
     string $txn,
     string $localStatus,
     array $invoiceLinePrices,
-    array $listLinePrices,
     array $createRes,
     array $postBody,
     array $cartCtx
@@ -147,8 +145,7 @@ function pos_local_checkout_try_create_when_api_fails(
         $paymentMode,
         $txn,
         $localStatus,
-        $invoiceLinePrices,
-        $listLinePrices
+        $invoiceLinePrices
     );
     if (empty($persist['success'])) {
         return [
@@ -177,7 +174,6 @@ function pos_local_checkout_try_create_when_api_fails(
         'post_body' => $postBody,
         'cart_query' => is_array($cartCtx['query'] ?? null) ? $cartCtx['query'] : [],
         'cart_extra_headers' => is_array($cartCtx['extraHeaders'] ?? null) ? $cartCtx['extraHeaders'] : [],
-        'list_line_prices' => $listLinePrices,
         'api_error' => $apiMsg,
         'warehouse_id' => $whId,
         'customer_id' => $customerId,
@@ -195,7 +191,6 @@ function pos_local_checkout_try_create_when_api_fails(
  * @param array<string, mixed> $payload
  * @param array<string, mixed> $cartData
  * @param list<array<string, mixed>> $invoiceLinePrices
- * @param list<array<string, mixed>> $listLinePrices
  *
  * @return array{success:bool,message?:string,lines?:int}
  */
@@ -210,8 +205,7 @@ function pos_local_checkout_persist_order(
     string $paymentMode,
     string $txn,
     string $localStatus,
-    array $invoiceLinePrices,
-    array $listLinePrices
+    array $invoiceLinePrices
 ): array {
     pos_local_checkout_ensure_order_info_order_number_varchar($conn);
 
@@ -221,7 +215,6 @@ function pos_local_checkout_persist_order(
     }
 
     $invoiceByKey = pos_local_checkout_index_line_prices($invoiceLinePrices, 'price');
-    $listByKey = pos_local_checkout_index_line_prices($listLinePrices, 'price');
     $orderDate = date('Y-m-d H:i:s');
     $processedTime = time();
     $cashDiscount = round((float)($payload['receipt_cash_discount'] ?? 0), 2);
@@ -252,7 +245,7 @@ function pos_local_checkout_persist_order(
         $key = pos_local_checkout_line_key($itemCode, $size, $color);
         $qty = max(1, (int)($row['qty'] ?? $row['quantity'] ?? 1));
 
-        $listUnit = (float)($listByKey[$key]['price'] ?? $row['itemprice'] ?? $row['item_price'] ?? $row['unit_price'] ?? $row['price'] ?? 0);
+        $listUnit = (float)($row['itemprice'] ?? $row['item_price'] ?? $row['unit_price'] ?? $row['price'] ?? 0);
         if ($listUnit <= 0) {
             $lineTotal = (float)($row['linetotal'] ?? $row['line_total'] ?? $row['finalprice'] ?? 0);
             if ($lineTotal > 0) {
@@ -887,7 +880,7 @@ function pos_local_checkout_clear_exotic_cart(RetailApiClient $client): void
 /**
  * @param list<array<string, mixed>> $orderLines
  *
- * @return array{success:bool,message?:string,cart_data?:array<string,mixed>,list_line_prices?:list<array<string,string>>}
+ * @return array{success:bool,message?:string,cart_data?:array<string,mixed>}
  */
 function pos_local_checkout_rebuild_exotic_cart_from_order_lines(
     RetailApiClient $client,
@@ -899,7 +892,6 @@ function pos_local_checkout_rebuild_exotic_cart_from_order_lines(
     $client->call('/cart/addcustomdiscount', 'GET', ['custom_reduce' => '0']);
     pos_local_checkout_clear_exotic_cart($client);
 
-    $listLinePrices = [];
     $added = 0;
     foreach ($orderLines as $row) {
         if (!is_array($row)) {
@@ -943,18 +935,6 @@ function pos_local_checkout_rebuild_exotic_cart_from_order_lines(
             ];
         }
 
-        $unit = (float)($row['itemprice'] ?? 0);
-        if ($unit <= 0) {
-            $unit = (float)($row['finalprice'] ?? 0);
-        }
-        if ($unit > 0) {
-            $listLinePrices[] = [
-                'itemcode' => $itemCode,
-                'size' => $size,
-                'color' => $color,
-                'price' => number_format($unit, 2, '.', ''),
-            ];
-        }
         ++$added;
     }
 
@@ -987,22 +967,19 @@ function pos_local_checkout_rebuild_exotic_cart_from_order_lines(
     return [
         'success' => true,
         'cart_data' => $cartData,
-        'list_line_prices' => $listLinePrices,
     ];
 }
 
 /**
  * @param array<string, string> $postBody
- * @param list<array<string, mixed>> $listLinePrices
  *
  * @return array{success:bool,message?:string,api_order_number?:string}
  */
-function pos_local_checkout_call_order_create_and_edit_prices(
+function pos_local_checkout_call_order_create(
     RetailApiClient $client,
     array $postBody,
     array $query,
-    array $headers,
-    array $listLinePrices
+    array $headers
 ): array {
     require_once dirname(__DIR__) . '/integrations/exotic/Support/CartResponseParser.php';
     require_once dirname(__DIR__) . '/integrations/exotic/Support/OrderResponseParser.php';
@@ -1023,30 +1000,14 @@ function pos_local_checkout_call_order_create_and_edit_prices(
         return ['success' => false, 'message' => 'Exotic accepted the order but returned no order number.'];
     }
 
-    if ($listLinePrices !== []) {
-        $editRes = pos_local_checkout_exotic_edit_order_prices($client, $apiOrderNumber, $listLinePrices);
-        if (!CartResponseParser::isSuccess($editRes)) {
-            $em = CartResponseParser::extractUserMessage($editRes);
-            if ($em === '') {
-                $em = 'HTTP ' . (int)($editRes['code'] ?? 0);
-            }
-
-            return [
-                'success' => true,
-                'api_order_number' => $apiOrderNumber,
-                'line_prices_sync_warning' => 'Exotic order ' . $apiOrderNumber . ' was created but line prices were rejected: ' . $em,
-            ];
-        }
-    }
-
     return ['success' => true, 'api_order_number' => $apiOrderNumber];
 }
 
 /**
- * Rename temp order locally when Exotic returned an order number (even if line prices failed).
+ * Rename temp order locally when Exotic returned an order number.
  *
- * @param array{success?:bool,message?:string,api_order_number?:string,line_prices_sync_warning?:string} $attempt
- * @return array{success:bool,message?:string,old_order_number?:string,new_order_number?:string,cart_rebuilt?:bool,used_stored_payload?:bool,line_prices_sync_warning?:string}
+ * @param array{success?:bool,message?:string,api_order_number?:string} $attempt
+ * @return array{success:bool,message?:string,old_order_number?:string,new_order_number?:string,cart_rebuilt?:bool,used_stored_payload?:bool}
  */
 function pos_local_checkout_complete_publish_attempt(
     mysqli $conn,
@@ -1067,21 +1028,9 @@ function pos_local_checkout_complete_publish_attempt(
         ];
     }
 
-    $lineWarning = trim((string)($attempt['line_prices_sync_warning'] ?? ''));
-    if ($lineWarning === '' && empty($attempt['success'])) {
-        $lineWarning = trim((string)($attempt['message'] ?? ''));
-    }
-
     $final = pos_local_checkout_finalize_publish_rename($conn, $tempOrderNumber, $apiOrderNumber);
     $final['cart_rebuilt'] = $cartRebuilt;
     $final['used_stored_payload'] = $usedStoredPayload;
-
-    if ($lineWarning !== '') {
-        $final['line_prices_sync_warning'] = $lineWarning;
-        if (!empty($final['success'])) {
-            $final['message'] = trim((string)($final['message'] ?? '')) . ' ' . $lineWarning;
-        }
-    }
 
     if ($cartRebuilt && !empty($final['success'])) {
         $final['message'] = trim((string)($final['message'] ?? ''))
@@ -1147,7 +1096,7 @@ function pos_local_checkout_finalize_publish_rename(mysqli $conn, string $tempOr
 /**
  * @param list<array<string, mixed>> $orderLines
  *
- * @return array{success:bool,message?:string,post_body?:array<string,string>,list_line_prices?:list<array<string,string>>}
+ * @return array{success:bool,message?:string,post_body?:array<string,string>}
  */
 function pos_local_checkout_prepare_publish_from_database(
     mysqli $conn,
@@ -1188,31 +1137,7 @@ function pos_local_checkout_prepare_publish_from_database(
     return [
         'success' => true,
         'post_body' => $postBody,
-        'list_line_prices' => is_array($rebuild['list_line_prices'] ?? null) ? $rebuild['list_line_prices'] : [],
     ];
-}
-
-/**
- * @param list<array<string, mixed>> $lines
- *
- * @return array{data: array, code: int, raw: string}
- */
-function pos_local_checkout_exotic_edit_order_prices(RetailApiClient $client, string $orderId, array $lines): array
-{
-    $post = ['orderid' => $orderId];
-    $i = 0;
-    foreach ($lines as $ln) {
-        if (!is_array($ln)) {
-            continue;
-        }
-        $post['itemcode[' . $i . ']'] = trim((string)($ln['itemcode'] ?? ''));
-        $post['size[' . $i . ']'] = trim((string)($ln['size'] ?? ''));
-        $post['color[' . $i . ']'] = trim((string)($ln['color'] ?? ''));
-        $post['price[' . $i . ']'] = trim((string)($ln['price'] ?? ''));
-        ++$i;
-    }
-
-    return $client->call('/order/pos_editorderprices', 'POST', [], $post);
 }
 
 /**
@@ -1249,20 +1174,17 @@ function pos_local_checkout_publish_to_exotic(mysqli $conn, string $tempOrderNum
     }
 
     $client = RetailApiClient::create($conn);
-    $listLinePrices = [];
     $cartRebuilt = false;
     $usedStoredPayload = false;
     $lastError = '';
 
     if ($sync !== null && is_array($sync['post_body'] ?? null) && $sync['post_body'] !== []) {
         $usedStoredPayload = true;
-        $listLinePrices = is_array($sync['list_line_prices'] ?? null) ? $sync['list_line_prices'] : [];
-        $attempt = pos_local_checkout_call_order_create_and_edit_prices(
+        $attempt = pos_local_checkout_call_order_create(
             $client,
             $sync['post_body'],
             is_array($sync['cart_query'] ?? null) ? $sync['cart_query'] : [],
-            is_array($sync['cart_extra_headers'] ?? null) ? $sync['cart_extra_headers'] : [],
-            $listLinePrices
+            is_array($sync['cart_extra_headers'] ?? null) ? $sync['cart_extra_headers'] : []
         );
         if (!empty($attempt['api_order_number'])) {
             return pos_local_checkout_complete_publish_attempt(
@@ -1294,13 +1216,11 @@ function pos_local_checkout_publish_to_exotic(mysqli $conn, string $tempOrderNum
     }
 
     $cartRebuilt = true;
-    $listLinePrices = is_array($prepared['list_line_prices'] ?? null) ? $prepared['list_line_prices'] : [];
-    $attempt = pos_local_checkout_call_order_create_and_edit_prices(
+    $attempt = pos_local_checkout_call_order_create(
         $client,
         $prepared['post_body'],
         [],
-        [],
-        $listLinePrices
+        []
     );
     if (!empty($attempt['api_order_number'])) {
         return pos_local_checkout_complete_publish_attempt(

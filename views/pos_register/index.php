@@ -3445,16 +3445,6 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (Array.isArray(linePricePayload) && linePricePayload.length > 0) {
       body.pos_line_prices = linePricePayload;
     }
-    var listPricePayload =
-      typeof window.getPosListLinePricesPayloadForCheckout === "function"
-        ? window.getPosListLinePricesPayloadForCheckout()
-        : [];
-    var needsListLinePriceSync =
-      typeof window.hasPosLineLevelPriceOverridesForCheckout === "function"
-        && window.hasPosLineLevelPriceOverridesForCheckout();
-    if (needsListLinePriceSync && Array.isArray(listPricePayload) && listPricePayload.length > 0) {
-      body.list_line_prices = listPricePayload;
-    }
     if (checkoutOptions.confirmLocalFallback) {
       body.confirm_local_fallback = "1";
     }
