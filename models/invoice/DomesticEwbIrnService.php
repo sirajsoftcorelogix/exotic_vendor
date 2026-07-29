@@ -248,7 +248,7 @@ class DomesticEwbIrnService {
                 'SupTyp' => $isBusiness ? 'B2B' : 'B2C',
                 'RegRev' => 'N',
                 //'EcmGstin' => $firm['gst'] ?? '',
-                'EcmGstin' => '07AAGFH1697G1Z8',
+                'EcmGstin' => $alankitConfig['gstin'] ?? '07AGAPA5363L002',
                 'IgstOnIntra' => 'N'
             ],
             'DocDtls' => [
@@ -257,7 +257,7 @@ class DomesticEwbIrnService {
                 'Dt' => $invoice['invoice_date'] ? date('d/m/Y', strtotime($invoice['invoice_date'])) : date('d/m/Y')
             ],
             'SellerDtls' => [
-                'Gstin' => $firm['gst'] ?? '',
+                'Gstin' => $alankitConfig['gstin'] ?? '07AGAPA5363L002',
                 'LglNm' => $firm['firm_name'] ?? '',
                 'TrdNm' => $firm['firm_name'] ?? '',
                 'Addr1' => $firm['address'] ?? '',
