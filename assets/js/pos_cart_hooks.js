@@ -947,6 +947,41 @@
     return round2(extra);
   }
 
+  /** Exotic cart retrieve: addons object map, e.g. {"Add on Frame": 12995}. */
+  function parseAddonsMapFromRow(row) {
+    if (!row || typeof row !== 'object') {
+      return [];
+    }
+    var raw = row.addons;
+    if (raw == null || raw === '' || raw === 0 || raw === '0') {
+      return [];
+    }
+    var map = raw;
+    if (typeof raw === 'string') {
+      var trimmed = String(raw).trim();
+      if (!trimmed || trimmed === '0') {
+        return [];
+      }
+      try {
+        map = JSON.parse(trimmed);
+      } catch (eParse) {
+        return [];
+      }
+    }
+    if (!map || typeof map !== 'object' || Array.isArray(map)) {
+      return [];
+    }
+    var out = [];
+    Object.keys(map).forEach(function (name) {
+      var label = String(name || '').trim();
+      if (!label) {
+        return;
+      }
+      out.push({ name: label, price: parseMoneyValue(map[name]) });
+    });
+    return out;
+  }
+
   /** Parse POS custom add-on segments from cart line options (Name:_blank_:Price). */
   function parseCustomAddonOptionsFromRow(row) {
     if (!row || typeof row !== 'object') {
@@ -1008,12 +1043,34 @@
       return [];
     }
     var labels = [];
+    var seen = {};
     var customFromOptions = parseCustomAddonOptionsFromRow(row);
     var priceByName = {};
     customFromOptions.forEach(function (item) {
       if (item.name) {
         priceByName[item.name.toLowerCase()] = item.price;
       }
+    });
+
+    function pushAddonLabel(name, price) {
+      var labelName = String(name || '').trim();
+      if (!labelName) {
+        return;
+      }
+      var key = labelName.toLowerCase();
+      if (seen[key]) {
+        return;
+      }
+      var label = formatAddonLabelWithPrice(labelName, price);
+      if (!label) {
+        return;
+      }
+      seen[key] = true;
+      labels.push(label);
+    }
+
+    parseAddonsMapFromRow(row).forEach(function (item) {
+      pushAddonLabel(item.name, item.price);
     });
 
     var addons = row.addons_selected;
@@ -1030,42 +1087,45 @@
         if ((price == null || price <= 0) && priceByName[name.toLowerCase()] != null) {
           price = priceByName[name.toLowerCase()];
         }
-        var label = formatAddonLabelWithPrice(name, price);
-        if (label) {
-          labels.push(label);
-        }
+        pushAddonLabel(name, price);
       });
     }
 
     if (!labels.length && customFromOptions.length) {
       customFromOptions.forEach(function (item) {
-        var label = formatAddonLabelWithPrice(item.name, item.price);
-        if (label) {
-          labels.push(label);
-        }
+        pushAddonLabel(item.name, item.price);
       });
     }
 
     if (!labels.length) {
       var frame = parseMoneyValue(pickFirst(row, ['framevalue', 'frame_value', 'frame_price']));
       if (frame != null && frame > 0) {
-        labels.push(formatAddonLabelWithPrice('Add-on', frame));
+        pushAddonLabel('Add-on', frame);
       }
     }
     if (
-      labels.indexOf('Express Shipping') === -1 &&
-      !labels.some(function (lbl) {
-        return String(lbl).indexOf('Express Shipping') === 0;
-      }) &&
+      !seen['express shipping'] &&
       (row.express_shipping_chosen === true ||
         row.express_shipping_chosen === 1 ||
         row.express_shipping_chosen === '1' ||
         String(row.express_shipping_chosen || '').toLowerCase() === 'true')
     ) {
       var expressCost = parseMoneyValue(row.express_shipping_cost);
-      labels.push(formatAddonLabelWithPrice('Express Shipping', expressCost));
+      pushAddonLabel('Express Shipping', expressCost);
     }
     return labels;
+  }
+
+  function buildCartLineAddonsBlockHtml(row) {
+    var addonLabels = lineAddonLabels(row);
+    if (!addonLabels.length) {
+      return '';
+    }
+    return (
+      '<div class="pos-cart-line-addons mt-1 text-[10px] font-medium text-emerald-800 leading-snug">' +
+      escapeHtml('+ ' + addonLabels.join(', ')) +
+      '</div>'
+    );
   }
 
   /** Cart line thumbnail URL (Exotic: full https, path from site root, or CDN-relative). */
@@ -2677,7 +2737,9 @@
           escapeHtml(title) +
           '">' +
           escapeHtml(title) +
-          '</div></td>' +
+          '</div>' +
+          buildCartLineAddonsBlockHtml(row) +
+          '</td>' +
           '<td class="py-2 px-1 align-top text-center">';
         if (ref) {
           html +=
@@ -2845,13 +2907,7 @@
           '<div class="text-[13px] font-bold text-slate-900 leading-snug mt-0.5 pr-1 line-clamp-3">' +
           escapeHtml(title) +
           '</div>';
-        var addonLabels = lineAddonLabels(row);
-        if (addonLabels.length) {
-          html +=
-            '<div class="mt-1 text-[10px] font-medium text-emerald-800 leading-snug">' +
-            escapeHtml('+ ' + addonLabels.join(', ')) +
-            '</div>';
-        }
+        html += buildCartLineAddonsBlockHtml(row);
         html += '</div></div>';
         html +=
           '<div class="text-[13px] tabular-nums text-slate-800 mt-0.5 leading-relaxed">' +
