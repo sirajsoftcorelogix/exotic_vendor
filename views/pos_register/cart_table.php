@@ -63,6 +63,18 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       #posCartTablePage .pos-cart-table th {
         font-size: 0.75rem;
       }
+      #posCartTablePage .pos-cart-table .pos-cart-table-metric-col,
+      .pos-cart-table-page-panel .pos-cart-table .pos-cart-table-metric-col {
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+      @media (min-width: 768px) {
+        #posCartTablePage .pos-cart-table .pos-cart-table-metric-col,
+        .pos-cart-table-page-panel .pos-cart-table .pos-cart-table-metric-col {
+          padding-left: 1.25rem;
+          padding-right: 1.25rem;
+        }
+      }
       #posCartTablePage .pos-cart-table-line td:nth-child(3) {
         max-width: none;
       }

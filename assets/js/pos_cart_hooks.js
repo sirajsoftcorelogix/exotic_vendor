@@ -2940,6 +2940,8 @@
   }
 
   function buildCartTableCartHtml(items, data, lineCartAllocs) {
+    var metricHdr = 'pos-cart-table-metric-col py-1.5 font-semibold whitespace-nowrap';
+    var metricCell = 'pos-cart-table-metric-col py-2 align-top tabular-nums whitespace-nowrap';
     var html =
       '<div class="pos-cart-table-wrap overflow-x-auto -mx-0.5">' +
       '<table class="pos-cart-table w-full border-collapse text-[11px]">' +
@@ -2947,11 +2949,11 @@
       '<th class="py-1.5 pr-2 font-semibold w-16">Image</th>' +
       '<th class="py-1.5 pr-1 font-semibold">SKU</th>' +
       '<th class="py-1.5 pr-1 font-semibold">Product</th>' +
-      '<th class="py-1.5 px-1 font-semibold w-[4.5rem] text-right whitespace-nowrap">Item List Price</th>' +
-      '<th class="py-1.5 px-1 font-semibold w-12 text-center">Qty</th>' +
-      '<th class="py-1.5 px-1 font-semibold w-14 text-right">Price</th>' +
-      '<th class="py-1.5 px-1 font-semibold w-[4.25rem] text-right whitespace-nowrap">Total GST</th>' +
-      '<th class="py-1.5 pl-1 font-semibold w-14 text-right">Total</th>' +
+      '<th class="' + metricHdr + ' w-[4.5rem] text-right">Item List Price</th>' +
+      '<th class="' + metricHdr + ' w-12 text-center">Qty</th>' +
+      '<th class="' + metricHdr + ' w-14 text-right">Price</th>' +
+      '<th class="' + metricHdr + ' w-[4.25rem] text-right">Total GST</th>' +
+      '<th class="' + metricHdr + ' w-14 text-right">Line Total</th>' +
       '<th class="py-1.5 w-7"></th>' +
       '</tr></thead><tbody>';
 
@@ -3000,10 +3002,10 @@
           '</div>' +
           buildCartLineAddonsBlockHtml(row, ref) +
           '</td>' +
-          '<td class="py-2 px-1 align-top text-right tabular-nums text-slate-500 whitespace-nowrap">' +
+          '<td class="' + metricCell + ' text-right text-slate-500">' +
           disp.listUnitDisp +
           '</td>' +
-          '<td class="py-2 px-1 align-top text-center">';
+          '<td class="' + metricCell + ' text-center">';
         if (ref) {
           html +=
             '<input type="number" min="1" step="1" class="pos-cart-qty-input w-11 rounded border border-slate-300 bg-white px-1 py-1 text-center text-[11px] font-semibold outline-none focus:border-orange-500"' +
@@ -3018,13 +3020,13 @@
         }
         html +=
           '</td>' +
-          '<td class="py-2 px-1 align-top text-right tabular-nums text-slate-600 whitespace-nowrap">' +
+          '<td class="' + metricCell + ' text-right text-slate-600">' +
           disp.unitDisp +
           '</td>' +
-          '<td class="py-2 px-1 align-top text-right tabular-nums text-slate-600 whitespace-nowrap">' +
+          '<td class="' + metricCell + ' text-right text-slate-600">' +
           disp.gstDisp +
           '</td>' +
-          '<td class="py-2 pl-1 align-top text-right tabular-nums font-semibold text-orange-600 whitespace-nowrap">' +
+          '<td class="' + metricCell + ' text-right font-semibold text-orange-600">' +
           disp.lineDisp +
           '</td>' +
           '<td class="py-2 align-top text-right">';
