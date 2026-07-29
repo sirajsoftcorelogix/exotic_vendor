@@ -982,6 +982,15 @@
     return out;
   }
 
+  function normalizeAddonMatchName(name) {
+    return String(name || '')
+      .trim()
+      .toLowerCase()
+      .replace(/^add on\s+/, '')
+      .replace(/\s+/g, ' ')
+      .replace(/_/g, ' ');
+  }
+
   function lineCartOptionsSegments(row) {
     if (!row || typeof row !== 'object') {
       return [];
@@ -990,7 +999,36 @@
     if (raw == null || raw === '' || raw === 0 || raw === '0') {
       return [];
     }
-    return String(raw)
+    if (Array.isArray(raw)) {
+      return raw
+        .map(function (part) {
+          return String(part || '').trim();
+        })
+        .filter(function (part) {
+          return part !== '';
+        });
+    }
+    var rawStr = String(raw).trim();
+    if (!rawStr) {
+      return [];
+    }
+    if (rawStr.charAt(0) === '[') {
+      try {
+        var decoded = JSON.parse(rawStr);
+        if (Array.isArray(decoded)) {
+          return decoded
+            .map(function (part) {
+              return String(part || '').trim();
+            })
+            .filter(function (part) {
+              return part !== '';
+            });
+        }
+      } catch (eJson) {
+        /* fall through */
+      }
+    }
+    return rawStr
       .split('|')
       .map(function (part) {
         return String(part || '').trim();
@@ -1000,17 +1038,31 @@
       });
   }
 
+  function optionSegmentPriceMarkerIndex(seg) {
+    var s = String(seg || '').trim();
+    var markers = [':_blank_:', ':blank:'];
+    var foundIdx = -1;
+    var foundLen = 0;
+    markers.forEach(function (marker) {
+      var idx = s.indexOf(marker);
+      if (idx > 0 && (foundIdx === -1 || idx < foundIdx)) {
+        foundIdx = idx;
+        foundLen = marker.length;
+      }
+    });
+    return foundIdx > 0 ? { idx: foundIdx, len: foundLen } : null;
+  }
+
   function optionSegmentDisplayName(seg) {
     var s = String(seg || '').trim();
     if (!s) {
       return '';
     }
-    var marker = ':_blank_:';
-    var idx = s.indexOf(marker);
-    if (idx > 0) {
-      var customName = s.slice(0, idx);
-      if (/^[A-Za-z_]+$/.test(customName)) {
-        return customName.replace(/_/g, ' ');
+    var markerInfo = optionSegmentPriceMarkerIndex(s);
+    if (markerInfo) {
+      var customName = s.slice(0, markerInfo.idx);
+      if (/^[A-Za-z0-9_]+$/i.test(customName)) {
+        return customName.replace(/^OPTIONALS_/i, '').replace(/_/g, ' ').trim() || customName;
       }
     }
     var colonIdx = s.indexOf(':');
@@ -1023,10 +1075,9 @@
     if (!s) {
       return null;
     }
-    var marker = ':_blank_:';
-    var idx = s.indexOf(marker);
-    if (idx > 0) {
-      return parseMoneyValue(s.slice(idx + marker.length));
+    var markerInfo = optionSegmentPriceMarkerIndex(s);
+    if (markerInfo) {
+      return parseMoneyValue(s.slice(markerInfo.idx + markerInfo.len));
     }
     var parts = s.split(':');
     if (parts.length >= 2) {
@@ -1036,13 +1087,13 @@
   }
 
   function findOptionSegmentForAddon(row, name, price) {
-    var targetName = String(name || '').trim().toLowerCase();
+    var targetName = normalizeAddonMatchName(name);
     var nameUnderscore = targetName.replace(/\s+/g, '_');
     var segments = lineCartOptionsSegments(row);
     for (var i = 0; i < segments.length; i++) {
       var seg = segments[i];
       var segLower = seg.toLowerCase();
-      var displayName = optionSegmentDisplayName(seg).toLowerCase();
+      var displayName = normalizeAddonMatchName(optionSegmentDisplayName(seg));
       if (
         displayName === targetName ||
         segLower.indexOf(nameUnderscore) !== -1 ||
@@ -1285,37 +1336,152 @@
       .join('|');
   }
 
-  function lineVariationForCartAdd(row) {
-    if (!row || typeof row !== 'object') {
+  function buildCustomAddonCartEntryLocal(name, price) {
+    var n = String(name || '')
+      .trim()
+      .replace(/\s+/g, '_')
+      .replace(/^OPTIONALS_/i, '');
+    if (!/^[A-Za-z_]+$/.test(n)) {
       return '';
     }
-    var variation = pickFirst(row, ['variation', 'Variation', 'variant', 'subcode']);
-    if (variation != null) {
-      var v = String(variation).trim();
-      if (v && v.indexOf(':_blank_:') === -1 && v.indexOf('|') === -1) {
-        return v;
+    if (price == null || isNaN(price) || price < 0) {
+      return '';
+    }
+    var priceStr =
+      Math.abs(price - Math.round(price)) < 0.000001 ? String(Math.round(price)) : String(round2(price));
+    return n + ':_blank_:' + priceStr;
+  }
+
+  function fetchProductAddonOptionsForCode(code) {
+    var url =
+      'index.php?page=pos_register&action=get-product-api&code=' +
+      encodeURIComponent(String(code || '').trim());
+    return fetch(url, {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+      .then(function (res) {
+        return res.text();
+      })
+      .then(function (text) {
+        var cleaned = String(text || '').replace(/^\uFEFF/, '').trim();
+        if (!cleaned) {
+          return [];
+        }
+        var payload = JSON.parse(cleaned);
+        var p = payload && payload.product ? payload.product : payload;
+        var opts =
+          p && p.addon_options && Array.isArray(p.addon_options.default_options)
+            ? p.addon_options.default_options
+            : [];
+        if (
+          p &&
+          p.express_shipping_option &&
+          p.express_shipping_option.cart_entry &&
+          String(p.express_shipping_option.cart_entry).trim() !== ''
+        ) {
+          opts = opts.concat([
+            {
+              title: p.express_shipping_option.title || 'Express Shipping',
+              price: p.express_shipping_option.price,
+              cart_entry: p.express_shipping_option.cart_entry
+            }
+          ]);
+        }
+        return opts;
+      })
+      .catch(function () {
+        return [];
+      });
+  }
+
+  function matchProductAddonOption(productAddonOptions, name, price) {
+    if (!Array.isArray(productAddonOptions) || !productAddonOptions.length) {
+      return null;
+    }
+    var targetName = normalizeAddonMatchName(name);
+    var matched = null;
+    productAddonOptions.forEach(function (opt) {
+      if (!opt || typeof opt !== 'object') {
+        return;
+      }
+      var title = normalizeAddonMatchName(opt.title || opt.name || '');
+      var optPrice = parseMoneyValue(opt.price);
+      if (
+        title &&
+        (title === targetName ||
+          title.indexOf(targetName) !== -1 ||
+          targetName.indexOf(title) !== -1)
+      ) {
+        matched = opt;
+        return;
+      }
+      if (
+        !matched &&
+        price != null &&
+        optPrice != null &&
+        Math.abs(optPrice - price) < 0.01
+      ) {
+        matched = opt;
+      }
+    });
+    return matched;
+  }
+
+  function addonCartEntryForItem(row, item, productAddonOptions) {
+    if (!item) {
+      return '';
+    }
+    if (item.removeSegment) {
+      return String(item.removeSegment).trim();
+    }
+    var fromOptions = findOptionSegmentForAddon(row, item.name, item.price);
+    if (fromOptions) {
+      return fromOptions;
+    }
+    var productOpt = matchProductAddonOption(productAddonOptions, item.name, item.price);
+    if (productOpt) {
+      var cartEntry = String(
+        productOpt.cart_entry || productOpt.cartEntry || productOpt.entry || ''
+      ).trim();
+      if (cartEntry) {
+        return cartEntry;
       }
     }
-    var size = lineSizeForApi(row);
-    var color = lineColorForApi(row);
-    if (size || color) {
-      return (size || '') + ':' + (color || '');
-    }
-    return '';
+    return buildCustomAddonCartEntryLocal(item.name, item.price);
+  }
+
+  function buildOptionsForRemainingAddons(row, removedKey, productAddonOptions) {
+    return lineAddonItems(row)
+      .filter(function (item) {
+        return item.key !== removedKey;
+      })
+      .map(function (item) {
+        return addonCartEntryForItem(row, item, productAddonOptions);
+      })
+      .filter(function (seg) {
+        return !!String(seg || '').trim();
+      })
+      .join('|');
   }
 
   function cartLineAddPayloadFromRow(row, newOptions) {
-    var code = lineItemCodeForApi(row) || String(pickFirst(row, ['code', 'sku']) || '').trim();
-    return {
-      code: code,
-      qty: lineQty(row),
-      variation: lineVariationForCartAdd(row),
-      options: String(newOptions == null ? '' : newOptions),
-      item_level: String(pickFirst(row, ['item_level', 'itemLevel']) || '').trim(),
-      item_code: lineItemCodeForApi(row),
-      size: lineSizeForApi(row),
-      color: lineColorForApi(row)
-    };
+    var built = buildCartAddPayloadFromProduct(
+      {
+        item_code: lineItemCodeForApi(row),
+        sku: String(pickFirst(row, ['sku', 'code']) || '').trim(),
+        size: lineSizeForApi(row),
+        color: lineColorForApi(row),
+        item_level: String(pickFirst(row, ['item_level', 'itemLevel']) || '').trim()
+      },
+      lineQty(row)
+    );
+    built.options = String(newOptions == null ? '' : newOptions);
+    return built;
   }
 
   function buildCartLineAddonsBlockHtml(row, cartRef) {
@@ -1336,7 +1502,13 @@
               escapeHtml(ref) +
               '" data-addon-key="' +
               escapeHtml(item.key) +
-              '" title="Remove add-on" aria-label="Remove add-on ' +
+              '"' +
+              (item.removeSegment
+                ? ' data-addon-segment="' +
+                  escapeHtml(encodeURIComponent(String(item.removeSegment))) +
+                  '"'
+                : '') +
+              ' title="Remove add-on" aria-label="Remove add-on ' +
               escapeHtml(item.name) +
               '">&times;</button>'
             : '') +
@@ -3756,8 +3928,21 @@
           e.stopPropagation();
           var refAddon = String(addonRemove.getAttribute('data-cartref') || '').trim();
           var addonKey = String(addonRemove.getAttribute('data-addon-key') || '').trim();
+          var addonSegmentEnc = String(addonRemove.getAttribute('data-addon-segment') || '').trim();
+          var addonSegment = '';
+          if (addonSegmentEnc) {
+            try {
+              addonSegment = decodeURIComponent(addonSegmentEnc);
+            } catch (eDec) {
+              addonSegment = addonSegmentEnc;
+            }
+          }
           if (refAddon && addonKey && typeof window.handleRemoveCartLineAddon === 'function') {
-            window.handleRemoveCartLineAddon({ cartref: refAddon, addon_key: addonKey });
+            window.handleRemoveCartLineAddon({
+              cartref: refAddon,
+              addon_key: addonKey,
+              addon_segment: addonSegment
+            });
           }
           return;
         }
@@ -4098,7 +4283,10 @@
     return withCartLock(function () {
       var p = payload || {};
       var ref = String(p.cartref || '').trim();
-      var addonKey = String(p.addon_key || p.addonKey || '').trim().toLowerCase();
+      var addonKey = String(p.addon_key || p.addonKey || '')
+        .trim()
+        .toLowerCase();
+      var explicitSegment = String(p.addon_segment || p.addonSegment || '').trim();
       if (!ref || !addonKey) {
         toast('Invalid add-on remove request', 'red');
         return undefined;
@@ -4120,39 +4308,56 @@
         toast('Add-on not found on this line', 'red');
         return undefined;
       }
-      var segmentToRemove = resolveAddonRemoveSegment(row, addonItem);
-      if (!segmentToRemove) {
-        toast('Could not remove this add-on automatically. Edit the item from product details.', 'red');
-        return undefined;
+
+      function performRemove(newOptions) {
+        var addPayload = cartLineAddPayloadFromRow(row, newOptions);
+        if (!addPayload.code) {
+          toast('Missing product code for cart line', 'red');
+          return undefined;
+        }
+        setPanelBusy(true);
+        return cartRequest('delete', { query: { cartid: ref } })
+          .then(function (rDel) {
+            cartHandleApiMessages(rDel);
+            if (!rDel.success) {
+              return rDel;
+            }
+            return cartRequest('add', { method: 'POST', jsonBody: addPayload });
+          })
+          .then(function (rAdd) {
+            cartHandleApiMessages(rAdd);
+            if (rAdd && rAdd.success) {
+              toast('Add-on removed.', 'green');
+              return refreshCartInternal();
+            }
+            if (rAdd && !rAdd.success) {
+              openPosCartApiDebugModal();
+            }
+            return rAdd;
+          })
+          .finally(function () {
+            setPanelBusy(false);
+          });
       }
-      var newOptions = buildOptionsWithoutSegment(row, segmentToRemove);
-      var addPayload = cartLineAddPayloadFromRow(row, newOptions);
-      if (!addPayload.code) {
+
+      var segmentToRemove = explicitSegment || resolveAddonRemoveSegment(row, addonItem);
+      if (segmentToRemove) {
+        return performRemove(buildOptionsWithoutSegment(row, segmentToRemove));
+      }
+
+      var productCode =
+        lineItemCodeForApi(row) || String(pickFirst(row, ['code', 'sku']) || '').trim();
+      if (!productCode) {
         toast('Missing product code for cart line', 'red');
         return undefined;
       }
-      setPanelBusy(true);
-      return cartRequest('delete', { query: { cartid: ref } })
-        .then(function (rDel) {
-          cartHandleApiMessages(rDel);
-          if (!rDel.success) {
-            return rDel;
-          }
-          return cartRequest('add', { method: 'POST', jsonBody: addPayload });
+      return fetchProductAddonOptionsForCode(productCode)
+        .then(function (productAddonOptions) {
+          return performRemove(buildOptionsForRemainingAddons(row, addonKey, productAddonOptions));
         })
-        .then(function (rAdd) {
-          cartHandleApiMessages(rAdd);
-          if (rAdd && rAdd.success) {
-            toast('Add-on removed.', 'green');
-            return refreshCartInternal();
-          }
-          if (rAdd && !rAdd.success) {
-            openPosCartApiDebugModal();
-          }
-          return rAdd;
-        })
-        .finally(function () {
-          setPanelBusy(false);
+        .catch(function () {
+          toast('Could not remove this add-on. Try again or edit from product details.', 'red');
+          return undefined;
         });
     });
   };
