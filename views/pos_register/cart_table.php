@@ -126,6 +126,12 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       #posCartTablePage .pos-cart-discount-box {
         min-width: 0;
       }
+      #posCartTablePage .pos-cart-line-adjust {
+        margin-top: 0.5rem;
+      }
+      #posCartTablePage .pos-cart-line-adjust .flex.flex-wrap {
+        max-width: 100%;
+      }
     </style>
 
     <div class="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
