@@ -1278,6 +1278,52 @@ data-code="${lookupCode}">
   const $searchErr = $('#posSkuSearchError');
   const skuSearchBase = '?page=products&action=search_product';
   let activeSuggestRequest = 0;
+  let activeSuggestIndex = -1;
+
+  function setActiveSuggestIndex(idx) {
+    const $buttons = $skuSuggest.find('button[data-sku]');
+    if (!$buttons.length) {
+      activeSuggestIndex = -1;
+      return null;
+    }
+    const safeIdx = Math.max(0, Math.min(idx, $buttons.length - 1));
+    $buttons.removeClass('bg-orange-50 ring-1 ring-orange-200/80');
+    const $active = $buttons.eq(safeIdx);
+    $active.addClass('bg-orange-50 ring-1 ring-orange-200/80');
+    activeSuggestIndex = safeIdx;
+    if ($active.length && $active[0].scrollIntoView) {
+      $active[0].scrollIntoView({ block: 'nearest' });
+    }
+    return $active;
+  }
+
+  function getActiveSuggestButton() {
+    const $buttons = $skuSuggest.find('button[data-sku]');
+    if (!$buttons.length || $skuSuggest.hasClass('hidden')) {
+      return null;
+    }
+    if (activeSuggestIndex >= 0 && activeSuggestIndex < $buttons.length) {
+      return $buttons.eq(activeSuggestIndex);
+    }
+    return $buttons.eq(0);
+  }
+
+  function applySuggestSelection($btn) {
+    if (!$btn || !$btn.length) return;
+    const sku = ($btn.data('sku') || '').toString();
+    const itemCode = ($btn.data('item-code') || '').toString();
+    const selected = sku || itemCode;
+    if (!selected) return;
+    hideSearchError();
+    $searchName.val(selected);
+    hideSuggest();
+    resetAndLoad();
+    checkAvailabilityAndMaybeOpen({
+      id: '',
+      sku: sku,
+      item_code: itemCode
+    });
+  }
 
   /** Split POS search into terms when comma/semicolon/newline/tab present; else one phrase. */
   function parsePosSearchTerms(raw) {
@@ -1333,7 +1379,8 @@ data-code="${lookupCode}">
 
   function hideSuggest() {
     $searchName.attr('aria-expanded', 'false');
-    $skuSuggest.addClass('hidden').empty();
+    $skuSuggest.addClass('hidden').empty().css('display', 'none');
+    activeSuggestIndex = -1;
   }
 
   function hideSearchError() {
@@ -1399,16 +1446,19 @@ data-code="${lookupCode}">
       return;
     }
 
-    const html = rows.slice(0, 12).map(function (p) {
+    const html = rows.slice(0, 12).map(function (p, idx) {
       const sku = p.sku || p.item_code || p.code || '';
       const itemCode = p.item_code || p.itemcode || '';
       const title = p.title || p.name || '';
       const trimmedTitle = title.length > 72 ? (title.slice(0, 69) + '...') : title;
+      const activeCls = idx === 0 ? ' bg-orange-50 ring-1 ring-orange-200/80' : '';
       return `
         <button type="button"
-          class="w-full text-left px-3 py-2 hover:bg-slate-50 transition border-b border-slate-100 last:border-0"
+          class="w-full text-left px-3 py-2 hover:bg-slate-50 transition border-b border-slate-100 last:border-0${activeCls}"
           data-sku="${escapeHtml(sku)}"
-          data-item-code="${escapeHtml(itemCode)}">
+          data-item-code="${escapeHtml(itemCode)}"
+          role="option"
+          aria-selected="${idx === 0 ? 'true' : 'false'}">
           <div class="min-w-0">
             <div class="text-xs font-semibold text-slate-800 truncate">${escapeHtml(sku)}</div>
             <div class="text-[11px] text-slate-500 truncate">${escapeHtml(itemCode)}${trimmedTitle ? (' · ' + escapeHtml(trimmedTitle)) : ''}</div>
@@ -1418,7 +1468,8 @@ data-code="${lookupCode}">
     }).join('');
 
     $searchName.attr('aria-expanded', 'true');
-    $skuSuggest.html(html).removeClass('hidden');
+    $skuSuggest.html(html).removeClass('hidden').css('display', 'block');
+    activeSuggestIndex = rows.length ? 0 : -1;
   }
 
   let suggestTimeout = null;
@@ -1459,19 +1510,7 @@ data-code="${lookupCode}">
   }
 
   $skuSuggest.on('click', 'button[data-sku]', function () {
-    const sku = ($(this).data('sku') || '').toString();
-    const itemCode = ($(this).data('item-code') || '').toString();
-    const selected = sku || itemCode;
-    if (!selected) return;
-    hideSearchError();
-    $searchName.val(selected);
-    hideSuggest();
-    resetAndLoad();
-    checkAvailabilityAndMaybeOpen({
-      id: '',
-      sku: sku,
-      item_code: itemCode
-    });
+    applySuggestSelection($(this));
   });
 
   $searchName.on('blur', function () {
@@ -1480,13 +1519,29 @@ data-code="${lookupCode}">
   });
 
   $searchName.on('keydown', function (e) {
+    const suggestOpen = !$skuSuggest.hasClass('hidden') && $skuSuggest.find('button[data-sku]').length > 0;
     if (e.key === 'Escape') {
       hideSuggest();
       return;
     }
-    // Enter without Shift: search / open product. Shift+Enter inserts a newline in the textarea.
+    if (suggestOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      e.preventDefault();
+      const nextIdx = e.key === 'ArrowDown'
+        ? (activeSuggestIndex < 0 ? 0 : activeSuggestIndex + 1)
+        : (activeSuggestIndex < 0 ? 0 : activeSuggestIndex - 1);
+      setActiveSuggestIndex(nextIdx);
+      return;
+    }
+    // Enter without Shift: pick highlighted suggestion or run search. Shift+Enter inserts a newline in the textarea.
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      if (suggestOpen) {
+        const $active = getActiveSuggestButton();
+        if ($active && $active.length) {
+          applySuggestSelection($active);
+          return;
+        }
+      }
       runPosSearch();
     }
   });

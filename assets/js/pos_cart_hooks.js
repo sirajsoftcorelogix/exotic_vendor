@@ -2243,7 +2243,7 @@
       '<input type="text" class="pos-cart-draft-sku w-full min-w-[5rem] rounded border border-slate-300 bg-white px-2 py-1.5 text-[11px] outline-none focus:border-orange-500" placeholder="Type SKU…" autocomplete="off" value="' +
       sku +
       '" />' +
-      '<div class="pos-cart-draft-suggest absolute left-0 right-0 top-full z-[100] mt-0.5 hidden max-h-36 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg"></div>' +
+      '<div class="pos-cart-draft-suggest absolute left-0 right-0 top-full z-[100] mt-0.5 hidden max-h-36 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg" style="display:none"></div>' +
       '</div></td>' +
       '<td class="py-1.5 px-1 w-14">' +
       '<input type="number" min="1" step="1" class="pos-cart-draft-qty w-full rounded border border-slate-300 bg-white px-1 py-1.5 text-center text-[11px]" value="' +
@@ -2271,7 +2271,7 @@
       '<button type="button" class="pos-cart-draft-add-row inline-flex items-center gap-1 rounded-md border border-orange-200 bg-white px-2 py-1 text-[10px] font-semibold text-orange-700 hover:bg-orange-50">' +
       '<i class="fas fa-plus text-[9px]" aria-hidden="true"></i> Add row</button>' +
       '</div>' +
-      '<div class="overflow-x-auto -mx-0.5">' +
+      '<div class="pos-cart-draft-table-wrap -mx-0.5">' +
       '<table class="w-full border-collapse text-[11px]">' +
       '<thead><tr class="text-left text-[9px] uppercase tracking-wide text-slate-500">' +
       '<th class="pb-1 font-semibold">SKU</th><th class="pb-1 font-semibold w-14 text-center">Qty</th><th class="pb-1 w-8"></th>' +
@@ -2333,6 +2333,57 @@
     return el && el.closest ? el.closest('.pos-cart-draft-row') : null;
   }
 
+  function posCartDraftProductFromPickBtn(btn) {
+    if (!btn) {
+      return null;
+    }
+    return {
+      sku: btn.getAttribute('data-sku'),
+      item_code: btn.getAttribute('data-item-code'),
+      size: btn.getAttribute('data-size'),
+      color: btn.getAttribute('data-color'),
+      item_level: btn.getAttribute('data-item-level')
+    };
+  }
+
+  function posCartDraftHideSuggest(boxEl) {
+    if (!boxEl) {
+      return;
+    }
+    boxEl.classList.add('hidden');
+    boxEl.innerHTML = '';
+    boxEl.style.display = 'none';
+  }
+
+  function posCartDraftSetActivePick(boxEl, idx) {
+    if (!boxEl) {
+      return null;
+    }
+    var picks = boxEl.querySelectorAll('.pos-cart-draft-sku-pick');
+    if (!picks.length) {
+      return null;
+    }
+    var safeIdx = Math.max(0, Math.min(idx, picks.length - 1));
+    picks.forEach(function (btn, i) {
+      btn.classList.toggle('pos-cart-draft-sku-pick-active', i === safeIdx);
+      btn.setAttribute('aria-selected', i === safeIdx ? 'true' : 'false');
+    });
+    boxEl.setAttribute('data-active-pick-idx', String(safeIdx));
+    return picks[safeIdx];
+  }
+
+  function posCartDraftActivePick(rowEl) {
+    var boxEl = rowEl ? rowEl.querySelector('.pos-cart-draft-suggest') : null;
+    if (!boxEl || boxEl.classList.contains('hidden')) {
+      return null;
+    }
+    var active = boxEl.querySelector('.pos-cart-draft-sku-pick-active');
+    if (active) {
+      return active;
+    }
+    return boxEl.querySelector('.pos-cart-draft-sku-pick');
+  }
+
   function posCartDraftAddFromProduct(product, rowEl) {
     var qtyEl = rowEl ? rowEl.querySelector('.pos-cart-draft-qty') : null;
     var qty = parseInt(String(qtyEl && qtyEl.value != null ? qtyEl.value : '1'), 10);
@@ -2346,8 +2397,7 @@
     }
     var suggest = rowEl ? rowEl.querySelector('.pos-cart-draft-suggest') : null;
     if (suggest) {
-      suggest.classList.add('hidden');
-      suggest.innerHTML = '';
+      posCartDraftHideSuggest(suggest);
     }
     if (typeof window.handleAddToCart !== 'function') {
       return;
@@ -2396,8 +2446,7 @@
     }
     var q = String(inputEl.value || '').trim();
     if (q.length < 2) {
-      boxEl.classList.add('hidden');
-      boxEl.innerHTML = '';
+      posCartDraftHideSuggest(boxEl);
       return;
     }
     clearTimeout(posCartDraftSuggestTimer);
@@ -2413,18 +2462,21 @@
           var products =
             data && data.success && Array.isArray(data.products) ? data.products : [];
           if (!products.length) {
-            boxEl.classList.add('hidden');
-            boxEl.innerHTML = '';
+            posCartDraftHideSuggest(boxEl);
             return;
           }
           boxEl.innerHTML = products
             .slice(0, 10)
-            .map(function (p) {
+            .map(function (p, pickIdx) {
               var skuLbl = escapeHtml(String(p.sku || p.item_code || ''));
               var title = String(p.title || p.name || '').trim();
               var titleShort = title.length > 48 ? title.slice(0, 45) + '…' : title;
+              var activeCls =
+                pickIdx === 0 ? ' pos-cart-draft-sku-pick-active bg-orange-50 ring-1 ring-orange-200/80' : '';
               return (
-                '<button type="button" class="pos-cart-draft-sku-pick block w-full text-left px-2 py-1.5 hover:bg-orange-50 border-b border-slate-100 last:border-0"' +
+                '<button type="button" class="pos-cart-draft-sku-pick block w-full text-left px-2 py-1.5 hover:bg-orange-50 border-b border-slate-100 last:border-0' +
+                activeCls +
+                '"' +
                 ' data-sku="' +
                 escapeHtml(String(p.sku || '')) +
                 '" data-item-code="' +
@@ -2435,7 +2487,9 @@
                 escapeHtml(String(p.color || '')) +
                 '" data-item-level="' +
                 escapeHtml(String(p.item_level || '')) +
-                '">' +
+                '" role="option"' +
+                (pickIdx === 0 ? ' aria-selected="true"' : ' aria-selected="false"') +
+                '>' +
                 '<span class="font-semibold text-slate-800">' +
                 skuLbl +
                 '</span>' +
@@ -2447,9 +2501,11 @@
             })
             .join('');
           boxEl.classList.remove('hidden');
+          boxEl.style.display = 'block';
+          boxEl.setAttribute('data-active-pick-idx', '0');
         })
         .catch(function () {
-          boxEl.classList.add('hidden');
+          posCartDraftHideSuggest(boxEl);
         });
     }, 180);
   }
@@ -2502,6 +2558,7 @@
       '<div class="pos-cart-table-wrap overflow-x-auto -mx-0.5">' +
       '<table class="pos-cart-table w-full border-collapse text-[11px]">' +
       '<thead><tr class="border-b border-slate-200 text-left text-[9px] uppercase tracking-wide text-slate-500">' +
+      '<th class="py-1.5 pr-2 font-semibold w-16">Image</th>' +
       '<th class="py-1.5 pr-1 font-semibold">SKU</th>' +
       '<th class="py-1.5 pr-1 font-semibold">Product</th>' +
       '<th class="py-1.5 px-1 font-semibold w-12 text-center">Qty</th>' +
@@ -2512,7 +2569,7 @@
 
     if (!items.length) {
       html +=
-        '<tr><td colspan="6" class="py-4 text-center text-[11px] text-slate-400 italic">No items in cart yet — add SKUs below.</td></tr>';
+        '<tr><td colspan="7" class="py-4 text-center text-[11px] text-slate-400 italic">No items in cart yet — add SKUs below.</td></tr>';
     } else {
       items.forEach(function (row, idx) {
         var disp = computeCartLineDisplay(row, idx, items, data, lineCartAllocs);
@@ -2522,21 +2579,52 @@
         var sub = lineSubDisplay(row);
         var productCode = String(pickFirst(row, ['code', 'item_code', 'sku']) || '').trim();
         var codeLbl = String(sub || productCode || '').trim() || '\u2014';
+        var imgUrl = lineImageUrl(row);
         var maxSell = lineMaxSellableQty(row, data || {});
         var maxAttr =
           ref && maxSell != null && maxSell >= 1
             ? ' max="' + escapeHtml(String(maxSell)) + '" data-max-qty="' + escapeHtml(String(maxSell)) + '"'
             : '';
+        var imgClickAttrs =
+          productCode
+            ? ' pos-cart-line-item cursor-pointer hover:opacity-90" data-product-code="' + escapeHtml(productCode) + '" title="View product"'
+            : '" title="No image"';
         html +=
           '<tr class="pos-cart-table-line border-b border-slate-100 hover:bg-slate-50/80">' +
+          '<td class="py-2 pr-2 align-top w-16">';
+        if (imgUrl) {
+          html +=
+            '<div class="shrink-0 w-14 h-14 rounded-md border border-slate-200 bg-white overflow-hidden' +
+            imgClickAttrs +
+            '>' +
+            '<img src="' +
+            escapeHtml(imgUrl) +
+            '" alt="' +
+            escapeHtml(title) +
+            '" class="h-full w-full object-contain p-0.5" loading="lazy" decoding="async" />' +
+            '</div>';
+        } else {
+          html +=
+            '<div class="shrink-0 w-14 h-14 rounded-md border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-slate-300 text-sm' +
+            (productCode ? ' pos-cart-line-item cursor-pointer" data-product-code="' + escapeHtml(productCode) + '"' : '"') +
+            ' title="No image">\u25c7</div>';
+        }
+        html +=
+          '</td>' +
           '<td class="py-2 pr-1 align-top">' +
           '<span class="pos-cart-line-item font-semibold tabular-nums text-slate-700 cursor-pointer hover:text-orange-700"' +
           (productCode ? ' data-product-code="' + escapeHtml(productCode) + '"' : '') +
           ' title="View product">' +
           escapeHtml(codeLbl) +
           '</span></td>' +
-          '<td class="py-2 pr-1 align-top max-w-[7rem]">' +
-          '<div class="pos-cart-line-item line-clamp-2 text-slate-800 leading-snug cursor-pointer"' +
+          '<td class="py-2 pr-1 align-top' +
+          (isCartTablePage() ? '' : ' max-w-[7rem]') +
+          '">' +
+          '<div class="' +
+          (isCartTablePage()
+            ? 'pos-cart-line-item text-slate-800 leading-snug cursor-pointer'
+            : 'pos-cart-line-item line-clamp-2 text-slate-800 leading-snug cursor-pointer') +
+          '"' +
           (productCode ? ' data-product-code="' + escapeHtml(productCode) + '"' : '') +
           ' title="' +
           escapeHtml(title) +
@@ -3178,16 +3266,7 @@
         }
         e.preventDefault();
         var rowPick = posCartDraftRowFromTarget(draftPick);
-        posCartDraftAddFromProduct(
-          {
-            sku: draftPick.getAttribute('data-sku'),
-            item_code: draftPick.getAttribute('data-item-code'),
-            size: draftPick.getAttribute('data-size'),
-            color: draftPick.getAttribute('data-color'),
-            item_level: draftPick.getAttribute('data-item-level')
-          },
-          rowPick
-        );
+        posCartDraftAddFromProduct(posCartDraftProductFromPickBtn(draftPick), rowPick);
       },
       false
     );
@@ -3195,9 +3274,6 @@
     document.body.addEventListener(
       'keydown',
       function (e) {
-        if (e.key !== 'Enter' || e.shiftKey) {
-          return;
-        }
         var t = e.target;
         if (!t || !t.matches || !t.matches('.pos-cart-draft-sku')) {
           return;
@@ -3206,14 +3282,70 @@
         if (!panelKd || !panelKd.contains(t)) {
           return;
         }
-        e.preventDefault();
         var rowKd = posCartDraftRowFromTarget(t);
         var suggestKd = rowKd ? rowKd.querySelector('.pos-cart-draft-suggest') : null;
-        if (suggestKd) {
-          suggestKd.classList.add('hidden');
-          suggestKd.innerHTML = '';
+        var suggestOpen = suggestKd && !suggestKd.classList.contains('hidden');
+        var picks = suggestOpen ? suggestKd.querySelectorAll('.pos-cart-draft-sku-pick') : null;
+
+        if (suggestOpen && picks && picks.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+          e.preventDefault();
+          var curIdx = parseInt(String(suggestKd.getAttribute('data-active-pick-idx') || '0'), 10);
+          if (isNaN(curIdx) || curIdx < 0) {
+            curIdx = 0;
+          }
+          var nextIdx = e.key === 'ArrowDown' ? curIdx + 1 : curIdx - 1;
+          var nextPick = posCartDraftSetActivePick(suggestKd, nextIdx);
+          if (nextPick && typeof nextPick.scrollIntoView === 'function') {
+            nextPick.scrollIntoView({ block: 'nearest' });
+          }
+          return;
+        }
+
+        if (e.key === 'Escape') {
+          if (suggestOpen) {
+            e.preventDefault();
+            posCartDraftHideSuggest(suggestKd);
+          }
+          return;
+        }
+
+        if (e.key !== 'Enter' || e.shiftKey) {
+          return;
+        }
+
+        e.preventDefault();
+        if (suggestOpen && picks && picks.length) {
+          var pickBtn = posCartDraftActivePick(rowKd);
+          if (pickBtn) {
+            posCartDraftAddFromProduct(posCartDraftProductFromPickBtn(pickBtn), rowKd);
+            return;
+          }
         }
         posCartDraftExactLookup(t.value, rowKd);
+      },
+      false
+    );
+
+    document.body.addEventListener(
+      'mouseover',
+      function (e) {
+        var draftPick = e.target && e.target.closest ? e.target.closest('.pos-cart-draft-sku-pick') : null;
+        if (!draftPick) {
+          return;
+        }
+        var panel = document.getElementById(PANEL_ID);
+        if (!panel || !panel.contains(draftPick)) {
+          return;
+        }
+        var boxEl = draftPick.closest('.pos-cart-draft-suggest');
+        if (!boxEl) {
+          return;
+        }
+        var picks = boxEl.querySelectorAll('.pos-cart-draft-sku-pick');
+        var idx = Array.prototype.indexOf.call(picks, draftPick);
+        if (idx >= 0) {
+          posCartDraftSetActivePick(boxEl, idx);
+        }
       },
       false
     );

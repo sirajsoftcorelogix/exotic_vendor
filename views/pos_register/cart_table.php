@@ -63,12 +63,34 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       #posCartTablePage .pos-cart-table th {
         font-size: 0.75rem;
       }
-      #posCartTablePage .pos-cart-table-line td:nth-child(2) {
+      #posCartTablePage .pos-cart-table-line td:nth-child(3) {
         max-width: none;
+      }
+      #posCartTablePage .pos-cart-table .pos-cart-table-line img {
+        display: block;
       }
       #posCartTablePage .pos-cart-draft-section,
       #posCartTablePage .pos-cart-table-wrap {
         max-width: none;
+      }
+      #posCartTablePage .pos-cart-draft-table-wrap {
+        overflow: visible;
+      }
+      #posCartTablePage .pos-cart-draft-row td {
+        overflow: visible;
+        vertical-align: top;
+      }
+      #posCartTablePage .pos-cart-draft-suggest.hidden {
+        display: none !important;
+        height: 0;
+        max-height: 0;
+        overflow: hidden;
+        padding: 0;
+        margin: 0;
+        border: 0;
+      }
+      #posCartTablePage .pos-cart-draft-suggest:not(.hidden) {
+        display: block;
       }
     </style>
 
