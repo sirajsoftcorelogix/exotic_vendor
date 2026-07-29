@@ -19,6 +19,8 @@
   var posCustomDiscountPersist = null;
   /** Per cart line (cartref): line-level discount toward POST /order/pos_editorderprices after checkout. */
   var posLineAdjustByRef = {};
+  /** Per cart line: line discount form expanded in cart UI. */
+  var posLineDiscountExpandedByRef = {};
   /** Stable keys (sku+qty+local stock) persisted in sessionStorage across page reload. */
   var POS_LOCAL_STOCK_CONFIRM_SS_KEY = 'pos_local_stock_confirmed_v1';
 
@@ -1560,22 +1562,49 @@
     }
     var showValFixed = round2(Math.max(0, manualFixed) + Math.max(0, cartShare));
     var compact = !!opts.compact;
+    var hasApplied = storedVal > 0.001 || cartShare > 0.001;
+    var isExpanded = !!posLineDiscountExpandedByRef[ref];
     var labelCls = compact
-      ? 'text-[10px] font-bold text-red-600 mb-1'
-      : 'text-[11px] font-bold text-red-600 mb-1.5';
+      ? 'text-[10px] font-bold text-red-600'
+      : 'text-[11px] font-bold text-red-600';
     var fieldCls = compact
       ? 'rounded border border-slate-300 bg-white text-[10px] shadow-sm outline-none focus:border-orange-500'
       : 'rounded border border-slate-300 bg-white text-xs shadow-sm outline-none focus:border-orange-500';
+    var toggleCls = compact
+      ? 'text-[10px] font-semibold text-red-600 hover:text-red-700 hover:underline underline-offset-2'
+      : 'text-[11px] font-semibold text-red-600 hover:text-red-700 hover:underline underline-offset-2';
 
     return (
       '<div class="pos-cart-line-adjust mt-2' +
       (compact ? ' max-w-md' : '') +
       '" data-cartshare="' +
       escapeHtml(String(cartShare)) +
+      '" data-cartref="' +
+      escapeHtml(ref) +
+      '">' +
+      '<button type="button" class="pos-cart-line-disc-toggle' +
+      (isExpanded ? ' hidden' : '') +
+      ' ' +
+      toggleCls +
+      '" data-cartref="' +
+      escapeHtml(ref) +
+      '">Line Discount' +
+      (hasApplied ? ' <span class="font-normal text-amber-700">(applied)</span>' : '') +
+      '</button>' +
+      '<div class="pos-cart-line-disc-panel' +
+      (isExpanded ? '' : ' hidden') +
+      '">' +
+      '<div class="flex items-center justify-between gap-2 ' +
+      (compact ? 'mb-1' : 'mb-1.5') +
       '">' +
       '<div class="' +
       labelCls +
       '">Line Discount</div>' +
+      '<button type="button" class="pos-cart-line-disc-close inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" data-cartref="' +
+      escapeHtml(ref) +
+      '" aria-label="Close line discount" title="Close">' +
+      '<i class="fas fa-times text-[10px]" aria-hidden="true"></i></button>' +
+      '</div>' +
       '<div class="flex flex-wrap items-stretch gap-1.5">' +
       '<select class="pos-cart-line-disc-mode shrink-0 px-1.5 py-1.5 font-medium text-slate-800 ' +
       fieldCls +
@@ -1610,8 +1639,39 @@
       '<button type="button" class="pos-cart-line-disc-reset shrink-0 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50" data-cartref="' +
       escapeHtml(ref) +
       '">Clear</button>' +
-      '</div></div>'
+      '</div></div></div>'
     );
+  }
+
+  function showLineDiscountPanel(wrapEl) {
+    if (!wrapEl) {
+      return;
+    }
+    var toggle = wrapEl.querySelector('.pos-cart-line-disc-toggle');
+    var panel = wrapEl.querySelector('.pos-cart-line-disc-panel');
+    if (toggle) {
+      toggle.classList.add('hidden');
+    }
+    if (panel) {
+      panel.classList.remove('hidden');
+    }
+  }
+
+  function hideLineDiscountPanel(wrapEl, ref) {
+    if (!wrapEl) {
+      return;
+    }
+    if (ref) {
+      delete posLineDiscountExpandedByRef[ref];
+    }
+    var toggle = wrapEl.querySelector('.pos-cart-line-disc-toggle');
+    var panel = wrapEl.querySelector('.pos-cart-line-disc-panel');
+    if (toggle) {
+      toggle.classList.remove('hidden');
+    }
+    if (panel) {
+      panel.classList.add('hidden');
+    }
   }
 
   function applyLineDiscountFromControls(ref, wrapEl) {
@@ -1641,6 +1701,7 @@
       toast('Percentage must be between 0 and 100.', 'red');
       return;
     }
+    posLineDiscountExpandedByRef[ref] = true;
     posLineAdjustByRef[ref] = { mode: modeA, value: modeA === 'percent' && vA > 100 ? 100 : vA };
     rerenderCartFromSnapshot();
   }
@@ -2312,6 +2373,7 @@
 
   function pruneLineAdjustMaps(refsUsed) {
     var next = {};
+    var nextExpanded = {};
     for (var i = 0; i < refsUsed.length; i++) {
       var r = refsUsed[i];
       if (!r) {
@@ -2320,8 +2382,12 @@
       if (posLineAdjustByRef[r]) {
         next[r] = posLineAdjustByRef[r];
       }
+      if (posLineDiscountExpandedByRef[r]) {
+        nextExpanded[r] = true;
+      }
     }
     posLineAdjustByRef = next;
+    posLineDiscountExpandedByRef = nextExpanded;
   }
 
   /** Final GST-inclusive unit prices for Exotic pos_editorderprices (after line + cart-level discounts). */
@@ -4153,6 +4219,29 @@
         var sumRmD = e.target && e.target.closest ? e.target.closest('.pos-cart-summary-remove-custom') : null;
         if (sumRmD && panel.contains(sumRmD)) {
           window.applyCustomDiscount(0);
+          return;
+        }
+        var discToggle = e.target && e.target.closest ? e.target.closest('.pos-cart-line-disc-toggle') : null;
+        if (discToggle && panel.contains(discToggle)) {
+          e.preventDefault();
+          e.stopPropagation();
+          var refToggle = String(discToggle.getAttribute('data-cartref') || '').trim();
+          var wrapToggle = discToggle.closest('.pos-cart-line-adjust');
+          if (refToggle && wrapToggle) {
+            posLineDiscountExpandedByRef[refToggle] = true;
+            showLineDiscountPanel(wrapToggle);
+          }
+          return;
+        }
+        var discClose = e.target && e.target.closest ? e.target.closest('.pos-cart-line-disc-close') : null;
+        if (discClose && panel.contains(discClose)) {
+          e.preventDefault();
+          e.stopPropagation();
+          var refClose = String(discClose.getAttribute('data-cartref') || '').trim();
+          var wrapClose = discClose.closest('.pos-cart-line-adjust');
+          if (refClose && wrapClose) {
+            hideLineDiscountPanel(wrapClose, refClose);
+          }
           return;
         }
         var discApply = e.target && e.target.closest ? e.target.closest('.pos-cart-line-disc-apply') : null;
