@@ -66,8 +66,12 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       #posCartTablePage .pos-cart-table-line td:nth-child(3) {
         max-width: none;
       }
-      #posCartTablePage .pos-cart-table .pos-cart-table-line img {
+      #posCartTablePage .pos-cart-table .pos-cart-table-line img,
+      #posCartTablePage .pos-cart-line-image-enlarge {
         display: block;
+      }
+      #posCartTablePage .pos-cart-line-image-enlarge {
+        padding: 0;
       }
       #posCartTablePage .pos-cart-draft-section,
       #posCartTablePage .pos-cart-table-wrap {
@@ -106,11 +110,14 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
   </div>
 </div>
 
+<?php require __DIR__ . '/partials/product_modal.php'; ?>
+
 <script>
   window.POS_CART_TABLE_PAGE = true;
   window.POS_INITIAL_CUSTOMER = <?= json_encode(isset($selected_customer) ? $selected_customer : null, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
 </script>
 <script src="<?php echo base_url(); ?>assets/js/pos_cart_hooks.js"></script>
+<script src="<?php echo base_url(); ?>assets/js/pos.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     var refreshBtn = document.getElementById('posCartTableRefreshBtn');

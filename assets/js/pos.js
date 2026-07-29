@@ -350,6 +350,8 @@ $(function () {
     resetCustomAddonsUi();
     $('#pmQtySummary').empty().addClass('hidden');
     $('#pmModalPrice').addClass('hidden').text('');
+    window.__posCartDraftRowAfterAdd = null;
+    window.__posModalOpenOpts = null;
   }
 
   /** Called after cart add (e.g. from pos_cart_hooks.js) to dismiss the product popup. */
@@ -431,6 +433,20 @@ $(function () {
   function getModalQty() {
     const n = parseInt(String($pmQtyVal.text()).trim(), 10);
     return Number.isFinite(n) ? n : 1;
+  }
+
+  function applyModalOpenOptsIfPending() {
+    const opts = window.__posModalOpenOpts;
+    if (!opts || typeof opts !== 'object') {
+      return;
+    }
+    if (opts.qty != null) {
+      const q = parseInt(String(opts.qty), 10);
+      if (Number.isFinite(q) && q >= 1) {
+        setModalQty(q);
+      }
+    }
+    window.__posModalOpenOpts = null;
   }
 
   function normalizeAddonEntries(entries) {
@@ -880,6 +896,7 @@ $(function () {
     renderQtySummaryUnderInput(p);
 
     loadSiblingSkusForProduct(p);
+    applyModalOpenOptsIfPending();
   }
 
   function renderQtySummaryUnderInput(p) {
@@ -1140,8 +1157,9 @@ data-code="${lookupCode}">
     currentCategory = $(this).data('category') || '';
     resetAndLoad();
   });
-  function openProductModalByCode(code, preselectedAddonEntries = [], seedProduct = null) {
+  function openProductModalByCode(code, preselectedAddonEntries = [], seedProduct = null, openOpts = null) {
     if (!code) return;
+    window.__posModalOpenOpts = openOpts && typeof openOpts === 'object' ? openOpts : null;
     modalPreselectedAddonEntries = normalizeAddonEntries(preselectedAddonEntries);
     openModal();
 
@@ -1579,8 +1597,10 @@ data-code="${lookupCode}">
     });
   }
 
-  // Initial load – products only
-  resetAndLoad();
+  // Initial load – products grid only (skip on cart-table page)
+  if ($cards.length) {
+    resetAndLoad();
+  }
 });
 
 // In pos.js, add this

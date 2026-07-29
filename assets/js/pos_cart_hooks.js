@@ -1098,6 +1098,96 @@
     return 'https://cdn.exoticindia.com/' + s.replace(/^\/+/, '');
   }
 
+  var CART_IMAGE_LIGHTBOX_ID = 'posCartImageLightbox';
+
+  function ensurePosCartImageLightbox() {
+    var lb = document.getElementById(CART_IMAGE_LIGHTBOX_ID);
+    if (lb) {
+      return lb;
+    }
+    lb = document.createElement('div');
+    lb.id = CART_IMAGE_LIGHTBOX_ID;
+    lb.className =
+      'fixed inset-0 z-[10060] hidden flex-col items-center justify-center bg-black/85 p-4 sm:p-6';
+    lb.setAttribute('role', 'dialog');
+    lb.setAttribute('aria-modal', 'true');
+    lb.setAttribute('aria-label', 'Enlarged product image');
+    lb.innerHTML =
+      '<p class="sr-only">Enlarged product image</p>' +
+      '<button type="button" class="pos-cart-image-lightbox-close absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white text-xl font-light hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400" aria-label="Close">&times;</button>' +
+      '<img id="posCartImageLightboxImg" src="" alt="" class="max-h-[90vh] max-w-full rounded-lg object-contain shadow-2xl ring-1 ring-white/10 bg-white" />';
+    document.body.appendChild(lb);
+    lb.addEventListener('click', function (ev) {
+      if (ev.target === lb) {
+        closePosCartImageLightbox();
+      }
+    });
+    var closeBtn = lb.querySelector('.pos-cart-image-lightbox-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        closePosCartImageLightbox();
+      });
+    }
+    return lb;
+  }
+
+  function openPosCartImageLightbox(url, alt) {
+    if (!url || !String(url).trim()) {
+      return;
+    }
+    var lb = ensurePosCartImageLightbox();
+    var img = document.getElementById('posCartImageLightboxImg');
+    if (!img) {
+      return;
+    }
+    img.src = String(url).trim();
+    img.alt = alt ? String(alt) : 'Product image';
+    lb.classList.remove('hidden');
+    lb.classList.add('flex');
+    lb.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closePosCartImageLightbox() {
+    var lb = document.getElementById(CART_IMAGE_LIGHTBOX_ID);
+    var img = document.getElementById('posCartImageLightboxImg');
+    if (!lb) {
+      return;
+    }
+    lb.classList.add('hidden');
+    lb.classList.remove('flex');
+    lb.style.display = 'none';
+    if (img) {
+      img.src = '';
+      img.alt = '';
+    }
+    document.body.style.overflow = '';
+  }
+
+  function buildCartLineThumbnailHtml(imgUrl, title) {
+    var safeTitle = escapeHtml(String(title || 'Product'));
+    if (!imgUrl) {
+      return (
+        '<div class="shrink-0 w-14 h-14 rounded-md border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-slate-300 text-sm" title="No image">\u25c7</div>'
+      );
+    }
+    return (
+      '<button type="button" class="pos-cart-line-image-enlarge shrink-0 w-14 h-14 rounded-md border border-slate-200 bg-white overflow-hidden cursor-pointer hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"' +
+      ' data-full-src="' +
+      escapeHtml(imgUrl) +
+      '" data-image-alt="' +
+      safeTitle +
+      '" title="Click to enlarge" aria-label="Enlarge product image">' +
+      '<img src="' +
+      escapeHtml(imgUrl) +
+      '" alt="' +
+      safeTitle +
+      '" class="pointer-events-none h-full w-full object-contain p-0.5" loading="lazy" decoding="async" />' +
+      '</button>'
+    );
+  }
+
   function parseMoneyValue(val) {
     if (val == null || val === '') {
       return null;
@@ -2279,7 +2369,7 @@
       '<tbody class="pos-cart-draft-body">' +
       body +
       '</tbody></table></div>' +
-      '<p class="mt-1.5 text-[9px] text-slate-500 leading-snug">Pick from suggestions or press Enter to add. Shift+Enter for a new line in SKU lists.</p>' +
+      '<p class="mt-1.5 text-[9px] text-slate-500 leading-snug">Pick from suggestions or press Enter to open product details (add-ons &amp; custom add-ons). Shift+Enter for a new line in SKU lists.</p>' +
       '</div>'
     );
   }
@@ -2384,31 +2474,51 @@
     return boxEl.querySelector('.pos-cart-draft-sku-pick');
   }
 
-  function posCartDraftAddFromProduct(product, rowEl) {
+  function posCartDraftOpenProductModal(product, rowEl) {
+    var p = product || {};
+    var sku = normalizeCartFacet(p.sku);
+    var itemCode = normalizeCartFacet(p.item_code);
+    var code = sku || itemCode || normalizeCartFacet(p.code);
+    if (!code) {
+      toast('Missing product code', 'red');
+      return;
+    }
     var qtyEl = rowEl ? rowEl.querySelector('.pos-cart-draft-qty') : null;
     var qty = parseInt(String(qtyEl && qtyEl.value != null ? qtyEl.value : '1'), 10);
     if (!qty || qty < 1) {
       qty = 1;
     }
-    var payload = buildCartAddPayloadFromProduct(product, qty);
-    if (!payload.code) {
-      toast('Missing product code', 'red');
-      return;
-    }
     var suggest = rowEl ? rowEl.querySelector('.pos-cart-draft-suggest') : null;
     if (suggest) {
       posCartDraftHideSuggest(suggest);
     }
-    if (typeof window.handleAddToCart !== 'function') {
+    var skuIn = rowEl ? rowEl.querySelector('.pos-cart-draft-sku') : null;
+    if (skuIn) {
+      skuIn.value = code;
+    }
+    window.__posCartDraftRowAfterAdd = rowEl || null;
+    if (typeof window.openProductModalByCode !== 'function') {
+      toast('Product details unavailable — reload the page and try again.', 'red');
+      window.__posCartDraftRowAfterAdd = null;
       return;
     }
-    Promise.resolve(window.handleAddToCart(payload)).then(function () {
-      var skuIn = rowEl ? rowEl.querySelector('.pos-cart-draft-sku') : null;
-      if (skuIn) {
-        skuIn.value = '';
-        skuIn.focus();
-      }
-    });
+    window.openProductModalByCode(
+      code,
+      [],
+      {
+        id: p.id,
+        sku: sku || code,
+        item_code: itemCode,
+        title: p.title || p.name,
+        name: p.name || p.title,
+        size: p.size,
+        color: p.color,
+        item_level: p.item_level,
+        image: p.image || p.image_url,
+        price: p.price
+      },
+      { qty: qty }
+    );
   }
 
   function posCartDraftExactLookup(sku, rowEl) {
@@ -2425,7 +2535,7 @@
       })
       .then(function (data) {
         if (data && data.success && data.product) {
-          posCartDraftAddFromProduct(data.product, rowEl);
+          posCartDraftOpenProductModal(data.product, rowEl);
           return;
         }
         toast((data && data.message) ? data.message : 'No product found for SKU: ' + q, 'red');
@@ -2585,31 +2695,10 @@
           ref && maxSell != null && maxSell >= 1
             ? ' max="' + escapeHtml(String(maxSell)) + '" data-max-qty="' + escapeHtml(String(maxSell)) + '"'
             : '';
-        var imgClickAttrs =
-          productCode
-            ? ' pos-cart-line-item cursor-pointer hover:opacity-90" data-product-code="' + escapeHtml(productCode) + '" title="View product"'
-            : '" title="No image"';
         html +=
           '<tr class="pos-cart-table-line border-b border-slate-100 hover:bg-slate-50/80">' +
-          '<td class="py-2 pr-2 align-top w-16">';
-        if (imgUrl) {
-          html +=
-            '<div class="shrink-0 w-14 h-14 rounded-md border border-slate-200 bg-white overflow-hidden' +
-            imgClickAttrs +
-            '>' +
-            '<img src="' +
-            escapeHtml(imgUrl) +
-            '" alt="' +
-            escapeHtml(title) +
-            '" class="h-full w-full object-contain p-0.5" loading="lazy" decoding="async" />' +
-            '</div>';
-        } else {
-          html +=
-            '<div class="shrink-0 w-14 h-14 rounded-md border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-slate-300 text-sm' +
-            (productCode ? ' pos-cart-line-item cursor-pointer" data-product-code="' + escapeHtml(productCode) + '"' : '"') +
-            ' title="No image">\u25c7</div>';
-        }
-        html +=
+          '<td class="py-2 pr-2 align-top w-16">' +
+          buildCartLineThumbnailHtml(imgUrl, title) +
           '</td>' +
           '<td class="py-2 pr-1 align-top">' +
           '<span class="pos-cart-line-item font-semibold tabular-nums text-slate-700 cursor-pointer hover:text-orange-700"' +
@@ -2784,19 +2873,7 @@
           (productCode ? ' data-product-code="' + escapeHtml(productCode) + '"' : '') +
           ' role="button" tabindex="0" title="View product details">';
         html += '<div class="flex gap-2.5">';
-        if (imgUrl) {
-          html +=
-            '<div class="shrink-0 w-14 h-14 rounded-md border border-slate-200 bg-white overflow-hidden">' +
-            '<img src="' +
-            escapeHtml(imgUrl) +
-            '" alt="' +
-            escapeHtml(title) +
-            '" class="h-full w-full object-contain p-0.5" loading="lazy" decoding="async" />' +
-            '</div>';
-        } else {
-          html +=
-            '<div class="shrink-0 w-14 h-14 rounded-md border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center text-slate-300 text-sm" title="No image">\u25c7</div>';
-        }
+        html += buildCartLineThumbnailHtml(imgUrl, title);
         html += '<div class="min-w-0 flex-1 flex flex-col">';
         html += '<div class="flex items-start justify-between gap-2">';
         html +=
@@ -3125,6 +3202,11 @@
         var modal = document.getElementById(MODAL_ID);
         if (modal && !modal.classList.contains('hidden')) {
           closePosCartApiDebugModal();
+          return;
+        }
+        var cartImgLb = document.getElementById(CART_IMAGE_LIGHTBOX_ID);
+        if (cartImgLb && !cartImgLb.classList.contains('hidden')) {
+          closePosCartImageLightbox();
         }
         return;
       }
@@ -3266,7 +3348,7 @@
         }
         e.preventDefault();
         var rowPick = posCartDraftRowFromTarget(draftPick);
-        posCartDraftAddFromProduct(posCartDraftProductFromPickBtn(draftPick), rowPick);
+        posCartDraftOpenProductModal(posCartDraftProductFromPickBtn(draftPick), rowPick);
       },
       false
     );
@@ -3317,7 +3399,7 @@
         if (suggestOpen && picks && picks.length) {
           var pickBtn = posCartDraftActivePick(rowKd);
           if (pickBtn) {
-            posCartDraftAddFromProduct(posCartDraftProductFromPickBtn(pickBtn), rowKd);
+            posCartDraftOpenProductModal(posCartDraftProductFromPickBtn(pickBtn), rowKd);
             return;
           }
         }
@@ -3360,6 +3442,17 @@
         }
         var panel = document.getElementById(PANEL_ID);
         if (!panel) {
+          return;
+        }
+        var imgEnlarge =
+          e.target && e.target.closest ? e.target.closest('.pos-cart-line-image-enlarge') : null;
+        if (imgEnlarge && panel.contains(imgEnlarge)) {
+          e.preventDefault();
+          e.stopPropagation();
+          openPosCartImageLightbox(
+            imgEnlarge.getAttribute('data-full-src') || '',
+            imgEnlarge.getAttribute('data-image-alt') || 'Product image'
+          );
           return;
         }
         var viewBtn = e.target && e.target.closest ? e.target.closest('.pos-cart-view-toggle-btn') : null;
@@ -3801,6 +3894,15 @@
           if (typeof window.closePosProductModal === 'function') {
             window.closePosProductModal();
           }
+          var draftRow = window.__posCartDraftRowAfterAdd;
+          if (draftRow) {
+            window.__posCartDraftRowAfterAdd = null;
+            var draftSkuIn = draftRow.querySelector('.pos-cart-draft-sku');
+            if (draftSkuIn) {
+              draftSkuIn.value = '';
+              draftSkuIn.focus();
+            }
+          }
           return refreshCartInternal().then(function (r2) {
             if (r2 && r2.data && typeof r2.data === 'object') {
               toastIfQtyCappedAfterSuccess(requestedQty, r2.data, { code: body.code });
@@ -4081,6 +4183,7 @@
   function initPosCartHooks() {
     bindCartDelegatesOnce();
     ensureCartPanel();
+    ensurePosCartImageLightbox();
     window.refreshCart();
   }
 
