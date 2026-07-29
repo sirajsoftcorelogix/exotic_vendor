@@ -2311,11 +2311,7 @@
       .join('');
     return (
       '<div class="pos-cart-draft-section mt-3 rounded-lg border border-dashed border-orange-200 bg-orange-50/40 p-2">' +
-      '<div class="flex items-center justify-between gap-2 mb-1.5">' +
-      '<p class="text-[10px] font-bold uppercase tracking-wider text-orange-800/80">Add by SKU</p>' +
-      '<button type="button" class="pos-cart-draft-add-row inline-flex items-center gap-1 rounded-md border border-orange-200 bg-white px-2 py-1 text-[10px] font-semibold text-orange-700 hover:bg-orange-50">' +
-      '<i class="fas fa-plus text-[9px]" aria-hidden="true"></i> Add row</button>' +
-      '</div>' +
+      '<p class="text-[10px] font-bold uppercase tracking-wider text-orange-800/80 mb-1.5">Add by SKU</p>' +
       '<div class="pos-cart-draft-table-wrap -mx-0.5">' +
       '<table class="w-full border-collapse text-[11px]">' +
       '<thead><tr class="text-left text-[9px] uppercase tracking-wide text-slate-500">' +
@@ -2324,7 +2320,7 @@
       '<tbody class="pos-cart-draft-body">' +
       body +
       '</tbody></table></div>' +
-      '<p class="mt-1.5 text-[9px] text-slate-500 leading-snug">Pick from suggestions or press Enter to open product details (add-ons &amp; custom add-ons). Shift+Enter for a new line in SKU lists.</p>' +
+      '<p class="mt-1.5 text-[9px] text-slate-500 leading-snug">Pick from suggestions or press Enter to open product details (add-ons &amp; custom add-ons).</p>' +
       '</div>'
     );
   }
@@ -3346,20 +3342,6 @@
               /* ignore */
             }
             rerenderCartFromSnapshot();
-          }
-          return;
-        }
-        var draftAddRow = e.target && e.target.closest ? e.target.closest('.pos-cart-draft-add-row') : null;
-        if (draftAddRow && panel.contains(draftAddRow)) {
-          e.preventDefault();
-          var draftBody = panel.querySelector('.pos-cart-draft-body');
-          if (draftBody) {
-            var tmpTb = document.createElement('tbody');
-            tmpTb.innerHTML = buildCartDraftRowHtml({ sku: '', qty: '1' }, false);
-            var newTr = tmpTb.querySelector('tr');
-            if (newTr) {
-              draftBody.appendChild(newTr);
-            }
           }
           return;
         }
