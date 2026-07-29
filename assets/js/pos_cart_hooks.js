@@ -982,39 +982,112 @@
     return out;
   }
 
+  function lineCartOptionsSegments(row) {
+    if (!row || typeof row !== 'object') {
+      return [];
+    }
+    var raw = pickFirst(row, ['options', 'option', 'selected_options']);
+    if (raw == null || raw === '' || raw === 0 || raw === '0') {
+      return [];
+    }
+    return String(raw)
+      .split('|')
+      .map(function (part) {
+        return String(part || '').trim();
+      })
+      .filter(function (part) {
+        return part !== '';
+      });
+  }
+
+  function optionSegmentDisplayName(seg) {
+    var s = String(seg || '').trim();
+    if (!s) {
+      return '';
+    }
+    var marker = ':_blank_:';
+    var idx = s.indexOf(marker);
+    if (idx > 0) {
+      var customName = s.slice(0, idx);
+      if (/^[A-Za-z_]+$/.test(customName)) {
+        return customName.replace(/_/g, ' ');
+      }
+    }
+    var colonIdx = s.indexOf(':');
+    var prefix = colonIdx > 0 ? s.slice(0, colonIdx) : s;
+    return String(prefix).replace(/^OPTIONALS_/i, '').replace(/_/g, ' ').trim() || prefix;
+  }
+
+  function optionSegmentPrice(seg) {
+    var s = String(seg || '').trim();
+    if (!s) {
+      return null;
+    }
+    var marker = ':_blank_:';
+    var idx = s.indexOf(marker);
+    if (idx > 0) {
+      return parseMoneyValue(s.slice(idx + marker.length));
+    }
+    var parts = s.split(':');
+    if (parts.length >= 2) {
+      return parseMoneyValue(parts[parts.length - 1]);
+    }
+    return null;
+  }
+
+  function findOptionSegmentForAddon(row, name, price) {
+    var targetName = String(name || '').trim().toLowerCase();
+    var nameUnderscore = targetName.replace(/\s+/g, '_');
+    var segments = lineCartOptionsSegments(row);
+    for (var i = 0; i < segments.length; i++) {
+      var seg = segments[i];
+      var segLower = seg.toLowerCase();
+      var displayName = optionSegmentDisplayName(seg).toLowerCase();
+      if (
+        displayName === targetName ||
+        segLower.indexOf(nameUnderscore) !== -1 ||
+        targetName.indexOf(displayName) !== -1 ||
+        displayName.indexOf(targetName) !== -1
+      ) {
+        return seg;
+      }
+      if (price != null && price > 0) {
+        var segPrice = optionSegmentPrice(seg);
+        if (segPrice != null && Math.abs(segPrice - price) < 0.01) {
+          return seg;
+        }
+      }
+    }
+    return null;
+  }
+
   /** Parse POS custom add-on segments from cart line options (Name:_blank_:Price). */
   function parseCustomAddonOptionsFromRow(row) {
     if (!row || typeof row !== 'object') {
       return [];
     }
-    var raw = pickFirst(row, ['options', 'option', 'selected_options']);
-    if (raw == null || String(raw).trim() === '') {
-      return [];
-    }
     var out = [];
-    String(raw)
-      .split('|')
-      .forEach(function (part) {
-        var s = String(part || '').trim();
-        if (!s) {
-          return;
-        }
-        var marker = ':_blank_:';
-        var idx = s.indexOf(marker);
-        if (idx <= 0) {
-          return;
-        }
-        var name = s.slice(0, idx);
-        var priceStr = s.slice(idx + marker.length);
-        if (!/^[A-Za-z_]+$/.test(name)) {
-          return;
-        }
-        var price = parseMoneyValue(priceStr);
-        if (price == null || price < 0) {
-          return;
-        }
-        out.push({ name: name, price: price });
-      });
+    lineCartOptionsSegments(row).forEach(function (part) {
+      var s = String(part || '').trim();
+      if (!s) {
+        return;
+      }
+      var marker = ':_blank_:';
+      var idx = s.indexOf(marker);
+      if (idx <= 0) {
+        return;
+      }
+      var name = s.slice(0, idx);
+      var priceStr = s.slice(idx + marker.length);
+      if (!/^[A-Za-z_]+$/.test(name)) {
+        return;
+      }
+      var price = parseMoneyValue(priceStr);
+      if (price == null || price < 0) {
+        return;
+      }
+      out.push({ name: name, price: price, removeSegment: s });
+    });
     return out;
   }
 
@@ -1038,39 +1111,83 @@
     return label;
   }
 
-  function lineAddonLabels(row) {
+  function lineAddonItemExists(items, name, price) {
+    var targetName = String(name || '').trim().toLowerCase();
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      if (item.key === targetName) {
+        return true;
+      }
+      var itemName = String(item.name || '').trim().toLowerCase();
+      if (
+        itemName === targetName ||
+        itemName.indexOf(targetName) !== -1 ||
+        targetName.indexOf(itemName) !== -1
+      ) {
+        return true;
+      }
+      if (price != null && item.price != null && Math.abs(item.price - price) < 0.01) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function lineAddonItems(row) {
     if (!row || typeof row !== 'object') {
       return [];
     }
-    var labels = [];
+    var items = [];
     var seen = {};
     var customFromOptions = parseCustomAddonOptionsFromRow(row);
     var priceByName = {};
     customFromOptions.forEach(function (item) {
       if (item.name) {
-        priceByName[item.name.toLowerCase()] = item.price;
+        priceByName[String(item.name).toLowerCase()] = item.price;
       }
     });
 
-    function pushAddonLabel(name, price) {
+    function pushAddonItem(name, price, removeSegment, key) {
       var labelName = String(name || '').trim();
       if (!labelName) {
         return;
       }
-      var key = labelName.toLowerCase();
-      if (seen[key]) {
+      var itemKey = String(key || labelName).trim().toLowerCase();
+      if (!itemKey || seen[itemKey]) {
         return;
       }
       var label = formatAddonLabelWithPrice(labelName, price);
       if (!label) {
         return;
       }
-      seen[key] = true;
-      labels.push(label);
+      seen[itemKey] = true;
+      items.push({
+        key: itemKey,
+        name: labelName,
+        price: price,
+        label: label,
+        removeSegment: removeSegment || null
+      });
     }
 
+    lineCartOptionsSegments(row).forEach(function (seg) {
+      var displayName = optionSegmentDisplayName(seg);
+      if (!displayName) {
+        return;
+      }
+      pushAddonItem(displayName, optionSegmentPrice(seg), seg, displayName.toLowerCase());
+    });
+
     parseAddonsMapFromRow(row).forEach(function (item) {
-      pushAddonLabel(item.name, item.price);
+      if (lineAddonItemExists(items, item.name, item.price)) {
+        return;
+      }
+      pushAddonItem(
+        item.name,
+        item.price,
+        findOptionSegmentForAddon(row, item.name, item.price),
+        item.name.toLowerCase()
+      );
     });
 
     var addons = row.addons_selected;
@@ -1083,26 +1200,45 @@
         if (!name) {
           return;
         }
+        if (lineAddonItemExists(items, name, null)) {
+          return;
+        }
         var price = addonDisplayPrice(addon);
         if ((price == null || price <= 0) && priceByName[name.toLowerCase()] != null) {
           price = priceByName[name.toLowerCase()];
         }
-        pushAddonLabel(name, price);
+        pushAddonItem(
+          name,
+          price,
+          findOptionSegmentForAddon(row, name, price),
+          name.toLowerCase()
+        );
       });
     }
 
-    if (!labels.length && customFromOptions.length) {
+    if (!items.length && customFromOptions.length) {
       customFromOptions.forEach(function (item) {
-        pushAddonLabel(item.name, item.price);
+        pushAddonItem(
+          String(item.name || '').replace(/_/g, ' '),
+          item.price,
+          item.removeSegment || null,
+          String(item.name || '').toLowerCase()
+        );
       });
     }
 
-    if (!labels.length) {
+    if (!items.length) {
       var frame = parseMoneyValue(pickFirst(row, ['framevalue', 'frame_value', 'frame_price']));
       if (frame != null && frame > 0) {
-        pushAddonLabel('Add-on', frame);
+        pushAddonItem(
+          'Add-on',
+          frame,
+          findOptionSegmentForAddon(row, 'Add-on', frame),
+          'add-on'
+        );
       }
     }
+
     if (
       !seen['express shipping'] &&
       (row.express_shipping_chosen === true ||
@@ -1111,20 +1247,105 @@
         String(row.express_shipping_chosen || '').toLowerCase() === 'true')
     ) {
       var expressCost = parseMoneyValue(row.express_shipping_cost);
-      pushAddonLabel('Express Shipping', expressCost);
+      pushAddonItem(
+        'Express Shipping',
+        expressCost,
+        findOptionSegmentForAddon(row, 'Express Shipping', expressCost),
+        'express shipping'
+      );
     }
-    return labels;
+
+    return items;
   }
 
-  function buildCartLineAddonsBlockHtml(row) {
-    var addonLabels = lineAddonLabels(row);
-    if (!addonLabels.length) {
+  function lineAddonLabels(row) {
+    return lineAddonItems(row).map(function (item) {
+      return item.label;
+    });
+  }
+
+  function resolveAddonRemoveSegment(row, addonItem) {
+    if (!addonItem) {
+      return null;
+    }
+    if (addonItem.removeSegment) {
+      return addonItem.removeSegment;
+    }
+    return findOptionSegmentForAddon(row, addonItem.name, addonItem.price);
+  }
+
+  function buildOptionsWithoutSegment(row, segmentToRemove) {
+    if (!segmentToRemove) {
+      return lineCartOptionsSegments(row).join('|');
+    }
+    return lineCartOptionsSegments(row)
+      .filter(function (seg) {
+        return seg !== segmentToRemove;
+      })
+      .join('|');
+  }
+
+  function lineVariationForCartAdd(row) {
+    if (!row || typeof row !== 'object') {
       return '';
     }
+    var variation = pickFirst(row, ['variation', 'Variation', 'variant', 'subcode']);
+    if (variation != null) {
+      var v = String(variation).trim();
+      if (v && v.indexOf(':_blank_:') === -1 && v.indexOf('|') === -1) {
+        return v;
+      }
+    }
+    var size = lineSizeForApi(row);
+    var color = lineColorForApi(row);
+    if (size || color) {
+      return (size || '') + ':' + (color || '');
+    }
+    return '';
+  }
+
+  function cartLineAddPayloadFromRow(row, newOptions) {
+    var code = lineItemCodeForApi(row) || String(pickFirst(row, ['code', 'sku']) || '').trim();
+    return {
+      code: code,
+      qty: lineQty(row),
+      variation: lineVariationForCartAdd(row),
+      options: String(newOptions == null ? '' : newOptions),
+      item_level: String(pickFirst(row, ['item_level', 'itemLevel']) || '').trim(),
+      item_code: lineItemCodeForApi(row),
+      size: lineSizeForApi(row),
+      color: lineColorForApi(row)
+    };
+  }
+
+  function buildCartLineAddonsBlockHtml(row, cartRef) {
+    var addonItems = lineAddonItems(row);
+    if (!addonItems.length) {
+      return '';
+    }
+    var ref = String(cartRef || lineCartRef(row) || '').trim();
+    var chips = addonItems
+      .map(function (item) {
+        return (
+          '<span class="pos-cart-line-addon-chip inline-flex max-w-full items-center gap-1 rounded-md border border-emerald-200 bg-white px-2 py-0.5 text-[10px] font-medium text-emerald-900 shadow-sm">' +
+          '<span class="pos-cart-line-addon-label min-w-0 truncate">' +
+          escapeHtml(item.label) +
+          '</span>' +
+          (ref
+            ? '<button type="button" class="pos-cart-line-addon-remove inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[11px] leading-none text-emerald-700/90 hover:bg-red-50 hover:text-red-600" data-cartref="' +
+              escapeHtml(ref) +
+              '" data-addon-key="' +
+              escapeHtml(item.key) +
+              '" title="Remove add-on" aria-label="Remove add-on ' +
+              escapeHtml(item.name) +
+              '">&times;</button>'
+            : '') +
+          '</span>'
+        );
+      })
+      .join('');
     return (
-      '<div class="pos-cart-line-addons mt-1 text-[10px] font-medium text-emerald-800 leading-snug">' +
-      escapeHtml('+ ' + addonLabels.join(', ')) +
-      '</div>'
+      '<div class="pos-cart-line-addons mt-1.5 flex flex-wrap gap-1.5">' + chips + '</div>'
     );
   }
 
@@ -2738,7 +2959,7 @@
           '">' +
           escapeHtml(title) +
           '</div>' +
-          buildCartLineAddonsBlockHtml(row) +
+          buildCartLineAddonsBlockHtml(row, ref) +
           '</td>' +
           '<td class="py-2 px-1 align-top text-center">';
         if (ref) {
@@ -2907,7 +3128,7 @@
           '<div class="text-[13px] font-bold text-slate-900 leading-snug mt-0.5 pr-1 line-clamp-3">' +
           escapeHtml(title) +
           '</div>';
-        html += buildCartLineAddonsBlockHtml(row);
+        html += buildCartLineAddonsBlockHtml(row, ref);
         html += '</div></div>';
         html +=
           '<div class="text-[13px] tabular-nums text-slate-800 mt-0.5 leading-relaxed">' +
@@ -3481,6 +3702,18 @@
           }
           return;
         }
+        var addonRemove =
+          e.target && e.target.closest ? e.target.closest('.pos-cart-line-addon-remove') : null;
+        if (addonRemove && panel.contains(addonRemove)) {
+          e.preventDefault();
+          e.stopPropagation();
+          var refAddon = String(addonRemove.getAttribute('data-cartref') || '').trim();
+          var addonKey = String(addonRemove.getAttribute('data-addon-key') || '').trim();
+          if (refAddon && addonKey && typeof window.handleRemoveCartLineAddon === 'function') {
+            window.handleRemoveCartLineAddon({ cartref: refAddon, addon_key: addonKey });
+          }
+          return;
+        }
         var del = e.target && e.target.closest ? e.target.closest('.pos-cart-delete-btn') : null;
         if (del && panel.contains(del)) {
           e.preventDefault();
@@ -3806,6 +4039,70 @@
             }
             return r2;
           });
+        })
+        .finally(function () {
+          setPanelBusy(false);
+        });
+    });
+  };
+
+  /** @param {Record<string, unknown>} [payload] */
+  window.handleRemoveCartLineAddon = function (payload) {
+    return withCartLock(function () {
+      var p = payload || {};
+      var ref = String(p.cartref || '').trim();
+      var addonKey = String(p.addon_key || p.addonKey || '').trim().toLowerCase();
+      if (!ref || !addonKey) {
+        toast('Invalid add-on remove request', 'red');
+        return undefined;
+      }
+      var row = findCartRowByRef(window.__posCartLastRetrieveData, ref);
+      if (!row) {
+        toast('Cart line not found', 'red');
+        return undefined;
+      }
+      var addonItem = null;
+      lineAddonItems(row).some(function (item) {
+        if (item.key === addonKey) {
+          addonItem = item;
+          return true;
+        }
+        return false;
+      });
+      if (!addonItem) {
+        toast('Add-on not found on this line', 'red');
+        return undefined;
+      }
+      var segmentToRemove = resolveAddonRemoveSegment(row, addonItem);
+      if (!segmentToRemove) {
+        toast('Could not remove this add-on automatically. Edit the item from product details.', 'red');
+        return undefined;
+      }
+      var newOptions = buildOptionsWithoutSegment(row, segmentToRemove);
+      var addPayload = cartLineAddPayloadFromRow(row, newOptions);
+      if (!addPayload.code) {
+        toast('Missing product code for cart line', 'red');
+        return undefined;
+      }
+      setPanelBusy(true);
+      return cartRequest('delete', { query: { cartid: ref } })
+        .then(function (rDel) {
+          cartHandleApiMessages(rDel);
+          if (!rDel.success) {
+            return rDel;
+          }
+          return cartRequest('add', { method: 'POST', jsonBody: addPayload });
+        })
+        .then(function (rAdd) {
+          cartHandleApiMessages(rAdd);
+          if (rAdd && rAdd.success) {
+            toast('Add-on removed.', 'green');
+            return refreshCartInternal();
+          }
+          if (rAdd && !rAdd.success) {
+            openPosCartApiDebugModal();
+          }
+          return rAdd;
         })
         .finally(function () {
           setPanelBusy(false);
