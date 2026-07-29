@@ -67,23 +67,21 @@
     var customerId =
       typeof window.getSelectedCustomerId === 'function' ? window.getSelectedCustomerId() : '';
     if (!customerId) {
-      toast('Please select customer first', 'red');
-      if (typeof window.focusPosCustomerSelect === 'function') {
-        window.focusPosCustomerSelect();
-      } else if (typeof window.jQuery !== 'undefined' && window.jQuery.fn && window.jQuery.fn.select2) {
-        var $cust = window.jQuery('#customerSelect');
-        if ($cust.length && $cust.data('select2')) {
-          $cust.select2('open');
-        } else {
-          var cs = document.getElementById('customerSelect');
-          if (cs) {
-            cs.focus();
+      if (typeof window.showPosMessageModal === 'function') {
+        window.showPosMessageModal({
+          title: 'Customer required',
+          message: 'Please select customer first',
+          tone: 'warning',
+          onClose: function () {
+            if (typeof window.focusPosCustomerSelect === 'function') {
+              window.focusPosCustomerSelect();
+            }
           }
-        }
+        });
       } else {
-        var csEl = document.getElementById('customerSelect');
-        if (csEl) {
-          csEl.focus();
+        toast('Please select customer first', 'red');
+        if (typeof window.focusPosCustomerSelect === 'function') {
+          window.focusPosCustomerSelect();
         }
       }
       return false;

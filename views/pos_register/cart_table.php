@@ -182,6 +182,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
   window.POS_SESSION_CUSTOMER_ID = <?= json_encode(!empty($_SESSION['pos_customer_id']) ? (string)(int)$_SESSION['pos_customer_id'] : '') ?>;
   window.POS_INITIAL_CUSTOMER = <?= json_encode(isset($selected_customer) ? $selected_customer : null, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
 </script>
+<script src="<?php echo base_url(); ?>assets/js/pos_message_modal.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos_customer.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos_cart_hooks.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos.js"></script>
