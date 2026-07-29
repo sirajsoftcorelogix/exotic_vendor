@@ -776,6 +776,8 @@ class PosOrdersController
      */
     private function buildOrderInvoiceDiscountLines(array $posDiscounts, ?array $orderInfo): array
     {
+        require_once __DIR__ . '/../helpers/invoice/pos_invoice_amount_summary.php';
+
         $absorbed = !empty($posDiscounts['discounts_absorbed']);
 
         $line = round((float)($posDiscounts['line_discount'] ?? 0), 2);
@@ -809,30 +811,36 @@ class PosOrdersController
         if ($cash > 0.001) {
             $lines[] = [
                 'type' => 'custom',
-                'label' => $this->orderInvoiceCustomDiscountLabel($posDiscounts, $orderInfo),
+                'label' => pos_order_custom_discount_display_label($posDiscounts),
                 'amount' => $cash,
                 'note' => is_array($orderInfo) ? trim((string)($orderInfo['custom_note'] ?? '')) : '',
             ];
         }
 
         if ($coupon > 0.001) {
-            $couponName = trim((string)($posDiscounts['coupon_display_name'] ?? ''));
-            if ($couponName === '' && is_array($orderInfo)) {
-                $couponName = trim((string)($orderInfo['coupon'] ?? ''));
+            $couponRaw = trim((string)($posDiscounts['coupon_raw'] ?? ''));
+            if ($couponRaw === '') {
+                $couponRaw = trim((string)($posDiscounts['coupon_display_name'] ?? ''));
+            }
+            if ($couponRaw === '' && is_array($orderInfo)) {
+                $couponRaw = trim((string)($orderInfo['coupon'] ?? ''));
             }
             $lines[] = [
                 'type' => 'coupon',
-                'label' => $couponName !== '' ? 'Coupon (' . $couponName . ')' : 'Coupon Discount',
+                'label' => pos_order_coupon_discount_label($couponRaw),
                 'amount' => $coupon,
                 'note' => '',
             ];
         }
 
         if ($gift > 0.001) {
-            $giftName = is_array($orderInfo) ? trim((string)($orderInfo['giftvoucher'] ?? '')) : '';
+            $giftName = trim((string)($posDiscounts['gift_voucher_name'] ?? ''));
+            if ($giftName === '' && is_array($orderInfo)) {
+                $giftName = trim((string)($orderInfo['giftvoucher'] ?? ''));
+            }
             $lines[] = [
                 'type' => 'gift',
-                'label' => $giftName !== '' ? 'Gift Voucher (' . $giftName . ')' : 'Gift Voucher',
+                'label' => pos_order_gift_voucher_discount_label($giftName),
                 'amount' => $gift,
                 'note' => '',
             ];
@@ -879,7 +887,7 @@ class PosOrdersController
      *   payments: list<array<string, mixed>>
      * }
      */
-    private function buildOrderPaymentSummary(string $orderNumber, ?array $orderInfo = null): array
+    private function buildOrderPaymentSummary(string $orderNumber, ?array $orderInfo = null, array $orderLines = []): array
     {
         global $conn;
 
@@ -890,6 +898,17 @@ class PosOrdersController
         $paymentModel = new Payment($conn);
         $payments = $paymentModel->listByOrderNumber($orderNumber);
         $paidTotal = $paymentModel->sumPaidByOrderNumber($orderNumber);
+
+        $creditAmount = 0.0;
+        if (is_array($orderInfo)) {
+            $creditAmount = round((float)($orderInfo['credit'] ?? 0), 2);
+        }
+        foreach ($orderLines as $orderLine) {
+            if (!is_array($orderLine)) {
+                continue;
+            }
+            $creditAmount = max($creditAmount, round((float)($orderLine['credit'] ?? 0), 2));
+        }
 
         $orderTotal = ($conn instanceof mysqli)
             ? pos_payment_resolve_order_total($conn, $orderNumber)
@@ -909,6 +928,7 @@ class PosOrdersController
             'pending' => $pending,
             'is_fully_paid' => $pending <= 0.02,
             'payments' => $payments,
+            'credit_amount' => $creditAmount,
         ];
     }
 
@@ -1000,7 +1020,8 @@ class PosOrdersController
         $invoiceDisplay = $this->buildOrderInvoiceDisplaySummary($activeInvoice, $resolvedOrderNumber);
         $paymentSummary = $this->buildOrderPaymentSummary(
             $resolvedOrderNumber,
-            is_array($orderremarks) ? $orderremarks : null
+            is_array($orderInfo) ? $orderInfo : null,
+            $order
         );
 
         require_once __DIR__ . '/../helpers/invoice/pos_order_pricing.php';
@@ -1011,16 +1032,22 @@ class PosOrdersController
             $commanModel
         );
 
-        if (is_array($invoiceDisplay) && pos_order_line_pricing_should_override_invoice_summary($linePricingByLineId, is_array($orderInfo) ? $orderInfo : null)) {
+        if (is_array($invoiceDisplay) && pos_order_line_pricing_should_override_invoice_summary($linePricingByLineId, is_array($orderInfo) ? $orderInfo : null, $order)) {
             $pricingAggregate = pos_order_aggregate_line_pricing_summary(
                 $linePricingByLineId,
                 is_array($orderInfo) ? $orderInfo : null
             );
             if (is_array($pricingAggregate)) {
-                $posMeta = is_array($activeInvoice)
-                    ? pos_invoice_parse_discount_meta($activeInvoice['notes'] ?? null)
-                    : [];
-                $invoiceDisplay['summary_rows'] = pos_order_build_summary_rows_from_line_pricing($pricingAggregate, $posMeta);
+                $discountMeta = pos_order_resolve_discount_meta(
+                    is_array($activeInvoice) ? $activeInvoice : null,
+                    is_array($orderInfo) ? $orderInfo : null,
+                    $order
+                );
+                $invoiceDisplay['summary_rows'] = pos_order_build_summary_rows_from_line_pricing(
+                    $pricingAggregate,
+                    $discountMeta,
+                    is_array($orderInfo) ? $orderInfo : null
+                );
                 $invoiceDisplay['pdf_grand_total'] = $pricingAggregate['net_chargeable'];
                 $invoiceDisplay['grand_total'] = $pricingAggregate['net_chargeable'];
             }
@@ -1091,9 +1118,13 @@ class PosOrdersController
 
         $invoicePdfUrl = $invoiceId > 0 ? pos_invoice_pdf_url($invoiceId) : '';
         $invoiceDisplay = $this->buildOrderInvoiceDisplaySummary($activeInvoice, $resolvedOrderNumber);
-        $paymentSummary = $this->buildOrderPaymentSummary($resolvedOrderNumber, is_array($orderremarks) ? $orderremarks : null);
-        $proformaPrintAction = $this->resolveProformaPrintAction($resolvedOrderNumber, $activeInvoice, $paymentSummary);
         $orderInfo = $ordersModel->getAddressInfoByOrderNumber($resolvedOrderNumber);
+        $paymentSummary = $this->buildOrderPaymentSummary(
+            $resolvedOrderNumber,
+            is_array($orderInfo) ? $orderInfo : null,
+            $order
+        );
+        $proformaPrintAction = $this->resolveProformaPrintAction($resolvedOrderNumber, $activeInvoice, $paymentSummary);
         require_once __DIR__ . '/../helpers/invoice/pos_order_pricing.php';
         $linePricingByLineId = pos_order_build_line_display_pricing_map(
             $order,
@@ -1102,16 +1133,22 @@ class PosOrdersController
             $commanModel
         );
 
-        if (is_array($invoiceDisplay) && pos_order_line_pricing_should_override_invoice_summary($linePricingByLineId, is_array($orderInfo) ? $orderInfo : null)) {
+        if (is_array($invoiceDisplay) && pos_order_line_pricing_should_override_invoice_summary($linePricingByLineId, is_array($orderInfo) ? $orderInfo : null, $order)) {
             $pricingAggregate = pos_order_aggregate_line_pricing_summary(
                 $linePricingByLineId,
                 is_array($orderInfo) ? $orderInfo : null
             );
             if (is_array($pricingAggregate)) {
-                $posMeta = is_array($activeInvoice)
-                    ? pos_invoice_parse_discount_meta($activeInvoice['notes'] ?? null)
-                    : [];
-                $invoiceDisplay['summary_rows'] = pos_order_build_summary_rows_from_line_pricing($pricingAggregate, $posMeta);
+                $discountMeta = pos_order_resolve_discount_meta(
+                    is_array($activeInvoice) ? $activeInvoice : null,
+                    is_array($orderInfo) ? $orderInfo : null,
+                    $order
+                );
+                $invoiceDisplay['summary_rows'] = pos_order_build_summary_rows_from_line_pricing(
+                    $pricingAggregate,
+                    $discountMeta,
+                    is_array($orderInfo) ? $orderInfo : null
+                );
                 $invoiceDisplay['pdf_grand_total'] = $pricingAggregate['net_chargeable'];
                 $invoiceDisplay['grand_total'] = $pricingAggregate['net_chargeable'];
                 $invoiceDisplay['subtotal_goods_incl'] = $pricingAggregate['gross_incl'];
@@ -1120,18 +1157,32 @@ class PosOrdersController
         }
 
         require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+        require_once __DIR__ . '/../helpers/pos_local_checkout_order.php';
         $invoiceStatusForGate = is_array($invoiceDisplay)
             ? strtolower(trim((string)($invoiceDisplay['status'] ?? '')))
             : '';
         $canCreateFinalInvoice = $conn instanceof mysqli
             && pos_payment_is_allocation_complete($conn, $resolvedOrderNumber)
             && $invoiceStatusForGate !== 'final';
+        $canPublishExoticSync = canSrEmpAccess()
+            && pos_local_checkout_is_temp_order_number($resolvedOrderNumber);
+        $hasExoticSyncPayload = $conn instanceof mysqli
+            && pos_local_checkout_has_pending_sync($conn, $resolvedOrderNumber);
+
+        require_once __DIR__ . '/../helpers/html_helpers.php';
+        $viewerUserId = (int) ($_SESSION['user']['id'] ?? 0);
+        $canFetchOrderJson = hasTieredAccess($viewerUserId, 'Sr Emp Access', ['Orders', 'POS Orders']);
 
         if ($type === 'inner') {
-            renderPartial('views/posorders/partial_order_details.php', [
+            $page = trim((string)($_GET['page'] ?? ''));
+            $innerPartial = $page === 'orders'
+                ? 'views/orders/partial_order_details.php'
+                : 'views/posorders/partial_order_details.php';
+            renderPartial($innerPartial, [
                 'order' => $order,
                 'statusList' => $statusList,
                 'linePricingByLineId' => $linePricingByLineId,
+                'orderremarks' => is_array($orderremarks) ? $orderremarks : [],
             ]);
         } else {
             renderTemplate('views/posorders/other_partial_order_details.php', [
@@ -1147,10 +1198,13 @@ class PosOrdersController
                 'canEditInvoiceNumber' => canSrEmpAccess(),
                 'paymentSummary' => $paymentSummary,
                 'canCreateFinalInvoice' => $canCreateFinalInvoice,
+                'canPublishExoticSync' => $canPublishExoticSync,
+                'hasExoticSyncPayload' => $hasExoticSyncPayload,
                 'linePricingByLineId' => $linePricingByLineId,
                 'order_status_list' => $commanModel->get_order_status(),
                 'staff_list' => $commanModel->get_staff_list(),
                 'showOrderVendorName' => function_exists('canViewOrderVendorName') && canViewOrderVendorName(),
+                'canFetchOrderJson' => $canFetchOrderJson,
             ], 'Order Details');
         }
         exit;
@@ -1219,6 +1273,34 @@ class PosOrdersController
             'invoice_pdf_url' => pos_invoice_pdf_url($invoiceId),
             'message' => !empty($invoiceMeta['created']) ? 'Invoice created successfully.' : 'Invoice is ready.',
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    public function publishExoticSyncAjax(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (!canSrEmpAccess()) {
+            echo json_encode(['success' => false, 'message' => 'Access denied.']);
+            exit;
+        }
+
+        global $conn;
+        if (!$conn instanceof mysqli) {
+            echo json_encode(['success' => false, 'message' => 'Database unavailable']);
+            exit;
+        }
+
+        $orderNumber = trim((string)($_POST['order_number'] ?? $_GET['order_number'] ?? ''));
+        if ($orderNumber === '') {
+            echo json_encode(['success' => false, 'message' => 'Order number missing']);
+            exit;
+        }
+
+        require_once __DIR__ . '/../helpers/pos_local_checkout_order.php';
+        $result = pos_local_checkout_publish_to_exotic($conn, $orderNumber);
+        echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
 

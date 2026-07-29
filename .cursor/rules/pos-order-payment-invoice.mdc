@@ -24,9 +24,47 @@ Entry: `POST ?page=pos_register&action=checkout-create` → `POSRegisterControll
 | Customer selected | `customer_id` must match `$_SESSION['pos_customer_id']` |
 | Order total > 0 | From payment modal (`order_total`) |
 | Payment splits valid | `validatePosPaymentSplits()` |
-| Address complete | `validatePosCheckoutAddressPayload()` |
+| Address complete | `validatePosCheckoutAddressPayload()` — required fields + **phone/country dial-code match** (see below) |
 | Delivery status | `resolvePosDeliveryStatusFromPayload()` |
 | High-value compliance | `evaluateHighValueCompliance()` (PAN/Aadhaar/OTP thresholds) |
+
+### Address confirm — phone must match country
+
+Modal: **Confirm Billing & Shipping Details** (`#addressConfirmModal` in `views/pos_register/index.php`).
+
+Phone entry uses a **country code selector** (`confirm_phone_code` / `confirm_sphone_code`, default **India +91**) plus a local number field. On submit, JS combines them into `confirm_phone` / `confirm_sphone` via `posBuildFullPhone()` before checkout.
+
+Phone numbers must use a dial code consistent with the selected **billing** and **shipping** country (from `countries.phone_code` in DB).
+
+| Scope | Rule |
+|-------|------|
+| Billing | `confirm_phone_code` must match `confirm_country`; combined `confirm_phone` validated |
+| Shipping (separate address) | `confirm_sphone_code` vs `confirm_scountry` when shipping phone is filled |
+| Same as billing | Only billing phone/country checked (shipping fields copied) |
+| Country change | `syncPosPhoneCodeFromCountry()` updates the phone code selector to match |
+
+**Accepted formats** (examples):
+
+| Country | Valid local number (with +91 selected) |
+|---------|----------------------------------------|
+| India (`IN`, +91) | `9810865978` (10-digit mobile starting 6–9) |
+| US (`US`, +1) | `4155551212` (10-digit local) |
+| Other | Local digits; selector must match address country |
+
+**Implementation:**
+
+| Layer | Location |
+|-------|----------|
+| UI fields | `confirm_phone_code` + `confirm_phone`, `confirm_sphone_code` + `confirm_sphone`; options partial `views/pos_register/partials/phone_code_options.php` |
+| Combine / split | `posBuildFullPhone()`, `posSplitPhoneForCountry()`, `setPosPhoneFields()` |
+| UI validate (submit) | `validateAddressConfirmPayload()` → `posPhoneMatchesCountry()` |
+| Server validate (checkout) | `POSRegisterController::validatePosCheckoutAddressPayload()` → `posPhoneMatchesCountryIso()` |
+| Dial codes to browser | `window.POS_COUNTRY_PHONE_CODES` — built in `POSRegisterController::index()` from `countries.phone_code` |
+| Country lookup (PHP) | `helpers/courier/country_codes.php` → `getCountryByIso2()` |
+
+**Errors:** UI shows e.g. *“Billing: Phone country code must match India (+91 or a valid local number).”* Server returns the same rule in `checkout-create` JSON if bypassed.
+
+**Exotic order/create:** Combined validated phone is posted as `phone` / `sphone` on `/order/create` (see `buildOrderCreatePostFromPayload()`).
 
 ### Exotic order/create sequence
 
@@ -45,15 +83,35 @@ Entry: `POST ?page=pos_register&action=checkout-create` → `POSRegisterControll
 | Field | Source |
 |-------|--------|
 | `checkoutdata` | **Exact string** from cart retrieve JSON (required) |
-| `payment_type` | `'offline'` (counter sale) |
+| `payment_type` | **Always `'offline'`** — do not send POS modes (`upi`, `cash`, etc.) here; Exotic returns `Invalid payment type selected` |
 | `buynow` | `'0'` |
-| `cod` / `codcharges` | `'1'` if COD split amount > 0 |
+| `cod` / `codcharges` | `'1'` if COD split amount > 0 (independent of `payment_type`) |
 | Billing | `confirm_*` fields from payment modal; dummies if empty (`POS_DUMMY_*` constants) |
 | Shipping | `confirm_s*` unless `shouldOmitShippingOnOrderCreate()` |
-| `store_payment_details` | `{warehouse_id}|{Exotic payment type}|{txn}` |
+| `store_payment_details` | `{warehouse_id}\|{POS payment mode label}\|{txn}` — **actual counter payment mode lives here** |
 | Razorpay | Optional `razorpay_payment_id`, `razorpay_order_id`, `razorpay_signature` |
 
-**Payment mode mapping:** POS mode → Exotic type via `mapPosPaymentModeToExoticPaymentType()` (cash, cod, upi, etc.).
+#### `payment_type` vs `store_payment_details` (required)
+
+Exotic **`POST /order/create`** expects counter/POS sales to use a fixed top-level payment type:
+
+| Form field | Value | Purpose |
+|------------|-------|---------|
+| `payment_type` | **`offline`** always | Tells Exotic this is an offline/counter order (not web checkout UPI/card/COD gateway flow) |
+| `store_payment_details` | e.g. `1\|upi\|store.20260725212330` | Records warehouse id, **real POS mode** (`upi`, `cash`, `cod`, …), and transaction reference |
+| `cod` | `1` when COD split present | COD flag; still use `payment_type=offline` |
+
+**Implementation:** `POSRegisterController::buildOrderCreatePostFromPayload()` and `pos_local_checkout_build_order_create_post()` (temp-order publish) set `'payment_type' => 'offline'`. POS mode mapping via `mapPosPaymentModeToExoticPaymentType()` / `pos_local_checkout_map_pos_payment_mode_to_exotic()` applies **only** to the middle segment of `store_payment_details`, not to `payment_type`.
+
+**Local DB:** `vp_orders.payment_type` and `pos_payments.payment_mode` keep the real POS mode (`upi`, `cash`, etc.) — unrelated to the Exotic `payment_type` form field.
+
+**Example (UPI checkout):**
+
+```
+payment_type=offline
+store_payment_details=1|upi|store.20260725212330
+cod=0
+```
 
 ### After Exotic order number exists (local side)
 
@@ -273,8 +331,9 @@ flowchart TD
 ## Extension rules
 
 1. **New checkout field for Exotic** → `buildOrderCreatePostFromPayload()` + payment modal JS + validation.
-2. **New payment mode** → `allowedPosPaymentModes()`, `mapPosPaymentModeToExoticPaymentType()`, payments UI.
+2. **New payment mode** → `allowedPosPaymentModes()`, `mapPosPaymentModeToExoticPaymentType()` (for `store_payment_details` only — **`payment_type` stays `offline`**), payments UI.
 3. **New invoice line/discount field** → `pos_checkout_invoice_snapshot` in `checkout_create()` + `buildInvoicePostFromCheckoutSnapshot()` in PosInvoiceController.
 4. **Block checkout** → add validation in `checkout_create()` before `order/create`.
 5. **Never insert payments outside** `pos_payment_insert_row()` — keeps snapshots consistent.
 6. **Order import** → always use `OrdersController::importSingleOrderForCheckout*` (vendor-api), not duplicate fetch logic.
+7. **Address phone vs country** → keep `posPhoneMatchesCountry()` (JS) and `posPhoneMatchesCountryIso()` (PHP) in sync; dial codes from `countries.phone_code` via `POS_COUNTRY_PHONE_CODES` / `getCountryByIso2()`.

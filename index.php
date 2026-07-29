@@ -288,6 +288,10 @@ switch ($page) {
             case 'refresh_order_apply':
                 $controller->refreshOrderApplyAjax();
                 break;
+            case 'fetch_order_json':
+                require_once __DIR__ . '/helpers/order_json_fetch.php';
+                order_json_fetch_handle_ajax();
+                break;
             case 'update_status':
                 $controller->updateStatus();
                 break;
@@ -1432,6 +1436,10 @@ switch ($page) {
                 $controller->index();
                 break;
 
+            case 'cart-table':
+                $controller->cartTable();
+                break;
+
             case 'products-ajax':
                 $controller->productsAjax();
                 break;
@@ -1848,8 +1856,15 @@ switch ($page) {
             case 'get_order_details_html':
                 $controller->getOrderDetailsHTML();
                 break;
+            case 'fetch_order_json':
+                require_once __DIR__ . '/helpers/order_json_fetch.php';
+                order_json_fetch_handle_ajax();
+                break;
             case 'create_invoice_from_order':
                 $controller->createInvoiceFromOrderAjax();
+                break;
+            case 'publish_exotic_sync':
+                $controller->publishExoticSyncAjax();
                 break;
             case 'print_proforma':
                 $controller->printProforma();

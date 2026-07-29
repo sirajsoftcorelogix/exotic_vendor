@@ -47,6 +47,18 @@ if ($receipt_download_filename_base === '') {
           <div class="grid grid-cols-1 gap-8 border-b border-neutral-300 px-4 pb-2 sm:grid-cols-2 sm:px-6">
             <div class="text-[11px] leading-relaxed">
               <div class="font-bold uppercase tracking-wide text-neutral-900"><?= $h($receipt_company_legal_name ?? 'EXOTIC INDIA ART PVT LTD') ?></div>
+              <?php
+              $companyAddressLines = isset($receipt_company_address_lines) && is_array($receipt_company_address_lines)
+                  ? $receipt_company_address_lines
+                  : [];
+              foreach ($companyAddressLines as $companyAddrLine):
+                  $companyAddrLine = trim((string)$companyAddrLine);
+                  if ($companyAddrLine === '') {
+                      continue;
+                  }
+              ?>
+                <div class="mt-0.5 text-neutral-800"><?= $h($companyAddrLine) ?></div>
+              <?php endforeach; ?>
               <div class="mt-1"><span class="font-semibold">GST No:</span> <?= $h($receipt_company_gstin ?? '') ?></div>
               <div><span class="font-semibold">PAN:</span> <?= $h($receipt_company_pan ?? '') ?></div>
             </div>
@@ -54,9 +66,11 @@ if ($receipt_download_filename_base === '') {
               <div class="text-xl font-black uppercase tracking-tight text-neutral-900"><?= $h($receipt_title_main ?? 'PAYMENT RECEIPT') ?></div>
               <div class="mt-3 space-y-1 text-[11px] text-neutral-800">
                 <div><span class="font-semibold">Receipt No. :</span> <?= $h($receipt_number ?? '') ?></div>
+                <?php if (trim((string)($order_id ?? '')) !== ''): ?>
+                <div><span class="font-semibold">Order No. :</span> <?= $h((string)$order_id) ?></div>
+                <?php endif; ?>
                 <div><span class="font-semibold">Dated :</span> <?= $h($receipt_date_formatted ?? '') ?></div>
                 <div><span class="font-semibold">Place of Supply :</span> <?= $h($receipt_place_of_supply ?? '') ?></div>
-                <div class="sm:hidden"><span class="font-semibold">Order ID :</span> <?= $h($order_id ?? '') ?></div>
               </div>
             </div>
           </div>

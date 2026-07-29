@@ -73,6 +73,16 @@ class ExoticIndiaGateway
     }
 
     /**
+     * Live vendor-api/order/fetch JSON for one order (investigation / refresh).
+     *
+     * @return array{success:bool,message:string,http_code:int,raw:string,data:array,orders:list<array<string,mixed>>}
+     */
+    public function fetchOrderJson(string $orderNumber): array
+    {
+        return $this->orderClient->fetchOrderByNumber($orderNumber);
+    }
+
+    /**
      * Resolve local status slug and sync one vp_orders line to Exotic India.
      *
      * @param array<string, mixed> $orderRow Row from vp_orders (order_number, item_code, size, color).

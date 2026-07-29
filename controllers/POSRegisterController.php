@@ -12,6 +12,9 @@ class POSRegisterController
     private $pos;
     private RetailApiClient $retailApiClient;
 
+    /** @var array{id:int,address_title:string}|null|false */
+    private static $defaultWarehouseCache = false;
+
     public function __construct($conn)
     {
         $this->pos = new pos($conn);
@@ -430,8 +433,22 @@ class POSRegisterController
         }
 
         try {
+            require_once dirname(__DIR__) . '/helpers/pos_local_checkout_order.php';
             $ordersCtrl = $this->getOrdersControllerForImport();
-            $import = $ordersCtrl->importSingleOrderForCheckoutWithRetry($orderNumber, 4, 2);
+            if (pos_local_checkout_is_temp_order_number($orderNumber)) {
+                global $ordersModel;
+                if (!$ordersModel->hasOrderLines($orderNumber) || !$ordersModel->hasOrderInfo($orderNumber)) {
+                    $out['import_status'] = 'failed';
+                    $out['invoice_pdf_disabled_hint'] = 'Local order data is incomplete — contact support.';
+                    return $out;
+                }
+                $import = [
+                    'success' => true,
+                    'message' => 'Local POS order (Exotic publish pending)',
+                ];
+            } else {
+                $import = $ordersCtrl->importSingleOrderForCheckoutWithRetry($orderNumber, 4, 2);
+            }
 
             if (!$ordersCtrl->isOrderReadyForPosCheckout($orderNumber)) {
                 $out['import_status'] = 'failed';
@@ -502,7 +519,7 @@ class POSRegisterController
         if (!$stmt) {
             return;
         }
-        $stmt->bind_param('ssssss', $gstin, $gstin, $shippingGstin, $shippingGstin, $orderNumber);
+        $stmt->bind_param('sssss', $gstin, $gstin, $shippingGstin, $shippingGstin, $orderNumber);
         $stmt->execute();
         $stmt->close();
     }
@@ -530,6 +547,21 @@ class POSRegisterController
             $result['message'] = 'Order number missing for fulfillment status sync.';
             return $result;
         }
+
+        require_once dirname(__DIR__) . '/helpers/pos_local_checkout_order.php';
+        if (pos_local_checkout_is_temp_order_number($orderNumber)) {
+            $upd = $conn->prepare('UPDATE vp_orders SET status = ? WHERE order_number = ?');
+            if (!$upd) {
+                $result['message'] = 'Could not prepare local fulfillment status update.';
+                return $result;
+            }
+            $upd->bind_param('ss', $localStatus, $orderNumber);
+            $result['local_updated'] = $upd->execute();
+            $upd->close();
+            $result['message'] = 'Local order — Exotic fulfillment sync skipped until order is published.';
+            return $result;
+        }
+
         if (!in_array($localStatus, ['shipped', 'pending'], true)) {
             $result['message'] = 'Invalid local fulfillment status.';
             return $result;
@@ -943,6 +975,7 @@ class POSRegisterController
         if (!empty($_SESSION['warehouse_id'])) {
             $warehouse = $usersModel->getWarehouseById($_SESSION['warehouse_id']);
             $warehouseName = $warehouse['address_title'] ?? 'No Warehouse';
+            $_SESSION['pos_warehouse_name'] = $warehouseName;
         }
         // Add "All Products" (slug => label)
         // Put it first:
@@ -1104,6 +1137,24 @@ class POSRegisterController
 
         $posStorePincode = $conn instanceof mysqli ? $this->resolveStorePincodeForPos($conn) : '';
 
+        $countryPhoneCodes = [];
+        if ($conn instanceof mysqli) {
+            $phoneRes = $conn->query(
+                "SELECT country_code, phone_code FROM countries
+                 WHERE phone_code IS NOT NULL AND TRIM(phone_code) <> ''"
+            );
+            if ($phoneRes) {
+                while ($phoneRow = $phoneRes->fetch_assoc()) {
+                    $iso = strtoupper(substr(trim((string)($phoneRow['country_code'] ?? '')), 0, 2));
+                    $phoneCode = preg_replace('/\D+/', '', (string)($phoneRow['phone_code'] ?? ''));
+                    if ($iso !== '' && $phoneCode !== '') {
+                        $countryPhoneCodes[$iso] = $phoneCode;
+                    }
+                }
+                $phoneRes->free();
+            }
+        }
+
         renderTemplate('views/pos_register/index.php', [
             'categories' => $categoryData,
             'warehouse_name' => $warehouseName,
@@ -1117,6 +1168,7 @@ class POSRegisterController
             'selected_customer' => $selected_customer,
             'high_value_transaction_limit' => $highValueTransactionLimit,
             'country_list' => $countryList,
+            'pos_country_phone_codes' => $countryPhoneCodes,
             'pos_india_states' => $posCountryStates['IN'] ?? [],
             'pos_country_states' => $posCountryStates,
             'pos_payment_mode_options' => $this->posPaymentModeOptionsForView(),
@@ -1371,6 +1423,55 @@ class POSRegisterController
         exit;
     }
 
+    public function cartTable()
+    {
+        is_login();
+        require_once 'models/user/user.php';
+        require_once 'models/customer/Customer.php';
+        global $conn;
+        $usersModel = new User($conn);
+
+        if ((int)($_SESSION['warehouse_id'] ?? 0) <= 0 && $conn instanceof mysqli) {
+            $defWh = $this->getDefaultWarehouseRow($conn);
+            if ($defWh !== null && !empty($defWh['id'])) {
+                $_SESSION['warehouse_id'] = $defWh['id'];
+            }
+        }
+
+        $warehouseName = 'No Warehouse';
+        if (!empty($_SESSION['warehouse_id'])) {
+            $warehouse = $usersModel->getWarehouseById($_SESSION['warehouse_id']);
+            $warehouseName = $warehouse['address_title'] ?? 'No Warehouse';
+            $_SESSION['pos_warehouse_name'] = $warehouseName;
+        }
+
+        $selectedCustomer = null;
+        if ($conn instanceof mysqli && !empty($_SESSION['pos_customer_id'])) {
+            $cid = (int)$_SESSION['pos_customer_id'];
+            if ($cid > 0) {
+                $customerModel = new Customer($conn);
+                $row = $customerModel->getCustomerById($cid);
+                if (!empty($row['id'])) {
+                    $nm = (string)($row['name'] ?? '');
+                    $ph = (string)($row['phone'] ?? '');
+                    $em = (string)($row['email'] ?? '');
+                    $selectedCustomer = [
+                        'id' => (int)$row['id'],
+                        'name' => $nm,
+                        'phone' => $ph,
+                        'email' => $em,
+                        'text' => trim($nm . ' | ' . $ph . ($em !== '' ? ' | ' . $em : '')),
+                    ];
+                }
+            }
+        }
+
+        renderTemplate('views/pos_register/cart_table.php', [
+            'warehouse_name' => $warehouseName,
+            'selected_customer' => $selectedCustomer,
+        ], 'POS Cart — Table View');
+    }
+
     public function stockReport()
     {
         is_login();
@@ -1425,6 +1526,7 @@ class POSRegisterController
             'total_rows' => $totalRows,
             'total_pages' => $totalPages,
             'can_change_warehouse' => $isAdmin,
+            'can_bulk_refresh_stock' => canSrEmpAccess(),
             'warehouses' => $warehouses,
             'user_email' => trim((string) ($_SESSION['user']['email'] ?? '')),
         ]);
@@ -1476,6 +1578,11 @@ class POSRegisterController
 
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
             echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        if (!canSrEmpAccess()) {
+            echo json_encode(['success' => false, 'message' => 'Access denied.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
 
@@ -1562,6 +1669,11 @@ class POSRegisterController
             exit;
         }
 
+        if (!canSrEmpAccess()) {
+            echo json_encode(['success' => false, 'message' => 'Access denied.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
         require_once __DIR__ . '/../helpers/mail_helper.php';
         global $conn;
         $usersModel = new User($conn);
@@ -1638,6 +1750,11 @@ class POSRegisterController
 
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
             echo json_encode(['success' => false, 'message' => 'POST required.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        if (!canSrEmpAccess()) {
+            echo json_encode(['success' => false, 'message' => 'Access denied.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
 
@@ -2084,6 +2201,18 @@ class POSRegisterController
         $sku = trim((string) ($product['sku'] ?? ''));
         $itemCode = trim((string) ($product['item_code'] ?? ''));
         $label = $sku !== '' ? $sku : ($itemCode !== '' ? $itemCode : ('#' . $productId));
+
+        $refreshEligibility = $productModel->getStockReportInlineRefreshEligibility($productId);
+        if (empty($refreshEligibility['eligible'])) {
+            return [
+                'success' => false,
+                'message' => 'Stock refresh is only available for items with no stock movements, or a single movement at zero balance.',
+                'product_id' => $productId,
+                'sku' => $sku,
+                'label' => $label,
+                'movement_count' => (int) ($refreshEligibility['movement_count'] ?? 0),
+            ];
+        }
 
         $defaultWarehouseId = $this->resolveDefaultWarehouseIdForStockRefresh($conn);
         if ($defaultWarehouseId <= 0) {
@@ -3101,26 +3230,37 @@ class POSRegisterController
     /** Default warehouse row from exotic_address (POS / GRN “default store”). */
     private function getDefaultWarehouseRow($conn): ?array
     {
+        if (self::$defaultWarehouseCache !== false) {
+            return self::$defaultWarehouseCache;
+        }
         if (!$conn) {
+            self::$defaultWarehouseCache = null;
+
             return null;
         }
         $stmt = $conn->prepare(
             'SELECT id, address_title FROM exotic_address WHERE is_active = 1 AND is_default = 1 ORDER BY id ASC LIMIT 1'
         );
         if (!$stmt) {
+            self::$defaultWarehouseCache = null;
+
             return null;
         }
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
         if (empty($row['id'])) {
+            self::$defaultWarehouseCache = null;
+
             return null;
         }
 
-        return [
+        self::$defaultWarehouseCache = [
             'id' => (int)$row['id'],
             'address_title' => trim((string)($row['address_title'] ?? '')),
         ];
+
+        return self::$defaultWarehouseCache;
     }
 
     /**
@@ -3149,6 +3289,10 @@ class POSRegisterController
             'current_warehouse_id' => $currentWarehouseId,
             'current_warehouse_name' => $currentWarehouseName,
             'current_stock_qty' => 0.0,
+            'current_location' => '',
+            'total_qty_all_warehouses' => 0.0,
+            'default_store_qty' => null,
+            'default_store_name' => '',
             'mapped_at_current' => false,
             'mapped_anywhere' => false,
             'alternative_warehouses' => [],
@@ -3167,7 +3311,8 @@ class POSRegisterController
         $stockSql = "
             SELECT sm.warehouse_id,
                    COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
-                   sm.running_stock AS stock_qty
+                   sm.running_stock AS stock_qty,
+                   sm.location AS warehouse_location
             FROM vp_stock_movements sm
             INNER JOIN (
                 SELECT warehouse_id, product_id, MAX(id) AS max_id
@@ -3190,10 +3335,13 @@ class POSRegisterController
 
         $mappedAtCurrent = false;
         $currentStock = 0.0;
+        $currentLocation = '';
+        $totalQtyAll = 0.0;
         $alternativeWarehouses = [];
         foreach ($rows as $row) {
             $wid = (int)($row['warehouse_id'] ?? 0);
             $stockQty = (float)($row['stock_qty'] ?? 0);
+            $totalQtyAll += $stockQty;
             $entry = [
                 'warehouse_id' => $wid,
                 'warehouse_name' => trim((string)($row['warehouse_name'] ?? '')),
@@ -3202,6 +3350,7 @@ class POSRegisterController
             if ($wid === $currentWarehouseId) {
                 $mappedAtCurrent = true;
                 $currentStock = $stockQty;
+                $currentLocation = trim((string)($row['warehouse_location'] ?? ''));
             } elseif ($stockQty > 0) {
                 $alternativeWarehouses[] = $entry;
             }
@@ -3209,6 +3358,17 @@ class POSRegisterController
 
         $mappedAnywhere = !empty($rows);
         $defaultWarehouse = $this->getDefaultWarehouseRow($conn);
+        $defaultStoreName = trim((string)($defaultWarehouse['address_title'] ?? ''));
+        $defaultStoreQty = null;
+        if ($defaultWarehouse !== null && !empty($defaultWarehouse['id'])) {
+            $defWhId = (int)$defaultWarehouse['id'];
+            foreach ($rows as $row) {
+                if ((int)($row['warehouse_id'] ?? 0) === $defWhId) {
+                    $defaultStoreQty = (float)($row['stock_qty'] ?? 0);
+                    break;
+                }
+            }
+        }
         $storeLabel = $currentWarehouseName !== '' ? $currentWarehouseName : 'this store';
 
         $altNames = array_values(array_filter(array_map(static function (array $w): string {
@@ -3248,6 +3408,10 @@ class POSRegisterController
             'current_warehouse_id' => $currentWarehouseId,
             'current_warehouse_name' => $currentWarehouseName,
             'current_stock_qty' => $currentStock,
+            'current_location' => $currentLocation,
+            'total_qty_all_warehouses' => $totalQtyAll,
+            'default_store_qty' => $defaultStoreQty,
+            'default_store_name' => $defaultStoreName,
             'mapped_at_current' => $mappedAtCurrent,
             'mapped_anywhere' => $mappedAnywhere,
             'alternative_warehouses' => $alternativeWarehouses,
@@ -3258,6 +3422,119 @@ class POSRegisterController
             'warning_message' => $warningMessage,
             'warning_type' => $warningType,
         ];
+    }
+
+    /**
+     * Company block for POS payment receipt (default warehouse address + firm GST/PAN).
+     *
+     * @return array{
+     *   receipt_company_legal_name: string,
+     *   receipt_company_gstin: string,
+     *   receipt_company_pan: string,
+     *   receipt_company_address_lines: list<string>,
+     *   receipt_office_footer: string
+     * }
+     */
+    private function resolvePosReceiptCompanyHeader(mysqli $conn, string $orderNumber = ''): array
+    {
+        require_once __DIR__ . '/../helpers/app_settings.php';
+        require_once __DIR__ . '/../models/payment/Payment.php';
+
+        $firm = app_setting_firm_details();
+        $legalName = trim((string)($firm['firm_name'] ?? ''));
+        if ($legalName === '') {
+            $legalName = 'EXOTIC INDIA ART PVT LTD';
+        }
+
+        $gstin = trim((string)($firm['gstin'] ?? $firm['gst'] ?? ''));
+        if ($gstin === '') {
+            $gstin = trim((string)app_setting('gstin', '07AADCE1400C1ZJ'));
+        }
+
+        $pan = strtoupper(trim((string)($firm['pan'] ?? '')));
+        if ($pan === '' && strlen($gstin) >= 12) {
+            $pan = strtoupper(substr($gstin, 2, 10));
+        }
+
+        $paymentModel = new Payment($conn);
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber !== '') {
+            $warehouseAddr = $paymentModel->getSaleStoreAddressForOrder($orderNumber);
+        } else {
+            $warehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
+            $warehouseAddr = $warehouseId > 0
+                ? $paymentModel->getWarehouseAddressById($warehouseId)
+                : $paymentModel->getDefaultWarehouseAddress();
+            if (($warehouseAddr['title'] ?? '') === '' && ($warehouseAddr['lines'] ?? []) === []) {
+                $warehouseAddr = $paymentModel->getDefaultWarehouseAddress();
+            }
+        }
+
+        $addressLines = [];
+        $title = trim((string)($warehouseAddr['title'] ?? ''));
+        foreach (($warehouseAddr['lines'] ?? []) as $line) {
+            $line = trim((string)$line);
+            if ($line !== '') {
+                $addressLines[] = $line;
+            }
+        }
+        if ($addressLines === [] && $title !== '') {
+            $addressLines[] = $title;
+        }
+
+        $footerParts = [];
+        if ($title !== '') {
+            $footerParts[] = $title;
+        }
+        foreach ($addressLines as $line) {
+            if (!in_array($line, $footerParts, true)) {
+                $footerParts[] = $line;
+            }
+        }
+        if ($footerParts === []) {
+            $firmAddr = trim((string)($firm['address'] ?? ''));
+            if ($firmAddr !== '') {
+                $footerParts[] = preg_replace('/\s+/u', ' ', $firmAddr);
+            } else {
+                $footer = $this->getDefaultExoticAddressFooterString($conn);
+                if ($footer !== '') {
+                    $footerParts[] = $footer;
+                }
+            }
+        }
+
+        return [
+            'receipt_company_legal_name' => $legalName,
+            'receipt_company_gstin' => $gstin,
+            'receipt_company_pan' => $pan,
+            'receipt_company_address_lines' => $addressLines,
+            'receipt_office_footer' => implode(', ', $footerParts),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function applyPosReceiptCompanyHeader(array $row, mysqli $conn): array
+    {
+        $header = $this->resolvePosReceiptCompanyHeader(
+            $conn,
+            trim((string)($row['order_id'] ?? ''))
+        );
+        foreach ($header as $key => $value) {
+            if ($key === 'receipt_company_address_lines') {
+                if (empty($row['receipt_company_address_lines']) || !is_array($row['receipt_company_address_lines'])) {
+                    $row['receipt_company_address_lines'] = $value;
+                }
+                continue;
+            }
+            if (trim((string)($row[$key] ?? '')) === '') {
+                $row[$key] = $value;
+            }
+        }
+
+        return $row;
     }
 
     /**
@@ -3529,26 +3806,19 @@ class POSRegisterController
         $dbPwu = isset($dbRow['product_weight_unit']) ? trim((string)$dbRow['product_weight_unit']) : '';
 
         $warehouseId = (int)($_SESSION['warehouse_id'] ?? 0);
-        $currentWarehouseName = '';
-        if ($warehouseId > 0 && !empty($conn)) {
-            require_once 'models/user/user.php';
+        $currentWarehouseName = trim((string)($_SESSION['pos_warehouse_name'] ?? ''));
+        if ($currentWarehouseName === '' && $warehouseId > 0 && !empty($conn)) {
             $usersModel = new User($conn);
             $whRow = $usersModel->getWarehouseById($warehouseId);
             if (!empty($whRow)) {
                 $currentWarehouseName = trim((string)($whRow['address_title'] ?? ''));
+                if ($currentWarehouseName !== '') {
+                    $_SESSION['pos_warehouse_name'] = $currentWarehouseName;
+                }
             }
         }
 
         $vpId = isset($dbRow['id']) ? (int)$dbRow['id'] : 0;
-        $warehouseLocationOut = '';
-        if ($vpId > 0 && $warehouseId > 0) {
-            $snap = $this->getWarehouseStockSnapshotForProductId($conn, $vpId, $warehouseId);
-            $stockQtyOut = $snap['running_stock'];
-            $warehouseLocationOut = $snap['location'];
-        } else {
-            $stockQtyOut = $data['stock'] ?? 0;
-        }
-
         $stockContext = ($vpId > 0)
             ? $this->resolvePosStockContext($conn, $vpId, $warehouseId, $currentWarehouseName)
             : [
@@ -3560,24 +3830,20 @@ class POSRegisterController
                 'alternative_warehouses' => [],
                 'mapped_at_current' => false,
                 'mapped_anywhere' => false,
+                'current_stock_qty' => 0.0,
+                'current_location' => '',
+                'total_qty_all_warehouses' => null,
+                'default_store_qty' => null,
+                'default_store_name' => '',
             ];
 
-        $siblingSkus = [];
-        if ($dbItemCode !== '') {
-            $siblingSkus = $this->fetchSiblingSkusByItemCode($conn, $dbItemCode, trim($code), $warehouseId);
-        }
-
-        $totalQtyAllWarehouses = null;
-        $defaultStoreQty = null;
-        $defaultStoreName = '';
-        if ($vpId > 0) {
-            $totalQtyAllWarehouses = $this->getTotalStockAcrossWarehouses($conn, $vpId);
-            $defWh = $this->getDefaultWarehouseRow($conn);
-            if ($defWh !== null) {
-                $defaultStoreName = $defWh['address_title'];
-                $defaultStoreQty = $this->getWarehouseStockSnapshotForProductId($conn, $vpId, (int)$defWh['id'])['running_stock'];
-            }
-        }
+        $stockQtyOut = $vpId > 0
+            ? (float)($stockContext['current_stock_qty'] ?? 0)
+            : ($data['stock'] ?? 0);
+        $warehouseLocationOut = (string)($stockContext['current_location'] ?? '');
+        $totalQtyAllWarehouses = $stockContext['total_qty_all_warehouses'] ?? null;
+        $defaultStoreQty = $stockContext['default_store_qty'] ?? null;
+        $defaultStoreName = (string)($stockContext['default_store_name'] ?? '');
 
         $mrpOut = $this->mergeMrpRupee($data, $dbRow);
         if ($mrpOut <= 0 && $data2 !== null) {
@@ -3630,7 +3896,6 @@ class POSRegisterController
             'express_shipping_cost' => $data['express_shipping_cost'] ?? 0,
             'express_shipping_option' => $data['express_shipping_option'] ?? null,
             'addon_options' => $this->normalizePosAddonOptions(is_array($data['addon_options'] ?? null) ? $data['addon_options'] : []),
-            'sibling_skus' => $siblingSkus,
             'item_level' => trim((string)($dbRow['item_level'] ?? '')),
             'is_parent_level' => $this->isParentItemLevel($dbRow['item_level'] ?? ''),
         ];
@@ -4315,7 +4580,34 @@ class POSRegisterController
         return $payload;
     }
 
-    private function validatePosCheckoutAddressPayload(array $payload): array
+    private function posPhoneMatchesCountryIso(string $phone, string $countryIso, mysqli $conn): bool
+    {
+        $digits = preg_replace('/\D+/', '', $phone);
+        $countryIso = strtoupper(substr(trim($countryIso), 0, 2));
+        if ($digits === '' || $countryIso === '') {
+            return true;
+        }
+
+        require_once dirname(__DIR__) . '/helpers/courier/country_codes.php';
+        $country = getCountryByIso2($countryIso, $conn);
+        $expected = preg_replace('/\D+/', '', (string)($country['phone_code'] ?? ''));
+        if ($expected === '') {
+            return true;
+        }
+        if (str_starts_with($digits, $expected)) {
+            return true;
+        }
+        if ($countryIso === 'IN' && strlen($digits) === 10 && preg_match('/^[6-9]/', $digits)) {
+            return true;
+        }
+        if ($countryIso === 'US' && strlen($digits) === 10) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function validatePosCheckoutAddressPayload(array $payload, ?mysqli $conn = null): array
     {
         $errors = [];
         if (trim((string)($payload['confirm_first_name'] ?? '')) === '') {
@@ -4332,6 +4624,21 @@ class POSRegisterController
         }
         if (trim((string)($payload['confirm_phone'] ?? '')) === '') {
             $errors[] = 'Phone';
+        } elseif ($conn instanceof mysqli) {
+            $billingCountry = strtoupper(substr(trim((string)($payload['confirm_country'] ?? 'IN')), 0, 2));
+            if (!$this->posPhoneMatchesCountryIso((string)$payload['confirm_phone'], $billingCountry, $conn)) {
+                $errors[] = 'Billing phone country code must match billing country';
+            }
+        }
+
+        $shippingSame = !empty($payload['confirm_shipping_same_as_billing'])
+            || (string)($payload['confirm_shipping_same_as_billing'] ?? '') === '1';
+        $shippingPhone = trim((string)($payload['confirm_sphone'] ?? ''));
+        if (!$shippingSame && $shippingPhone !== '' && $conn instanceof mysqli) {
+            $shippingCountry = strtoupper(substr(trim((string)($payload['confirm_scountry'] ?? 'IN')), 0, 2));
+            if (!$this->posPhoneMatchesCountryIso($shippingPhone, $shippingCountry, $conn)) {
+                $errors[] = 'Shipping phone country code must match shipping country';
+            }
         }
 
         return $errors;
@@ -4409,7 +4716,7 @@ class POSRegisterController
             exit;
         }
 
-        $addressErrors = $this->validatePosCheckoutAddressPayload($payload);
+        $addressErrors = $this->validatePosCheckoutAddressPayload($payload, $conn);
         if (!empty($addressErrors)) {
             echo json_encode([
                 'success' => false,
@@ -4503,28 +4810,73 @@ class POSRegisterController
             ],
         ];
 
+        $exoticSyncPending = false;
+        $localFallbackMessage = '';
+
         if (!CartResponseParser::isSuccess($createRes)) {
             $d = is_array($createRes['data'] ?? null) ? $createRes['data'] : [];
-            $msg = trim((string)($d['message'] ?? $d['error'] ?? $d['errormessage'] ?? ''));
-            if ($msg === '') {
-                $msg = 'Order create failed (HTTP ' . (int)($createRes['code'] ?? 0) . ').';
+            $apiMsg = trim((string)($d['message'] ?? $d['error'] ?? $d['errormessage'] ?? ''));
+            if ($apiMsg === '') {
+                $apiMsg = 'Order create failed (HTTP ' . (int)($createRes['code'] ?? 0) . ').';
             }
-            echo json_encode([
-                'success' => false,
-                'message' => $msg,
-                'order_create_debug' => $_SESSION['pos_order_create_api_debug'],
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
-        }
 
-        $orderNumber = OrderResponseParser::extractOrderNumber(is_array($createRes['data'] ?? null) ? $createRes['data'] : []);
-        if ($orderNumber === '') {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Order was created but no order number was returned. Check Last order-create API in the payment modal.',
-                'order_create_debug' => $_SESSION['pos_order_create_api_debug'],
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
+            $confirmLocalFallback = !empty($payload['confirm_local_fallback'])
+                || (string)($payload['confirm_local_fallback'] ?? '') === '1';
+
+            if (!$confirmLocalFallback) {
+                echo json_encode([
+                    'success' => false,
+                    'requires_local_fallback_confirm' => true,
+                    'api_error_message' => $apiMsg,
+                    'message' => 'Export to Exotic website failed.',
+                    'order_create_debug' => $_SESSION['pos_order_create_api_debug'],
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+
+            require_once dirname(__DIR__) . '/helpers/pos_local_checkout_order.php';
+            $invoiceLinePricesForLocal = is_array($payload['pos_line_prices'] ?? null) ? $payload['pos_line_prices'] : [];
+            $listLinePricesForLocal = is_array($payload['list_line_prices'] ?? null) ? $payload['list_line_prices'] : [];
+            $fallback = pos_local_checkout_try_create_when_api_fails(
+                $conn,
+                $payload,
+                $cartData,
+                $orderTotal,
+                $customerId,
+                $paymentMode,
+                $txn,
+                (string)$deliveryStatus['local_status'],
+                $invoiceLinePricesForLocal,
+                $listLinePricesForLocal,
+                $createRes,
+                $postBody,
+                [
+                    'query' => $ctx['query'] ?? [],
+                    'extraHeaders' => $ctx['extraHeaders'] ?? [],
+                ]
+            );
+            if (empty($fallback['success'])) {
+                $fallbackDetail = trim((string)($fallback['message'] ?? ''));
+                echo json_encode([
+                    'success' => false,
+                    'message' => $fallbackDetail !== '' ? $fallbackDetail : $apiMsg,
+                    'order_create_debug' => $_SESSION['pos_order_create_api_debug'],
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+            $orderNumber = trim((string)($fallback['order_number'] ?? ''));
+            $exoticSyncPending = true;
+            $localFallbackMessage = trim((string)($fallback['message'] ?? ''));
+        } else {
+            $orderNumber = OrderResponseParser::extractOrderNumber(is_array($createRes['data'] ?? null) ? $createRes['data'] : []);
+            if ($orderNumber === '') {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Order was created but no order number was returned. Check Last order-create API in the payment modal.',
+                    'order_create_debug' => $_SESSION['pos_order_create_api_debug'],
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
         }
 
         $this->persistVpOrderInfoTradeName(
@@ -4535,14 +4887,15 @@ class POSRegisterController
         );
 
         $editLinePrices = $payload['list_line_prices'] ?? null;
-        if (!is_array($editLinePrices) || count($editLinePrices) === 0) {
-            $editLinePrices = $this->buildPosListLinePricesFromCart($cartData);
+        if (!is_array($editLinePrices)) {
+            $editLinePrices = [];
         }
         $invoiceLinePrices = $payload['pos_line_prices'] ?? [];
         if (!is_array($invoiceLinePrices)) {
             $invoiceLinePrices = [];
         }
-        if (is_array($editLinePrices) && count($editLinePrices) > 0) {
+        $linePricesSyncWarning = '';
+        if (!$exoticSyncPending && count($editLinePrices) > 0) {
             if (count($editLinePrices) !== count($items)) {
                 echo json_encode([
                     'success' => false,
@@ -4577,14 +4930,9 @@ class POSRegisterController
                 if ($em === '') {
                     $em = 'HTTP ' . (int)($editRes['code'] ?? 0);
                 }
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'Order ' . $orderNumber . ' was created but Exotic rejected line prices: ' . $em
-                        . ' You may need to fix prices manually or retry before recording payment locally.',
-                    'order_number' => $orderNumber,
-                    'order_create_debug' => $_SESSION['pos_order_create_api_debug'] ?? null,
-                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                exit;
+                $linePricesSyncWarning = 'Order ' . $orderNumber . ' was created but Exotic rejected line prices: ' . $em
+                    . ' Payment was recorded locally; fix line prices on Exotic if needed.';
+                error_log('[POS checkout line prices] ' . $linePricesSyncWarning);
             }
         }
 
@@ -4723,6 +5071,16 @@ class POSRegisterController
         $receiptGiftDiscount = round((float)($payload['receipt_gift_discount'] ?? 0), 2);
         $receiptLineDiscount = round((float)($payload['receipt_line_discount'] ?? 0), 2);
 
+        $receiptCompanyHeader = $conn instanceof mysqli
+            ? $this->resolvePosReceiptCompanyHeader($conn, $orderNumber)
+            : [
+                'receipt_company_legal_name' => 'EXOTIC INDIA ART PVT LTD',
+                'receipt_company_gstin' => '',
+                'receipt_company_pan' => '',
+                'receipt_company_address_lines' => [],
+                'receipt_office_footer' => '',
+            ];
+
         $_SESSION['pos_last_checkout_receipt'] = [
             'receipt_number' => $receiptNo,
             'receipt_date_formatted' => $dt->format('d M Y, h:i A'),
@@ -4767,25 +5125,35 @@ class POSRegisterController
             'invoice_preview_url' => $invoiceMeta['invoice_preview_url'] ?? '',
             'invoice_pdf_disabled_hint' => $invoiceMeta['invoice_pdf_disabled_hint'],
             'is_payment_in_full' => ($paymentStage === 'final' && !$hasCodPending && (float)($pay['pending_amount'] ?? 0) <= 0.02),
-            'receipt_company_legal_name' => 'EXOTIC INDIA ART PVT LTD',
+            'receipt_company_legal_name' => $receiptCompanyHeader['receipt_company_legal_name'],
             'receipt_company_tagline' => '',
-            'receipt_company_gstin' => '',
-            'receipt_company_pan' => '',
+            'receipt_company_gstin' => $receiptCompanyHeader['receipt_company_gstin'],
+            'receipt_company_pan' => $receiptCompanyHeader['receipt_company_pan'],
+            'receipt_company_address_lines' => $receiptCompanyHeader['receipt_company_address_lines'],
             'receipt_title_main' => 'PAYMENT RECEIPT',
             'receipt_place_of_supply' => '',
             'receipt_terms' => [
                 'Goods once sold will not be taken back.',
                 'Subject to jurisdiction of competent courts at New Delhi.',
             ],
-            'receipt_office_footer' => '',
+            'receipt_office_footer' => $receiptCompanyHeader['receipt_office_footer'],
             'receipt_signature_date' => $dt->format('d M Y'),
             'payment_history_url' => 'index.php?page=payments&order_number=' . rawurlencode($orderNumber) . '&order_exact=1',
             'invoice_poitem_ids' => $this->resolveInvoicePoitemIdsForOrderNumber($conn, $orderNumber),
+            'exotic_sync_pending' => $exoticSyncPending,
         ];
 
         $successMessage = 'Order placed.';
+        if ($exoticSyncPending) {
+            $successMessage = $localFallbackMessage !== ''
+                ? $localFallbackMessage
+                : ('Order saved locally as ' . $orderNumber . '. Publish to Exotic when the API is available.');
+        }
         if (!empty($localStockWarnings)) {
             $successMessage .= ' Local stock warning: ' . count($localStockWarnings) . ' item(s) sold above local stock.';
+        }
+        if ($linePricesSyncWarning !== '') {
+            $successMessage .= ' ' . $linePricesSyncWarning;
         }
         if (!empty($fulfillmentStatusMeta['message']) && (empty($fulfillmentStatusMeta['local_updated']) || !empty($fulfillmentStatusMeta['api_failed']))) {
             $successMessage .= ' ' . $fulfillmentStatusMeta['message'];
@@ -4797,6 +5165,8 @@ class POSRegisterController
             'success' => true,
             'message' => $successMessage,
             'order_number' => $orderNumber,
+            'exotic_sync_pending' => $exoticSyncPending,
+            'line_prices_sync_warning' => $linePricesSyncWarning,
             'receipt_number' => $receiptNo,
             'payment_id' => (int)($pay['payment_id'] ?? 0),
             'payment_ids' => $paymentIds,
@@ -4846,6 +5216,7 @@ class POSRegisterController
         if (empty($row['invoice_poitem_ids']) || !is_array($row['invoice_poitem_ids'])) {
             $row['invoice_poitem_ids'] = $this->resolveInvoicePoitemIdsForOrderNumber($conn, $row['order_id'] ?? '');
         }
+        $row = $this->applyPosReceiptCompanyHeader($row, $conn);
         renderTemplateClean('views/pos_register/order_confirmation.php', $row, 'Order confirmation');
     }
 
@@ -5205,7 +5576,6 @@ class POSRegisterController
             $posMode = 'cod';
         }
         $storePaymentMode = $this->mapPosPaymentModeToExoticPaymentType($posMode);
-        $paymentType = $codAmount > 0.001 ? 'cod' : $storePaymentMode;
 
         /** Exact string from GET /cart/retrieve JSON — posted as-is (only URL-encoded as form field by HTTP client). */
         $checkoutdata = $this->extractCheckoutDataStringFromCart($cartData);
@@ -5237,7 +5607,8 @@ class POSRegisterController
         $txnField = $this->resolveStorePaymentTransactionId($txn);
 
         $out = [
-            'payment_type' => $paymentType,
+            // Exotic order/create requires payment_type=offline for counter sales; POS mode goes in store_payment_details.
+            'payment_type' => 'offline',
             'buynow' => '0',
             'checkoutdata' => $checkoutdata,
             'cod' => $codAmount > 0.001 ? '1' : '0',
@@ -5842,6 +6213,8 @@ class POSRegisterController
             0.0
         ), 2);
 
+        $receiptCompanyHeader = $this->resolvePosReceiptCompanyHeader($conn, $orderNumber);
+
         return [
             'receipt_number' => $receiptNo,
             'receipt_date_formatted' => $dt->format('d M Y, h:i A'),
@@ -5886,17 +6259,18 @@ class POSRegisterController
             'invoice_preview_url' => '',
             'invoice_pdf_disabled_hint' => 'Tax invoice is available after payment is received in full.',
             'is_payment_in_full' => ($paymentStage === 'final' && !$hasCodPending && $pendingAmount <= 0.02),
-            'receipt_company_legal_name' => 'EXOTIC INDIA ART PVT LTD',
+            'receipt_company_legal_name' => $receiptCompanyHeader['receipt_company_legal_name'],
             'receipt_company_tagline' => '',
-            'receipt_company_gstin' => '',
-            'receipt_company_pan' => '',
+            'receipt_company_gstin' => $receiptCompanyHeader['receipt_company_gstin'],
+            'receipt_company_pan' => $receiptCompanyHeader['receipt_company_pan'],
+            'receipt_company_address_lines' => $receiptCompanyHeader['receipt_company_address_lines'],
             'receipt_title_main' => 'PAYMENT RECEIPT',
             'receipt_place_of_supply' => '',
             'receipt_terms' => [
                 'Goods once sold will not be taken back.',
                 'Subject to jurisdiction of competent courts at New Delhi.',
             ],
-            'receipt_office_footer' => '',
+            'receipt_office_footer' => $receiptCompanyHeader['receipt_office_footer'],
             'receipt_signature_date' => $dt->format('d M Y'),
             'payment_history_url' => 'index.php?page=payments&order_number=' . rawurlencode($orderNumber) . '&order_exact=1',
             'invoice_poitem_ids' => $this->resolveInvoicePoitemIdsForOrderNumber($conn, $orderNumber),

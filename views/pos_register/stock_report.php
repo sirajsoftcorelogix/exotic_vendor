@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/../../helpers/stock_report_filters.php';
 $filtersPanelOpen = stockReportFiltersPanelOpen($filters ?? [], !empty($can_change_warehouse));
+$canBulkRefreshStock = !empty($can_bulk_refresh_stock);
+$stockReportTableColspan = $canBulkRefreshStock ? 8 : 7;
 $selectedCategory = (string)($filters['category'] ?? 'allProducts');
 $groupFilterFields = is_array($group_filter_fields ?? null) ? $group_filter_fields : getStockReportGroupFilterFieldDefinitions();
 $rowCount = is_array($rows ?? null) ? count($rows) : 0;
@@ -59,7 +61,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         </span>
         <div class="min-w-0">
           <h2 class="text-sm font-semibold text-gray-900">Search &amp; filters</h2>
-          <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Warehouse, keyword, location, group name, physical/local stock status, group-specific fields, and rows limit.</p>
+          <p class="text-xs text-gray-500 mt-0.5 hidden sm:block">Warehouse, keyword (multiple SKUs supported), location, group name, physical/local stock status, group-specific fields, and rows limit.</p>
         </div>
       </div>
       <span class="shrink-0 inline-flex items-center gap-2 text-xs font-semibold text-amber-800">
@@ -90,13 +92,13 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
 
         <div class="<?= !empty($can_change_warehouse) ? 'sm:col-span-2' : 'sm:col-span-2 lg:col-span-2' ?>">
           <label class="block text-xs font-semibold text-gray-600 mb-1">Keyword</label>
-          <input
-            type="text"
+          <textarea
             name="search"
-            value="<?= htmlspecialchars($filters['search'] ?? '') ?>"
-            placeholder="Item code, SKU, title"
-            class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition"
-          >
+            rows="2"
+            placeholder="Item code, SKU, or title — paste multiple SKUs separated by comma, space, or new line"
+            class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition resize-y min-h-[2.75rem]"
+          ><?= htmlspecialchars($filters['search'] ?? '') ?></textarea>
+          <p class="mt-1 text-[11px] text-gray-500">Paste from Excel or Google Sheets — one SKU per cell/row, or comma/space separated.</p>
         </div>
 
         <div>
@@ -235,7 +237,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
   <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-gray-50/80 px-5 py-3">
       <p class="text-sm text-gray-600">
-        <?php if (!empty($rows)): ?>
+        <?php if (!empty($rows) && $canBulkRefreshStock): ?>
           <span id="stockReportSelectedCount" class="font-semibold text-gray-900 tabular-nums">0</span>
           <span> selected on this page</span>
         <?php else: ?>
@@ -251,7 +253,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
           <i class="fas fa-file-excel text-xs" aria-hidden="true"></i>
           <span>Export to Excel</span>
         </button>
-        <?php if (!empty($rows)): ?>
+        <?php if ($canBulkRefreshStock && !empty($rows)): ?>
           <button
             type="button"
             id="stockReportBulkRefreshBtn"
@@ -267,6 +269,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
       <table class="min-w-full text-left">
         <thead class="sticky top-0 z-10">
           <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
+            <?php if ($canBulkRefreshStock): ?>
             <th class="px-5 py-3.5 whitespace-nowrap w-12">
               <?php if (!empty($rows)): ?>
                 <input
@@ -277,6 +280,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
                   title="Select all on this page">
               <?php endif; ?>
             </th>
+            <?php endif; ?>
             <th class="px-5 py-3.5 whitespace-nowrap">Image</th>
             <th class="px-5 py-3.5 whitespace-nowrap">SKU</th>
             <th class="px-5 py-3.5 whitespace-nowrap">Group Name</th>
@@ -289,7 +293,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
         <tbody class="divide-y divide-gray-100">
           <?php if (empty($rows)): ?>
             <tr>
-              <td colspan="8" class="px-5 py-16 text-center">
+              <td colspan="<?= (int) $stockReportTableColspan ?>" class="px-5 py-16 text-center">
                 <div class="mx-auto flex max-w-sm flex-col items-center">
                   <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
                     <i class="fas fa-inbox" aria-hidden="true"></i>
@@ -312,8 +316,12 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
               <?php
                 $productId = (int)($r['id'] ?? 0);
                 $skuLabel = trim((string)($r['sku'] ?? $r['item_code'] ?? ''));
+                $movementCount = (int)($r['movement_count'] ?? 0);
+                $soleMovementBalance = $movementCount === 1 ? (float)($r['min_running_stock'] ?? 0) : null;
+                $canInlineStockRefresh = isStockReportInlineRefreshEligible($movementCount, $soleMovementBalance);
               ?>
               <tr class="odd:bg-white even:bg-gray-50/40 hover:bg-amber-50/50 transition-colors" data-product-id="<?= $productId ?>">
+                <?php if ($canBulkRefreshStock): ?>
                 <td class="px-5 py-4 align-top">
                   <input
                     type="checkbox"
@@ -322,6 +330,7 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
                     data-sku-label="<?= htmlspecialchars($skuLabel, ENT_QUOTES, 'UTF-8') ?>"
                     aria-label="Select <?= htmlspecialchars($skuLabel, ENT_QUOTES, 'UTF-8') ?>">
                 </td>
+                <?php endif; ?>
                 <td class="px-5 py-4 align-top">
                   <img
                     src="<?= htmlspecialchars($imgUrl) ?>"
@@ -350,14 +359,27 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
                     <span class="inline-flex rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-500">N/A</span>
                   <?php endif; ?>
                 </td>
-                <td class="px-5 py-4 align-top">
-                  <?php if ($qty <= 0): ?>
-                    <span class="inline-flex rounded-full bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700">Out (0)</span>
-                  <?php elseif ($qty <= 5): ?>
-                    <span class="inline-flex rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700">Low (<?= $qty ?>)</span>
-                  <?php else: ?>
-                    <span class="inline-flex rounded-full bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700">In (<?= $qty ?>)</span>
-                  <?php endif; ?>
+                <td class="px-5 py-4 align-top stock-report-stock-cell" data-product-id="<?= $productId ?>">
+                  <div class="inline-flex items-center gap-2 flex-wrap">
+                    <?php if ($qty <= 0): ?>
+                      <span class="stock-report-stock-badge inline-flex rounded-full bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700">Out (0)</span>
+                    <?php elseif ($qty <= 5): ?>
+                      <span class="stock-report-stock-badge inline-flex rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700">Low (<?= $qty ?>)</span>
+                    <?php else: ?>
+                      <span class="stock-report-stock-badge inline-flex rounded-full bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700">In (<?= $qty ?>)</span>
+                    <?php endif; ?>
+                    <?php if ($canInlineStockRefresh): ?>
+                      <button
+                        type="button"
+                        class="stock-report-inline-refresh inline-flex h-7 w-7 items-center justify-center rounded-md border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-1 transition disabled:opacity-50 disabled:pointer-events-none"
+                        data-product-id="<?= $productId ?>"
+                        data-sku-label="<?= htmlspecialchars($skuLabel, ENT_QUOTES, 'UTF-8') ?>"
+                        title="Refresh stock from API (fresh item with no ledger history)"
+                        aria-label="Refresh stock from API for <?= htmlspecialchars($skuLabel, ENT_QUOTES, 'UTF-8') ?>">
+                        <i class="fas fa-sync-alt text-[11px]" aria-hidden="true"></i>
+                      </button>
+                    <?php endif; ?>
+                  </div>
                 </td>
                 <td class="px-5 py-4 align-top text-sm text-right font-semibold text-gray-900 tabular-nums">₹<?= number_format((float)($r['sell_price'] ?? 0), 2) ?></td>
                 <td class="px-5 py-4 align-top text-sm text-gray-800 max-w-[15rem] break-words leading-snug"><?= htmlspecialchars($r['title'] ?? '') ?></td>
@@ -606,6 +628,55 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
       chunks.push(ids.slice(i, i + size));
     }
     return chunks;
+  }
+
+  async function refreshStockReportRowInline(btn) {
+    const productId = parseInt(String(btn.dataset.productId || '0'), 10);
+    const skuLabel = String(btn.dataset.skuLabel || ('#' + productId)).trim();
+    if (productId <= 0) return;
+
+    const confirmed = window.confirm(
+      'Refresh stock for ' + skuLabel + '?\n\n' + STOCK_REPORT_REFRESH_CONFIRM
+    );
+    if (!confirmed) return;
+
+    const iconEl = btn.querySelector('i');
+    btn.disabled = true;
+    btn.classList.add('opacity-70', 'cursor-not-allowed');
+    if (iconEl) {
+      iconEl.classList.remove('fa-sync-alt');
+      iconEl.classList.add('fa-spinner', 'fa-spin');
+    }
+
+    try {
+      const res = await fetch('index.php?page=pos_register&action=stock-report-refresh', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ product_id: productId }),
+      });
+      const rawText = await res.text();
+      let data = null;
+      try {
+        data = rawText ? JSON.parse(rawText) : null;
+      } catch (parseErr) {
+        data = null;
+      }
+      if (!data || !data.success) {
+        throw new Error((data && data.message) ? data.message : 'Stock refresh failed.');
+      }
+
+      window.alert(data.message || ('Stock refreshed for ' + skuLabel + '.'));
+      window.location.reload();
+    } catch (err) {
+      window.alert(err && err.message ? err.message : 'Stock refresh failed.');
+      btn.disabled = false;
+      btn.classList.remove('opacity-70', 'cursor-not-allowed');
+      if (iconEl) {
+        iconEl.classList.remove('fa-spinner', 'fa-spin');
+        iconEl.classList.add('fa-sync-alt');
+      }
+    }
   }
 
   function setStockReportBulkUiLocked(locked) {
@@ -1678,6 +1749,13 @@ $pgBase = '?page=pos_register&action=stock-report' . $qs;
       groupSelect.addEventListener('change', syncStockReportGroupFilters);
     }
     syncStockReportGroupFilters();
+
+    document.addEventListener('click', (event) => {
+      const refreshBtn = event.target.closest('.stock-report-inline-refresh');
+      if (!refreshBtn || refreshBtn.disabled) return;
+      event.preventDefault();
+      refreshStockReportRowInline(refreshBtn);
+    });
 
     updateStockReportSelectionUi();
   });

@@ -2171,7 +2171,8 @@ class PosInvoiceController
             $posDiscountMeta = pos_invoice_apply_pricing_aggregate_to_pos_meta(
                 is_array($posDiscountMeta) ? $posDiscountMeta : [],
                 $pricingMapForPdf,
-                is_array($orderInfo) ? $orderInfo : null
+                is_array($orderInfo) ? $orderInfo : null,
+                $orderLines
             );
         }
         if (!empty($posDiscountMeta) && $pricingMapForPdf === []) {

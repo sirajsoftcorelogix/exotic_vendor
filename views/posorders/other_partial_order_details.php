@@ -86,6 +86,8 @@ $invoiceGoodsInclDisplay = number_format((float)($invoiceDisplay['subtotal_goods
 $invoiceGrandTotalDisplay = number_format((float)($invoiceDisplay['pdf_grand_total'] ?? $invoiceDisplay['grand_total'] ?? 0), 2);
 $paymentSummary = is_array($paymentSummary ?? null) ? $paymentSummary : ['order_total' => 0, 'paid_total' => 0, 'pending' => 0, 'is_fully_paid' => false, 'payments' => []];
 $paymentRows = is_array($paymentSummary['payments'] ?? null) ? $paymentSummary['payments'] : [];
+$creditAmount = (float)($paymentSummary['credit_amount'] ?? 0);
+$creditAmountDisplay = number_format($creditAmount, 2);
 $paymentOrderTotalDisplay = number_format((float)($paymentSummary['order_total'] ?? 0), 2);
 $paymentPaidTotalDisplay = number_format((float)($paymentSummary['paid_total'] ?? 0), 2);
 $paymentPendingDisplay = number_format((float)($paymentSummary['pending'] ?? 0), 2);
@@ -93,6 +95,9 @@ $paymentIsFullyPaid = !empty($paymentSummary['is_fully_paid']);
 $paymentPendingAmount = (float)($paymentSummary['pending'] ?? 0);
 $canAddOrderPayment = $paymentPendingAmount > 0.02;
 $canCreateFinalInvoice = !empty($canCreateFinalInvoice);
+$canPublishExoticSync = !empty($canPublishExoticSync);
+$hasExoticSyncPayload = !empty($hasExoticSyncPayload);
+$canFetchOrderJson = !empty($canFetchOrderJson);
 $paymentsListUrl = base_url('?page=payments&action=list&order_number=' . rawurlencode($displayOrderNumber) . '&order_exact=1');
 $salesReturnUrl = base_url('?page=sales_returns&action=create&order_number=' . rawurlencode($displayOrderNumber));
 $invoiceIdForReturn = is_array($invoiceDisplay) ? (int)($invoiceDisplay['id'] ?? 0) : 0;
@@ -115,9 +120,47 @@ $proformaPrintDisabledReason = $canPrintProforma
 ?>
 
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
+    <?php if ($canPublishExoticSync): ?>
+        <div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <p class="font-semibold">Local temp order — not on Exotic website yet</p>
+                    <p class="mt-1 text-xs text-amber-900/90">
+                        Use the publish icon next to the order number to send this order to Exotic.
+                        <?php if (!$hasExoticSyncPayload): ?>
+                            Saved checkout data is unavailable; items will be re-added to the Exotic cart automatically before order create.
+                        <?php else: ?>
+                            If the website cart expired, publish will rebuild the cart from these order lines and retry.
+                        <?php endif; ?>
+                    </p>
+                </div>
+                <button type="button"
+                    id="publish_exotic_sync_btn"
+                    onclick="publishExoticSyncOrder()"
+                    class="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800">
+                    Publish to Exotic
+                </button>
+            </div>
+            <p id="publish_exotic_sync_error" class="mt-2 hidden text-xs text-red-700"></p>
+            <p id="publish_exotic_sync_success" class="mt-2 hidden text-xs text-green-800"></p>
+        </div>
+    <?php endif; ?>
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-2">
             <h1 class="text-xl font-bold"><?php echo htmlspecialchars($displayOrderNumber); ?></h1>
+            <?php if ($canPublishExoticSync): ?>
+                <button type="button"
+                    id="publish_exotic_sync_icon_btn"
+                    onclick="publishExoticSyncOrder()"
+                    title="Publish to Exotic website (rebuilds cart if expired)"
+                    aria-label="Publish to Exotic website"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-300 bg-amber-50 text-amber-800 transition hover:bg-amber-100 hover:text-amber-950 disabled:cursor-not-allowed disabled:opacity-60">
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0l-4 4m4-4l4 4M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1" />
+                    </svg>
+                </button>
+                <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-900">Local temp</span>
+            <?php endif; ?>
             <!-- <span class="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white">Paid</span>
             <span class="rounded-full bg-red-500 px-3 py-1 text-xs font-semibold text-white">Canceled</span>
             <span class="rounded-full bg-yellow-500 px-3 py-1 text-xs font-semibold text-white">Refunded</span>
@@ -249,10 +292,6 @@ $proformaPrintDisabledReason = $canPrintProforma
                         $lineId = (int)($item['id'] ?? 0);
                         $lineStatus = (string)($item['status'] ?? '');
                         $lineStatusLabel = (string)($statusList[$lineStatus] ?? ucwords(str_replace('_', ' ', $lineStatus)));
-                        $lineAgentId = (int)($item['agent_id'] ?? 0);
-                        $lineAgentName = $lineAgentId > 0 ? (string)($staff_list[$lineAgentId] ?? 'N/A') : 'N/A';
-                        $linePriority = trim((string)($item['priority'] ?? ''));
-                        $lineEsd = trim((string)($item['esd'] ?? ''));
                         $statusOrderPayload = $buildStatusOrderPayload($item);
                     ?>
                         <div class="flex items-center gap-4 accordion-trigger">
@@ -305,11 +344,6 @@ $proformaPrintDisabledReason = $canPrintProforma
                                                     </p>
                                                 <?php endforeach; ?>
                                             <?php endif; ?>
-                                            <div class="grid grid-cols-1 gap-1 pt-2 text-[12px] text-black-600">
-                                                <p><span class="font-bold text-black">Priority</span>: <?php echo $linePriority !== '' ? htmlspecialchars(ucfirst($linePriority)) : '—'; ?></p>
-                                                <p><span class="font-bold text-black">Agent</span>: <?php echo htmlspecialchars($lineAgentName); ?></p>
-                                                <p><span class="font-bold text-black">Ship by</span>: <?php echo $lineEsd !== '' ? htmlspecialchars(date('d M Y', strtotime($lineEsd))) : '—'; ?></p>
-                                            </div>
                                         </div>
                                         <div class="flex items-center gap-12">
                                             <?php if ($hasExtendedPricing): ?>
@@ -725,12 +759,26 @@ $proformaPrintDisabledReason = $canPrintProforma
                         </div>
                     </div>
 
-                    <?php if ($paymentRows === []): ?>
+                    <?php if ($paymentRows === [] && $creditAmount <= 0.001): ?>
                         <div class="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
                             No payments recorded for this order yet.
                         </div>
                     <?php else: ?>
                         <div class="space-y-2">
+                            <?php if ($creditAmount > 0.001): ?>
+                                <div class="rounded-lg border border-gray-200 bg-white px-3 py-3">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div class="min-w-0">
+                                            <p class="text-sm font-semibold text-gray-900">Credit</p>
+                                            <p class="mt-0.5 text-xs text-gray-500">Store credit applied to this order</p>
+                                        </div>
+                                        <p class="text-sm font-bold tabular-nums text-gray-900">₹ <?php echo $creditAmountDisplay; ?></p>
+                                    </div>
+                                    <div class="mt-2 flex flex-wrap gap-1.5">
+                                        <span class="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">Credit</span>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                             <?php foreach ($paymentRows as $paymentRow):
                                 $paymentId = (int)($paymentRow['id'] ?? 0);
                                 $receiptLabel = trim((string)($paymentRow['receipt_number'] ?? ''));
@@ -833,6 +881,18 @@ $proformaPrintDisabledReason = $canPrintProforma
                     </div>
                 <?php endif; ?>
             </div>
+
+            <?php if ($canFetchOrderJson): ?>
+                <div class="flex justify-end">
+                    <button type="button"
+                        id="fetch_order_json_btn"
+                        onclick="openOrderJsonModal()"
+                        title="Fetch live JSON from Exotic vendor API (read-only)"
+                        class="text-xs font-normal text-red-600 hover:text-red-700 underline-offset-2 hover:underline">
+                        Exotic API JSON
+                    </button>
+                </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>
@@ -1000,6 +1060,29 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
 </div>
 <?php endif; ?>
 
+<?php if ($canFetchOrderJson): ?>
+<div id="orderJsonModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[90] p-4" onclick="closeOrderJsonModal(event)">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col relative" onclick="event.stopPropagation();">
+        <button type="button" onclick="closeOrderJsonModal()" class="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-sm z-10">✕</button>
+        <div class="p-5 border-b border-gray-200 pr-14">
+            <h2 class="text-lg font-bold text-gray-900">Exotic vendor API JSON</h2>
+            <p class="text-sm text-gray-600 mt-1">Live response from <code class="text-xs bg-gray-100 px-1 rounded">vendor-api/order/fetch</code> for order <strong id="orderJsonOrderLabel"><?php echo htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8'); ?></strong>. Read-only — does not update local data.</p>
+        </div>
+        <div class="p-5 overflow-y-auto flex-1 min-h-0">
+            <div id="orderJsonLoading" class="hidden text-sm text-gray-600 mb-3">Fetching latest JSON from Exotic…</div>
+            <div id="orderJsonError" class="hidden text-sm text-red-600 mb-3"></div>
+            <div id="orderJsonMeta" class="hidden text-xs text-gray-500 mb-2"></div>
+            <pre id="orderJsonPre" class="hidden text-xs leading-relaxed bg-gray-900 text-green-100 rounded-lg p-4 overflow-x-auto whitespace-pre-wrap break-words max-h-[60vh]"></pre>
+        </div>
+        <div class="p-5 border-t border-gray-200 flex justify-end gap-3">
+            <button type="button" id="orderJsonCopyBtn" disabled onclick="copyOrderJson()" class="px-4 py-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed">Copy JSON</button>
+            <button type="button" onclick="refetchOrderJson()" class="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700">Refetch</button>
+            <button type="button" onclick="closeOrderJsonModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">Close</button>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <div id="statusPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50 p-4" onclick="closeStatusPopup(event)">
     <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative" onclick="event.stopPropagation();">
         <button type="button" onclick="closeStatusPopup()" class="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
@@ -1080,6 +1163,15 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
 </div>
 
 <script src="<?php echo base_url(); ?>assets/js/pos_payment_split.js"></script>
+<?php if ($canFetchOrderJson): ?>
+<script>
+window.orderJsonModalConfig = {
+    orderNumber: <?php echo json_encode($displayOrderNumber, JSON_UNESCAPED_UNICODE); ?>,
+    fetchUrl: <?php echo json_encode(base_url('index.php?page=posorders&action=fetch_order_json'), JSON_UNESCAPED_UNICODE); ?>
+};
+</script>
+<script src="<?php echo base_url('assets/js/order_json_modal.js'); ?>"></script>
+<?php endif; ?>
 <script>
     function openInvoiceNumberEditPopup(invoiceId, currentNumber) {
         document.getElementById('edit_invoice_id').value = invoiceId;
@@ -1671,6 +1763,87 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
             .finally(function() {
                 if (submitBtn) {
                     submitBtn.disabled = false;
+                }
+            });
+    }
+
+    function publishExoticSyncOrder() {
+        var btn = document.getElementById('publish_exotic_sync_btn');
+        var iconBtn = document.getElementById('publish_exotic_sync_icon_btn');
+        var errEl = document.getElementById('publish_exotic_sync_error');
+        var okEl = document.getElementById('publish_exotic_sync_success');
+        if (errEl) {
+            errEl.classList.add('hidden');
+            errEl.textContent = '';
+        }
+        if (okEl) {
+            okEl.classList.add('hidden');
+            okEl.textContent = '';
+        }
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Publishing…';
+        }
+        if (iconBtn) {
+            iconBtn.disabled = true;
+        }
+
+        var formData = new FormData();
+        formData.append('order_number', orderPaymentState.orderNumber);
+
+        fetch('index.php?page=posorders&action=publish_exotic_sync', {
+            method: 'POST',
+            body: formData,
+        })
+            .then(function(res) { return res.text(); })
+            .then(function(text) {
+                var data;
+                try {
+                    data = JSON.parse(text);
+                } catch (parseErr) {
+                    throw new Error((text || '').trim().slice(0, 200) || 'Invalid server response');
+                }
+                if (!data.success) {
+                    var failMsg = data.message || 'Could not publish to Exotic.';
+                    if (errEl) {
+                        errEl.textContent = failMsg;
+                        errEl.classList.remove('hidden');
+                    } else {
+                        alert(failMsg);
+                    }
+                    return;
+                }
+
+                var msg = data.message || 'Published to Exotic.';
+                if (data.new_order_number && data.new_order_number !== orderPaymentState.orderNumber) {
+                    window.location.href = '?page=posorders&action=get_order_details_html&type=outer&order_number='
+                        + encodeURIComponent(data.new_order_number);
+                    return;
+                }
+
+                if (okEl) {
+                    okEl.textContent = msg;
+                    okEl.classList.remove('hidden');
+                } else {
+                    alert(msg);
+                }
+                window.location.reload();
+            })
+            .catch(function(err) {
+                if (errEl) {
+                    errEl.textContent = err && err.message ? err.message : 'Publish request failed.';
+                    errEl.classList.remove('hidden');
+                } else {
+                    alert(err && err.message ? err.message : 'Publish request failed.');
+                }
+            })
+            .finally(function() {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Publish to Exotic';
+                }
+                if (iconBtn) {
+                    iconBtn.disabled = false;
                 }
             });
     }

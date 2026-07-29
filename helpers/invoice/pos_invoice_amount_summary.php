@@ -24,9 +24,86 @@ function pos_invoice_custom_discount_label(array $posMeta): string
 
 function pos_invoice_coupon_label(array $posMeta): string
 {
-    $name = trim((string)($posMeta['coupon_display_name'] ?? ''));
+    $raw = pos_order_pick_best_coupon_raw([
+        $posMeta['coupon_raw'] ?? '',
+        $posMeta['coupon_display_name'] ?? '',
+    ]);
 
-    return $name !== '' ? 'Coupon (' . $name . ')' : 'Coupon';
+    return pos_order_coupon_discount_label($raw);
+}
+
+/**
+ * Exotic API coupon field e.g. UNI37|c|1550 → display code UNI37.
+ */
+function pos_order_parse_coupon_code(string $couponRaw): string
+{
+    $couponRaw = trim($couponRaw);
+    if ($couponRaw === '' || $couponRaw === '0') {
+        return '';
+    }
+
+    if (str_contains($couponRaw, '|')) {
+        $parts = explode('|', $couponRaw);
+        $code = trim((string)($parts[0] ?? ''));
+        if ($code !== '' && $code !== '0') {
+            return $code;
+        }
+    }
+
+    return $couponRaw;
+}
+
+/**
+ * Prefer full Exotic coupon string (UNI37|c|1550) over stale vp_order_info "0".
+ *
+ * @param list<mixed> $candidates
+ */
+function pos_order_pick_best_coupon_raw(array $candidates): string
+{
+    $normalized = [];
+    foreach ($candidates as $candidate) {
+        $raw = trim((string)$candidate);
+        if ($raw === '' || $raw === '0') {
+            continue;
+        }
+        $normalized[] = $raw;
+    }
+
+    if ($normalized === []) {
+        return '';
+    }
+
+    foreach ($normalized as $raw) {
+        if (str_contains($raw, '|')) {
+            return $raw;
+        }
+    }
+
+    return $normalized[0];
+}
+
+function pos_order_coupon_discount_label(string $couponRaw): string
+{
+    $code = pos_order_parse_coupon_code($couponRaw);
+
+    return $code !== '' ? 'Coupon(' . $code . '):' : 'Coupon:';
+}
+
+function pos_order_gift_voucher_discount_label(string $giftVoucherRaw): string
+{
+    $id = trim($giftVoucherRaw);
+
+    return $id !== '' ? 'Gift Voucher(' . $id . '):' : 'Gift Voucher:';
+}
+
+function pos_order_custom_discount_display_label(array $posMeta = []): string
+{
+    $mode = trim((string)($posMeta['custom_discount_mode'] ?? ''));
+    if ($mode === 'percent' && round((float)($posMeta['custom_discount_value'] ?? 0), 2) > 0) {
+        return pos_invoice_custom_discount_label($posMeta) . ':';
+    }
+
+    return 'Custom Discount:';
 }
 
 /**
@@ -97,7 +174,7 @@ function pos_invoice_build_amount_summary_rows(
         }
         if ($cash > 0.001) {
             $rows[] = [
-                'label' => pos_invoice_custom_discount_label($posMeta),
+                'label' => pos_order_custom_discount_display_label($posMeta),
                 'amount' => $cash,
                 'note' => '',
                 'is_grand' => false,
@@ -112,8 +189,9 @@ function pos_invoice_build_amount_summary_rows(
             ];
         }
         if ($gift > 0.001) {
+            $giftName = trim((string)($posMeta['gift_voucher_name'] ?? ''));
             $rows[] = [
-                'label' => 'Gift Voucher',
+                'label' => pos_order_gift_voucher_discount_label($giftName),
                 'amount' => $gift,
                 'note' => '',
                 'is_grand' => false,
@@ -153,7 +231,7 @@ function pos_invoice_build_amount_summary_rows(
     }
     if ($cash > 0) {
         $rows[] = [
-            'label' => pos_invoice_custom_discount_label($posMeta),
+            'label' => pos_order_custom_discount_display_label($posMeta),
             'amount' => $cash,
             'note' => $absorbedNote,
             'is_grand' => false,
@@ -168,8 +246,9 @@ function pos_invoice_build_amount_summary_rows(
         ];
     }
     if ($gift > 0) {
+        $giftName = trim((string)($posMeta['gift_voucher_name'] ?? ''));
         $rows[] = [
-            'label' => 'Gift Voucher',
+            'label' => pos_order_gift_voucher_discount_label($giftName),
             'amount' => $gift,
             'note' => $absorbedNote,
             'is_grand' => false,

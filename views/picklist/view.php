@@ -85,19 +85,41 @@ include __DIR__ . '/partials/detail_hero.php';
                 <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
                     <th class="px-3 py-3 w-10"></th>
                     <th class="px-3 py-3 whitespace-nowrap">#</th>
-                    <th class="px-3 py-3 whitespace-nowrap">Location</th>
-                    <th class="px-3 py-3 whitespace-nowrap">Order #</th>
-                    <th class="px-3 py-3 whitespace-nowrap">SKU</th>
+                    <th class="px-2 py-3 whitespace-nowrap w-44 max-w-44">Location</th>
+                    <th class="px-3 py-3 whitespace-nowrap">
+                        <span class="inline-flex items-center gap-1.5">
+                            Order #
+                            <button type="button"
+                                    class="js-picklist-copy-column shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md border border-gray-200 bg-white text-gray-500 hover:text-amber-700 hover:border-amber-300 hover:bg-amber-50/50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                                    data-copy-column="order"
+                                    data-copy-label="Order numbers"
+                                    title="Copy all order numbers"
+                                    aria-label="Copy all order numbers">
+                                <i class="fas fa-copy text-[10px]" aria-hidden="true"></i>
+                            </button>
+                        </span>
+                    </th>
+                    <th class="px-3 py-3 whitespace-nowrap">
+                        <span class="inline-flex items-center gap-1.5">
+                            SKU
+                            <button type="button"
+                                    class="js-picklist-copy-column shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md border border-gray-200 bg-white text-gray-500 hover:text-amber-700 hover:border-amber-300 hover:bg-amber-50/50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                                    data-copy-column="sku"
+                                    data-copy-label="SKUs"
+                                    title="Copy all SKUs"
+                                    aria-label="Copy all SKUs">
+                                <i class="fas fa-copy text-[10px]" aria-hidden="true"></i>
+                            </button>
+                        </span>
+                    </th>
                     <th class="px-3 py-3 min-w-[12rem]">Item Title</th>
                     <th class="px-3 py-3 whitespace-nowrap">Image</th>
                     <th class="px-3 py-3 whitespace-nowrap">Phys Qty</th>
                     <th class="px-3 py-3 whitespace-nowrap">Order Qty</th>
                     <?php if ($showBookColumns): ?>
                         <th class="px-3 py-3 whitespace-nowrap">Publisher</th>
-                        <th class="px-3 py-3 whitespace-nowrap">Cover</th>
                     <?php endif; ?>
                     <th class="px-3 py-3 whitespace-nowrap">Status</th>
-                    <th class="px-3 py-3 whitespace-nowrap text-center min-w-[9rem]">Actions</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
@@ -126,9 +148,61 @@ include __DIR__ . '/partials/detail_hero.php';
                                    aria-label="Select item">
                         </td>
                         <td class="px-3 py-3 align-middle tabular-nums text-gray-500"><?= $idx + 1 ?></td>
-                        <td class="px-3 py-3 align-middle font-semibold text-amber-800 whitespace-nowrap"><?= htmlspecialchars((string) ($item['warehouse_location'] ?: '—')) ?></td>
-                        <td class="px-3 py-3 align-middle whitespace-nowrap font-mono text-xs text-gray-800">
-                            <?php $orderNumber = trim((string) ($item['order_number'] ?? '')); ?>
+                        <?php $locationText = (string) ($item['warehouse_location'] ?: '—'); ?>
+                        <?php $removeConfirm = 'Remove this item from the picklist? The order will be set back to Item Received where applicable.'; ?>
+                        <td class="picklist-row-actions px-2 py-3 align-middle max-w-44">
+                            <div class="flex items-center gap-1 min-w-0">
+                                <div class="relative shrink-0 picklist-row-menu">
+                                    <button type="button"
+                                            class="picklist-row-menu-btn inline-flex items-center justify-center w-7 h-7 rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                                            aria-haspopup="true"
+                                            aria-expanded="false"
+                                            title="Item actions">
+                                        <i class="fas fa-ellipsis-v text-xs" aria-hidden="true"></i>
+                                    </button>
+                                    <div class="picklist-row-menu-panel hidden absolute left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 text-left">
+                                        <?php if ($isPending): ?>
+                                            <button type="button"
+                                                    class="js-picklist-set-availability w-full text-left px-4 py-2 text-sm text-orange-800 hover:bg-orange-50 flex items-center gap-2"
+                                                    data-item-id="<?= (int) ($item['id'] ?? 0) ?>"
+                                                    data-status="partially_available">
+                                                <i class="fas fa-adjust w-4 text-center text-orange-600" aria-hidden="true"></i>
+                                                Mark partially available
+                                            </button>
+                                            <button type="button"
+                                                    class="js-picklist-set-availability w-full text-left px-4 py-2 text-sm text-red-800 hover:bg-red-50 flex items-center gap-2"
+                                                    data-item-id="<?= (int) ($item['id'] ?? 0) ?>"
+                                                    data-status="not_available">
+                                                <i class="fas fa-ban w-4 text-center text-red-600" aria-hidden="true"></i>
+                                                Mark not available
+                                            </button>
+                                        <?php endif; ?>
+                                        <?php if ($canRevert): ?>
+                                            <?php if ($isPending): ?><div class="my-1 border-t border-gray-100"></div><?php endif; ?>
+                                            <button type="button"
+                                                    class="js-picklist-unpick-item w-full text-left px-4 py-2 text-sm text-amber-800 hover:bg-amber-50 flex items-center gap-2"
+                                                    data-item-id="<?= (int) ($item['id'] ?? 0) ?>">
+                                                <i class="fas fa-undo w-4 text-center text-amber-600" aria-hidden="true"></i>
+                                                Revert to pending
+                                            </button>
+                                        <?php endif; ?>
+                                        <?php if ($isPending || $canRevert): ?><div class="my-1 border-t border-gray-100"></div><?php endif; ?>
+                                        <a href="#"
+                                           class="js-picklist-confirm-action block px-4 py-2 text-sm text-red-700 hover:bg-red-50 flex items-center gap-2"
+                                           data-confirm="<?= htmlspecialchars($removeConfirm, ENT_QUOTES, 'UTF-8') ?>"
+                                           data-item-id="<?= (int) ($item['id'] ?? 0) ?>">
+                                            <i class="fas fa-times w-4 text-center text-red-600" aria-hidden="true"></i>
+                                            Remove from picklist
+                                        </a>
+                                    </div>
+                                </div>
+                                <span class="font-semibold text-amber-800 truncate min-w-0" title="<?= htmlspecialchars($locationText, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($locationText) ?></span>
+                            </div>
+                        </td>
+                        <?php $orderNumber = trim((string) ($item['order_number'] ?? '')); ?>
+                        <td class="px-3 py-3 align-middle whitespace-nowrap font-mono text-xs text-gray-800"
+                            data-picklist-column="order"
+                            data-picklist-column-value="<?= htmlspecialchars($orderNumber, ENT_QUOTES, 'UTF-8') ?>">
                             <?php if ($orderNumber !== ''): ?>
                                 <span class="inline-flex items-center gap-1.5">
                                     <span><?= htmlspecialchars($orderNumber) ?></span>
@@ -145,8 +219,10 @@ include __DIR__ . '/partials/detail_hero.php';
                                 —
                             <?php endif; ?>
                         </td>
-                        <td class="px-3 py-3 align-middle whitespace-nowrap text-gray-700">
-                            <?php $skuText = picklist_item_sku($item); ?>
+                        <?php $skuText = picklist_item_sku($item); ?>
+                        <td class="px-3 py-3 align-middle whitespace-nowrap text-gray-700"
+                            data-picklist-column="sku"
+                            data-picklist-column-value="<?= htmlspecialchars($skuText, ENT_QUOTES, 'UTF-8') ?>">
                             <?php if ($skuText !== ''): ?>
                                 <span class="inline-flex items-center gap-1.5 max-w-[12rem]">
                                     <span class="truncate font-medium"><?= htmlspecialchars($skuText) ?></span>
@@ -191,7 +267,6 @@ include __DIR__ . '/partials/detail_hero.php';
                         <td class="px-3 py-3 align-middle font-semibold tabular-nums"><?= (int) ($item['quantity'] ?? 1) ?></td>
                         <?php if ($showBookColumns): ?>
                             <td class="px-3 py-3 align-middle text-gray-700"><?= $isBook ? htmlspecialchars((string) ($item['publisher'] ?? '—')) : '—' ?></td>
-                            <td class="px-3 py-3 align-middle text-gray-700"><?= $isBook ? htmlspecialchars((string) ($item['cover_type'] ?? '—')) : '—' ?></td>
                         <?php endif; ?>
                         <td class="px-3 py-3 align-middle whitespace-nowrap">
                             <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border <?= $itemStatusClass ?>">
@@ -201,47 +276,11 @@ include __DIR__ . '/partials/detail_hero.php';
                                 <div class="text-[11px] text-gray-500 mt-1 tabular-nums"><?= date('d M, H:i', strtotime($item['picked_at'])) ?></div>
                             <?php endif; ?>
                         </td>
-                        <td class="picklist-row-actions px-3 py-3 align-middle">
-                            <div class="flex flex-wrap items-center justify-center gap-1.5">
-                                <?php if ($isPending): ?>
-                                    <button type="button"
-                                            class="js-picklist-set-availability inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-orange-200 bg-orange-50 text-orange-800 text-xs font-semibold shadow-sm hover:bg-orange-100 transition"
-                                            data-item-id="<?= (int) ($item['id'] ?? 0) ?>"
-                                            data-status="partially_available"
-                                            title="Mark partially available">
-                                        <i class="fas fa-adjust text-[10px]" aria-hidden="true"></i> Partial
-                                    </button>
-                                    <button type="button"
-                                            class="js-picklist-set-availability inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-800 text-xs font-semibold shadow-sm hover:bg-red-100 transition"
-                                            data-item-id="<?= (int) ($item['id'] ?? 0) ?>"
-                                            data-status="not_available"
-                                            title="Mark not available">
-                                        <i class="fas fa-ban text-[10px]" aria-hidden="true"></i> N/A
-                                    </button>
-                                <?php endif; ?>
-                                <?php if ($canRevert): ?>
-                                    <button type="button"
-                                            class="js-picklist-unpick-item inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-xs font-semibold shadow-sm hover:bg-amber-100 transition"
-                                            data-item-id="<?= (int) ($item['id'] ?? 0) ?>"
-                                            title="Revert to pending">
-                                        <i class="fas fa-undo text-[10px]" aria-hidden="true"></i> Revert
-                                    </button>
-                                <?php endif; ?>
-                                <?php $removeConfirm = 'Remove this item from the picklist? The order will be set back to Item Received where applicable.'; ?>
-                                <a href="#"
-                                   class="js-picklist-confirm-action inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-semibold shadow-sm hover:bg-red-100 transition"
-                                   data-confirm="<?= htmlspecialchars($removeConfirm, ENT_QUOTES, 'UTF-8') ?>"
-                                   data-item-id="<?= (int) ($item['id'] ?? 0) ?>"
-                                   title="Remove from picklist">
-                                    <i class="fas fa-times text-[10px]" aria-hidden="true"></i> Remove
-                                </a>
-                            </div>
-                        </td>
                     </tr>
                 <?php endforeach; ?>
                 <?php if ($items === []): ?>
                     <tr>
-                        <td colspan="<?= $showBookColumns ? 13 : 11 ?>" class="px-3 py-16 text-center">
+                        <td colspan="<?= $showBookColumns ? 11 : 10 ?>" class="px-3 py-16 text-center">
                             <div class="mx-auto flex max-w-sm flex-col items-center">
                                 <span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 text-xl mb-4">
                                     <i class="fas fa-box-open" aria-hidden="true"></i>
@@ -268,3 +307,4 @@ include __DIR__ . '/partials/detail_hero.php';
 <?php require_once __DIR__ . '/partials/image_lightbox.php'; ?>
 <?php require_once __DIR__ . '/partials/copy_sku_script.php'; ?>
 <?php require_once __DIR__ . '/partials/availability_script.php'; ?>
+<?php require_once __DIR__ . '/partials/row_menu_script.php'; ?>

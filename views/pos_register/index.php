@@ -105,6 +105,23 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       color: #dc2626 !important;
       font-weight: 700;
     }
+    #addressConfirmModal .pos-phone-row {
+      display: grid;
+      grid-template-columns: 4.5rem minmax(0, 1fr);
+      gap: 0.5rem;
+      margin-top: 0.25rem;
+    }
+    #addressConfirmModal .pos-phone-code-select {
+      width: 100%;
+      min-width: 0;
+      padding-left: 0.35rem;
+      padding-right: 0.25rem;
+      font-size: 0.8125rem;
+      text-align: center;
+    }
+    #addressConfirmModal .pos-phone-number-input {
+      min-width: 0;
+    }
   </style>
   <?php
   $posCountryList = isset($country_list) && is_array($country_list)
@@ -126,6 +143,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     window.POS_COUNTRY_ISO_BY_NAME = <?= json_encode($posCountryIsoByName, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_INDIA_STATES = <?= json_encode($pos_india_states ?? [], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_COUNTRY_STATES = <?= json_encode($pos_country_states ?? ['IN' => ($pos_india_states ?? [])], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
+    window.POS_COUNTRY_PHONE_CODES = <?= json_encode($pos_country_phone_codes ?? ['IN' => '91'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_DEFAULT_STATE = "Delhi";
     window.POS_STORE_PINCODE = <?= json_encode(trim((string)($pos_store_pincode ?? '')), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_ADDRESS_API_DEFAULTS = {
@@ -140,20 +158,40 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     <div class="mx-auto flex max-w-[1500px] items-center gap-3 px-4 py-3">
 
       <!-- Search -->
-      <div class="relative w-full max-w-lg">
-        <input
-          class="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm focus:border-orange-500 outline-none"
-          placeholder="Search product by Name or SKU"
-          id="searchName"
-          autocomplete="off"
-          aria-autocomplete="list"
-          aria-controls="skuSuggest"
-          aria-expanded="false" />
-        <div
-          id="skuSuggest"
-          class="absolute left-0 right-0 top-full z-[9999] mt-1 hidden max-h-72 overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+      <div class="flex w-full max-w-xl items-start gap-2">
+        <div class="relative min-w-0 flex-1">
+          <textarea
+            class="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm focus:border-orange-500 outline-none resize-none min-h-[2.5rem] max-h-24 leading-snug"
+            placeholder="Search by name or SKU — paste multiple SKUs separated by comma or new line"
+            id="searchName"
+            rows="2"
+            autocomplete="off"
+            aria-autocomplete="list"
+            aria-controls="skuSuggest"
+            aria-expanded="false"></textarea>
+          <div
+            id="skuSuggest"
+            class="absolute left-0 right-0 top-full z-[9999] mt-1 hidden max-h-72 overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+          </div>
+          <p id="posSkuSearchError" class="hidden mt-2 text-xs font-medium text-red-600"></p>
+          <p class="mt-1 text-[10px] text-slate-500 leading-snug">Paste from Excel — one SKU per row, or comma-separated.</p>
         </div>
-        <p id="posSkuSearchError" class="hidden mt-2 text-xs font-medium text-red-600"></p>
+        <div class="flex shrink-0 flex-col gap-2 pt-0.5">
+          <button
+            type="button"
+            id="posSearchBtn"
+            class="inline-flex items-center justify-center gap-1.5 rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 transition whitespace-nowrap">
+            <i class="fas fa-search text-xs" aria-hidden="true"></i>
+            Search
+          </button>
+          <button
+            type="button"
+            id="posSearchClearBtn"
+            class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition whitespace-nowrap">
+            <i class="fas fa-times text-xs" aria-hidden="true"></i>
+            Clear
+          </button>
+        </div>
       </div>
 
       <!-- Right -->
@@ -315,128 +353,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         </div>
       </div>
     </aside>
-<!-- Product Modal -->
-<div id="productModal" class="fixed inset-0 z-[9999] hidden"
-     data-pos-warehouse="<?= htmlspecialchars((string)($warehouse_name ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-  <!-- overlay -->
-  <div id="productModalOverlay" class="absolute inset-0 bg-black/50"></div>
-
-  <!-- modal box -->
-  <div class="relative mx-auto mt-10 w-[95%] max-w-3xl rounded-2xl bg-white shadow-xl">
-    <div class="flex items-start justify-between gap-3 border-b px-5 py-3">
-      <h2
-        id="pmTitle"
-        class="min-w-0 flex-1 text-left text-sm font-semibold text-gray-900 leading-snug line-clamp-3 break-words">
-        Product
-      </h2>
-
-      <button
-        type="button"
-        id="productModalClose"
-        class="shrink-0 rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800">
-        ✕
-      </button>
-    </div>
-
-    <div class="p-5">
-      <div class="grid grid-cols-1 gap-5 md:grid-cols-[220px_1fr]">
-        <div class="rounded-xl border bg-gray-50 p-3">
-          <img
-            id="pmImage"
-            src=""
-            alt=""
-            class="mx-auto h-56 w-full object-contain" />
-        </div>
-
-        <div>
-          <div id="pmStockWarning" class="hidden mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-900"></div>
-          <div class="flex flex-wrap gap-2" id="pmBadges"></div>
-
-          <div
-            class="mt-4 grid grid-cols-[140px_10px_1fr] gap-x-2 gap-y-2 text-xs"
-            id="pmDetails">
-            <!-- rows injected here -->
-          </div>
-          <!-- ADDONS -->
-          <div id="pmAddonsWrapper" class="mt-4 hidden">
-            <div class="text-xs font-semibold text-gray-700 mb-2">
-              Add-ons
-            </div>
-
-            <div id="pmAddons" class="space-y-2"></div>
-          </div>
-
-          <!-- Footer -->
-          <div class="mt-6 flex flex-wrap items-center justify-end gap-2">
-
-            <!-- Qty control -->
-            <div class="mr-auto flex flex-col items-start gap-1">
-              <div class="flex items-center gap-3 flex-wrap">
-                <span
-                  id="pmModalPrice"
-                  class="hidden shrink-0 text-lg font-bold text-gray-900 tabular-nums tracking-tight"
-                  aria-live="polite"></span>
-                <label class="text-xs text-gray-600">Qty</label>
-                <span id="pmQtyMaxHint" class="text-[10px] text-gray-500"></span>
-
-                <div class="flex items-center border border-gray-200 rounded-lg overflow-hidden">
-                  <button
-                    type="button"
-                    id="pmQtyDec"
-                    class="h-9 w-9 text-slate-600 hover:bg-gray-50">
-                    −
-                  </button>
-
-                  <span
-                    id="pmQtyVal"
-                    class="h-9 w-10 flex items-center justify-center font-semibold text-sm">
-                    1
-                  </span>
-
-                  <button
-                    type="button"
-                    id="pmQtyInc"
-                    class="h-9 w-9 text-slate-600 hover:bg-gray-50">
-                    +
-                  </button>
-                </div>
-              </div>
-              <div id="pmQtySummary" class="hidden mt-0.5 max-w-[280px] space-y-0.5 text-[10px] leading-snug text-gray-600"></div>
-            </div>
-
-
-            <input type="hidden" id="modal_product_code" value="">
-            <input type="hidden" id="modal_item_code" value="">
-            <input type="hidden" id="modal_size" value="">
-            <input type="hidden" id="modal_color" value="">
-            <input type="hidden" id="modal_item_level" value="">
-            <input type="hidden" id="modal_stock_check_code" value="">
-            <input type="hidden" id="modal_qty" value="1">
-            <input type="hidden" id="modal_options" value="">
-            <input type="hidden" id="modal_variation" value="">
-            <button
-              type="button"
-              id="pmAddToCartBtn"
-              class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 disabled:pointer-events-none">
-              Add to cart
-            </button>
-            <!-- Close -->
-            <button
-              type="button"
-              id="pmCloseBtn"
-              class="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div id="pmSiblingSkusWrapper" class="hidden mt-5 border-t border-gray-100 pt-4">
-        <div id="pmSiblingSkus" class="flex flex-wrap gap-2"></div>
-      </div>
-    </div>
-  </div>
-</div>
+<?php require __DIR__ . '/partials/product_modal.php'; ?>
 
 <!-- CUSTOMER MODAL -->
 <div id="customerModal" class="fixed inset-0 z-[9999] hidden">
@@ -680,7 +597,14 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           <span class="font-semibold text-slate-800">Split total: <span id="payment_split_total" class="text-orange-700 tabular-nums">₹ 0.00</span></span>
         </div>
       </div>
-      <div id="payment_split_validation" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"></div>
+      <div id="payment_split_validation" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 pr-8 text-xs text-red-700 relative">
+        <button type="button" id="payment_split_validation_dismiss" class="absolute top-1.5 right-2 text-red-500 hover:text-red-800 leading-none" aria-label="Dismiss error">✕</button>
+        <span id="payment_split_validation_text"></span>
+      </div>
+      <div id="posCheckoutErrorBanner" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 pr-8 text-xs text-red-700 relative">
+        <button type="button" id="posCheckoutErrorBannerDismiss" class="absolute top-1.5 right-2 text-red-500 hover:text-red-800 leading-none" aria-label="Dismiss error">✕</button>
+        <span id="posCheckoutErrorBannerText"></span>
+      </div>
 
       <!-- Legacy single-payment fields kept for scripts that read totals; updated by split UI -->
       <input type="hidden" id="payment_amount" value="">
@@ -739,12 +663,15 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     <div class="flex shrink-0 items-center justify-between border-b px-5 py-3">
       <div>
         <h2 class="text-lg font-semibold text-slate-800">Confirm Billing &amp; Shipping Details</h2>
-        <p class="mt-0.5 text-xs text-slate-500">Required: First name, Last name and State. Other fields use defaults when left blank.</p>
+        <p class="mt-0.5 text-xs text-slate-500">Required: First name, Last name and State. Select phone country code (default +91 India) and enter the number.</p>
       </div>
       <button type="button" onclick="closeAddressConfirmModal()" class="text-lg leading-none text-gray-500 hover:text-gray-800" aria-label="Close">✕</button>
     </div>
     <div class="address-confirm-body flex-1 overflow-y-auto overscroll-contain">
-    <div id="addressConfirmValidationSummary" class="mx-5 mt-3 hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"></div>
+    <div id="addressConfirmValidationSummary" class="mx-5 mt-3 hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 pr-8 text-sm text-red-700 relative">
+      <button type="button" id="addressConfirmValidationDismiss" class="absolute top-2 right-2 text-red-500 hover:text-red-800 leading-none" aria-label="Dismiss error">✕</button>
+      <span id="addressConfirmValidationSummaryText"></span>
+    </div>
     <div id="highValueComplianceBanner" class="mx-5 mt-3 hidden rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-900">High Value Transaction – Compliance Required</div>
     <div class="grid grid-cols-1 gap-5 p-5 md:grid-cols-2">
       <div class="space-y-3">
@@ -753,10 +680,18 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           <label class="block text-xs font-medium text-slate-600">First Name <span class="field-req-star text-red-600">*</span><input id="confirm_first_name" class="w-full rounded border" placeholder="First Name"></label>
           <label class="block text-xs font-medium text-slate-600">Last Name <span class="field-req-star text-red-600">*</span><input id="confirm_last_name" class="w-full rounded border" placeholder="Last Name"></label>
         </div>
-        <div class="grid grid-cols-2 gap-3">
-          <label class="block text-xs font-medium text-slate-600">Email<input id="confirm_email" type="email" class="w-full rounded border" placeholder="Email"></label>
-          <label class="block text-xs font-medium text-slate-600">Phone <span class="field-req-star text-red-600">*</span><input id="confirm_phone" class="w-full rounded border" placeholder="Phone"></label>
-        </div>
+        <label class="block text-xs font-medium text-slate-600">Email<input id="confirm_email" type="email" class="w-full rounded border" placeholder="Email"></label>
+        <label class="block text-xs font-medium text-slate-600">Phone <span class="field-req-star text-red-600">*</span>
+          <div class="pos-phone-row">
+            <select id="confirm_phone_code" class="pos-phone-code-select rounded border bg-white" aria-label="Billing phone country code">
+              <?php
+              $selected_phone_iso = 'IN';
+              include __DIR__ . '/partials/phone_code_options.php';
+              ?>
+            </select>
+            <input id="confirm_phone" class="pos-phone-number-input w-full rounded border" placeholder="Phone number" inputmode="tel" autocomplete="tel-national">
+          </div>
+        </label>
         <label class="block text-xs font-medium text-slate-600">Address 1<input id="confirm_address1" class="w-full rounded border" placeholder="Address 1"></label>
         <label class="block text-xs font-medium text-slate-600">Address 2<input id="confirm_address2" class="w-full rounded border" placeholder="Address 2"></label>
         <div class="grid grid-cols-2 gap-3">
@@ -827,7 +762,17 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           <label class="block text-xs font-medium text-slate-600">First Name<input id="confirm_sfirst_name" class="w-full rounded border" placeholder="First Name"></label>
           <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_slast_name" class="w-full rounded border" placeholder="Last Name"></label>
         </div>
-        <label class="block text-xs font-medium text-slate-600">Phone<input id="confirm_sphone" class="w-full rounded border" placeholder="Phone"></label>
+        <label class="block text-xs font-medium text-slate-600">Phone
+          <div class="pos-phone-row">
+            <select id="confirm_sphone_code" class="pos-phone-code-select rounded border bg-white" aria-label="Shipping phone country code">
+              <?php
+              $selected_phone_iso = 'IN';
+              include __DIR__ . '/partials/phone_code_options.php';
+              ?>
+            </select>
+            <input id="confirm_sphone" class="pos-phone-number-input w-full rounded border" placeholder="Phone number" inputmode="tel" autocomplete="tel-national">
+          </div>
+        </label>
         <label class="block text-xs font-medium text-slate-600">Address 1<input id="confirm_saddress1" class="w-full rounded border" placeholder="Address 1"></label>
         <label class="block text-xs font-medium text-slate-600">Address 2<input id="confirm_saddress2" class="w-full rounded border" placeholder="Address 2"></label>
         <div class="grid grid-cols-2 gap-3">
@@ -969,6 +914,36 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     <i class="fas fa-spinner fa-spin text-3xl text-orange-600" aria-hidden="true"></i>
     <p id="posCheckoutLoadingTitle" class="mt-4 text-base font-semibold text-slate-800">Creating order…</p>
     <p id="posCheckoutLoadingHint" class="mt-1 text-sm text-slate-500">Your request was accepted. Order creation is in progress.</p>
+  </div>
+</div>
+
+<!-- LOCAL FALLBACK CONFIRM (Exotic order/create failed) -->
+<div id="localFallbackConfirmModal" class="fixed inset-0 z-[10004] hidden">
+  <div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
+  <div class="relative mx-auto mt-[10vh] w-[95%] max-w-lg rounded-2xl bg-white shadow-2xl">
+    <div class="border-b px-5 py-4">
+      <h2 class="text-base font-semibold text-slate-800">Online order export failed</h2>
+      <p class="mt-1 text-xs text-slate-500">The website API could not create this order on Exotic India.</p>
+    </div>
+    <div class="space-y-4 p-5">
+      <div id="localFallbackApiErrorBox" class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 relative">
+        <button type="button" id="localFallbackApiErrorDismiss" class="absolute top-2 right-2 text-red-500 hover:text-red-800 leading-none" aria-label="Dismiss error">✕</button>
+        <p class="text-xs font-semibold uppercase tracking-wide text-red-800 pr-6">API error</p>
+        <p id="localFallbackApiError" class="mt-1 text-sm text-red-900 break-words pr-4"></p>
+      </div>
+      <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        <p class="font-semibold">Create order locally in POS?</p>
+        <ul class="mt-2 list-disc space-y-1 pl-5 text-xs leading-relaxed text-amber-900">
+          <li>A <strong>temporary order number</strong> (e.g. POS-TMP-…) will be assigned until the website API is working again.</li>
+          <li>You can still <strong>register payment</strong> and <strong>create the tax invoice</strong> as usual.</li>
+          <li>When the website API is active, the order can be <strong>published online</strong> from order details to replace the temp number with the real Exotic order ID.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3 rounded-b-2xl">
+      <button type="button" id="localFallbackCancelBtn" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Cancel</button>
+      <button type="button" id="localFallbackConfirmBtn" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Save order &amp; continue checkout</button>
+    </div>
   </div>
 </div>
 
@@ -1530,18 +1505,24 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 
   function validatePaymentSplitsForCheckout(grandTotal) {
     var box = document.getElementById("payment_split_validation");
+    var boxText = document.getElementById("payment_split_validation_text");
     var hideErr = function() {
       if (box) {
         box.classList.add("hidden");
-        box.textContent = "";
+      }
+      if (boxText) {
+        boxText.textContent = "";
       }
     };
     var showErr = function(msg) {
-      if (box) {
+      if (boxText) {
+        boxText.textContent = msg;
+      } else if (box) {
         box.textContent = msg;
+      }
+      if (box) {
         box.classList.remove("hidden");
       }
-      showToast("⚠ " + msg, "red");
     };
 
     var splits = collectAllPaymentSplitRowsFromUi();
@@ -1749,8 +1730,14 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       err.classList.add("hidden");
       err.textContent = "";
     }
+    var status = addressPayload && addressPayload.pos_delivery_status ? String(addressPayload.pos_delivery_status) : "";
+    var selectedRadio = status
+      ? document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"][value="' + status + '"]')
+      : null;
     var defaultRadio = document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"][value="collected_from_showroom"]');
-    if (defaultRadio) {
+    if (selectedRadio) {
+      selectedRadio.checked = true;
+    } else if (defaultRadio) {
       defaultRadio.checked = true;
     }
     syncDeliveryStatusOptionStyles();
@@ -1764,7 +1751,97 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (modal) {
       modal.classList.add("hidden");
     }
+  }
+
+  function closeAllPosCheckoutModals() {
+    closeDeliveryStatusModal();
+    closeLocalFallbackConfirmModal();
+    closeOverseasGstModal();
+    closeAddressConfirmModal();
+    closePaymentModal();
     setPosCheckoutLoading(false);
+  }
+
+  var pendingLocalFallbackCheckoutPayload = null;
+
+  function showPosCheckoutErrorBanner(msg) {
+    var banner = document.getElementById("posCheckoutErrorBanner");
+    var text = document.getElementById("posCheckoutErrorBannerText");
+    if (!banner || !text) {
+      return;
+    }
+    text.textContent = msg || "Checkout failed.";
+    banner.classList.remove("hidden");
+  }
+
+  function hidePosCheckoutErrorBanner() {
+    var banner = document.getElementById("posCheckoutErrorBanner");
+    var text = document.getElementById("posCheckoutErrorBannerText");
+    if (banner) {
+      banner.classList.add("hidden");
+    }
+    if (text) {
+      text.textContent = "";
+    }
+  }
+
+  function showAddressConfirmValidationError(msg) {
+    var summary = document.getElementById("addressConfirmValidationSummary");
+    var text = document.getElementById("addressConfirmValidationSummaryText");
+    if (!summary || !text) {
+      return;
+    }
+    text.textContent = msg || "";
+    summary.classList.remove("hidden");
+  }
+
+  function hideAddressConfirmValidationError() {
+    var summary = document.getElementById("addressConfirmValidationSummary");
+    var text = document.getElementById("addressConfirmValidationSummaryText");
+    if (summary) {
+      summary.classList.add("hidden");
+    }
+    if (text) {
+      text.textContent = "";
+    }
+  }
+
+  function openLocalFallbackConfirmModal(apiErrorMessage, debug, addressPayload) {
+    pendingLocalFallbackCheckoutPayload = addressPayload || null;
+    var modal = document.getElementById("localFallbackConfirmModal");
+    var errEl = document.getElementById("localFallbackApiError");
+    var errBox = document.getElementById("localFallbackApiErrorBox");
+    if (errEl) {
+      errEl.textContent = apiErrorMessage || "Unknown API error.";
+    }
+    if (errBox) {
+      errBox.classList.remove("hidden");
+    }
+    if (modal) {
+      modal.classList.remove("hidden");
+    }
+    var confirmBtn = document.getElementById("localFallbackConfirmBtn");
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Save order & continue checkout";
+    }
+    window.__posLastOrderCreateDebug = debug || null;
+    if (window.__posLastOrderCreateDebug && typeof showPaymentModalOrderApiRecord === "function") {
+      showPaymentModalOrderApiRecord(window.__posLastOrderCreateDebug);
+    }
+  }
+
+  function closeLocalFallbackConfirmModal() {
+    var modal = document.getElementById("localFallbackConfirmModal");
+    if (modal) {
+      modal.classList.add("hidden");
+    }
+    pendingLocalFallbackCheckoutPayload = null;
+    var confirmBtn = document.getElementById("localFallbackConfirmBtn");
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Save order & continue checkout";
+    }
   }
 
   var posCheckoutLoadingActive = false;
@@ -2115,7 +2192,6 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       confirm_first_name: firstNonEmpty(billing.first_name, billing.billing_first_name),
       confirm_last_name: firstNonEmpty(billing.last_name, billing.billing_last_name),
       confirm_email: firstNonEmpty(billing.email, billing.cus_email, billing.billing_email),
-      confirm_phone: firstNonEmpty(billing.phone, billing.mobile, billing.billing_mobile, (window.POS_ADDRESS_API_DEFAULTS || {}).confirm_phone || "8031404444"),
       confirm_address1: firstNonEmpty(billing.address1, billing.address_line1, billing.billing_address_line1),
       confirm_address2: firstNonEmpty(billing.address2, billing.address_line2, billing.billing_address_line2),
       confirm_city: firstNonEmpty(billing.city),
@@ -2132,9 +2208,20 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       confirm_scity: firstNonEmpty(shipping.scity, shipping.shipping_city, shipping.city),
       confirm_sstate: firstNonEmpty(shipping.sstate, shipping.shipping_state, shipping.state),
       confirm_szip: firstNonEmpty(shipping.szip, shipping.shipping_zipcode, shipping.zip, shipping.zipcode),
-      confirm_sphone: firstNonEmpty(shipping.sphone, shipping.shipping_mobile, shipping.mobile, shipping.phone),
       confirm_sgstin: firstNonEmpty(shipping.sgstin, shipping.shipping_gstin)
     };
+    var billingPhoneFull = firstNonEmpty(
+      billing.phone,
+      billing.mobile,
+      billing.billing_mobile,
+      (window.POS_ADDRESS_API_DEFAULTS || {}).confirm_phone || "8031404444"
+    );
+    var shippingPhoneFull = firstNonEmpty(
+      shipping.sphone,
+      shipping.shipping_mobile,
+      shipping.mobile,
+      shipping.phone
+    );
     var billingCountryRaw = firstNonEmpty(billing.country, billing.billing_country, "IN");
     var shippingCountryRaw = firstNonEmpty(shipping.scountry, shipping.shipping_country, shipping.country, "IN");
     Object.keys(map).forEach(function(id) {
@@ -2143,6 +2230,17 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     });
     setPosCountrySelect("confirm_country", billingCountryRaw);
     setPosCountrySelect("confirm_scountry", shippingCountryRaw);
+    var billingCountry = normalizePosCountryCode(document.getElementById("confirm_country")?.value || "IN", document.getElementById("confirm_country"));
+    var shippingCountry = normalizePosCountryCode(document.getElementById("confirm_scountry")?.value || "IN", document.getElementById("confirm_scountry"));
+    setPosPhoneFields("confirm_phone", "confirm_phone_code", billingPhoneFull, billingCountry);
+    setPosPhoneFields("confirm_sphone", "confirm_sphone_code", shippingPhoneFull, shippingCountry);
+    var defaultState = String(window.POS_DEFAULT_STATE || "Delhi");
+    syncAllPosStateFields({
+      billing: map.confirm_state || (isPosIndiaCountry(billingCountry) ? defaultState : ""),
+      shipping: map.confirm_sstate || (isPosIndiaCountry(shippingCountry) ? defaultState : "")
+    }).then(function() {
+      syncHighValueComplianceUi();
+    });
     var compliance = (payload && payload.compliance) || {};
     [
       ["customer_residency_status", compliance.customer_residency_status || "INDIAN_RESIDENT"],
@@ -2154,20 +2252,12 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       var el = document.getElementById(row[0]);
       if (el) el.value = row[1];
     });
-    var billingCountry = normalizePosCountryCode(document.getElementById("confirm_country")?.value || "IN", document.getElementById("confirm_country"));
-    var shippingCountry = normalizePosCountryCode(document.getElementById("confirm_scountry")?.value || "IN", document.getElementById("confirm_scountry"));
-    var defaultState = String(window.POS_DEFAULT_STATE || "Delhi");
-    syncAllPosStateFields({
-      billing: map.confirm_state || (isPosIndiaCountry(billingCountry) ? defaultState : ""),
-      shipping: map.confirm_sstate || (isPosIndiaCountry(shippingCountry) ? defaultState : "")
-    }).then(function() {
-      syncHighValueComplianceUi();
-    });
   }
 
   var POS_SHIPPING_ADDRESS_FIELD_IDS = [
     "confirm_sfirst_name",
     "confirm_slast_name",
+    "confirm_sphone_code",
     "confirm_sphone",
     "confirm_saddress1",
     "confirm_saddress2",
@@ -2181,6 +2271,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   var POS_BILLING_TO_SHIPPING_FIELDS = [
     ["confirm_first_name", "confirm_sfirst_name"],
     ["confirm_last_name", "confirm_slast_name"],
+    ["confirm_phone_code", "confirm_sphone_code"],
     ["confirm_phone", "confirm_sphone"],
     ["confirm_address1", "confirm_saddress1"],
     ["confirm_address2", "confirm_saddress2"],
@@ -2220,7 +2311,11 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     POS_SHIPPING_ADDRESS_FIELD_IDS.forEach(function(id) {
       var el = document.getElementById(id);
       if (el) {
-        el.readOnly = synced;
+        if (el.tagName === "SELECT") {
+          el.disabled = synced;
+        } else {
+          el.readOnly = synced;
+        }
         el.classList.toggle("bg-slate-100", synced);
         el.classList.toggle("cursor-not-allowed", synced);
       }
@@ -2292,12 +2387,15 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var shippingFirstName = read("confirm_sfirst_name");
     var shippingLastName = read("confirm_slast_name");
     var shippingFullName = [shippingFirstName, shippingLastName].filter(Boolean).join(" ").trim();
+    var billingPhoneCodeIso = read("confirm_phone_code") || "IN";
+    var shippingPhoneCodeIso = read("confirm_sphone_code") || "IN";
     return {
       confirm_address_submit: "1",
       confirm_first_name: read("confirm_first_name"),
       confirm_last_name: read("confirm_last_name"),
       confirm_email: read("confirm_email"),
-      confirm_phone: read("confirm_phone"),
+      confirm_phone: posBuildFullPhone(billingPhoneCodeIso, read("confirm_phone")),
+      confirm_phone_code: billingPhoneCodeIso,
       confirm_address1: read("confirm_address1"),
       confirm_address2: read("confirm_address2"),
       confirm_city: read("confirm_city"),
@@ -2316,7 +2414,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       confirm_sstate: getPosStateValue("confirm_sstate"),
       confirm_szip: read("confirm_szip"),
       confirm_scountry: read("confirm_scountry"),
-      confirm_sphone: read("confirm_sphone"),
+      confirm_sphone: posBuildFullPhone(shippingPhoneCodeIso, read("confirm_sphone")),
+      confirm_sphone_code: shippingPhoneCodeIso,
       confirm_sgstin: read("confirm_sgstin").toUpperCase(),
       confirm_shipping_same_as_billing: isShippingSameAsBillingChecked() ? "1" : "0",
       confirm_omit_shipping_api: "0",
@@ -2370,17 +2469,12 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   }
 
   function clearAddressValidationState() {
-    ["confirm_first_name", "confirm_last_name", "confirm_phone", "confirm_zip", "confirm_state", "confirm_state_select", "confirm_email", "confirm_gstin", "confirm_sgstin", "customer_pan", "customer_aadhaar", "passport_number", "country_of_residence"].forEach(function(id) {
+    ["confirm_first_name", "confirm_last_name", "confirm_phone_code", "confirm_phone", "confirm_zip", "confirm_state", "confirm_state_select", "confirm_email", "confirm_gstin", "confirm_sgstin", "customer_pan", "customer_aadhaar", "passport_number", "country_of_residence"].forEach(function(id) {
       setPosFieldInvalid(id, false);
     });
     POS_SHIPPING_ADDRESS_FIELD_IDS.forEach(function(id) {
       setPosFieldInvalid(id, false);
     });
-    var summary = document.getElementById("addressConfirmValidationSummary");
-    if (summary) {
-      summary.classList.add("hidden");
-      summary.textContent = "";
-    }
   }
 
   function getHighValueLimit() {
@@ -2530,6 +2624,125 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     btn.title = "";
   }
 
+  function posCountryPhoneCode(iso) {
+    var code = String(iso || "").trim().toUpperCase().substring(0, 2);
+    var map = window.POS_COUNTRY_PHONE_CODES || {};
+    return String(map[code] || "").replace(/\D/g, "");
+  }
+
+  function posNormalizeCountryIso(iso) {
+    return String(iso || "IN").trim().toUpperCase().substring(0, 2);
+  }
+
+  function posPhoneDigits(phone) {
+    return String(phone || "").replace(/\D/g, "");
+  }
+
+  function posBuildFullPhone(codeIso, localPhone) {
+    var local = posPhoneDigits(localPhone);
+    if (!local) {
+      return "";
+    }
+    var iso = posNormalizeCountryIso(codeIso);
+    var dial = posCountryPhoneCode(iso);
+    if (!dial) {
+      return local;
+    }
+    if (local.indexOf(dial) === 0) {
+      return local;
+    }
+    return dial + local;
+  }
+
+  function posSplitPhoneForCountry(fullPhone, countryIso) {
+    var digits = posPhoneDigits(fullPhone);
+    var country = posNormalizeCountryIso(countryIso);
+    if (!digits) {
+      return { codeIso: country, local: "" };
+    }
+    var expected = posCountryPhoneCode(country);
+    if (expected && digits.indexOf(expected) === 0) {
+      return { codeIso: country, local: digits.substring(expected.length) };
+    }
+    var map = window.POS_COUNTRY_PHONE_CODES || {};
+    var matchedIso = "";
+    Object.keys(map).forEach(function(iso) {
+      if (matchedIso) {
+        return;
+      }
+      var dial = String(map[iso] || "").replace(/\D/g, "");
+      if (dial && digits.indexOf(dial) === 0) {
+        matchedIso = iso;
+      }
+    });
+    if (matchedIso) {
+      return {
+        codeIso: matchedIso,
+        local: digits.substring(posCountryPhoneCode(matchedIso).length)
+      };
+    }
+    if (country === "IN" && digits.length === 10 && /^[6-9]/.test(digits)) {
+      return { codeIso: "IN", local: digits };
+    }
+    if (country === "US" && digits.length === 10) {
+      return { codeIso: "US", local: digits };
+    }
+    return { codeIso: country, local: digits };
+  }
+
+  function setPosPhoneFields(localInputId, codeSelectId, fullPhone, countryIso) {
+    var split = posSplitPhoneForCountry(fullPhone, countryIso);
+    var phoneEl = document.getElementById(localInputId);
+    var codeEl = document.getElementById(codeSelectId);
+    if (phoneEl) {
+      phoneEl.value = split.local;
+    }
+    if (codeEl) {
+      if (codeEl.querySelector('option[value="' + split.codeIso + '"]')) {
+        codeEl.value = split.codeIso;
+      } else {
+        codeEl.value = "IN";
+      }
+    }
+  }
+
+  function syncPosPhoneCodeFromCountry(countryIso, codeSelectId) {
+    var codeEl = document.getElementById(codeSelectId);
+    if (!codeEl) {
+      return;
+    }
+    var iso = posNormalizeCountryIso(countryIso);
+    if (codeEl.querySelector('option[value="' + iso + '"]')) {
+      codeEl.value = iso;
+    }
+  }
+
+  function posPhoneMatchesCountry(phone, countryIso) {
+    var digits = posPhoneDigits(phone);
+    var country = String(countryIso || "").trim().toUpperCase().substring(0, 2);
+    if (!digits || !country) {
+      return { ok: true };
+    }
+    var expected = posCountryPhoneCode(country);
+    if (!expected) {
+      return { ok: true };
+    }
+    if (digits.indexOf(expected) === 0) {
+      return { ok: true };
+    }
+    if (country === "IN" && digits.length === 10 && /^[6-9]/.test(digits)) {
+      return { ok: true };
+    }
+    if (country === "US" && digits.length === 10) {
+      return { ok: true };
+    }
+    return {
+      ok: false,
+      message: "Phone country code must match " + posCountryDisplayName(country)
+        + " (+" + expected + " or a valid local number)."
+    };
+  }
+
   function validateAddressConfirmPayload(payload) {
     clearAddressValidationState();
     var missing = [];
@@ -2554,10 +2767,32 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       if (!firstInvalidId) firstInvalidId = "confirm_zip";
     }
     var phone = String(payload.confirm_phone || "").trim();
+    var billingCountry = posNormalizeCountryIso(payload.confirm_country || "IN");
+    var billingPhoneCode = posNormalizeCountryIso(payload.confirm_phone_code || "IN");
     if (!phone) {
       missing.push("Phone");
       setPosFieldInvalid("confirm_phone", true);
+      setPosFieldInvalid("confirm_phone_code", true);
       if (!firstInvalidId) firstInvalidId = "confirm_phone";
+    } else if (billingPhoneCode !== billingCountry) {
+      setPosFieldInvalid("confirm_phone", true);
+      setPosFieldInvalid("confirm_phone_code", true);
+      if (!firstInvalidId) firstInvalidId = "confirm_phone";
+      showAddressConfirmValidationError("Billing: Phone country code must match billing country.");
+      var billingPhoneEl = document.getElementById("confirm_phone");
+      if (billingPhoneEl) billingPhoneEl.focus();
+      return false;
+    } else {
+      var billingPhoneCheck = posPhoneMatchesCountry(phone, billingCountry);
+      if (!billingPhoneCheck.ok) {
+        setPosFieldInvalid("confirm_phone", true);
+        setPosFieldInvalid("confirm_phone_code", true);
+        if (!firstInvalidId) firstInvalidId = "confirm_phone";
+        showAddressConfirmValidationError("Billing: " + billingPhoneCheck.message);
+        var billingPhoneEl = document.getElementById("confirm_phone");
+        if (billingPhoneEl) billingPhoneEl.focus();
+        return false;
+      }
     }
     if (!state) {
       missing.push("State");
@@ -2575,42 +2810,54 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var shippingGstin = String(payload.confirm_sgstin || "").trim().toUpperCase();
     if (shippingGstin !== "" && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(shippingGstin)) {
       setPosFieldInvalid("confirm_sgstin", true);
-      var gstinSummary = document.getElementById("addressConfirmValidationSummary");
-      if (gstinSummary) {
-        gstinSummary.textContent = "Shipping GSTIN format is invalid.";
-        gstinSummary.classList.remove("hidden");
-      }
-      showToast("⚠ Shipping GSTIN format is invalid.", "red");
+      showAddressConfirmValidationError("Shipping GSTIN format is invalid.");
       var sgstinEl = document.getElementById("confirm_sgstin");
       if (sgstinEl) sgstinEl.focus();
       return false;
     }
 
     if (missing.length) {
-      var summary = document.getElementById("addressConfirmValidationSummary");
       var message = "Please complete: " + missing.slice(0, 6).join(", ") + (missing.length > 6 ? " and " + (missing.length - 6) + " more" : "") + ".";
-      if (summary) {
-        summary.textContent = message;
-        summary.classList.remove("hidden");
-      }
-      showToast("⚠ " + message, "red");
+      showAddressConfirmValidationError(message);
       var first = firstInvalidId ? document.getElementById(firstInvalidId) : null;
       if (first) first.focus();
       return false;
     }
 
+    if (!isShippingSameAsBillingChecked()) {
+      var shippingPhone = String(payload.confirm_sphone || "").trim();
+      var shippingCountry = posNormalizeCountryIso(payload.confirm_scountry || "IN");
+      var shippingPhoneCode = posNormalizeCountryIso(payload.confirm_sphone_code || "IN");
+      if (shippingPhone) {
+        if (shippingPhoneCode !== shippingCountry) {
+          setPosFieldInvalid("confirm_sphone", true);
+          setPosFieldInvalid("confirm_sphone_code", true);
+          showAddressConfirmValidationError("Shipping: Phone country code must match shipping country.");
+          var shippingPhoneEl = document.getElementById("confirm_sphone");
+          if (shippingPhoneEl) shippingPhoneEl.focus();
+          return false;
+        }
+        var shippingPhoneCheck = posPhoneMatchesCountry(shippingPhone, shippingCountry);
+        if (!shippingPhoneCheck.ok) {
+          setPosFieldInvalid("confirm_sphone", true);
+          setPosFieldInvalid("confirm_sphone_code", true);
+          showAddressConfirmValidationError("Shipping: " + shippingPhoneCheck.message);
+          var shippingPhoneEl = document.getElementById("confirm_sphone");
+          if (shippingPhoneEl) shippingPhoneEl.focus();
+          return false;
+        }
+      }
+    }
+
     var complianceCheck = validateHighValueCompliancePayload();
     if (!complianceCheck.ok) {
-      var complianceSummary = document.getElementById("addressConfirmValidationSummary");
-      if (complianceSummary) {
-        complianceSummary.textContent = complianceCheck.message;
-        complianceSummary.classList.remove("hidden");
-      }
+      showAddressConfirmValidationError(complianceCheck.message);
       syncHighValueComplianceUi();
       showToast("⚠ " + complianceCheck.message, "red");
       return false;
     }
 
+    hideAddressConfirmValidationError();
     return true;
   }
 
@@ -2719,6 +2966,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 <script>
   document.addEventListener("DOMContentLoaded", function() {
 
+    if (window.location.hash === "#checkout") {
+      window.__posOpenCheckoutAfterCartLoad = true;
+    }
+
     var fullOrderApiBtn = document.getElementById("paymentModalOrderApiFullBtn");
     if (fullOrderApiBtn) {
       fullOrderApiBtn.addEventListener("click", function () {
@@ -2804,6 +3055,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (deliveryStatusBackBtn) {
       deliveryStatusBackBtn.addEventListener("click", function() {
         closeDeliveryStatusModal();
+        setPosCheckoutLoading(false);
       });
     }
 
@@ -2936,6 +3188,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           openOverseasGstModal(payload);
           return;
         }
+        closeDeliveryStatusModal();
         
         // Add E-way bill data if checked
         if (generateEwb) {
@@ -2982,6 +3235,64 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       });
     }
 
+    var localFallbackCancelBtn = document.getElementById("localFallbackCancelBtn");
+    if (localFallbackCancelBtn) {
+      localFallbackCancelBtn.addEventListener("click", function() {
+        var resumePayload = pendingLocalFallbackCheckoutPayload;
+        closeLocalFallbackConfirmModal();
+        if (resumePayload) {
+          openDeliveryStatusModal(resumePayload);
+        }
+      });
+    }
+    var localFallbackConfirmBtn = document.getElementById("localFallbackConfirmBtn");
+    if (localFallbackConfirmBtn) {
+      localFallbackConfirmBtn.addEventListener("click", function() {
+        if (!pendingLocalFallbackCheckoutPayload) {
+          showPosCheckoutErrorBanner("Checkout details missing — please try again from delivery status.");
+          closeLocalFallbackConfirmModal();
+          return;
+        }
+        localFallbackConfirmBtn.disabled = true;
+        localFallbackConfirmBtn.textContent = "Saving…";
+        createOrderNow(pendingLocalFallbackCheckoutPayload, { confirmLocalFallback: true, keepLocalFallbackModalOpen: true });
+      });
+    }
+
+    var localFallbackApiErrorDismiss = document.getElementById("localFallbackApiErrorDismiss");
+    if (localFallbackApiErrorDismiss) {
+      localFallbackApiErrorDismiss.addEventListener("click", function() {
+        var errBox = document.getElementById("localFallbackApiErrorBox");
+        if (errBox) {
+          errBox.classList.add("hidden");
+        }
+      });
+    }
+
+    var paymentSplitValidationDismiss = document.getElementById("payment_split_validation_dismiss");
+    if (paymentSplitValidationDismiss) {
+      paymentSplitValidationDismiss.addEventListener("click", function() {
+        var box = document.getElementById("payment_split_validation");
+        var boxText = document.getElementById("payment_split_validation_text");
+        if (box) {
+          box.classList.add("hidden");
+        }
+        if (boxText) {
+          boxText.textContent = "";
+        }
+      });
+    }
+
+    var posCheckoutErrorBannerDismiss = document.getElementById("posCheckoutErrorBannerDismiss");
+    if (posCheckoutErrorBannerDismiss) {
+      posCheckoutErrorBannerDismiss.addEventListener("click", hidePosCheckoutErrorBanner);
+    }
+
+    var addressConfirmValidationDismiss = document.getElementById("addressConfirmValidationDismiss");
+    if (addressConfirmValidationDismiss) {
+      addressConfirmValidationDismiss.addEventListener("click", hideAddressConfirmValidationError);
+    }
+
     var confirmAddressSubmitBtn = document.getElementById("confirmAddressSubmitBtn");
     if (confirmAddressSubmitBtn) {
       confirmAddressSubmitBtn.addEventListener("click", function() {
@@ -3010,13 +3321,27 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         el.addEventListener("change", function() {
           setPosFieldInvalid(id, false);
           if (id === "confirm_country") {
+            syncPosPhoneCodeFromCountry(el.value, "confirm_phone_code");
             syncPosStateField("billing", "").then(function() {
               if (isShippingSameAsBillingChecked()) {
                 copyBillingToShippingFields();
               }
             });
           } else {
+            syncPosPhoneCodeFromCountry(el.value, "confirm_sphone_code");
             syncPosStateField("shipping", "");
+          }
+        });
+      }
+    });
+    ["confirm_phone_code", "confirm_sphone_code"].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) {
+        el.addEventListener("change", function() {
+          setPosFieldInvalid(id, false);
+          setPosFieldInvalid(id === "confirm_phone_code" ? "confirm_phone" : "confirm_sphone", false);
+          if (id === "confirm_phone_code" && isShippingSameAsBillingChecked()) {
+            copyBillingToShippingFields();
           }
         });
       }
@@ -3033,7 +3358,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     });
   });
 
-  function createOrderNow(addressPayload) {
+  function createOrderNow(addressPayload, checkoutOptions) {
+    checkoutOptions = checkoutOptions || {};
     if (posCheckoutLoadingActive) {
       return;
     }
@@ -3123,8 +3449,14 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       typeof window.getPosListLinePricesPayloadForCheckout === "function"
         ? window.getPosListLinePricesPayloadForCheckout()
         : [];
-    if (Array.isArray(listPricePayload) && listPricePayload.length > 0) {
+    var needsListLinePriceSync =
+      typeof window.hasPosLineLevelPriceOverridesForCheckout === "function"
+        && window.hasPosLineLevelPriceOverridesForCheckout();
+    if (needsListLinePriceSync && Array.isArray(listPricePayload) && listPricePayload.length > 0) {
       body.list_line_prices = listPricePayload;
+    }
+    if (checkoutOptions.confirmLocalFallback) {
+      body.confirm_local_fallback = "1";
     }
     setPosCheckoutLoading(true);
     fetch("index.php?page=pos_register&action=checkout-create", {
@@ -3146,37 +3478,72 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       .then(function (data) {
         if (!data || !data.success) {
           window.__posLastOrderCreateDebug = data && data.order_create_debug ? data.order_create_debug : null;
+          if (data && data.requires_local_fallback_confirm) {
+            closeDeliveryStatusModal();
+            openLocalFallbackConfirmModal(
+              data.api_error_message || data.message || "Unknown API error.",
+              data.order_create_debug || null,
+              addressPayload
+            );
+            return;
+          }
+          if (checkoutOptions.keepLocalFallbackModalOpen) {
+            openLocalFallbackConfirmModal(
+              (data && data.message) ? data.message : "Checkout failed.",
+              data && data.order_create_debug ? data.order_create_debug : null,
+              addressPayload
+            );
+            return;
+          }
           if (window.__posLastOrderCreateDebug && typeof showPaymentModalOrderApiRecord === "function") {
             showPaymentModalOrderApiRecord(window.__posLastOrderCreateDebug);
+          }
+          if (data && data.order_number) {
+            closeAddressConfirmModal();
+            closeDeliveryStatusModal();
+            closeLocalFallbackConfirmModal();
+            closeOverseasGstModal();
           }
           if (data && data.requires_compliance) {
             closeDeliveryStatusModal();
             syncHighValueComplianceUi();
-            var summary = document.getElementById("addressConfirmValidationSummary");
-            if (summary) {
-              summary.textContent = data.message || "Additional details required for High Value Transaction.";
-              summary.classList.remove("hidden");
-            }
+            showAddressConfirmValidationError(data.message || "Additional details required for High Value Transaction.");
+          } else {
+            showPosCheckoutErrorBanner(data && data.message ? data.message : "Checkout failed");
           }
-          showToast(data && data.message ? data.message : "Checkout failed", "red");
           return;
         }
         window.__posLastOrderCreateDebug = null;
-        showToast(data.message || "Order placed.", "green");
-        closeDeliveryStatusModal();
+        hidePosCheckoutErrorBanner();
         pendingAddressPayloadForCheckout = null;
-        closeAddressConfirmModal();
-        closePaymentModal();
+        closeAllPosCheckoutModals();
+        showToast(data.message || "Order placed.", "green");
         if (data.redirect_url) {
-          window.location.href = data.redirect_url;
+          window.location.assign(data.redirect_url);
         }
+        return;
       })
       .catch(function (err) {
         console.error(err);
-        showToast(err && err.message ? err.message : "Checkout request failed", "red");
+        if (checkoutOptions.keepLocalFallbackModalOpen) {
+          openLocalFallbackConfirmModal(
+            err && err.message ? err.message : "Checkout request failed.",
+            window.__posLastOrderCreateDebug || null,
+            addressPayload
+          );
+        } else {
+          showPosCheckoutErrorBanner(err && err.message ? err.message : "Checkout request failed");
+        }
       })
       .finally(function () {
         setPosCheckoutLoading(false);
+        if (checkoutOptions.keepLocalFallbackModalOpen) {
+          var confirmBtn = document.getElementById("localFallbackConfirmBtn");
+          if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = "Save order & continue checkout";
+          }
+        }
       });
   }
 

@@ -335,6 +335,7 @@ class OrdersController
         $result = [];
         $pdata = [];
         $addressdata = [];
+        $refreshedFreshStockProductIds = [];
 
         foreach ($ordersList as $order) {
             $orderId = (string)($order['orderid'] ?? '');
@@ -469,6 +470,13 @@ class OrdersController
                     $imported++;
                     require_once __DIR__ . '/../helpers/BookPurchaseReplenishment.php';
                     BookPurchaseReplenishment::tryProcessImportedOrderLine($conn, $productModel, $rdata);
+                    require_once __DIR__ . '/../helpers/stock_refresh_from_api.php';
+                    tryRefreshFreshProductStockFromApiForOrderLine(
+                        $conn,
+                        $productModel,
+                        $rdata,
+                        $refreshedFreshStockProductIds
+                    );
                 }
 
                 $vendorRaw = trim((string)($item['vendor'] ?? ''));
@@ -550,61 +558,9 @@ class OrdersController
      */
     private function fetchVendorOrderPayloadForCheckout(string $orderNumber): array
     {
-        $orderNumber = trim($orderNumber);
-        if ($orderNumber === '') {
-            return ['ok' => false, 'orders' => [], 'error' => 'Order number missing'];
-        }
+        require_once __DIR__ . '/../helpers/order_json_fetch.php';
 
-        $url = 'https://www.exoticindia.com/vendor-api/order/fetch';
-        $postData = [
-            'makeRequestOf' => 'vendors-orderjson',
-            'orderid' => $orderNumber,
-        ];
-        $headers = [
-            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-            'x-adminapitest: 1',
-            'Content-Type: application/x-www-form-urlencoded',
-        ];
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 45);
-        $response = curl_exec($ch);
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        if ($response === false) {
-            return ['ok' => false, 'orders' => [], 'error' => 'Vendor API error: ' . $error];
-        }
-
-        $decoded = json_decode($response, true);
-        if (!is_array($decoded) || empty($decoded['orders']) || !is_array($decoded['orders'])) {
-            return ['ok' => false, 'orders' => [], 'error' => 'No order data from vendor API'];
-        }
-
-        return ['ok' => true, 'orders' => $this->normalizeVendorOrdersList($decoded['orders']), 'error' => ''];
-    }
-
-    /**
-     * Vendor API returns orders as a list or as an object keyed by order id.
-     *
-     * @param array<int|string, array<string, mixed>> $orders
-     * @return list<array<string, mixed>>
-     */
-    private function normalizeVendorOrdersList(array $orders): array
-    {
-        if ($orders === []) {
-            return [];
-        }
-
-        if (array_is_list($orders)) {
-            return $orders;
-        }
-
-        return array_values($orders);
+        return order_json_fetch_checkout_payload($orderNumber);
     }
 
     /**
@@ -655,6 +611,20 @@ class OrdersController
         $orderNumber = trim($orderNumber);
         if ($orderNumber === '') {
             return ['success' => false, 'message' => 'Order number missing', 'imported' => 0, 'total' => 0, 'attempts' => 0];
+        }
+
+        require_once dirname(__DIR__) . '/helpers/pos_local_checkout_order.php';
+        if (pos_local_checkout_is_temp_order_number($orderNumber)) {
+            global $ordersModel;
+            $ready = $ordersModel->hasOrderLines($orderNumber) && $ordersModel->hasOrderInfo($orderNumber);
+
+            return [
+                'success' => $ready,
+                'message' => $ready ? 'Local POS order ready' : 'Local order data missing',
+                'imported' => 0,
+                'total' => 0,
+                'attempts' => 1,
+            ];
         }
 
         $maxAttempts = max(1, min(6, $maxAttempts));
@@ -2897,6 +2867,7 @@ class OrdersController
         $updated = 0;
         $failed = 0;
         $results = [];
+        $refreshedFreshStockProductIds = [];
 
         foreach ($cart as $item) {
             if (!is_array($item)) {
@@ -2934,6 +2905,13 @@ class OrdersController
                     require_once __DIR__ . '/../helpers/BookPurchaseReplenishment.php';
                     BookPurchaseReplenishment::tryProcessImportedOrderLine($conn, $productModel, $rdata);
                     $ordersModel->addProducts($rdata);
+                    require_once __DIR__ . '/../helpers/stock_refresh_from_api.php';
+                    tryRefreshFreshProductStockFromApiForOrderLine(
+                        $conn,
+                        $productModel,
+                        $rdata,
+                        $refreshedFreshStockProductIds
+                    );
                 } elseif ($action === 'updated') {
                     $updated++;
                 }

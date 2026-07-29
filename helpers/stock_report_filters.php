@@ -63,6 +63,130 @@ function appendStockReportStockStatusFiltersSql(string &$where, array $filters):
  *
  * @param array<string, mixed> $filters
  */
+/**
+ * Split stock report keyword input into individual search terms.
+ * Supports comma, semicolon, whitespace, tabs, and newlines (Excel / Sheets paste).
+ *
+ * @return array<int, string>
+ */
+function parseStockReportSearchTerms(string $search): array
+{
+    $search = trim($search);
+    if ($search === '') {
+        return [];
+    }
+
+    $parts = preg_split('/[\s,;]+/', $search, -1, PREG_SPLIT_NO_EMPTY);
+    if ($parts === false) {
+        return [];
+    }
+
+    $normalized = [];
+    foreach ($parts as $part) {
+        $part = trim((string) $part);
+        if ($part !== '') {
+            $normalized[] = $part;
+        }
+    }
+
+    return array_values(array_unique($normalized));
+}
+
+/**
+ * POS register search — multi-item when comma/semicolon/newline/tab present; otherwise one phrase.
+ *
+ * @return array<int, string>
+ */
+function parsePosRegisterSearchTerms(string $search): array
+{
+    $search = trim($search);
+    if ($search === '') {
+        return [];
+    }
+    if (preg_match('/[,;\r\n\t]/', $search) === 1) {
+        return parseStockReportSearchTerms($search);
+    }
+
+    return [$search];
+}
+
+/**
+ * Apply POS register keyword filter (item code, SKU, title). Multiple terms are OR-matched.
+ *
+ * @return bool True when at least one search term was applied.
+ */
+function appendPosRegisterSearchFilterSql(
+    string &$where,
+    array &$params,
+    string &$types,
+    string $search
+): bool {
+    $terms = parsePosRegisterSearchTerms($search);
+    if ($terms === []) {
+        return false;
+    }
+
+    $clauses = [];
+    foreach ($terms as $term) {
+        $clauses[] = '(p.item_code LIKE ? OR p.title LIKE ? OR p.sku LIKE ?)';
+        $like = '%' . $term . '%';
+        $params[] = $like;
+        $params[] = $like;
+        $params[] = $like;
+        $types .= 'sss';
+    }
+
+    $where .= ' AND (' . implode(' OR ', $clauses) . ') ';
+
+    return true;
+}
+
+/**
+ * Apply keyword filter (item code, SKU, title). Multiple terms are OR-matched.
+ *
+ * @return bool True when at least one search term was applied.
+ */
+function appendStockReportSearchFilterSql(
+    string &$where,
+    array &$params,
+    string &$types,
+    string $search
+): bool {
+    $terms = parseStockReportSearchTerms($search);
+    if ($terms === []) {
+        return false;
+    }
+
+    $clauses = [];
+    foreach ($terms as $term) {
+        $clauses[] = '(p.item_code LIKE ? OR p.title LIKE ? OR p.sku LIKE ?)';
+        $like = '%' . $term . '%';
+        $params[] = $like;
+        $params[] = $like;
+        $params[] = $like;
+        $types .= 'sss';
+    }
+
+    $where .= ' AND (' . implode(' OR ', $clauses) . ') ';
+
+    return true;
+}
+
+/**
+ * Whether a product may use inline stock-report refresh (no ledger history, or one zero-balance row).
+ */
+function isStockReportInlineRefreshEligible(int $movementCount, ?float $soleMovementRunningStock): bool
+{
+    if ($movementCount <= 0) {
+        return true;
+    }
+    if ($movementCount === 1) {
+        return abs((float) $soleMovementRunningStock) < 0.00001;
+    }
+
+    return false;
+}
+
 function appendStockReportLocationFilterSql(
     string &$where,
     array &$params,

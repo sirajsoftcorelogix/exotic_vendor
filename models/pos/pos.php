@@ -1,4 +1,7 @@
 <?php
+
+require_once dirname(__DIR__, 2) . '/helpers/stock_report_filters.php';
+
 class pos
 {
     private $db;
@@ -93,13 +96,9 @@ class pos
             $types .= "s";
         }
 
-        // PRODUCT NAME
+        // PRODUCT NAME / SKU search — multiple items when comma/semicolon/newline/tab present.
         if ($productName !== '') {
-            $where .= " AND (p.title LIKE ? OR p.item_code LIKE ? OR p.sku LIKE ?) ";
-            $params[] = "%{$productName}%";
-            $params[] = "%{$productName}%";
-            $params[] = "%{$productName}%";
-            $types .= "sss";
+            appendPosRegisterSearchFilterSql($where, $params, $types, $productName);
         }
 
         // PRODUCT CODE
@@ -134,7 +133,8 @@ class pos
             $types .= "d";
         }
 
-        $hasSearch = ($productName !== '' || $searchValue !== '' || $productCode !== '');
+        $hasSearch = (parsePosRegisterSearchTerms($productName) !== [])
+            || ($searchValue !== '' || $productCode !== '');
 
         // Stock scope: align with stock report (getStockReport) — default is "all" rows with a movement row.
         $stockFilter = strtolower(trim((string)$stockFilter));
@@ -411,7 +411,6 @@ class pos
     private function buildStockReportQueryContext(array $filters, bool $includeLocation): ?array
     {
         $warehouseId = isset($filters['warehouse_id']) ? (int) $filters['warehouse_id'] : (isset($_SESSION['warehouse_id']) ? (int) $_SESSION['warehouse_id'] : 0);
-        $search = trim((string) ($filters['search'] ?? ''));
         $category = trim((string) ($filters['category'] ?? ''));
 
         if ($warehouseId <= 0) {
@@ -420,9 +419,12 @@ class pos
 
         require_once dirname(__DIR__, 2) . '/helpers/stock_report_filters.php';
 
+        $search = trim((string) ($filters['search'] ?? ''));
+        $hasSearch = parseStockReportSearchTerms($search) !== [];
+
         // Latest movement row per product in selected warehouse using MAX(id) subquery.
         // When searching, LEFT JOIN so products with no movements in this warehouse still appear with 0 stock.
-        $joinType = ($search !== '') ? 'LEFT' : 'INNER';
+        $joinType = $hasSearch ? 'LEFT' : 'INNER';
         $join = "
             {$joinType} JOIN (
                 SELECT sm1.product_id, sm1.running_stock, sm1.location
@@ -449,13 +451,8 @@ class pos
             $types .= 's';
         }
 
-        if ($search !== '') {
-            $where .= ' AND (p.item_code LIKE ? OR p.title LIKE ? OR p.sku LIKE ?) ';
-            $like = '%' . $search . '%';
-            $params[] = $like;
-            $params[] = $like;
-            $params[] = $like;
-            $types .= 'sss';
+        if ($hasSearch) {
+            appendStockReportSearchFilterSql($where, $params, $types, $search);
         }
 
         appendStockReportExtraFiltersSql($where, $params, $types, $filters, $this->db);
@@ -464,6 +461,13 @@ class pos
 
         return [
             'join' => $join,
+            'stats_join' => "
+            LEFT JOIN (
+                SELECT product_id, COUNT(*) AS movement_count, MIN(running_stock) AS min_running_stock
+                FROM vp_stock_movements
+                GROUP BY product_id
+            ) sm_stats ON sm_stats.product_id = p.id
+            ",
             'where' => $where,
             'params' => $params,
             'types' => $types,
@@ -488,6 +492,7 @@ class pos
         }
 
         $join = $query['join'];
+        $statsJoin = $query['stats_join'] ?? '';
         $where = $query['where'];
         $params = $query['params'];
         $types = $query['types'];
@@ -506,9 +511,12 @@ class pos
                 ({$this->sqlPosIndiaSellBaseExpr('p')} * (1 + IFNULL(p.gst, 0) / 100)) AS sell_price,
                 p.cost_price,
                 COALESCE(sm.running_stock, 0) AS stock_qty,
-                sm.location AS location
+                sm.location AS location,
+                COALESCE(sm_stats.movement_count, 0) AS movement_count,
+                sm_stats.min_running_stock AS min_running_stock
             FROM vp_products p
             $join
+            $statsJoin
             LEFT JOIN `category` cat ON cat.category = p.groupname
             $where
             ORDER BY COALESCE(sm.running_stock, 0) ASC, p.title ASC

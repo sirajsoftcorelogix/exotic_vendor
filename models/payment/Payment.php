@@ -2,6 +2,10 @@
 
 class Payment
 {
+    private const LIST_AJAX_DEFAULT_LIMIT = 250;
+    private const LIST_AJAX_EXACT_ORDER_LIMIT = 100;
+    private const ORDER_NUMBER_COLLATE = 'utf8mb4_unicode_ci';
+
     /** @var mysqli */
     private $db;
 
@@ -62,7 +66,11 @@ class Payment
      */
     public function searchListAjax(array $filters): array
     {
+        $exactOrderNumber = $this->resolveExactOrderNumberFilter($filters);
         $where = $this->buildSearchListAjaxWhereClause($filters);
+        $limit = $exactOrderNumber !== null
+            ? self::LIST_AJAX_EXACT_ORDER_LIMIT
+            : self::LIST_AJAX_DEFAULT_LIMIT;
 
         $sql = '
             SELECT
@@ -74,6 +82,7 @@ class Payment
                 p.order_amount,
                 p.payment_mode,
                 p.payment_stage,
+                p.payment_status,
                 u.name AS user_name,
                 w.address_title AS warehouse
             FROM pos_payments p
@@ -81,7 +90,7 @@ class Payment
             LEFT JOIN exotic_address w ON w.id = p.warehouse_id
             WHERE 1=1' . $where['sql'] . '
             ORDER BY p.id DESC
-        ';
+            LIMIT ' . (int)$limit;
 
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
@@ -113,7 +122,14 @@ class Payment
         }
 
         $orderNumbers = array_keys($orderNumbers);
-        $orderContexts = $this->fetchOrderContextByNumbers($orderNumbers);
+        if ($exactOrderNumber !== null) {
+            $singleContext = $this->fetchOrderContextForSingleOrder($exactOrderNumber);
+            $orderContexts = $singleContext !== []
+                ? [$exactOrderNumber => $singleContext]
+                : [];
+        } else {
+            $orderContexts = $this->fetchOrderContextByNumbers($orderNumbers);
+        }
         $invoiceIds = $this->fetchInvoiceIdsByOrderNumbers($orderNumbers);
         $paymentMetrics = $this->buildPaymentMetricsByOrderNumbers($orderNumbers, $orderContexts);
 
@@ -208,6 +224,79 @@ class Payment
     }
 
     /**
+     * @param array<string, mixed> $filters
+     */
+    private function resolveExactOrderNumberFilter(array $filters): ?string
+    {
+        if (empty($filters['order_exact']) || empty($filters['order_number'])) {
+            return null;
+        }
+        if (
+            isset($filters['order_id'])
+            && $filters['order_id'] !== ''
+            && ctype_digit((string)$filters['order_id'])
+        ) {
+            return null;
+        }
+
+        $orderNumber = trim((string)$filters['order_number']);
+
+        return $orderNumber !== '' ? $orderNumber : null;
+    }
+
+    /**
+     * Fast path for payment list filtered to one order (POS receipt / order history links).
+     *
+     * @return array{order_id: int, order_grand_total: float}
+     */
+    private function fetchOrderContextForSingleOrder(string $orderNumber): array
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '') {
+            return [];
+        }
+
+        $sql = '
+            SELECT
+                IFNULL((
+                    SELECT MIN(o.id)
+                    FROM vp_orders o
+                    WHERE o.order_number COLLATE ' . self::ORDER_NUMBER_COLLATE . ' = CONVERT(? USING utf8mb4) COLLATE ' . self::ORDER_NUMBER_COLLATE . '
+                ), 0) AS order_id,
+                COALESCE(
+                    NULLIF((
+                        SELECT MAX(pp.order_amount)
+                        FROM pos_payments pp
+                        WHERE pp.order_number COLLATE ' . self::ORDER_NUMBER_COLLATE . ' = CONVERT(? USING utf8mb4) COLLATE ' . self::ORDER_NUMBER_COLLATE . '
+                          AND pp.order_amount > 0
+                    ), 0),
+                    NULLIF((
+                        SELECT MAX(oi.total)
+                        FROM vp_order_info oi
+                        WHERE oi.order_number COLLATE ' . self::ORDER_NUMBER_COLLATE . ' = CONVERT(? USING utf8mb4) COLLATE ' . self::ORDER_NUMBER_COLLATE . '
+                    ), 0),
+                    0
+                ) AS order_grand_total
+        ';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('sss', $orderNumber, $orderNumber, $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!is_array($row)) {
+            return [];
+        }
+
+        return [
+            'order_id' => (int)($row['order_id'] ?? 0),
+            'order_grand_total' => round((float)($row['order_grand_total'] ?? 0), 2),
+        ];
+    }
+
+    /**
      * @param list<string> $orderNumbers
      * @return array<string, array{order_id: int, order_grand_total: float}>
      */
@@ -216,47 +305,48 @@ class Payment
         if ($orderNumbers === []) {
             return [];
         }
+        if (count($orderNumbers) === 1) {
+            $single = $this->fetchOrderContextForSingleOrder($orderNumbers[0]);
+
+            return $single !== [] ? [$orderNumbers[0] => $single] : [];
+        }
 
         $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
         $types = str_repeat('s', count($orderNumbers));
+        $orderNumberJoin = ' COLLATE ' . self::ORDER_NUMBER_COLLATE . ' = nums.order_number COLLATE ' . self::ORDER_NUMBER_COLLATE;
 
         $sql = "
             SELECT
-                agg.order_number,
-                agg.order_id,
+                nums.order_number,
+                IFNULL(vo.order_id, 0) AS order_id,
                 COALESCE(
-                    NULLIF(pay_snap.max_order_amount, 0),
-                    NULLIF(agg.order_info_total, 0),
-                    GREATEST(
-                        agg.order_line_subtotal
-                        - agg.custom_reduce
-                        - agg.coupon_reduce
-                        - agg.gift_reduce
-                        - agg.credit,
-                        0
-                    )
+                    NULLIF(pay.max_order_amount, 0),
+                    NULLIF(oi.max_total, 0),
+                    0
                 ) AS order_grand_total
             FROM (
-                SELECT
-                    o.order_number,
-                    MIN(o.id) AS order_id,
-                    SUM(o.finalprice * o.quantity) AS order_line_subtotal,
-                    MAX(CASE WHEN oi.total > 0 THEN oi.total ELSE NULL END) AS order_info_total,
-                    IFNULL(MAX(o.custom_reduce), 0) AS custom_reduce,
-                    IFNULL(MAX(oi.coupon_reduce), 0) AS coupon_reduce,
-                    IFNULL(MAX(oi.giftvoucher_reduce), 0) AS gift_reduce,
-                    IFNULL(MAX(oi.credit), 0) AS credit
-                FROM vp_orders o
-                LEFT JOIN vp_order_info oi ON oi.order_number = o.order_number
-                WHERE o.order_number IN ($placeholders)
-                GROUP BY o.order_number
-            ) agg
+                SELECT DISTINCT order_number
+                FROM pos_payments
+                WHERE order_number IN ($placeholders)
+            ) nums
+            LEFT JOIN (
+                SELECT order_number, MIN(id) AS order_id
+                FROM vp_orders
+                WHERE order_number IN ($placeholders)
+                GROUP BY order_number
+            ) vo ON vo.order_number{$orderNumberJoin}
+            LEFT JOIN (
+                SELECT order_number, MAX(total) AS max_total
+                FROM vp_order_info
+                WHERE order_number IN ($placeholders)
+                GROUP BY order_number
+            ) oi ON oi.order_number{$orderNumberJoin}
             LEFT JOIN (
                 SELECT order_number, MAX(order_amount) AS max_order_amount
                 FROM pos_payments
                 WHERE order_number IN ($placeholders) AND order_amount > 0
                 GROUP BY order_number
-            ) pay_snap ON pay_snap.order_number = agg.order_number
+            ) pay ON pay.order_number{$orderNumberJoin}
         ";
 
         $stmt = $this->db->prepare($sql);
@@ -264,8 +354,8 @@ class Payment
             return [];
         }
 
-        $bindParams = array_merge($orderNumbers, $orderNumbers);
-        $stmt->bind_param($types . $types, ...$bindParams);
+        $bindParams = array_merge($orderNumbers, $orderNumbers, $orderNumbers, $orderNumbers);
+        $stmt->bind_param($types . $types . $types . $types, ...$bindParams);
         $stmt->execute();
         $result = $stmt->get_result();
 
@@ -302,7 +392,7 @@ class Payment
             SELECT ii.order_number, MAX(i.id) AS invoice_id
             FROM vp_invoice_items ii
             INNER JOIN vp_invoices i ON i.id = ii.invoice_id
-            WHERE LOWER(TRIM(COALESCE(i.status, ''))) <> 'cancelled'
+            WHERE COALESCE(i.status, '') <> 'cancelled'
               AND ii.order_number IN ($placeholders)
             GROUP BY ii.order_number
         ";
