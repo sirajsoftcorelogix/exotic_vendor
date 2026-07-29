@@ -946,11 +946,110 @@ class POSRegisterController
             }
         }
 
-        renderTemplate('views/pos_register/index.php', [
-            'categories' => $categoryData,
+        renderTemplate('views/pos_register/index.php', array_merge(
+            $this->buildPosCheckoutViewContext($conn, $usersModel, $customerModel, $highValueTransactionLimit, $countryList, $countryPhoneCodes, $posCountryStates, $posStorePincode, $warehouseName),
+            ['categories' => $categoryData]
+        ));
+    }
+
+    /** Dedicated cart page (Direct Purchase–style line table). */
+    public function cartPage()
+    {
+        require_once 'models/user/user.php';
+        require_once 'models/customer/Customer.php';
+        global $conn;
+        $usersModel = new User($conn);
+
+        if ((int)($_SESSION['warehouse_id'] ?? 0) <= 0 && $conn instanceof mysqli) {
+            $defWh = $this->getDefaultWarehouseRow($conn);
+            if ($defWh !== null && !empty($defWh['id'])) {
+                $_SESSION['warehouse_id'] = $defWh['id'];
+            }
+        }
+
+        $warehouseName = 'No Warehouse';
+        if (!empty($_SESSION['warehouse_id'])) {
+            $warehouse = $usersModel->getWarehouseById($_SESSION['warehouse_id']);
+            $warehouseName = $warehouse['address_title'] ?? 'No Warehouse';
+            $_SESSION['pos_warehouse_name'] = $warehouseName;
+        }
+
+        $customerModel = new Customer($conn);
+        $highValueTransactionLimit = $conn instanceof mysqli ? $this->getHighValueTransactionLimit($conn) : 200000.00;
+
+        $rawCountries = function_exists('country_array') ? country_array() : ['IN' => 'India'];
+        asort($rawCountries);
+        $countryList = [];
+        if (isset($rawCountries['IN'])) {
+            $countryList['IN'] = $rawCountries['IN'];
+            unset($rawCountries['IN']);
+        }
+        foreach ($rawCountries as $code => $name) {
+            $iso = strtoupper(substr(trim((string)$code), 0, 2));
+            if ($iso !== '' && !isset($countryList[$iso])) {
+                $countryList[$iso] = (string)$name;
+            }
+        }
+
+        $posCountryStates = $this->loadPosCountryStatesForCheckout($conn);
+        $posStorePincode = $conn instanceof mysqli ? $this->resolveStorePincodeForPos($conn) : '';
+        $countryPhoneCodes = $this->loadPosCountryPhoneCodes($conn);
+
+        renderTemplate('views/pos_register/cart.php', $this->buildPosCheckoutViewContext(
+            $conn,
+            $usersModel,
+            $customerModel,
+            $highValueTransactionLimit,
+            $countryList,
+            $countryPhoneCodes,
+            $posCountryStates,
+            $posStorePincode,
+            $warehouseName
+        ), 'POS Cart');
+    }
+
+    /**
+     * Shared view data for POS register cart/checkout (index sidebar + dedicated cart page).
+     *
+     * @param array<string, array{id:int,name:string}> $posCountryStates
+     * @return array<string, mixed>
+     */
+    private function buildPosCheckoutViewContext(
+        $conn,
+        User $usersModel,
+        Customer $customerModel,
+        float $highValueTransactionLimit,
+        array $countryList,
+        array $countryPhoneCodes,
+        array $posCountryStates,
+        string $posStorePincode,
+        string $warehouseName
+    ): array {
+        $selected_customer = null;
+        if (!empty($_SESSION['pos_customer_id'])) {
+            $cid = (int)$_SESSION['pos_customer_id'];
+            if ($cid > 0) {
+                $row = $customerModel->getCustomerById($cid);
+                if (!empty($row['id'])) {
+                    $nm = (string)($row['name'] ?? '');
+                    $ph = (string)($row['phone'] ?? '');
+                    $em = (string)($row['email'] ?? '');
+                    $selected_customer = [
+                        'id' => (int)$row['id'],
+                        'name' => $nm,
+                        'phone' => $ph,
+                        'email' => $em,
+                        'text' => trim($nm . ' | ' . $ph . ($em !== '' ? ' | ' . $em : '')),
+                    ];
+                } else {
+                    unset($_SESSION['pos_customer_id']);
+                }
+            }
+        }
+
+        return [
             'warehouse_name' => $warehouseName,
             'pos_store_pincode' => $posStorePincode,
-            // Minimal placeholder until new cart; view must not depend on Exotic retrieve shape.
             'cartData' => [
                 'items' => [],
                 'grand_total' => 0.0,
@@ -963,7 +1062,87 @@ class POSRegisterController
             'pos_india_states' => $posCountryStates['IN'] ?? [],
             'pos_country_states' => $posCountryStates,
             'pos_payment_mode_options' => $this->posPaymentModeOptionsForView(),
-        ]);
+        ];
+    }
+
+    /** @return array<string, list<array{id:int,name:string}>> */
+    private function loadPosCountryStatesForCheckout($conn): array
+    {
+        if (!$conn instanceof mysqli) {
+            return [];
+        }
+
+        $resolveCountryIdForStates = function (string $iso, array $names = []) use ($conn): int {
+            $codes = array_values(array_unique(array_filter([
+                strtoupper(substr(trim($iso), 0, 2)),
+                strtoupper(trim($iso)),
+            ])));
+            $nameCandidates = array_values(array_unique(array_filter(array_map('trim', $names))));
+            $sql = 'SELECT id FROM countries WHERE UPPER(country_code) IN (?, ?) OR name IN (?, ?) LIMIT 1';
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                return 0;
+            }
+            $codeA = $codes[0] ?? '';
+            $codeB = $codes[1] ?? $codeA;
+            $nameA = $nameCandidates[0] ?? '';
+            $nameB = $nameCandidates[1] ?? $nameA;
+            $stmt->bind_param('ssss', $codeA, $codeB, $nameA, $nameB);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            return (int)($row['id'] ?? 0);
+        };
+
+        $loadPosStatesForCountry = function (int $countryId) use ($conn): array {
+            require_once 'models/country/state.php';
+            $stateModel = new State($conn);
+            $stateRows = $stateModel->getAllStates($countryId);
+            $states = [];
+            foreach (($stateRows['states'] ?? []) as $row) {
+                $name = trim((string)($row['name'] ?? ''));
+                if ($name !== '') {
+                    $states[] = ['id' => (int)($row['id'] ?? 0), 'name' => $name];
+                }
+            }
+
+            return $states;
+        };
+
+        $indiaCountryId = $resolveCountryIdForStates('IN', ['India']) ?: 105;
+        $usCountryId = $resolveCountryIdForStates('US', ['United States', 'USA', 'United States of America']);
+
+        return [
+            'IN' => $loadPosStatesForCountry($indiaCountryId),
+            'US' => $loadPosStatesForCountry($usCountryId),
+        ];
+    }
+
+    /** @return array<string, string> ISO => phone digits */
+    private function loadPosCountryPhoneCodes($conn): array
+    {
+        $countryPhoneCodes = [];
+        if (!$conn instanceof mysqli) {
+            return $countryPhoneCodes;
+        }
+
+        $phoneRes = $conn->query(
+            "SELECT country_code, phone_code FROM countries
+             WHERE phone_code IS NOT NULL AND TRIM(phone_code) <> ''"
+        );
+        if ($phoneRes) {
+            while ($phoneRow = $phoneRes->fetch_assoc()) {
+                $iso = strtoupper(substr(trim((string)($phoneRow['country_code'] ?? '')), 0, 2));
+                $phoneCode = preg_replace('/\D+/', '', (string)($phoneRow['phone_code'] ?? ''));
+                if ($iso !== '' && $phoneCode !== '') {
+                    $countryPhoneCodes[$iso] = $phoneCode;
+                }
+            }
+            $phoneRes->free();
+        }
+
+        return $countryPhoneCodes;
     }
 
     /** JSON list of supported POS states by ISO country code. */

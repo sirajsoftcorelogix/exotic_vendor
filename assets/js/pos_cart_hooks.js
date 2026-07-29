@@ -49,13 +49,20 @@
   var CART_VIEW_SS_KEY = 'pos_cart_view_mode';
   var cartViewMode = 'card';
   var posCartDraftSuggestTimer = null;
+  var POS_CART_PAGE_MODE = !!(window.POS_CART_PAGE_MODE);
+  var POS_CART_THUMB_PLACEHOLDER =
+    'https://placehold.co/48x48/e2e8f0/94a3b8?text=%E2%80%94';
   try {
-    var storedCartView = sessionStorage.getItem(CART_VIEW_SS_KEY);
-    if (storedCartView === 'table' || storedCartView === 'card') {
-      cartViewMode = storedCartView;
+    if (POS_CART_PAGE_MODE) {
+      cartViewMode = 'page';
+    } else {
+      var storedCartView = sessionStorage.getItem(CART_VIEW_SS_KEY);
+      if (storedCartView === 'table' || storedCartView === 'card') {
+        cartViewMode = storedCartView;
+      }
     }
   } catch (eCartView) {
-    cartViewMode = 'card';
+    cartViewMode = POS_CART_PAGE_MODE ? 'page' : 'card';
   }
 
   function setLastCartApiDebug(entry) {
@@ -2126,6 +2133,9 @@
     if (el) {
       return el;
     }
+    if (POS_CART_PAGE_MODE) {
+      return null;
+    }
     var aside =
       document.querySelector('aside[data-pos-cart-sidebar]') ||
       document.querySelector('.pos-register-page aside') ||
@@ -2231,22 +2241,27 @@
         return buildCartDraftRowHtml(row, rows.length === 1);
       })
       .join('');
+    var isPage = cartViewMode === 'page';
     return (
-      '<div class="pos-cart-draft-section mt-3 rounded-lg border border-dashed border-orange-200 bg-orange-50/40 p-2">' +
-      '<div class="flex items-center justify-between gap-2 mb-1.5">' +
-      '<p class="text-[10px] font-bold uppercase tracking-wider text-orange-800/80">Add by SKU</p>' +
-      '<button type="button" class="pos-cart-draft-add-row inline-flex items-center gap-1 rounded-md border border-orange-200 bg-white px-2 py-1 text-[10px] font-semibold text-orange-700 hover:bg-orange-50">' +
+      '<div class="pos-cart-draft-section ' +
+      (isPage ? 'rounded-xl border border-dashed border-orange-300 bg-orange-50/50 p-4' : 'mt-3 rounded-lg border border-dashed border-orange-200 bg-orange-50/40 p-2') +
+      '">' +
+      '<div class="flex items-center justify-between gap-2 mb-2">' +
+      '<p class="text-xs font-bold uppercase tracking-wider text-orange-800/90">Add by SKU</p>' +
+      '<button type="button" class="pos-cart-draft-add-row inline-flex items-center gap-1 rounded-md border border-orange-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-orange-700 hover:bg-orange-50">' +
       '<i class="fas fa-plus text-[9px]" aria-hidden="true"></i> Add row</button>' +
       '</div>' +
       '<div class="overflow-x-auto -mx-0.5">' +
-      '<table class="w-full border-collapse text-[11px]">' +
-      '<thead><tr class="text-left text-[9px] uppercase tracking-wide text-slate-500">' +
-      '<th class="pb-1 font-semibold">SKU</th><th class="pb-1 font-semibold w-14 text-center">Qty</th><th class="pb-1 w-8"></th>' +
+      '<table class="w-full border-collapse ' +
+      (isPage ? 'text-sm' : 'text-[11px]') +
+      '">' +
+      '<thead><tr class="text-left text-[10px] uppercase tracking-wide text-slate-500">' +
+      '<th class="pb-1.5 font-semibold">SKU (auto search)</th><th class="pb-1.5 font-semibold w-16 text-center">Qty</th><th class="pb-1.5 w-8"></th>' +
       '</tr></thead>' +
       '<tbody class="pos-cart-draft-body">' +
       body +
       '</tbody></table></div>' +
-      '<p class="mt-1.5 text-[9px] text-slate-500 leading-snug">Pick from suggestions or press Enter to add. Shift+Enter for a new line in SKU lists.</p>' +
+      '<p class="mt-2 text-[11px] text-slate-500 leading-snug">Pick from suggestions or press Enter to add to cart.</p>' +
       '</div>'
     );
   }
@@ -2464,6 +2479,231 @@
     };
   }
 
+  function buildCartLineDiscountControlsHtml(ref, row, idx, items, data, lineCartAllocs) {
+    if (!ref) {
+      return '<span class="text-[10px] text-slate-400">—</span>';
+    }
+    var qty = lineQty(row);
+    var listUNum = lineListUnitNumber(row, qty);
+    var cartShare =
+      lineCartAllocs != null && lineCartAllocs.length === items.length
+        ? round2(lineCartAllocs[idx] || 0)
+        : 0;
+    if (isNaN(cartShare) || cartShare < 0) {
+      cartShare = 0;
+    }
+
+    var gadj = posLineAdjustByRef[ref] || { mode: 'percent', value: 0 };
+    var storedMode = String(gadj.mode) === 'fixed_line' ? 'fixed_line' : 'percent';
+    var storedVal =
+      typeof gadj.value === 'number' && !isNaN(gadj.value)
+        ? gadj.value
+        : parseFloat(String(gadj.value));
+    if (isNaN(storedVal) || storedVal < 0) {
+      storedVal = 0;
+    }
+
+    var showMode = cartShare > 0.001 ? 'fixed_line' : storedMode;
+    var manualFixed = 0;
+    if (storedVal > 0.001) {
+      if (storedMode === 'fixed_line') {
+        manualFixed = storedVal;
+      } else {
+        var baseLine = listUNum != null && !isNaN(listUNum) ? Math.max(0, round2(listUNum * qty)) : 0;
+        manualFixed = round2((baseLine * Math.min(100, Math.max(0, storedVal))) / 100);
+      }
+    }
+    var showValFixed = round2(Math.max(0, manualFixed) + Math.max(0, cartShare));
+
+    return (
+      '<div class="pos-cart-line-adjust min-w-[9rem]" data-cartshare="' +
+      escapeHtml(String(cartShare)) +
+      '">' +
+      '<div class="flex flex-wrap items-stretch gap-1">' +
+      '<select class="pos-cart-line-disc-mode shrink-0 rounded border border-slate-300 bg-white px-1.5 py-1 text-[10px] font-medium text-slate-800 outline-none focus:border-orange-500" data-cartref="' +
+      escapeHtml(ref) +
+      '">' +
+      (cartShare > 0.001
+        ? ''
+        : '<option value="percent"' + (showMode === 'percent' ? ' selected' : '') + '>%</option>') +
+      '<option value="fixed_line"' +
+      (showMode === 'fixed_line' ? ' selected' : '') +
+      '>\u20b9</option>' +
+      '</select>' +
+      '<input type="number" step="0.01" min="0"' +
+      (showMode === 'percent' ? ' max="100"' : '') +
+      ' class="pos-cart-line-disc-val min-w-[3.5rem] flex-1 rounded border border-slate-300 bg-white px-1.5 py-1 text-[10px] tabular-nums outline-none focus:border-orange-500"' +
+      ' data-cartref="' +
+      escapeHtml(ref) +
+      '" placeholder="' +
+      (showMode === 'percent' ? '%' : '\u20b9') +
+      '" value="' +
+      (showMode === 'fixed_line' && showValFixed > 0.001
+        ? escapeHtml(String(showValFixed))
+        : storedVal > 0.001
+          ? escapeHtml(String(storedVal))
+          : '') +
+      '" />' +
+      '<button type="button" class="pos-cart-line-disc-apply shrink-0 rounded bg-slate-800 px-2 py-1 text-[10px] font-bold text-white hover:bg-slate-700" data-cartref="' +
+      escapeHtml(ref) +
+      '" title="Apply">OK</button>' +
+      '<button type="button" class="pos-cart-line-disc-reset shrink-0 rounded border border-slate-300 bg-white px-1.5 py-1 text-[10px] text-slate-600 hover:bg-slate-50" data-cartref="' +
+      escapeHtml(ref) +
+      '" title="Clear">\u2715</button>' +
+      '</div></div>'
+    );
+  }
+
+  function buildCartPageLocalStockHtml(ref, row, qty, productCode, localStockQty) {
+    if (localStockQty == null || qty <= localStockQty || !ref) {
+      return '';
+    }
+    if (isLocalStockConfirmed(ref, qty, localStockQty, row)) {
+      return (
+        '<tr class="pos-cart-page-local-stock-ack"><td colspan="8" class="py-1 px-2">' +
+        '<div class="inline-flex items-center rounded-md border border-violet-200/80 bg-violet-50/90 px-2 py-1 text-[10px] font-semibold text-violet-900">' +
+        escapeHtml(localStockAckLabel(localStockQty)) +
+        '</div></td></tr>'
+      );
+    }
+    return (
+      '<tr class="pos-cart-page-local-stock-warn"><td colspan="8" class="py-1.5 px-2">' +
+      '<div class="pos-local-stock-confirm flex max-w-full flex-col gap-1.5 rounded-md border-2 border-violet-300 bg-violet-100 px-2.5 py-1.5 text-[11px] font-semibold text-violet-950" role="alert"' +
+      ' data-cartref="' +
+      escapeHtml(ref) +
+      '" data-product-code="' +
+      escapeHtml(productCode) +
+      '" data-qty="' +
+      escapeHtml(String(qty)) +
+      '" data-local-stock="' +
+      escapeHtml(formatLocalStockQty(localStockQty)) +
+      '">' +
+      '<span class="min-w-0">' +
+      escapeHtml(localStockProceedPrompt(localStockQty)) +
+      '</span>' +
+      '<span class="inline-flex shrink-0 items-center gap-1.5">' +
+      '<button type="button" class="pos-local-stock-yes min-w-[2rem] rounded-md bg-violet-700 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-violet-800">Y</button>' +
+      '<span class="font-bold text-violet-500">|</span>' +
+      '<button type="button" class="pos-local-stock-no min-w-[2rem] rounded-md border border-violet-400 bg-white px-2.5 py-1 text-[11px] font-bold text-violet-900 hover:bg-violet-50">N</button>' +
+      '</span></div></td></tr>'
+    );
+  }
+
+  function buildCartPageCartHtml(items, data, lineCartAllocs) {
+    var html =
+      '<div class="pos-cart-page-table-wrap overflow-x-auto">' +
+      '<table class="pos-cart-page-table w-full border-collapse text-xs sm:text-sm">' +
+      '<thead><tr class="border-b border-slate-200 text-left text-[10px] uppercase tracking-wide text-slate-500">' +
+      '<th class="py-2.5 pl-3 pr-2 font-semibold w-14">Image</th>' +
+      '<th class="py-2.5 pr-2 font-semibold w-24">SKU</th>' +
+      '<th class="py-2.5 pr-2 font-semibold min-w-[8rem]">Product</th>' +
+      '<th class="py-2.5 px-2 font-semibold w-16 text-center">Qty</th>' +
+      '<th class="py-2.5 px-2 font-semibold w-20 text-right">Price</th>' +
+      '<th class="py-2.5 px-2 font-semibold min-w-[9rem]">Line Disc.</th>' +
+      '<th class="py-2.5 pl-2 pr-3 font-semibold w-20 text-right">Total</th>' +
+      '<th class="py-2.5 w-9"></th>' +
+      '</tr></thead><tbody>';
+
+    if (!items.length) {
+      html +=
+        '<tr><td colspan="8" class="py-10 text-center text-sm text-slate-400 italic">No items yet — add SKUs using the row below.</td></tr>';
+    } else {
+      items.forEach(function (row, idx) {
+        var disp = computeCartLineDisplay(row, idx, items, data, lineCartAllocs);
+        var ref = disp.ref;
+        var qty = disp.qty;
+        var title = lineTitle(row);
+        var sub = lineSubDisplay(row);
+        var productCode = String(pickFirst(row, ['code', 'item_code', 'sku']) || '').trim();
+        var codeLbl = String(sub || productCode || '').trim() || '\u2014';
+        var maxSell = lineMaxSellableQty(row, data || {});
+        var localStockQty = lineLocalStockQty(row);
+        var imgUrl = lineImageUrl(row);
+        var maxAttr =
+          ref && maxSell != null && maxSell >= 1
+            ? ' max="' + escapeHtml(String(maxSell)) + '" data-max-qty="' + escapeHtml(String(maxSell)) + '"'
+            : '';
+
+        html += '<tr class="pos-cart-page-line border-b border-slate-100 align-top">';
+        html += '<td class="py-2.5 pl-3 pr-2 align-top">';
+        if (imgUrl) {
+          html +=
+            '<img src="' +
+            escapeHtml(imgUrl) +
+            '" alt="" class="pos-cart-line-thumb" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=\'' +
+            POS_CART_THUMB_PLACEHOLDER +
+            '\';" />';
+        } else {
+          html +=
+            '<div class="pos-cart-line-thumb-placeholder" aria-hidden="true">\u25c7</div>';
+        }
+        html += '</td>';
+        html +=
+          '<td class="py-2.5 pr-2 align-top">' +
+          '<span class="pos-cart-line-item font-semibold tabular-nums text-slate-700 cursor-pointer hover:text-orange-700"' +
+          (productCode ? ' data-product-code="' + escapeHtml(productCode) + '"' : '') +
+          ' title="View product">' +
+          escapeHtml(codeLbl) +
+          '</span></td>';
+        html +=
+          '<td class="py-2.5 pr-2 align-top max-w-[14rem]">' +
+          '<div class="pos-cart-line-item line-clamp-2 text-slate-800 leading-snug cursor-pointer font-medium"' +
+          (productCode ? ' data-product-code="' + escapeHtml(productCode) + '"' : '') +
+          ' title="' +
+          escapeHtml(title) +
+          '">' +
+          escapeHtml(title) +
+          '</div>';
+        var addonLabels = lineAddonLabels(row);
+        if (addonLabels.length) {
+          html +=
+            '<div class="mt-0.5 text-[10px] font-medium text-emerald-800 leading-snug">' +
+            escapeHtml('+ ' + addonLabels.join(', ')) +
+            '</div>';
+        }
+        html += '</td>';
+        html += '<td class="py-2.5 px-2 align-top text-center">';
+        if (ref) {
+          html +=
+            '<input type="number" min="1" step="1" class="pos-cart-qty-input w-14 rounded border border-slate-300 bg-white px-1.5 py-1.5 text-center text-xs font-semibold outline-none focus:border-orange-500"' +
+            maxAttr +
+            ' data-cartref="' +
+            escapeHtml(ref) +
+            '" value="' +
+            escapeHtml(String(qty)) +
+            '" />';
+        } else {
+          html += escapeHtml(String(qty));
+        }
+        html += '</td>';
+        html +=
+          '<td class="py-2.5 px-2 align-top text-right tabular-nums text-slate-600 whitespace-nowrap">' +
+          disp.unitDisp +
+          '</td>';
+        html +=
+          '<td class="py-2.5 px-2 align-top">' +
+          buildCartLineDiscountControlsHtml(ref, row, idx, items, data, lineCartAllocs) +
+          '</td>';
+        html +=
+          '<td class="py-2.5 pl-2 pr-3 align-top text-right tabular-nums font-semibold text-orange-600 whitespace-nowrap">' +
+          disp.lineDisp +
+          '</td>';
+        html += '<td class="py-2.5 align-top text-right pr-2">';
+        if (ref) {
+          html +=
+            '<button type="button" class="pos-cart-delete-btn inline-flex h-8 w-8 items-center justify-center rounded-full text-red-500 hover:bg-red-50" data-cartref="' +
+            escapeHtml(ref) +
+            '" title="Remove" aria-label="Remove"><i class="fas fa-trash-alt text-[11px]"></i></button>';
+        }
+        html += '</td></tr>';
+        html += buildCartPageLocalStockHtml(ref, row, qty, productCode, localStockQty);
+      });
+    }
+
+    html += '</tbody></table></div>';
+    return html;
+  }
+
   function buildCartTableCartHtml(items, data, lineCartAllocs) {
     var html =
       '<div class="pos-cart-table-wrap overflow-x-auto -mx-0.5">' +
@@ -2551,8 +2791,9 @@
     if (!panel) {
       return;
     }
-    panel.className =
-      'pos-exotic-cart-panel rounded-2xl border border-slate-200/90 bg-gradient-to-b from-slate-50 to-white shadow-sm px-3 py-4 text-sm text-slate-800 mx-0.5 mb-2';
+    panel.className = POS_CART_PAGE_MODE
+      ? 'pos-exotic-cart-panel text-sm text-slate-800'
+      : 'pos-exotic-cart-panel rounded-2xl border border-slate-200/90 bg-gradient-to-b from-slate-50 to-white shadow-sm px-3 py-4 text-sm text-slate-800 mx-0.5 mb-2';
     var items = getCartItems(data);
     var refsUsed = [];
     for (var ri = 0; ri < items.length; ri++) {
@@ -2585,12 +2826,23 @@
     var totals = mergeTotalsWithLineAdjustments(data || {}, rawTotalsForAlloc);
     var existingPanel = document.getElementById(PANEL_ID);
     var draftSnapshot =
-      cartViewMode === 'table' ? captureCartDraftRows(existingPanel) : null;
+      cartViewMode === 'table' || cartViewMode === 'page'
+        ? captureCartDraftRows(existingPanel)
+        : null;
     var html = '';
 
-    html += buildCartViewToggleHtml();
+    if (!POS_CART_PAGE_MODE) {
+      html += buildCartViewToggleHtml();
+    }
 
-    if (cartViewMode === 'table') {
+    if (cartViewMode === 'page') {
+      html += '<div class="pos-cart-page-layout grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(17rem,20rem)] gap-6 items-start">';
+      html += '<div class="pos-cart-page-main min-w-0 space-y-4">';
+      html += buildCartPageCartHtml(items, data, lineCartAllocs);
+      html += buildCartDraftSectionHtml(draftSnapshot);
+      html += '</div>';
+      html += '<div class="pos-cart-page-sidebar space-y-4 xl:sticky xl:top-4">';
+    } else if (cartViewMode === 'table') {
       html += buildCartTableCartHtml(items, data, lineCartAllocs);
       html += buildCartDraftSectionHtml(draftSnapshot);
     } else if (!items.length) {
@@ -2860,7 +3112,9 @@
       totals.grandTotal != null;
     if (showSummary) {
       html +=
-        '<div class="mt-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">' +
+        '<div class="' +
+        (cartViewMode === 'page' ? '' : 'mt-4 ') +
+        'rounded-lg border border-slate-200 bg-white p-3 shadow-sm">' +
         '<p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Summary</p>' +
         '<div class="space-y-0.5">';
       html += moneyRowSummary('Sub total (incl. GST)', totals.subtotal, false);
@@ -2913,7 +3167,9 @@
     }
 
     html +=
-      '<div class="mt-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm space-y-3">' +
+      '<div class="' +
+      (cartViewMode === 'page' ? '' : 'mt-4 ') +
+      'rounded-lg border border-slate-200 bg-white p-3 shadow-sm space-y-3">' +
       '<p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Discount</p>' +
       '<div class="space-y-1">' +
       '<div class="flex gap-2 flex-wrap items-stretch">' +
@@ -2947,6 +3203,10 @@
       'Review API request / response (proxy + Exotic add)' +
       '</button>' +
       '</div>';
+
+    if (cartViewMode === 'page') {
+      html += '</div></div>';
+    }
 
     window.__posCartLastTotals = {
       grandTotal: totals.grandTotal,

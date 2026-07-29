@@ -1436,6 +1436,10 @@ switch ($page) {
                 $controller->index();
                 break;
 
+            case 'cart':
+                $controller->cartPage();
+                break;
+
             case 'products-ajax':
                 $controller->productsAjax();
                 break;
