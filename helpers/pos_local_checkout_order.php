@@ -235,7 +235,13 @@ function pos_local_checkout_persist_order(
         if (!is_array($row)) {
             continue;
         }
-        $itemCode = trim((string)($row['code'] ?? $row['item_code'] ?? $row['itemcode'] ?? ''));
+        require_once dirname(__DIR__) . '/integrations/exotic/Support/CartAddPayloadResolver.php';
+        $row = exotic_cart_normalize_line_for_local_persist($conn, $row);
+
+        $itemCode = trim((string)($row['item_code'] ?? ''));
+        if ($itemCode === '') {
+            $itemCode = trim((string)($row['code'] ?? $row['itemcode'] ?? ''));
+        }
         if ($itemCode === '') {
             continue;
         }
@@ -772,9 +778,11 @@ function pos_local_checkout_clear_exotic_cart(RetailApiClient $client): void
 function pos_local_checkout_rebuild_exotic_cart_from_order_lines(
     RetailApiClient $client,
     array $orderLines,
-    float $customReduce
+    float $customReduce,
+    ?mysqli $conn = null
 ): array {
     require_once dirname(__DIR__) . '/integrations/exotic/Support/CartResponseParser.php';
+    require_once dirname(__DIR__) . '/integrations/exotic/Support/CartAddPayloadResolver.php';
 
     $client->call('/cart/addcustomdiscount', 'GET', ['custom_reduce' => '0']);
     pos_local_checkout_clear_exotic_cart($client);
@@ -784,32 +792,18 @@ function pos_local_checkout_rebuild_exotic_cart_from_order_lines(
         if (!is_array($row)) {
             continue;
         }
-        $itemCode = trim((string)($row['item_code'] ?? ''));
-        if ($itemCode === '') {
-            continue;
-        }
 
-        $size = trim((string)($row['size'] ?? ''));
-        $color = trim((string)($row['color'] ?? ''));
-        $variation = pos_local_checkout_build_variation_from_size_color($size, $color);
         $qty = max(1, (int)($row['quantity'] ?? 1));
+        $built = exotic_cart_build_add_post_from_order_line($conn, $row, $qty);
+        if (empty($built['success'])) {
+            return [
+                'success' => false,
+                'message' => (string)($built['message'] ?? 'Could not rebuild cart line.'),
+            ];
+        }
 
-        $post = [
-            'buynow' => '0',
-            'code' => $itemCode,
-            'qty' => (string)$qty,
-        ];
-        if ($variation !== '') {
-            $post['variation'] = $variation;
-        }
-        $options = $row['options'] ?? '';
-        if (is_array($options)) {
-            $options = json_encode($options, JSON_UNESCAPED_UNICODE);
-        }
-        $options = trim((string)$options);
-        if ($options !== '' && $options !== '0') {
-            $post['options'] = $options;
-        }
+        $post = is_array($built['post'] ?? null) ? $built['post'] : [];
+        $label = trim((string)($built['label'] ?? ($row['item_code'] ?? '')));
 
         $addRes = $client->call('/cart/add', 'POST', [], $post);
         if (!CartResponseParser::isSuccess($addRes)) {
@@ -817,7 +811,7 @@ function pos_local_checkout_rebuild_exotic_cart_from_order_lines(
 
             return [
                 'success' => false,
-                'message' => 'Could not add ' . $itemCode . ' to Exotic cart'
+                'message' => 'Could not add ' . ($label !== '' ? $label : 'item') . ' to Exotic cart'
                     . ($em !== '' ? ': ' . $em : ''),
             ];
         }
@@ -1007,7 +1001,7 @@ function pos_local_checkout_prepare_publish_from_database(
         }
     }
 
-    $rebuild = pos_local_checkout_rebuild_exotic_cart_from_order_lines($client, $orderLines, $customReduce);
+    $rebuild = pos_local_checkout_rebuild_exotic_cart_from_order_lines($client, $orderLines, $customReduce, $conn);
     if (empty($rebuild['success'])) {
         return $rebuild;
     }
