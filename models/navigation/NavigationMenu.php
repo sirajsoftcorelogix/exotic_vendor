@@ -30,9 +30,11 @@ class NavigationMenu
                 FROM vp_role_permissions rp
                 INNER JOIN vp_permissions p ON rp.permission_id = p.id
                 INNER JOIN vp_roles r ON r.id = rp.role_id AND r.is_active = 1
-                LEFT JOIN modules m ON m.module_name = p.module_name AND m.active = 1
+                LEFT JOIN modules m
+                    ON m.module_name COLLATE utf8mb4_unicode_ci = p.module_name COLLATE utf8mb4_unicode_ci
+                   AND m.active = 1
                 WHERE rp.role_id = ?
-                  AND p.action_name IN ({$actionPlaceholders})
+                  AND p.action_name COLLATE utf8mb4_unicode_ci IN ({$actionPlaceholders})
                   AND COALESCE(NULLIF(p.module_id, 0), m.id) IS NOT NULL
                   AND COALESCE(NULLIF(p.module_id, 0), m.id) > 0";
 
