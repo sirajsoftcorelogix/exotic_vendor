@@ -52,6 +52,11 @@ $parent_groups = $parent_groups ?? [];
                 </p>
             </div>
             <div class="flex shrink-0 lg:pl-4 lg:self-center gap-3 flex-wrap">
+                <a href="?page=workflow_transition&amp;action=list"
+                    class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl border border-amber-300 bg-white text-amber-900 text-sm font-semibold shadow-sm hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap w-full sm:w-auto">
+                    <i class="fas fa-project-diagram text-xs opacity-95" aria-hidden="true"></i>
+                    Status transitions
+                </a>
                 <button type="button" id="open-order-status-popup-btn"
                     class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap w-full sm:w-auto">
                     <i class="fas fa-plus text-xs opacity-95" aria-hidden="true"></i>
