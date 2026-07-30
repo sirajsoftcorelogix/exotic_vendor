@@ -317,9 +317,14 @@ $proformaPrintDisabledReason = $canPrintProforma
                                     <div class="flex justify-between items-start">
                                         <div class="space-y-1.5 text-[13px]">
                                             <p>
-                                                <span class="inline-block w-12 font-bold text-black">SKU</span>
+                                                <span class="inline-block w-20 font-bold text-black">Item Code</span>
                                                 <span class="text-black">:</span>
-                                                <span class="ml-2 text-black-700"><?php echo $item['sku']; ?></span>
+                                                <span class="ml-2 text-black-700"><?php echo htmlspecialchars(trim((string)($item['item_code'] ?? '')) !== '' ? (string)$item['item_code'] : '—'); ?></span>
+                                            </p>
+                                            <p>
+                                                <span class="inline-block w-20 font-bold text-black">SKU</span>
+                                                <span class="text-black">:</span>
+                                                <span class="ml-2 text-black-700"><?php echo htmlspecialchars(trim((string)($item['sku'] ?? '')) !== '' ? (string)$item['sku'] : '—'); ?></span>
                                             </p>
                                             <p>
                                                 <span class="inline-block w-12 font-bold text-black">Color</span>
