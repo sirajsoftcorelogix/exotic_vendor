@@ -41,7 +41,10 @@ function order_handle_status_change_stock(mysqli $conn, array $orderRow, string 
 
     require_once __DIR__ . '/../models/order/stock.php';
     $stockModel = new Stock($conn);
-    $refType = is_order_status_returned($newStatus) ? 'ORDER_RETURN' : 'ORDER_CANCEL';
+    $statusSlug = strtolower(trim($newStatus));
+    $refType = in_array($statusSlug, ['returned', 'cancelled_returned'], true)
+        ? 'ORDER_RETURN'
+        : 'ORDER_CANCEL';
     $orderStockRestore = $stockModel->restoreStockByOrderRow($orderRow, $refType);
 
     $success = !empty($orderStockRestore['success']);
