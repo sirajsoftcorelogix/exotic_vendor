@@ -744,6 +744,14 @@ function canSrEmpAccess(): bool
 }
 
 /**
+ * POS Orders list: Admin, Top Management, or Sr Emp on POS Orders module see all warehouses.
+ */
+function canViewAllPosOrders(): bool
+{
+	return hasTieredAccess((int)($_SESSION['user']['id'] ?? 0), 'Sr Emp Access', ['POS Orders']);
+}
+
+/**
  * Actions requiring Top Management tier (includes Admin).
  */
 function canTopManagementAccess(): bool

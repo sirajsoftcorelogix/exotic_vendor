@@ -26,6 +26,7 @@ class POSOrder
 		LEFT JOIN vp_invoices inv ON inv.id = vp_orders.invoice_id
 		WHERE store_name != 'null'  AND store_name > 0";
         $params = [];
+        appendPosOrderWarehouseScopeFilterSql($sql, $params, $filters);
         appendOrderNumberFilterSql($sql, $params, $filters['order_number'] ?? null);
         if (!empty($filters['item_code'])) {
             $sql .= " AND vp_orders.item_code LIKE ?";
@@ -204,6 +205,7 @@ class POSOrder
         }
         $sql .= " WHERE store_name != 'null' AND store_name > 0";
         $params = [];
+        appendPosOrderWarehouseScopeFilterSql($sql, $params, $filters);
         appendOrderNumberFilterSql($sql, $params, $filters['order_number'] ?? null);
         if (!empty($filters['item_code'])) {
             $sql .= " AND item_code LIKE ?";
