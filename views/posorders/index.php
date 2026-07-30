@@ -1038,6 +1038,8 @@
     </div>
 </div>
 
+<?php renderPartial('views/posorders/partials/list_debug_panel.php', ['list_debug' => $list_debug ?? null]); ?>
+
 <!-- Order Details Popup Modal -->
 <!-- <div class="fixed inset-y-0 right-0 w-[400px] bg-white shadow-lg p-4" id="orderDetailOffcanvas" style="display: none; z-index: 1000;">
   Popup content goes here
