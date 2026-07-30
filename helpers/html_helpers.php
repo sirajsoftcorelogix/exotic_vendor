@@ -628,42 +628,119 @@ function canAccessProductCp(): bool
 }
 
 /**
- * Orders / POS orders listing: vendor name hidden for front-line store roles.
+ * Permission module_name values for a portal page (modules.slug + optional action).
+ *
+ * @return string[]
  */
-function canViewOrderVendorName(): bool
+function resolvePagePermissionModuleNames(?string $pageSlug = null, ?string $pageAction = null): array
 {
-	if (!isset($_SESSION['user']['role_id'])) {
-		return false;
+	$pageSlug = basename(trim((string) ($pageSlug ?? $_GET['page'] ?? '')));
+	$pageAction = trim((string) ($pageAction ?? $_GET['action'] ?? ''));
+	if ($pageSlug === '') {
+		return [];
 	}
-	$roleId = (int) $_SESSION['user']['role_id'];
-	if ($roleId === 1) {
-		return true;
+
+	static $cache = [];
+	$cacheKey = $pageSlug . '|' . $pageAction;
+	if (array_key_exists($cacheKey, $cache)) {
+		return $cache[$cacheKey];
 	}
+
+	$names = [];
 	global $conn;
-	if (!$conn) {
-		return false;
+	if (!$conn instanceof mysqli) {
+		return $cache[$cacheKey] = $names;
 	}
-	$stmt = $conn->prepare('SELECT role_name FROM vp_roles WHERE id = ? AND is_active = 1 LIMIT 1');
+
+	$stmt = $conn->prepare(
+		"SELECT m.id, m.module_name
+		 FROM modules m
+		 WHERE m.slug = ? AND m.active = 1
+		 ORDER BY CASE WHEN ? <> '' AND m.`action` = ? THEN 0 ELSE 1 END, m.id ASC
+		 LIMIT 1"
+	);
 	if (!$stmt) {
-		return false;
+		return $cache[$cacheKey] = $names;
 	}
-	$stmt->bind_param('i', $roleId);
+	$stmt->bind_param('sss', $pageSlug, $pageAction, $pageAction);
 	$stmt->execute();
 	$result = $stmt->get_result();
 	$row = $result ? $result->fetch_assoc() : null;
 	$stmt->close();
+
 	if (!$row) {
+		return $cache[$cacheKey] = $names;
+	}
+
+	$moduleId = (int) ($row['id'] ?? 0);
+	$moduleLabel = trim((string) ($row['module_name'] ?? ''));
+	if ($moduleLabel !== '') {
+		$names[] = $moduleLabel;
+	}
+
+	if ($moduleId > 0) {
+		$permStmt = $conn->prepare(
+			'SELECT DISTINCT module_name FROM vp_permissions
+			 WHERE module_id = ? AND module_name IS NOT NULL AND TRIM(module_name) <> \'\''
+		);
+		if ($permStmt) {
+			$permStmt->bind_param('i', $moduleId);
+			$permStmt->execute();
+			$permResult = $permStmt->get_result();
+			while ($permRow = $permResult->fetch_assoc()) {
+				$permName = trim((string) ($permRow['module_name'] ?? ''));
+				if ($permName !== '' && !in_array($permName, $names, true)) {
+					$names[] = $permName;
+				}
+			}
+			$permStmt->close();
+		}
+	}
+
+	return $cache[$cacheKey] = $names;
+}
+
+/**
+ * Whether the current user may see orders from all warehouses on a page.
+ * Bypass only for Administrator or Sr Emp / Top Management on that page's module.
+ */
+function canViewAllWarehousesForPage(?string $pageSlug = null, ?string $pageAction = null): bool
+{
+	if (isAdministratorUser()) {
+		return true;
+	}
+
+	$moduleNames = resolvePagePermissionModuleNames($pageSlug, $pageAction);
+	if ($moduleNames === []) {
 		return false;
 	}
-	$roleName = strtolower(trim((string) ($row['role_name'] ?? '')));
-	$hiddenRoles = [
-		'pos executive',
-		'showroom',
-		'picker',
-		'designer',
-		'customer support',
-	];
-	return !in_array($roleName, $hiddenRoles, true);
+
+	return hasTieredAccess(
+		(int) ($_SESSION['user']['id'] ?? 0),
+		'Sr Emp Access',
+		$moduleNames
+	);
+}
+
+/**
+ * Orders / POS orders listing: vendor name visible for Admin or Sr Emp+ on the page module.
+ */
+function canViewOrderVendorName(?string $pageSlug = null, ?string $pageAction = null): bool
+{
+	if (isAdministratorUser()) {
+		return true;
+	}
+
+	$moduleNames = resolvePagePermissionModuleNames($pageSlug, $pageAction ?? 'list');
+	if ($moduleNames === []) {
+		return false;
+	}
+
+	return hasTieredAccess(
+		(int) ($_SESSION['user']['id'] ?? 0),
+		'Sr Emp Access',
+		$moduleNames
+	);
 }
 
 /**
@@ -744,11 +821,11 @@ function canSrEmpAccess(): bool
 }
 
 /**
- * POS Orders list: Admin, Top Management, or Sr Emp on POS Orders module see all warehouses.
+ * POS Orders list: Admin, Top Management, or Sr Emp on the page module see all warehouses.
  */
 function canViewAllPosOrders(): bool
 {
-	return hasTieredAccess((int)($_SESSION['user']['id'] ?? 0), 'Sr Emp Access', ['POS Orders']);
+	return canViewAllWarehousesForPage(null, null);
 }
 
 /**
