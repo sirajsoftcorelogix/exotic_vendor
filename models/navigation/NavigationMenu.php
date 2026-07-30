@@ -13,8 +13,8 @@ class NavigationMenu
 {
     private mysqli $conn;
 
-    /** @var bool|null */
-    private static $userRolesTableExists = null;
+    /** @var array{user_column:string,role_column:string}|null|false */
+    private static $userRolesTableMeta = false;
 
     public function __construct(mysqli $db)
     {
@@ -59,21 +59,9 @@ class NavigationMenu
             $roleIds[] = $primaryRoleId;
         }
 
-        if ($userId > 0 && $this->userRolesTableExists()) {
-            $stmt = $this->conn->prepare(
-                'SELECT DISTINCT ur.role_id
-                 FROM vp_user_roles ur
-                 INNER JOIN vp_roles r ON r.id = ur.role_id AND r.is_active = 1
-                 WHERE ur.user_id = ?'
-            );
-            if ($stmt) {
-                $stmt->bind_param('i', $userId);
-                $stmt->execute();
-                $result = $stmt->get_result();
-                while ($row = $result->fetch_assoc()) {
-                    $roleIds[] = (int) ($row['role_id'] ?? 0);
-                }
-                $stmt->close();
+        if ($userId > 0) {
+            foreach ($this->fetchRoleIdsFromUserRolesPivot($userId) as $roleId) {
+                $roleIds[] = $roleId;
             }
         }
 
@@ -383,18 +371,128 @@ class NavigationMenu
         return array_values(array_filter($active, static fn(int $id): bool => $id > 0));
     }
 
-    private function userRolesTableExists(): bool
+    /**
+     * @return int[]
+     */
+    private function fetchRoleIdsFromUserRolesPivot(int $userId): array
     {
-        if (self::$userRolesTableExists !== null) {
-            return self::$userRolesTableExists;
+        $meta = $this->resolveUserRolesTableMeta();
+        if ($meta === null) {
+            return [];
         }
 
-        $result = $this->conn->query("SHOW TABLES LIKE 'vp_user_roles'");
-        self::$userRolesTableExists = ($result && $result->num_rows > 0);
-        if ($result) {
-            $result->free();
+        $userColumn = $meta['user_column'];
+        $roleColumn = $meta['role_column'];
+        $sql = "SELECT DISTINCT ur.`{$roleColumn}` AS resolved_role_id
+                FROM vp_user_roles ur
+                INNER JOIN vp_roles r ON r.id = ur.`{$roleColumn}` AND r.is_active = 1
+                WHERE ur.`{$userColumn}` = ?";
+
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return [];
         }
 
-        return self::$userRolesTableExists;
+        $stmt->bind_param('i', $userId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $roleIds = [];
+        while ($row = $result->fetch_assoc()) {
+            $roleIds[] = (int) ($row['resolved_role_id'] ?? 0);
+        }
+        $stmt->close();
+
+        return array_values(array_filter($roleIds, static fn(int $id): bool => $id > 0));
+    }
+
+    /**
+     * Detect vp_user_roles column names (varies by environment).
+     *
+     * @return array{user_column:string,role_column:string}|null
+     */
+    private function resolveUserRolesTableMeta(): ?array
+    {
+        if (self::$userRolesTableMeta !== false) {
+            return self::$userRolesTableMeta;
+        }
+
+        $tableResult = $this->conn->query("SHOW TABLES LIKE 'vp_user_roles'");
+        if (!$tableResult || $tableResult->num_rows === 0) {
+            if ($tableResult) {
+                $tableResult->free();
+            }
+
+            return self::$userRolesTableMeta = null;
+        }
+        $tableResult->free();
+
+        $columnsResult = $this->conn->query('SHOW COLUMNS FROM vp_user_roles');
+        if (!$columnsResult) {
+            return self::$userRolesTableMeta = null;
+        }
+
+        $columns = [];
+        while ($row = $columnsResult->fetch_assoc()) {
+            $field = (string) ($row['Field'] ?? '');
+            if ($field !== '' && preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $field) === 1) {
+                $columns[] = $field;
+            }
+        }
+        $columnsResult->free();
+
+        if ($columns === []) {
+            return self::$userRolesTableMeta = null;
+        }
+
+        $lowerMap = [];
+        foreach ($columns as $column) {
+            $lowerMap[strtolower($column)] = $column;
+        }
+
+        $userColumn = $this->pickColumn($lowerMap, ['user_id', 'vp_user_id', 'userid']);
+        $roleColumn = $this->pickColumn($lowerMap, ['role_id', 'vp_role_id', 'roles_id', 'roleid']);
+
+        if ($userColumn === null) {
+            foreach ($lowerMap as $lower => $original) {
+                if (str_contains($lower, 'user')) {
+                    $userColumn = $original;
+                    break;
+                }
+            }
+        }
+
+        if ($roleColumn === null) {
+            foreach ($lowerMap as $lower => $original) {
+                if (str_contains($lower, 'role')) {
+                    $roleColumn = $original;
+                    break;
+                }
+            }
+        }
+
+        if ($userColumn === null || $roleColumn === null || $userColumn === $roleColumn) {
+            return self::$userRolesTableMeta = null;
+        }
+
+        return self::$userRolesTableMeta = [
+            'user_column' => $userColumn,
+            'role_column' => $roleColumn,
+        ];
+    }
+
+    /**
+     * @param array<string, string> $lowerMap
+     * @param string[] $candidates
+     */
+    private function pickColumn(array $lowerMap, array $candidates): ?string
+    {
+        foreach ($candidates as $candidate) {
+            if (isset($lowerMap[strtolower($candidate)])) {
+                return $lowerMap[strtolower($candidate)];
+            }
+        }
+
+        return null;
     }
 }
