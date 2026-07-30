@@ -701,25 +701,129 @@ function resolvePagePermissionModuleNames(?string $pageSlug = null, ?string $pag
 }
 
 /**
+ * Tiered page permissions granted to a user (for debug / auditing).
+ *
+ * @param string[] $moduleNames
+ * @return array<int, array{module_name:string,action_name:string}>
+ */
+function resolveTieredPagePermissionMatches(int $userId, array $moduleNames, string $minimumAccess = 'Sr Emp Access'): array
+{
+	if ($userId <= 0 || $moduleNames === []) {
+		return [];
+	}
+
+	global $conn;
+	if (!$conn instanceof mysqli) {
+		return [];
+	}
+
+	$actions = getAccessTiersIncluding($minimumAccess);
+	if ($actions === []) {
+		return [];
+	}
+
+	$modulePlaceholders = implode(',', array_fill(0, count($moduleNames), '?'));
+	$actionPlaceholders = implode(',', array_fill(0, count($actions), '?'));
+	$sql = "SELECT DISTINCT p.module_name, p.action_name
+			FROM vp_role_permissions rp
+			INNER JOIN vp_permissions p ON rp.permission_id = p.id
+			INNER JOIN vp_users u ON u.role_id = rp.role_id
+			INNER JOIN vp_roles r ON r.id = u.role_id
+			WHERE u.id = ?
+			  AND r.is_active = 1
+			  AND p.module_name IN ({$modulePlaceholders})
+			  AND p.action_name IN ({$actionPlaceholders})
+			ORDER BY p.module_name ASC, p.action_name ASC";
+
+	$stmt = $conn->prepare($sql);
+	if (!$stmt) {
+		return [];
+	}
+
+	$types = 'i' . str_repeat('s', count($moduleNames) + count($actions));
+	$params = array_merge([$userId], $moduleNames, $actions);
+	$stmt->bind_param($types, ...$params);
+	$stmt->execute();
+	$result = $stmt->get_result();
+
+	$matches = [];
+	while ($row = $result->fetch_assoc()) {
+		$matches[] = [
+			'module_name' => (string) ($row['module_name'] ?? ''),
+			'action_name' => (string) ($row['action_name'] ?? ''),
+		];
+	}
+	$stmt->close();
+
+	return $matches;
+}
+
+/**
+ * Explain why warehouse scope is or is not applied on an order list page.
+ *
+ * @return array<string, mixed>
+ */
+function resolveWarehouseScopeDecision(?string $pageSlug = null, ?string $pageAction = null): array
+{
+	$userId = (int) ($_SESSION['user']['id'] ?? 0);
+	$warehouseId = resolveOrderListDefaultWarehouseId();
+	$moduleNames = resolvePagePermissionModuleNames($pageSlug, $pageAction);
+	$tieredMatches = $moduleNames !== [] && $userId > 0
+		? resolveTieredPagePermissionMatches($userId, $moduleNames, 'Sr Emp Access')
+		: [];
+	$hasTieredPageAccess = $tieredMatches !== [];
+
+	if (isAdministratorUser()) {
+		return [
+			'can_view_all_warehouses' => true,
+			'reason' => 'administrator',
+			'tiered_page_permissions' => $tieredMatches,
+		];
+	}
+
+	if ($warehouseId > 0) {
+		return [
+			'can_view_all_warehouses' => false,
+			'reason' => 'assigned_warehouse',
+			'warehouse_id' => $warehouseId,
+			'tiered_page_permissions' => $tieredMatches,
+			'note' => $hasTieredPageAccess
+				? 'User has Sr Emp / Top Management on this page, but vp_users.warehouse_id is set so the list stays warehouse-scoped.'
+				: 'User is scoped to vp_users.warehouse_id.',
+		];
+	}
+
+	if ($moduleNames === []) {
+		return [
+			'can_view_all_warehouses' => false,
+			'reason' => 'page_module_not_found',
+			'tiered_page_permissions' => [],
+		];
+	}
+
+	if ($hasTieredPageAccess) {
+		return [
+			'can_view_all_warehouses' => true,
+			'reason' => 'tiered_page_access',
+			'tiered_page_permissions' => $tieredMatches,
+		];
+	}
+
+	return [
+		'can_view_all_warehouses' => false,
+		'reason' => 'no_tiered_page_access',
+		'tiered_page_permissions' => [],
+	];
+}
+
+/**
  * Whether the current user may see orders from all warehouses on a page.
- * Bypass only for Administrator or Sr Emp / Top Management on that page's module.
+ * Administrator always sees all. Users with vp_users.warehouse_id set are always scoped
+ * to that warehouse. Otherwise Sr Emp / Top Management on the page module sees all.
  */
 function canViewAllWarehousesForPage(?string $pageSlug = null, ?string $pageAction = null): bool
 {
-	if (isAdministratorUser()) {
-		return true;
-	}
-
-	$moduleNames = resolvePagePermissionModuleNames($pageSlug, $pageAction);
-	if ($moduleNames === []) {
-		return false;
-	}
-
-	return hasTieredAccess(
-		(int) ($_SESSION['user']['id'] ?? 0),
-		'Sr Emp Access',
-		$moduleNames
-	);
+	return (bool) (resolveWarehouseScopeDecision($pageSlug, $pageAction)['can_view_all_warehouses'] ?? false);
 }
 
 /**
