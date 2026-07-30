@@ -525,6 +525,7 @@ class PosOrdersController
 
             if ($order_id > 0 && !empty($new_status)) {
                 $invoiceCancel = null;
+                $stockRestore = null;
                 $update_data = [
                     'status' => $new_status,
                     'remarks' => $remarks,
@@ -558,13 +559,14 @@ class PosOrdersController
                 if ($new_status != $_POST['previousStatus']) {
                     $commanModel->add_order_status_log($logData);
                 }
-                if (strtolower(trim((string) $new_status)) === 'cancelled'
-                    && strtolower(trim((string) $previous_status)) !== 'cancelled'
+                require_once __DIR__ . '/../helpers/order_status_stock.php';
+                if (order_status_triggers_stock_restore($new_status)
+                    && !order_status_triggers_stock_restore((string) $previous_status)
                     && is_array($orderval)
                 ) {
                     global $conn;
-                    require_once __DIR__ . '/../helpers/order_cancel_invoice.php';
-                    $invoiceCancel = order_cancel_linked_invoice_for_order_row($conn, $orderval);
+                    $stockRestore = order_handle_status_change_stock($conn, $orderval, $new_status, (string) $previous_status);
+                    $invoiceCancel = is_array($stockRestore['invoice_cancel'] ?? null) ? $stockRestore['invoice_cancel'] : null;
                 }
                 if ($agent_id != $previous_agent) {
                     //log agent change
@@ -627,6 +629,9 @@ class PosOrdersController
                         $localMessage .= empty($invoiceCancel['success'])
                             ? ' Linked invoice cancel failed: ' . (string) ($invoiceCancel['message'] ?? '')
                             : ' Linked invoice cancelled.';
+                    }
+                    if (isset($stockRestore) && is_array($stockRestore)) {
+                        $localMessage .= order_status_stock_summary_message($stockRestore);
                     }
                     echo json_encode([
                         'success' => true,
@@ -1756,19 +1761,19 @@ class PosOrdersController
             //print_array($_POST);
             //exit;
             if (!empty($order_ids) && !empty($new_status)) {
-                $ordersToCancelInvoice = [];
-                if (strtolower(trim((string) $new_status)) === 'cancelled') {
-                    require_once __DIR__ . '/../helpers/order_cancel_invoice.php';
+                $ordersForStockRestore = [];
+                if (order_status_triggers_stock_restore($new_status)) {
+                    require_once __DIR__ . '/../helpers/order_status_stock.php';
                     foreach ($order_ids as $oid) {
                         $oid = (int) $oid;
                         if ($oid <= 0) {
                             continue;
                         }
                         $row = $ordersModel->getOrderById($oid);
-                        if (!is_array($row) || is_order_status_cancelled((string) ($row['status'] ?? ''))) {
+                        if (!is_array($row) || order_status_triggers_stock_restore((string) ($row['status'] ?? ''))) {
                             continue;
                         }
-                        $ordersToCancelInvoice[] = $row;
+                        $ordersForStockRestore[] = $row;
                     }
                 }
                 $result = $ordersModel->updateStatusBulk($order_ids, $new_status);
@@ -1810,13 +1815,15 @@ class PosOrdersController
                     if (!empty($apiFailures)) {
                         $message .= ' Exotic India sync failed for ' . count($apiFailures) . ' item(s).';
                     }
-                    if (!empty($ordersToCancelInvoice)) {
+                    if (!empty($ordersForStockRestore)) {
                         global $conn;
-                        require_once __DIR__ . '/../helpers/order_cancel_invoice.php';
-                        $invoiceCancelResults = order_cancel_linked_invoices_for_order_rows($conn, $ordersToCancelInvoice);
-                        $invoiceCancelMessage = order_cancel_invoice_summary_message($invoiceCancelResults);
-                        if ($invoiceCancelMessage !== '') {
-                            $message .= $invoiceCancelMessage;
+                        foreach ($ordersForStockRestore as $orderRow) {
+                            $previousStatus = (string) ($orderRow['status'] ?? '');
+                            $stockResult = order_handle_status_change_stock($conn, $orderRow, $new_status, $previousStatus);
+                            $stockMessage = order_status_stock_summary_message($stockResult);
+                            if ($stockMessage !== '') {
+                                $message .= $stockMessage;
+                            }
                         }
                     }
                     echo json_encode([
