@@ -1,6 +1,5 @@
 <?php 
 is_login();
-assertPageModuleAccess($page ?? null, $action ?? null);
 $loginUser = getloginUser();
 ?>
 <?php //$root_path = $_SERVER['DOCUMENT_ROOT'].'/exotic_vendor';
