@@ -524,6 +524,19 @@ class PosOrdersController
             $previous_remarks = isset($_POST['previous_remarks']) ? trim($_POST['previous_remarks']) : NULL;
 
             if ($order_id > 0 && !empty($new_status)) {
+                require_once __DIR__ . '/../helpers/order_workflow.php';
+                global $conn;
+                $workflowError = assert_order_status_transition_allowed(
+                    $conn,
+                    (string) $previous_status,
+                    (string) $new_status,
+                    (int) ($_SESSION['user']['id'] ?? 0)
+                );
+                if ($workflowError !== null) {
+                    echo json_encode(['success' => false, 'message' => $workflowError]);
+                    exit;
+                }
+
                 $invoiceCancel = null;
                 $stockRestore = null;
                 $update_data = [
@@ -1761,9 +1774,29 @@ class PosOrdersController
             //print_array($_POST);
             //exit;
             if (!empty($order_ids) && !empty($new_status)) {
+                require_once __DIR__ . '/../helpers/order_workflow.php';
+                global $conn;
+                $ordersForWorkflowCheck = [];
+                foreach ($order_ids as $oid) {
+                    $row = $ordersModel->getOrderById((int) $oid);
+                    if (is_array($row)) {
+                        $ordersForWorkflowCheck[] = $row;
+                    }
+                }
+                $workflowError = assert_bulk_order_status_transitions_allowed(
+                    $conn,
+                    $ordersForWorkflowCheck,
+                    (string) $new_status,
+                    (int) ($_SESSION['user']['id'] ?? 0)
+                );
+                if ($workflowError !== null) {
+                    echo json_encode(['success' => false, 'message' => $workflowError]);
+                    exit;
+                }
+
                 $ordersForStockRestore = [];
+                require_once __DIR__ . '/../helpers/order_status_stock.php';
                 if (order_status_triggers_stock_restore($new_status)) {
-                    require_once __DIR__ . '/../helpers/order_status_stock.php';
                     foreach ($order_ids as $oid) {
                         $oid = (int) $oid;
                         if ($oid <= 0) {

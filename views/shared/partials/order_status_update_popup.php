@@ -81,6 +81,7 @@ $showOrderVendorName = (bool)($showOrderVendorName ?? false);
         </div>
     </div>
 </div>
+<script src="assets/js/order_workflow_status_filter.js"></script>
 <script>
 (function() {
     if (window.__orderStatusPopupInit) {
@@ -142,6 +143,10 @@ $showOrderVendorName = (bool)($showOrderVendorName ?? false);
         }
 
         popup.classList.remove('hidden');
+
+        if (window.applyOrderWorkflowStatusFilter) {
+            window.applyOrderWorkflowStatusFilter(orderData.status || '', document.getElementById('orderStatus'));
+        }
     };
 
     window.closeStatusPopup = function(e) {

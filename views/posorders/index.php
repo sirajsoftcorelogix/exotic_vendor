@@ -140,6 +140,7 @@
 <script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
 <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+<script src="assets/js/order_workflow_status_filter.js"></script>
 <div class="container mx-auto pr-4 pt-2">
     <?php
 
@@ -1992,6 +1993,10 @@
         //image
         const imgElem = document.querySelector('#statusPopup img');
         imgElem.src = orderData.image || 'default-image.png';
+
+        if (window.applyOrderWorkflowStatusFilter) {
+            window.applyOrderWorkflowStatusFilter(orderData.status || '', document.getElementById('orderStatus'));
+        }
     }
 
     function closeStatusPopup() {
