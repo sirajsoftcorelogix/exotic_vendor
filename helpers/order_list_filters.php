@@ -135,9 +135,10 @@ function normalizeStockAvailableFilter(?string $value): string
 
 function resolveOrderListDefaultWarehouseId(): int
 {
-    $warehouseId = (int) ($_SESSION['warehouse_id'] ?? 0);
-    if ($warehouseId <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
-        $warehouseId = (int) $_SESSION['user']['warehouse_id'];
+    // Login assignment (vp_users.warehouse_id) is authoritative for list scoping.
+    $warehouseId = (int) ($_SESSION['user']['warehouse_id'] ?? 0);
+    if ($warehouseId <= 0) {
+        $warehouseId = (int) ($_SESSION['warehouse_id'] ?? 0);
     }
 
     return max(0, $warehouseId);
@@ -178,17 +179,17 @@ function appendOrderStockAvailabilityFilterSql(string &$sql, array &$params, arr
 }
 
 /**
- * Restrict POS order list to the user's assigned warehouse unless they have Sr Emp+ tier on POS Orders.
+ * Restrict order list to the user's assigned warehouse unless they have Sr Emp+ on the page module.
  *
  * @param array<string, mixed> $filters
  * @return array<string, mixed>
  */
-function applyPosOrderListWarehouseScope(array $filters): array
+function applyPosOrderListWarehouseScope(array $filters, ?string $pageSlug = null, ?string $pageAction = null): array
 {
-    if (!function_exists('canViewAllPosOrders')) {
+    if (!function_exists('canViewAllWarehousesForPage')) {
         require_once __DIR__ . '/html_helpers.php';
     }
-    if (canViewAllPosOrders()) {
+    if (canViewAllWarehousesForPage($pageSlug, $pageAction)) {
         return $filters;
     }
 
@@ -218,8 +219,13 @@ function appendPosOrderWarehouseScopeFilterSql(
         return;
     }
 
-    $sql .= " AND CAST({$ordersAlias}.store_name AS UNSIGNED) = ?";
+    $warehouseKey = (string) $warehouseId;
+    $sql .= " AND (
+        CAST({$ordersAlias}.store_name AS UNSIGNED) = ?
+        OR TRIM({$ordersAlias}.store_name) = ?
+    )";
     $params[] = $warehouseId;
+    $params[] = $warehouseKey;
 }
 
 function buildOrderListFiltersFromRequest(array $request): array
