@@ -290,6 +290,8 @@ function buildPosOrderListDebugContext(array $filters, $ordersModel): array
         }
     }
 
+    $scopeDecision = resolveWarehouseScopeDecision(null, null);
+
     return [
         'generated_at' => date('Y-m-d H:i:s'),
         'request_page' => (string) ($_GET['page'] ?? ''),
@@ -299,7 +301,8 @@ function buildPosOrderListDebugContext(array $filters, $ordersModel): array
         'session_warehouse_id' => $_SESSION['warehouse_id'] ?? null,
         'resolved_warehouse_id' => resolveOrderListDefaultWarehouseId(),
         'page_module_names' => resolvePagePermissionModuleNames(null, null),
-        'can_view_all_warehouses' => canViewAllWarehousesForPage(null, null),
+        'warehouse_scope_decision' => $scopeDecision,
+        'can_view_all_warehouses' => (bool) ($scopeDecision['can_view_all_warehouses'] ?? false),
         'is_administrator' => isAdministratorUser(),
         'filters' => $filters,
         'list_query' => method_exists($ordersModel, 'getLastListQueryDebug') ? $ordersModel->getLastListQueryDebug() : null,

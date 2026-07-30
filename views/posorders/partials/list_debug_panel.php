@@ -46,6 +46,7 @@ $renderQueryBlock = static function (?array $queryDebug, string $title): void {
                         'resolved_warehouse_id' => $listDebug['resolved_warehouse_id'] ?? null,
                         'is_administrator' => $listDebug['is_administrator'] ?? false,
                         'can_view_all_warehouses' => $listDebug['can_view_all_warehouses'] ?? false,
+                        'warehouse_scope_decision' => $listDebug['warehouse_scope_decision'] ?? [],
                         'page_module_names' => $listDebug['page_module_names'] ?? [],
                         'request_page' => $listDebug['request_page'] ?? '',
                         'request_action' => $listDebug['request_action'] ?? '',
