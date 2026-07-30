@@ -1,0 +1,56 @@
+---
+description: Do not use window.alert for user-facing messages; prefer modal popups (POS message modal or existing app modals).
+globs: assets/js/**/*.js,views/**/*.php
+alwaysApply: true
+---
+
+# No JS alert — use modal popups
+
+Do **not** use `window.alert()`, `window.confirm()`, or browser-native dialog boxes for user-facing validation, errors, or notices when a modal can be shown instead.
+
+## Required pattern (POS register / cart)
+
+Use the shared helper in `assets/js/pos_message_modal.js`:
+
+```javascript
+window.showPosMessageModal({
+  title: 'Customer required',
+  message: 'Please select customer first',
+  tone: 'warning', // error | warning | info | success
+  onClose: function () {
+    window.focusPosCustomerSelect && window.focusPosCustomerSelect();
+  }
+});
+```
+
+Load `pos_message_modal.js` before other POS scripts that may call it.
+
+## When alert is allowed
+
+Only when **no DOM / modal is possible**, for example:
+
+- A non-browser runtime (CLI script, pure Node without UI)
+- Catastrophic boot failure before any modal markup or helper can load
+
+In that case prefer `console.error` / logging first; use `alert` only as a last resort and note why in a short comment.
+
+## Other UI surfaces
+
+- **POS checkout/cart flows:** modal (`showPosMessageModal`) for blocking validation; toasts optional for non-blocking success/info.
+- **Legacy admin pages:** prefer existing app modal/dialog components over `alert` when touching that code.
+- **Do not introduce new `alert()` calls** in POS JS (`assets/js/pos*.js`, `views/pos_register/**`).
+
+## Examples
+
+```javascript
+// ❌ BAD
+alert('Please select customer first');
+
+// ✅ GOOD
+showPosMessageModal({
+  title: 'Customer required',
+  message: 'Please select customer first',
+  tone: 'warning',
+  onClose: function () { focusPosCustomerSelect(); }
+});
+```

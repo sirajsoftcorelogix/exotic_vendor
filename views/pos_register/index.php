@@ -1040,6 +1040,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 </div>
 
 <!-- ===== END PAGE WRAPPER ===== -->
+<script src="<?php echo base_url(); ?>assets/js/pos_message_modal.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos_cart_hooks.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos.js"></script>
 <!-- <script src="<?php echo 'http://' . $_SERVER['HTTP_HOST']; ?>/assets/js/pos.js"></script> -->
@@ -1616,6 +1617,35 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   function openPaymentModal() {
     if (typeof window.hasUnconfirmedLocalStockWarnings === "function" && window.hasUnconfirmedLocalStockWarnings()) {
       showToast("Please confirm local stock for cart items (Y or N) before checkout.", "violet");
+      return;
+    }
+    var customerId = typeof window.getSelectedCustomerId === "function" ? window.getSelectedCustomerId() : "";
+    if (!customerId) {
+      if (typeof window.showPosMessageModal === "function") {
+        window.showPosMessageModal({
+          title: "Customer required",
+          message: "Please select customer first",
+          tone: "warning",
+          onClose: function () {
+            if (typeof window.focusPosCustomerSelect === "function") {
+              window.focusPosCustomerSelect();
+            } else if (typeof jQuery !== "undefined" && jQuery("#customerSelect").data("select2")) {
+              jQuery("#customerSelect").select2("open");
+            } else {
+              var cs = document.getElementById("customerSelect");
+              if (cs) cs.focus();
+            }
+          }
+        });
+      } else {
+        showToast("Please select customer first", "red");
+        if (typeof jQuery !== "undefined" && jQuery("#customerSelect").data("select2")) {
+          jQuery("#customerSelect").select2("open");
+        } else {
+          var cs = document.getElementById("customerSelect");
+          if (cs) cs.focus();
+        }
+      }
       return;
     }
     var pm = document.getElementById("paymentModal");
@@ -3007,12 +3037,30 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         var customerId = getSelectedCustomerId();
 
         if (!customerId) {
-          showToast("⚠ Please select customer first", "red");
-            if (typeof jQuery !== "undefined" && jQuery("#customerSelect").data("select2")) {
-            jQuery("#customerSelect").select2("open");
+          if (typeof window.showPosMessageModal === "function") {
+            window.showPosMessageModal({
+              title: "Customer required",
+              message: "Please select customer first",
+              tone: "warning",
+              onClose: function () {
+                if (typeof window.focusPosCustomerSelect === "function") {
+                  window.focusPosCustomerSelect();
+                } else if (typeof jQuery !== "undefined" && jQuery("#customerSelect").data("select2")) {
+                  jQuery("#customerSelect").select2("open");
+                } else {
+                  var cs = document.getElementById("customerSelect");
+                  if (cs) cs.focus();
+                }
+              }
+            });
           } else {
-            var cs = document.getElementById("customerSelect");
-            if (cs) cs.focus();
+            showToast("Please select customer first", "red");
+            if (typeof jQuery !== "undefined" && jQuery("#customerSelect").data("select2")) {
+              jQuery("#customerSelect").select2("open");
+            } else {
+              var cs = document.getElementById("customerSelect");
+              if (cs) cs.focus();
+            }
           }
           return;
         }
