@@ -498,6 +498,150 @@ class SalesReturn
     }
 
     /**
+     * Create a finalized sales return when an order line moves to status "returned".
+     *
+     * @param array<string, mixed> $orderRow vp_orders row (must include id, order_number)
+     * @return array{
+     *   attempted:bool,
+     *   success:bool,
+     *   skipped:bool,
+     *   message:string,
+     *   return_id:int,
+     *   return_number:string,
+     *   stock_applied:int,
+     *   stock_skipped:int
+     * }
+     */
+    public function createAutoReturnForOrderRow(array $orderRow, int $userId, bool $isAdmin = false): array
+    {
+        $base = [
+            'attempted' => false,
+            'success' => false,
+            'skipped' => false,
+            'message' => '',
+            'return_id' => 0,
+            'return_number' => '',
+            'stock_applied' => 0,
+            'stock_skipped' => 0,
+        ];
+
+        $orderRowId = (int) ($orderRow['id'] ?? 0);
+        $orderNumber = trim((string) ($orderRow['order_number'] ?? ''));
+        if ($orderRowId <= 0 || $orderNumber === '') {
+            return $base;
+        }
+
+        $base['attempted'] = true;
+        $invoiceId = (int) ($orderRow['invoice_id'] ?? 0);
+        $context = $this->getReturnContext($orderNumber, $invoiceId > 0 ? $invoiceId : null);
+
+        $targetLine = null;
+        foreach ($context['lines'] as $line) {
+            if ((int) ($line['order_row_id'] ?? 0) === $orderRowId) {
+                $targetLine = $line;
+                break;
+            }
+        }
+
+        if ($targetLine === null) {
+            $base['skipped'] = true;
+            $base['success'] = true;
+            $base['message'] = 'Sales return already recorded or no returnable quantity for this line.';
+
+            return $base;
+        }
+
+        $returnQty = (float) ($targetLine['max_return_qty'] ?? 0);
+        if ($returnQty <= 0) {
+            $base['skipped'] = true;
+            $base['success'] = true;
+            $base['message'] = 'Sales return already recorded for this line.';
+
+            return $base;
+        }
+
+        $sessionWarehouseId = (int) ($_SESSION['warehouse_id'] ?? 0);
+        if ($sessionWarehouseId <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+            $sessionWarehouseId = (int) $_SESSION['user']['warehouse_id'];
+        }
+
+        $resolvedInvoiceId = !empty($context['invoice']['id']) ? (int) $context['invoice']['id'] : null;
+        $validation = $this->validateReturnLines(
+            [
+                'order_number' => $orderNumber,
+                'invoice_id' => $resolvedInvoiceId,
+            ],
+            [
+                [
+                    'order_row_id' => $orderRowId,
+                    'return_qty' => $returnQty,
+                ],
+            ],
+            $sessionWarehouseId,
+            $isAdmin
+        );
+
+        if (!$validation['valid']) {
+            $base['message'] = implode(' ', $validation['errors']);
+
+            return $base;
+        }
+
+        $warehouseId = (int) ($validation['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            $warehouseId = (int) ($context['warehouse_id'] ?? 0);
+        }
+
+        try {
+            $returnId = $this->insertReturn([
+                'order_number' => $orderNumber,
+                'invoice_id' => $validation['invoice_id'] ?? $resolvedInvoiceId,
+                'warehouse_id' => $warehouseId,
+                'return_date' => date('Y-m-d'),
+                'return_type' => 'customer_request',
+                'remarks' => 'Auto-created when order status set to Returned.',
+                'status' => 'finalized',
+                'created_by' => $userId,
+            ], $validation['normalized_lines']);
+
+            require_once __DIR__ . '/../order/stock.php';
+            $stockModel = new Stock($this->conn);
+            $stockResult = $stockModel->applySalesReturnStockIn($returnId, $warehouseId);
+            $this->updateStockAppliedFlags($returnId, $stockResult);
+
+            $returnRow = $this->getById($returnId);
+            $returnNumber = (string) ($returnRow['return_number'] ?? ('#' . $returnId));
+            $applied = (int) ($stockResult['applied_lines'] ?? 0);
+            $skipped = (int) ($stockResult['skipped_lines'] ?? 0);
+
+            $message = 'Sales return ' . $returnNumber . ' created.';
+            if ($applied > 0) {
+                $message .= ' Stock updated for ' . $applied . ' line(s).';
+            }
+            if ($skipped > 0) {
+                $message .= ' ' . $skipped . ' line(s) had no prior stock OUT.';
+            }
+
+            return [
+                'attempted' => true,
+                'success' => true,
+                'skipped' => false,
+                'message' => $message,
+                'return_id' => $returnId,
+                'return_number' => $returnNumber,
+                'stock_applied' => $applied,
+                'stock_skipped' => $skipped,
+            ];
+        } catch (Throwable $e) {
+            error_log('[SalesReturn auto from order status] order row ' . $orderRowId . ': ' . $e->getMessage());
+
+            $base['message'] = 'Failed to create sales return: ' . $e->getMessage();
+
+            return $base;
+        }
+    }
+
+    /**
      * @param array<string, mixed> $stockResult
      */
     public function updateStockAppliedFlags(int $returnId, array $stockResult): void

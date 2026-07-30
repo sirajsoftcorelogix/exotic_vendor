@@ -21,6 +21,31 @@ function order_handle_status_change_stock(mysqli $conn, array $orderRow, string 
     }
 
     $invoiceCancel = null;
+    if (is_order_status_returned($newStatus)) {
+        require_once __DIR__ . '/html_helpers.php';
+        require_once __DIR__ . '/../models/sales_return/SalesReturn.php';
+        $salesReturnModel = new SalesReturn($conn);
+        $salesReturnResult = $salesReturnModel->createAutoReturnForOrderRow(
+            $orderRow,
+            (int) ($_SESSION['user']['id'] ?? 0),
+            isAdministratorUser()
+        );
+
+        if (!empty($salesReturnResult['attempted'])) {
+            return [
+                'attempted' => true,
+                'via' => 'sales_return',
+                'success' => !empty($salesReturnResult['success']),
+                'skipped' => !empty($salesReturnResult['skipped']),
+                'message' => (string) ($salesReturnResult['message'] ?? ''),
+                'return_id' => (int) ($salesReturnResult['return_id'] ?? 0),
+                'return_number' => (string) ($salesReturnResult['return_number'] ?? ''),
+                'stock_applied' => (int) ($salesReturnResult['stock_applied'] ?? 0),
+                'sales_return' => $salesReturnResult,
+            ];
+        }
+    }
+
     if (is_order_status_cancelled($newStatus)) {
         $invoiceCancel = order_cancel_linked_invoice_for_order_row($conn, $orderRow);
         $invoiceStockApplied = (int) (($invoiceCancel['stock_restore']['applied'] ?? 0));
@@ -71,6 +96,18 @@ function order_status_stock_summary_message(?array $stockResult): string
     }
 
     if (!empty($stockResult['success'])) {
+        if (($stockResult['via'] ?? '') === 'sales_return') {
+            $message = trim((string) ($stockResult['message'] ?? ''));
+            if ($message !== '') {
+                return ' ' . $message;
+            }
+            $returnNumber = trim((string) ($stockResult['return_number'] ?? ''));
+            if ($returnNumber !== '') {
+                return ' Sales return ' . $returnNumber . ' created.';
+            }
+
+            return ' Sales return created.';
+        }
         if (($stockResult['via'] ?? '') === 'invoice') {
             return ' Stock restored via linked invoice cancel.';
         }
@@ -85,6 +122,13 @@ function order_status_stock_summary_message(?array $stockResult): string
     $message = trim((string) ($stockResult['message'] ?? ''));
     if ($message === '') {
         $message = trim((string) ($stockResult['order_stock_restore']['message'] ?? ''));
+        if ($message === '' && ($stockResult['via'] ?? '') === 'sales_return') {
+            $message = trim((string) ($stockResult['sales_return']['message'] ?? ''));
+        }
+    }
+
+    if (($stockResult['via'] ?? '') === 'sales_return' && $message !== '') {
+        return ' Sales return failed: ' . $message;
     }
 
     return $message !== '' ? ' Stock restore failed: ' . $message : ' Stock restore failed.';
