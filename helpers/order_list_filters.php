@@ -177,6 +177,51 @@ function appendOrderStockAvailabilityFilterSql(string &$sql, array &$params, arr
     $params[] = $warehouseId;
 }
 
+/**
+ * Restrict POS order list to the user's assigned warehouse unless they have Sr Emp+ tier on POS Orders.
+ *
+ * @param array<string, mixed> $filters
+ * @return array<string, mixed>
+ */
+function applyPosOrderListWarehouseScope(array $filters): array
+{
+    if (!function_exists('canViewAllPosOrders')) {
+        require_once __DIR__ . '/html_helpers.php';
+    }
+    if (canViewAllPosOrders()) {
+        return $filters;
+    }
+
+    $filters['warehouse_scope_enforced'] = true;
+    $filters['warehouse_scope_id'] = resolveOrderListDefaultWarehouseId();
+
+    return $filters;
+}
+
+/**
+ * @param array<string, mixed> $filters
+ */
+function appendPosOrderWarehouseScopeFilterSql(
+    string &$sql,
+    array &$params,
+    array $filters,
+    string $ordersAlias = 'vp_orders'
+): void {
+    if (empty($filters['warehouse_scope_enforced'])) {
+        return;
+    }
+
+    $warehouseId = (int) ($filters['warehouse_scope_id'] ?? 0);
+    if ($warehouseId <= 0) {
+        $sql .= ' AND 1=0';
+
+        return;
+    }
+
+    $sql .= " AND CAST({$ordersAlias}.store_name AS UNSIGNED) = ?";
+    $params[] = $warehouseId;
+}
+
 function buildOrderListFiltersFromRequest(array $request): array
 {
     $filters = [];

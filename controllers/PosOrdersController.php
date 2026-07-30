@@ -37,6 +37,7 @@ class PosOrdersController
         $offset = ($page - 1) * $limit;
 
         $filters = buildOrderListFiltersFromRequest($_GET);
+        $filters = applyPosOrderListWarehouseScope($filters);
         //order status list
         $statusList = $commanModel->get_order_status_list();
         $order_status_row = $commanModel->get_order_status();
@@ -66,7 +67,9 @@ class PosOrdersController
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
 
         // Pending orders badge (for selected warehouse)
-        $pending_orders_count = $ordersModel->getOrdersCount(['status_filter' => 'pending']);
+        $pending_orders_count = $ordersModel->getOrdersCount(
+            applyPosOrderListWarehouseScope(['status_filter' => 'pending'])
+        );
         // Prepare saved searches for current user
         $user_id = $_SESSION['user']['id'] ?? 0;
         $saved_searches = [];
