@@ -65,7 +65,99 @@ function is_login()
 		exit;
 	}
 
+	syncSessionUserFromDatabase();
+
 	return true;
+}
+
+/**
+ * Refresh role_id / warehouse_id (and related fields) from vp_users into the session.
+ */
+function syncSessionUserFromDatabase(): void
+{
+	if (!isset($_SESSION['user']['id'])) {
+		return;
+	}
+
+	global $conn;
+	if (!$conn instanceof mysqli) {
+		return;
+	}
+
+	$userId = (int) $_SESSION['user']['id'];
+	if ($userId <= 0) {
+		return;
+	}
+
+	$stmt = $conn->prepare(
+		'SELECT id, name, email, phone, role_id, warehouse_id, is_active
+		 FROM vp_users
+		 WHERE id = ? AND is_deleted = 0
+		 LIMIT 1'
+	);
+	if (!$stmt) {
+		return;
+	}
+
+	$stmt->bind_param('i', $userId);
+	$stmt->execute();
+	$result = $stmt->get_result();
+	$row = $result ? $result->fetch_assoc() : null;
+	$stmt->close();
+
+	if (!$row) {
+		return;
+	}
+
+	$_SESSION['user'] = array_merge(is_array($_SESSION['user'] ?? null) ? $_SESSION['user'] : [], $row);
+	$_SESSION['user_id'] = (int) ($row['id'] ?? $userId);
+	$_SESSION['warehouse_id'] = $row['warehouse_id'] ?? null;
+}
+
+/**
+ * Block direct URL access to modules the user cannot see in navigation.
+ */
+function assertPageModuleAccess(?string $pageSlug = null, ?string $pageAction = null): void
+{
+	if (!isset($_SESSION['user'])) {
+		return;
+	}
+
+	$pageSlug = basename(trim((string) ($pageSlug ?? $_GET['page'] ?? '')));
+	$pageAction = trim((string) ($pageAction ?? $_GET['action'] ?? ''));
+
+	if ($pageSlug === '' || $pageSlug === 'dashboard') {
+		return;
+	}
+
+	$publicUserActions = [
+		'login', 'loginProcess', 'logout', 'forgotPassword', 'sendResetLink',
+		'resetPassword', 'resetPasswordProcess', 'verifyResetToken', 'sendLoginOtp',
+		'validateLoginOtp', 'updateCaptcha', 'validateCaptcha',
+	];
+	if ($pageSlug === 'users' && in_array($pageAction, $publicUserActions, true)) {
+		return;
+	}
+
+	if (isAdministratorUser()) {
+		return;
+	}
+
+	if (!function_exists('userHasNavigationMenuAccess')) {
+		require_once __DIR__ . '/navigation_menu.php';
+	}
+
+	$moduleNames = resolvePagePermissionModuleNames($pageSlug, $pageAction);
+	if ($moduleNames === []) {
+		return;
+	}
+
+	$userId = (int) ($_SESSION['user']['id'] ?? 0);
+	if (!userHasNavigationMenuAccess($userId, $moduleNames)) {
+		global $domain;
+		header('Location: ' . ($domain ?? '') . '?page=dashboard&action=dashboard');
+		exit;
+	}
 }
 function base_url($path = '')
 {
