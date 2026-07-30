@@ -2358,6 +2358,73 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (!String(out.confirm_phone || "").trim() && defaults.confirm_phone) {
       out.confirm_phone = String(defaults.confirm_phone).trim();
     }
+    out = applyShippingSameAsBillingToPayload(out);
+    return out;
+  }
+
+  function applyShippingSameAsBillingToPayload(payload) {
+    var out = Object.assign({}, payload);
+    var sameAsBilling = out.confirm_shipping_same_as_billing === "1"
+      || out.confirm_shipping_same_as_billing === 1
+      || out.confirm_shipping_same_as_billing === true;
+    if (!sameAsBilling) {
+      return applyBillingFallbacksToShippingPayload(out);
+    }
+    var pairs = [
+      ["confirm_first_name", "confirm_sfirst_name"],
+      ["confirm_last_name", "confirm_slast_name"],
+      ["confirm_address1", "confirm_saddress1"],
+      ["confirm_address2", "confirm_saddress2"],
+      ["confirm_city", "confirm_scity"],
+      ["confirm_state", "confirm_sstate"],
+      ["confirm_zip", "confirm_szip"],
+      ["confirm_country", "confirm_scountry"],
+      ["confirm_phone", "confirm_sphone"],
+      ["confirm_phone_code", "confirm_sphone_code"],
+      ["confirm_gstin", "confirm_sgstin"]
+    ];
+    pairs.forEach(function(pair) {
+      var billingVal = String(out[pair[0]] || "").trim();
+      if (billingVal !== "") {
+        out[pair[1]] = billingVal;
+      }
+    });
+    var sf = String(out.confirm_sfirst_name || "").trim();
+    var sl = String(out.confirm_slast_name || "").trim();
+    out.confirm_sname = [sf, sl].filter(Boolean).join(" ").trim();
+    return out;
+  }
+
+  function applyBillingFallbacksToShippingPayload(payload) {
+    var out = Object.assign({}, payload);
+    var pairs = [
+      ["confirm_sfirst_name", "confirm_first_name"],
+      ["confirm_slast_name", "confirm_last_name"],
+      ["confirm_saddress1", "confirm_address1"],
+      ["confirm_saddress2", "confirm_address2"],
+      ["confirm_scity", "confirm_city"],
+      ["confirm_sstate", "confirm_state"],
+      ["confirm_szip", "confirm_zip"],
+      ["confirm_scountry", "confirm_country"],
+      ["confirm_sphone", "confirm_phone"],
+      ["confirm_sgstin", "confirm_gstin"]
+    ];
+    pairs.forEach(function(pair) {
+      if (!String(out[pair[0]] || "").trim()) {
+        var billingVal = String(out[pair[1]] || "").trim();
+        if (billingVal !== "") {
+          out[pair[0]] = billingVal;
+        }
+      }
+    });
+    if (!String(out.confirm_sname || "").trim()) {
+      out.confirm_sname = [out.confirm_sfirst_name, out.confirm_slast_name].filter(Boolean).join(" ").trim();
+    } else if (!String(out.confirm_slast_name || "").trim() && String(out.confirm_last_name || "").trim()) {
+      var firstPart = String(out.confirm_sfirst_name || out.confirm_sname || "").trim();
+      var lastPart = String(out.confirm_last_name || "").trim();
+      out.confirm_slast_name = lastPart;
+      out.confirm_sname = [firstPart, lastPart].filter(Boolean).join(" ").trim();
+    }
     return out;
   }
 

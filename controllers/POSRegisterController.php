@@ -4442,6 +4442,9 @@ class POSRegisterController
         }
 
         $payload = $this->normalizePosCheckoutBillingPayload($payload, $conn);
+        require_once dirname(__DIR__) . '/integrations/exotic/Support/OrderCreatePayload.php';
+        $payload = pos_order_create_apply_shipping_same_as_billing($payload);
+        $payload = pos_order_create_apply_billing_fallbacks_to_shipping($payload);
 
         $customerId = (int)($payload['customer_id'] ?? 0);
         $sessionCid = (int)($_SESSION['pos_customer_id'] ?? 0);
@@ -5159,62 +5162,8 @@ class POSRegisterController
      */
     private function appendOrderCreateShippingFields(array &$out, array $payload): void
     {
-        $sf = trim((string)($payload['confirm_sfirst_name'] ?? ''));
-        $sl = trim((string)($payload['confirm_slast_name'] ?? ''));
-        $sname = trim((string)($payload['confirm_sname'] ?? ''));
-        if ($sname === '') {
-            $sname = trim($sf . ' ' . $sl);
-        }
-        if ($sname === '') {
-            $sname = trim((string)($out['first_name'] ?? '') . ' ' . (string)($out['last_name'] ?? ''));
-        }
-
-        $saddress1 = trim((string)($payload['confirm_saddress1'] ?? ''));
-        $saddress2 = trim((string)($payload['confirm_saddress2'] ?? ''));
-        $scity = trim((string)($payload['confirm_scity'] ?? ''));
-        $sstate = trim((string)($payload['confirm_sstate'] ?? ''));
-        $szip = trim((string)($payload['confirm_szip'] ?? ''));
-        $sphone = trim((string)($payload['confirm_sphone'] ?? ''));
-        $sgstin = strtoupper(trim((string)($payload['confirm_sgstin'] ?? '')));
-
-        if ($saddress1 === '') {
-            $saddress1 = (string)($out['address1'] ?? '');
-        }
-        if ($saddress2 === '') {
-            $saddress2 = (string)($out['address2'] ?? '');
-        }
-        if ($scity === '') {
-            $scity = (string)($out['city'] ?? '');
-        }
-        if ($sstate === '') {
-            $sstate = (string)($out['state'] ?? '');
-        }
-        if ($szip === '') {
-            $szip = (string)($out['zip'] ?? '');
-        }
-        if ($sphone === '') {
-            $sphone = (string)($out['phone'] ?? '');
-        }
-        if ($sgstin === '') {
-            $sgstin = strtoupper(trim((string)($out['gstin'] ?? '')));
-        }
-
-        $scountry = strtoupper(substr(trim((string)($payload['confirm_scountry'] ?? 'IN')), 0, 2));
-        if ($scountry === '') {
-            $scountry = (string)($out['country'] ?? 'IN');
-        }
-        if ($scountry === '') {
-            $scountry = 'IN';
-        }
-
-        $out['sname'] = $sname;
-        $out['saddress1'] = $saddress1;
-        $out['saddress2'] = $saddress2;
-        $out['scity'] = $scity;
-        $out['sstate'] = $sstate;
-        $out['szip'] = $szip;
-        $out['scountry'] = $scountry;
-        $out['sphone'] = $sphone;
+        require_once dirname(__DIR__) . '/integrations/exotic/Support/OrderCreatePayload.php';
+        pos_order_create_append_shipping_fields($out, $payload);
     }
 
     /** Exotic store_payment_details third segment when no gateway txn id (counter sale). */
@@ -5266,6 +5215,10 @@ class POSRegisterController
      */
     private function buildOrderCreatePostFromPayload(array $payload, array $cartData): array
     {
+        require_once dirname(__DIR__) . '/integrations/exotic/Support/OrderCreatePayload.php';
+        $payload = pos_order_create_apply_shipping_same_as_billing($payload);
+        $payload = pos_order_create_apply_billing_fallbacks_to_shipping($payload);
+
         $posMode = strtolower(trim((string)($payload['payment_mode'] ?? 'cash')));
         $codAmount = round((float)($payload['cod_amount'] ?? 0), 2);
         if ($codAmount <= 0.001) {
