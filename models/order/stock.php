@@ -198,6 +198,163 @@ class Stock {
     }
 
     /**
+     * Restore warehouse stock for one vp_orders line (cancel / cancelled_returned / returned).
+     *
+     * @return array{success:bool,message:string,applied:int,skipped:bool}
+     */
+    public function restoreStockByOrderRow(array $orderRow, string $refType = 'ORDER_CANCEL'): array
+    {
+        $orderNumber = trim((string) ($orderRow['order_number'] ?? ''));
+        $qty = (int) round((float) ($orderRow['quantity'] ?? 0));
+        if ($orderNumber === '' || $qty <= 0) {
+            return [
+                'success' => true,
+                'message' => 'No quantity to restore',
+                'applied' => 0,
+                'skipped' => true,
+            ];
+        }
+
+        $refType = strtoupper(trim($refType));
+        if (!in_array($refType, ['ORDER_CANCEL', 'ORDER_RETURN'], true)) {
+            $refType = 'ORDER_CANCEL';
+        }
+
+        $productModel = new product($this->conn);
+        $prodId = (int) $productModel->getProductIdForInvoiceLine(
+            $orderNumber,
+            trim((string) ($orderRow['item_code'] ?? '')),
+            trim((string) ($orderRow['size'] ?? '')),
+            trim((string) ($orderRow['color'] ?? ''))
+        );
+        if ($prodId <= 0) {
+            $sku = trim((string) ($orderRow['sku'] ?? ''));
+            if ($sku !== '') {
+                $stmt = $this->conn->prepare('SELECT id FROM vp_products WHERE sku = ? LIMIT 1');
+                if ($stmt) {
+                    $stmt->bind_param('s', $sku);
+                    $stmt->execute();
+                    $row = $stmt->get_result()->fetch_assoc();
+                    $stmt->close();
+                    $prodId = (int) ($row['id'] ?? 0);
+                }
+            }
+        }
+
+        if ($prodId <= 0) {
+            return [
+                'success' => false,
+                'message' => 'Product not resolved for order line',
+                'applied' => 0,
+                'skipped' => true,
+            ];
+        }
+
+        $refStr = $orderNumber;
+        $dupStmt = $this->conn->prepare(
+            "SELECT id FROM vp_stock_movements
+             WHERE ref_type = ? AND ref_id = ? AND product_id = ? AND movement_type = 'IN'
+             LIMIT 1"
+        );
+        if (!$dupStmt) {
+            return ['success' => false, 'message' => 'Prepare failed (dup check)', 'applied' => 0, 'skipped' => true];
+        }
+        $dupStmt->bind_param('ssi', $refType, $refStr, $prodId);
+        $dupStmt->execute();
+        $dupRes = $dupStmt->get_result();
+        if ($dupRes && $dupRes->num_rows > 0) {
+            $dupStmt->close();
+
+            return [
+                'success' => true,
+                'message' => 'Stock already restored for this order line',
+                'applied' => 0,
+                'skipped' => true,
+            ];
+        }
+        $dupStmt->close();
+
+        $invoiceId = (int) ($orderRow['invoice_id'] ?? 0);
+        if (
+            !$this->hasPriorInvoiceStockOut($prodId, $invoiceId, $orderNumber)
+            && !$this->hasPriorOrderStockOut($prodId, $orderNumber)
+        ) {
+            return [
+                'success' => true,
+                'message' => 'No prior stock OUT found for this order line',
+                'applied' => 0,
+                'skipped' => true,
+            ];
+        }
+
+        $warehouseId = $this->resolveWarehouseIdForOrderRow($orderRow);
+        $res = $this->addStockMovement($prodId, $qty, 'IN', $refStr, $refType, $warehouseId);
+        if (empty($res['success'])) {
+            return [
+                'success' => false,
+                'message' => (string) ($res['message'] ?? 'Stock movement failed'),
+                'applied' => 0,
+                'skipped' => false,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Stock restored for order line',
+            'applied' => 1,
+            'skipped' => false,
+        ];
+    }
+
+    private function hasPriorOrderStockOut(int $productId, string $orderNumber): bool
+    {
+        $productId = (int) $productId;
+        $orderNumber = trim($orderNumber);
+        if ($productId <= 0 || $orderNumber === '') {
+            return false;
+        }
+
+        $stmt = $this->conn->prepare(
+            "SELECT id FROM vp_stock_movements
+             WHERE product_id = ? AND movement_type = 'OUT'
+               AND ref_type = 'ORDER' AND ref_id = ?
+             LIMIT 1"
+        );
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('is', $productId, $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return !empty($row);
+    }
+
+    private function resolveWarehouseIdForOrderRow(array $orderRow): int
+    {
+        $storeWarehouse = (int) ($orderRow['store_name'] ?? 0);
+        if ($storeWarehouse > 0) {
+            return $storeWarehouse;
+        }
+
+        $invoiceId = (int) ($orderRow['invoice_id'] ?? 0);
+        if ($invoiceId > 0) {
+            $fromInvoice = $this->resolveWarehouseIdForInvoice($invoiceId);
+            if ($fromInvoice > 0) {
+                return $fromInvoice;
+            }
+        }
+
+        $sessionWarehouse = (int) ($_SESSION['user']['warehouse_id'] ?? 0);
+        if ($sessionWarehouse > 0) {
+            return $sessionWarehouse;
+        }
+
+        return (int) ($_SESSION['warehouse_id'] ?? 0);
+    }
+
+    /**
      * @return list<array{product_id:int,quantity:int,order_number:string,item_code:string,size:string,color:string}>
      */
     private function fetchInvoiceStockLines(int $invoice_id): array
@@ -315,7 +472,7 @@ class Stock {
      * Generic helper that adjusts stock and writes a movement entry.
      * Delegates most work to the product model.
      */
-    public function addStockMovement($item_id, $quantity, $movement_type, $reference_id, $ref_type = null) {
+    public function addStockMovement($item_id, $quantity, $movement_type, $reference_id, $ref_type = null, $warehouseId = 0) {
         // retrieve product data
         $sql = "SELECT id, sku, item_code, size, color FROM vp_products WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
@@ -333,12 +490,15 @@ class Stock {
         $quantity = abs((int)$quantity);
         $defaultRef = (($movementTypeNormalized === 'IN') || ($movementTypeNormalized === 'TRANSFER_IN')) ? 'GRN' : 'ORDER';
         $refTypeResolved = strtoupper(trim((string)($ref_type !== null && $ref_type !== '' ? $ref_type : $defaultRef)));
-        // Safety: cancellation flow must always restore stock, never deduct.
-        if ($refTypeResolved === 'INVOICE_CANCEL') {
+        // Safety: cancellation / return flow must always restore stock, never deduct.
+        if (in_array($refTypeResolved, ['INVOICE_CANCEL', 'ORDER_CANCEL', 'ORDER_RETURN'], true)) {
             $movementTypeNormalized = 'IN';
         }
         $refIdStr = $reference_id !== null && $reference_id !== '' ? (string)$reference_id : '0';
-        $wh = (int)($_SESSION['warehouse_id'] ?? 0);
+        $wh = (int) $warehouseId;
+        if ($wh <= 0) {
+            $wh = (int)($_SESSION['warehouse_id'] ?? 0);
+        }
         if ($refTypeResolved === 'INVOICE' || $refTypeResolved === 'INVOICE_CANCEL') {
             $wh = $this->resolveWarehouseIdForInvoice((int)$refIdStr);
         } elseif ($refTypeResolved === 'SALES_RETURN' || $refTypeResolved === 'SALES_RETURN_CANCEL') {
@@ -352,6 +512,10 @@ class Stock {
             $reason = 'Order ' . $refIdStr;
         } elseif ($movementTypeNormalized === 'IN' && $refTypeResolved === 'INVOICE_CANCEL') {
             $reason = 'Invoice cancelled / dispatch cancelled #' . $refIdStr;
+        } elseif ($movementTypeNormalized === 'IN' && $refTypeResolved === 'ORDER_CANCEL') {
+            $reason = 'Order cancelled / cancelled & returned ' . $refIdStr;
+        } elseif ($movementTypeNormalized === 'IN' && $refTypeResolved === 'ORDER_RETURN') {
+            $reason = 'Order returned ' . $refIdStr;
         } elseif ($movementTypeNormalized === 'IN' && $refTypeResolved === 'SALES_RETURN') {
             $reason = 'Sales return #' . $refIdStr;
         } elseif ($movementTypeNormalized === 'OUT' && $refTypeResolved === 'SALES_RETURN_CANCEL') {

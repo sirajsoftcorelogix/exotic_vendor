@@ -2,7 +2,19 @@
 
 function is_order_status_cancelled(string $status): bool
 {
-    return strtolower(trim($status)) === 'cancelled';
+    $slug = strtolower(trim($status));
+
+    return in_array($slug, ['cancelled', 'cancelled_returned'], true);
+}
+
+function is_order_status_returned(string $status): bool
+{
+    return strtolower(trim($status)) === 'returned';
+}
+
+function order_status_triggers_stock_restore(string $status): bool
+{
+    return is_order_status_cancelled($status) || is_order_status_returned($status);
 }
 
 function order_cancel_resolve_invoice_id_for_row(mysqli $conn, array $orderRow): int
