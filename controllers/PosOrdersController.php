@@ -64,6 +64,7 @@ class PosOrdersController
         //     }
         //print_array($orders);  
         $total_orders = $ordersModel->getOrdersCount($filters);
+        $list_debug = buildPosOrderListDebugContext($filters, $ordersModel);
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
 
         // Pending orders badge (for selected warehouse)
@@ -95,6 +96,7 @@ class PosOrdersController
                 'saved_searches' => $saved_searches,
                 'warehouses' => $commanModel->get_exotic_address(),
                 'default_warehouse_id' => resolveOrderListDefaultWarehouseId(),
+                'list_debug' => $list_debug,
             ],
             preparePaymentTypeFilterData($paymentTypes, $_GET['payment_type'] ?? null)
         ), 'Manage Orders');

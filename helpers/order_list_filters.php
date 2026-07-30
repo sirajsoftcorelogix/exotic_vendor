@@ -228,6 +228,85 @@ function appendPosOrderWarehouseScopeFilterSql(
     $params[] = $warehouseKey;
 }
 
+/**
+ * @param array<int, mixed> $params
+ * @return array{sql:string,params:array<int,mixed>,types:?string,interpolated:string}
+ */
+function buildSqlQueryDebugSnapshot(string $sql, array $params, ?string $types = null): array
+{
+    return [
+        'sql' => $sql,
+        'params' => $params,
+        'types' => $types,
+        'interpolated' => interpolateSqlDebugQuery($sql, $params, $types),
+    ];
+}
+
+/**
+ * @param array<int, mixed> $params
+ */
+function interpolateSqlDebugQuery(string $sql, array $params, ?string $types = null): string
+{
+    $index = 0;
+
+    return (string) preg_replace_callback('/\?/', static function () use (&$index, $params, $types) {
+        if (!array_key_exists($index, $params)) {
+            return '?';
+        }
+
+        $value = $params[$index];
+        $type = ($types !== null && isset($types[$index])) ? $types[$index] : 's';
+        $index++;
+
+        if ($type === 'i') {
+            return (string) (int) $value;
+        }
+        if ($type === 'd') {
+            return (string) (float) $value;
+        }
+
+        return "'" . str_replace("'", "''", (string) $value) . "'";
+    }, $sql);
+}
+
+/**
+ * Debug context for POS Orders list (warehouse scope + SQL).
+ *
+ * @param array<string, mixed> $filters
+ * @return array<string, mixed>
+ */
+function buildPosOrderListDebugContext(array $filters, $ordersModel): array
+{
+    if (!function_exists('canViewAllWarehousesForPage')) {
+        require_once __DIR__ . '/html_helpers.php';
+    }
+
+    $sessionUser = is_array($_SESSION['user'] ?? null) ? $_SESSION['user'] : [];
+    $safeUserKeys = ['id', 'name', 'email', 'phone', 'role_id', 'warehouse_id', 'is_active'];
+    $user = [];
+    foreach ($safeUserKeys as $key) {
+        if (array_key_exists($key, $sessionUser)) {
+            $user[$key] = $sessionUser[$key];
+        }
+    }
+
+    return [
+        'generated_at' => date('Y-m-d H:i:s'),
+        'request_page' => (string) ($_GET['page'] ?? ''),
+        'request_action' => (string) ($_GET['action'] ?? ''),
+        'user' => $user,
+        'session_user_id' => (int) ($_SESSION['user_id'] ?? 0),
+        'session_warehouse_id' => $_SESSION['warehouse_id'] ?? null,
+        'resolved_warehouse_id' => resolveOrderListDefaultWarehouseId(),
+        'page_module_names' => resolvePagePermissionModuleNames(null, null),
+        'can_view_all_warehouses' => canViewAllWarehousesForPage(null, null),
+        'is_administrator' => isAdministratorUser(),
+        'filters' => $filters,
+        'list_query' => method_exists($ordersModel, 'getLastListQueryDebug') ? $ordersModel->getLastListQueryDebug() : null,
+        'count_query' => method_exists($ordersModel, 'getLastCountQueryDebug') ? $ordersModel->getLastCountQueryDebug() : null,
+    ];
+}
+
 function buildOrderListFiltersFromRequest(array $request): array
 {
     $filters = [];

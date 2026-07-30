@@ -6,9 +6,32 @@ require_once __DIR__ . '/../../helpers/order_list_filters.php';
 class POSOrder
 {
     private $db;
+
+    /** @var array<string, mixed>|null */
+    private $lastListQueryDebug = null;
+
+    /** @var array<string, mixed>|null */
+    private $lastCountQueryDebug = null;
+
     public function __construct($db)
     {
         $this->db = $db;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function getLastListQueryDebug(): ?array
+    {
+        return $this->lastListQueryDebug;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function getLastCountQueryDebug(): ?array
+    {
+        return $this->lastCountQueryDebug;
     }
     public function getAllOrders($filters = [], $limit = 50, $offset = 0)
     {
@@ -176,6 +199,7 @@ class POSOrder
         $params[] = $limit;
         $params[] = $offset;
         $types = str_repeat('s', count($params) - 2) . 'ii';
+        $this->lastListQueryDebug = buildSqlQueryDebugSnapshot($sql, $params, $types);
         $stmt->bind_param($types, ...$params);
 
         try {
@@ -330,9 +354,12 @@ class POSOrder
             return 0;
         }
 
+        $countTypes = $params ? str_repeat('s', count($params)) : null;
+        $this->lastCountQueryDebug = buildSqlQueryDebugSnapshot($sql, $params, $countTypes);
+
         try {
             if ($params) {
-                $stmt->bind_param(str_repeat('s', count($params)), ...$params);
+                $stmt->bind_param($countTypes, ...$params);
             }
             $stmt->execute();
             $result = $stmt->get_result();
