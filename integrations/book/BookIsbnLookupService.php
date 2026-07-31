@@ -1,15 +1,15 @@
 <?php
 
-require_once __DIR__ . '/../../integrations/book/BookMetadataGateway.php';
-require_once __DIR__ . '/../../integrations/shared/Http/HttpClient.php';
-require_once __DIR__ . '/../../integrations/book/Providers/OpenLibraryProvider.php';
-require_once __DIR__ . '/../../integrations/book/Providers/GoogleBooksProvider.php';
-require_once __DIR__ . '/../../integrations/book/Providers/VpCatalogProvider.php';
+require_once __DIR__ . '/BookMetadataGateway.php';
+require_once __DIR__ . '/../shared/Http/HttpClient.php';
+require_once __DIR__ . '/Providers/OpenLibraryProvider.php';
+require_once __DIR__ . '/Providers/GoogleBooksProvider.php';
+require_once __DIR__ . '/Providers/VpCatalogProvider.php';
 require_once __DIR__ . '/../../models/author/Author.php';
 require_once __DIR__ . '/../../models/publisher/Publisher.php';
 
 /**
- * Inbound use-case: ISBN lookup + local author/publisher catalog matching.
+ * ISBN lookup orchestration: external providers + local author/publisher catalog matching.
  */
 class BookIsbnLookupService
 {

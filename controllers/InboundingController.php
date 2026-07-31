@@ -534,7 +534,7 @@ class InboundingController {
         is_login();
         global $conn;
 
-        require_once __DIR__ . '/../services/inbound/BookIsbnLookupService.php';
+        require_once __DIR__ . '/../integrations/book/BookIsbnLookupService.php';
 
         $isbn = trim((string) ($_GET['isbn'] ?? $_POST['isbn'] ?? ''));
         if ($isbn === '') {
