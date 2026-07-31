@@ -1028,7 +1028,20 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-[#555] mb-1">ISBN</label>
-                                <input type="text" name="isbn" value="<?php echo htmlspecialchars($data['form2']['isbn'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                                <div class="flex gap-2">
+                                    <input type="text"
+                                           name="isbn"
+                                           id="isbn_input"
+                                           value="<?php echo htmlspecialchars($data['form2']['isbn'] ?? ''); ?>"
+                                           class="flex-1 min-w-0 h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white"
+                                           placeholder="978-0-14-032872-1"
+                                           autocomplete="off">
+                                    <button type="button"
+                                            id="isbn-lookup-btn"
+                                            class="shrink-0 h-10 bg-[#d97824] hover:bg-[#bf7326] text-white font-bold px-3 rounded-[3px] text-xs uppercase whitespace-nowrap">
+                                        Lookup
+                                    </button>
+                                </div>
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-[#555] mb-1">Cover Type</label>
@@ -2258,6 +2271,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         
     </div>
 </div>
+<?php
+$isbnLookupApplyBtnClass = 'bg-[#d97824] hover:bg-[#bf7326]';
+require __DIR__ . '/partials/isbn_lookup_modal.php';
+require __DIR__ . '/partials/isbn_lookup_script.php';
+?>
 <div id="deleteConfirmPopup" class="desktop-form-modal" hidden aria-hidden="true">
     <div class="bg-white p-6 rounded-md w-[90%] max-w-[400px] shadow-lg relative text-center font-['Segoe_UI']" onclick="event.stopPropagation();">
         <h3 class="text-lg font-bold mb-2 text-gray-800">Remove Invoice?</h3>
@@ -2922,9 +2940,10 @@ document.addEventListener('DOMContentLoaded', function() {
             CKEDITOR?.instances?.long_description_india_input?.setData(html);
         });
 
+        let publisherSelect = null;
         const publisherEl = document.getElementById('publisher_select');
         if (publisherEl && typeof window.safeTomSelect === 'function') {
-            window.safeTomSelect(publisherEl, {
+            publisherSelect = window.safeTomSelect(publisherEl, {
                 valueField: 'id',
                 labelField: 'name',
                 searchField: ['name'],
@@ -2941,6 +2960,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
+
+        initIsbnLookup({
+            authorTomSelect: authorTomSelect,
+            publisherSelect: publisherSelect,
+            syncAuthorPipeValue: syncAuthorPipeValue
+        });
     });
 </script>
 <script>

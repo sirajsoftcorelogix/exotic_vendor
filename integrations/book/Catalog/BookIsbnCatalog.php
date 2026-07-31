@@ -1,7 +1,7 @@
 <?php
 
-require_once __DIR__ . '/../inbounding/Inbounding.php';
-require_once __DIR__ . '/../product/product.php';
+require_once __DIR__ . '/../../../models/inbounding/Inbounding.php';
+require_once __DIR__ . '/../../../models/product/product.php';
 
 /**
  * Local ISBN metadata from vp_products / prior vp_inbound rows.
