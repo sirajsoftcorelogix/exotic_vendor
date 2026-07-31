@@ -1,4 +1,4 @@
-<script src="https://cdn.tailwindcss.com"></script>
+﻿<script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Roboto:wght@400&display=swap" rel="stylesheet">
@@ -57,7 +57,7 @@
     }
 
     .custom-checkbox:checked::after {
-        content: '✓';
+        content: 'âœ“';
         font-size: 10px;
         color: white;
         position: absolute;
@@ -268,7 +268,7 @@
                         <label for="order-from" class="block text-sm font-medium text-gray-600 mb-1">Order From</label>
                         <input type="date" value="<?= htmlspecialchars($_GET['order_from'] ?? '') ?>" name="order_from" id="order-from" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                     </div>
-                    <span class="text-gray-500 pb-2">→</span>
+                    <span class="text-gray-500 pb-2">â†’</span>
                     <div class="w-1/2">
                         <label for="order-till" class="block text-sm font-medium text-gray-600 mb-1">Order To</label>
                         <input type="date" value="<?= htmlspecialchars($_GET['order_till'] ?? '') ?>" name="order_till" id="order-till" class="w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
@@ -776,7 +776,7 @@
                                                     if ($width > 0)  $dimParts[] = 'W: ' . $width . ' Inch';
                                                     if ($height > 0) $dimParts[] = 'H: ' . $height . ' Inch';
 
-                                                    $dimensions[] = ' ' . implode(' × ', $dimParts);
+                                                    $dimensions[] = ' ' . implode(' Ã— ', $dimParts);
                                                 }
                                                 ?>
                                                 <?php if (!empty($dimensions)): ?>
@@ -866,7 +866,7 @@
                                                         <span class="data-typography mt-1 block"><?= $order['location'] ?: 'N/A' ?></span>
                                                     </div>
                                                     <div>
-                                                        <span class="heading-typography block mb-5">Ship By Date</span>
+                                                        <span class="heading-typography block mb-5">Ship ByÂ Date</span>
                                                         <span class="data-typography mt-1 block"><?= $order['esd'] ? date("d M Y", strtotime($order['esd'])) : 'N/A' ?></span>
                                                     </div>
 
@@ -1119,7 +1119,7 @@
                             </div>
                             <div>
                                 <label for="item_price" class="text-sm font-bold text-gray-700">Item Price: </label>
-                                <span class="text-gray-600" id="item_price">₹00</span>
+                                <span class="text-gray-600" id="item_price">â‚¹00</span>
                             </div>
                             <div>
                                 <label for="final_price" class="text-sm font-bold text-gray-700">Final Price: </label>
@@ -1242,7 +1242,7 @@
 <!--popup for search settings-->
 <div id="searchSettingsPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50">
     <div class="bg-white p-4 rounded-md max-w-6xl w-5/12 max-h-3xl relative flex flex-col items-center">
-        <button onclick="closesearch();" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <button onclick="closesearch();" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
         <div class="p-6 w-full overflow-y-auto">
             <h2 class="text-2xl font-bold mb-4">Search Settings</h2>
             <form id="searchSettingsForm" method="post" action="?page=posorders&action=save_search_settings">
@@ -1269,13 +1269,13 @@
 <!-- Image Popup -->
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
     <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
-        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
         <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
     </div>
 </div>
 <div id="importPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImportPopup(event)">
     <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center " onclick="event.stopPropagation();">
-        <button onclick="closeImportPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <button onclick="closeImportPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
         <div class="p-6">
             <h2 class="text-2xl font-bold mb-4">Import Orders</h2>
             <?php //echo date('Y-m-d H:i:s',1761382018);          
@@ -1308,195 +1308,16 @@
         </div>
     </div>
 </div>
-<!--Status Popup -->
-<div id="statusPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeStatusPopup(event)">
-    <div class="bg-white p-4 rounded-md max-w-4xl max-h-3xl relative flex flex-col items-center " onclick="event.stopPropagation();">
-        <button onclick="closeStatusPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
-        <div class="w-full flex">
-            <div class="items-start mb-6 w-[40%]">
-                <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md border-2 m-6 h-36
-                    object-cover">
-                <p class="ml-6 text-sm text-gray-600 space-y-1">
-                    <strong>Order Number:</strong> <span id="status_order_number"></span><br>
-                    <strong>Item Code:</strong> <span id="status_item_code"></span><br>
-                    <?php if ($showOrderVendorName): ?>
-                    <strong>Vendor Name:</strong> <span id="status_vendor_name"></span><br>
-                    <?php endif; ?>
-                    <br>
-                    <span id="status_category"></span> /
-                    <span id="status_sub_category"></span><br>
-                    <span id="status_item" class="font-bold"></span><br>
-                </p>
-            </div>
-            <div class="border-l pl-4 ml-4"></div>
-            <div class="p-4 w-[59%]">
-                <h2 class="text-2xl font-bold mb-4">Update Order</h2>
-                <form id="statusForm" enctype="multipart/form-data" method="post" action="?page=posorders&action=update_status">
-                    <input type="hidden" name="status_order_id" id="status_order_id">
-                    <div class="mb-4">
-                        <div class="mb-4 flex space-x-4">
-                            <div>
-                                <label for="orderStatus" class="block text-gray-700 font-bold mb-2 ">Order Status:</label>
-                                <select id="orderStatus" name="orderStatus" class="border border-gray-300 rounded px-3 py-2 w-full">
-                                    <?php
-                                    echo '<option value="">-- Order Status --</option>';
-
-                                    // Find the "Procurement" parent id (by slug or title, case-insensitive)
-                                    $procurement_id = null;
-                                    $sorder_id = null;
-                                    $parent = [];
-                                    foreach ($order_status_list as $s) {
-                                        if ((isset($s['slug']) && strtolower($s['slug']) === 'procurement') ||
-                                            (isset($s['title']) && strtolower($s['title']) === 'procurement')
-                                        ) {
-                                            $procurement_id = $s['id'] ?? null;
-                                            //break;
-                                        }
-                                        if ($s['parent_id'] === 0 && strtolower($s['slug']) === 'order') {
-                                            //$parent[$s['id']] = $s['title'];
-                                            $sorder_id = $s['id'] ?? null;
-                                        }
-                                    }
-
-                                    // Partition statuses into procurement children and others
-                                    $procurement_children = [];
-                                    $other_statuses = [];
-                                    foreach ($order_status_list as $status) {
-                                        // skip the procurement parent itself from listing
-                                        if ($procurement_id !== null && isset($status['id']) && $status['id'] == $procurement_id) {
-                                            continue;
-                                        }
-                                        if ($sorder_id !== null &&  $status['id'] == $sorder_id) {
-                                            continue;
-                                        }
-                                        if ($procurement_id !== null && isset($status['parent_id']) && $status['parent_id'] == $procurement_id) {
-                                            $procurement_children[] = $status;
-                                        } else {
-                                            $other_statuses[] = $status;
-                                        }
-                                    }
-                                    // Output remaining statuses
-                                    if (!empty($other_statuses)) {
-                                        echo '<optgroup label="Order">';
-                                        foreach ($other_statuses as $st) {
-                                            $value = htmlspecialchars($st['slug'] ?? '');
-                                            $label = htmlspecialchars($st['title'] ?? $st['slug'] ?? '');
-                                            echo "<option value=\"{$value}\">{$label}</option>";
-                                        }
-                                    }
-                                    // Output optgroup for Procurement (if any)
-                                    if (!empty($procurement_children)) {
-                                        echo '<optgroup label="Procurement">';
-                                        foreach ($procurement_children as $st) {
-                                            $value = htmlspecialchars($st['slug'] ?? '');
-                                            $label = htmlspecialchars($st['title'] ?? $st['slug'] ?? '');
-                                            echo "<option value=\"{$value}\">{$label}</option>";
-                                        }
-                                        echo '</optgroup>';
-                                    }
-                                    ?>
-
-                                </select>
-                                <input type="hidden" id="previousStatus" name="previousStatus" value="">
-                            </div>
-                            <div>
-                                <label for="statusESD" class="block text-gray-700 font-bold mb-2">Ship By Date:</label>
-                                <input type="date" id="statusESD" name="esd" class="border border-gray-300 rounded px-2 py-1.5 w-full">
-                                <input type="hidden" id="previousESD" name="previous_esd" value="">
-                            </div>
-                        </div>
-                        <div class="mb-4 flex space-x-4">
-                            <div style="min-width: 100px;">
-                                <label for="orderPriority" class="block text-gray-700 font-bold mb-2 ">Assign agent:</label>
-                                <select name="agent_id" id="agentId" class="border border-gray-300 rounded px-3 py-2 w-full">
-                                    <option value="">Select User</option>
-                                    <?php foreach ($staff_list as $id => $name): ?>
-                                        <option value="<?= $id ?>"><?= htmlspecialchars($name) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <input type="hidden" id="agentName" name="agent_name" value="">
-                                <input type="hidden" id="previousAgent" name="previous_agent" value="">
-                            </div>
-                            <div style="min-width: 100px;">
-                                <label for="orderPriority" class="block text-gray-700 font-bold mb-2 ">Priority:</label>
-                                <select id="orderPriority" name="orderPriority" class="border border-gray-300 rounded px-3 py-2 w-full">
-                                    <option value="">-Select-</option>
-                                    <option value="critical">Critical</option>
-                                    <option value="urgent">Urgent</option>
-                                    <option value="high">High</option>
-                                    <option value="medium" selected>Medium</option>
-                                    <option value="low">Low</option>
-                                </select>
-                                <input type="hidden" id="previousPriority" name="previous_priority" value="">
-                            </div>
-                        </div>
-                        <!-- Remarks field -->
-                        <div class="mb-4">
-                            <label for="orderRemarks" class="block text-gray-700 font-bold mb-2">Notes:</label>
-                            <textarea id="orderRemarks" name="orderRemarks" class="border border-gray-300 rounded px-3 py-2 w-full" rows="4"></textarea>
-                            <input type="hidden" id="previousRemarks" name="previous_remarks" value="">
-                        </div>
-                        <div id="orderStatusError" class="text-red-500 text-sm mt-1 hidden">Please select a status.</div>
-                    </div>
-                    <div class="flex justify-end space-x-4">
-                        <button type="button" onclick="closeStatusPopup()" class="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-600">Cancel</button>
-                        <button type="submit" class="px-4 py-2 btn-success text-white rounded hover:bg-blue-700">Save</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-<!-- Details Modal -->
-<div id="details-modal" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden">
-    <div id="details-modal-slider" class="fixed top-0 right-0 h-full w-full max-w-3xl flex transform translate-x-full">
-
-        <!-- Close Button -->
-        <div class="flex-shrink-0 flex items-start pt-5">
-            <button id="close-details-modal"
-                class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center -ml-[61px]"
-                style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-                    stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-            </button>
-        </div>
-
-        <div class="flex-1 min-h-0 bg-white shadow-xl p-8 overflow-y-auto flex flex-col w-full">
-            <!-- Modal Content -->
-            <div class="min-h-0 overflow-y-auto pb-8" id="details-modal-content">
-                <!-- Dynamic content will be loaded here -->
-
-            </div>
-        </div>
-    </div>
-</div>
-<!-- image popup close -->
-
-<!-- Exotic India API sync failure -->
-<div id="exoticApiSyncModal" class="fixed inset-0 z-[10000] hidden">
-    <div class="absolute inset-0 bg-black/50" onclick="closeExoticApiSyncModal()"></div>
-    <div class="relative mx-auto mt-24 w-[92%] max-w-lg rounded-xl bg-white shadow-xl">
-        <div class="border-b border-amber-200 bg-amber-50 px-5 py-4 rounded-t-xl">
-            <h3 class="text-lg font-semibold text-amber-900">Exotic India sync failed</h3>
-            <p class="text-sm text-amber-800 mt-1">Local order status was saved, but the vendor portal could not be updated.</p>
-        </div>
-        <div class="px-5 py-4 space-y-3 text-sm text-gray-700">
-            <p id="exoticApiSyncSummary" class="font-medium text-gray-900"></p>
-            <div id="exoticApiSyncDetails" class="max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3 font-mono text-xs whitespace-pre-wrap text-gray-800"></div>
-        </div>
-        <div class="flex flex-wrap justify-end gap-2 border-t border-gray-200 px-5 py-4">
-            <button type="button" onclick="closeExoticApiSyncModal()" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Close</button>
-            <button type="button" id="exoticApiSyncRetryBtn" onclick="retryExoticApiSync()" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Retry sync</button>
-        </div>
-    </div>
-</div>
-
+<?php renderPartial('views/shared/partials/order_status_update_popup.php', [
+    'order_status_list' => $order_status_list ?? [],
+    'staff_list' => $staff_list ?? [],
+    'showOrderVendorName' => !empty($showOrderVendorName),
+    'orderPage' => 'posorders',
+]); ?>
 <!-- Bulk Update Status Modal -->
 <div id="bulkStatusPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeBulkStatusPopup(event)">
     <div class="bg-white p-4 rounded-md max-w-2xl w-full relative" onclick="event.stopPropagation();">
-        <button onclick="closeBulkStatusPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <button onclick="closeBulkStatusPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
         <h2 class="text-xl font-bold mb-4">Bulk Update Status</h2>
         <form id="bulkStatusForm" method="post" action="?page=posorders&action=bulk_update_status">
             <div class="mb-4">
@@ -1568,7 +1389,7 @@
 <!-- Bulk Assign To Modal -->
 <div id="bulkAssignPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeBulkAssignPopup(event)">
     <div class="bg-white p-4 rounded-md max-w-2xl w-full relative" onclick="event.stopPropagation();">
-        <button onclick="closeBulkAssignPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <button onclick="closeBulkAssignPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
         <h2 class="text-xl font-bold mb-4">Assign Orders To Agent</h2>
         <form id="bulkAssignForm" method="post" action="?page=posorders&action=bulk_assign_agent">
             <div class="mb-4">
@@ -1599,7 +1420,7 @@
 <!--bulk add to To Purchase-->
 <div id="bulkAddToPurchasePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeBulkAddToPurchasePopup(event)">
     <div class="bg-white p-4 rounded-md max-w-2xl w-full relative" onclick="event.stopPropagation();">
-        <button onclick="closeBulkAddToPurchasePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
+        <button onclick="closeBulkAddToPurchasePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
         <h2 class="text-xl font-bold mb-4">Create Purchase List</h2>
         <form id="bulkAddToPurchaseForm" method="post" action="">
             <div class="mb-4 flex gap-4 w-full items-end">
@@ -1930,248 +1751,6 @@
         document.querySelectorAll('.menu-popup-order').forEach(function(menu) {
             menu.style.display = 'none';
         });
-    });
-
-    function openStatusPopup(orderId) {
-        document.getElementById('status_order_id').value = orderId;
-        document.getElementById('statusPopup').classList.remove('hidden');
-        document.getElementById('orderStatusError').textContent = '';
-        document.getElementById('orderStatusError').classList.add('hidden');
-        document.getElementById('orderRemarks').value = '';
-        document.getElementById('orderPriority').value = '';
-
-
-        // Close the menu
-        const menu = document.getElementById('menu-' + orderId);
-        if (menu) {
-            menu.style.display = 'none';
-        }
-        // update fields with order data
-        const orderData = JSON.parse(document.querySelector('#order-id-' + orderId).getAttribute('data-order'));
-        document.getElementById('orderRemarks').value = orderData.remarks || '';
-        document.getElementById('orderStatus').value = orderData.status || '';
-        document.getElementById('status_order_number').textContent = orderData.order_number || 'N/A';
-        document.getElementById('status_item_code').textContent = orderData.item_code || 'N/A';
-        <?php if ($showOrderVendorName): ?>
-        document.getElementById('status_vendor_name').textContent = orderData.vendor_name || orderData.vendor || 'N/A';
-        <?php endif; ?>
-        document.getElementById('status_category').textContent = orderData.groupname || 'N/A';
-        document.getElementById('status_sub_category').textContent = orderData.subcategories || 'N/A';
-        document.getElementById('status_item').textContent = orderData.title || 'N/A';
-        document.getElementById('orderPriority').value = orderData.priority || '';
-        document.getElementById('previousStatus').value = orderData.status || '';
-        document.getElementById('previousAgent').value = orderData.agent_id || '';
-        document.getElementById('agentId').value = orderData.agent_id || '';
-        document.getElementById('previousPriority').value = orderData.priority || '';
-        document.getElementById('previousRemarks').value = orderData.remarks || '';
-        document.getElementById('previousESD').value = orderData.esd || '';
-        // display ESD in dd-mm-yyyy format while keeping the date input usable
-        (function() {
-            const statusESD = document.getElementById('statusESD');
-            const raw = orderData.esd || '';
-
-            if (!statusESD) return;
-
-            // expect raw in yyyy-mm-dd
-            const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-            if (m) {
-                const formatted = `${m[3]}-${m[2]}-${m[1]}`; // dd-mm-yyyy
-
-                if (statusESD.type === 'date') {
-                    // keep the actual input value in yyyy-mm-dd so the native picker works
-                    statusESD.value = raw;
-                } else {
-                    // if it's a text field, set the formatted value directly
-                    statusESD.value = formatted;
-                }
-            } else {
-                // fallback: if format unknown, set raw value
-                statusESD.value = raw || '';
-            }
-        })();
-        //console.log(orderData.esd);
-        //image
-        const imgElem = document.querySelector('#statusPopup img');
-        imgElem.src = orderData.image || 'default-image.png';
-
-        if (window.applyOrderWorkflowStatusFilter) {
-            window.applyOrderWorkflowStatusFilter(orderData.status || '', document.getElementById('orderStatus'));
-        }
-    }
-
-    function closeStatusPopup() {
-        document.getElementById('statusPopup').classList.add('hidden');
-    }
-    //agent name set on selection
-    document.getElementById('agentId').addEventListener('change', function() {
-        const selectedOption = this.options[this.selectedIndex];
-        document.getElementById('agentName').value = selectedOption.text;
-    });
-    // submit status form with validation
-    let exoticApiSyncRetryQueue = [];
-
-    function closeExoticApiSyncModal() {
-        document.getElementById('exoticApiSyncModal').classList.add('hidden');
-    }
-
-    function showExoticApiSyncFailure(apiSync, options) {
-        options = options || {};
-        const failures = Array.isArray(apiSync && apiSync.failures) ? apiSync.failures
-            : (apiSync && apiSync.attempted && !apiSync.success ? [apiSync] : []);
-
-        if (!failures.length) {
-            return;
-        }
-
-        exoticApiSyncRetryQueue = failures.map(function(item) {
-            return {
-                order_id: item.order_id,
-                orderStatus: options.orderStatus || document.getElementById('orderStatus')?.value || ''
-            };
-        });
-
-        const summary = failures.length === 1
-            ? ('Order ' + (failures[0].order_number || failures[0].order_id) + ' / ' + (failures[0].item_code || 'item'))
-            : (failures.length + ' items failed to sync');
-
-        const details = failures.map(function(item) {
-            const parts = [
-                'Order: ' + (item.order_number || item.order_id || '—'),
-                'Item: ' + (item.item_code || '—'),
-                'HTTP: ' + (item.http_code || '—'),
-                'Reason: ' + (item.message || 'Unknown error')
-            ];
-            if (item.raw) {
-                parts.push('Response: ' + String(item.raw).slice(0, 400));
-            }
-            return parts.join('\n');
-        }).join('\n\n');
-
-        document.getElementById('exoticApiSyncSummary').textContent = summary;
-        document.getElementById('exoticApiSyncDetails').textContent = details;
-        document.getElementById('exoticApiSyncRetryBtn').classList.toggle('hidden', exoticApiSyncRetryQueue.length === 0);
-        document.getElementById('exoticApiSyncModal').classList.remove('hidden');
-    }
-
-    function retryExoticApiSync() {
-        if (!exoticApiSyncRetryQueue.length) {
-            closeExoticApiSyncModal();
-            return;
-        }
-
-        const btn = document.getElementById('exoticApiSyncRetryBtn');
-        const originalText = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = 'Retrying…';
-
-        const runNext = function(index) {
-            if (index >= exoticApiSyncRetryQueue.length) {
-                btn.disabled = false;
-                btn.textContent = originalText;
-                closeExoticApiSyncModal();
-                if (typeof showAlert === 'function') {
-                    showAlert('Exotic India sync retry completed.', 'success');
-                }
-                setTimeout(function() { location.reload(); }, 1200);
-                return;
-            }
-
-            const item = exoticApiSyncRetryQueue[index];
-            const formData = new FormData();
-            formData.append('order_id', item.order_id);
-            if (item.orderStatus) {
-                formData.append('orderStatus', item.orderStatus);
-            }
-
-            fetch('?page=posorders&action=retry_status_api', {
-                method: 'POST',
-                body: formData
-            })
-            .then(function(res) { return res.json(); })
-            .then(function(data) {
-                if (!data.success) {
-                    throw new Error(data.message || 'Retry failed');
-                }
-                runNext(index + 1);
-            })
-            .catch(function(err) {
-                btn.disabled = false;
-                btn.textContent = originalText;
-                document.getElementById('exoticApiSyncDetails').textContent = err.message || 'Retry failed';
-                if (typeof showAlert === 'function') {
-                    showAlert(err.message || 'Retry failed', 'error');
-                } else {
-                    alert(err.message || 'Retry failed');
-                }
-            });
-        };
-
-        runNext(0);
-    }
-
-    function handlePosOrderStatusResponse(data, errorDiv, onComplete) {
-        if (!data.success) {
-            errorDiv.classList.remove('text-green-500');
-            errorDiv.classList.add('text-red-500');
-            errorDiv.textContent = data.message || 'Error updating order status.';
-            errorDiv.classList.remove('hidden');
-            return;
-        }
-
-        const apiSync = data.api_sync || null;
-        const apiFailed = apiSync && apiSync.attempted && !apiSync.success;
-
-        if (apiFailed) {
-            errorDiv.classList.remove('text-green-500');
-            errorDiv.classList.add('text-amber-600');
-            errorDiv.textContent = data.message || 'Saved locally, but Exotic India sync failed.';
-            errorDiv.classList.remove('hidden');
-            showExoticApiSyncFailure(apiSync, { orderStatus: document.getElementById('orderStatus')?.value || '' });
-            return;
-        }
-
-        errorDiv.classList.remove('text-red-500', 'text-amber-600');
-        errorDiv.classList.add('text-green-500');
-        errorDiv.textContent = data.message || 'Order status updated successfully.';
-        errorDiv.classList.remove('hidden');
-
-        if (typeof onComplete === 'function') {
-            onComplete();
-        } else {
-            setTimeout(function() {
-                closeStatusPopup();
-                location.reload();
-            }, 1500);
-        }
-    }
-
-    document.getElementById('statusForm').addEventListener('submit', function(e) {
-        const statusSelect = document.getElementById('orderStatus');
-        const errorDiv = document.getElementById('orderStatusError');
-        if (statusSelect.value === '') {
-            e.preventDefault();
-            errorDiv.classList.remove('hidden');
-        } else {
-            errorDiv.classList.add('hidden');
-        }
-        // Ajax submit the form if validation passes       
-        if (statusSelect.value !== '') {
-            e.preventDefault();
-            const formData = new FormData(document.getElementById('statusForm'));
-            fetch('?page=posorders&action=update_status', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    handlePosOrderStatusResponse(data, errorDiv);
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('An error occurred while updating order status.');
-                });
-        }
-
     });
 </script>
 
@@ -2697,7 +2276,7 @@
             qtyInput.type = 'number';
             qtyInput.min = '1';
             qtyInput.value = '';
-            qtyInput.name = `quantity[]`; // ✅ quantity per order id
+            qtyInput.name = `quantity[]`; // âœ… quantity per order id
             qtyInput.className = 'border rounded px-2 py-1 w-full text-sm';
             qtyWrap.appendChild(qtyInput);
 
@@ -2748,27 +2327,27 @@
 
                     let html = [];
 
-                    // ✅ Created (GREEN)
+                    // âœ… Created (GREEN)
                     if (data.created && data.created > 0) {
                         html.push(
                             `<span class="text-green-500 font-semibold">
-                        ✅ ${data.created} item(s) added to Purchase List
+                        âœ… ${data.created} item(s) added to Purchase List
                     </span>`
                         );
                     }
 
-                    // ⚠️ Failed (RED)
+                    // âš ï¸ Failed (RED)
                     if (Array.isArray(data.failed) && data.failed.length > 0) {
                         html.push(
                             `<span class="text-red-500 font-semibold">
-                        ⚠️ ${data.failed.length} item(s) failed:
+                        âš ï¸ ${data.failed.length} item(s) failed:
                     </span>`
                         );
 
                         data.failed.forEach(f => {
                             html.push(
                                 `<span class="text-red-500 ml-2 block">
-                            • Order #${f.order_id} (SKU: ${f.sku}): ${f.message}
+                            â€¢ Order #${f.order_id} (SKU: ${f.sku}): ${f.message}
                         </span>`
                             );
                         });
