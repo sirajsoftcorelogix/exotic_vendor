@@ -48,20 +48,31 @@ function order_handle_status_change_stock(mysqli $conn, array $orderRow, string 
 
     if (is_order_status_cancelled($newStatus)) {
         $invoiceCancel = order_cancel_linked_invoice_for_order_row($conn, $orderRow);
-        $invoiceStockApplied = (int) (($invoiceCancel['stock_restore']['applied'] ?? 0));
-        if (
-            !empty($invoiceCancel['attempted'])
-            && !empty($invoiceCancel['success'])
-            && $invoiceStockApplied > 0
-        ) {
+        if (!empty($invoiceCancel['attempted']) && !empty($invoiceCancel['success'])) {
             return [
                 'attempted' => true,
                 'via' => 'invoice',
                 'success' => true,
-                'message' => (string) ($invoiceCancel['message'] ?? 'Stock restored via linked invoice cancel.'),
+                'message' => (string) ($invoiceCancel['message'] ?? 'Linked invoice cancelled.'),
                 'invoice_cancel' => $invoiceCancel,
             ];
         }
+    }
+
+    if (is_order_status_cancelled($newStatus) && is_array($invoiceCancel) && !empty($invoiceCancel['attempted']) && empty($invoiceCancel['success'])) {
+        require_once __DIR__ . '/../models/order/stock.php';
+        $stockModel = new Stock($conn);
+        $orderStockRestore = $stockModel->restoreStockByOrderRow($orderRow, 'ORDER_CANCEL');
+
+        return [
+            'attempted' => true,
+            'via' => 'order_row',
+            'success' => !empty($orderStockRestore['success']),
+            'message' => (string) ($orderStockRestore['message'] ?? ''),
+            'applied' => (int) ($orderStockRestore['applied'] ?? 0),
+            'invoice_cancel' => $invoiceCancel,
+            'order_stock_restore' => $orderStockRestore,
+        ];
     }
 
     require_once __DIR__ . '/../models/order/stock.php';
@@ -109,7 +120,9 @@ function order_status_stock_summary_message(?array $stockResult): string
             return ' Sales return created.';
         }
         if (($stockResult['via'] ?? '') === 'invoice') {
-            return ' Stock restored via linked invoice cancel.';
+            $message = trim((string) ($stockResult['message'] ?? ''));
+
+            return $message !== '' ? ' ' . $message : ' Linked invoice cancelled.';
         }
         $applied = (int) ($stockResult['applied'] ?? $stockResult['order_stock_restore']['applied'] ?? 0);
         if ($applied > 0) {
