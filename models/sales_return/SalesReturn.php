@@ -320,8 +320,13 @@ class SalesReturn
      * @param array<int, array<string, mixed>> $lines
      * @return array{valid:bool,errors:array<int,string>,normalized_lines:array<int,array<string,mixed>>}
      */
-    public function validateReturnLines(array $header, array $lines, int $sessionWarehouseId, bool $isAdmin): array
-    {
+    public function validateReturnLines(
+        array $header,
+        array $lines,
+        int $sessionWarehouseId,
+        bool $isAdmin,
+        bool $autoFromOrderStatus = false
+    ): array {
         $errors = [];
         $orderNumber = trim((string) ($header['order_number'] ?? ''));
         if ($orderNumber === '') {
@@ -339,7 +344,12 @@ class SalesReturn
         }
         if ($warehouseId <= 0) {
             $errors[] = 'Warehouse could not be determined. Select a warehouse in your session.';
-        } elseif (!$isAdmin && $sessionWarehouseId > 0 && $warehouseId !== $sessionWarehouseId) {
+        } elseif (
+            !$autoFromOrderStatus
+            && !$isAdmin
+            && $sessionWarehouseId > 0
+            && $warehouseId !== $sessionWarehouseId
+        ) {
             $errors[] = 'This order belongs to a different warehouse.';
         }
 
@@ -533,6 +543,10 @@ class SalesReturn
 
         $base['attempted'] = true;
         $invoiceId = (int) ($orderRow['invoice_id'] ?? 0);
+        if ($invoiceId <= 0) {
+            require_once __DIR__ . '/../../helpers/order_cancel_invoice.php';
+            $invoiceId = order_cancel_resolve_invoice_id_for_row($this->conn, $orderRow);
+        }
         $context = $this->getReturnContext($orderNumber, $invoiceId > 0 ? $invoiceId : null);
 
         $targetLine = null;
@@ -578,7 +592,8 @@ class SalesReturn
                 ],
             ],
             $sessionWarehouseId,
-            $isAdmin
+            $isAdmin,
+            true
         );
 
         if (!$validation['valid']) {
@@ -621,6 +636,8 @@ class SalesReturn
             if ($skipped > 0) {
                 $message .= ' ' . $skipped . ' line(s) had no prior stock OUT.';
             }
+
+            $this->updateOrderReturnStatus($orderNumber, [$orderRowId], $userId);
 
             return [
                 'attempted' => true,

@@ -37,6 +37,33 @@ function order_cancel_resolve_invoice_id_for_row(mysqli $conn, array $orderRow):
 }
 
 /**
+ * Stock restore failure that still allows marking the invoice cancelled (e.g. proforma, no prior OUT).
+ */
+function order_cancel_stock_restore_allows_invoice_cancel(array $stockRestore): bool
+{
+    if (!empty($stockRestore['success'])) {
+        return true;
+    }
+
+    $message = strtolower(trim((string) ($stockRestore['message'] ?? '')));
+    if ($message === '') {
+        return false;
+    }
+
+    foreach ([
+        'no matching invoice out',
+        'stock not restored',
+        'stock already restored',
+    ] as $pattern) {
+        if (str_contains($message, $pattern)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
  * Cancel vp_invoices row: shipments, stock restore, status cancelled (same as dispatch cancel).
  *
  * @return array{success:bool, attempted:bool, invoice_id:int, message:string, stock_restore?:array<string,mixed>}
@@ -105,7 +132,7 @@ function order_cancel_vp_invoice_by_id(mysqli $conn, int $invoiceId): array
 
         $stockModel = new Stock($conn);
         $stockRestore = $stockModel->restoreStockByInvoiceId($invoiceId);
-        if (empty($stockRestore['success'])) {
+        if (!order_cancel_stock_restore_allows_invoice_cancel(is_array($stockRestore) ? $stockRestore : [])) {
             return [
                 'success' => false,
                 'attempted' => true,
