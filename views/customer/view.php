@@ -772,6 +772,7 @@ if ($end - $start < $slotSize - 1) {
         'order_status_list' => $order_status_list ?? [],
         'staff_list' => $staff_list ?? [],
         'showOrderVendorName' => !empty($showOrderVendorName),
+        'orderPage' => 'orders',
     ]); ?>
 <?php endif; ?>
 

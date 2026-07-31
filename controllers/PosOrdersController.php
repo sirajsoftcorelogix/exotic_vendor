@@ -1236,6 +1236,9 @@ class PosOrdersController
                 'showOrderVendorName' => function_exists('canViewOrderVendorName') && canViewOrderVendorName(),
                 'canFetchOrderJson' => $canFetchOrderJson,
                 'salesReturnEligibility' => $salesReturnEligibility,
+                'orderStatusPage' => in_array(trim((string)($_GET['page'] ?? '')), ['orders', 'posorders'], true)
+                    ? trim((string)$_GET['page'])
+                    : 'posorders',
             ], 'Order Details');
         }
         exit;
