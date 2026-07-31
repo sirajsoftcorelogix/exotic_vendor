@@ -1,6 +1,20 @@
 <?php
 
 require_once __DIR__ . '/html_helpers.php';
+require_once __DIR__ . '/order_cancel_invoice.php';
+
+/** @return list<string> */
+function order_workflow_terminal_status_slugs(): array
+{
+    return ['cancelled', 'cancelled_returned', 'returned'];
+}
+
+function is_order_workflow_terminal_status(string $slug): bool
+{
+    $slug = strtolower(trim($slug));
+
+    return $slug !== '' && in_array($slug, order_workflow_terminal_status_slugs(), true);
+}
 
 function order_workflow_transition_model(mysqli $conn): WorkflowTransition
 {
@@ -24,6 +38,12 @@ function assert_order_status_transition_allowed(
     $toSlug = strtolower(trim($toSlug));
     if ($fromSlug === '' || $toSlug === '' || $fromSlug === $toSlug) {
         return null;
+    }
+    if (is_order_workflow_terminal_status($fromSlug)) {
+        $model = order_workflow_transition_model($conn);
+        $fromTitle = $model->getStatusTitleBySlug($fromSlug) ?: $fromSlug;
+
+        return 'Orders in "' . $fromTitle . '" status cannot be changed to another status.';
     }
     if (isAdministratorUser()) {
         return null;
