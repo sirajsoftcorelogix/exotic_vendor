@@ -837,6 +837,98 @@ class SalesReturn
     }
 
     /**
+     * Whether the order details "Return" action may start a new sales return.
+     *
+     * @return array{
+     *   can_create:bool,
+     *   disabled_reason:string,
+     *   has_invoice:bool,
+     *   invoice_id:int,
+     *   existing_return_numbers:list<string>,
+     *   latest_return_id:int,
+     *   latest_return_number:string
+     * }
+     */
+    public function resolveSalesReturnCreateEligibility(string $orderNumber, ?int $invoiceId = null): array
+    {
+        $orderNumber = trim($orderNumber);
+        $result = [
+            'can_create' => false,
+            'disabled_reason' => '',
+            'has_invoice' => false,
+            'invoice_id' => 0,
+            'existing_return_numbers' => [],
+            'latest_return_id' => 0,
+            'latest_return_number' => '',
+        ];
+
+        if ($orderNumber === '') {
+            $result['disabled_reason'] = 'Order number is required.';
+
+            return $result;
+        }
+
+        $invoiceModel = new POSInvoice($this->conn);
+        $activeInvoice = null;
+        if ($invoiceId !== null && $invoiceId > 0) {
+            $activeInvoice = $invoiceModel->getInvoiceById($invoiceId);
+            if ($activeInvoice && strtolower(trim((string) ($activeInvoice['status'] ?? ''))) === 'cancelled') {
+                $activeInvoice = null;
+            }
+        }
+        if (!$activeInvoice) {
+            $activeInvoice = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
+        }
+
+        if (!$activeInvoice) {
+            $result['disabled_reason'] = 'Generate an invoice before creating a sales return.';
+
+            return $result;
+        }
+
+        $resolvedInvoiceId = (int) ($activeInvoice['id'] ?? 0);
+        $result['has_invoice'] = $resolvedInvoiceId > 0;
+        $result['invoice_id'] = $resolvedInvoiceId;
+
+        $stmt = $this->conn->prepare(
+            "SELECT id, return_number FROM vp_sales_returns
+             WHERE order_number = ? AND status = 'finalized'
+             ORDER BY id DESC"
+        );
+        if ($stmt) {
+            $stmt->bind_param('s', $orderNumber);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            while ($row = $res->fetch_assoc()) {
+                $returnNumber = trim((string) ($row['return_number'] ?? ''));
+                if ($returnNumber !== '') {
+                    $result['existing_return_numbers'][] = $returnNumber;
+                }
+                if ($result['latest_return_id'] <= 0) {
+                    $result['latest_return_id'] = (int) ($row['id'] ?? 0);
+                    $result['latest_return_number'] = $returnNumber;
+                }
+            }
+            $stmt->close();
+        }
+
+        $context = $this->getReturnContext($orderNumber, $resolvedInvoiceId);
+        if ($context['lines'] === []) {
+            if ($result['existing_return_numbers'] !== []) {
+                $result['disabled_reason'] = 'Sales return already recorded for this order.';
+            } else {
+                $result['disabled_reason'] = 'No returnable items for this order.';
+            }
+
+            return $result;
+        }
+
+        $result['can_create'] = true;
+
+        return $result;
+    }
+
+    /**
      * @param array<string, mixed> $filters
      * @return array{rows:array<int,array<string,mixed>>,total:int}
      */
