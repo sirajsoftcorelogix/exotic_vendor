@@ -192,6 +192,11 @@ $proformaPrintDisabledReason = $canPrintProforma
                     class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">
                     Return
                 </button>
+            <?php elseif ($latestSalesReturnViewUrl !== ''): ?>
+                <a href="<?= htmlspecialchars($latestSalesReturnViewUrl, ENT_QUOTES, 'UTF-8') ?>"
+                    class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">
+                    View Return
+                </a>
             <?php else: ?>
                 <button type="button"
                     disabled
@@ -199,13 +204,6 @@ $proformaPrintDisabledReason = $canPrintProforma
                     class="rounded border border-gray-200 bg-gray-100 px-4 py-1.5 text-sm font-medium text-gray-400 cursor-not-allowed">
                     Return
                 </button>
-                <?php if ($latestSalesReturnViewUrl !== ''): ?>
-                    <a href="<?= htmlspecialchars($latestSalesReturnViewUrl, ENT_QUOTES, 'UTF-8') ?>"
-                        class="text-xs font-medium text-amber-800 hover:text-amber-950 underline underline-offset-2"
-                        title="View existing sales return">
-                        View return<?= !empty($salesReturnEligibility['latest_return_number']) ? ' (' . htmlspecialchars((string) $salesReturnEligibility['latest_return_number'], ENT_QUOTES, 'UTF-8') . ')' : '' ?>
-                    </a>
-                <?php endif; ?>
             <?php endif; ?>
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Edit</button>
             <div class="relative inline-block text-left">
