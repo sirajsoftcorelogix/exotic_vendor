@@ -30,7 +30,6 @@ foreach ($order as $items => $item):
         $total_price += (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
     }
 endforeach;
-$currencyIcons = ['INR' => 'â‚¹', 'USD' => '$', 'EUR' => 'â‚¬', 'GBP' => 'Â£', 'JPY' => 'Â¥'];
 $orderremarks = is_array($orderremarks ?? null) ? $orderremarks : [];
 $customerdetails = is_array($customerdetails ?? null) ? $customerdetails : [];
 $statusList = is_array($statusList ?? null) ? $statusList : [];
@@ -65,6 +64,11 @@ $resolveCountryLabel = static function (?string $code) use ($countries): string 
 $displayOrderNumber = (string)($orderremarks['order_number'] ?? ($order[0]['order_number'] ?? ''));
 $invoicePdfUrl = trim((string)($invoicePdfUrl ?? ''));
 $invoiceDisplay = is_array($invoiceDisplay ?? null) ? $invoiceDisplay : null;
+$orderCurrencyCode = strtoupper(trim((string)($order[0]['currency'] ?? ($invoiceDisplay['currency'] ?? 'INR'))));
+if ($orderCurrencyCode === '') {
+    $orderCurrencyCode = 'INR';
+}
+$orderCurrencySymbol = vendor_currency_symbol($orderCurrencyCode);
 $canEditInvoiceNumber = !empty($canEditInvoiceNumber);
 $invoiceStatus = strtolower(trim((string)($invoiceDisplay['status'] ?? '')));
 $invoiceStatusBadgeClass = match ($invoiceStatus) {
@@ -297,12 +301,7 @@ $proformaPrintDisabledReason = $canPrintProforma
 
                 <div class="space-y-4">
                     <?php foreach ($order as $item):
-                        $currencyCode = strtoupper(trim($item['currency'] ?? ''));
-                        if (isset($currencyIcons[$currencyCode]) && $currencyIcons[$currencyCode] !== '') {
-                            $currencysymbol = $currencyIcons[$currencyCode] ?? $currencyCode;
-                        } else {
-                            $currencysymbol = $currencyCode . ' ';
-                        }
+                        $currencysymbol = vendor_currency_symbol($item['currency'] ?? $orderCurrencyCode);
                         $linePricing = ($linePricingByLineId ?? [])[(int)($item['id'] ?? 0)] ?? null;
                         $netLineAmount = is_array($linePricing)
                             ? (float)($linePricing['chargeable_value'] ?? 0)
@@ -662,22 +661,22 @@ $proformaPrintDisabledReason = $canPrintProforma
                         <?php if ($invoiceSummaryRows !== []): ?>
                             <?php renderPartial('views/posorders/partials/invoice_pdf_summary.php', [
                                 'summaryRows' => $invoiceSummaryRows,
-                                'currencySymbol' => 'â‚¹',
+                                'currencySymbol' => $orderCurrencySymbol,
                             ]); ?>
                         <?php else: ?>
                             <div class="rounded-lg border border-gray-200 bg-white">
                                 <div class="divide-y divide-gray-100 px-4 py-1 text-sm">
                                     <div class="flex items-center justify-between gap-4 py-2.5">
                                         <span class="text-gray-600">Subtotal</span>
-                                        <span class="tabular-nums font-medium text-gray-900">â‚¹ <?php echo $invoiceSubtotalDisplay; ?></span>
+                                        <span class="tabular-nums font-medium text-gray-900"><?php echo htmlspecialchars($orderCurrencySymbol, ENT_QUOTES, 'UTF-8'); ?> <?php echo $invoiceSubtotalDisplay; ?></span>
                                     </div>
                                     <div class="flex items-center justify-between gap-4 py-2.5">
                                         <span class="text-gray-600">Tax</span>
-                                        <span class="tabular-nums font-medium text-gray-900">â‚¹ <?php echo $invoiceTaxDisplay; ?></span>
+                                        <span class="tabular-nums font-medium text-gray-900"><?php echo htmlspecialchars($orderCurrencySymbol, ENT_QUOTES, 'UTF-8'); ?> <?php echo $invoiceTaxDisplay; ?></span>
                                     </div>
                                     <div class="flex items-center justify-between gap-4 border-t border-gray-200 bg-gray-50 px-4 py-3 -mx-4 mt-1">
                                         <span class="text-sm font-bold text-gray-900">Net chargeable amount</span>
-                                        <span class="text-base font-bold tabular-nums text-gray-900">â‚¹ <?php echo $invoiceGrandTotalDisplay; ?></span>
+                                        <span class="text-base font-bold tabular-nums text-gray-900"><?php echo htmlspecialchars($orderCurrencySymbol, ENT_QUOTES, 'UTF-8'); ?> <?php echo $invoiceGrandTotalDisplay; ?></span>
                                     </div>
                                 </div>
                             </div>
@@ -772,15 +771,15 @@ $proformaPrintDisabledReason = $canPrintProforma
                     <div class="grid grid-cols-3 gap-2 text-center">
                         <div class="rounded-lg border border-gray-100 bg-gray-50 px-2 py-2.5">
                             <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Order Total</p>
-                            <p class="mt-1 text-sm font-bold tabular-nums text-gray-900">â‚¹ <?php echo $paymentOrderTotalDisplay; ?></p>
+                            <p class="mt-1 text-sm font-bold tabular-nums text-gray-900"><?php echo htmlspecialchars($orderCurrencySymbol, ENT_QUOTES, 'UTF-8'); ?> <?php echo $paymentOrderTotalDisplay; ?></p>
                         </div>
                         <div class="rounded-lg border border-emerald-100 bg-emerald-50/60 px-2 py-2.5">
                             <p class="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Paid</p>
-                            <p class="mt-1 text-sm font-bold tabular-nums text-emerald-800">â‚¹ <?php echo $paymentPaidTotalDisplay; ?></p>
+                            <p class="mt-1 text-sm font-bold tabular-nums text-emerald-800"><?php echo htmlspecialchars($orderCurrencySymbol, ENT_QUOTES, 'UTF-8'); ?> <?php echo $paymentPaidTotalDisplay; ?></p>
                         </div>
                         <div class="rounded-lg border border-gray-100 bg-gray-50 px-2 py-2.5">
                             <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Pending</p>
-                            <p class="mt-1 text-sm font-bold tabular-nums <?php echo (float)($paymentSummary['pending'] ?? 0) > 0.02 ? 'text-red-600' : 'text-gray-900'; ?>">â‚¹ <?php echo $paymentPendingDisplay; ?></p>
+                            <p class="mt-1 text-sm font-bold tabular-nums <?php echo (float)($paymentSummary['pending'] ?? 0) > 0.02 ? 'text-red-600' : 'text-gray-900'; ?>"><?php echo htmlspecialchars($orderCurrencySymbol, ENT_QUOTES, 'UTF-8'); ?> <?php echo $paymentPendingDisplay; ?></p>
                         </div>
                     </div>
 
@@ -797,7 +796,7 @@ $proformaPrintDisabledReason = $canPrintProforma
                                             <p class="text-sm font-semibold text-gray-900">Credit</p>
                                             <p class="mt-0.5 text-xs text-gray-500">Store credit applied to this order</p>
                                         </div>
-                                        <p class="text-sm font-bold tabular-nums text-gray-900">â‚¹ <?php echo $creditAmountDisplay; ?></p>
+                                        <p class="text-sm font-bold tabular-nums text-gray-900"><?php echo htmlspecialchars($orderCurrencySymbol, ENT_QUOTES, 'UTF-8'); ?> <?php echo $creditAmountDisplay; ?></p>
                                     </div>
                                     <div class="mt-2 flex flex-wrap gap-1.5">
                                         <span class="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">Credit</span>
@@ -833,7 +832,7 @@ $proformaPrintDisabledReason = $canPrintProforma
                                             <p class="mt-0.5 text-xs text-gray-500"><?php echo htmlspecialchars($paymentDateLabel); ?></p>
                                         </div>
                                         <div class="flex shrink-0 flex-col items-end gap-1.5">
-                                            <p class="text-sm font-bold tabular-nums text-gray-900">â‚¹ <?php echo $paymentAmount; ?></p>
+                                            <p class="text-sm font-bold tabular-nums text-gray-900"><?php echo htmlspecialchars($orderCurrencySymbol, ENT_QUOTES, 'UTF-8'); ?> <?php echo $paymentAmount; ?></p>
                                             <button type="button"
                                                 onclick="printOrderPaymentReceipt(<?php echo $paymentId; ?>)"
                                                 class="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100">
