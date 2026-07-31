@@ -132,6 +132,9 @@ class WorkflowTransition
         if ($fromStatusId === $toStatusId) {
             return true;
         }
+        if ($fromStatusId > 0 && $this->isTerminalStatusId($fromStatusId)) {
+            return false;
+        }
         if ($fromStatusId <= 0 || $toStatusId <= 0) {
             return !$this->isEnforcementActive();
         }
@@ -170,6 +173,7 @@ class WorkflowTransition
     public function getAllowedTargetsForFromSlug(string $fromSlug): array
     {
         require_once dirname(__DIR__, 2) . '/helpers/order_status_stock.php';
+        require_once dirname(__DIR__, 2) . '/helpers/order_workflow.php';
 
         $fromSlug = strtolower(trim($fromSlug));
         $empty = [
@@ -180,6 +184,15 @@ class WorkflowTransition
         ];
         if ($fromSlug === '') {
             return $empty;
+        }
+
+        if (is_order_workflow_terminal_status($fromSlug)) {
+            return [
+                'enforced' => true,
+                'filter_options' => true,
+                'allowed_slugs' => [$fromSlug],
+                'stock_affecting_slugs' => [],
+            ];
         }
 
         if (!$this->isEnforcementActive()) {
@@ -369,6 +382,9 @@ class WorkflowTransition
         if (!$this->isLeafStatus($fromId) || !$this->isLeafStatus($toId)) {
             return ['success' => false, 'message' => 'Only child order statuses can be used in transitions.'];
         }
+        if ($this->isTerminalStatusId($fromId)) {
+            return ['success' => false, 'message' => 'Terminal statuses (cancelled, returned) cannot have outgoing transitions.'];
+        }
 
         $dup = $this->conn->prepare(
             'SELECT id FROM vp_workflow_transition WHERE from_status_id = ? AND to_status_id = ? LIMIT 1'
@@ -426,6 +442,9 @@ class WorkflowTransition
         }
         if (!$this->isLeafStatus($fromId) || !$this->isLeafStatus($toId)) {
             return ['success' => false, 'message' => 'Only child order statuses can be used in transitions.'];
+        }
+        if ($this->isTerminalStatusId($fromId)) {
+            return ['success' => false, 'message' => 'Terminal statuses (cancelled, returned) cannot have outgoing transitions.'];
         }
 
         $dup = $this->conn->prepare(
@@ -526,5 +545,28 @@ class WorkflowTransition
         $stmt->close();
 
         return !empty($row);
+    }
+
+    private function isTerminalStatusId(int $statusId): bool
+    {
+        $statusId = (int) $statusId;
+        if ($statusId <= 0) {
+            return false;
+        }
+
+        require_once dirname(__DIR__, 2) . '/helpers/order_workflow.php';
+
+        $stmt = $this->conn->prepare(
+            'SELECT slug FROM vp_order_status WHERE id = ? LIMIT 1'
+        );
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('i', $statusId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return is_order_workflow_terminal_status((string) ($row['slug'] ?? ''));
     }
 }
