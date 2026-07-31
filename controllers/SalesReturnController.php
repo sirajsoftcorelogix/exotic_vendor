@@ -108,15 +108,28 @@ class SalesReturnController
             exit;
         }
 
-        $context = $salesReturnModel->getReturnContext(
+        $eligibility = $salesReturnModel->resolveSalesReturnCreateEligibility(
             $orderNumber,
             $invoiceId > 0 ? $invoiceId : null
+        );
+        if (empty($eligibility['can_create'])) {
+            $_SESSION['sales_return_flash'] = [
+                'type' => 'error',
+                'text' => (string) ($eligibility['disabled_reason'] ?? 'Sales return is not available for this order.'),
+            ];
+            header('Location: ?page=sales_returns&action=index');
+            exit;
+        }
+
+        $context = $salesReturnModel->getReturnContext(
+            $orderNumber,
+            (int) ($eligibility['invoice_id'] ?? 0) > 0 ? (int) $eligibility['invoice_id'] : ($invoiceId > 0 ? $invoiceId : null)
         );
 
         if ($context['lines'] === []) {
             $_SESSION['sales_return_flash'] = [
                 'type' => 'error',
-                'text' => 'No returnable lines found for order ' . $orderNumber . '.',
+                'text' => (string) ($eligibility['disabled_reason'] ?? ('No returnable lines found for order ' . $orderNumber . '.')),
             ];
             header('Location: ?page=sales_returns&action=index');
             exit;
@@ -156,6 +169,19 @@ class SalesReturnController
         if ($orderNumber === '' || $returnDate === '') {
             $_SESSION['sales_return_flash'] = ['type' => 'error', 'text' => 'Order number and return date are required.'];
             header('Location: ?page=sales_returns&action=create&order_number=' . rawurlencode($orderNumber));
+            exit;
+        }
+
+        $createEligibility = $salesReturnModel->resolveSalesReturnCreateEligibility(
+            $orderNumber,
+            $invoiceId > 0 ? $invoiceId : null
+        );
+        if (empty($createEligibility['can_create'])) {
+            $_SESSION['sales_return_flash'] = [
+                'type' => 'error',
+                'text' => (string) ($createEligibility['disabled_reason'] ?? 'Sales return is not available for this order.'),
+            ];
+            header('Location: ?page=sales_returns&action=index');
             exit;
         }
 

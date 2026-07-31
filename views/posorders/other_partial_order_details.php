@@ -107,6 +107,15 @@ if ($invoiceIdForReturn <= 0) {
 if ($invoiceIdForReturn > 0) {
     $salesReturnUrl .= '&invoice_id=' . $invoiceIdForReturn;
 }
+$salesReturnEligibility = is_array($salesReturnEligibility ?? null) ? $salesReturnEligibility : [];
+$canCreateSalesReturn = !empty($salesReturnEligibility['can_create']);
+$salesReturnDisabledReason = trim((string)($salesReturnEligibility['disabled_reason'] ?? ''));
+if ($salesReturnDisabledReason === '' && !$canCreateSalesReturn) {
+    $salesReturnDisabledReason = 'Sales return is not available for this order.';
+}
+$latestSalesReturnViewUrl = (int)($salesReturnEligibility['latest_return_id'] ?? 0) > 0
+    ? base_url('?page=sales_returns&action=view&id=' . (int) $salesReturnEligibility['latest_return_id'])
+    : '';
 $proformaPrintUrl = trim((string)($proformaPrintUrl ?? ''));
 $canPrintProforma = !empty($canPrintProforma);
 $canPrintTaxInvoice = $invoicePdfUrl !== '' && $invoiceStatus === 'final';
@@ -171,13 +180,29 @@ $proformaPrintDisabledReason = $canPrintProforma
 
         <div class="flex items-center gap-2">
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Restock</button>
-            <button type="button"
-                data-sales-return-create
-                data-sales-return-url="<?= htmlspecialchars($salesReturnUrl, ENT_QUOTES, 'UTF-8') ?>"
-                data-order-number="<?= htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8') ?>"
-                class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">
-                Return
-            </button>
+            <?php if ($canCreateSalesReturn): ?>
+                <button type="button"
+                    data-sales-return-create
+                    data-sales-return-url="<?= htmlspecialchars($salesReturnUrl, ENT_QUOTES, 'UTF-8') ?>"
+                    data-order-number="<?= htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8') ?>"
+                    class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">
+                    Return
+                </button>
+            <?php else: ?>
+                <button type="button"
+                    disabled
+                    title="<?= htmlspecialchars($salesReturnDisabledReason, ENT_QUOTES, 'UTF-8') ?>"
+                    class="rounded border border-gray-200 bg-gray-100 px-4 py-1.5 text-sm font-medium text-gray-400 cursor-not-allowed">
+                    Return
+                </button>
+                <?php if ($latestSalesReturnViewUrl !== ''): ?>
+                    <a href="<?= htmlspecialchars($latestSalesReturnViewUrl, ENT_QUOTES, 'UTF-8') ?>"
+                        class="text-xs font-medium text-amber-800 hover:text-amber-950 underline underline-offset-2"
+                        title="View existing sales return">
+                        View return<?= !empty($salesReturnEligibility['latest_return_number']) ? ' (' . htmlspecialchars((string) $salesReturnEligibility['latest_return_number'], ENT_QUOTES, 'UTF-8') . ')' : '' ?>
+                    </a>
+                <?php endif; ?>
+            <?php endif; ?>
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Edit</button>
             <div class="relative inline-block text-left">
                 <input type="checkbox" id="dropdown-toggle" class="peer hidden">

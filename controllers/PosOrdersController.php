@@ -1196,6 +1196,13 @@ class PosOrdersController
         $viewerUserId = (int) ($_SESSION['user']['id'] ?? 0);
         $canFetchOrderJson = hasTieredAccess($viewerUserId, 'Sr Emp Access', ['Orders', 'POS Orders']);
 
+        require_once __DIR__ . '/../models/sales_return/SalesReturn.php';
+        $salesReturnModel = new SalesReturn($conn);
+        $salesReturnEligibility = $salesReturnModel->resolveSalesReturnCreateEligibility(
+            $resolvedOrderNumber,
+            $invoiceId > 0 ? $invoiceId : null
+        );
+
         if ($type === 'inner') {
             $page = trim((string)($_GET['page'] ?? ''));
             $innerPartial = $page === 'orders'
@@ -1228,6 +1235,7 @@ class PosOrdersController
                 'staff_list' => $commanModel->get_staff_list(),
                 'showOrderVendorName' => function_exists('canViewOrderVendorName') && canViewOrderVendorName(),
                 'canFetchOrderJson' => $canFetchOrderJson,
+                'salesReturnEligibility' => $salesReturnEligibility,
             ], 'Order Details');
         }
         exit;
