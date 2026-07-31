@@ -74,6 +74,8 @@ function base_url($path = '')
 	//return 'http://localhost:8082/' . ltrim($path, '/');
 }
 
+require_once __DIR__ . '/currency_display.php';
+
 /** Tax invoice PDF for POS orders (PosInvoiceController layout with checkout discounts). */
 function pos_invoice_pdf_url(int $invoiceId): string
 {

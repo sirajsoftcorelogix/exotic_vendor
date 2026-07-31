@@ -3,48 +3,34 @@
 /**
  * Currency symbols and labels for direct purchase screens.
  */
+require_once __DIR__ . '/currency_display.php';
+
 if (!function_exists('dp_currency_symbol_map')) {
     function dp_currency_symbol_map(): array
     {
-        return [
-            'INR' => "\u{20B9}",
-            'USD' => '$',
-            'EUR' => '€',
-            'GBP' => '£',
-            'AED' => 'د.إ',
-            'SGD' => 'S$',
-            'HKD' => 'HK$',
-            'JPY' => '¥',
-            'CNY' => '¥',
-            'AUD' => 'A$',
-            'CAD' => 'C$',
-            'CHF' => 'Fr.',
-            'NZD' => 'NZ$',
-            'SAR' => "\u{FDFC}",
-            'THB' => "\u{0E3F}",
-        ];
+        return vendor_currency_symbol_map();
     }
 
     function dp_currency_form_options(): array
     {
-        $sym = dp_currency_symbol_map();
+        $map = dp_currency_symbol_map();
 
         return [
-            'INR' => $sym['INR'] . ' INR — Indian Rupee',
-            'USD' => $sym['USD'] . ' USD — US Dollar',
-            'EUR' => $sym['EUR'] . ' EUR — Euro',
-            'GBP' => $sym['GBP'] . ' GBP — British Pound',
-            'AED' => $sym['AED'] . ' AED — UAE Dirham',
-            'SGD' => $sym['SGD'] . ' SGD — Singapore Dollar',
-            'HKD' => $sym['HKD'] . ' HKD — Hong Kong Dollar',
-            'JPY' => $sym['JPY'] . ' JPY — Japanese Yen',
-            'CNY' => $sym['CNY'] . ' CNY — Chinese Yuan',
-            'AUD' => $sym['AUD'] . ' AUD — Australian Dollar',
-            'CAD' => $sym['CAD'] . ' CAD — Canadian Dollar',
-            'CHF' => $sym['CHF'] . ' CHF — Swiss Franc',
-            'NZD' => $sym['NZD'] . ' NZD — New Zealand Dollar',
-            'SAR' => $sym['SAR'] . ' SAR — Saudi Riyal',
-            'THB' => $sym['THB'] . ' THB — Thai Baht',
+            'INR' => ($map['INR'] ?? 'INR') . ' INR — Indian Rupee',
+            'USD' => ($map['USD'] ?? 'USD') . ' USD — US Dollar',
+            'EUR' => ($map['EUR'] ?? 'EUR') . ' EUR — Euro',
+            'GBP' => ($map['GBP'] ?? 'GBP') . ' GBP — British Pound',
+            'AED' => ($map['AED'] ?? 'AED') . ' AED — UAE Dirham',
+            'SGD' => ($map['SGD'] ?? 'SGD') . ' SGD — Singapore Dollar',
+            'HKD' => ($map['HKD'] ?? 'HKD') . ' HKD — Hong Kong Dollar',
+            'JPY' => ($map['JPY'] ?? 'JPY') . ' JPY — Japanese Yen',
+            'CNY' => ($map['CNY'] ?? 'CNY') . ' CNY — Chinese Yuan',
+            'AUD' => ($map['AUD'] ?? 'AUD') . ' AUD — Australian Dollar',
+            'CAD' => ($map['CAD'] ?? 'CAD') . ' CAD — Canadian Dollar',
+            'CHF' => ($map['CHF'] ?? 'CHF') . ' CHF — Swiss Franc',
+            'NZD' => ($map['NZD'] ?? 'NZD') . ' NZD — New Zealand Dollar',
+            'SAR' => ($map['SAR'] ?? 'SAR') . ' SAR — Saudi Riyal',
+            'THB' => ($map['THB'] ?? 'THB') . ' THB — Thai Baht',
         ];
     }
 
@@ -53,13 +39,7 @@ if (!function_exists('dp_currency_symbol_map')) {
      */
     function dp_currency_symbol($code): string
     {
-        $c = strtoupper(preg_replace('/[^A-Za-z]/', '', (string) $code));
-        if ($c === '') {
-            $c = 'INR';
-        }
-        $map = dp_currency_symbol_map();
-
-        return $map[$c] ?? '¤';
+        return vendor_currency_symbol($code);
     }
 
     /** @param mixed $code */

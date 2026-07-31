@@ -24,7 +24,6 @@ $currency = '';
 foreach ($order as $items => $item):
     $total_price += $item['finalprice'] * $item['quantity'];
 endforeach;
-$currencyIcons = ['INR' => 'â‚¹', 'USD' => '$', 'EUR' => 'â‚¬', 'GBP' => 'Â£', 'JPY' => 'Â¥'];
 $orderremarks = is_array($orderremarks ?? null) ? $orderremarks : [];
 $customerdetails = is_array($customerdetails ?? null) ? $customerdetails : [];
 $statusList = is_array($statusList ?? null) ? $statusList : [];
@@ -50,6 +49,11 @@ $buildStatusOrderPayload = static function (array $item): array {
     ];
 };
 $displayOrderNumber = (string)($orderremarks['order_number'] ?? ($order[0]['order_number'] ?? ''));
+$orderCurrencyCode = strtoupper(trim((string)($order[0]['currency'] ?? 'INR')));
+if ($orderCurrencyCode === '') {
+    $orderCurrencyCode = 'INR';
+}
+$orderCurrencySymbol = vendor_currency_symbol($orderCurrencyCode);
 $resolveCountryLabel = static function (?string $code) use ($countries): string {
     $code = trim((string)$code);
     if ($code === '') {
@@ -153,12 +157,7 @@ if ($invoiceIdForReturn > 0) {
 
                 <div class="space-y-4">
                     <?php foreach ($order as $item):
-                        $currencyCode = strtoupper(trim($item['currency'] ?? ''));
-                        if (isset($currencyIcons[$currencyCode]) && $currencyIcons[$currencyCode] !== '') {
-                            $currencysymbol = $currencyIcons[$currencyCode] ?? $currencyCode;
-                        } else {
-                            $currencysymbol = $currencyCode . ' ';
-                        }
+                        $currencysymbol = vendor_currency_symbol($item['currency'] ?? $orderCurrencyCode);
                         $lineId = (int)($item['id'] ?? 0);
                         $lineStatus = (string)($item['status'] ?? '');
                         $lineStatusLabel = (string)($statusList[$lineStatus] ?? ucwords(str_replace('_', ' ', $lineStatus)));
