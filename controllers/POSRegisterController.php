@@ -963,7 +963,33 @@ class POSRegisterController
             'pos_india_states' => $posCountryStates['IN'] ?? [],
             'pos_country_states' => $posCountryStates,
             'pos_payment_mode_options' => $this->posPaymentModeOptionsForView(),
+            'pos_follow_up' => (static function () {
+                require_once dirname(__DIR__) . '/helpers/order_follow_up.php';
+                $session = order_follow_up_get_session();
+
+                return is_array($session) ? order_follow_up_public_session_view($session) : null;
+            })(),
+            'pos_follow_up_seed' => isset($_GET['follow_up_seed']) && (string) $_GET['follow_up_seed'] === '1',
         ]);
+    }
+
+    public function follow_up_seed(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+        global $conn;
+
+        require_once dirname(__DIR__) . '/helpers/order_follow_up.php';
+
+        if (!canSrEmpAccess()) {
+            echo json_encode(['success' => false, 'message' => 'Access denied.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $result = order_follow_up_seed_exotic_cart($conn, $this->retailApiClient);
+        echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
     }
 
     /** JSON list of supported POS states by ISO country code. */
@@ -4433,6 +4459,7 @@ class POSRegisterController
         global $conn;
 
         require_once dirname(__DIR__) . '/helpers/pos_payment_receipt.php';
+        require_once dirname(__DIR__) . '/helpers/order_follow_up.php';
 
         $raw = (string)file_get_contents('php://input');
         $payload = json_decode($raw, true);
@@ -4454,9 +4481,14 @@ class POSRegisterController
         }
 
         $orderTotal = round((float)($payload['order_total'] ?? 0), 2);
-        if ($orderTotal <= 0) {
+        $followUpSession = order_follow_up_get_session();
+        $isWaivedFollowUp = order_follow_up_is_waived_checkout($followUpSession);
+        if ($orderTotal <= 0 && !$isWaivedFollowUp) {
             echo json_encode(['success' => false, 'message' => 'Cart total is missing or zero. Refresh the cart and try again.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
+        }
+        if ($isWaivedFollowUp && $orderTotal < 0) {
+            $orderTotal = 0.0;
         }
 
         $paymentStage = strtolower(trim((string)($payload['payment_stage'] ?? 'final')));
@@ -4511,7 +4543,10 @@ class POSRegisterController
             exit;
         }
 
-        $compliance = $this->evaluateHighValueCompliance($payload, $orderTotal, $advanceAmount, $paymentMode, $conn);
+        $compliance = ['ok' => true, 'errors' => []];
+        if ($orderTotal > 0.001) {
+            $compliance = $this->evaluateHighValueCompliance($payload, $orderTotal, $advanceAmount, $paymentMode, $conn);
+        }
         if (!$compliance['ok']) {
             echo json_encode([
                 'success' => false,
@@ -4683,6 +4718,10 @@ class POSRegisterController
             $note = $this->appendPaymentSplitsToNote($note, $splitBundle['splits']);
         }
         $note = $this->appendPosDeliveryStatusToNote($note, (string)$deliveryStatus['label']);
+        if (is_array($followUpSession)) {
+            $note = trim($note . "\nFollow-up " . order_follow_up_type_label((string) ($followUpSession['follow_up_type'] ?? ''))
+                . ' for order #' . (string) ($followUpSession['source_order_number'] ?? ''));
+        }
         $userId = pos_payment_resolve_session_user_id();
         $whId = (int)($_SESSION['warehouse_id'] ?? 0);
 
@@ -4868,6 +4907,21 @@ class POSRegisterController
         }
         if (!empty($fulfillmentStatusMeta['message']) && (empty($fulfillmentStatusMeta['local_updated']) || !empty($fulfillmentStatusMeta['api_failed']))) {
             $successMessage .= ' ' . $fulfillmentStatusMeta['message'];
+        }
+
+        if (is_array($followUpSession)) {
+            $linkResult = order_follow_up_finalize_link(
+                $conn,
+                $orderNumber,
+                $orderTotal,
+                $receiptNo,
+                (int) ($invoiceMeta['invoice_id'] ?? 0)
+            );
+            if (!empty($linkResult['success'])) {
+                $successMessage .= ' Linked to source order #' . (string) ($followUpSession['source_order_number'] ?? '') . '.';
+            } elseif (!empty($linkResult['message'])) {
+                $successMessage .= ' Follow-up link: ' . (string) $linkResult['message'];
+            }
         }
 
         $this->clearPosExoticCartCustomDiscount();
@@ -5499,54 +5553,8 @@ class POSRegisterController
      */
     private function validatePosPaymentSplits(array $splitBundle, float $orderTotal, string $paymentStage): array
     {
-        $errors = [];
+        $errors = pos_payment_validate_splits($splitBundle, $orderTotal, $paymentStage);
         $splits = $splitBundle['splits'] ?? [];
-        if ($splits === []) {
-            $errors[] = 'Add at least one payment line.';
-
-            return $errors;
-        }
-
-        $advanceTotal = pos_payment_split_advance_total($splits);
-        $codTotal = pos_payment_split_cod_total($splits);
-        $splitTotal = round($advanceTotal + $codTotal, 2);
-        $hasCod = $codTotal > 0.001;
-
-        foreach ($splits as $idx => $split) {
-            $amount = round((float)($split['amount'] ?? 0), 2);
-            if ($amount <= 0) {
-                $errors[] = 'Each payment line must have amount greater than zero (line ' . ($idx + 1) . ').';
-
-                return $errors;
-            }
-        }
-
-        if ($hasCod) {
-            if ($splitTotal + 0.02 < $orderTotal) {
-                $errors[] = 'Advance plus COD must equal order total ₹ ' . $orderTotal . '.';
-            } elseif ($splitTotal - 0.02 > $orderTotal) {
-                $errors[] = 'Advance plus COD exceeds order total.';
-            }
-        } else {
-            $paymentAmount = (float)($splitBundle['total'] ?? 0);
-            if ($paymentAmount <= 0) {
-                $errors[] = 'Payment amount must be greater than zero.';
-
-                return $errors;
-            }
-
-            if ($paymentStage === 'final') {
-                if ($paymentAmount + 0.02 < $orderTotal) {
-                    $errors[] = 'Final payment must match order total ₹ ' . $orderTotal . '.';
-                } elseif ($paymentAmount - 0.02 > $orderTotal) {
-                    $errors[] = 'Over payment is not allowed for final settlement.';
-                }
-            } elseif ($paymentStage === 'partial' || $paymentStage === 'advance') {
-                if ($paymentAmount + 0.02 >= $orderTotal) {
-                    $errors[] = 'Partial / advance must be less than order total ₹ ' . $orderTotal . '.';
-                }
-            }
-        }
 
         foreach ($splits as $idx => $split) {
             $mode = (string)($split['mode'] ?? '');

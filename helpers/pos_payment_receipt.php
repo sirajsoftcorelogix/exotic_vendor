@@ -376,7 +376,12 @@ function pos_payment_split_cod_total(array $splits): float
  */
 function pos_payment_allowed_modes(): array
 {
-    return ['cash', 'cod', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque'];
+    return ['cash', 'cod', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque', 'waived'];
+}
+
+function pos_payment_is_waived_mode(string $mode): bool
+{
+    return strtolower(trim($mode)) === 'waived';
 }
 
 /**
@@ -392,6 +397,7 @@ function pos_payment_mode_options_for_view(): array
         'pos_machine' => 'POS machine',
         'razorpay' => 'Razorpay',
         'cheque' => 'Cheque',
+        'waived' => 'Waived (no charge)',
     ];
     $options = [];
     foreach (pos_payment_allowed_modes() as $mode) {
@@ -491,9 +497,31 @@ function pos_payment_validate_splits(array $splitBundle, float $targetTotal, str
 
     foreach ($splits as $idx => $split) {
         $amount = round((float)($split['amount'] ?? 0), 2);
+        $mode = strtolower(trim((string)($split['mode'] ?? '')));
+        if (pos_payment_is_waived_mode($mode)) {
+            if ($amount > 0.001) {
+                return ['Waived payment line must be zero amount.'];
+            }
+            continue;
+        }
         if ($amount <= 0) {
             return ['Each payment line must have amount greater than zero (line ' . ($idx + 1) . ').'];
         }
+    }
+
+    if ($targetTotal <= 0.001) {
+        $allWaived = true;
+        foreach ($splits as $split) {
+            if (!pos_payment_is_waived_mode((string)($split['mode'] ?? ''))) {
+                $allWaived = false;
+                break;
+            }
+        }
+        if ($allWaived) {
+            return [];
+        }
+
+        return ['Order total is zero — use Waived payment mode.'];
     }
 
     if ($hasCod) {

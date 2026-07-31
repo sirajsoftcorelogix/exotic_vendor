@@ -558,6 +558,22 @@ switch ($page) {
         }
         break;
 
+    case 'order_follow_up':
+        require_once 'controllers/OrderFollowUpController.php';
+        $controller = new OrderFollowUpController();
+        switch ($action) {
+            case 'start':
+                $controller->start();
+                break;
+            case 'preview':
+                $controller->preview();
+                break;
+            default:
+                header('Location: ' . base_url('index.php?page=posorders&action=list'));
+                exit;
+        }
+        break;
+
     case 'sales_returns':
         require_once 'controllers/SalesReturnController.php';
         $controller = new SalesReturnController();
@@ -1527,6 +1543,9 @@ switch ($page) {
                 break;
             case 'checkout-create':
                 $controller->checkout_create();
+                break;
+            case 'follow-up-seed':
+                $controller->follow_up_seed();
                 break;
             case 'checkout-receipt':
                 $controller->checkout_receipt();

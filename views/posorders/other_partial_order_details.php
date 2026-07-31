@@ -120,6 +120,22 @@ if ($salesReturnDisabledReason === '' && !$canCreateSalesReturn) {
 $latestSalesReturnViewUrl = (int)($salesReturnEligibility['latest_return_id'] ?? 0) > 0
     ? base_url('?page=sales_returns&action=view&id=' . (int) $salesReturnEligibility['latest_return_id'])
     : '';
+$canFollowUpOrder = !empty($canFollowUpOrder);
+$followUpLinks = is_array($followUpLinks ?? null) ? $followUpLinks : ['outbound' => [], 'inbound' => null];
+$followUpEligibility = is_array($followUpEligibility ?? null) ? $followUpEligibility : [];
+$orderStatusPage = in_array(trim((string)($orderStatusPage ?? '')), ['orders', 'posorders'], true)
+    ? trim((string) $orderStatusPage)
+    : 'posorders';
+$followUpReshipEligible = !empty($followUpEligibility['reship']['can_start']);
+$followUpReplaceEligible = !empty($followUpEligibility['replace']['can_start']);
+$followUpCopyEligible = !empty($followUpEligibility['copy']['can_start']);
+$followUpReshipReason = trim((string)($followUpEligibility['reship']['disabled_reason'] ?? ''));
+$followUpReplaceReason = trim((string)($followUpEligibility['replace']['disabled_reason'] ?? ''));
+$followUpInboundLink = is_array($followUpLinks['inbound'] ?? null) ? $followUpLinks['inbound'] : null;
+$followUpOutboundLinks = is_array($followUpLinks['outbound'] ?? null) ? $followUpLinks['outbound'] : [];
+$followUpFlash = $_SESSION['order_follow_up_flash'] ?? null;
+unset($_SESSION['order_follow_up_flash']);
+require_once dirname(__DIR__, 2) . '/helpers/order_follow_up.php';
 $proformaPrintUrl = trim((string)($proformaPrintUrl ?? ''));
 $canPrintProforma = !empty($canPrintProforma);
 $canPrintTaxInvoice = $invoicePdfUrl !== '' && $invoiceStatus === 'final';
@@ -133,6 +149,64 @@ $proformaPrintDisabledReason = $canPrintProforma
 ?>
 
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
+    <?php if (is_array($followUpFlash) && trim((string)($followUpFlash['text'] ?? '')) !== ''): ?>
+        <?php
+        $flashType = strtolower(trim((string)($followUpFlash['type'] ?? 'info')));
+        $flashClass = match ($flashType) {
+            'error' => 'border-red-300 bg-red-50 text-red-950',
+            'success' => 'border-green-300 bg-green-50 text-green-950',
+            default => 'border-indigo-300 bg-indigo-50 text-indigo-950',
+        };
+        ?>
+        <div class="mb-4 rounded-lg border px-4 py-3 text-sm <?= htmlspecialchars($flashClass, ENT_QUOTES, 'UTF-8') ?>">
+            <?= htmlspecialchars((string) $followUpFlash['text'], ENT_QUOTES, 'UTF-8') ?>
+        </div>
+    <?php endif; ?>
+    <?php if (is_array($followUpInboundLink)): ?>
+        <?php
+        $sourceOrderNumber = trim((string)($followUpInboundLink['source_order_number'] ?? ''));
+        $followUpTypeLabel = order_follow_up_type_label((string)($followUpInboundLink['follow_up_type'] ?? ''));
+        $sourceOrderUrl = $sourceOrderNumber !== ''
+            ? order_follow_up_order_details_url($sourceOrderNumber, $orderStatusPage)
+            : '';
+        ?>
+        <div class="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-950">
+            <p class="font-semibold"><?= htmlspecialchars($followUpTypeLabel, ENT_QUOTES, 'UTF-8') ?> order</p>
+            <p class="mt-1 text-xs text-indigo-900/90">
+                Created from
+                <?php if ($sourceOrderUrl !== ''): ?>
+                    <a href="<?= htmlspecialchars($sourceOrderUrl, ENT_QUOTES, 'UTF-8') ?>" class="font-medium underline hover:text-indigo-700">
+                        #<?= htmlspecialchars($sourceOrderNumber, ENT_QUOTES, 'UTF-8') ?>
+                    </a>
+                <?php else: ?>
+                    #<?= htmlspecialchars($sourceOrderNumber, ENT_QUOTES, 'UTF-8') ?>
+                <?php endif; ?>
+                · Pricing: <?= htmlspecialchars(order_follow_up_pricing_mode_label((string)($followUpInboundLink['pricing_mode'] ?? '')), ENT_QUOTES, 'UTF-8') ?>
+            </p>
+        </div>
+    <?php endif; ?>
+    <?php if ($followUpOutboundLinks !== []): ?>
+        <div class="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800">
+            <p class="font-semibold">Follow-up orders</p>
+            <ul class="mt-2 space-y-1 text-xs">
+                <?php foreach ($followUpOutboundLinks as $followUpRow): ?>
+                    <?php if (!is_array($followUpRow)) { continue; } ?>
+                    <?php
+                    $childOrderNumber = trim((string)($followUpRow['follow_up_order_number'] ?? ''));
+                    if ($childOrderNumber === '') { continue; }
+                    $childOrderUrl = order_follow_up_order_details_url($childOrderNumber, $orderStatusPage);
+                    ?>
+                    <li>
+                        <a href="<?= htmlspecialchars($childOrderUrl, ENT_QUOTES, 'UTF-8') ?>" class="font-medium text-indigo-700 underline hover:text-indigo-900">
+                            #<?= htmlspecialchars($childOrderNumber, ENT_QUOTES, 'UTF-8') ?>
+                        </a>
+                        · <?= htmlspecialchars(order_follow_up_type_label((string)($followUpRow['follow_up_type'] ?? '')), ENT_QUOTES, 'UTF-8') ?>
+                        · <?= htmlspecialchars(order_follow_up_pricing_mode_label((string)($followUpRow['pricing_mode'] ?? '')), ENT_QUOTES, 'UTF-8') ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+    <?php endif; ?>
     <?php if ($canPublishExoticSync): ?>
         <div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
             <div class="flex flex-wrap items-center justify-between gap-3">
@@ -204,6 +278,37 @@ $proformaPrintDisabledReason = $canPrintProforma
                     class="rounded border border-gray-200 bg-gray-100 px-4 py-1.5 text-sm font-medium text-gray-400 cursor-not-allowed">
                     Return
                 </button>
+            <?php endif; ?>
+            <?php if ($canFollowUpOrder): ?>
+                <div class="relative inline-block text-left">
+                    <input type="checkbox" id="follow-up-dropdown-toggle" class="peer hidden">
+                    <label for="follow-up-dropdown-toggle" class="flex cursor-pointer items-center gap-2 rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50 transition-colors select-none">
+                        Follow-up
+                        <svg class="w-4 h-4 transition-transform duration-200 peer-checked:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </label>
+                    <div class="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden opacity-0 invisible scale-95 transition-all duration-200 peer-checked:opacity-100 peer-checked:visible peer-checked:scale-100">
+                        <div class="py-1">
+                            <?php if ($followUpReshipEligible): ?>
+                                <button type="button" data-open-follow-up="reship" class="flex w-full items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100 text-left">Reship (waived)</button>
+                            <?php else: ?>
+                                <span class="flex items-center px-4 py-2 text-[13px] text-gray-400 cursor-not-allowed" title="<?= htmlspecialchars($followUpReshipReason, ENT_QUOTES, 'UTF-8') ?>">Reship</span>
+                            <?php endif; ?>
+                            <?php if ($followUpReplaceEligible): ?>
+                                <button type="button" data-open-follow-up="replace" class="flex w-full items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100 border-t border-gray-50 text-left">Replace (same price)</button>
+                            <?php else: ?>
+                                <span class="flex items-center px-4 py-2 text-[13px] text-gray-400 cursor-not-allowed border-t border-gray-50" title="<?= htmlspecialchars($followUpReplaceReason, ENT_QUOTES, 'UTF-8') ?>">Replace</span>
+                            <?php endif; ?>
+                            <?php if ($followUpCopyEligible): ?>
+                                <button type="button" data-open-follow-up="copy" class="flex w-full items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100 border-t border-gray-50 text-left">Copy order</button>
+                            <?php else: ?>
+                                <span class="flex items-center px-4 py-2 text-[13px] text-gray-400 cursor-not-allowed border-t border-gray-50">Copy order</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <label for="follow-up-dropdown-toggle" class="fixed inset-0 h-full w-full cursor-default hidden peer-checked:block z-40"></label>
+                </div>
             <?php endif; ?>
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Edit</button>
             <div class="relative inline-block text-left">
@@ -1788,6 +1893,11 @@ window.orderJsonModalConfig = {
         });
     });
 </script>
+<?php
+if ($canFollowUpOrder) {
+    require dirname(__DIR__) . '/shared/partials/order_follow_up_modal.php';
+}
+?>
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[100]" onclick="closeImagePopup()">
     <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
         <button type="button" onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm" aria-label="Close">âœ•</button>
