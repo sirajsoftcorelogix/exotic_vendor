@@ -2961,10 +2961,82 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
+        function resolveOriginalLanguageIdsFromLookup(languageText) {
+            const selectEl = document.getElementById('original_languages_select');
+            if (!selectEl || !languageText) {
+                return [];
+            }
+
+            const normalized = String(languageText).trim().toLowerCase();
+            if (normalized === '') {
+                return [];
+            }
+
+            const matchedIds = [];
+            Array.prototype.forEach.call(selectEl.options, function (option) {
+                const optionId = String(option.value || '').trim();
+                if (!optionId) {
+                    return;
+                }
+
+                const optionText = String(option.textContent || '').trim();
+                const optionTextLower = optionText.toLowerCase();
+                const namePart = optionTextLower.split('(')[0].trim();
+                const isoMatch = optionText.match(/\(([A-Za-z]{2,3})\)\s*$/);
+                const iso = isoMatch ? isoMatch[1].toLowerCase() : '';
+
+                const isMatch = optionTextLower === normalized
+                    || namePart === normalized
+                    || iso === normalized
+                    || (namePart !== '' && (namePart.indexOf(normalized) !== -1 || normalized.indexOf(namePart) !== -1));
+
+                if (isMatch && matchedIds.indexOf(optionId) === -1) {
+                    matchedIds.push(optionId);
+                }
+            });
+
+            return matchedIds;
+        }
+
+        function applyIsbnLookupDesktopBookFields(data) {
+            data = data || {};
+
+            const title = String(data.title || '').trim();
+            if (title) {
+                const titleField = document.querySelector('[name="product_title"]');
+                if (titleField) {
+                    titleField.value = title;
+                }
+            }
+
+            const description = String(data.description || '').trim();
+            if (description) {
+                if (window.CKEDITOR && CKEDITOR.instances && CKEDITOR.instances.snippet_description_input) {
+                    CKEDITOR.instances.snippet_description_input.setData(description);
+                } else {
+                    const snippetEl = document.getElementById('snippet_description_input');
+                    if (snippetEl) {
+                        snippetEl.value = description;
+                    }
+                }
+            }
+
+            const languageIds = resolveOriginalLanguageIdsFromLookup(data.language);
+            const originalLangTs = bookLanguageTomSelects.original_languages;
+            if (originalLangTs && languageIds.length) {
+                originalLangTs.setValue(languageIds);
+                syncBookLanguageHiddenValue(originalLangTs, 'original_languages');
+                updateFormattedBookLanguageDisplay();
+            }
+        }
+
         initIsbnLookup({
             authorTomSelect: authorTomSelect,
             publisherSelect: publisherSelect,
-            syncAuthorPipeValue: syncAuthorPipeValue
+            syncAuthorPipeValue: syncAuthorPipeValue,
+            onApply: function (payload) {
+                applyIsbnLookupDesktopBookFields((payload && payload.data) || {});
+            }
         });
     });
 </script>
