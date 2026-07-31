@@ -31,10 +31,19 @@
             return Promise.resolve();
         }
 
-        return fetch(
-            'index.php?page=workflow_transition&action=allowedTargets&from_slug=' + encodeURIComponent(fromSlug)
-        )
+        var cfg = window.OrderWorkflowStatusFilterConfig || {};
+        var baseUrl = String(cfg.allowedTargetsUrl || 'index.php?page=workflow_transition&action=allowedTargets');
+        var sep = baseUrl.indexOf('?') >= 0 ? '&' : '?';
+        var url = baseUrl + sep + 'from_slug=' + encodeURIComponent(fromSlug);
+
+        return fetch(url, {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' }
+        })
             .then(function (response) {
+                if (!response.ok) {
+                    throw new Error('Workflow lookup failed');
+                }
                 return response.json();
             })
             .then(function (data) {

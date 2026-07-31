@@ -247,8 +247,14 @@
 
         popup.classList.remove('hidden');
 
-        if (window.applyOrderWorkflowStatusFilter) {
-            window.applyOrderWorkflowStatusFilter(orderData.status || '', document.getElementById('orderStatus'));
+        const statusSelect = document.getElementById('orderStatus');
+        const fromStatus = String(orderData.status || '').trim();
+        if (statusSelect && typeof window.applyOrderWorkflowStatusFilter === 'function') {
+            statusSelect.disabled = true;
+            window.applyOrderWorkflowStatusFilter(fromStatus, statusSelect)
+                .finally(function () {
+                    statusSelect.disabled = false;
+                });
         }
     };
 
