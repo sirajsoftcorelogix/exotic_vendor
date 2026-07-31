@@ -114,11 +114,14 @@ $showExoticApiSyncModal = (bool)($showExoticApiSyncModal ?? ($orderPage === 'pos
 </div>
 <?php endif; ?>
 
-<script src="assets/js/order_workflow_status_filter.js"></script>
 <script>
 window.OrderStatusPopupConfig = <?= json_encode([
     'updateStatusUrl' => $updateStatusUrl,
     'retryStatusApiUrl' => $retryStatusApiUrl,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+window.OrderWorkflowStatusFilterConfig = <?= json_encode([
+    'allowedTargetsUrl' => base_url('index.php?page=workflow_transition&action=allowedTargets'),
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 </script>
-<script src="assets/js/order_status_update_popup.js"></script>
+<script src="<?= htmlspecialchars(base_url('assets/js/order_workflow_status_filter.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
+<script src="<?= htmlspecialchars(base_url('assets/js/order_status_update_popup.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
