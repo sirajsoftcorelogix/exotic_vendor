@@ -1203,6 +1203,17 @@ class PosOrdersController
             $invoiceId > 0 ? $invoiceId : null
         );
 
+        require_once __DIR__ . '/../helpers/order_follow_up.php';
+        require_once __DIR__ . '/../models/order_follow_up/OrderFollowUp.php';
+        $followUpModel = new OrderFollowUp($conn);
+        $followUpLinks = order_follow_up_links_for_order($conn, $resolvedOrderNumber);
+        $followUpEligibility = [
+            'reship' => $followUpModel->resolveStartEligibility($resolvedOrderNumber, 'reship'),
+            'replace' => $followUpModel->resolveStartEligibility($resolvedOrderNumber, 'replace'),
+            'copy' => $followUpModel->resolveStartEligibility($resolvedOrderNumber, 'copy'),
+        ];
+        $canFollowUpOrder = canSrEmpAccess();
+
         if ($type === 'inner') {
             $page = trim((string)($_GET['page'] ?? ''));
             $innerPartial = $page === 'orders'
@@ -1239,6 +1250,9 @@ class PosOrdersController
                 'orderStatusPage' => in_array(trim((string)($_GET['page'] ?? '')), ['orders', 'posorders'], true)
                     ? trim((string)$_GET['page'])
                     : 'posorders',
+                'canFollowUpOrder' => $canFollowUpOrder,
+                'followUpLinks' => $followUpLinks,
+                'followUpEligibility' => $followUpEligibility,
             ], 'Order Details');
         }
         exit;

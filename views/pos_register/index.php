@@ -152,6 +152,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       confirm_city: "Delhi",
       confirm_state: "Delhi"
     };
+    window.POS_FOLLOW_UP = <?= json_encode($pos_follow_up ?? null, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
+    window.POS_FOLLOW_UP_SEED = <?= !empty($pos_follow_up_seed) ? 'true' : 'false' ?>;
   </script>
   <!-- ===== TOP BAR ===== -->
   <header class="border-b bg-white">
@@ -971,6 +973,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 <!-- ===== END PAGE WRAPPER ===== -->
 <script src="<?php echo base_url(); ?>assets/js/pos_message_modal.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos_cart_hooks.js"></script>
+<script src="<?php echo base_url(); ?>assets/js/order_follow_up_pos.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos.js"></script>
 <!-- <script src="<?php echo 'http://' . $_SERVER['HTTP_HOST']; ?>/assets/js/pos.js"></script> -->
 <script>
@@ -3233,23 +3236,30 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       typeof window.getPosReceiptDiscountsForCheckout === "function"
         ? window.getPosReceiptDiscountsForCheckout()
         : null;
+    var waivedFollowUp =
+      typeof window.isPosFollowUpWaivedCheckout === "function" && window.isPosFollowUpWaivedCheckout();
     var orderTotal =
       disc && disc.grandTotal > 0
         ? disc.grandTotal
         : live && live.grandTotal != null
           ? parseFloat(String(live.grandTotal))
           : NaN;
-    if (!isFinite(orderTotal) || orderTotal <= 0) {
-      showToast("Cart total unavailable — add items or refresh the cart.", "red");
-      return;
-    }
     var payStage = document.getElementById("payment_stage").value;
     var paySplits = collectPaymentSplitsFromUi();
     var payAmt = getPaymentSplitTotalFromUi();
+    if (waivedFollowUp) {
+      orderTotal = 0;
+      payStage = "final";
+      paySplits = [{ mode: "waived", amount: 0, transaction_id: "" }];
+      payAmt = 0;
+    } else if (!isFinite(orderTotal) || orderTotal <= 0) {
+      showToast("Cart total unavailable — add items or refresh the cart.", "red");
+      return;
+    }
     var primarySplit = paySplits.reduce(function(best, s) {
       return s.amount > best.amount ? s : best;
     }, paySplits[0] || { mode: "cash", amount: 0, transaction_id: "" });
-    var payMode = primarySplit.mode || "cash";
+    var payMode = waivedFollowUp ? "waived" : (primarySplit.mode || "cash");
     var txn = primarySplit.transaction_id || "";
     var note = (document.getElementById("payment_note") && document.getElementById("payment_note").value) || "";
     var subTotalGoods = live && live.subtotal != null ? parseFloat(String(live.subtotal)) : NaN;
@@ -3306,6 +3316,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       typeof window.getPosLinePricesPayloadForCheckout === "function"
         ? window.getPosLinePricesPayloadForCheckout()
         : [];
+    var followUpLinePrices =
+      typeof window.getPosFollowUpLinePricesOverride === "function"
+        ? window.getPosFollowUpLinePricesOverride()
+        : null;
+    if (Array.isArray(followUpLinePrices) && followUpLinePrices.length > 0) {
+      linePricePayload = followUpLinePrices;
+    }
     if (Array.isArray(linePricePayload) && linePricePayload.length > 0) {
       body.pos_line_prices = linePricePayload;
     }
