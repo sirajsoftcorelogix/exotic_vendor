@@ -304,7 +304,7 @@ $queryBase = [
                         class="mt-0.5 rounded border-gray-300 text-sky-600 focus:ring-sky-500">
                     <span>
                         <span class="block text-sm font-medium text-gray-800">Also create vendor</span>
-                        <span class="block text-xs text-gray-500 mt-0.5">Creates a matching <strong class="font-semibold">book</strong> vendor in Vendor Master with the same contact, address, and tax details. Primary phone is required.</span>
+                        <span class="block text-xs text-gray-500 mt-0.5">Creates a matching <strong class="font-semibold">book</strong> vendor in Vendor Master with the same contact, address, and tax details, and links it under <strong class="font-semibold">Manage Distributors</strong>. Primary phone is required.</span>
                     </span>
                 </label>
             </section>

@@ -1146,21 +1146,29 @@ class Publisher
         return $options;
     }
 
-    public function addPublisherVendorMapping(int $publisherId, int $vendorId): array
+    /**
+     * @param array{allow_inactive_vendor?:bool,idempotent?:bool} $options
+     */
+    public function addPublisherVendorMapping(int $publisherId, int $vendorId, array $options = []): array
     {
         if ($publisherId <= 0 || $vendorId <= 0) {
             return ['success' => false, 'message' => 'Invalid publisher or vendor.'];
         }
 
+        $allowInactiveVendor = !empty($options['allow_inactive_vendor']);
+        $idempotent = !empty($options['idempotent']);
+
         if (!$this->getPublisherById($publisherId)) {
             return ['success' => false, 'message' => 'Publisher not found.'];
         }
 
-        $vendorStmt = $this->conn->prepare(
-            'SELECT id, vendor_name FROM vp_vendors
-             WHERE id = ? AND (is_active = 1 OR is_active = \'active\')
-             LIMIT 1'
-        );
+        $vendorSql = 'SELECT id, vendor_name FROM vp_vendors WHERE id = ?';
+        if (!$allowInactiveVendor) {
+            $vendorSql .= ' AND (is_active = 1 OR is_active = \'active\')';
+        }
+        $vendorSql .= ' LIMIT 1';
+
+        $vendorStmt = $this->conn->prepare($vendorSql);
         if (!$vendorStmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
         }
@@ -1169,7 +1177,7 @@ class Publisher
         $vendor = $vendorStmt->get_result()->fetch_assoc();
         $vendorStmt->close();
         if (!$vendor) {
-            return ['success' => false, 'message' => 'Active vendor not found.'];
+            return ['success' => false, 'message' => $allowInactiveVendor ? 'Vendor not found.' : 'Active vendor not found.'];
         }
 
         $dupStmt = $this->conn->prepare(
@@ -1183,6 +1191,15 @@ class Publisher
         $existing = $dupStmt->get_result()->fetch_assoc();
         $dupStmt->close();
         if ($existing) {
+            if ($idempotent) {
+                return [
+                    'success' => true,
+                    'message' => 'Vendor already mapped to publisher.',
+                    'mapping_id' => (int) ($existing['id'] ?? 0),
+                    'mappings' => $this->getVendorMappingsByPublisherId($publisherId),
+                ];
+            }
+
             return ['success' => false, 'message' => 'This vendor is already mapped to the publisher.'];
         }
 
