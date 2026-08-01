@@ -43,7 +43,7 @@ $stateList = is_array($stateList ?? null) ? $stateList : [];
                     Broker <span class="text-amber-800">master</span>
                 </h1>
                 <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
-                    Manage brokers used on publisher records: name, state, zone, and active status.
+                    Manage brokers used on publisher records: name, locations (state and zone), and active status.
                 </p>
             </div>
             <div class="flex shrink-0 lg:pl-4 lg:self-center gap-3 flex-wrap">
@@ -103,8 +103,7 @@ $stateList = is_array($stateList ?? null) ? $stateList : [];
                     <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
                         <th class="px-5 py-3.5 whitespace-nowrap">#</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Broker name</th>
-                        <th class="px-5 py-3.5 whitespace-nowrap">State</th>
-                        <th class="px-5 py-3.5 whitespace-nowrap">Zone</th>
+                        <th class="px-5 py-3.5 whitespace-nowrap">Locations</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Updated</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Status</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Action</th>
@@ -123,12 +122,12 @@ $stateList = is_array($stateList ?? null) ? $stateList : [];
                             $updatedLabel = $updatedAt ? date('d M Y', strtotime($updatedAt)) : '—';
                             $publisherCount = (int) ($row['publisher_count'] ?? 0);
                             $isMapped = $publisherCount > 0;
+                            $locationsLabel = trim((string) ($row['locations_label'] ?? ''));
                             ?>
                             <tr class="hover:bg-amber-50/40 transition-colors">
                                 <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-700"><?= ++$counter ?></td>
                                 <td class="px-5 py-4 text-sm font-semibold text-gray-900"><?= htmlspecialchars((string) ($row['broker_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                                <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-700"><?= htmlspecialchars((string) ($row['state'] ?? '') ?: '—', ENT_QUOTES, 'UTF-8') ?></td>
-                                <td class="px-5 py-4 text-sm text-gray-700"><?= htmlspecialchars((string) ($row['zone'] ?? '') ?: '—', ENT_QUOTES, 'UTF-8') ?></td>
+                                <td class="px-5 py-4 text-sm text-gray-700"><?= htmlspecialchars($locationsLabel !== '' ? $locationsLabel : '—', ENT_QUOTES, 'UTF-8') ?></td>
                                 <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-600"><?= htmlspecialchars($updatedLabel, ENT_QUOTES, 'UTF-8') ?></td>
                                 <td class="px-5 py-4 whitespace-nowrap text-sm">
                                     <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset <?= $statusClass ?>">
@@ -158,7 +157,7 @@ $stateList = is_array($stateList ?? null) ? $stateList : [];
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="7" class="px-6 py-16 text-center text-gray-500">
+                            <td colspan="6" class="px-6 py-16 text-center text-gray-500">
                                 <p class="text-base font-medium text-gray-900">No brokers match</p>
                                 <p class="mt-1 text-sm text-gray-500">Try changing filters or add a new broker.</p>
                             </td>
@@ -229,13 +228,17 @@ foreach ($stateList as $item) {
                                 <label class="text-sm font-medium text-gray-700">Broker name <span class="text-red-500">*</span></label>
                                 <input type="text" class="form-input w-full mt-1" required name="addBrokerName" id="addBrokerName" placeholder="Broker name" />
                             </div>
-                            <div>
-                                <label class="text-sm font-medium text-gray-700">State</label>
-                                <select class="form-input w-full mt-1" name="addState" id="addState"><?= $stateOptionsHtml ?></select>
-                            </div>
-                            <div>
-                                <label class="text-sm font-medium text-gray-700">Zone</label>
-                                <input type="text" class="form-input w-full mt-1" name="addZone" id="addZone" placeholder="Zone" />
+                            <div class="rounded-lg border border-gray-200 bg-gray-50/60 p-3 space-y-3">
+                                <div class="flex items-center justify-between gap-3">
+                                    <label class="text-sm font-medium text-gray-700">Locations</label>
+                                    <button type="button" id="addBrokerLocationRowBtn"
+                                        class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                        <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                                        Add location
+                                    </button>
+                                </div>
+                                <div id="addBrokerLocationsList" class="space-y-3"></div>
+                                <p class="text-xs text-gray-500">Each row is a state and zone combination. The first row is shown by default.</p>
                             </div>
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
@@ -279,13 +282,17 @@ foreach ($stateList as $item) {
                                 <label class="text-sm font-medium text-gray-700">Broker name <span class="text-red-500">*</span></label>
                                 <input type="text" class="form-input w-full mt-1" required name="editBrokerName" id="editBrokerName" />
                             </div>
-                            <div>
-                                <label class="text-sm font-medium text-gray-700">State</label>
-                                <select class="form-input w-full mt-1" name="editState" id="editState"><?= $stateOptionsHtml ?></select>
-                            </div>
-                            <div>
-                                <label class="text-sm font-medium text-gray-700">Zone</label>
-                                <input type="text" class="form-input w-full mt-1" name="editZone" id="editZone" />
+                            <div class="rounded-lg border border-gray-200 bg-gray-50/60 p-3 space-y-3">
+                                <div class="flex items-center justify-between gap-3">
+                                    <label class="text-sm font-medium text-gray-700">Locations</label>
+                                    <button type="button" id="editBrokerLocationRowBtn"
+                                        class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                        <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                                        Add location
+                                    </button>
+                                </div>
+                                <div id="editBrokerLocationsList" class="space-y-3"></div>
+                                <p class="text-xs text-gray-500">Each row is a state and zone combination.</p>
                             </div>
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
@@ -309,6 +316,92 @@ foreach ($stateList as $item) {
 </div>
 
 <script>
+const brokerStateOptionsHtml = <?= json_encode($stateOptionsHtml, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+const brokerMaxLocations = 20;
+
+function buildBrokerLocationRowHtml(index, fieldPrefix) {
+    return ''
+        + '<div class="broker-location-row rounded-lg border border-gray-200 bg-white p-3 space-y-3" data-index="' + index + '">'
+        + '  <div class="flex items-center justify-between gap-2">'
+        + '    <span class="broker-location-row-label text-xs font-semibold uppercase tracking-wide text-gray-500">Location ' + (index + 1) + '</span>'
+        + '    <button type="button" class="remove-broker-location-row text-xs font-semibold text-red-600 hover:text-red-700">Remove</button>'
+        + '  </div>'
+        + '  <div>'
+        + '    <label class="text-xs font-medium text-gray-600">State</label>'
+        + '    <select class="form-input w-full mt-1" name="' + fieldPrefix + '[' + index + '][state]">' + brokerStateOptionsHtml + '</select>'
+        + '  </div>'
+        + '  <div>'
+        + '    <label class="text-xs font-medium text-gray-600">Zone</label>'
+        + '    <input type="text" class="form-input w-full mt-1" name="' + fieldPrefix + '[' + index + '][zone]" placeholder="Zone" />'
+        + '  </div>'
+        + '</div>';
+}
+
+function renderBrokerLocationRows(containerId, locations, fieldPrefix) {
+    const container = document.getElementById(containerId);
+    if (!container) {
+        return;
+    }
+    container.innerHTML = '';
+    const rows = Array.isArray(locations) && locations.length ? locations : [{ state: '', zone: '' }];
+    rows.forEach(function (location, index) {
+        container.insertAdjacentHTML('beforeend', buildBrokerLocationRowHtml(index, fieldPrefix));
+        const row = container.lastElementChild;
+        const stateSelect = row ? row.querySelector('select') : null;
+        const zoneInput = row ? row.querySelector('input[type="text"]') : null;
+        if (stateSelect && location.state) {
+            stateSelect.value = location.state;
+        }
+        if (zoneInput) {
+            zoneInput.value = location.zone || '';
+        }
+    });
+    bindBrokerLocationRowHandlers(container);
+}
+
+function bindBrokerLocationRowHandlers(container) {
+    container.querySelectorAll('.remove-broker-location-row').forEach(function (btn) {
+        btn.onclick = function () {
+            const rows = container.querySelectorAll('.broker-location-row');
+            if (rows.length <= 1) {
+                const stateSelect = rows[0].querySelector('select');
+                const zoneInput = rows[0].querySelector('input[type="text"]');
+                if (stateSelect) stateSelect.value = '';
+                if (zoneInput) zoneInput.value = '';
+                return;
+            }
+            btn.closest('.broker-location-row').remove();
+            reindexBrokerLocationRows(container);
+        };
+    });
+}
+
+function reindexBrokerLocationRows(container) {
+    const fieldPrefix = container.id === 'editBrokerLocationsList' ? 'locations' : 'locations';
+    container.querySelectorAll('.broker-location-row').forEach(function (row, index) {
+        row.dataset.index = String(index);
+        row.querySelector('.broker-location-row-label').textContent = 'Location ' + (index + 1);
+        const stateSelect = row.querySelector('select');
+        const zoneInput = row.querySelector('input[type="text"]');
+        if (stateSelect) stateSelect.name = fieldPrefix + '[' + index + '][state]';
+        if (zoneInput) zoneInput.name = fieldPrefix + '[' + index + '][zone]';
+    });
+}
+
+function addBrokerLocationRow(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) {
+        return;
+    }
+    const count = container.querySelectorAll('.broker-location-row').length;
+    if (count >= brokerMaxLocations) {
+        alert('Maximum ' + brokerMaxLocations + ' locations allowed.');
+        return;
+    }
+    container.insertAdjacentHTML('beforeend', buildBrokerLocationRowHtml(count, 'locations'));
+    bindBrokerLocationRowHandlers(container);
+}
+
 function toggleMenu(button) {
     const popup = button.nextElementSibling;
     popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
@@ -327,6 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function openBrokerPopup() {
         document.getElementById('addBrokerForm').reset();
         document.getElementById('addBrokerMsg').innerHTML = '';
+        renderBrokerLocationRows('addBrokerLocationsList', [{ state: '', zone: '' }], 'locations');
         popupWrapper.classList.remove('hidden');
         setTimeout(() => modalSlider.classList.remove('translate-x-full'), 10);
     }
@@ -344,15 +438,20 @@ document.addEventListener('DOMContentLoaded', () => {
     openBrokerPopupBtn.addEventListener('click', openBrokerPopup);
     cancelBrokerBtn.addEventListener('click', closeBrokerPopup);
     closeBrokerPopupBtn.addEventListener('click', closeBrokerPopup);
+    document.getElementById('addBrokerLocationRowBtn')?.addEventListener('click', function () {
+        addBrokerLocationRow('addBrokerLocationsList');
+    });
+    document.getElementById('editBrokerLocationRowBtn')?.addEventListener('click', function () {
+        addBrokerLocationRow('editBrokerLocationsList');
+    });
+    renderBrokerLocationRows('addBrokerLocationsList', [{ state: '', zone: '' }], 'locations');
 
     document.getElementById('addBrokerForm').onsubmit = function(e) {
         e.preventDefault();
         const form = new FormData(this);
-        const params = new URLSearchParams(form).toString();
         fetch('?page=brokers&action=addRecord', {
             method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: params
+            body: form
         })
         .then(r => r.json())
         .then(data => {
@@ -414,23 +513,8 @@ function openEditModal(id) {
             }
             document.getElementById('editId').value = data.id;
             document.getElementById('editBrokerName').value = data.broker_name || '';
-            document.getElementById('editZone').value = data.zone || '';
             document.getElementById('editStatus').value = String(data.is_active != null ? data.is_active : 1);
-            const stateSelect = document.getElementById('editState');
-            const stateVal = data.state || '';
-            if (stateSelect) {
-                let matched = false;
-                for (const opt of stateSelect.options) {
-                    if (opt.value === stateVal) {
-                        opt.selected = true;
-                        matched = true;
-                        break;
-                    }
-                }
-                if (!matched) {
-                    stateSelect.value = '';
-                }
-            }
+            renderBrokerLocationRows('editBrokerLocationsList', data.locations || [{ state: '', zone: '' }], 'locations');
             document.getElementById('editBrokerMsg').innerHTML = '';
             const modal = document.getElementById('editBrokerModal');
             modal.classList.remove('hidden');
@@ -455,11 +539,9 @@ editSlider.addEventListener('transitionend', (event) => {
 document.getElementById('editBrokerForm').onsubmit = function(e) {
     e.preventDefault();
     const form = new FormData(this);
-    const params = new URLSearchParams(form).toString();
     fetch('?page=brokers&action=addRecord', {
         method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: params
+        body: form
     })
     .then(r => r.json())
     .then(data => {
