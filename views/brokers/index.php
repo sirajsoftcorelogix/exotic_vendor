@@ -95,9 +95,9 @@ $stateList = is_array($stateList ?? null) ? $stateList : [];
         </form>
     </div>
 
-    <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
-        <div class="p-6">
-                <table class="w-full text-left">
+    <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm ring-1 ring-gray-900/[0.03]">
+        <div class="p-6 overflow-visible">
+                <table id="broker-list-table" class="w-full text-left">
                     <thead>
                     <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
                         <th class="px-5 py-3.5 whitespace-nowrap">#</th>
@@ -135,8 +135,8 @@ $stateList = is_array($stateList ?? null) ? $stateList : [];
                                 </td>
                                 <td class="px-5 py-4 whitespace-nowrap text-sm font-medium">
                                     <div class="menu-wrapper">
-                                        <button type="button" class="menu-button" onclick="toggleMenu(this)">&#x22EE;</button>
-                                        <ul class="menu-popup">
+                                        <button type="button" class="menu-button" aria-label="Broker actions">&#x22EE;</button>
+                                        <ul class="menu-popup text-left">
                                             <li onclick="openEditModal(<?= (int) $row['id'] ?>)"><i class="fa-solid fa-pencil"></i> Edit</li>
                                             <?php if ($isMapped): ?>
                                                 <li class="text-gray-400 cursor-not-allowed" title="Assigned to <?= (int) $publisherCount ?> publisher(s)">
@@ -400,15 +400,73 @@ function addBrokerLocationRow(containerId) {
     bindBrokerLocationRowHandlers(container);
 }
 
-function toggleMenu(button) {
-    const popup = button.nextElementSibling;
-    popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
-    document.querySelectorAll('.menu-popup').forEach(menu => {
-        if (menu !== popup) menu.style.display = 'none';
-    });
-}
-
 document.addEventListener('DOMContentLoaded', () => {
+    const menuButtons = document.querySelectorAll('#broker-list-table .menu-button, .menu-wrapper .menu-button');
+    window.currentOpenMenu = null;
+    const menuMargin = 8;
+
+    window.closeAllMenus = function () {
+        if (window.currentOpenMenu) {
+            window.currentOpenMenu.classList.remove('active');
+            window.currentOpenMenu.removeAttribute('style');
+            window.currentOpenMenu = null;
+        }
+        document.querySelectorAll('.menu-popup').forEach(function (menu) {
+            menu.style.display = 'none';
+        });
+    };
+
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('.menu-button') || e.target.closest('.menu-popup')) {
+            return;
+        }
+        closeAllMenus();
+    });
+
+    menuButtons.forEach(function (button) {
+        button.addEventListener('click', function (event) {
+            event.stopPropagation();
+            const dropdown = button.nextElementSibling;
+            if (!dropdown) {
+                return;
+            }
+
+            const isActive = dropdown.classList.contains('active');
+            if (window.currentOpenMenu && window.currentOpenMenu !== dropdown) {
+                closeAllMenus();
+            }
+
+            if (!isActive) {
+                dropdown.style.display = 'block';
+                const buttonRect = button.getBoundingClientRect();
+                const dropdownWidth = dropdown.offsetWidth;
+                const dropdownHeight = dropdown.offsetHeight;
+                const viewportHeight = window.innerHeight;
+                const viewportWidth = window.innerWidth;
+
+                dropdown.style.position = 'fixed';
+                dropdown.style.top = '';
+                dropdown.style.left = '';
+                dropdown.style.zIndex = '1000';
+                if (buttonRect.bottom + dropdownHeight + menuMargin < viewportHeight) {
+                    dropdown.style.top = (buttonRect.bottom + menuMargin) + 'px';
+                } else {
+                    dropdown.style.top = (buttonRect.top - dropdownHeight - menuMargin) + 'px';
+                }
+                if (buttonRect.left + dropdownWidth < viewportWidth) {
+                    dropdown.style.left = buttonRect.left + 'px';
+                } else {
+                    dropdown.style.left = (buttonRect.left - dropdownWidth + buttonRect.width) + 'px';
+                }
+
+                dropdown.classList.add('active');
+                window.currentOpenMenu = dropdown;
+            } else {
+                closeAllMenus();
+            }
+        });
+    });
+
     const openBrokerPopupBtn = document.getElementById('open-broker-popup-btn');
     const popupWrapper = document.getElementById('popup-wrapper');
     const modalSlider = document.getElementById('modal-slider');
@@ -466,6 +524,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('.deactivate-btn').forEach(btn => {
         btn.addEventListener('click', function() {
+            if (typeof closeAllMenus === 'function') {
+                closeAllMenus();
+            }
             const id = this.dataset.id;
             const name = this.dataset.name || 'this broker';
             if (!confirm('Deactivate ' + name + '?')) return;
@@ -484,6 +545,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('.permanent-delete-btn').forEach(btn => {
         btn.addEventListener('click', function() {
+            if (typeof closeAllMenus === 'function') {
+                closeAllMenus();
+            }
             const id = this.dataset.id;
             const name = this.dataset.name || 'this broker';
             if (!confirm('Permanently delete ' + name + '? This cannot be undone.')) return;
@@ -502,6 +566,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function openEditModal(id) {
+    if (typeof closeAllMenus === 'function') {
+        closeAllMenus();
+    }
     fetch('?page=brokers&action=getDetails&id=' + encodeURIComponent(id))
         .then(r => r.json())
         .then(data => {
