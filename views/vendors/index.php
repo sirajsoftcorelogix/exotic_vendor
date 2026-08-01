@@ -1,3 +1,11 @@
+<?php
+$vfInput = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition';
+$vfLabel = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600';
+$vfSection = 'rounded-xl border border-gray-200/90 bg-gradient-to-b from-gray-50/70 to-white p-4 sm:p-5 space-y-4';
+$vfHint = 'mt-1 text-xs text-gray-500';
+$vendorModalWidth = 'width: 42%; min-width: 520px; max-width: 680px;';
+$vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
+?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
     <!-- Page Header -->
     <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04]">
@@ -351,7 +359,7 @@
     <div id="popup-overlay" class="fixed inset-0 bg-black bg-opacity-25 z-40"></div>
 
     <!-- Sliding Container -->
-    <div id="modal-slider" class="popup-transition fixed top-0 right-0 h-full flex transform translate-x-full z-50" style="width: 35%; min-width: 400px;">
+    <div id="modal-slider" class="popup-transition fixed top-0 right-0 h-full flex transform translate-x-full z-50" style="<?= htmlspecialchars($vendorModalWidth, ENT_QUOTES, 'UTF-8') ?>">
 
         <!-- Close Button -->
         <div class="flex-shrink-0 flex items-start pt-5">
@@ -362,97 +370,150 @@
             </button>
         </div>
         <!-- Popup Panel -->
-        <div id="vendor-popup-panel" class="h-full bg-white shadow-2xl" style="width: 100%;">
-            <div class="h-full w-full overflow-y-auto">
-                <div class="p-6">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Add Vendor</h2>
-                    <div id="addVendorMsg" style="margin-top:10px;" class="text-sm font-bold"></div>
-                    <form id="addVendorForm">
+        <div id="vendor-popup-panel" class="h-full bg-white shadow-2xl flex flex-col" style="width: 100%;">
+            <div class="flex-1 overflow-y-auto">
+                <div class="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-amber-50/60 to-white">
+                    <h2 class="text-xl font-bold text-gray-900">Add vendor</h2>
+                    <p class="mt-1 text-sm text-gray-500">Create a supplier profile and sync with Exotic India when groups are selected.</p>
+                </div>
+                <div class="px-6 py-5">
+                    <div id="addVendorMsg" class="text-sm font-semibold mb-4"></div>
+                    <form id="addVendorForm" class="space-y-5">
                         <input type="hidden" name="page" value="vendors">
                         <input type="hidden" name="action" value="addVendor">
 
-                        <!-- Basic Information -->
-                        <div class="pt-4">
-                            <h3 class="text-sm font-bold text-gray-800 mb-2">Basic Information</h3>
-                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
+                                    <i class="fas fa-building text-sm" aria-hidden="true"></i>
+                                </span>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Vendor Name <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="addVendorName" id="addVendorName" />
-                                    <span id="addVendorNameMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Contact Person <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="addContactPerson" id="addContactPerson" />
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Phone <span class="text-red-500">*</span></label>
-                                    <select class="form-input w-1/4" style="width: 190px;" name="addCountryCode" id="addCountryCode" required>
-                                        <option value="" disabled>Select Code</option>
-                                        <?php foreach($countryList as $cl): ?>
-                                            <option value="<?php echo $cl['phone_code']; ?>" <?php if($cl["name"]=="India") { echo "selected"; }?>>
-                                                <?php echo $cl['name'] . " (+" .$cl['phone_code'].")"; ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div>
-                                    <input type="number" class="form-input w-full mt-1" required oninput="limitToTenDigits(this)" name="addPhone" id="addPhone" style="margin-top: 25px;" />
-                                    <span id="addPhoneMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
-                                </div>
-                                
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Email</label>
-                                    <input type="email" class="form-input w-full mt-1" name="addEmail" id="addEmail" />
-                                    <span id="addEmailMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Alternate Phone (optional)</label>
-                                    <input type="number" class="form-input w-full mt-1" name="addAltPhone" id="addAltPhone" oninput="limitToTenDigits(this)" />
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Stock Replenishment Months</label>
-                                    <input type="number" class="form-input w-full mt-1" name="stock_replenishment_months" id="add_stock_replenishment_months" min="0" step="1" placeholder="e.g. 3" />
-                                    <p class="mt-1 text-xs text-gray-500">Expected months to replenish stock for this vendor. Leave empty or 0 if not set.</p>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Broker</label>
-                                    <select name="broker_id" id="add_broker_id" class="form-input w-full mt-1">
-                                        <option value="">Select broker...</option>
-                                    </select>
-                                    <p class="mt-1 text-xs text-gray-500">Search active brokers from Broker Master. Leave empty if not assigned.</p>
+                                    <h3 class="text-sm font-bold text-gray-900">Basic information</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Vendor identity, contact, and assignment.</p>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div style="width: 400px;">
-                                    <label class="text-sm font-medium text-gray-700">Team</label>
-                                    <br/>
-                                    <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="addTeam[]" id="addTeam" onchange="fillTeamAgent(this.value, 'AddForm');">
-                                        <option value="" disabled>Select Team</option>
-                                        <?php foreach($teamList as $team): ?>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Vendor name <span class="text-red-500 normal-case">*</span></label>
+                                    <input type="text" class="<?= $vfInput ?>" required name="addVendorName" id="addVendorName" placeholder="Official vendor name" />
+                                    <span id="addVendorNameMsg" class="text-sm text-red-500"></span>
+                                </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Contact person <span class="text-red-500 normal-case">*</span></label>
+                                    <input type="text" class="<?= $vfInput ?>" required name="addContactPerson" id="addContactPerson" placeholder="Primary contact" />
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="<?= $vfLabel ?>">Phone <span class="text-red-500 normal-case">*</span></label>
+                                    <div class="flex flex-col sm:flex-row gap-2">
+                                        <select class="<?= $vfInput ?> sm:max-w-[220px]" name="addCountryCode" id="addCountryCode" required>
+                                            <option value="" disabled>Select code</option>
+                                            <?php foreach ($countryList as $cl): ?>
+                                                <option value="<?php echo $cl['phone_code']; ?>" <?php if ($cl['name'] === 'India') { echo 'selected'; } ?>>
+                                                    <?php echo $cl['name'] . ' (+' . $cl['phone_code'] . ')'; ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <input type="number" class="<?= $vfInput ?> flex-1" required oninput="limitToTenDigits(this)" name="addPhone" id="addPhone" placeholder="10-digit mobile" />
+                                    </div>
+                                    <span id="addPhoneMsg" class="text-sm text-red-500"></span>
+                                </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Email</label>
+                                    <input type="email" class="<?= $vfInput ?>" name="addEmail" id="addEmail" placeholder="name@vendor.com" />
+                                    <span id="addEmailMsg" class="text-sm text-red-500"></span>
+                                </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Alternate phone</label>
+                                    <input type="number" class="<?= $vfInput ?>" name="addAltPhone" id="addAltPhone" oninput="limitToTenDigits(this)" placeholder="Optional" />
+                                </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Broker</label>
+                                    <select name="broker_id" id="add_broker_id" class="<?= $vfInput ?>">
+                                        <option value="">Select broker...</option>
+                                    </select>
+                                    <p class="<?= $vfHint ?>">Search active brokers from Broker Master.</p>
+                                </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Status <span class="text-red-500 normal-case">*</span></label>
+                                    <select class="<?= $vfInput ?>" required name="addStatus" id="addStatus">
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive</option>
+                                        <option value="blacklisted">Blacklisted</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                                    <i class="fas fa-handshake text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Commercial &amp; groups</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Categories, product groups, and default terms.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Stock replenishment (months)</label>
+                                    <input type="number" class="<?= $vfInput ?>" name="stock_replenishment_months" id="add_stock_replenishment_months" min="0" step="1" placeholder="e.g. 3" />
+                                    <p class="<?= $vfHint ?>">Leave empty or 0 if not set.</p>
+                                </div>
+                                <div id="addBookDiscountField" class="hidden">
+                                    <label class="<?= $vfLabel ?>">Discount (%)</label>
+                                    <input type="number" class="<?= $vfInput ?>" name="discount" id="add_discount" min="0" step="0.01" placeholder="e.g. 10" />
+                                    <p class="<?= $vfHint ?>">For book vendors only.</p>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="<?= $vfLabel ?>">Group name <span class="text-red-500 normal-case">*</span></label>
+                                <div id="groupname" class="mt-1 grid grid-cols-2 gap-2 rounded-lg border border-amber-200/80 bg-amber-50/40 p-3 max-h-36 overflow-y-auto">
+                                    <?php foreach ($groupnameList as $groupSlug): ?>
+                                        <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 vendor-group-checkbox" name="groupname[]" value="<?php echo htmlspecialchars($groupSlug); ?>">
+                                            <span><?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupSlug, MB_CASE_TITLE, 'UTF-8') : ucwords($groupSlug)); ?></span>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                                <span id="addGroupnameMsg" class="text-sm text-red-500"></span>
+                                <p class="<?= $vfHint ?>">Required for Exotic India API sync.</p>
+                            </div>
+                            <label class="flex items-start gap-3 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2.5 cursor-pointer">
+                                <input type="hidden" name="addWebpage" value="0">
+                                <input type="checkbox" class="mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="addWebpage" id="addWebpage" value="1" checked>
+                                <span>
+                                    <span class="block text-sm font-medium text-gray-800">Allow webpage on Exotic India</span>
+                                    <span class="block text-xs text-gray-500 mt-0.5">Whether this vendor may have a public webpage.</span>
+                                </span>
+                            </label>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Team</label>
+                                    <select class="<?= $vfInput ?> min-h-[7rem]" multiple name="addTeam[]" id="addTeam" onchange="fillTeamAgent(this.value, 'AddForm');">
+                                        <option value="" disabled>Select team</option>
+                                        <?php foreach ($teamList as $team): ?>
                                             <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-                                <br />
-                                <div style="width: 400px;">
-                                    <label class="text-sm font-medium text-gray-700">Agent</label>
-                                    <br/>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Agent</label>
                                     <span id="addTeamMemberBlock">
-                                        <select class="form-input w-full mt-1" name="addTeamMember" id="addTeamMember">
-                                            <option value="" disabled selected>Select Team Member</option>
+                                        <select class="<?= $vfInput ?>" name="addTeamMember" id="addTeamMember">
+                                            <option value="" disabled selected>Select team member</option>
                                         </select>
                                     </span>
                                 </div>
                             </div>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Category</label>
-                                <br/>
-                                <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="addVendorCategory[]" id="addVendorCategory">
-                                    <option value="" disabled>Select Categories</option>
-                                    <?php foreach($category[0] as $key => $value): ?>
+                                <label class="<?= $vfLabel ?>">Category</label>
+                                <select class="<?= $vfInput ?> min-h-[7rem]" multiple name="addVendorCategory[]" id="addVendorCategory">
+                                    <option value="" disabled>Select categories</option>
+                                    <?php foreach ($category[0] as $key => $value): ?>
                                         <?php if ($value['parent_id'] == 0): ?>
                                             <optgroup label="<?php echo $value['category_name']; ?>">
-                                                <?php foreach($category[$value['id']] as $subKey => $subValue): 
+                                                <?php foreach ($category[$value['id']] as $subKey => $subValue):
                                                     if ($subValue['parent_id'] == $value['id']): ?>
                                                         <option value="<?php echo $subValue['id']; ?>"><?php echo $subValue['category_name']; ?></option>
                                                 <?php endif; endforeach; ?>
@@ -461,122 +522,93 @@
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-                            <!-- Groupname checkboxes -->
-                            <div class="mt-2">
-                                <label class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
-                                <div id="groupname" class="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-gray-200 p-3 max-h-36 overflow-y-auto">
-                                    <?php foreach($groupnameList as $groupSlug): ?>
-                                        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
-                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 vendor-group-checkbox" name="groupname[]" value="<?php echo htmlspecialchars($groupSlug); ?>">
-                                            <span><?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupSlug, MB_CASE_TITLE, 'UTF-8') : ucwords($groupSlug)); ?></span>
-                                        </label>
-                                    <?php endforeach; ?>
-                                </div>
-                                <span id="addGroupnameMsg" class="text-sm text-red-500"></span>
-                                <p class="mt-1 text-xs text-gray-500">Required for Exotic India API sync. Select at least one group.</p>
-                            </div>
-                            <div id="addBookDiscountField" class="mt-2 hidden">
-                                <label class="text-sm font-medium text-gray-700">Discount (%)</label>
-                                <input type="number" class="form-input w-full mt-1" name="discount" id="add_discount" min="0" step="0.01" placeholder="e.g. 10" />
-                                <p class="mt-1 text-xs text-gray-500">Default discount percentage for book vendors. Leave empty or 0 if not set.</p>
-                            </div>
-                            <div class="mt-2">
-                                <label for="addWebpage" class="text-sm font-medium text-gray-700">Webpage <span class="text-red-500">*</span></label>
-                                <div class="mt-1 flex items-center gap-2">
-                                    <input type="hidden" name="addWebpage" value="0">
-                                    <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="addWebpage" id="addWebpage" value="1" checked>
-                                    <label for="addWebpage" class="text-sm text-gray-700">Allow webpage</label>
-                                </div>
-                                <p class="mt-1 text-xs text-gray-500">Whether to allow a webpage for this vendor.</p>
-                            </div>
-                        </div>
+                        </section>
 
-                        <!-- Address -->
-                        <div class="pt-4">
-                            <h3 class="text-sm font-bold text-gray-800 mb-2">Address</h3>
-                            <div>
-                                <label class="text-sm font-medium text-gray-700">Address</label>
-                                <input type="text" class="form-input w-full mt-1" name="addAddress" id="addAddress" />
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+                                    <i class="fas fa-map-marker-alt text-sm" aria-hidden="true"></i>
+                                </span>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">City</label>
-                                    <input type="text" class="form-input w-full mt-1" name="addCity" id="addCity" />
+                                    <h3 class="text-sm font-bold text-gray-900">Address</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Location details for the vendor.</p>
                                 </div>
+                            </div>
+                            <div class="space-y-4">
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">State</label>
-                                    <span id="addStateBlock">
-                                        <select class="form-input w-full mt-1" name="addState" id="addState">
-                                            <?php foreach($stateList as $item): ?>
-                                                <option value="<?php echo $item["name"];?>"><?php echo $item["name"];?></option>
-                                            <?php endforeach?>
+                                    <label class="<?= $vfLabel ?>">Street address</label>
+                                    <input type="text" class="<?= $vfInput ?>" name="addAddress" id="addAddress" placeholder="Building, street, area" />
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="<?= $vfLabel ?>">City</label>
+                                        <input type="text" class="<?= $vfInput ?>" name="addCity" id="addCity" />
+                                    </div>
+                                    <div>
+                                        <label class="<?= $vfLabel ?>">State</label>
+                                        <span id="addStateBlock">
+                                            <select class="<?= $vfInput ?>" name="addState" id="addState">
+                                                <option value="">Select State</option>
+                                                <?php foreach ($stateList as $item): ?>
+                                                    <option value="<?php echo htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8'); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <label class="<?= $vfLabel ?>">Country</label>
+                                        <select class="<?= $vfInput ?>" name="addCountry" id="addCountry" onchange="fetchStates(this.value, 'AddForm');">
+                                            <?php foreach ($countryList as $item): ?>
+                                                <option value="<?php echo $item['name']; ?>" <?php if ($item['name'] === 'India') { echo 'selected'; } ?>><?php echo $item['name']; ?></option>
+                                            <?php endforeach; ?>
                                         </select>
-                                    </span>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Country</label>
-                                    <select class="form-input w-full mt-1" name="addCountry" id="addCountry" onchange="fetchStates(this.value, 'AddForm');">
-                                        <?php foreach($countryList as $item): ?>
-                                            <option value="<?php echo $item["name"];?>" <?php if($item["name"]=="India") { echo "selected"; }?>><?php echo $item["name"];?></option>
-                                        <?php endforeach?>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Postal Code</label>
-                                    <input type="text" class="form-input w-full mt-1" name="addPostalCode" id="addPostalCode" />
+                                    </div>
+                                    <div>
+                                        <label class="<?= $vfLabel ?>">Postal code</label>
+                                        <input type="text" class="<?= $vfInput ?>" name="addPostalCode" id="addPostalCode" />
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        </section>
 
-                        <!-- Tax Information -->
-                        <div class="pt-4">
-                            <h3 class="text-sm font-bold text-gray-800 mb-2">Tax Information</h3>
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
+                                    <i class="fas fa-file-invoice text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Tax &amp; notes</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">GST/PAN and internal notes.</p>
+                                </div>
+                            </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">GST Number </label>
-                                    <input type="text" class="form-input w-full mt-1" name="addGstNumber" id="addGstNumber" />
+                                    <label class="<?= $vfLabel ?>">GST number</label>
+                                    <input type="text" class="<?= $vfInput ?>" name="addGstNumber" id="addGstNumber" />
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">PAN Number</label>
-                                    <input type="text" class="form-input w-full mt-1" name="addPanNumber" id="addPanNumber" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Ratings & Notes -->
-                        <div class="pt-4">
-                            <h3 class="text-sm font-bold text-gray-800 mb-2">Ratings & Notes</h3>
-                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">
-                                        Rating <span class="text-red-500">*</span>
-                                    </label>
-                                    <select class="form-input w-full mt-1" required name="addRating" id="addRating">
-                                        <option>5 Star</option>
-                                        <option>4 Star</option>
-                                        <option>3 Star</option>
-                                        <option>2 Star</option>
-                                        <option>1 Star</option>
-                                    </select>
+                                    <label class="<?= $vfLabel ?>">PAN number</label>
+                                    <input type="text" class="<?= $vfInput ?>" name="addPanNumber" id="addPanNumber" />
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
-                                    <select class="form-input w-full mt-1" required name="addStatus" id="addStatus">
-                                        <option value="active">Active</option>
-                                        <option value="inactive">Inactive </option>
-                                        <option value="blacklisted">Blacklisted</option>
+                                    <label class="<?= $vfLabel ?>">Rating</label>
+                                    <select class="<?= $vfInput ?>" name="addRating" id="addRating">
+                                        <option value="">Select rating (optional)</option>
+                                        <?php foreach ($vendorRatingOptions as $ratingOption): ?>
+                                            <option value="<?php echo htmlspecialchars($ratingOption, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($ratingOption, ENT_QUOTES, 'UTF-8'); ?></option>
+                                        <?php endforeach; ?>
                                     </select>
                                 </div>
                             </div>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Notes</label>
-                                <textarea class="w-full min-h-[120px] p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" name="addNotes" id="addNotes"></textarea>
+                                <label class="<?= $vfLabel ?>">Notes</label>
+                                <textarea class="<?= $vfInput ?> min-h-[100px] resize-y" name="addNotes" id="addNotes" placeholder="Internal notes about this vendor"></textarea>
                             </div>
-                        </div>
+                        </section>
 
-                        <div class="flex justify-center items-center gap-4 pt-6 border-t">
+                        <div class="sticky bottom-0 -mx-6 px-6 py-4 bg-white/95 backdrop-blur-sm border-t border-gray-200 flex justify-end gap-3">
                             <button type="button" id="cancel-vendor-btn" class="action-btn cancel-btn">Back</button>
-                            <button type="submit" class="action-btn save-btn">Save</button>
+                            <button type="submit" class="action-btn save-btn">Save vendor</button>
                         </div>
                     </form>
                 </div>
@@ -591,7 +623,7 @@
   <div class="modal-dialog">
     <div class="modal-content">
     <!-- Sliding Container -->
-    <div id="modal-slider-edit" class="popup-transition fixed top-0 right-0 h-full flex transform translate-x-full z-50" style="width: 35%; min-width: 400px;">
+    <div id="modal-slider-edit" class="popup-transition fixed top-0 right-0 h-full flex transform translate-x-full z-50" style="<?= htmlspecialchars($vendorModalWidth, ENT_QUOTES, 'UTF-8') ?>">
         <!-- Close Button -->
         <div class="flex-shrink-0 flex items-start pt-5">
             <button id="close-vendor-popup-btn-edit" class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center shadow-lg" style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
@@ -602,104 +634,156 @@
         </div>
 
         <!-- Popup Panel -->
-        <div class="h-full bg-white shadow-2xl" style="width: 100%;">
-            <div class="h-full w-full overflow-y-auto">
-                <div class="p-8">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Edit Vendor</h2>
-                    <div id="editVendorMsg" style="margin-top:10px;"></div>
-                    <form id="editUserForm">
+        <div class="h-full bg-white shadow-2xl flex flex-col" style="width: 100%;">
+            <div class="flex-1 overflow-y-auto">
+                <div class="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-amber-50/60 to-white">
+                    <h2 class="text-xl font-bold text-gray-900">Edit vendor</h2>
+                    <p class="mt-1 text-sm text-gray-500">Update supplier profile, groups, and contact details.</p>
+                </div>
+                <div class="px-6 py-5">
+                    <div id="editVendorMsg" class="text-sm font-semibold mb-4"></div>
+                    <form id="editUserForm" class="space-y-5">
                         <input type="hidden" id="editVendorId" name="id" value="">
                         <input type="hidden" id="editAgentIds" value="">
                         <input type="hidden" id="editPreviousState" name="editPreviousState" value="">
-                        <!-- Basic Information -->
-                        <div class="pt-4">
-                            <h3 class="text-sm font-bold text-gray-800 mb-2">Basic Information</h3>
-                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
+                                    <i class="fas fa-building text-sm" aria-hidden="true"></i>
+                                </span>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Vendor Name <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="editVendorName" id="editVendorName" />
-                                    <span id="editVendorNameMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Contact Person <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="editContactPerson" id="editContactPerson" />
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Phone <span class="text-red-500">*</span></label>
-                                    <select class="form-input w-1/4" style="width: 190px;" name="editCountryCode" id="editCountryCode" required>
-                                        <option value="" disabled>Select Code</option>
-                                        <?php foreach($countryList as $cl): ?>
-                                            <option value="<?php echo $cl['phone_code']; ?>">
-                                                <?php echo $cl['name'] . " (+" .$cl['phone_code'].")"; ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div>
-                                    <input type="number" class="form-input w-full mt-1" required name="editPhone" id="editPhone" oninput="limitToTenDigits(this)" style="margin-top: 25px;" />
-                                    <span id="editPhoneMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Email</label>
-                                    <input type="email" class="form-input w-full mt-1" name="editEmail" id="editEmail" />
-                                    <span id="editEmailMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Alternate Phone (optional)</label>
-                                    <input type="number" class="form-input w-full mt-1" name="editAltPhone" id="editAltPhone" oninput="limitToTenDigits(this)" />
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Stock Replenishment Months</label>
-                                    <input type="number" class="form-input w-full mt-1" name="stock_replenishment_months" id="edit_stock_replenishment_months" min="0" step="1" placeholder="e.g. 3" />
-                                    <p class="mt-1 text-xs text-gray-500">Expected months to replenish stock for this vendor. Leave empty or 0 if not set.</p>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Broker</label>
-                                    <select name="broker_id" id="edit_broker_id" class="form-input w-full mt-1">
-                                        <option value="">Select broker...</option>
-                                    </select>
-                                    <p class="mt-1 text-xs text-gray-500">Search active brokers from Broker Master. Leave empty if not assigned.</p>
+                                    <h3 class="text-sm font-bold text-gray-900">Basic information</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Vendor identity, contact, and assignment.</p>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div style="width: 400px;">
-                                    <label class="text-sm font-medium text-gray-700">Team</label>
-                                    <br />
-                                    <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="editTeam[]" id="editTeam" onchange="fillTeamAgent(this.value, 'EditForm');">
-                                        <option value="" disabled>Select Team</option>
-                                        <?php foreach($teamList as $team): ?>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Vendor name <span class="text-red-500 normal-case">*</span></label>
+                                    <input type="text" class="<?= $vfInput ?>" required name="editVendorName" id="editVendorName" />
+                                    <span id="editVendorNameMsg" class="text-sm text-red-500"></span>
+                                </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Contact person <span class="text-red-500 normal-case">*</span></label>
+                                    <input type="text" class="<?= $vfInput ?>" required name="editContactPerson" id="editContactPerson" />
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="<?= $vfLabel ?>">Phone <span class="text-red-500 normal-case">*</span></label>
+                                    <div class="flex flex-col sm:flex-row gap-2">
+                                        <select class="<?= $vfInput ?> sm:max-w-[220px]" name="editCountryCode" id="editCountryCode" required>
+                                            <option value="" disabled>Select code</option>
+                                            <?php foreach ($countryList as $cl): ?>
+                                                <option value="<?php echo $cl['phone_code']; ?>">
+                                                    <?php echo $cl['name'] . ' (+' . $cl['phone_code'] . ')'; ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <input type="number" class="<?= $vfInput ?> flex-1" required name="editPhone" id="editPhone" oninput="limitToTenDigits(this)" placeholder="10-digit mobile" />
+                                    </div>
+                                    <span id="editPhoneMsg" class="text-sm text-red-500"></span>
+                                </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Email</label>
+                                    <input type="email" class="<?= $vfInput ?>" name="editEmail" id="editEmail" />
+                                    <span id="editEmailMsg" class="text-sm text-red-500"></span>
+                                </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Alternate phone</label>
+                                    <input type="number" class="<?= $vfInput ?>" name="editAltPhone" id="editAltPhone" oninput="limitToTenDigits(this)" />
+                                </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Broker</label>
+                                    <select name="broker_id" id="edit_broker_id" class="<?= $vfInput ?>">
+                                        <option value="">Select broker...</option>
+                                    </select>
+                                    <p class="<?= $vfHint ?>">Search active brokers from Broker Master.</p>
+                                </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Status <span class="text-red-500 normal-case">*</span></label>
+                                    <select class="<?= $vfInput ?>" required name="editStatus" id="editStatus">
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive</option>
+                                        <option value="blacklisted">Blacklisted</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                                    <i class="fas fa-handshake text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Commercial &amp; groups</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Categories, product groups, and default terms.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Stock replenishment (months)</label>
+                                    <input type="number" class="<?= $vfInput ?>" name="stock_replenishment_months" id="edit_stock_replenishment_months" min="0" step="1" placeholder="e.g. 3" />
+                                    <p class="<?= $vfHint ?>">Leave empty or 0 if not set.</p>
+                                </div>
+                                <div id="editBookDiscountField" class="hidden">
+                                    <label class="<?= $vfLabel ?>">Discount (%)</label>
+                                    <input type="number" class="<?= $vfInput ?>" name="discount" id="edit_discount" min="0" step="0.01" placeholder="e.g. 10" />
+                                    <p class="<?= $vfHint ?>">For book vendors only.</p>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="<?= $vfLabel ?>">Group name <span class="text-red-500 normal-case">*</span></label>
+                                <div id="editGroupname" class="mt-1 grid grid-cols-2 gap-2 rounded-lg border border-amber-200/80 bg-amber-50/40 p-3 max-h-36 overflow-y-auto">
+                                    <?php foreach ($groupnameList as $groupSlug): ?>
+                                        <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 vendor-group-checkbox" name="editGroupname[]" value="<?php echo htmlspecialchars($groupSlug); ?>">
+                                            <span><?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupSlug, MB_CASE_TITLE, 'UTF-8') : ucwords($groupSlug)); ?></span>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                                <span id="editGroupnameMsg" class="text-sm text-red-500"></span>
+                                <p class="<?= $vfHint ?>">Required for Exotic India API sync.</p>
+                            </div>
+                            <label class="flex items-start gap-3 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2.5 cursor-pointer">
+                                <input type="hidden" name="editWebpage" value="0">
+                                <input type="checkbox" class="mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="editWebpage" id="editWebpage" value="1" checked>
+                                <span>
+                                    <span class="block text-sm font-medium text-gray-800">Allow webpage on Exotic India</span>
+                                    <span class="block text-xs text-gray-500 mt-0.5">Whether this vendor may have a public webpage.</span>
+                                </span>
+                            </label>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Team</label>
+                                    <select class="<?= $vfInput ?> min-h-[7rem]" multiple name="editTeam[]" id="editTeam" onchange="fillTeamAgent(this.value, 'EditForm');">
+                                        <option value="" disabled>Select team</option>
+                                        <?php foreach ($teamList as $team): ?>
                                             <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-                                <br />
-                                <div style="width: 400px;">
-                                    <label class="text-sm font-medium text-gray-700">Agent</label>
-                                    <br />
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Agent</label>
                                     <span id="editTeamMemberBlock">
-                                        <select class="form-input w-full mt-1" name="editTeamMember" id="editTeamMember">
-                                            <option value="" disabled selected>Select Agent</option>
+                                        <select class="<?= $vfInput ?>" name="editTeamMember" id="editTeamMember">
+                                            <option value="" disabled selected>Select agent</option>
                                         </select>
                                     </span>
                                 </div>
                             </div>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Category</label>
-                                <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="addVendorCategory[]" id="editVendorCategory">
-                                    <option value="" disabled>Select Categories</option>
-                                    <?php                                     
+                                <label class="<?= $vfLabel ?>">Category</label>
+                                <select class="<?= $vfInput ?> min-h-[7rem]" multiple name="addVendorCategory[]" id="editVendorCategory">
+                                    <option value="" disabled>Select categories</option>
+                                    <?php
                                     if (isset($category[0]) && is_array($category[0])) {
                                         foreach ($category[0] as $parent) {
                                             $parentId = $parent['id'];
                                             $parentName = $parent['category_name'];
-
-                                            // Only show parent as optgroup label, not as selectable option
-                                            echo '<optgroup label="' . htmlspecialchars($parentName) . '" style="font-weight: bold;">';
-
-                                            // Show subcategories if exist
+                                            echo '<optgroup label="' . htmlspecialchars($parentName) . '">';
                                             if (isset($category[$parentId]) && is_array($category[$parentId])) {
                                                 foreach ($category[$parentId] as $child) {
-                                                    echo '<option value="' . $child['id'] . '">' . htmlspecialchars($child['category_name']) . '</option>';
+                                                    echo '<option value="' . (int) $child['id'] . '">' . htmlspecialchars($child['category_name']) . '</option>';
                                                 }
                                             }
                                             echo '</optgroup>';
@@ -707,124 +791,94 @@
                                     }
                                     ?>
                                 </select>
-                                
                             </div>
-                            <!-- Groupname checkboxes -->
-                            <div class="mt-2">
-                                <label class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
-                                <div id="editGroupname" class="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-gray-200 p-3 max-h-36 overflow-y-auto">
-                                    <?php foreach($groupnameList as $groupSlug): ?>
-                                        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
-                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 vendor-group-checkbox" name="editGroupname[]" value="<?php echo htmlspecialchars($groupSlug); ?>">
-                                            <span><?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupSlug, MB_CASE_TITLE, 'UTF-8') : ucwords($groupSlug)); ?></span>
-                                        </label>
-                                    <?php endforeach; ?>
-                                </div>
-                                <span id="editGroupnameMsg" class="text-sm text-red-500"></span>
-                                <p class="mt-1 text-xs text-gray-500">Required for Exotic India API sync. Select at least one group.</p>
-                            </div>
-                            <div id="editBookDiscountField" class="mt-2 hidden">
-                                <label class="text-sm font-medium text-gray-700">Discount (%)</label>
-                                <input type="number" class="form-input w-full mt-1" name="discount" id="edit_discount" min="0" step="0.01" placeholder="e.g. 10" />
-                                <p class="mt-1 text-xs text-gray-500">Default discount percentage for book vendors. Leave empty or 0 if not set.</p>
-                            </div>
-                            <div class="mt-2">
-                                <label for="editWebpage" class="text-sm font-medium text-gray-700">Webpage <span class="text-red-500">*</span></label>
-                                <div class="mt-1 flex items-center gap-2">
-                                    <input type="hidden" name="editWebpage" value="0">
-                                    <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="editWebpage" id="editWebpage" value="1" checked>
-                                    <label for="editWebpage" class="text-sm text-gray-700">Allow webpage</label>
-                                </div>
-                                <p class="mt-1 text-xs text-gray-500">Whether to allow a webpage for this vendor.</p>
-                            </div>
-                        </div>
+                        </section>
 
-                        <!-- Address -->
-                        <div class="pt-4">
-                            <h3 class="text-sm font-bold text-gray-800 mb-2">Address</h3>
-                            <div>
-                                <label class="text-sm font-medium text-gray-700">Address</label>
-                                <input type="text" class="form-input w-full mt-1" name="editAddress" id="editAddress" />
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+                                    <i class="fas fa-map-marker-alt text-sm" aria-hidden="true"></i>
+                                </span>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">City</label>
-                                    <input type="text" class="form-input w-full mt-1" name="editCity" id="editCity" />
+                                    <h3 class="text-sm font-bold text-gray-900">Address</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Location details for the vendor.</p>
                                 </div>
+                            </div>
+                            <div class="space-y-4">
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">State</label>
-                                    <span id="editStateBlock">
-                                        <select class="form-input w-full mt-1" name="editState" id="editState">
-                                            <?php foreach($stateList as $item): ?>
-                                                <option value="<?php echo $item["name"];?>"><?php echo $item["name"];?></option>
-                                            <?php endforeach?>
+                                    <label class="<?= $vfLabel ?>">Street address</label>
+                                    <input type="text" class="<?= $vfInput ?>" name="editAddress" id="editAddress" />
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="<?= $vfLabel ?>">City</label>
+                                        <input type="text" class="<?= $vfInput ?>" name="editCity" id="editCity" />
+                                    </div>
+                                    <div>
+                                        <label class="<?= $vfLabel ?>">State</label>
+                                        <span id="editStateBlock">
+                                            <select class="<?= $vfInput ?>" name="editState" id="editState">
+                                                <option value="">Select State</option>
+                                                <?php foreach ($stateList as $item): ?>
+                                                    <option value="<?php echo htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8'); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <label class="<?= $vfLabel ?>">Country</label>
+                                        <select class="<?= $vfInput ?>" name="editCountry" id="editCountry" onchange="fetchStates(this.value, 'EditForm');">
+                                            <?php foreach ($countryList as $item): ?>
+                                                <option value="<?php echo $item['name']; ?>" <?php if ($item['name'] === 'India') { echo 'selected'; } ?>><?php echo $item['name']; ?></option>
+                                            <?php endforeach; ?>
                                         </select>
-                                    </span>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Country</label>
-                                    <select class="form-input w-full mt-1" name="editCountry" id="editCountry" onchange="fetchStates(this.value, 'EditForm');">
-                                        <?php foreach($countryList as $item): ?>
-                                            <option value="<?php echo $item["name"];?>" <?php if($item["name"]=="India") { echo "selected"; }?>><?php echo $item["name"];?></option>
-                                        <?php endforeach?>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Postal Code</label>
-                                    <input type="text" class="form-input w-full mt-1" name="editPostalCode" id="editPostalCode" />
+                                    </div>
+                                    <div>
+                                        <label class="<?= $vfLabel ?>">Postal code</label>
+                                        <input type="text" class="<?= $vfInput ?>" name="editPostalCode" id="editPostalCode" />
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        </section>
 
-                        <!-- Tax Information -->
-                        <div class="pt-4">
-                            <h3 class="text-sm font-bold text-gray-800 mb-2">Tax Information</h3>
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
+                                    <i class="fas fa-file-invoice text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Tax &amp; notes</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">GST/PAN and internal notes.</p>
+                                </div>
+                            </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">GST Number </label>
-                                    <input type="text" class="form-input w-full mt-1"  name="editGstNumber" id="editGstNumber" />
+                                    <label class="<?= $vfLabel ?>">GST number</label>
+                                    <input type="text" class="<?= $vfInput ?>" name="editGstNumber" id="editGstNumber" />
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">PAN Number</label>
-                                    <input type="text" class="form-input w-full mt-1" name="editPanNumber" id="editPanNumber" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Ratings & Notes -->
-                        <div class="pt-4">
-                            <h3 class="text-sm font-bold text-gray-800 mb-2">Ratings & Notes</h3>
-                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">
-                                        Rating <span class="text-red-500">*</span>
-                                    </label>
-                                    <select class="form-input w-full mt-1" required name="editRating" id="editRating">
-                                        <option>5 Star</option>
-                                        <option>4 Star</option>
-                                        <option>3 Star</option>
-                                        <option>2 Star</option>
-                                        <option>1 Star</option>
-                                    </select>
+                                    <label class="<?= $vfLabel ?>">PAN number</label>
+                                    <input type="text" class="<?= $vfInput ?>" name="editPanNumber" id="editPanNumber" />
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
-                                    <select class="form-input w-full mt-1" required name="editStatus" id="editStatus">
-                                        <option value="active">Active</option>
-                                        <option value="inactive">Inactive </option>
-                                        <option value="blacklisted">Blacklisted</option>
+                                    <label class="<?= $vfLabel ?>">Rating</label>
+                                    <select class="<?= $vfInput ?>" name="editRating" id="editRating">
+                                        <option value="">Select rating (optional)</option>
+                                        <?php foreach ($vendorRatingOptions as $ratingOption): ?>
+                                            <option value="<?php echo htmlspecialchars($ratingOption, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($ratingOption, ENT_QUOTES, 'UTF-8'); ?></option>
+                                        <?php endforeach; ?>
                                     </select>
                                 </div>
                             </div>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Notes</label>
-                                <textarea class="w-full min-h-[120px] p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" name="editNotes" id="editNotes"></textarea>
+                                <label class="<?= $vfLabel ?>">Notes</label>
+                                <textarea class="<?= $vfInput ?> min-h-[100px] resize-y" name="editNotes" id="editNotes"></textarea>
                             </div>
-                        </div>
+                        </section>
 
-                        <div class="flex justify-center items-center gap-4 pt-6 border-t">
+                        <div class="sticky bottom-0 -mx-6 px-6 py-4 bg-white/95 backdrop-blur-sm border-t border-gray-200 flex justify-end gap-3">
                             <button type="button" id="cancel-vendor-btn-edit" class="action-btn cancel-btn">Back</button>
-                            <button type="submit" class="action-btn save-btn">Save</button>
+                            <button type="submit" class="action-btn save-btn">Save changes</button>
                         </div>
                     </form>
                 </div>
@@ -1645,13 +1699,49 @@
         });
     });
 
+    const vendorFieldInputClass = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition';
+
+    function populateVendorStateSelect(stateSelect, states, selectedValue) {
+        const blankOption = document.createElement('option');
+        blankOption.value = '';
+        blankOption.textContent = 'Select State';
+        stateSelect.appendChild(blankOption);
+
+        const stateRows = Array.isArray(states) ? states : [states];
+        stateRows.forEach(function (state) {
+            if (!state || !state.name) {
+                return;
+            }
+            const option = document.createElement('option');
+            option.value = state.name;
+            option.textContent = state.name;
+            stateSelect.appendChild(option);
+        });
+
+        const normalizedSelected = String(selectedValue || '').trim();
+        if (normalizedSelected !== '') {
+            stateSelect.value = normalizedSelected;
+            if (stateSelect.value !== normalizedSelected) {
+                const fallback = document.createElement('option');
+                fallback.value = normalizedSelected;
+                fallback.textContent = normalizedSelected;
+                fallback.selected = true;
+                stateSelect.appendChild(fallback);
+            }
+        } else {
+            stateSelect.value = '';
+        }
+    }
+
     function fetchStates(countryId, formType) {
         if(countryId === "") return;
         if(countryId !== "India") {
+            const inputClass = vendorFieldInputClass;
             if(formType === 'AddForm') {
-                document.getElementById('addStateBlock').innerHTML = '<input type="text" class="form-input w-full mt-1" name="addState" id="addState" />';
+                document.getElementById('addStateBlock').innerHTML = '<input type="text" class="' + inputClass + '" name="addState" id="addState" placeholder="State / province" />';
             } else {
-                document.getElementById('editStateBlock').innerHTML = '<input type="text" class="form-input w-full mt-1" name="editState" id="editState" />';
+                const previous = document.getElementById('editPreviousState') ? document.getElementById('editPreviousState').value : '';
+                document.getElementById('editStateBlock').innerHTML = '<input type="text" class="' + inputClass + '" name="editState" id="editState" value="' + String(previous || '').replace(/"/g, '&quot;') + '" placeholder="State / province" />';
             }
             return;
         } else {
@@ -1660,42 +1750,20 @@
             .then(response => response.json())
             .then(data => {
                 if (formType === 'AddForm') {
-                    // Create a new select element
                     let stateSelect = document.createElement('select');
-
-                    // add attributes
-                    stateSelect.id = "addState";
-                    stateSelect.name = "addState";
-                    stateSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
-
-                    // Populate the select element with options
-                    let states = Array.isArray(data) ? data : [data]; 
-                    states.forEach(state => {
-                        const option = document.createElement('option');
-                        option.value = state.name;
-                        option.textContent = state.name;
-                        stateSelect.appendChild(option);
-                    });
+                    stateSelect.id = 'addState';
+                    stateSelect.name = 'addState';
+                    stateSelect.className = vendorFieldInputClass;
+                    populateVendorStateSelect(stateSelect, data, '');
                     document.getElementById('addStateBlock').innerHTML = stateSelect.outerHTML;
                 } else {
-                    // Create a new select element
                     let stateSelect = document.createElement('select');
-
-                    // add attributes
-                    stateSelect.id = "editState";
-                    stateSelect.name = "editState";
-                    stateSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
-
-                    // Populate the select element with options
-                    let states = Array.isArray(data) ? data : [data]; 
-                    states.forEach(state => {
-                        const option = document.createElement('option');
-                        option.value = state.name;
-                        option.textContent = state.name;
-                        stateSelect.appendChild(option);
-                    });
+                    stateSelect.id = 'editState';
+                    stateSelect.name = 'editState';
+                    stateSelect.className = vendorFieldInputClass;
+                    const previousState = document.getElementById('editPreviousState') ? document.getElementById('editPreviousState').value : '';
+                    populateVendorStateSelect(stateSelect, data, previousState);
                     document.getElementById('editStateBlock').innerHTML = stateSelect.outerHTML;
-                    document.getElementById("editState").value = document.getElementById("editPreviousState").value;
                 }
                 return;
             });
@@ -1899,40 +1967,27 @@
 
             //document.getElementById("editTeamMember").value = vendor.agent_id;
 
+            document.getElementById("editPreviousState").value = vendor.state || '';
+
             if(vendor.country !== "India") {
-                document.getElementById("editStateBlock").innerHTML = '<input type="text" class="form-input w-full mt-1" name="editState" id="editState" value="' + vendor.state + '" />';
-                document.getElementById("editPreviousState").value = vendor.state;
+                document.getElementById("editStateBlock").innerHTML = '<input type="text" class="' + vendorFieldInputClass + '" name="editState" id="editState" value="' + String(vendor.state || '').replace(/"/g, '&quot;') + '" placeholder="State / province" />';
             } else {
-                // Fetch states from the server
                 fetch('?page=vendors&action=getStates')
                 .then(response => response.json())
                 .then(data => {
-                    // Create a new select element
                     let stateSelect = document.createElement('select');
-
-                    // add attributes
-                    stateSelect.id = "editState";
-                    stateSelect.name = "editState";
-                    stateSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
-
-                    // Populate the select element with options
-                    let states = Array.isArray(data) ? data : [data]; 
-                    states.forEach(state => {
-                        const option = document.createElement('option');
-                        option.value = state.name;
-                        option.textContent = state.name;
-                        stateSelect.appendChild(option);
-                    });
-
+                    stateSelect.id = 'editState';
+                    stateSelect.name = 'editState';
+                    stateSelect.className = vendorFieldInputClass;
+                    populateVendorStateSelect(stateSelect, data, vendor.state || '');
                     document.getElementById('editStateBlock').innerHTML = stateSelect.outerHTML;
-                    document.getElementById("editState").value = vendor.state;
-                    document.getElementById("editPreviousState").value = vendor.state;
+                    document.getElementById('editPreviousState').value = vendor.state || '';
                     return;
                 });
             }
 
             document.getElementById("editPostalCode").value = vendor.postal_code;
-            document.getElementById("editRating").value = vendor.rating;
+            document.getElementById("editRating").value = vendor.rating || '';
             document.getElementById("editTeam").value = vendor.team_id;
             document.getElementById("editNotes").value = vendor.notes;
             document.getElementById("editStatus").value = vendor.is_active;
