@@ -1037,6 +1037,9 @@ switch ($page) {
             case 'edit_role':
                 $controller->updateRecord();
                 break;
+            case 'copy_role':
+                $controller->copyRecord();
+                break;
             /*case 'updateRecord':
                 $controller->addRecord();
                 break;*/
