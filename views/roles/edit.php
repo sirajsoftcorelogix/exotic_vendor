@@ -1,5 +1,13 @@
 <div class="bg-white p-4 md:p-8">
-    <h1>Edit Role</h1>
+    <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <h1 class="text-xl font-semibold text-gray-900">Edit Role</h1>
+        <button type="button" id="copyRoleBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-md">
+            Copy Role
+        </button>
+    </div>
+    <?php if (!empty($_SESSION['role_message'])): ?>
+        <div class="text-sm font-bold text-green-600 mb-4"><?php echo htmlspecialchars($_SESSION['role_message']); unset($_SESSION['role_message']); ?></div>
+    <?php endif; ?>
     <form action="<?php echo base_url('?page=roles&action=edit_role'); ?>" id="edit_role" method="POST">
         <input type="hidden" id="role_id" name="role_id" value="<?php echo $roles["id"]; ?>">
         <div class="flex flex-col md:flex-row justify-between mb-8">
@@ -32,15 +40,66 @@
             </div>
         </div>
     </form>
+    <form id="copyRoleForm" action="<?php echo base_url('?page=roles&action=copy_role'); ?>" method="POST" class="hidden">
+        <input type="hidden" name="role_id" value="<?php echo (int) $roles['id']; ?>">
+    </form>
 </div>
+
+<div id="copyRoleConfirmModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 hidden z-50" role="dialog" aria-modal="true" aria-labelledby="copyRoleConfirmTitle">
+    <div class="bg-white rounded-lg shadow-lg w-[420px] p-8 text-center">
+        <h2 id="copyRoleConfirmTitle" class="text-xl font-bold text-gray-900 mb-3">Copy Role</h2>
+        <p class="text-gray-700">
+            Create a new role named <strong><?php echo htmlspecialchars($roles['role_name']); ?> (Copy)</strong> with the same permissions as this role?
+        </p>
+        <div class="mt-6 flex justify-center gap-3">
+            <button type="button" id="copyRoleCancelBtn" class="bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-md">
+                Cancel
+            </button>
+            <button type="button" id="copyRoleConfirmBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-md">
+                Copy Role
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
     const requiredFields = document.querySelectorAll('.required');
-    // Optional: Auto-trim leading spaces on input
     requiredFields.forEach(field => {
         field.addEventListener('input', function() {
             if (this.value.charAt(0) === ' ') {
-                this.value = this.value.trimStart(); // Remove leading spaces
+                this.value = this.value.trimStart();
             }
         });
     });
+
+    (function () {
+        const copyBtn = document.getElementById('copyRoleBtn');
+        const modal = document.getElementById('copyRoleConfirmModal');
+        const cancelBtn = document.getElementById('copyRoleCancelBtn');
+        const confirmBtn = document.getElementById('copyRoleConfirmBtn');
+        const copyForm = document.getElementById('copyRoleForm');
+
+        if (!copyBtn || !modal || !cancelBtn || !confirmBtn || !copyForm) {
+            return;
+        }
+
+        function openCopyModal() {
+            modal.classList.remove('hidden');
+        }
+
+        function closeCopyModal() {
+            modal.classList.add('hidden');
+        }
+
+        copyBtn.addEventListener('click', openCopyModal);
+        cancelBtn.addEventListener('click', closeCopyModal);
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) {
+                closeCopyModal();
+            }
+        });
+        confirmBtn.addEventListener('click', function () {
+            copyForm.submit();
+        });
+    })();
 </script>

@@ -79,6 +79,26 @@ class RolesController {
         header("location: " . base_url('?page=roles&action=list'));
         exit;
     }
+    public function copyRecord() {
+        global $rolesModel;
+        $roleId = isset($_POST['role_id']) ? (int) $_POST['role_id'] : 0;
+        if ($roleId <= 0) {
+            $_SESSION['role_message'] = 'Invalid role ID.';
+            header('location: ' . base_url('?page=roles&action=list'));
+            exit;
+        }
+
+        $result = $rolesModel->copyRecord($roleId);
+        if (!empty($result['success']) && !empty($result['role_id'])) {
+            $_SESSION['role_message'] = $result['message'];
+            header('location: ' . base_url('?page=roles&action=edit&role_id=' . (int) $result['role_id']));
+            exit;
+        }
+
+        $_SESSION['role_message'] = $result['message'] ?? 'Failed to copy role.';
+        header('location: ' . base_url('?page=roles&action=edit&role_id=' . $roleId));
+        exit;
+    }
     public function delete() {
         global $rolesModel;
         // Try to get id from JSON or POST

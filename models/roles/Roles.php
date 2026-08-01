@@ -179,6 +179,93 @@ class Roles {
             'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
         ];
     }
+    public function copyRecord(int $sourceRoleId): array
+    {
+        if ($sourceRoleId <= 0) {
+            return ['success' => false, 'message' => 'Invalid role ID.'];
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT id, role_name, role_description, is_active FROM vp_roles WHERE id = ? LIMIT 1'
+        );
+        $stmt->bind_param('i', $sourceRoleId);
+        $stmt->execute();
+        $source = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        if (!$source) {
+            return ['success' => false, 'message' => 'Source role not found.'];
+        }
+
+        $newName = $this->generateUniqueCopyRoleName($source['role_name']);
+
+        $stmt = $this->conn->prepare(
+            'INSERT INTO vp_roles (role_name, role_description, user_id, is_active) VALUES (?, ?, ?, ?)'
+        );
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+        $isActive = (int) $source['is_active'];
+        $stmt->bind_param('ssii', $newName, $source['role_description'], $userId, $isActive);
+
+        if (!$stmt->execute()) {
+            $error = $stmt->error;
+            $stmt->close();
+            return ['success' => false, 'message' => 'Copy failed: ' . $error];
+        }
+
+        $newRoleId = (int) $this->conn->insert_id;
+        $stmt->close();
+
+        $permStmt = $this->conn->prepare(
+            'SELECT permission_id FROM vp_role_permissions WHERE role_id = ?'
+        );
+        $permStmt->bind_param('i', $sourceRoleId);
+        $permStmt->execute();
+        $permResult = $permStmt->get_result();
+
+        $insertPerm = $this->conn->prepare(
+            'INSERT INTO vp_role_permissions (role_id, permission_id, user_id) VALUES (?, ?, ?)'
+        );
+
+        while ($row = $permResult->fetch_assoc()) {
+            $permissionId = (int) $row['permission_id'];
+            $insertPerm->bind_param('iii', $newRoleId, $permissionId, $userId);
+            $insertPerm->execute();
+        }
+
+        $permStmt->close();
+        $insertPerm->close();
+
+        return [
+            'success' => true,
+            'message' => 'Role copied successfully.',
+            'role_id' => $newRoleId,
+        ];
+    }
+
+    private function generateUniqueCopyRoleName(string $roleName): string
+    {
+        $candidate = $roleName . ' (Copy)';
+        $counter = 2;
+
+        while ($this->roleNameExists($candidate)) {
+            $candidate = $roleName . ' (Copy ' . $counter . ')';
+            $counter++;
+        }
+
+        return $candidate;
+    }
+
+    private function roleNameExists(string $roleName): bool
+    {
+        $stmt = $this->conn->prepare('SELECT COUNT(*) AS total FROM vp_roles WHERE role_name = ?');
+        $stmt->bind_param('s', $roleName);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return ((int) ($row['total'] ?? 0)) > 0;
+    }
+
     public function deleteRecord($role_id) {
         $query = "SELECT COUNT(*) AS total FROM vp_users WHERE role_id = $role_id AND is_deleted = 0";
         $result = $this->conn->query($query);
