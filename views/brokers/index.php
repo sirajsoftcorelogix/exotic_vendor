@@ -261,18 +261,26 @@ foreach ($stateList as $item) {
                                 <label class="text-sm font-medium text-gray-700">Broker name <span class="text-red-500">*</span></label>
                                 <input type="text" class="form-input w-full mt-1" required name="addBrokerName" id="addBrokerName" placeholder="Broker name" />
                             </div>
-                            <div class="rounded-lg border border-gray-200 bg-gray-50/60 p-3 space-y-3">
-                                <div class="flex items-center justify-between gap-3">
-                                    <label class="text-sm font-medium text-gray-700">Locations</label>
+                            <section class="rounded-xl border-2 border-amber-300/80 bg-gradient-to-br from-amber-50 via-amber-50/40 to-white p-4 space-y-4 shadow-sm ring-1 ring-amber-200/60">
+                                <div class="flex items-start justify-between gap-3 border-b border-amber-200/70 pb-3">
+                                    <div class="flex items-start gap-3 min-w-0">
+                                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 shadow-sm">
+                                            <i class="fas fa-location-dot text-sm" aria-hidden="true"></i>
+                                        </span>
+                                        <div class="min-w-0">
+                                            <h3 class="text-sm font-bold text-amber-950">Locations</h3>
+                                            <p class="text-xs text-amber-900/70 mt-0.5">Add state and zone combinations for this broker.</p>
+                                        </div>
+                                    </div>
                                     <button type="button" id="addBrokerLocationRowBtn"
-                                        class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                        class="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100/80">
                                         <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
                                         Add location
                                     </button>
                                 </div>
                                 <div id="addBrokerLocationsList" class="space-y-3"></div>
-                                <p class="text-xs text-gray-500">Each row is a state and zone combination. The first row is shown by default.</p>
-                            </div>
+                                <p class="text-xs text-amber-900/60">The first location row is shown by default. Use <span class="font-semibold">Add location</span> for more.</p>
+                            </section>
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
                                 <select class="form-input w-full mt-1" required name="addStatus" id="addStatus">
@@ -315,18 +323,26 @@ foreach ($stateList as $item) {
                                 <label class="text-sm font-medium text-gray-700">Broker name <span class="text-red-500">*</span></label>
                                 <input type="text" class="form-input w-full mt-1" required name="editBrokerName" id="editBrokerName" />
                             </div>
-                            <div class="rounded-lg border border-gray-200 bg-gray-50/60 p-3 space-y-3">
-                                <div class="flex items-center justify-between gap-3">
-                                    <label class="text-sm font-medium text-gray-700">Locations</label>
+                            <section class="rounded-xl border-2 border-amber-300/80 bg-gradient-to-br from-amber-50 via-amber-50/40 to-white p-4 space-y-4 shadow-sm ring-1 ring-amber-200/60">
+                                <div class="flex items-start justify-between gap-3 border-b border-amber-200/70 pb-3">
+                                    <div class="flex items-start gap-3 min-w-0">
+                                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 shadow-sm">
+                                            <i class="fas fa-location-dot text-sm" aria-hidden="true"></i>
+                                        </span>
+                                        <div class="min-w-0">
+                                            <h3 class="text-sm font-bold text-amber-950">Locations</h3>
+                                            <p class="text-xs text-amber-900/70 mt-0.5">Update state and zone combinations for this broker.</p>
+                                        </div>
+                                    </div>
                                     <button type="button" id="editBrokerLocationRowBtn"
-                                        class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                        class="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100/80">
                                         <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
                                         Add location
                                     </button>
                                 </div>
                                 <div id="editBrokerLocationsList" class="space-y-3"></div>
-                                <p class="text-xs text-gray-500">Each row is a state and zone combination.</p>
-                            </div>
+                                <p class="text-xs text-amber-900/60">Each row is one state and zone combination.</p>
+                            </section>
                             <div>
                                 <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
                                 <select class="form-input w-full mt-1" required name="editStatus" id="editStatus">
@@ -354,9 +370,9 @@ const brokerMaxLocations = 20;
 
 function buildBrokerLocationRowHtml(index, fieldPrefix) {
     return ''
-        + '<div class="broker-location-row rounded-lg border border-gray-200 bg-white p-3 space-y-3" data-index="' + index + '">'
+        + '<div class="broker-location-row rounded-lg border border-amber-200 bg-white/90 p-3 space-y-3 shadow-sm" data-index="' + index + '">'
         + '  <div class="flex items-center justify-between gap-2">'
-        + '    <span class="broker-location-row-label text-xs font-semibold uppercase tracking-wide text-gray-500">Location ' + (index + 1) + '</span>'
+        + '    <span class="broker-location-row-label inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-amber-900">Location ' + (index + 1) + '</span>'
         + '    <button type="button" class="remove-broker-location-row text-xs font-semibold text-red-600 hover:text-red-700">Remove</button>'
         + '  </div>'
         + '  <div>'
