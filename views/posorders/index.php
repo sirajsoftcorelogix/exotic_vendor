@@ -798,7 +798,7 @@
                                                 <p class="">: <span class="data-typography"><?= date("d M Y", strtotime($order['order_date'])) ?></span></p>
 
                                                 <span class="heading-typography ">Order ID</span>
-                                                <p class="">: <span class="data-typography"><a href="#" id="order-id-<?= $order['order_id'] ?>" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a></span></p>
+                                                <p class="">: <span class="data-typography"><a href="<?= base_url('?page=posorders&action=get_order_details_html&type=outer&order_number=' . rawurlencode((string)$order['order_number'])) ?>" target="_blank" id="order-id-<?= $order['order_id'] ?>" class="text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= htmlspecialchars((string)$order['order_number']) ?></a></span></p>
                                                 <?php if ($showOrderVendorName): ?>
                                                 <span class="heading-typography">Vendor Name</span>
                                                 <p>: <span class="data-typography"><?= htmlspecialchars((string)($order['vendor_name'] ?? $order['vendor'] ?? 'N/A'), ENT_QUOTES, 'UTF-8') ?></span></p>
@@ -1821,38 +1821,6 @@
 
         // initialize for existing DOM
         //initAccordionTriggers();
-
-        // Load dynamic content into the modal when an order detail link is clicked
-        const orderDetailLinks = document.querySelectorAll('.order-detail-link');
-        orderDetailLinks.forEach(link => {
-            link.addEventListener('click', (event) => {
-                event.preventDefault();
-                openModal(); // Open the modal first
-                const modalContentDiv = document.getElementById('details-modal-content');
-                const orderData = JSON.parse(link.getAttribute('data-order'));
-                //console.log('Fetching details for order:', orderData.order_number);
-                //loadingImage.classList.remove('hidden');
-                modalContentDiv.innerHTML = '<p>Loading...</p>'; // Show loading indicator
-
-                fetch(`?page=posorders&action=get_order_details_html&type=inner&order_number=${encodeURIComponent(orderData.order_number)}`)
-                    .then(response => response.text())
-                    .then(html => {
-                        modalContentDiv.innerHTML = html; // Insert the fetched HTML
-
-                        // Initialize accordion triggers inside the newly injected content so they work.
-                        if (typeof initAccordionTriggers === 'function') {
-                            initAccordionTriggers(modalContentDiv);
-                        }
-                        if (typeof initOrderDetailImageEnlarge === 'function') {
-                            initOrderDetailImageEnlarge(modalContentDiv);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error loading order details:', error);
-                        modalContentDiv.innerHTML = '<p>Error loading order details.</p>';
-                    });
-            });
-        });
 
     });
 </script>
