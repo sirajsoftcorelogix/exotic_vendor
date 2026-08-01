@@ -3,7 +3,7 @@ require_once 'models/publisher/Publisher.php';
 require_once 'models/country/country.php';
 require_once 'models/country/state.php';
 require_once 'models/vendor/vendor.php';
-require_once __DIR__ . '/../helpers/vendor_external_api.php';
+require_once __DIR__ . '/../integrations/exotic/vendor_product_api.php';
 require_once __DIR__ . '/../helpers/publisher_vendor_sync.php';
 
 class PublishersController
