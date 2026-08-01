@@ -123,7 +123,10 @@ class PublishersController
                 $publisherLocalId = (int) ($result['id'] ?? 0);
                 $vendorResult = $this->createLinkedVendorFromPublisher($publisherLocalId, $name, $isActive, $extra);
                 if ($vendorResult['success']) {
-                    $result['message'] .= ' Linked vendor record created.';
+                    $result['message'] .= ' Linked vendor created and mapped as distributor (Manage Distributors).';
+                    if (!empty($vendorResult['vendor_api_warning'])) {
+                        $result['vendor_create_warning'] = true;
+                    }
                 } else {
                     $result['vendor_create_warning'] = true;
                     $result['message'] .= ' Vendor was not created: ' . ($vendorResult['message'] ?? 'Unknown error.');
@@ -170,30 +173,39 @@ class PublishersController
             return ['success' => false, 'message' => 'Vendor insert did not return an id.'];
         }
 
-        $webpage = (string) ($vendorPayload['addWebpage'] ?? '0');
-        $api = vendor_external_api_sync_catalog($name, $groupsCsv, $webpage, null);
-        if (!empty($api['vendor_id'])) {
-            $this->vendorModel->updateVendorRemoteId($localVendorId, (string) $api['vendor_id']);
-        } elseif (!vendor_external_api_allows_local_save($api)) {
-            return [
-                'success' => false,
-                'message' => (string) ($api['message'] ?? 'Exotic India vendor sync failed.'),
-            ];
-        }
-
-        $mapResult = $this->publisherModel->addPublisherVendorMapping($publisherLocalId, $localVendorId);
+        $mapResult = $this->publisherModel->addPublisherVendorMapping($publisherLocalId, $localVendorId, [
+            'allow_inactive_vendor' => true,
+            'idempotent' => true,
+        ]);
         if (empty($mapResult['success'])) {
             return [
                 'success' => false,
-                'message' => (string) ($mapResult['message'] ?? 'Vendor created but could not link to publisher.'),
+                'message' => (string) ($mapResult['message'] ?? 'Vendor created but could not map as distributor.'),
                 'vendor_id' => $localVendorId,
             ];
         }
 
+        $webpage = (string) ($vendorPayload['addWebpage'] ?? '0');
+        $apiWarning = null;
+        $api = vendor_external_api_sync_catalog($name, $groupsCsv, $webpage, null);
+        if (!empty($api['vendor_id'])) {
+            $this->vendorModel->updateVendorRemoteId($localVendorId, (string) $api['vendor_id']);
+        } elseif (!vendor_external_api_allows_local_save($api)) {
+            $apiWarning = (string) ($api['message'] ?? 'Exotic India vendor sync failed.');
+        }
+
+        $message = 'Vendor created and mapped as distributor.';
+        if ($apiWarning !== null) {
+            $message .= ' ' . $apiWarning;
+        }
+
         return [
             'success' => true,
-            'message' => 'Vendor created and linked to publisher.',
+            'message' => $message,
             'vendor_id' => $localVendorId,
+            'mapping_id' => (int) ($mapResult['mapping_id'] ?? 0),
+            'vendor_api_warning' => $apiWarning !== null,
+            'mappings' => $mapResult['mappings'] ?? [],
         ];
     }
 
