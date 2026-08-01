@@ -147,7 +147,6 @@ $queryBase = [
                                 'id' => $id,
                                 'publishers_id' => $publisherExternalId,
                                 'publishers' => $name,
-                                'display_name' => (string)($publisher['display_name'] ?? ''),
                                 'website' => (string)($publisher['website'] ?? ''),
                                 'contact_name' => $contactName,
                                 'publisher_email' => (string)($publisher['publisher_email'] ?? ''),
@@ -261,7 +260,7 @@ $queryBase = [
                     </span>
                     <div>
                         <h3 class="text-sm font-bold text-gray-900">Publisher profile</h3>
-                        <p class="text-xs text-gray-500 mt-0.5">Legal name synced with Exotic India, plus display and web presence.</p>
+                        <p class="text-xs text-gray-500 mt-0.5">Legal name synced with Exotic India and web presence.</p>
                     </div>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -271,13 +270,6 @@ $queryBase = [
                             class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
                             placeholder="Official publisher name">
                         <span id="publisherNameMsg" class="text-sm text-red-500"></span>
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Display name</label>
-                        <input type="text" name="display_name" id="publisher_display_name"
-                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
-                            placeholder="Friendly name shown in listings">
-                        <p class="mt-1 text-xs text-gray-500">Optional. Use when the display label differs from the official name.</p>
                     </div>
                     <div>
                         <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Status</label>
@@ -801,7 +793,6 @@ function openPublisherModal(publisher) {
     }
     document.getElementById('publisher_id').value = publisher.id || '';
     document.getElementById('publisher_name').value = publisher.publishers || '';
-    document.getElementById('publisher_display_name').value = publisher.display_name || '';
     document.getElementById('publisher_website').value = publisher.website || '';
     document.getElementById('publisher_is_active').value = publisher.is_active != null ? String(publisher.is_active) : '1';
     document.getElementById('publisher_webpage').checked = publisher.webpage === 1 || publisher.webpage === '1';

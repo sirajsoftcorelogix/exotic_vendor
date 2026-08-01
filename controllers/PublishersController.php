@@ -360,7 +360,6 @@ class PublishersController
             'publisher' => [
                 'id' => (int) ($publisher['id'] ?? 0),
                 'publishers' => (string) ($publisher['publishers'] ?? ''),
-                'display_name' => (string) ($publisher['display_name'] ?? ''),
             ],
             'mappings' => $this->publisherModel->getVendorMappingsByPublisherId($publisherId),
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);

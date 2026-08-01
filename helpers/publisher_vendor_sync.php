@@ -4,26 +4,27 @@
  * Map publisher master fields to vendor master (vp_vendors) when creating a linked vendor.
  *
  * Shared / mapped:
- *   publishers          → vendor_name
- *   contact_name        → contact_name (falls back to publisher name)
- *   publisher_email     → vendor_email
- *   country_code        → country_code (defaults 91)
- *   publisher_phone     → vendor_phone
- *   alt_phones[0]       → alt_phone
- *   gst_number          → gst_number
- *   pan_number          → pan_number
- *   address             → address
- *   city                → city
- *   state               → state
- *   country             → country
- *   postal_code         → postal_code
+ *   publishers              → vendor_name
+ *   website                 → website
+ *   contact_name            → contact_name (falls back to publisher name)
+ *   publisher_email         → vendor_email
+ *   publisher_email_is_primary → vendor_email_is_primary
+ *   country_code            → country_code (defaults 91)
+ *   publisher_phone         → vendor_phone
+ *   publisher_phone_is_whatsapp → vendor_phone_is_whatsapp
+ *   alt_phones              → alt_phones (vendor_phones)
+ *   alt_emails              → alt_emails (vendor_emails)
+ *   gst_number              → gst_number
+ *   pan_number              → pan_number
+ *   address                 → address
+ *   city                    → city
+ *   state                   → state
+ *   country                 → country
+ *   postal_code             → postal_code
  *   stock_replenishment_months → stock_replenishment_months
- *   discount            → discount
- *   webpage             → addWebpage / Exotic India webpage flag
- *   is_active           → is_active (active/inactive)
- *
- * Publisher-only (stored in vendor notes when present):
- *   display_name, website
+ *   discount                → discount
+ *   webpage                 → addWebpage / Exotic India webpage flag
+ *   is_active               → is_active (active/inactive)
  *
  * Vendor-only (defaults when creating from publisher):
  *   groupname = book, vendor_code auto, broker/team/category unset, rating optional
@@ -46,10 +47,10 @@ function build_vendor_add_payload_from_publisher(string $publisherName, array $e
         $phone = substr($phone, 0, 10);
     }
 
-    $altPhone = '';
-    $altPhones = $extra['alt_phones'] ?? [];
-    if (is_array($altPhones)) {
-        foreach ($altPhones as $alt) {
+    $altPhones = [];
+    $rawPhones = $extra['alt_phones'] ?? [];
+    if (is_array($rawPhones)) {
+        foreach ($rawPhones as $alt) {
             if (!is_array($alt)) {
                 continue;
             }
@@ -57,30 +58,47 @@ function build_vendor_add_payload_from_publisher(string $publisherName, array $e
             if (strlen($candidate) > 10) {
                 $candidate = substr($candidate, 0, 10);
             }
-            if ($candidate !== '' && $candidate !== $phone) {
-                $altPhone = $candidate;
+            if ($candidate === '' || $candidate === $phone) {
+                continue;
+            }
+            $altPhones[] = [
+                'phone' => $candidate,
+                'is_whatsapp' => !empty($alt['is_whatsapp']) ? 1 : 0,
+            ];
+            if (count($altPhones) >= 5) {
                 break;
             }
         }
     }
 
-    $notesParts = [];
-    $displayName = trim((string) ($extra['display_name'] ?? ''));
-    if ($displayName !== '' && strcasecmp($displayName, $publisherName) !== 0) {
-        $notesParts[] = 'Display name: ' . $displayName;
-    }
-    $website = trim((string) ($extra['website'] ?? ''));
-    if ($website !== '') {
-        $notesParts[] = 'Website: ' . $website;
+    $altEmails = [];
+    $rawEmails = $extra['alt_emails'] ?? [];
+    if (is_array($rawEmails)) {
+        foreach ($rawEmails as $alt) {
+            if (!is_array($alt)) {
+                continue;
+            }
+            $email = trim((string) ($alt['email'] ?? ''));
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
+            $altEmails[] = [
+                'email' => $email,
+                'is_primary' => !empty($alt['is_primary']) ? 1 : 0,
+            ];
+            if (count($altEmails) >= 5) {
+                break;
+            }
+        }
     }
 
-    return [
+    $payload = [
         'addVendorName' => $publisherName,
         'addContactPerson' => $contactName,
+        'website' => trim((string) ($extra['website'] ?? '')),
         'addEmail' => trim((string) ($extra['publisher_email'] ?? '')),
         'addCountryCode' => $countryCode,
         'addPhone' => $phone,
-        'addAltPhone' => $altPhone,
         'addGstNumber' => trim((string) ($extra['gst_number'] ?? '')),
         'addPanNumber' => trim((string) ($extra['pan_number'] ?? '')),
         'addAddress' => trim((string) ($extra['address'] ?? '')),
@@ -89,7 +107,7 @@ function build_vendor_add_payload_from_publisher(string $publisherName, array $e
         'addCountry' => trim((string) ($extra['country'] ?? '')) !== '' ? trim((string) $extra['country']) : 'India',
         'addPostalCode' => trim((string) ($extra['postal_code'] ?? '')),
         'addRating' => '',
-        'addNotes' => implode("\n", $notesParts),
+        'addNotes' => '',
         'addStatus' => $isActive === 1 ? 'active' : 'inactive',
         'groupname' => ['book'],
         'addWebpage' => (string) ($extra['webpage'] ?? '0') === '1' ? '1' : '0',
@@ -98,6 +116,21 @@ function build_vendor_add_payload_from_publisher(string $publisherName, array $e
         'addTeam' => 0,
         'addTeamMember' => 0,
     ];
+
+    if (!empty($extra['publisher_email_is_primary'])) {
+        $payload['vendor_email_is_primary'] = '1';
+    }
+    if (!empty($extra['publisher_phone_is_whatsapp'])) {
+        $payload['vendor_phone_is_whatsapp'] = '1';
+    }
+    if ($altPhones !== []) {
+        $payload['alt_phones'] = $altPhones;
+    }
+    if ($altEmails !== []) {
+        $payload['alt_emails'] = $altEmails;
+    }
+
+    return $payload;
 }
 
 /**

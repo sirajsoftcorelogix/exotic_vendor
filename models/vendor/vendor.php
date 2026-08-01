@@ -51,7 +51,12 @@ class vendor
         $stmt->bind_param('i', $id);
         $stmt->execute();
         $result = $stmt->get_result();
-        return $result->fetch_assoc();
+        $row = $result->fetch_assoc();
+        if ($row) {
+            $this->attachContactsToVendor($row);
+        }
+
+        return $row;
     }
 
     public function getVendorByVendorId($vendorId)
@@ -254,11 +259,378 @@ class vendor
         return $brokerId;
     }
 
+    private const MAX_ALT_PHONES = 5;
+    private const MAX_ALT_EMAILS = 5;
+
     private function parseBrokerIdFromData(array $data): ?int
     {
         $raw = trim((string) ($data['broker_id'] ?? ''));
 
         return $raw === '' ? null : max(0, (int) $raw);
+    }
+
+    /**
+     * @return array<int, array{phone:string,is_whatsapp:int}>
+     */
+    public function parseAlternatePhonesFromPost(array $data): array
+    {
+        $rows = [];
+        $raw = $data['alt_phones'] ?? [];
+        if (!is_array($raw)) {
+            return $rows;
+        }
+
+        foreach ($raw as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $phone = preg_replace('/\D+/', '', trim((string)($item['phone'] ?? '')));
+            if ($phone === '') {
+                continue;
+            }
+            if (strlen($phone) > 10) {
+                $phone = substr($phone, 0, 10);
+            }
+            $rows[] = [
+                'phone' => $phone,
+                'is_whatsapp' => !empty($item['is_whatsapp']) ? 1 : 0,
+            ];
+            if (count($rows) >= self::MAX_ALT_PHONES) {
+                break;
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return array<int, array{email:string,is_primary:int}>
+     */
+    public function parseAlternateEmailsFromPost(array $data): array
+    {
+        $rows = [];
+        $raw = $data['alt_emails'] ?? [];
+        if (!is_array($raw)) {
+            return $rows;
+        }
+
+        foreach ($raw as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $email = trim((string)($item['email'] ?? ''));
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
+            $rows[] = [
+                'email' => $email,
+                'is_primary' => !empty($item['is_primary']) ? 1 : 0,
+            ];
+            if (count($rows) >= self::MAX_ALT_EMAILS) {
+                break;
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function normalizeVendorContactFields(array $data, bool $isEdit): array
+    {
+        $webpageKey = $isEdit ? 'editWebpage' : 'addWebpage';
+
+        return [
+            'website' => trim((string)($data['website'] ?? '')),
+            'vendor_email_is_primary' => !empty($data['vendor_email_is_primary']) ? 1 : 0,
+            'vendor_phone_is_whatsapp' => !empty($data['vendor_phone_is_whatsapp']) ? 1 : 0,
+            'webpage' => (isset($data[$webpageKey]) && (string)$data[$webpageKey] === '1') ? 1 : 0,
+            'alt_phones' => $this->parseAlternatePhonesFromPost($data),
+            'alt_emails' => $this->parseAlternateEmailsFromPost($data),
+        ];
+    }
+
+    /**
+     * @return array<int, array{phone:string,is_whatsapp:int}>
+     */
+    public function getPhonesByVendorId(int $vendorId): array
+    {
+        if ($vendorId <= 0) {
+            return [];
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT phone, is_whatsapp FROM vendor_phones WHERE vendor_id = ? ORDER BY sort_order ASC, id ASC'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $vendorId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = [];
+        while ($result && ($row = $result->fetch_assoc())) {
+            $rows[] = [
+                'phone' => (string)($row['phone'] ?? ''),
+                'is_whatsapp' => (int)($row['is_whatsapp'] ?? 0),
+            ];
+        }
+        $stmt->close();
+
+        return $rows;
+    }
+
+    /**
+     * @return array<int, array{email:string,is_primary:int}>
+     */
+    public function getEmailsByVendorId(int $vendorId): array
+    {
+        if ($vendorId <= 0) {
+            return [];
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT email, is_primary FROM vendor_emails WHERE vendor_id = ? ORDER BY sort_order ASC, id ASC'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $vendorId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = [];
+        while ($result && ($row = $result->fetch_assoc())) {
+            $rows[] = [
+                'email' => (string)($row['email'] ?? ''),
+                'is_primary' => (int)($row['is_primary'] ?? 0),
+            ];
+        }
+        $stmt->close();
+
+        return $rows;
+    }
+
+    private function attachContactsToVendor(array &$vendor): void
+    {
+        $vendorId = (int)($vendor['id'] ?? 0);
+        if ($vendorId <= 0) {
+            $vendor['alt_phones'] = [];
+            $vendor['alt_emails'] = [];
+
+            return;
+        }
+
+        $vendor['alt_phones'] = $this->getPhonesByVendorId($vendorId);
+        $vendor['alt_emails'] = $this->getEmailsByVendorId($vendorId);
+    }
+
+    /**
+     * @param array<int, array{phone:string,is_whatsapp:int}> $phones
+     * @param array<int, array{email:string,is_primary:int}> $emails
+     */
+    private function replaceVendorContacts(int $vendorId, array $phones, array $emails): ?array
+    {
+        if ($vendorId <= 0) {
+            return ['success' => false, 'message' => 'Invalid vendor id for contacts.'];
+        }
+
+        $deletePhones = $this->conn->prepare('DELETE FROM vendor_phones WHERE vendor_id = ?');
+        $deleteEmails = $this->conn->prepare('DELETE FROM vendor_emails WHERE vendor_id = ?');
+        if (!$deletePhones || !$deleteEmails) {
+            return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+        }
+
+        $deletePhones->bind_param('i', $vendorId);
+        $deleteEmails->bind_param('i', $vendorId);
+        if (!$deletePhones->execute() || !$deleteEmails->execute()) {
+            $error = $deletePhones->error ?: $deleteEmails->error;
+            $deletePhones->close();
+            $deleteEmails->close();
+
+            return ['success' => false, 'message' => 'Could not update vendor contacts: ' . $error];
+        }
+        $deletePhones->close();
+        $deleteEmails->close();
+
+        if ($phones !== []) {
+            $insertPhone = $this->conn->prepare(
+                'INSERT INTO vendor_phones (vendor_id, phone, is_whatsapp, sort_order) VALUES (?, ?, ?, ?)'
+            );
+            if (!$insertPhone) {
+                return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+            }
+            foreach ($phones as $index => $row) {
+                $phone = $row['phone'];
+                $isWhatsapp = (int)$row['is_whatsapp'];
+                $sortOrder = $index;
+                $insertPhone->bind_param('isii', $vendorId, $phone, $isWhatsapp, $sortOrder);
+                if (!$insertPhone->execute()) {
+                    $error = $insertPhone->error;
+                    $insertPhone->close();
+
+                    return ['success' => false, 'message' => 'Could not save alternate phone: ' . $error];
+                }
+            }
+            $insertPhone->close();
+        }
+
+        if ($emails !== []) {
+            $insertEmail = $this->conn->prepare(
+                'INSERT INTO vendor_emails (vendor_id, email, is_primary, sort_order) VALUES (?, ?, ?, ?)'
+            );
+            if (!$insertEmail) {
+                return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
+            }
+            foreach ($emails as $index => $row) {
+                $email = $row['email'];
+                $isPrimary = (int)$row['is_primary'];
+                $sortOrder = $index;
+                $insertEmail->bind_param('isii', $vendorId, $email, $isPrimary, $sortOrder);
+                if (!$insertEmail->execute()) {
+                    $error = $insertEmail->error;
+                    $insertEmail->close();
+
+                    return ['success' => false, 'message' => 'Could not save alternate email: ' . $error];
+                }
+            }
+            $insertEmail->close();
+        }
+
+        return null;
+    }
+
+    private function contactPhoneExistsGlobally(string $phone, ?int $excludeVendorId = null): bool
+    {
+        $phone = trim($phone);
+        if ($phone === '') {
+            return false;
+        }
+
+        if ($this->vendorFieldExists('vendor_phone', $phone, $excludeVendorId)) {
+            return true;
+        }
+
+        $sql = 'SELECT vp.id FROM vendor_phones vp INNER JOIN vp_vendors v ON v.id = vp.vendor_id WHERE BINARY vp.phone = ?';
+        if ($excludeVendorId !== null && $excludeVendorId > 0) {
+            $sql .= ' AND v.id != ? LIMIT 1';
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) {
+                return false;
+            }
+            $stmt->bind_param('si', $phone, $excludeVendorId);
+        } else {
+            $sql .= ' LIMIT 1';
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) {
+                return false;
+            }
+            $stmt->bind_param('s', $phone);
+        }
+        $stmt->execute();
+        $stmt->store_result();
+        $exists = $stmt->num_rows > 0;
+        $stmt->close();
+
+        return $exists;
+    }
+
+    private function contactEmailExistsGlobally(string $email, ?int $excludeVendorId = null): bool
+    {
+        $email = strtolower(trim($email));
+        if ($email === '') {
+            return false;
+        }
+
+        if ($this->vendorFieldExists('vendor_email', $email, $excludeVendorId)) {
+            return true;
+        }
+
+        $sql = 'SELECT ve.id FROM vendor_emails ve INNER JOIN vp_vendors v ON v.id = ve.vendor_id WHERE LOWER(TRIM(ve.email)) = LOWER(TRIM(?))';
+        if ($excludeVendorId !== null && $excludeVendorId > 0) {
+            $sql .= ' AND v.id != ? LIMIT 1';
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) {
+                return false;
+            }
+            $stmt->bind_param('si', $email, $excludeVendorId);
+        } else {
+            $sql .= ' LIMIT 1';
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) {
+                return false;
+            }
+            $stmt->bind_param('s', $email);
+        }
+        $stmt->execute();
+        $stmt->store_result();
+        $exists = $stmt->num_rows > 0;
+        $stmt->close();
+
+        return $exists;
+    }
+
+    /**
+     * @param array<string, mixed> $contactFields
+     * @param string|null $primaryPhone
+     * @param string|null $primaryEmail
+     */
+    private function validateVendorContacts(array $contactFields, ?string $primaryPhone, ?string $primaryEmail, ?int $excludeVendorId = null): ?array
+    {
+        $phones = [];
+        $primaryPhone = preg_replace('/\D+/', '', trim((string)$primaryPhone));
+        if ($primaryPhone !== '') {
+            if (strlen($primaryPhone) > 10) {
+                $primaryPhone = substr($primaryPhone, 0, 10);
+            }
+            $phones[] = $primaryPhone;
+        }
+        foreach ($contactFields['alt_phones'] ?? [] as $row) {
+            $phones[] = (string)($row['phone'] ?? '');
+        }
+
+        $normalizedPhones = array_values(array_filter($phones, static fn($value) => trim((string)$value) !== ''));
+        if (count($normalizedPhones) !== count(array_unique($normalizedPhones))) {
+            return ['success' => false, 'message' => 'Duplicate phone numbers are not allowed for the same vendor.'];
+        }
+        foreach ($normalizedPhones as $phone) {
+            if ($this->contactPhoneExistsGlobally($phone, $excludeVendorId)) {
+                return ['success' => false, 'message' => 'Phone number already exists. Please use a different phone number.'];
+            }
+        }
+
+        $emails = [];
+        $primaryEmail = trim((string)$primaryEmail);
+        if ($primaryEmail !== '') {
+            if (!filter_var($primaryEmail, FILTER_VALIDATE_EMAIL)) {
+                return ['success' => false, 'message' => 'Primary email address is invalid.'];
+            }
+            $emails[] = strtolower($primaryEmail);
+        }
+        foreach ($contactFields['alt_emails'] ?? [] as $row) {
+            $emails[] = strtolower(trim((string)($row['email'] ?? '')));
+        }
+
+        $normalizedEmails = array_values(array_filter($emails, static fn($value) => trim((string)$value) !== ''));
+        if (count($normalizedEmails) !== count(array_unique($normalizedEmails))) {
+            return ['success' => false, 'message' => 'Duplicate email addresses are not allowed for the same vendor.'];
+        }
+        foreach ($normalizedEmails as $email) {
+            if ($this->contactEmailExistsGlobally($email, $excludeVendorId)) {
+                return ['success' => false, 'message' => 'Email already exists. Please use a different email.'];
+            }
+        }
+
+        return null;
+    }
+
+    private function legacyAltPhoneFromContacts(array $altPhones): string
+    {
+        if ($altPhones === []) {
+            return '';
+        }
+
+        return (string)($altPhones[0]['phone'] ?? '');
     }
 
     private function validateBrokerId(?int $brokerId): ?array
@@ -312,6 +684,16 @@ class vendor
             return $brokerError;
         }
         $brokerId = $this->normalizeBrokerId($this->parseBrokerIdFromData($data));
+        $contactFields = $this->normalizeVendorContactFields($data, false);
+
+        $contactError = $this->validateVendorContacts(
+            $contactFields,
+            isset($data['addPhone']) ? (string) $data['addPhone'] : null,
+            isset($data['addEmail']) ? (string) $data['addEmail'] : null
+        );
+        if ($contactError !== null) {
+            return $contactError;
+        }
 
         $vendorCode = generateVendorCode($this->conn);
         $stockReplenishmentMonths = trim((string)($data['stock_replenishment_months'] ?? '')) === ''
@@ -321,17 +703,28 @@ class vendor
             ? 0.0
             : max(0.0, (float)$data['discount']);
 
-        $sql = "INSERT INTO vp_vendors (vendor_code, vendor_name, contact_name, vendor_email, country_code, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, agent_id, is_active, groupname, stock_replenishment_months, discount, broker_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $legacyAltPhone = $this->legacyAltPhoneFromContacts($contactFields['alt_phones']);
+        $webpage = (int)$contactFields['webpage'];
+        $vendorEmailIsPrimary = (int)$contactFields['vendor_email_is_primary'];
+        $vendorPhoneIsWhatsapp = (int)$contactFields['vendor_phone_is_whatsapp'];
+        $website = $contactFields['website'];
+
+        $this->conn->begin_transaction();
+
+        $sql = "INSERT INTO vp_vendors (vendor_code, vendor_name, website, contact_name, vendor_email, vendor_email_is_primary, country_code, vendor_phone, vendor_phone_is_whatsapp, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, webpage, rating, notes, user_id, team_id, agent_id, is_active, groupname, stock_replenishment_months, discount, broker_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param(
-            'ssssssssssssssssiiissidi',
+            'sssssisssisssssssissiiissidi',
             $vendorCode,
             $data['addVendorName'],
+            $website,
             $data['addContactPerson'],
             $data['addEmail'],
+            $vendorEmailIsPrimary,
             $data['addCountryCode'],
             $data['addPhone'],
-            $data['addAltPhone'],
+            $vendorPhoneIsWhatsapp,
+            $legacyAltPhone,
             $data['addGstNumber'],
             $data['addPanNumber'],
             $data['addAddress'],
@@ -339,6 +732,7 @@ class vendor
             $data['addState'],
             $data['addCountry'],
             $data['addPostalCode'],
+            $webpage,
             $data['addRating'],
             $data['addNotes'],
             $_SESSION["user"]["id"],
@@ -350,25 +744,40 @@ class vendor
             $discount,
             $brokerId
         );
-        if ($stmt->execute()) {
-            // Get the last inserted vendor id
-            $vendor_id = $this->conn->insert_id;
-            $cat_status = $tm_status = '';
-            // Add vendor categories if provided
-            if (!empty($data['addVendorCategory']) && is_array($data['addVendorCategory'])) {
-                $cat_status = $this->addVendorCategory($vendor_id, $data['addVendorCategory']);
-            }
-            // Add vendor teams
-            if (!empty($data['addTeam']) && is_array($data['addTeam'])) {
-                $tm_status = $this->addVendorTeams($vendor_id, $data['addTeam']);
-            }
+        if (!$stmt->execute()) {
+            $this->conn->rollback();
 
-            return ['success' => true, 'message' => 'Vendor added successfully.', 'category_status' => $cat_status, 'team_status' => $tm_status, 'inserted_id' => $vendor_id];
+            return [
+                'success' => false,
+                'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
+            ];
         }
-        return [
-            'success' => false,
-            'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
-        ];
+
+        $vendor_id = (int) $this->conn->insert_id;
+        $stmt->close();
+
+        $contactSaveError = $this->replaceVendorContacts(
+            $vendor_id,
+            $contactFields['alt_phones'],
+            $contactFields['alt_emails']
+        );
+        if ($contactSaveError !== null) {
+            $this->conn->rollback();
+
+            return $contactSaveError;
+        }
+
+        $cat_status = $tm_status = '';
+        if (!empty($data['addVendorCategory']) && is_array($data['addVendorCategory'])) {
+            $cat_status = $this->addVendorCategory($vendor_id, $data['addVendorCategory']);
+        }
+        if (!empty($data['addTeam']) && is_array($data['addTeam'])) {
+            $tm_status = $this->addVendorTeams($vendor_id, $data['addTeam']);
+        }
+
+        $this->conn->commit();
+
+        return ['success' => true, 'message' => 'Vendor added successfully.', 'category_status' => $cat_status, 'team_status' => $tm_status, 'inserted_id' => $vendor_id];
     }
     public function updateVendor($id, $data)
     {
@@ -401,6 +810,17 @@ class vendor
             return $brokerError;
         }
         $brokerId = $this->normalizeBrokerId($this->parseBrokerIdFromData($data));
+        $contactFields = $this->normalizeVendorContactFields($data, true);
+
+        $contactError = $this->validateVendorContacts(
+            $contactFields,
+            isset($data['editPhone']) ? (string) $data['editPhone'] : null,
+            isset($data['editEmail']) ? (string) $data['editEmail'] : null,
+            $id
+        );
+        if ($contactError !== null) {
+            return $contactError;
+        }
 
         $groupnameValue = '';
         if (isset($data['editGroupname'])) {
@@ -420,16 +840,27 @@ class vendor
             ? 0.0
             : max(0.0, (float)$data['discount']);
 
-        $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, country_code = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, agent_id = ?, is_active = ?, groupname = ?, stock_replenishment_months = ?, discount = ?, broker_id = ? WHERE id = ?";
+        $legacyAltPhone = $this->legacyAltPhoneFromContacts($contactFields['alt_phones']);
+        $webpage = (int)$contactFields['webpage'];
+        $vendorEmailIsPrimary = (int)$contactFields['vendor_email_is_primary'];
+        $vendorPhoneIsWhatsapp = (int)$contactFields['vendor_phone_is_whatsapp'];
+        $website = $contactFields['website'];
+
+        $this->conn->begin_transaction();
+
+        $sql = "UPDATE vp_vendors SET vendor_name = ?, website = ?, contact_name = ?, vendor_email = ?, vendor_email_is_primary = ?, country_code = ?, vendor_phone = ?, vendor_phone_is_whatsapp = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, agent_id = ?, is_active = ?, groupname = ?, stock_replenishment_months = ?, discount = ?, broker_id = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param(
-            'sssssssssssssssiiissiidi',
+            'ssssississsssssissiiissiidi',
             $data['editVendorName'],
+            $website,
             $data['editContactPerson'],
             $data['editEmail'],
+            $vendorEmailIsPrimary,
             $data['editCountryCode'],
             $data['editPhone'],
-            $data['editAltPhone'],
+            $vendorPhoneIsWhatsapp,
+            $legacyAltPhone,
             $data['editGstNumber'],
             $data['editPanNumber'],
             $data['editAddress'],
@@ -437,6 +868,7 @@ class vendor
             $data['editState'],
             $data['editCountry'],
             $data['editPostalCode'],
+            $webpage,
             $data['editRating'],
             $data['editNotes'],
             $_SESSION["user"]["id"],
@@ -449,24 +881,39 @@ class vendor
             $brokerId,
             $id
         );
-        if ($stmt->execute()) {
-            // Get the last inserted vendor id
-            $vendor_id = $id;
-            $cat_status = $tm_status = '';
-            // Add vendor categories if provided
-            if (!empty($data['addVendorCategory']) && is_array($data['addVendorCategory'])) {
-                $cat_status = $this->addVendorCategory($vendor_id, $data['addVendorCategory']);
-            }
-            // Add vendor teams
-            if (!empty($data['editTeam']) && is_array($data['editTeam'])) {
-                $tm_status = $this->addVendorTeams($vendor_id, $data['editTeam']);
-            }
-            return ['success' => true, 'message' => 'Vendor updated successfully.', 'cat_status' => $cat_status, 'team_status' => $tm_status];
+        if (!$stmt->execute()) {
+            $this->conn->rollback();
+
+            return [
+                'success' => false,
+                'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
+            ];
         }
-        return [
-            'success' => false,
-            'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
-        ];
+        $stmt->close();
+
+        $contactSaveError = $this->replaceVendorContacts(
+            $id,
+            $contactFields['alt_phones'],
+            $contactFields['alt_emails']
+        );
+        if ($contactSaveError !== null) {
+            $this->conn->rollback();
+
+            return $contactSaveError;
+        }
+
+        $vendor_id = $id;
+        $cat_status = $tm_status = '';
+        if (!empty($data['addVendorCategory']) && is_array($data['addVendorCategory'])) {
+            $cat_status = $this->addVendorCategory($vendor_id, $data['addVendorCategory']);
+        }
+        if (!empty($data['editTeam']) && is_array($data['editTeam'])) {
+            $tm_status = $this->addVendorTeams($vendor_id, $data['editTeam']);
+        }
+
+        $this->conn->commit();
+
+        return ['success' => true, 'message' => 'Vendor updated successfully.', 'cat_status' => $cat_status, 'team_status' => $tm_status];
     }
     public function updateVendorRemoteId($vendorId, $remoteVendorId)
     {
@@ -490,6 +937,16 @@ class vendor
 
         // Delete Bank details of the Vendor
         $sql = "DELETE FROM vendor_bank_details WHERE vendor_id = ?";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+
+        $sql = "DELETE FROM vendor_phones WHERE vendor_id = ?";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+
+        $sql = "DELETE FROM vendor_emails WHERE vendor_id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('i', $id);
         $stmt->execute();
