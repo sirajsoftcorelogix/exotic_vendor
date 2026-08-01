@@ -140,9 +140,6 @@ switch ($page) {
             case 'checkName':
                 $controller->checkName();
                 break;
-            case 'searchBrokers':
-                $controller->searchBrokers();
-                break;
             case 'syncFromAdmin':
                 $controller->syncFromAdmin();
                 break;
