@@ -307,6 +307,14 @@ $queryBase = [
                         <span class="block text-xs text-gray-500 mt-0.5">Maps to the <code class="text-[11px] bg-white/80 px-1 rounded">webpage</code> parameter (0 or 1) on the vendor API.</span>
                     </span>
                 </label>
+                <label id="publisher_also_create_vendor_wrap" class="flex items-start gap-3 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2.5 cursor-pointer">
+                    <input type="checkbox" name="also_create_vendor" id="publisher_also_create_vendor" value="1"
+                        class="mt-0.5 rounded border-gray-300 text-sky-600 focus:ring-sky-500">
+                    <span>
+                        <span class="block text-sm font-medium text-gray-800">Also create vendor</span>
+                        <span class="block text-xs text-gray-500 mt-0.5">Creates a matching <strong class="font-semibold">book</strong> vendor in Vendor Master with the same contact, address, and tax details. Primary phone is required.</span>
+                    </span>
+                </label>
             </section>
 
             <section class="rounded-xl border border-gray-200/90 bg-gradient-to-b from-gray-50/70 to-white p-4 sm:p-5 space-y-4">
@@ -783,6 +791,14 @@ function openPublisherModal(publisher) {
     const publisherNameMsg = document.getElementById('publisherNameMsg');
     if (publisherNameMsg) publisherNameMsg.textContent = '';
     document.getElementById('publisherModalTitle').textContent = publisher.id ? 'Edit Publisher' : 'Add Publisher';
+    const alsoCreateWrap = document.getElementById('publisher_also_create_vendor_wrap');
+    const alsoCreateCheckbox = document.getElementById('publisher_also_create_vendor');
+    if (alsoCreateWrap) {
+        alsoCreateWrap.classList.toggle('hidden', !!publisher.id);
+    }
+    if (alsoCreateCheckbox) {
+        alsoCreateCheckbox.checked = false;
+    }
     document.getElementById('publisher_id').value = publisher.id || '';
     document.getElementById('publisher_name').value = publisher.publishers || '';
     document.getElementById('publisher_display_name').value = publisher.display_name || '';
@@ -868,6 +884,15 @@ document.getElementById('publisherForm')?.addEventListener('submit', function (e
         showPublisherAlert('Publisher name already exists', false);
         return;
     }
+    const alsoCreateVendor = document.getElementById('publisher_also_create_vendor');
+    const isAddPublisher = !String(document.getElementById('publisher_id')?.value || '').trim();
+    if (isAddPublisher && alsoCreateVendor && alsoCreateVendor.checked) {
+        const phone = String(document.getElementById('publisher_phone')?.value || '').replace(/\D+/g, '');
+        if (phone.length < 10) {
+            showPublisherAlert('Primary phone (10 digits) is required when "Also create vendor" is checked.', false);
+            return;
+        }
+    }
     const form = new FormData(this);
     if (!document.getElementById('publisher_webpage').checked) {
         form.set('webpage', '0');
@@ -885,7 +910,10 @@ document.getElementById('publisherForm')?.addEventListener('submit', function (e
         btn.textContent = 'Saving...';
     }
     postPublisherAction('save', form).then(function (res) {
-        showPublisherAlert(res.message || (res.success ? 'Publisher saved.' : 'Could not save publisher.'), !!res.success);
+        showPublisherAlert(
+            res.message || (res.success ? 'Publisher saved.' : 'Could not save publisher.'),
+            !!res.success && !res.vendor_create_warning
+        );
         if (res.success) {
             closePublisherModal();
             setTimeout(function () { window.location.reload(); }, 700);
