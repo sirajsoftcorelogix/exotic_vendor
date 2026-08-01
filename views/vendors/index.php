@@ -3,6 +3,7 @@ $vfInput = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-s
 $vfLabel = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600';
 $vfSection = 'rounded-xl border border-gray-200/90 bg-gradient-to-b from-gray-50/70 to-white p-4 sm:p-5 space-y-4';
 $vfHint = 'mt-1 text-xs text-gray-500';
+$vfCard = 'rounded-lg border border-gray-200 bg-white p-3 space-y-2';
 $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
@@ -374,7 +375,7 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                 </span>
                                 <div>
                                     <h3 class="text-sm font-bold text-gray-900">Vendor profile</h3>
-                                    <p class="text-xs text-gray-500 mt-0.5">Vendor identity, web presence, and assignment.</p>
+                                    <p class="text-xs text-gray-500 mt-0.5">Identity, status, and web presence.</p>
                                 </div>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -391,6 +392,22 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                         <option value="blacklisted">Blacklisted</option>
                                     </select>
                                 </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Broker</label>
+                                    <select name="broker_id" id="add_broker_id" class="<?= $vfInput ?>">
+                                        <option value="">Select broker...</option>
+                                    </select>
+                                    <p class="<?= $vfHint ?>">Optional. From Broker Master.</p>
+                                </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Rating</label>
+                                    <select class="<?= $vfInput ?>" name="addRating" id="addRating">
+                                        <option value="">Select rating (optional)</option>
+                                        <?php foreach ($vendorRatingOptions as $ratingOption): ?>
+                                            <option value="<?php echo htmlspecialchars($ratingOption, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($ratingOption, ENT_QUOTES, 'UTF-8'); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
                                 <div class="md:col-span-2">
                                     <label class="<?= $vfLabel ?>">Website</label>
                                     <div class="relative">
@@ -399,13 +416,6 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                         </span>
                                         <input type="url" class="<?= $vfInput ?> py-2.5 pl-9 pr-3" name="website" id="addWebsite" placeholder="https://example.com" />
                                     </div>
-                                </div>
-                                <div>
-                                    <label class="<?= $vfLabel ?>">Broker</label>
-                                    <select name="broker_id" id="add_broker_id" class="<?= $vfInput ?>">
-                                        <option value="">Select broker...</option>
-                                    </select>
-                                    <p class="<?= $vfHint ?>">Search active brokers from Broker Master.</p>
                                 </div>
                             </div>
                             <label class="flex items-start gap-3 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2.5 cursor-pointer">
@@ -416,6 +426,54 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                     <span class="block text-xs text-gray-500 mt-0.5">Maps to the <code class="text-[11px] bg-white/80 px-1 rounded">webpage</code> parameter on the vendor API.</span>
                                 </span>
                             </label>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                                    <i class="fas fa-handshake text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Commercial terms</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Default stock and discount settings.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Stock replenishment (months)</label>
+                                    <input type="number" class="<?= $vfInput ?>" name="stock_replenishment_months" id="add_stock_replenishment_months" min="0" step="1" placeholder="e.g. 3" />
+                                    <p class="<?= $vfHint ?>">Leave empty or 0 if not set.</p>
+                                </div>
+                                <div id="addBookDiscountField" class="hidden">
+                                    <label class="<?= $vfLabel ?>">Discount (%)</label>
+                                    <input type="number" class="<?= $vfInput ?>" name="discount" id="add_discount" min="0" step="0.01" placeholder="e.g. 10" />
+                                    <p class="<?= $vfHint ?>">For book vendors only.</p>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-700">
+                                    <i class="fas fa-layer-group text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Product groups</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Required for Exotic India API sync.</p>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="<?= $vfLabel ?>">Group name <span class="text-red-500 normal-case">*</span></label>
+                                <div id="groupname" class="mt-1 grid grid-cols-2 sm:grid-cols-3 gap-2 rounded-lg border border-amber-200/80 bg-amber-50/40 p-3 max-h-36 overflow-y-auto">
+                                    <?php foreach ($groupnameList as $groupSlug): ?>
+                                        <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 vendor-group-checkbox" name="groupname[]" value="<?php echo htmlspecialchars($groupSlug); ?>">
+                                            <span><?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupSlug, MB_CASE_TITLE, 'UTF-8') : ucwords($groupSlug)); ?></span>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                                <span id="addGroupnameMsg" class="text-sm text-red-500"></span>
+                            </div>
                         </section>
 
                         <section class="<?= $vfSection ?>">
@@ -433,7 +491,7 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                     <label class="<?= $vfLabel ?>">Contact person <span class="text-red-500 normal-case">*</span></label>
                                     <input type="text" class="<?= $vfInput ?>" required name="addContactPerson" id="addContactPerson" placeholder="Primary contact name" />
                                 </div>
-                                <div class="md:col-span-2 rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+                                <div class="<?= $vfCard ?>">
                                     <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Primary email</label>
                                     <input type="email" class="<?= $vfInput ?>" name="addEmail" id="addEmail" placeholder="name@vendor.com" />
                                     <span id="addEmailMsg" class="text-sm text-red-500"></span>
@@ -442,20 +500,19 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                         <span>Mark as primary email</span>
                                     </label>
                                 </div>
-                                <div>
-                                    <label class="<?= $vfLabel ?>">Country code <span class="text-red-500 normal-case">*</span></label>
-                                    <select class="<?= $vfInput ?>" name="addCountryCode" id="addCountryCode" required>
-                                        <option value="" disabled>Select code</option>
-                                        <?php foreach ($countryList as $cl): ?>
-                                            <option value="<?php echo $cl['phone_code']; ?>" <?php if ($cl['name'] === 'India') { echo 'selected'; } ?>>
-                                                <?php echo $cl['name'] . ' (+' . $cl['phone_code'] . ')'; ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div class="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+                                <div class="<?= $vfCard ?>">
                                     <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Primary phone <span class="text-red-500 normal-case">*</span></label>
-                                    <input type="text" class="<?= $vfInput ?>" required name="addPhone" id="addPhone" oninput="limitToTenDigits(this)" placeholder="10-digit mobile" />
+                                    <div class="flex flex-col sm:flex-row gap-2">
+                                        <select class="<?= $vfInput ?> sm:max-w-[210px]" name="addCountryCode" id="addCountryCode" required>
+                                            <option value="" disabled>Select code</option>
+                                            <?php foreach ($countryList as $cl): ?>
+                                                <option value="<?php echo $cl['phone_code']; ?>" <?php if ($cl['name'] === 'India') { echo 'selected'; } ?>>
+                                                    <?php echo $cl['name'] . ' (+' . $cl['phone_code'] . ')'; ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <input type="text" class="<?= $vfInput ?> flex-1" required name="addPhone" id="addPhone" oninput="limitToTenDigits(this)" placeholder="10-digit mobile" />
+                                    </div>
                                     <span id="addPhoneMsg" class="text-sm text-red-500"></span>
                                     <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                                         <input type="checkbox" name="vendor_phone_is_whatsapp" id="add_vendor_phone_is_whatsapp" value="1" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
@@ -491,84 +548,12 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
 
                         <section class="<?= $vfSection ?>">
                             <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
-                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
-                                    <i class="fas fa-handshake text-sm" aria-hidden="true"></i>
-                                </span>
-                                <div>
-                                    <h3 class="text-sm font-bold text-gray-900">Commercial &amp; groups</h3>
-                                    <p class="text-xs text-gray-500 mt-0.5">Categories, product groups, and default terms.</p>
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label class="<?= $vfLabel ?>">Stock replenishment (months)</label>
-                                    <input type="number" class="<?= $vfInput ?>" name="stock_replenishment_months" id="add_stock_replenishment_months" min="0" step="1" placeholder="e.g. 3" />
-                                    <p class="<?= $vfHint ?>">Leave empty or 0 if not set.</p>
-                                </div>
-                                <div id="addBookDiscountField" class="hidden">
-                                    <label class="<?= $vfLabel ?>">Discount (%)</label>
-                                    <input type="number" class="<?= $vfInput ?>" name="discount" id="add_discount" min="0" step="0.01" placeholder="e.g. 10" />
-                                    <p class="<?= $vfHint ?>">For book vendors only.</p>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="<?= $vfLabel ?>">Group name <span class="text-red-500 normal-case">*</span></label>
-                                <div id="groupname" class="mt-1 grid grid-cols-2 gap-2 rounded-lg border border-amber-200/80 bg-amber-50/40 p-3 max-h-36 overflow-y-auto">
-                                    <?php foreach ($groupnameList as $groupSlug): ?>
-                                        <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 vendor-group-checkbox" name="groupname[]" value="<?php echo htmlspecialchars($groupSlug); ?>">
-                                            <span><?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupSlug, MB_CASE_TITLE, 'UTF-8') : ucwords($groupSlug)); ?></span>
-                                        </label>
-                                    <?php endforeach; ?>
-                                </div>
-                                <span id="addGroupnameMsg" class="text-sm text-red-500"></span>
-                                <p class="<?= $vfHint ?>">Required for Exotic India API sync.</p>
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label class="<?= $vfLabel ?>">Team</label>
-                                    <select class="<?= $vfInput ?> min-h-[7rem]" multiple name="addTeam[]" id="addTeam" onchange="fillTeamAgent(this.value, 'AddForm');">
-                                        <option value="" disabled>Select team</option>
-                                        <?php foreach ($teamList as $team): ?>
-                                            <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="<?= $vfLabel ?>">Agent</label>
-                                    <span id="addTeamMemberBlock">
-                                        <select class="<?= $vfInput ?>" name="addTeamMember" id="addTeamMember">
-                                            <option value="" disabled selected>Select team member</option>
-                                        </select>
-                                    </span>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="<?= $vfLabel ?>">Category</label>
-                                <select class="<?= $vfInput ?> min-h-[7rem]" multiple name="addVendorCategory[]" id="addVendorCategory">
-                                    <option value="" disabled>Select categories</option>
-                                    <?php foreach ($category[0] as $key => $value): ?>
-                                        <?php if ($value['parent_id'] == 0): ?>
-                                            <optgroup label="<?php echo $value['category_name']; ?>">
-                                                <?php foreach ($category[$value['id']] as $subKey => $subValue):
-                                                    if ($subValue['parent_id'] == $value['id']): ?>
-                                                        <option value="<?php echo $subValue['id']; ?>"><?php echo $subValue['category_name']; ?></option>
-                                                <?php endif; endforeach; ?>
-                                            </optgroup>
-                                        <?php endif; ?>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                        </section>
-
-                        <section class="<?= $vfSection ?>">
-                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
-                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
-                                    <i class="fas fa-map-marker-alt text-sm" aria-hidden="true"></i>
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
+                                    <i class="fas fa-location-dot text-sm" aria-hidden="true"></i>
                                 </span>
                                 <div>
                                     <h3 class="text-sm font-bold text-gray-900">Address</h3>
-                                    <p class="text-xs text-gray-500 mt-0.5">Location details for the vendor.</p>
+                                    <p class="text-xs text-gray-500 mt-0.5">Business or correspondence address.</p>
                                 </div>
                             </div>
                             <div class="space-y-4">
@@ -610,12 +595,12 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
 
                         <section class="<?= $vfSection ?>">
                             <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
-                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
                                     <i class="fas fa-file-invoice text-sm" aria-hidden="true"></i>
                                 </span>
                                 <div>
-                                    <h3 class="text-sm font-bold text-gray-900">Tax &amp; notes</h3>
-                                    <p class="text-xs text-gray-500 mt-0.5">GST/PAN and internal notes.</p>
+                                    <h3 class="text-sm font-bold text-gray-900">Tax &amp; compliance</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">GST and PAN for invoicing.</p>
                                 </div>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -627,19 +612,57 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                     <label class="<?= $vfLabel ?>">PAN number</label>
                                     <input type="text" class="<?= $vfInput ?>" name="addPanNumber" id="addPanNumber" />
                                 </div>
+                            </div>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+                                    <i class="fas fa-users text-sm" aria-hidden="true"></i>
+                                </span>
                                 <div>
-                                    <label class="<?= $vfLabel ?>">Rating</label>
-                                    <select class="<?= $vfInput ?>" name="addRating" id="addRating">
-                                        <option value="">Select rating (optional)</option>
-                                        <?php foreach ($vendorRatingOptions as $ratingOption): ?>
-                                            <option value="<?php echo htmlspecialchars($ratingOption, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($ratingOption, ENT_QUOTES, 'UTF-8'); ?></option>
+                                    <h3 class="text-sm font-bold text-gray-900">Assignment &amp; notes</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Internal team, categories, and notes.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Team</label>
+                                    <select class="<?= $vfInput ?> min-h-[7rem]" multiple name="addTeam[]" id="addTeam" onchange="fillTeamAgent(this.value, 'AddForm');">
+                                        <option value="" disabled>Select team</option>
+                                        <?php foreach ($teamList as $team): ?>
+                                            <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Agent</label>
+                                    <span id="addTeamMemberBlock">
+                                        <select class="<?= $vfInput ?>" name="addTeamMember" id="addTeamMember">
+                                            <option value="" disabled selected>Select team member</option>
+                                        </select>
+                                    </span>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="<?= $vfLabel ?>">Category</label>
+                                <select class="<?= $vfInput ?> min-h-[7rem]" multiple name="addVendorCategory[]" id="addVendorCategory">
+                                    <option value="" disabled>Select categories</option>
+                                    <?php foreach ($category[0] as $key => $value): ?>
+                                        <?php if ($value['parent_id'] == 0): ?>
+                                            <optgroup label="<?php echo $value['category_name']; ?>">
+                                                <?php foreach ($category[$value['id']] as $subKey => $subValue):
+                                                    if ($subValue['parent_id'] == $value['id']): ?>
+                                                        <option value="<?php echo $subValue['id']; ?>"><?php echo $subValue['category_name']; ?></option>
+                                                <?php endif; endforeach; ?>
+                                            </optgroup>
+                                        <?php endif; ?>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                             <div>
                                 <label class="<?= $vfLabel ?>">Notes</label>
-                                <textarea class="<?= $vfInput ?> min-h-[100px] resize-y" name="addNotes" id="addNotes" placeholder="Internal notes about this vendor"></textarea>
+                                <textarea class="<?= $vfInput ?> min-h-[88px] resize-y" name="addNotes" id="addNotes" placeholder="Internal notes about this vendor"></textarea>
                             </div>
                         </section>
 
@@ -675,7 +698,7 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                 </span>
                                 <div>
                                     <h3 class="text-sm font-bold text-gray-900">Vendor profile</h3>
-                                    <p class="text-xs text-gray-500 mt-0.5">Vendor identity, web presence, and assignment.</p>
+                                    <p class="text-xs text-gray-500 mt-0.5">Identity, status, and web presence.</p>
                                 </div>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -692,6 +715,22 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                         <option value="blacklisted">Blacklisted</option>
                                     </select>
                                 </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Broker</label>
+                                    <select name="broker_id" id="edit_broker_id" class="<?= $vfInput ?>">
+                                        <option value="">Select broker...</option>
+                                    </select>
+                                    <p class="<?= $vfHint ?>">Optional. From Broker Master.</p>
+                                </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Rating</label>
+                                    <select class="<?= $vfInput ?>" name="editRating" id="editRating">
+                                        <option value="">Select rating (optional)</option>
+                                        <?php foreach ($vendorRatingOptions as $ratingOption): ?>
+                                            <option value="<?php echo htmlspecialchars($ratingOption, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($ratingOption, ENT_QUOTES, 'UTF-8'); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
                                 <div class="md:col-span-2">
                                     <label class="<?= $vfLabel ?>">Website</label>
                                     <div class="relative">
@@ -700,13 +739,6 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                         </span>
                                         <input type="url" class="<?= $vfInput ?> py-2.5 pl-9 pr-3" name="website" id="editWebsite" placeholder="https://example.com" />
                                     </div>
-                                </div>
-                                <div>
-                                    <label class="<?= $vfLabel ?>">Broker</label>
-                                    <select name="broker_id" id="edit_broker_id" class="<?= $vfInput ?>">
-                                        <option value="">Select broker...</option>
-                                    </select>
-                                    <p class="<?= $vfHint ?>">Search active brokers from Broker Master.</p>
                                 </div>
                             </div>
                             <label class="flex items-start gap-3 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2.5 cursor-pointer">
@@ -717,6 +749,54 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                     <span class="block text-xs text-gray-500 mt-0.5">Maps to the <code class="text-[11px] bg-white/80 px-1 rounded">webpage</code> parameter on the vendor API.</span>
                                 </span>
                             </label>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                                    <i class="fas fa-handshake text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Commercial terms</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Default stock and discount settings.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Stock replenishment (months)</label>
+                                    <input type="number" class="<?= $vfInput ?>" name="stock_replenishment_months" id="edit_stock_replenishment_months" min="0" step="1" placeholder="e.g. 3" />
+                                    <p class="<?= $vfHint ?>">Leave empty or 0 if not set.</p>
+                                </div>
+                                <div id="editBookDiscountField" class="hidden">
+                                    <label class="<?= $vfLabel ?>">Discount (%)</label>
+                                    <input type="number" class="<?= $vfInput ?>" name="discount" id="edit_discount" min="0" step="0.01" placeholder="e.g. 10" />
+                                    <p class="<?= $vfHint ?>">For book vendors only.</p>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-700">
+                                    <i class="fas fa-layer-group text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Product groups</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Required for Exotic India API sync.</p>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="<?= $vfLabel ?>">Group name <span class="text-red-500 normal-case">*</span></label>
+                                <div id="editGroupname" class="mt-1 grid grid-cols-2 sm:grid-cols-3 gap-2 rounded-lg border border-amber-200/80 bg-amber-50/40 p-3 max-h-36 overflow-y-auto">
+                                    <?php foreach ($groupnameList as $groupSlug): ?>
+                                        <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 vendor-group-checkbox" name="editGroupname[]" value="<?php echo htmlspecialchars($groupSlug); ?>">
+                                            <span><?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupSlug, MB_CASE_TITLE, 'UTF-8') : ucwords($groupSlug)); ?></span>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                                <span id="editGroupnameMsg" class="text-sm text-red-500"></span>
+                            </div>
                         </section>
 
                         <section class="<?= $vfSection ?>">
@@ -734,7 +814,7 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                     <label class="<?= $vfLabel ?>">Contact person <span class="text-red-500 normal-case">*</span></label>
                                     <input type="text" class="<?= $vfInput ?>" required name="editContactPerson" id="editContactPerson" />
                                 </div>
-                                <div class="md:col-span-2 rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+                                <div class="<?= $vfCard ?>">
                                     <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Primary email</label>
                                     <input type="email" class="<?= $vfInput ?>" name="editEmail" id="editEmail" />
                                     <span id="editEmailMsg" class="text-sm text-red-500"></span>
@@ -743,20 +823,19 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                         <span>Mark as primary email</span>
                                     </label>
                                 </div>
-                                <div>
-                                    <label class="<?= $vfLabel ?>">Country code <span class="text-red-500 normal-case">*</span></label>
-                                    <select class="<?= $vfInput ?>" name="editCountryCode" id="editCountryCode" required>
-                                        <option value="" disabled>Select code</option>
-                                        <?php foreach ($countryList as $cl): ?>
-                                            <option value="<?php echo $cl['phone_code']; ?>">
-                                                <?php echo $cl['name'] . ' (+' . $cl['phone_code'] . ')'; ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div class="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+                                <div class="<?= $vfCard ?>">
                                     <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Primary phone <span class="text-red-500 normal-case">*</span></label>
-                                    <input type="text" class="<?= $vfInput ?>" required name="editPhone" id="editPhone" oninput="limitToTenDigits(this)" placeholder="10-digit mobile" />
+                                    <div class="flex flex-col sm:flex-row gap-2">
+                                        <select class="<?= $vfInput ?> sm:max-w-[210px]" name="editCountryCode" id="editCountryCode" required>
+                                            <option value="" disabled>Select code</option>
+                                            <?php foreach ($countryList as $cl): ?>
+                                                <option value="<?php echo $cl['phone_code']; ?>">
+                                                    <?php echo $cl['name'] . ' (+' . $cl['phone_code'] . ')'; ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <input type="text" class="<?= $vfInput ?> flex-1" required name="editPhone" id="editPhone" oninput="limitToTenDigits(this)" placeholder="10-digit mobile" />
+                                    </div>
                                     <span id="editPhoneMsg" class="text-sm text-red-500"></span>
                                     <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                                         <input type="checkbox" name="vendor_phone_is_whatsapp" id="edit_vendor_phone_is_whatsapp" value="1" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
@@ -792,89 +871,12 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
 
                         <section class="<?= $vfSection ?>">
                             <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
-                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
-                                    <i class="fas fa-handshake text-sm" aria-hidden="true"></i>
-                                </span>
-                                <div>
-                                    <h3 class="text-sm font-bold text-gray-900">Commercial &amp; groups</h3>
-                                    <p class="text-xs text-gray-500 mt-0.5">Categories, product groups, and default terms.</p>
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label class="<?= $vfLabel ?>">Stock replenishment (months)</label>
-                                    <input type="number" class="<?= $vfInput ?>" name="stock_replenishment_months" id="edit_stock_replenishment_months" min="0" step="1" placeholder="e.g. 3" />
-                                    <p class="<?= $vfHint ?>">Leave empty or 0 if not set.</p>
-                                </div>
-                                <div id="editBookDiscountField" class="hidden">
-                                    <label class="<?= $vfLabel ?>">Discount (%)</label>
-                                    <input type="number" class="<?= $vfInput ?>" name="discount" id="edit_discount" min="0" step="0.01" placeholder="e.g. 10" />
-                                    <p class="<?= $vfHint ?>">For book vendors only.</p>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="<?= $vfLabel ?>">Group name <span class="text-red-500 normal-case">*</span></label>
-                                <div id="editGroupname" class="mt-1 grid grid-cols-2 gap-2 rounded-lg border border-amber-200/80 bg-amber-50/40 p-3 max-h-36 overflow-y-auto">
-                                    <?php foreach ($groupnameList as $groupSlug): ?>
-                                        <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 vendor-group-checkbox" name="editGroupname[]" value="<?php echo htmlspecialchars($groupSlug); ?>">
-                                            <span><?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupSlug, MB_CASE_TITLE, 'UTF-8') : ucwords($groupSlug)); ?></span>
-                                        </label>
-                                    <?php endforeach; ?>
-                                </div>
-                                <span id="editGroupnameMsg" class="text-sm text-red-500"></span>
-                                <p class="<?= $vfHint ?>">Required for Exotic India API sync.</p>
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label class="<?= $vfLabel ?>">Team</label>
-                                    <select class="<?= $vfInput ?> min-h-[7rem]" multiple name="editTeam[]" id="editTeam" onchange="fillTeamAgent(this.value, 'EditForm');">
-                                        <option value="" disabled>Select team</option>
-                                        <?php foreach ($teamList as $team): ?>
-                                            <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="<?= $vfLabel ?>">Agent</label>
-                                    <span id="editTeamMemberBlock">
-                                        <select class="<?= $vfInput ?>" name="editTeamMember" id="editTeamMember">
-                                            <option value="" disabled selected>Select agent</option>
-                                        </select>
-                                    </span>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="<?= $vfLabel ?>">Category</label>
-                                <select class="<?= $vfInput ?> min-h-[7rem]" multiple name="addVendorCategory[]" id="editVendorCategory">
-                                    <option value="" disabled>Select categories</option>
-                                    <?php
-                                    if (isset($category[0]) && is_array($category[0])) {
-                                        foreach ($category[0] as $parent) {
-                                            $parentId = $parent['id'];
-                                            $parentName = $parent['category_name'];
-                                            echo '<optgroup label="' . htmlspecialchars($parentName) . '">';
-                                            if (isset($category[$parentId]) && is_array($category[$parentId])) {
-                                                foreach ($category[$parentId] as $child) {
-                                                    echo '<option value="' . (int) $child['id'] . '">' . htmlspecialchars($child['category_name']) . '</option>';
-                                                }
-                                            }
-                                            echo '</optgroup>';
-                                        }
-                                    }
-                                    ?>
-                                </select>
-                            </div>
-                        </section>
-
-                        <section class="<?= $vfSection ?>">
-                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
-                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
-                                    <i class="fas fa-map-marker-alt text-sm" aria-hidden="true"></i>
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
+                                    <i class="fas fa-location-dot text-sm" aria-hidden="true"></i>
                                 </span>
                                 <div>
                                     <h3 class="text-sm font-bold text-gray-900">Address</h3>
-                                    <p class="text-xs text-gray-500 mt-0.5">Location details for the vendor.</p>
+                                    <p class="text-xs text-gray-500 mt-0.5">Business or correspondence address.</p>
                                 </div>
                             </div>
                             <div class="space-y-4">
@@ -916,12 +918,12 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
 
                         <section class="<?= $vfSection ?>">
                             <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
-                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
                                     <i class="fas fa-file-invoice text-sm" aria-hidden="true"></i>
                                 </span>
                                 <div>
-                                    <h3 class="text-sm font-bold text-gray-900">Tax &amp; notes</h3>
-                                    <p class="text-xs text-gray-500 mt-0.5">GST/PAN and internal notes.</p>
+                                    <h3 class="text-sm font-bold text-gray-900">Tax &amp; compliance</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">GST and PAN for invoicing.</p>
                                 </div>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -933,19 +935,62 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                     <label class="<?= $vfLabel ?>">PAN number</label>
                                     <input type="text" class="<?= $vfInput ?>" name="editPanNumber" id="editPanNumber" />
                                 </div>
+                            </div>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+                                    <i class="fas fa-users text-sm" aria-hidden="true"></i>
+                                </span>
                                 <div>
-                                    <label class="<?= $vfLabel ?>">Rating</label>
-                                    <select class="<?= $vfInput ?>" name="editRating" id="editRating">
-                                        <option value="">Select rating (optional)</option>
-                                        <?php foreach ($vendorRatingOptions as $ratingOption): ?>
-                                            <option value="<?php echo htmlspecialchars($ratingOption, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($ratingOption, ENT_QUOTES, 'UTF-8'); ?></option>
+                                    <h3 class="text-sm font-bold text-gray-900">Assignment &amp; notes</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Internal team, categories, and notes.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Team</label>
+                                    <select class="<?= $vfInput ?> min-h-[7rem]" multiple name="editTeam[]" id="editTeam" onchange="fillTeamAgent(this.value, 'EditForm');">
+                                        <option value="" disabled>Select team</option>
+                                        <?php foreach ($teamList as $team): ?>
+                                            <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Agent</label>
+                                    <span id="editTeamMemberBlock">
+                                        <select class="<?= $vfInput ?>" name="editTeamMember" id="editTeamMember">
+                                            <option value="" disabled selected>Select agent</option>
+                                        </select>
+                                    </span>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="<?= $vfLabel ?>">Category</label>
+                                <select class="<?= $vfInput ?> min-h-[7rem]" multiple name="addVendorCategory[]" id="editVendorCategory">
+                                    <option value="" disabled>Select categories</option>
+                                    <?php
+                                    if (isset($category[0]) && is_array($category[0])) {
+                                        foreach ($category[0] as $parent) {
+                                            $parentId = $parent['id'];
+                                            $parentName = $parent['category_name'];
+                                            echo '<optgroup label="' . htmlspecialchars($parentName) . '">';
+                                            if (isset($category[$parentId]) && is_array($category[$parentId])) {
+                                                foreach ($category[$parentId] as $child) {
+                                                    echo '<option value="' . (int) $child['id'] . '">' . htmlspecialchars($child['category_name']) . '</option>';
+                                                }
+                                            }
+                                            echo '</optgroup>';
+                                        }
+                                    }
+                                    ?>
+                                </select>
                             </div>
                             <div>
                                 <label class="<?= $vfLabel ?>">Notes</label>
-                                <textarea class="<?= $vfInput ?> min-h-[100px] resize-y" name="editNotes" id="editNotes"></textarea>
+                                <textarea class="<?= $vfInput ?> min-h-[88px] resize-y" name="editNotes" id="editNotes"></textarea>
                             </div>
                         </section>
 
