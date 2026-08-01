@@ -177,6 +177,208 @@ function exotic_cart_item_code_has_variation_rows(mysqli $conn, string $itemCode
     return is_array($row);
 }
 
+const EXOTIC_CART_CUSTOM_ADDON_MARKER = '_blank_';
+
+/**
+ * @return list<string>
+ */
+function exotic_cart_parse_options_segments(array $row): array
+{
+    $raw = $row['options'] ?? $row['option'] ?? $row['selected_options'] ?? '';
+    if ($raw === null || $raw === '' || $raw === 0 || $raw === '0') {
+        return [];
+    }
+
+    if (is_array($raw)) {
+        $parts = $raw;
+    } else {
+        $rawStr = trim((string) $raw);
+        if ($rawStr === '') {
+            return [];
+        }
+        if ($rawStr !== '' && $rawStr[0] === '[') {
+            $decoded = json_decode($rawStr, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $parts = $decoded;
+            } else {
+                $parts = explode('|', $rawStr);
+            }
+        } else {
+            $parts = explode('|', $rawStr);
+        }
+    }
+
+    $segments = [];
+    foreach ($parts as $part) {
+        $segment = trim((string) $part);
+        if ($segment !== '') {
+            $segments[] = $segment;
+        }
+    }
+
+    return $segments;
+}
+
+function exotic_cart_normalize_addon_match_name(string $name): string
+{
+    $normalized = strtolower(trim($name));
+    if (str_starts_with($normalized, 'add on ')) {
+        $normalized = substr($normalized, 7);
+    }
+    $normalized = preg_replace('/\s+/', ' ', $normalized) ?? $normalized;
+
+    return trim(str_replace('_', ' ', $normalized));
+}
+
+function exotic_cart_option_segment_price_marker_index(string $segment): ?array
+{
+    $markers = [':_blank_:', ':blank:'];
+    $foundIdx = -1;
+    $foundLen = 0;
+    foreach ($markers as $marker) {
+        $idx = strpos($segment, $marker);
+        if ($idx !== false && $idx > 0 && ($foundIdx === -1 || $idx < $foundIdx)) {
+            $foundIdx = $idx;
+            $foundLen = strlen($marker);
+        }
+    }
+
+    return $foundIdx > 0 ? ['idx' => $foundIdx, 'len' => $foundLen] : null;
+}
+
+function exotic_cart_option_segment_display_name(string $segment): string
+{
+    $segment = trim($segment);
+    if ($segment === '') {
+        return '';
+    }
+
+    $markerInfo = exotic_cart_option_segment_price_marker_index($segment);
+    if ($markerInfo !== null) {
+        $customName = substr($segment, 0, $markerInfo['idx']);
+        if (preg_match('/^[A-Za-z0-9_]+$/', $customName)) {
+            $label = preg_replace('/^OPTIONALS_/i', '', $customName) ?? $customName;
+            $label = trim(str_replace('_', ' ', $label));
+
+            return $label !== '' ? $label : $customName;
+        }
+    }
+
+    $colonIdx = strpos($segment, ':');
+    $prefix = $colonIdx !== false && $colonIdx > 0 ? substr($segment, 0, $colonIdx) : $segment;
+    $label = preg_replace('/^OPTIONALS_/i', '', $prefix) ?? $prefix;
+    $label = trim(str_replace('_', ' ', $label));
+
+    return $label !== '' ? $label : $prefix;
+}
+
+function exotic_cart_option_segment_price(string $segment): ?float
+{
+    $segment = trim($segment);
+    if ($segment === '') {
+        return null;
+    }
+
+    $markerInfo = exotic_cart_option_segment_price_marker_index($segment);
+    if ($markerInfo !== null) {
+        $priceRaw = substr($segment, $markerInfo['idx'] + $markerInfo['len']);
+        $priceRaw = str_replace(',', '', trim($priceRaw));
+
+        return is_numeric($priceRaw) ? (float) $priceRaw : null;
+    }
+
+    $parts = explode(':', $segment);
+    if (count($parts) >= 2) {
+        $priceRaw = str_replace(',', '', trim((string) end($parts)));
+
+        return is_numeric($priceRaw) ? (float) $priceRaw : null;
+    }
+
+    return null;
+}
+
+function exotic_cart_option_segment_matches_addon(string $segment, string $name, ?float $price): bool
+{
+    $targetName = exotic_cart_normalize_addon_match_name($name);
+    $nameUnderscore = str_replace(' ', '_', $targetName);
+    $segmentLower = strtolower($segment);
+    $displayName = exotic_cart_normalize_addon_match_name(exotic_cart_option_segment_display_name($segment));
+
+    if (
+        $displayName === $targetName
+        || ($nameUnderscore !== '' && str_contains($segmentLower, $nameUnderscore))
+        || ($targetName !== '' && str_contains($targetName, $displayName))
+        || ($displayName !== '' && str_contains($displayName, $targetName))
+    ) {
+        return true;
+    }
+
+    if ($price !== null && $price > 0) {
+        $segmentPrice = exotic_cart_option_segment_price($segment);
+        if ($segmentPrice !== null && abs($segmentPrice - $price) < 0.01) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function exotic_cart_build_custom_addon_option_segment(string $name, float $price): string
+{
+    $normalized = trim(preg_replace('/\s+/', '_', $name) ?? $name);
+    $normalized = preg_replace('/^OPTIONALS_/i', '', $normalized) ?? $normalized;
+    if ($normalized === '' || !preg_match('/^[A-Za-z_]+$/', $normalized)) {
+        return '';
+    }
+    if ($price < 0) {
+        return '';
+    }
+
+    $priceStr = abs($price - round($price)) < 0.000001
+        ? (string) (int) round($price)
+        : number_format($price, 2, '.', '');
+
+    return $normalized . ':' . EXOTIC_CART_CUSTOM_ADDON_MARKER . ':' . $priceStr;
+}
+
+/**
+ * Merge vp_orders.addons JSON into pipe-separated /cart/add options when missing.
+ *
+ * @param array<string, mixed> $row
+ */
+function exotic_cart_merge_line_addons_into_options(array $row): string
+{
+    $segments = exotic_cart_parse_options_segments($row);
+    require_once dirname(__DIR__, 3) . '/models/order/order.php';
+
+    $addonRows = Order::parseVendorOrderLineAddonsList($row['addons'] ?? null);
+    foreach ($addonRows as $addon) {
+        $name = trim((string) ($addon['name'] ?? ''));
+        if ($name === '') {
+            continue;
+        }
+        $price = (float) ($addon['price'] ?? 0);
+
+        $alreadyPresent = false;
+        foreach ($segments as $segment) {
+            if (exotic_cart_option_segment_matches_addon($segment, $name, $price > 0 ? $price : null)) {
+                $alreadyPresent = true;
+                break;
+            }
+        }
+        if ($alreadyPresent) {
+            continue;
+        }
+
+        $segment = exotic_cart_build_custom_addon_option_segment($name, $price);
+        if ($segment !== '') {
+            $segments[] = $segment;
+        }
+    }
+
+    return implode('|', $segments);
+}
+
 /**
  * @param array<string, mixed> $row vp_orders line or cart retrieve item
  *
@@ -257,14 +459,7 @@ function exotic_cart_resolve_add_params(?mysqli $conn, array $row): array
         $requiresVariation = false;
     }
 
-    $options = $row['options'] ?? '';
-    if (is_array($options)) {
-        $options = json_encode($options, JSON_UNESCAPED_UNICODE);
-    }
-    $options = trim((string)$options);
-    if ($options === '0') {
-        $options = '';
-    }
+    $options = exotic_cart_merge_line_addons_into_options($row);
 
     $displayItemCode = $itemCode !== '' ? $itemCode : ($sku !== '' ? $sku : $cartCode);
 
