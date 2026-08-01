@@ -598,6 +598,30 @@ $queryBase = [
     </div>
 </div>
 
+<div id="publisherDeleteConfirmModal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-black/50 px-4 py-6" role="dialog" aria-modal="true" aria-labelledby="publisherDeleteConfirmTitle">
+    <div class="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
+        <div class="px-6 pt-6 pb-4 text-center">
+            <span class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600">
+                <i class="fas fa-trash-can text-xl" aria-hidden="true"></i>
+            </span>
+            <h3 id="publisherDeleteConfirmTitle" class="text-lg font-semibold text-gray-900">Delete publisher?</h3>
+            <p class="mt-2 text-sm text-gray-600 leading-relaxed">
+                Delete this publisher on Exotic India and locally? This cannot be undone.
+            </p>
+        </div>
+        <div class="flex justify-end gap-3 border-t border-gray-200 bg-gray-50/80 px-6 py-4">
+            <button type="button" id="publisherDeleteConfirmCancelBtn"
+                class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                Cancel
+            </button>
+            <button type="button" id="publisherDeleteConfirmBtn"
+                class="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700 transition">
+                Delete publisher
+            </button>
+        </div>
+    </div>
+</div>
+
 <script src="<?php echo base_url('assets/js/creator_form.js'); ?>"></script>
 <script>
 let publisherNameExists = false;
@@ -938,16 +962,86 @@ function deletePublisher(id) {
     if (typeof closeAllMenus === 'function') {
         closeAllMenus();
     }
-    if (!confirm('Delete this publisher on Exotic India and locally? This cannot be undone.')) return;
+    openPublisherDeleteConfirm(id);
+}
+
+let publisherDeletePendingId = null;
+
+function openPublisherDeleteConfirm(id) {
+    publisherDeletePendingId = parseInt(id, 10) || 0;
+    const modal = document.getElementById('publisherDeleteConfirmModal');
+    if (!modal || publisherDeletePendingId <= 0) {
+        return;
+    }
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closePublisherDeleteConfirm() {
+    publisherDeletePendingId = null;
+    const modal = document.getElementById('publisherDeleteConfirmModal');
+    const confirmBtn = document.getElementById('publisherDeleteConfirmBtn');
+    const cancelBtn = document.getElementById('publisherDeleteConfirmCancelBtn');
+    if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Delete publisher';
+    }
+    if (cancelBtn) {
+        cancelBtn.disabled = false;
+    }
+    if (!modal) {
+        return;
+    }
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+function executePublisherDelete() {
+    const id = publisherDeletePendingId;
+    if (!id || id <= 0) {
+        return;
+    }
+
+    const confirmBtn = document.getElementById('publisherDeleteConfirmBtn');
+    const cancelBtn = document.getElementById('publisherDeleteConfirmCancelBtn');
+    const oldLabel = confirmBtn ? confirmBtn.textContent : '';
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Deleting...';
+    }
+    if (cancelBtn) {
+        cancelBtn.disabled = true;
+    }
+
     const form = new FormData();
     form.append('id', id);
     postPublisherAction('delete', form).then(function (res) {
+        closePublisherDeleteConfirm();
         showPublisherAlert(res.message || 'Delete complete.', !!res.success);
-        if (res.success) setTimeout(function () { window.location.reload(); }, 700);
+        if (res.success) {
+            setTimeout(function () { window.location.reload(); }, 700);
+        }
     }).catch(function () {
+        closePublisherDeleteConfirm();
         showPublisherAlert('Could not delete publisher.', false);
+    }).finally(function () {
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = oldLabel;
+        }
+        if (cancelBtn) {
+            cancelBtn.disabled = false;
+        }
     });
 }
+
+document.getElementById('publisherDeleteConfirmCancelBtn')?.addEventListener('click', closePublisherDeleteConfirm);
+document.getElementById('publisherDeleteConfirmBtn')?.addEventListener('click', executePublisherDelete);
+document.getElementById('publisherDeleteConfirmModal')?.addEventListener('click', function (event) {
+    if (event.target === this) {
+        closePublisherDeleteConfirm();
+    }
+});
 
 document.getElementById('syncPublishersBtn')?.addEventListener('click', function () {
     if (!confirm('Sync publishers from Admin now? Existing publisher names will be updated by publisher ID.')) return;
