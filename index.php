@@ -169,6 +169,33 @@ switch ($page) {
                 break;
         }
         break;
+    case 'brokers':
+        require_once 'controllers/BrokersController.php';
+        $controller = new BrokersController();
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'addRecord':
+                $controller->addRecord();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'permanentDelete':
+                $controller->permanentDelete();
+                break;
+            case 'getDetails':
+                $controller->getDetails();
+                break;
+            case 'searchBrokers':
+                $controller->searchBrokers();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
     case 'account_groups':
         require_once 'controllers/AccountGroupsController.php';
         $controller = new AccountGroupsController($conn);

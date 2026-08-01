@@ -138,6 +138,8 @@ $queryBase = [
                             $phone = (string)($author['author_phone'] ?? '');
                             $city = (string)($author['city'] ?? '');
                             $state = (string)($author['state'] ?? '');
+                            $usageCount = (int)($author['usage_count'] ?? 0);
+                            $isMapped = $usageCount > 0;
                             $authorPayload = [
                                 'author_id' => $id,
                                 'author' => $name,
@@ -174,14 +176,28 @@ $queryBase = [
                                         onclick='openAuthorModal(<?php echo json_encode($authorPayload, JSON_HEX_APOS | JSON_HEX_QUOT); ?>)'>
                                         Edit
                                     </button>
-                                    <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50"
-                                        onclick="setAuthorStatus(<?php echo $id; ?>, <?php echo $active ? 0 : 1; ?>)">
-                                        <?php echo $active ? 'Deactivate' : 'Activate'; ?>
-                                    </button>
-                                    <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
-                                        onclick="deleteAuthor(<?php echo $id; ?>)">
-                                        Delete
-                                    </button>
+                                    <?php if ($isMapped && $active): ?>
+                                        <span class="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-400 cursor-not-allowed"
+                                            title="Used by <?php echo (int) ($author['inbound_usage_count'] ?? 0); ?> inbound and <?php echo (int) ($author['product_usage_count'] ?? 0); ?> product record(s)">
+                                            Deactivate (mapped)
+                                        </span>
+                                    <?php else: ?>
+                                        <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                                            onclick="setAuthorStatus(<?php echo $id; ?>, <?php echo $active ? 0 : 1; ?>)">
+                                            <?php echo $active ? 'Deactivate' : 'Activate'; ?>
+                                        </button>
+                                    <?php endif; ?>
+                                    <?php if ($isMapped): ?>
+                                        <span class="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-400 cursor-not-allowed"
+                                            title="Used by <?php echo (int) ($author['inbound_usage_count'] ?? 0); ?> inbound and <?php echo (int) ($author['product_usage_count'] ?? 0); ?> product record(s)">
+                                            Delete (mapped)
+                                        </span>
+                                    <?php else: ?>
+                                        <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                                            onclick="deleteAuthor(<?php echo $id; ?>)">
+                                            Delete
+                                        </button>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
