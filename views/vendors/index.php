@@ -3,7 +3,6 @@ $vfInput = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-s
 $vfLabel = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600';
 $vfSection = 'rounded-xl border border-gray-200/90 bg-gradient-to-b from-gray-50/70 to-white p-4 sm:p-5 space-y-4';
 $vfHint = 'mt-1 text-xs text-gray-500';
-$vendorModalWidth = 'width: 42%; min-width: 520px; max-width: 680px;';
 $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
 ?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
@@ -354,34 +353,20 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
 </div>
 
 <!-- Add Vendor Modal -->
-<div id="popup-wrapper" class="hidden">
-    <!-- Background Overlay -->
-    <div id="popup-overlay" class="fixed inset-0 bg-black bg-opacity-25 z-40"></div>
-
-    <!-- Sliding Container -->
-    <div id="modal-slider" class="popup-transition fixed top-0 right-0 h-full flex transform translate-x-full z-50" style="<?= htmlspecialchars($vendorModalWidth, ENT_QUOTES, 'UTF-8') ?>">
-
-        <!-- Close Button -->
-        <div class="flex-shrink-0 flex items-start pt-5">
-            <button id="close-vendor-popup-btn" class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center shadow-lg" style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-            </button>
+<div id="vendorAddModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4 py-6">
+    <div class="w-full max-w-4xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col">
+        <div class="flex items-center justify-between border-b border-gray-200 bg-gradient-to-r from-amber-50/60 to-white px-6 py-4 shrink-0">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900">Add vendor</h2>
+                <p class="mt-0.5 text-xs text-gray-500">Create a supplier profile and sync with Exotic India when groups are selected.</p>
+            </div>
+            <button type="button" id="close-vendor-popup-btn" class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition" aria-label="Close">&times;</button>
         </div>
-        <!-- Popup Panel -->
-        <div id="vendor-popup-panel" class="h-full bg-white shadow-2xl flex flex-col" style="width: 100%;">
-            <div class="flex-1 overflow-y-auto">
-                <div class="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-amber-50/60 to-white">
-                    <h2 class="text-xl font-bold text-gray-900">Add vendor</h2>
-                    <p class="mt-1 text-sm text-gray-500">Create a supplier profile and sync with Exotic India when groups are selected.</p>
-                </div>
-                <div class="px-6 py-5">
-                    <div id="addVendorMsg" class="text-sm font-semibold mb-4"></div>
-                    <form id="addVendorForm" class="space-y-5">
+        <form id="addVendorForm" class="overflow-y-auto px-4 py-5 sm:px-6 space-y-5 flex-1 min-h-0">
                         <input type="hidden" name="page" value="vendors">
                         <input type="hidden" name="action" value="addVendor">
 
+                        <div id="addVendorMsg" class="text-sm font-semibold"></div>
                         <section class="<?= $vfSection ?>">
                             <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
                                 <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
@@ -658,47 +643,31 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                             </div>
                         </section>
 
-                        <div class="sticky bottom-0 -mx-6 px-6 py-4 bg-white/95 backdrop-blur-sm border-t border-gray-200 flex justify-end gap-3">
-                            <button type="button" id="cancel-vendor-btn" class="action-btn cancel-btn">Back</button>
-                            <button type="submit" class="action-btn save-btn">Save vendor</button>
+                        <div class="sticky bottom-0 -mx-4 sm:-mx-6 flex justify-end gap-3 border-t border-gray-200 bg-white/95 px-4 sm:px-6 py-4 backdrop-blur-sm">
+                            <button type="button" id="cancel-vendor-btn" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
+                            <button type="submit" class="rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 transition">Save vendor</button>
                         </div>
-                    </form>
-                </div>
-            </div>
-        </div>
+        </form>
     </div>
 </div>
 <!-- End Add Model Popup -->
 
 <!-- Edit Vendor Modal -->
-<div class="modal fade hidden" id="editVendorModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-    <!-- Sliding Container -->
-    <div id="modal-slider-edit" class="popup-transition fixed top-0 right-0 h-full flex transform translate-x-full z-50" style="<?= htmlspecialchars($vendorModalWidth, ENT_QUOTES, 'UTF-8') ?>">
-        <!-- Close Button -->
-        <div class="flex-shrink-0 flex items-start pt-5">
-            <button id="close-vendor-popup-btn-edit" class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center shadow-lg" style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-            </button>
+<div id="editVendorModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4 py-6">
+    <div class="w-full max-w-4xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col">
+        <div class="flex items-center justify-between border-b border-gray-200 bg-gradient-to-r from-amber-50/60 to-white px-6 py-4 shrink-0">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900">Edit vendor</h2>
+                <p class="mt-0.5 text-xs text-gray-500">Update supplier profile, groups, and contact details.</p>
+            </div>
+            <button type="button" id="close-vendor-popup-btn-edit" class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition" aria-label="Close">&times;</button>
         </div>
-
-        <!-- Popup Panel -->
-        <div class="h-full bg-white shadow-2xl flex flex-col" style="width: 100%;">
-            <div class="flex-1 overflow-y-auto">
-                <div class="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-amber-50/60 to-white">
-                    <h2 class="text-xl font-bold text-gray-900">Edit vendor</h2>
-                    <p class="mt-1 text-sm text-gray-500">Update supplier profile, groups, and contact details.</p>
-                </div>
-                <div class="px-6 py-5">
-                    <div id="editVendorMsg" class="text-sm font-semibold mb-4"></div>
-                    <form id="editUserForm" class="space-y-5">
+        <form id="editUserForm" class="overflow-y-auto px-4 py-5 sm:px-6 space-y-5 flex-1 min-h-0">
                         <input type="hidden" id="editVendorId" name="id" value="">
                         <input type="hidden" id="editAgentIds" value="">
                         <input type="hidden" id="editPreviousState" name="editPreviousState" value="">
 
+                        <div id="editVendorMsg" class="text-sm font-semibold"></div>
                         <section class="<?= $vfSection ?>">
                             <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
                                 <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
@@ -980,17 +949,12 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                             </div>
                         </section>
 
-                        <div class="sticky bottom-0 -mx-6 px-6 py-4 bg-white/95 backdrop-blur-sm border-t border-gray-200 flex justify-end gap-3">
-                            <button type="button" id="cancel-vendor-btn-edit" class="action-btn cancel-btn">Back</button>
-                            <button type="submit" class="action-btn save-btn">Save changes</button>
+                        <div class="sticky bottom-0 -mx-4 sm:-mx-6 flex justify-end gap-3 border-t border-gray-200 bg-white/95 px-4 sm:px-6 py-4 backdrop-blur-sm">
+                            <button type="button" id="cancel-vendor-btn-edit" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
+                            <button type="submit" class="rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 transition">Save changes</button>
                         </div>
-                    </form>
-                </div>
-            </div>
-        </div>
+        </form>
     </div>
-    </div>
-  </div>
 </div>
 <!-- End Edit Model Popup -->
 
@@ -2020,30 +1984,22 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
     }
 
     const openVendorPopupBtn = document.getElementById('open-vendor-popup-btn');
-    const popupWrapper = document.getElementById('popup-wrapper');
-    const modalSlider = document.getElementById('modal-slider');
+    const vendorAddModal = document.getElementById('vendorAddModal');
     const cancelVendorBtn = document.getElementById('cancel-vendor-btn');
     const closeVendorPopupBtn = document.getElementById('close-vendor-popup-btn');
 
     function openVendorPopup() {
-        popupWrapper.classList.remove('hidden');
         updateVendorBookDiscountVisibility();
         resetVendorAddContactLists();
-        initVendorBrokerSelect2('add_broker_id', '#vendor-popup-panel', '', '');
-        setTimeout(() => {
-            modalSlider.classList.remove('translate-x-full');
-        }, 10);
+        initVendorBrokerSelect2('add_broker_id', '#vendorAddModal', '', '');
+        vendorAddModal.classList.remove('hidden');
+        vendorAddModal.classList.add('flex');
     }
-	
+
     function closeVendorPopup() {
-        modalSlider.classList.add('translate-x-full');
+        vendorAddModal.classList.add('hidden');
+        vendorAddModal.classList.remove('flex');
     }
-	
-	modalSlider.addEventListener('transitionend', (event) => {
-        if (event.propertyName === 'transform' && modalSlider.classList.contains('translate-x-full')) {
-            popupWrapper.classList.add('hidden');
-        }
-    });
 
     openVendorPopupBtn.addEventListener('click', openVendorPopup);
     cancelVendorBtn.addEventListener('click', closeVendorPopup);
@@ -2152,9 +2108,8 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
         window.location.reload();
     }
 
-    // Edit User Modal Logic    
+    // Edit User Modal Logic
     const popupWrapperEdit = document.getElementById('editVendorModal');
-    const modalSliderEdit = document.getElementById('modal-slider-edit');
     const cancelVendorBtnEdit = document.getElementById('cancel-vendor-btn-edit');
     const closeVendorPopupBtnEdit = document.getElementById('close-vendor-popup-btn-edit');
 
@@ -2293,14 +2248,13 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
             });
 
             popupWrapperEdit.classList.remove('hidden');
-            setTimeout(() => {
-                modalSliderEdit.classList.remove('translate-x-full');
-            }, 10);
+            popupWrapperEdit.classList.add('flex');
         });
     }
 
     function closeVendorPopupEdit() {
-        modalSliderEdit.classList.add('translate-x-full');
+        popupWrapperEdit.classList.add('hidden');
+        popupWrapperEdit.classList.remove('flex');
     }
 
     closeVendorPopupBtnEdit.addEventListener('click', closeVendorPopupEdit);
