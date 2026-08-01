@@ -1003,6 +1003,30 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
 </div>
 <!-- End Edit Model Popup -->
 
+<div id="vendorDeleteConfirmModal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-black/50 px-4 py-6" role="dialog" aria-modal="true" aria-labelledby="vendorDeleteConfirmTitle">
+    <div class="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
+        <div class="px-6 pt-6 pb-4 text-center">
+            <span class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600">
+                <i class="fas fa-trash-can text-xl" aria-hidden="true"></i>
+            </span>
+            <h3 id="vendorDeleteConfirmTitle" class="text-lg font-semibold text-gray-900">Delete vendor?</h3>
+            <p class="mt-2 text-sm text-gray-600 leading-relaxed">
+                Delete this vendor on Exotic India (when linked) and locally? This cannot be undone.
+            </p>
+        </div>
+        <div class="flex justify-end gap-3 border-t border-gray-200 bg-gray-50/80 px-6 py-4">
+            <button type="button" id="vendorDeleteConfirmCancelBtn"
+                class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                Cancel
+            </button>
+            <button type="button" id="vendorDeleteConfirmBtn"
+                class="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700 transition">
+                Delete vendor
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Bank Detail Modal -->
 <div class="modal fade hidden" id="bankDetailModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
@@ -2099,50 +2123,111 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
     };
 
     let successModalTimer;
+    let vendorDeletePendingId = null;
+
+    function openVendorDeleteConfirm(id) {
+        vendorDeletePendingId = parseInt(id, 10) || 0;
+        const modal = document.getElementById('vendorDeleteConfirmModal');
+        if (!modal || vendorDeletePendingId <= 0) {
+            return;
+        }
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeVendorDeleteConfirm() {
+        vendorDeletePendingId = null;
+        const modal = document.getElementById('vendorDeleteConfirmModal');
+        const confirmBtn = document.getElementById('vendorDeleteConfirmBtn');
+        const cancelBtn = document.getElementById('vendorDeleteConfirmCancelBtn');
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Delete vendor';
+        }
+        if (cancelBtn) {
+            cancelBtn.disabled = false;
+        }
+        if (!modal) {
+            return;
+        }
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+    function executeVendorDelete() {
+        const id = vendorDeletePendingId;
+        if (!id || id <= 0) {
+            return;
+        }
+
+        const confirmBtn = document.getElementById('vendorDeleteConfirmBtn');
+        const cancelBtn = document.getElementById('vendorDeleteConfirmCancelBtn');
+        const oldLabel = confirmBtn ? confirmBtn.textContent : '';
+        if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Deleting...';
+        }
+        if (cancelBtn) {
+            cancelBtn.disabled = true;
+        }
+
+        fetch("?page=vendors&action=delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: "id=" + id
+        })
+        .then(res => res.json())
+        .then(data => {
+            closeVendorDeleteConfirm();
+            if (!data.success) {
+                redirectToVendorListWithFlash(data.message || 'Delete vendor failed.', false);
+                return;
+            }
+            const title = document.getElementById("modalTitle");
+            title.innerText = "Success 🎉";
+            title.className = "text-2xl font-bold text-green-600 mb-4";
+            document.getElementById("showMessage").innerText = data.message;
+            const modal = document.getElementById("deleteMsgBox");
+            modal.classList.remove("hidden");
+            clearTimeout(successModalTimer);
+            successModalTimer = setTimeout(() => {
+                closeDeleteModal();
+            }, 1500);
+        })
+        .catch(err => {
+            console.error("AJAX Error:", err);
+            closeVendorDeleteConfirm();
+            redirectToVendorListWithFlash('Delete request failed. Please try again.', false);
+        })
+        .finally(function () {
+            if (confirmBtn) {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = oldLabel;
+            }
+            if (cancelBtn) {
+                cancelBtn.disabled = false;
+            }
+        });
+    }
+
+    document.getElementById('vendorDeleteConfirmCancelBtn')?.addEventListener('click', closeVendorDeleteConfirm);
+    document.getElementById('vendorDeleteConfirmBtn')?.addEventListener('click', executeVendorDelete);
+    document.getElementById('vendorDeleteConfirmModal')?.addEventListener('click', function (event) {
+        if (event.target === this) {
+            closeVendorDeleteConfirm();
+        }
+    });
+
     // Delete Vendor
     document.addEventListener("DOMContentLoaded", () => {
         const deleteButtons = document.querySelectorAll(".delete-btn");
-        
+
         deleteButtons.forEach(btn => {
             btn.addEventListener("click", (e) => {
                 e.preventDefault();
                 const id = btn.getAttribute("data-id");
                 window.closeAllMenus();
-                if (!confirm("Are you sure you want to delete this record?")) return;
-
-                fetch("?page=vendors&action=delete", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body: "id=" + id
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (!data.success) {
-                        redirectToVendorListWithFlash(data.message || 'Delete vendor failed.', false);
-                        return;
-                    }
-                    const title = document.getElementById("modalTitle");
-                    var type = "error";
-                    title.innerText = "Error ⚠️";
-                    title.className = "text-2xl font-bold text-red-600 mb-4";
-                    title.innerText = "Success 🎉";
-                    title.className = "text-2xl font-bold text-green-600 mb-4";
-
-                    document.getElementById("showMessage").innerText = data.message;
-                    const modal = document.getElementById("deleteMsgBox");
-                    modal.classList.remove("hidden");
-
-                    // Auto-close after 3 seconds
-                    clearTimeout(successModalTimer);
-                    successModalTimer = setTimeout(() => {
-                        closeDeleteModal();
-                    }, 1500);
-                    
-                })
-                .catch(err => {
-                    console.error("AJAX Error:", err);
-                    redirectToVendorListWithFlash('Delete request failed. Please try again.', false);
-                });
+                openVendorDeleteConfirm(id);
             });
         });
     });
