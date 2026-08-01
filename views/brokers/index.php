@@ -97,8 +97,7 @@ $stateList = is_array($stateList ?? null) ? $stateList : [];
 
     <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden ring-1 ring-gray-900/[0.03]">
         <div class="p-6">
-            <div class="overflow-x-auto">
-                <table class="min-w-full text-left">
+                <table class="w-full text-left">
                     <thead>
                     <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
                         <th class="px-5 py-3.5 whitespace-nowrap">#</th>
@@ -165,7 +164,6 @@ $stateList = is_array($stateList ?? null) ? $stateList : [];
                     <?php endif; ?>
                     </tbody>
                 </table>
-            </div>
         </div>
     </div>
 
