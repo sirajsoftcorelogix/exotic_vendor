@@ -1,12 +1,14 @@
 <?php
 
+require_once __DIR__ . '/../../helpers/creator_master_usage.php';
+
 class Publisher
 {
     private mysqli $conn;
 
-    private const LIST_COLUMNS = 'p.id, p.publishers_id, p.publishers, p.display_name, p.website, p.contact_name, p.publisher_email, p.publisher_email_is_primary, p.country_code, p.publisher_phone, p.publisher_phone_is_whatsapp, p.gst_number, p.pan_number, p.address, p.city, p.state, p.country, p.postal_code, p.webpage, p.stock_replenishment_months, p.discount, p.broker_id, bu.name AS broker_name, p.is_active, p.create_at, p.update_at';
+    private const LIST_COLUMNS = 'p.id, p.publishers_id, p.publishers, p.display_name, p.website, p.contact_name, p.publisher_email, p.publisher_email_is_primary, p.country_code, p.publisher_phone, p.publisher_phone_is_whatsapp, p.gst_number, p.pan_number, p.address, p.city, p.state, p.country, p.postal_code, p.webpage, p.stock_replenishment_months, p.discount, p.broker_id, br.broker_name AS broker_name, p.is_active, p.create_at, p.update_at';
 
-    private const LIST_FROM = ' FROM vp_publishers p LEFT JOIN vp_users bu ON bu.id = p.broker_id AND bu.is_deleted = 0';
+    private const LIST_FROM = ' FROM vp_publishers p LEFT JOIN vp_brokers br ON br.id = p.broker_id';
 
     private const MAX_ALT_PHONES = 5;
 
@@ -476,7 +478,7 @@ class Publisher
         }
 
         $stmt = $this->conn->prepare(
-            'SELECT id FROM vp_users WHERE id = ? AND is_active = 1 AND is_deleted = 0 LIMIT 1'
+            'SELECT id FROM vp_brokers WHERE id = ? AND is_active = 1 LIMIT 1'
         );
         if (!$stmt) {
             return ['success' => false, 'message' => 'Could not validate broker.'];
@@ -557,7 +559,7 @@ class Publisher
         $params = [];
 
         if ($search !== '') {
-            $where[] = '(p.publishers LIKE ? OR p.display_name LIKE ? OR p.website LIKE ? OR p.publishers_id = ? OR p.id = ? OR p.city LIKE ? OR p.state LIKE ? OR p.contact_name LIKE ? OR p.publisher_phone LIKE ? OR bu.name LIKE ?)';
+            $where[] = '(p.publishers LIKE ? OR p.display_name LIKE ? OR p.website LIKE ? OR p.publishers_id = ? OR p.id = ? OR p.city LIKE ? OR p.state LIKE ? OR p.contact_name LIKE ? OR p.publisher_phone LIKE ? OR br.broker_name LIKE ?)';
             $types .= 'ssssiissss';
             $params[] = '%' . $search . '%';
             $params[] = '%' . $search . '%';
@@ -578,7 +580,7 @@ class Publisher
         }
 
         $whereSql = $where ? (' WHERE ' . implode(' AND ', $where)) : '';
-        $countStmt = $this->conn->prepare('SELECT COUNT(*) AS total FROM vp_publishers p LEFT JOIN vp_users bu ON bu.id = p.broker_id AND bu.is_deleted = 0' . $whereSql);
+        $countStmt = $this->conn->prepare('SELECT COUNT(*) AS total FROM vp_publishers p LEFT JOIN vp_brokers br ON br.id = p.broker_id' . $whereSql);
         if (!$countStmt) {
             return ['publishers' => [], 'totalRecords' => 0, 'totalPages' => 1, 'currentPage' => $page, 'limit' => $limit];
         }
@@ -606,6 +608,7 @@ class Publisher
         $stmt->close();
 
         $this->attachContactsToPublishers($publishers);
+        $this->attachUsageCountsToPublishers($publishers);
 
         return [
             'publishers' => $publishers,
@@ -719,6 +722,13 @@ class Publisher
         $contactError = $this->validatePublisherContacts($fields, $id);
         if ($contactError !== null) {
             return $contactError;
+        }
+
+        if ($isActive === 0) {
+            $usageError = $this->publisherUsageError($id);
+            if ($usageError !== null) {
+                return $usageError;
+            }
         }
 
         $brokerError = $this->validateBrokerId($fields['broker_id']);
@@ -937,6 +947,13 @@ class Publisher
             return ['success' => false, 'message' => 'Invalid publisher id.'];
         }
         $isActive = $isActive ? 1 : 0;
+        if ($isActive === 0) {
+            $usageError = $this->publisherUsageError($id);
+            if ($usageError !== null) {
+                return $usageError;
+            }
+        }
+
         $stmt = $this->conn->prepare('UPDATE vp_publishers SET is_active = ? WHERE id = ?');
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
@@ -1320,10 +1337,46 @@ class Publisher
         return $label;
     }
 
+    private function publisherUsageError(int $localId, string $action = 'delete or deactivate'): ?array
+    {
+        $row = $this->getPublisherById($localId);
+        if (!$row) {
+            return null;
+        }
+
+        $usage = creatorMasterCountPublisherUsage(
+            $this->conn,
+            (int) ($row['publishers_id'] ?? 0),
+            (string) ($row['publishers'] ?? '')
+        );
+
+        return creatorMasterUsageError('publisher', $usage['inbound'], $usage['products'], $action);
+    }
+
+    private function attachUsageCountsToPublishers(array &$publishers): void
+    {
+        foreach ($publishers as &$publisher) {
+            $usage = creatorMasterCountPublisherUsage(
+                $this->conn,
+                (int) ($publisher['publishers_id'] ?? 0),
+                (string) ($publisher['publishers'] ?? '')
+            );
+            $publisher['inbound_usage_count'] = $usage['inbound'];
+            $publisher['product_usage_count'] = $usage['products'];
+            $publisher['usage_count'] = $usage['total'];
+        }
+        unset($publisher);
+    }
+
     public function deletePublisher(int $id): array
     {
         if ($id <= 0) {
             return ['success' => false, 'message' => 'Invalid publisher id.'];
+        }
+
+        $usageError = $this->publisherUsageError($id, 'delete');
+        if ($usageError !== null) {
+            return $usageError;
         }
 
         $bankStmt = $this->conn->prepare('DELETE FROM publisher_bank_details WHERE publisher_id = ?');

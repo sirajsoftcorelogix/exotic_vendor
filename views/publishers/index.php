@@ -35,6 +35,11 @@ $queryBase = [
                 </p>
             </div>
             <div class="flex shrink-0 lg:pl-4 lg:self-center gap-3 flex-wrap">
+                <a href="?page=brokers&action=list"
+                    class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-gray-300 bg-white text-gray-800 text-sm font-semibold shadow-sm hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 transition whitespace-nowrap">
+                    <i class="fas fa-user-tie text-xs opacity-95" aria-hidden="true"></i>
+                    Manage brokers
+                </a>
                 <?php if (isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1): ?>
                     <button id="syncPublishersBtn"
                         class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-amber-300 bg-white text-amber-800 text-sm font-semibold shadow-sm hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 transition whitespace-nowrap">
@@ -143,6 +148,8 @@ $queryBase = [
                             $city = (string)($publisher['city'] ?? '');
                             $state = (string)($publisher['state'] ?? '');
                             $brokerName = (string)($publisher['broker_name'] ?? '');
+                            $usageCount = (int)($publisher['usage_count'] ?? 0);
+                            $isMapped = $usageCount > 0;
                             $publisherPayload = [
                                 'id' => $id,
                                 'publishers_id' => $publisherExternalId,
@@ -192,10 +199,22 @@ $queryBase = [
                                         <button type="button" class="menu-button" aria-label="Publisher actions">&#x22EE;</button>
                                         <ul class="menu-popup text-left">
                                             <li data-action="edit" data-publisher="<?php echo htmlspecialchars(json_encode($publisherPayload), ENT_QUOTES, 'UTF-8'); ?>"><i class="fa-solid fa-pencil"></i> Edit</li>
-                                            <li data-action="status" data-id="<?php echo $id; ?>" data-active="<?php echo $active ? 0 : 1; ?>"><i class="fa-solid fa-power-off"></i> <?php echo $active ? 'Deactivate' : 'Activate'; ?></li>
+                                            <?php if ($isMapped && $active): ?>
+                                                <li class="text-gray-400 cursor-not-allowed" title="Used by <?php echo (int) ($publisher['inbound_usage_count'] ?? 0); ?> inbound and <?php echo (int) ($publisher['product_usage_count'] ?? 0); ?> product record(s)">
+                                                    <i class="fa-solid fa-power-off"></i> Deactivate (mapped)
+                                                </li>
+                                            <?php else: ?>
+                                                <li data-action="status" data-id="<?php echo $id; ?>" data-active="<?php echo $active ? 0 : 1; ?>"><i class="fa-solid fa-power-off"></i> <?php echo $active ? 'Deactivate' : 'Activate'; ?></li>
+                                            <?php endif; ?>
                                             <li data-action="bank" data-id="<?php echo $id; ?>"><i class="fa-solid fa-building-columns"></i> Bank Details</li>
                                             <li data-action="distributors" data-id="<?php echo $id; ?>" data-name="<?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?>"><i class="fa-solid fa-truck"></i> Manage Distributors</li>
-                                            <li class="text-red-700" data-action="delete" data-id="<?php echo $id; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
+                                            <?php if ($isMapped): ?>
+                                                <li class="text-gray-400 cursor-not-allowed" title="Used by <?php echo (int) ($publisher['inbound_usage_count'] ?? 0); ?> inbound and <?php echo (int) ($publisher['product_usage_count'] ?? 0); ?> product record(s)">
+                                                    <i class="fa-solid fa-trash"></i> Delete (mapped)
+                                                </li>
+                                            <?php else: ?>
+                                                <li class="text-red-700" data-action="delete" data-id="<?php echo $id; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
+                                            <?php endif; ?>
                                         </ul>
                                     </div>
                                 </td>
@@ -284,7 +303,7 @@ $queryBase = [
                             class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
                             <option value="">Select broker...</option>
                         </select>
-                        <p class="mt-1 text-xs text-gray-500">Search active portal users. Leave empty if not assigned.</p>
+                        <p class="mt-1 text-xs text-gray-500">Search active brokers from Broker Master. Leave empty if not assigned.</p>
                     </div>
                     <div class="md:col-span-2">
                         <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Website</label>

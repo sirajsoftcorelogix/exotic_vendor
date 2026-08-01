@@ -2,7 +2,7 @@
 require_once 'models/publisher/Publisher.php';
 require_once 'models/country/country.php';
 require_once 'models/country/state.php';
-require_once 'models/user/user.php';
+require_once 'models/broker/Broker.php';
 require_once __DIR__ . '/../helpers/vendor_external_api.php';
 
 class PublishersController
@@ -10,14 +10,14 @@ class PublishersController
     private Publisher $publisherModel;
     private Country $countryModel;
     private State $stateModel;
-    private User $userModel;
+    private Broker $brokerModel;
 
     public function __construct(mysqli $conn)
     {
         $this->publisherModel = new Publisher($conn);
         $this->countryModel = new Country($conn);
         $this->stateModel = new State($conn);
-        $this->userModel = new User($conn);
+        $this->brokerModel = new Broker($conn);
     }
 
     public function index(): void
@@ -214,7 +214,7 @@ class PublishersController
 
         $query = trim((string)($_GET['q'] ?? ''));
         echo json_encode(
-            $this->userModel->searchActiveUsers($query),
+            $this->brokerModel->searchActiveBrokers($query),
             JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
         );
         exit;

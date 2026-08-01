@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/../../helpers/creator_master_usage.php';
+
 class Author
 {
     private mysqli $conn;
@@ -142,6 +144,8 @@ class Author
         $authors = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
 
+        $this->attachUsageCountsToAuthors($authors);
+
         return [
             'authors' => $authors,
             'totalRecords' => $totalRecords,
@@ -260,6 +264,13 @@ class Author
             return $duplicate;
         }
 
+        if ($isActive === 0) {
+            $usageError = $this->authorUsageError($id);
+            if ($usageError !== null) {
+                return $usageError;
+            }
+        }
+
         $stmt = $this->conn->prepare(
             'UPDATE vp_author SET author = ?, contact_name = ?, author_email = ?, country_code = ?, author_phone = ?, alt_phone = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, is_active = ? WHERE author_id = ?'
         );
@@ -370,6 +381,13 @@ class Author
             return ['success' => false, 'message' => 'Invalid author id.'];
         }
         $isActive = $isActive ? 1 : 0;
+        if ($isActive === 0) {
+            $usageError = $this->authorUsageError($id);
+            if ($usageError !== null) {
+                return $usageError;
+            }
+        }
+
         $stmt = $this->conn->prepare('UPDATE vp_author SET is_active = ? WHERE author_id = ?');
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
@@ -388,6 +406,11 @@ class Author
     {
         if ($id <= 0) {
             return ['success' => false, 'message' => 'Invalid author id.'];
+        }
+
+        $usageError = $this->authorUsageError($id, 'delete');
+        if ($usageError !== null) {
+            return $usageError;
         }
 
         $stmt = $this->conn->prepare('DELETE FROM vp_author WHERE author_id = ?');
@@ -565,5 +588,23 @@ class Author
         }
 
         return null;
+    }
+
+    private function authorUsageError(int $authorId, string $action = 'delete or deactivate'): ?array
+    {
+        $usage = creatorMasterCountAuthorUsage($this->conn, $authorId);
+
+        return creatorMasterUsageError('author', $usage['inbound'], $usage['products'], $action);
+    }
+
+    private function attachUsageCountsToAuthors(array &$authors): void
+    {
+        foreach ($authors as &$author) {
+            $usage = creatorMasterCountAuthorUsage($this->conn, (int) ($author['author_id'] ?? 0));
+            $author['inbound_usage_count'] = $usage['inbound'];
+            $author['product_usage_count'] = $usage['products'];
+            $author['usage_count'] = $usage['total'];
+        }
+        unset($author);
     }
 }
