@@ -5010,11 +5010,21 @@
 
   window.formatPosLocalStockWarning = formatLocalStockWarning;
 
+  function shouldDeferInitialCartRefreshForFollowUpSeed() {
+    return !!(
+      window.POS_FOLLOW_UP_SEED &&
+      window.POS_FOLLOW_UP &&
+      window.POS_FOLLOW_UP.source_order_number
+    );
+  }
+
   function initPosCartHooks() {
     bindCartDelegatesOnce();
     ensureCartPanel();
     ensurePosCartImageLightbox();
-    window.refreshCart();
+    if (!shouldDeferInitialCartRefreshForFollowUpSeed()) {
+      window.refreshCart();
+    }
   }
 
   if (document.readyState === 'loading') {
