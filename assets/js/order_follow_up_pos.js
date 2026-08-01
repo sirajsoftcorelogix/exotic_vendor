@@ -26,12 +26,13 @@
                     if (typeof window.showPosMessageModal === 'function') {
                         window.showPosMessageModal({ title: 'Follow-up order', message: msg, tone: 'error' });
                     }
+                    if (typeof window.refreshCart === 'function') {
+                        window.refreshCart();
+                    }
                     return;
                 }
-                if (typeof window.refreshPosCartPanel === 'function') {
-                    window.refreshPosCartPanel();
-                } else if (typeof window.loadCart === 'function') {
-                    window.loadCart();
+                if (typeof window.refreshCart === 'function') {
+                    window.refreshCart();
                 }
                 if (data.follow_up) {
                     window.POS_FOLLOW_UP = data.follow_up;
@@ -45,6 +46,9 @@
                         message: 'Could not seed cart from source order.',
                         tone: 'error'
                     });
+                }
+                if (typeof window.refreshCart === 'function') {
+                    window.refreshCart();
                 }
             });
     });
