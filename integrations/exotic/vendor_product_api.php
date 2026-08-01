@@ -1,0 +1,538 @@
+<?php
+
+require_once __DIR__ . '/vendor_api.php';
+
+/**
+ * Exotic India vendor-api/product endpoints: vendorcreate, vendormodify, vendordelete.
+ *
+ * Used by catalog vendors, publishers, and authors (creator sync).
+ *
+ * vendorcreate — POST name, groupname, vendor_type, webpage (all required).
+ *   On duplicate name, API returns existing vendor_id with reason
+ *   "Vendor with this name already exists".
+ *
+ * vendormodify — POST vendor_id (required); name, groupname, vendor_type, webpage optional.
+ *
+ * vendordelete — POST vendor_id (required).
+ */
+
+/** @return string[] Lowercase group slugs accepted by vendorcreate / vendormodify */
+function vendor_external_api_allowed_groupnames(): array
+{
+    return ['textiles', 'paintings', 'sculptures', 'jewelry', 'homeandliving', 'book'];
+}
+
+/** @return string[] vendor_type values accepted by vendorcreate / vendormodify */
+function vendor_external_api_allowed_vendor_types(): array
+{
+    return [
+        'vendor_statues',
+        'vendor_sculptures',
+        'vendor_homeandliving',
+        'vendor_paintings',
+        'vendor_textiles',
+        'vendor_jewelry',
+        'vendor_book',
+        'author',
+        'publisher',
+    ];
+}
+
+/**
+ * @param mixed $raw POST groupname (array or CSV string)
+ */
+function vendor_external_api_normalize_groupnames_csv($raw): string
+{
+    if (is_array($raw)) {
+        $groups = array_values(array_unique(array_filter(array_map('trim', $raw), static function ($v) {
+            return $v !== '';
+        })));
+
+        return implode(',', $groups);
+    }
+
+    return trim((string) $raw);
+}
+
+/**
+ * @return array{success:false,message:string}|null
+ */
+function vendor_external_api_validate_vendor_fields(string $name, string $groupsCsv): ?array
+{
+    if (trim($name) === '') {
+        return ['success' => false, 'message' => 'Vendor name is required.'];
+    }
+
+    $groupsCsv = trim($groupsCsv);
+    if ($groupsCsv === '') {
+        return ['success' => false, 'message' => 'Group name is required. Select at least one group.'];
+    }
+
+    $allowed = array_flip(vendor_external_api_allowed_groupnames());
+    foreach (explode(',', $groupsCsv) as $group) {
+        $key = strtolower(trim($group));
+        if ($key === '') {
+            continue;
+        }
+        if (!isset($allowed[$key])) {
+            return [
+                'success' => false,
+                'message' => 'Invalid group name "' . trim($group) . '". Allowed groups: ' . implode(', ', vendor_external_api_allowed_groupnames()) . '.',
+            ];
+        }
+    }
+
+    return null;
+}
+
+function vendor_external_api_base_url(): string
+{
+    return rtrim(exotic_india_api_base_url(), '/') . '/product/';
+}
+
+function vendor_external_api_headers(): array
+{
+    return array_merge(
+        exotic_india_api_auth_headers(),
+        ['Content-Type: application/x-www-form-urlencoded']
+    );
+}
+
+/**
+ * Attach API action, URL, request payload, and parsed/raw response for error debugging.
+ *
+ * @return array<string, mixed>
+ */
+function vendor_external_api_attach_debug(string $action, array $postData, array $result): array
+{
+    $raw = (string) ($result['raw'] ?? '');
+    $parsed = null;
+    if ($raw !== '') {
+        $decoded = json_decode($raw, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            $parsed = $decoded;
+        }
+    }
+    if ($parsed === null && !empty($result['data']) && is_array($result['data'])) {
+        $parsed = $result['data'];
+    }
+
+    $response = $parsed !== null ? $parsed : $raw;
+    if (is_string($response) && strlen($response) > 32768) {
+        $response = substr($response, 0, 32768) . '… [truncated]';
+    }
+
+    $result['api_action'] = $action;
+    $result['api_url'] = vendor_external_api_base_url() . $action;
+    $result['request'] = $postData;
+    $result['response'] = $response;
+
+    return $result;
+}
+
+/**
+ * Extract remote vendor ID from API JSON (vendor_id, id, or vendorId).
+ */
+function vendor_external_api_extract_vendor_id(array $data): int
+{
+    foreach (['vendor_id', 'id', 'vendorId'] as $key) {
+        if (!isset($data[$key])) {
+            continue;
+        }
+        $id = (int) preg_replace('/\D/', '', (string) $data[$key]);
+        if ($id > 0) {
+            return $id;
+        }
+    }
+
+    return 0;
+}
+
+/**
+ * vendormodify returns success=false when submitted fields already match remote (HTTP 200).
+ */
+function vendor_external_api_message_indicates_no_changes(string $message): bool
+{
+    $msg = strtolower(trim($message));
+    $msg = rtrim($msg, '.');
+
+    return $msg === 'no changes detected';
+}
+
+function vendor_external_api_is_no_changes_response(array $data): bool
+{
+    foreach (['message', 'reason'] as $key) {
+        if (isset($data[$key]) && vendor_external_api_message_indicates_no_changes((string) $data[$key])) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * True when local save should proceed after an Exotic India sync attempt (incl. "no changes detected").
+ */
+function vendor_external_api_allows_local_save(array $api): bool
+{
+    if (!empty($api['success'])) {
+        return true;
+    }
+    if (vendor_external_api_is_no_changes_response($api)) {
+        return true;
+    }
+    if (is_array($api['data'] ?? null) && vendor_external_api_is_no_changes_response($api['data'])) {
+        return true;
+    }
+    if (is_array($api['response'] ?? null) && vendor_external_api_is_no_changes_response($api['response'])) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Normalize vendormodify "no changes detected" (and similar) to success for callers + UI.
+ */
+function vendor_external_api_normalize_for_local_save(array $api): array
+{
+    if (!vendor_external_api_allows_local_save($api)) {
+        return $api;
+    }
+
+    $api['success'] = true;
+    $message = (string) ($api['message'] ?? '');
+    if ($message === '' || vendor_external_api_message_indicates_no_changes($message)) {
+        $api['message'] = 'Remote vendor already up to date.';
+    }
+
+    return $api;
+}
+
+/**
+ * vendorcreate returns vendor_id for both new vendors and existing duplicate names.
+ */
+function vendor_external_api_response_is_failure(array $data): bool
+{
+    if (isset($data['status']) && strtolower((string) $data['status']) === 'error') {
+        return true;
+    }
+    if (!isset($data['success'])) {
+        return false;
+    }
+
+    $success = $data['success'];
+    if ($success === false || $success === 0 || $success === '0' || $success === 'false') {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * @return array{success:bool,message:string,http_code:int,vendor_id?:int,data?:array,raw?:string}
+ */
+function vendor_external_api_post(string $action, array $postData): array
+{
+    $action = trim($action);
+    if ($action === '') {
+        return vendor_external_api_attach_debug('', $postData, [
+            'success' => false,
+            'message' => 'Vendor API action is required.',
+            'http_code' => 0,
+            'raw' => '',
+        ]);
+    }
+
+    $transport = exotic_india_api_post(
+        '/product/' . $action,
+        http_build_query($postData),
+        ['Content-Type: application/x-www-form-urlencoded']
+    );
+
+    $raw = (string) ($transport['raw'] ?? '');
+    $httpCode = (int) ($transport['http_code'] ?? 0);
+    $data = is_array($transport['data'] ?? null) ? $transport['data'] : [];
+
+    if (!empty($transport['curl_error']) && $raw === '' && $httpCode === 0) {
+        return vendor_external_api_attach_debug($action, $postData, [
+            'success' => false,
+            'message' => 'Vendor API call failed: ' . (string) $transport['curl_error'],
+            'http_code' => $httpCode,
+            'raw' => '',
+        ]);
+    }
+
+    if ($raw !== '' && $data === [] && json_decode($raw, true) === null && json_last_error() !== JSON_ERROR_NONE) {
+        $snippet = trim(preg_replace('/\s+/', ' ', strip_tags($raw)));
+        if (strlen($snippet) > 200) {
+            $snippet = substr($snippet, 0, 200) . '…';
+        }
+
+        return vendor_external_api_attach_debug($action, $postData, [
+            'success' => false,
+            'message' => 'Vendor API returned an invalid response'
+                . ($snippet !== '' ? ': ' . $snippet : '. Expected JSON.'),
+            'http_code' => $httpCode,
+            'raw' => $raw,
+        ]);
+    }
+
+    $vendorId = vendor_external_api_extract_vendor_id($data);
+
+    if ($httpCode >= 400 || empty($transport['success'])) {
+        $msg = trim((string) ($transport['message'] ?? ''));
+        if ($msg === '') {
+            $msg = !empty($data['message']) ? (string) $data['message'] : 'HTTP ' . $httpCode;
+        }
+        if (stripos($msg, 'Vendor API failed:') !== 0) {
+            $msg = 'Vendor API failed: ' . $msg;
+        }
+
+        return vendor_external_api_attach_debug($action, $postData, [
+            'success' => false,
+            'message' => $msg,
+            'http_code' => $httpCode,
+            'data' => $data,
+            'raw' => $raw,
+        ]);
+    }
+
+    // Per API spec: vendorcreate with vendor_id means created or linked to existing vendor.
+    if ($action === 'vendorcreate' && $vendorId > 0) {
+        $msg = trim((string) ($data['reason'] ?? $data['message'] ?? ''));
+        if ($msg === '') {
+            $msg = 'Vendor synced to Exotic India.';
+        }
+
+        return vendor_external_api_attach_debug($action, $postData, [
+            'success' => true,
+            'message' => $msg,
+            'http_code' => $httpCode,
+            'vendor_id' => $vendorId,
+            'data' => $data,
+            'raw' => $raw,
+        ]);
+    }
+
+    if ($action === 'vendormodify'
+        && vendor_external_api_response_is_failure($data)
+        && vendor_external_api_is_no_changes_response($data)) {
+        $existingVendorId = (int) preg_replace('/\D/', '', (string) ($postData['vendor_id'] ?? ''));
+
+        return vendor_external_api_attach_debug($action, $postData, [
+            'success' => true,
+            'message' => 'Remote vendor already up to date.',
+            'http_code' => $httpCode,
+            'vendor_id' => $vendorId > 0 ? $vendorId : ($existingVendorId > 0 ? $existingVendorId : null),
+            'data' => $data,
+            'raw' => $raw,
+        ]);
+    }
+
+    if (vendor_external_api_response_is_failure($data)) {
+        $msg = !empty($data['message']) ? (string) $data['message'] : (!empty($data['reason']) ? (string) $data['reason'] : 'Remote API returned failure.');
+
+        return vendor_external_api_attach_debug($action, $postData, [
+            'success' => false,
+            'message' => $msg,
+            'http_code' => $httpCode,
+            'data' => $data,
+            'raw' => $raw,
+        ]);
+    }
+
+    $successMessage = !empty($data['message']) ? (string) $data['message'] : 'Vendor API call succeeded.';
+    if (!empty($data['reason'])) {
+        $successMessage = (string) $data['reason'];
+    }
+
+    return vendor_external_api_attach_debug($action, $postData, [
+        'success' => true,
+        'message' => $successMessage,
+        'http_code' => $httpCode,
+        'vendor_id' => $vendorId > 0 ? $vendorId : null,
+        'data' => $data,
+        'raw' => $raw,
+    ]);
+}
+
+/**
+ * @return array{success:bool,message:string,http_code:int,vendor_id?:int,data?:array,raw?:string}
+ */
+function vendor_external_api_create(array $postData): array
+{
+    $result = vendor_external_api_post('vendorcreate', $postData);
+    if (!$result['success']) {
+        return $result;
+    }
+
+    $vendorId = vendor_external_api_extract_vendor_id(is_array($result['data'] ?? null) ? $result['data'] : []);
+    if ($vendorId <= 0) {
+        $vendorId = (int) preg_replace('/\D/', '', (string) ($result['vendor_id'] ?? ''));
+    }
+    if ($vendorId <= 0) {
+        return array_merge($result, [
+            'success' => false,
+            'message' => 'Exotic India API did not return a Vendor ID. The API rejected the request or returned an unexpected response. Try a slightly different vendor name or contact Exotic India support.',
+        ]);
+    }
+
+    $result['vendor_id'] = $vendorId;
+
+    return $result;
+}
+
+/**
+ * @return array{success:bool,message:string,http_code:int,vendor_id?:int,data?:array,raw?:string}
+ */
+function vendor_external_api_modify(array $postData): array
+{
+    if (trim((string) ($postData['vendor_id'] ?? '')) === '') {
+        return vendor_external_api_attach_debug('vendormodify', $postData, [
+            'success' => false,
+            'message' => 'vendor_id is required for vendormodify.',
+            'http_code' => 0,
+            'raw' => '',
+        ]);
+    }
+
+    return vendor_external_api_normalize_for_local_save(vendor_external_api_post('vendormodify', $postData));
+}
+
+/**
+ * True when vendordelete indicates the remote record is already gone (idempotent delete).
+ */
+function vendor_external_api_delete_not_found(array $result): bool
+{
+    if ((int) ($result['http_code'] ?? 0) === 404) {
+        return true;
+    }
+
+    $needles = [];
+    foreach (['message', 'error', 'reason'] as $key) {
+        if (!empty($result[$key])) {
+            $needles[] = (string) $result[$key];
+        }
+    }
+    $data = is_array($result['data'] ?? null) ? $result['data'] : [];
+    foreach (['message', 'error', 'reason'] as $key) {
+        if (!empty($data[$key])) {
+            $needles[] = (string) $data[$key];
+        }
+    }
+
+    foreach ($needles as $text) {
+        if (stripos($text, 'not found') !== false) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @return array{success:bool,message:string,http_code:int,data?:array,raw?:string}
+ */
+function vendor_external_api_delete(string $vendorId): array
+{
+    $vendorId = trim($vendorId);
+    if ($vendorId === '') {
+        return ['success' => false, 'message' => 'vendor_id is required for vendordelete.', 'http_code' => 0];
+    }
+
+    $result = vendor_external_api_post('vendordelete', ['vendor_id' => $vendorId]);
+    if (!$result['success']) {
+        if (vendor_external_api_delete_not_found($result)) {
+            return [
+                'success' => true,
+                'message' => 'Remote vendor not found (already deleted or never synced).',
+                'http_code' => (int) ($result['http_code'] ?? 404),
+                'data' => $result['data'] ?? [],
+                'raw' => $result['raw'] ?? '',
+            ];
+        }
+
+        return $result;
+    }
+
+    return [
+        'success' => true,
+        'message' => 'Remote vendor deleted.',
+        'http_code' => $result['http_code'],
+        'data' => $result['data'] ?? [],
+        'raw' => $result['raw'] ?? '',
+    ];
+}
+
+/**
+ * Map first group slug to Exotic India vendor_type for vendorcreate / vendormodify.
+ */
+function vendor_external_api_resolve_vendor_type_from_groups(string $groupsCsv): string
+{
+    $first = trim((string) explode(',', $groupsCsv)[0]);
+    if ($first === '') {
+        return '';
+    }
+    $key = strtolower($first);
+    $map = [
+        'sculptures' => 'vendor_sculptures',
+        'sculpture' => 'vendor_sculptures',
+        'statues' => 'vendor_statues',
+        'homeandliving' => 'vendor_homeandliving',
+        'paintings' => 'vendor_paintings',
+        'textiles' => 'vendor_textiles',
+        'jewelry' => 'vendor_jewelry',
+        'book' => 'vendor_book',
+    ];
+
+    return $map[$key] ?? ('vendor_' . $key);
+}
+
+/**
+ * POST body for catalog vendor vendorcreate / vendormodify (without vendor_id).
+ */
+function vendor_external_api_vendor_sync_payload(string $name, string $groupsCsv, string $webpage = '0'): array
+{
+    return [
+        'name' => trim($name),
+        'groupname' => trim($groupsCsv),
+        'vendor_type' => vendor_external_api_resolve_vendor_type_from_groups($groupsCsv),
+        'webpage' => ((string) $webpage === '1') ? '1' : '0',
+    ];
+}
+
+/**
+ * vendorcreate or vendormodify for catalog vendors.
+ */
+function vendor_external_api_sync_catalog(string $name, string $groupsCsv, string $webpage, ?string $remoteVendorId = null): array
+{
+    $payload = vendor_external_api_vendor_sync_payload($name, $groupsCsv, $webpage);
+    if ($remoteVendorId !== null && trim($remoteVendorId) !== '') {
+        $payload['vendor_id'] = trim($remoteVendorId);
+
+        return vendor_external_api_normalize_for_local_save(vendor_external_api_modify($payload));
+    }
+
+    return vendor_external_api_normalize_for_local_save(vendor_external_api_create($payload));
+}
+
+/**
+ * vendorcreate or vendormodify for author / publisher (book group).
+ */
+function vendor_external_api_sync_creator(string $vendorType, string $name, string $webpage, ?int $remoteId = null): array
+{
+    $payload = [
+        'name' => trim($name),
+        'groupname' => 'book',
+        'vendor_type' => $vendorType,
+        'webpage' => ((string) $webpage === '1') ? '1' : '0',
+    ];
+    if ($remoteId !== null && $remoteId > 0) {
+        $payload['vendor_id'] = (string) $remoteId;
+
+        return vendor_external_api_normalize_for_local_save(vendor_external_api_modify($payload));
+    }
+
+    return vendor_external_api_normalize_for_local_save(vendor_external_api_create($payload));
+}
