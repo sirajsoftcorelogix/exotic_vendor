@@ -27,6 +27,23 @@ if ($end - $start < $slot_size - 1) {
     $start = max(1, $end - $slot_size + 1);
 }
 $stateList = is_array($stateList ?? null) ? $stateList : [];
+
+function broker_location_label(array $location): string
+{
+    $state = trim((string) ($location['state'] ?? ''));
+    $zone = trim((string) ($location['zone'] ?? ''));
+    if ($state !== '' && $zone !== '') {
+        return $state . ' / ' . $zone;
+    }
+    if ($state !== '') {
+        return $state;
+    }
+    if ($zone !== '') {
+        return $zone;
+    }
+
+    return '';
+}
 ?>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
@@ -121,12 +138,30 @@ $stateList = is_array($stateList ?? null) ? $stateList : [];
                             $updatedLabel = $updatedAt ? date('d M Y', strtotime($updatedAt)) : '—';
                             $publisherCount = (int) ($row['publisher_count'] ?? 0);
                             $isMapped = $publisherCount > 0;
-                            $locationsLabel = trim((string) ($row['locations_label'] ?? ''));
+                            $locations = is_array($row['locations'] ?? null) ? $row['locations'] : [];
                             ?>
                             <tr class="hover:bg-amber-50/40 transition-colors">
                                 <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-700"><?= ++$counter ?></td>
                                 <td class="px-5 py-4 text-sm font-semibold text-gray-900"><?= htmlspecialchars((string) ($row['broker_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                                <td class="px-5 py-4 text-sm text-gray-700"><?= htmlspecialchars($locationsLabel !== '' ? $locationsLabel : '—', ENT_QUOTES, 'UTF-8') ?></td>
+                                <td class="px-5 py-4 text-sm text-gray-700">
+                                    <?php if ($locations !== []): ?>
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <?php foreach ($locations as $location): ?>
+                                                <?php
+                                                $locationLabel = broker_location_label($location);
+                                                if ($locationLabel === '') {
+                                                    continue;
+                                                }
+                                                ?>
+                                                <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-900">
+                                                    <?= htmlspecialchars($locationLabel, ENT_QUOTES, 'UTF-8') ?>
+                                                </span>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php else: ?>
+                                        —
+                                    <?php endif; ?>
+                                </td>
                                 <td class="px-5 py-4 whitespace-nowrap text-sm text-gray-600"><?= htmlspecialchars($updatedLabel, ENT_QUOTES, 'UTF-8') ?></td>
                                 <td class="px-5 py-4 whitespace-nowrap text-sm">
                                     <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset <?= $statusClass ?>">
@@ -137,7 +172,7 @@ $stateList = is_array($stateList ?? null) ? $stateList : [];
                                     <div class="menu-wrapper">
                                         <button type="button" class="menu-button" aria-label="Broker actions">&#x22EE;</button>
                                         <ul class="menu-popup text-left">
-                                            <li onclick="openEditModal(<?= (int) $row['id'] ?>)"><i class="fa-solid fa-pencil"></i> Edit</li>
+                                            <li class="broker-edit-btn" data-id="<?= (int) $row['id'] ?>"><i class="fa-solid fa-pencil"></i> Edit</li>
                                             <?php if ($isMapped): ?>
                                                 <li class="text-gray-400 cursor-not-allowed" title="Assigned to <?= (int) $publisherCount ?> publisher(s)">
                                                     <i class="fa-solid fa-ban"></i> Deactivate (mapped)
@@ -507,6 +542,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const form = new FormData(this);
         fetch('?page=brokers&action=addRecord', {
             method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
             body: form
         })
         .then(r => r.json())
@@ -521,6 +561,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     };
+
+    document.querySelectorAll('.broker-edit-btn').forEach(function (item) {
+        item.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const id = parseInt(String(this.dataset.id || '0'), 10);
+            if (id > 0) {
+                openEditModal(id);
+            }
+        });
+    });
 
     document.querySelectorAll('.deactivate-btn').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -565,15 +616,35 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+function brokerFetchJson(url, options) {
+    const opts = Object.assign({
+        credentials: 'same-origin',
+        headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    }, options || {});
+    opts.headers = Object.assign({
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+    }, (options && options.headers) ? options.headers : {});
+
+    return fetch(url, opts).then(function (response) {
+        if (!response.ok) {
+            throw new Error('Request failed');
+        }
+        return response.json();
+    });
+}
+
 function openEditModal(id) {
     if (typeof closeAllMenus === 'function') {
         closeAllMenus();
     }
-    fetch('?page=brokers&action=getDetails&id=' + encodeURIComponent(id))
-        .then(r => r.json())
-        .then(data => {
+    brokerFetchJson('?page=brokers&action=getDetails&id=' + encodeURIComponent(id))
+        .then(function (data) {
             if (!data || !data.id) {
-                alert('Could not load broker.');
+                alert(data && data.message ? data.message : 'Could not load broker.');
                 return;
             }
             document.getElementById('editId').value = data.id;
@@ -584,7 +655,10 @@ function openEditModal(id) {
             const modal = document.getElementById('editBrokerModal');
             modal.classList.remove('hidden');
             const slider = document.getElementById('modal-slider-edit');
-            setTimeout(() => slider.classList.remove('translate-x-full'), 10);
+            setTimeout(function () { slider.classList.remove('translate-x-full'); }, 10);
+        })
+        .catch(function () {
+            alert('Could not load broker. Please refresh and try again.');
         });
 }
 
@@ -606,6 +680,11 @@ document.getElementById('editBrokerForm').onsubmit = function(e) {
     const form = new FormData(this);
     fetch('?page=brokers&action=addRecord', {
         method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
         body: form
     })
     .then(r => r.json())

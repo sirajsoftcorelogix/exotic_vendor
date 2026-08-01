@@ -2,6 +2,7 @@
 
 require_once 'models/broker/Broker.php';
 require_once 'models/country/state.php';
+require_once __DIR__ . '/../helpers/html_helpers.php';
 
 $brokerModel = new Broker($conn);
 
@@ -44,8 +45,7 @@ class BrokersController
         global $brokerModel;
 
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
-            echo json_encode(['success' => false, 'message' => 'Invalid request.']);
-            exit;
+            vendorJsonResponse(['success' => false, 'message' => 'Invalid request.'], 405);
         }
 
         $data = $_POST;
@@ -54,9 +54,7 @@ class BrokersController
             ? $brokerModel->updateRecord($id, $data)
             : $brokerModel->addRecord($data);
 
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-        exit;
+        vendorJsonResponse($result);
     }
 
     public function delete(): void
@@ -70,13 +68,10 @@ class BrokersController
         }
 
         $id = isset($data['id']) ? (int) $data['id'] : 0;
-        header('Content-Type: application/json; charset=utf-8');
         if ($id > 0) {
-            echo json_encode($brokerModel->deleteRecord($id), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-        } else {
-            echo json_encode(['success' => false, 'message' => 'Invalid ID.']);
+            vendorJsonResponse($brokerModel->deleteRecord($id));
         }
-        exit;
+        vendorJsonResponse(['success' => false, 'message' => 'Invalid ID.'], 400);
     }
 
     public function permanentDelete(): void
@@ -90,13 +85,10 @@ class BrokersController
         }
 
         $id = isset($data['id']) ? (int) $data['id'] : 0;
-        header('Content-Type: application/json; charset=utf-8');
         if ($id > 0) {
-            echo json_encode($brokerModel->permanentlyDeleteRecord($id), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-        } else {
-            echo json_encode(['success' => false, 'message' => 'Invalid ID.']);
+            vendorJsonResponse($brokerModel->permanentlyDeleteRecord($id));
         }
-        exit;
+        vendorJsonResponse(['success' => false, 'message' => 'Invalid ID.'], 400);
     }
 
     public function getDetails(): void
@@ -105,18 +97,16 @@ class BrokersController
         global $brokerModel;
 
         $id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
-        header('Content-Type: application/json; charset=utf-8');
-        if ($id > 0) {
-            $record = $brokerModel->getRecord($id);
-            if ($record) {
-                echo json_encode($record, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            } else {
-                echo json_encode(['status' => 'error', 'message' => 'Record not found.']);
-            }
-        } else {
-            echo json_encode(['status' => 'error', 'message' => 'Invalid ID.']);
+        if ($id <= 0) {
+            vendorJsonResponse(['success' => false, 'message' => 'Invalid ID.'], 400);
         }
-        exit;
+
+        $record = $brokerModel->getRecord($id);
+        if (!$record) {
+            vendorJsonResponse(['success' => false, 'message' => 'Record not found.'], 404);
+        }
+
+        vendorJsonResponse($record);
     }
 
     public function searchBrokers(): void
@@ -125,11 +115,6 @@ class BrokersController
         global $brokerModel;
 
         $query = trim((string) ($_GET['q'] ?? ''));
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(
-            $brokerModel->searchActiveBrokers($query),
-            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
-        );
-        exit;
+        vendorJsonResponse($brokerModel->searchActiveBrokers($query));
     }
 }

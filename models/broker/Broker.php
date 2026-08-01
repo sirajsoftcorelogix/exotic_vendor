@@ -63,11 +63,7 @@ class Broker
         $totalPages = $limit > 0 ? (int) ceil($totalRecords / $limit) : 1;
 
         $sql = "SELECT b.id, b.broker_name, b.is_active, b.created_at, b.updated_at,
-                       (SELECT COUNT(*) FROM vp_publishers p WHERE p.broker_id = b.id) AS publisher_count,
-                       (SELECT GROUP_CONCAT(
-                            TRIM(BOTH ' / ' FROM CONCAT(COALESCE(bl.state, ''), ' / ', COALESCE(bl.zone, '')))
-                            ORDER BY bl.sort_order ASC, bl.id ASC SEPARATOR '; '
-                        ) FROM vp_broker_locations bl WHERE bl.broker_id = b.id) AS locations_label
+                       (SELECT COUNT(*) FROM vp_publishers p WHERE p.broker_id = b.id) AS publisher_count
                 FROM vp_brokers b
                 $whereSql
                 ORDER BY b.broker_name ASC, b.id ASC
@@ -532,18 +528,6 @@ class Broker
         foreach ($brokers as &$broker) {
             $brokerId = (int) ($broker['id'] ?? 0);
             $broker['locations'] = $this->getLocationsByBrokerId($brokerId);
-            if (empty($broker['locations_label'])) {
-                $labels = [];
-                foreach ($broker['locations'] as $location) {
-                    $state = trim((string) ($location['state'] ?? ''));
-                    $zone = trim((string) ($location['zone'] ?? ''));
-                    $label = trim($state . ($state !== '' && $zone !== '' ? ' / ' : '') . $zone);
-                    if ($label !== '') {
-                        $labels[] = $label;
-                    }
-                }
-                $broker['locations_label'] = implode('; ', $labels);
-            }
         }
         unset($broker);
     }
