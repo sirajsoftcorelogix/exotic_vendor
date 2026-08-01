@@ -43,7 +43,10 @@ class vendor
     }
     public function getVendorById($id)
     {
-        $sql = "SELECT * FROM vp_vendors WHERE id = ?";
+        $sql = "SELECT vp.*, br.broker_name
+                FROM vp_vendors vp
+                LEFT JOIN vp_brokers br ON br.id = vp.broker_id
+                WHERE vp.id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param('i', $id);
         $stmt->execute();
@@ -242,6 +245,44 @@ class vendor
         return strtolower(trim((string) $email));
     }
 
+    private function normalizeBrokerId(?int $brokerId): ?int
+    {
+        if ($brokerId === null || $brokerId <= 0) {
+            return null;
+        }
+
+        return $brokerId;
+    }
+
+    private function parseBrokerIdFromData(array $data): ?int
+    {
+        $raw = trim((string) ($data['broker_id'] ?? ''));
+
+        return $raw === '' ? null : max(0, (int) $raw);
+    }
+
+    private function validateBrokerId(?int $brokerId): ?array
+    {
+        $brokerId = $this->normalizeBrokerId($brokerId);
+        if ($brokerId === null) {
+            return null;
+        }
+
+        $stmt = $this->conn->prepare(
+            'SELECT id FROM vp_brokers WHERE id = ? AND is_active = 1 LIMIT 1'
+        );
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Could not validate broker.'];
+        }
+        $stmt->bind_param('i', $brokerId);
+        $stmt->execute();
+        $stmt->store_result();
+        $ok = $stmt->num_rows > 0;
+        $stmt->close();
+
+        return $ok ? null : ['success' => false, 'message' => 'Selected broker is invalid or inactive.'];
+    }
+
     public function addVendor($data)
     {
         $groupnameValue = '';
@@ -266,6 +307,12 @@ class vendor
             return $duplicate;
         }
 
+        $brokerError = $this->validateBrokerId($this->parseBrokerIdFromData($data));
+        if ($brokerError !== null) {
+            return $brokerError;
+        }
+        $brokerId = $this->normalizeBrokerId($this->parseBrokerIdFromData($data));
+
         $vendorCode = generateVendorCode($this->conn);
         $stockReplenishmentMonths = trim((string)($data['stock_replenishment_months'] ?? '')) === ''
             ? 0
@@ -274,10 +321,10 @@ class vendor
             ? 0.0
             : max(0.0, (float)$data['discount']);
 
-        $sql = "INSERT INTO vp_vendors (vendor_code, vendor_name, contact_name, vendor_email, country_code, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, agent_id, is_active, groupname, stock_replenishment_months, discount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_vendors (vendor_code, vendor_name, contact_name, vendor_email, country_code, vendor_phone, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, rating, notes, user_id, team_id, agent_id, is_active, groupname, stock_replenishment_months, discount, broker_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param(
-            'ssssssssssssssssiiissid',
+            'ssssssssssssssssiiissidi',
             $vendorCode,
             $data['addVendorName'],
             $data['addContactPerson'],
@@ -300,7 +347,8 @@ class vendor
             $data['addStatus'],
             $groupnameValue,
             $stockReplenishmentMonths,
-            $discount
+            $discount,
+            $brokerId
         );
         if ($stmt->execute()) {
             // Get the last inserted vendor id
@@ -348,6 +396,12 @@ class vendor
             return $duplicate;
         }
 
+        $brokerError = $this->validateBrokerId($this->parseBrokerIdFromData($data));
+        if ($brokerError !== null) {
+            return $brokerError;
+        }
+        $brokerId = $this->normalizeBrokerId($this->parseBrokerIdFromData($data));
+
         $groupnameValue = '';
         if (isset($data['editGroupname'])) {
             if (is_array($data['editGroupname'])) {
@@ -366,10 +420,10 @@ class vendor
             ? 0.0
             : max(0.0, (float)$data['discount']);
 
-        $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, country_code = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, agent_id = ?, is_active = ?, groupname = ?, stock_replenishment_months = ?, discount = ? WHERE id = ?";
+        $sql = "UPDATE vp_vendors SET vendor_name = ?, contact_name = ?, vendor_email = ?, country_code = ?, vendor_phone = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, agent_id = ?, is_active = ?, groupname = ?, stock_replenishment_months = ?, discount = ?, broker_id = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param(
-            'sssssssssssssssiiissidi',
+            'sssssssssssssssiiissiidi',
             $data['editVendorName'],
             $data['editContactPerson'],
             $data['editEmail'],
@@ -392,6 +446,7 @@ class vendor
             $groupnameValue,
             $stockReplenishmentMonths,
             $discount,
+            $brokerId,
             $id
         );
         if ($stmt->execute()) {
@@ -525,11 +580,11 @@ class vendor
         if (!empty($search) && !empty($status_filter)) {
             $search = $this->conn->real_escape_string($search);
             $status_filter = $this->conn->real_escape_string($status_filter);
-            $where = "WHERE (vp.vendor_id LIKE '%$search%' OR vp.groupname LIKE '%$search%' OR vp.vendor_name LIKE '%$search%' OR vp.contact_name LIKE '%$search%' OR vp.vendor_email LIKE '%$search%' OR vp.vendor_phone LIKE '%$search%' OR vp.city LIKE '%$search%' OR vp.state LIKE '%$search%') AND vp.is_active = '$status_filter'";
+            $where = "WHERE (vp.vendor_id LIKE '%$search%' OR vp.groupname LIKE '%$search%' OR vp.vendor_name LIKE '%$search%' OR vp.contact_name LIKE '%$search%' OR vp.vendor_email LIKE '%$search%' OR vp.vendor_phone LIKE '%$search%' OR vp.city LIKE '%$search%' OR vp.state LIKE '%$search%' OR br.broker_name LIKE '%$search%') AND vp.is_active = '$status_filter'";
         } else {
             if (!empty($search)) {
                 $search = $this->conn->real_escape_string($search);
-                $where = "WHERE vp.vendor_id LIKE '%$search%' OR vp.groupname LIKE '%$search%' OR vp.vendor_name LIKE '%$search%' OR vp.contact_name LIKE '%$search%' OR vp.vendor_email LIKE '%$search%' OR vp.vendor_phone LIKE '%$search%' OR vp.city LIKE '%$search%' OR vp.state LIKE '%$search%'";
+                $where = "WHERE vp.vendor_id LIKE '%$search%' OR vp.groupname LIKE '%$search%' OR vp.vendor_name LIKE '%$search%' OR vp.contact_name LIKE '%$search%' OR vp.vendor_email LIKE '%$search%' OR vp.vendor_phone LIKE '%$search%' OR vp.city LIKE '%$search%' OR vp.state LIKE '%$search%' OR br.broker_name LIKE '%$search%'";
             }
 
             if (!empty($status_filter)) {
@@ -556,13 +611,13 @@ class vendor
         }
 
         // total records
-        $resultCount = $this->conn->query("SELECT COUNT(*) AS total FROM vp_vendors AS vp LEFT JOIN vp_users AS vu ON vp.agent_id = vu.id AND vu.is_deleted = 0 LEFT JOIN vendors_category AS vc ON vp.id = vc.vendor_id LEFT JOIN vp_vendor_team_mapping AS vvtm ON vp.id = vvtm.vendor_id $where");
+        $resultCount = $this->conn->query("SELECT COUNT(DISTINCT vp.id) AS total FROM vp_vendors AS vp LEFT JOIN vp_brokers AS br ON br.id = vp.broker_id LEFT JOIN vp_users AS vu ON vp.agent_id = vu.id AND vu.is_deleted = 0 LEFT JOIN vendors_category AS vc ON vp.id = vc.vendor_id LEFT JOIN vp_vendor_team_mapping AS vvtm ON vp.id = vvtm.vendor_id $where");
         $rowCount = $resultCount->fetch_assoc();
         $totalRecords = $rowCount['total'];
         $totalPages = ceil($totalRecords / $limit);
 
         // fetch data
-        $sql = "SELECT vp.*, vu.name AS agent_name, GROUP_CONCAT(DISTINCT vc.category_id) AS categories, GROUP_CONCAT(DISTINCT vvtm.team_id) AS teams FROM vp_vendors AS vp LEFT JOIN vp_users AS vu ON vp.agent_id = vu.id AND vu.is_deleted = 0 LEFT JOIN vendors_category AS vc ON vp.id = vc.vendor_id LEFT JOIN vp_vendor_team_mapping AS vvtm ON vp.id = vvtm.vendor_id $where GROUP BY vp.id ORDER BY CASE WHEN vp.vendor_id IS NULL OR TRIM(vp.vendor_id) = '' THEN 1 ELSE 0 END ASC, vp.vendor_id DESC, vp.id DESC LIMIT $limit OFFSET $offset";
+        $sql = "SELECT vp.*, br.broker_name, vu.name AS agent_name, GROUP_CONCAT(DISTINCT vc.category_id) AS categories, GROUP_CONCAT(DISTINCT vvtm.team_id) AS teams FROM vp_vendors AS vp LEFT JOIN vp_brokers AS br ON br.id = vp.broker_id LEFT JOIN vp_users AS vu ON vp.agent_id = vu.id AND vu.is_deleted = 0 LEFT JOIN vendors_category AS vc ON vp.id = vc.vendor_id LEFT JOIN vp_vendor_team_mapping AS vvtm ON vp.id = vvtm.vendor_id $where GROUP BY vp.id ORDER BY CASE WHEN vp.vendor_id IS NULL OR TRIM(vp.vendor_id) = '' THEN 1 ELSE 0 END ASC, vp.vendor_id DESC, vp.id DESC LIMIT $limit OFFSET $offset";
         $result = $this->conn->query($sql);
 
 

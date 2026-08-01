@@ -19,6 +19,11 @@
                 </p>
             </div>
             <div class="flex shrink-0 lg:pl-4 lg:self-center gap-3 flex-wrap">
+                <a href="?page=brokers&action=list"
+                    class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-gray-300 bg-white text-gray-800 text-sm font-semibold shadow-sm hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 transition whitespace-nowrap">
+                    <i class="fas fa-user-tie text-xs opacity-95" aria-hidden="true"></i>
+                    Manage brokers
+                </a>
                 <?php if (isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1): ?>
                     <button id="sync-vendors-api-btn"
                         class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-amber-300 bg-white text-amber-800 text-sm font-semibold shadow-sm hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50/50 transition whitespace-nowrap">
@@ -175,6 +180,7 @@
                         <!-- <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Email</th> -->
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">City</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">State</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Broker</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Status</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Action</th>
                     </tr>
@@ -239,6 +245,10 @@
                                 <!-- <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_email'] ?? '') ?></td> -->
                                 <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700"><?= htmlspecialchars($vendor['city'] ?? '') ?></td>
                                 <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700"><?= htmlspecialchars($vendor['state'] ?? '') ?></td>
+                                <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700"><?php
+                                    $brokerName = trim((string)($vendor['broker_name'] ?? ''));
+                                    echo htmlspecialchars($brokerName !== '' ? $brokerName : '-', ENT_QUOTES, 'UTF-8');
+                                ?></td>
                                 <td class="px-5 py-4 whitespace-wrap text-sm">
                                     <?php
                                         $vendorStatus = strtolower(trim((string)($vendor['is_active'] ?? '')));
@@ -403,6 +413,13 @@
                                     <label class="text-sm font-medium text-gray-700">Stock Replenishment Months</label>
                                     <input type="number" class="form-input w-full mt-1" name="stock_replenishment_months" id="add_stock_replenishment_months" min="0" step="1" placeholder="e.g. 3" />
                                     <p class="mt-1 text-xs text-gray-500">Expected months to replenish stock for this vendor. Leave empty or 0 if not set.</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Broker</label>
+                                    <select name="broker_id" id="add_broker_id" class="form-input w-full mt-1">
+                                        <option value="">Select broker...</option>
+                                    </select>
+                                    <p class="mt-1 text-xs text-gray-500">Search active brokers from Broker Master. Leave empty if not assigned.</p>
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -635,6 +652,13 @@
                                     <label class="text-sm font-medium text-gray-700">Stock Replenishment Months</label>
                                     <input type="number" class="form-input w-full mt-1" name="stock_replenishment_months" id="edit_stock_replenishment_months" min="0" step="1" placeholder="e.g. 3" />
                                     <p class="mt-1 text-xs text-gray-500">Expected months to replenish stock for this vendor. Leave empty or 0 if not set.</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Broker</label>
+                                    <select name="broker_id" id="edit_broker_id" class="form-input w-full mt-1">
+                                        <option value="">Select broker...</option>
+                                    </select>
+                                    <p class="mt-1 text-xs text-gray-500">Search active brokers from Broker Master. Leave empty if not assigned.</p>
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1174,6 +1198,57 @@
         return url;
     }
 
+    function destroyVendorBrokerSelect2(selectId) {
+        if (!window.jQuery || !jQuery.fn.select2) {
+            return;
+        }
+        const $broker = jQuery('#' + selectId);
+        if ($broker.length && $broker.hasClass('select2-hidden-accessible')) {
+            $broker.select2('destroy');
+        }
+    }
+
+    function initVendorBrokerSelect2(selectId, dropdownParentSelector, brokerId, brokerName) {
+        if (!window.jQuery || !jQuery.fn.select2) {
+            return;
+        }
+
+        const $broker = jQuery('#' + selectId);
+        if (!$broker.length) {
+            return;
+        }
+
+        destroyVendorBrokerSelect2(selectId);
+        $broker.empty().append(new Option('Select broker...', '', true, false));
+
+        const selectedId = parseInt(String(brokerId || '0'), 10);
+        const selectedName = String(brokerName || '').trim();
+        if (selectedId > 0 && selectedName !== '') {
+            $broker.append(new Option(selectedName, String(selectedId), true, true));
+        }
+
+        $broker.select2({
+            width: '100%',
+            placeholder: 'Type at least 2 characters to search...',
+            allowClear: true,
+            minimumInputLength: 2,
+            dropdownParent: jQuery(dropdownParentSelector),
+            ajax: {
+                url: 'index.php?page=brokers&action=searchBrokers',
+                type: 'GET',
+                dataType: 'json',
+                delay: 300,
+                data: function (params) {
+                    return { q: params.term || '' };
+                },
+                processResults: function (data) {
+                    return { results: Array.isArray(data) ? data : [] };
+                },
+                cache: true
+            }
+        });
+    }
+
     function bindVendorDuplicateCheck(inputEl, msgEl, action, paramName, minLen, existsFlagSetter, excludeIdGetter, duplicateMessage) {
         if (!inputEl || !msgEl) return;
         inputEl.addEventListener('keyup', () => {
@@ -1636,6 +1711,7 @@
     function openVendorPopup() {
         popupWrapper.classList.remove('hidden');
         updateVendorBookDiscountVisibility();
+        initVendorBrokerSelect2('add_broker_id', '#vendor-popup-panel', '', '');
         setTimeout(() => {
             modalSlider.classList.remove('translate-x-full');
         }, 10);
@@ -1810,6 +1886,12 @@
                 vendor.discount != null && vendor.discount !== 0
                     ? String(vendor.discount)
                     : '';
+            initVendorBrokerSelect2(
+                'edit_broker_id',
+                '#editVendorModal',
+                vendor.broker_id,
+                vendor.broker_name
+            );
             
             document.getElementById("editAgentIds").value = vendor.agent_id;
             

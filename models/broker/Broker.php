@@ -63,7 +63,7 @@ class Broker
         $totalPages = $limit > 0 ? (int) ceil($totalRecords / $limit) : 1;
 
         $sql = "SELECT b.id, b.broker_name, b.is_active, b.created_at, b.updated_at,
-                       (SELECT COUNT(*) FROM vp_publishers p WHERE p.broker_id = b.id) AS publisher_count
+                       (SELECT COUNT(*) FROM vp_vendors v WHERE v.broker_id = b.id) AS vendor_count
                 FROM vp_brokers b
                 $whereSql
                 ORDER BY b.broker_name ASC, b.id ASC
@@ -274,7 +274,7 @@ class Broker
 
         $isActive = $isActive ? 1 : 0;
         if ($isActive === 0) {
-            $mappingError = $this->publisherMappingError($id);
+            $mappingError = $this->vendorMappingError($id);
             if ($mappingError !== null) {
                 return $mappingError;
             }
@@ -322,7 +322,7 @@ class Broker
             return ['success' => false, 'message' => 'Broker not found.'];
         }
 
-        $mappingError = $this->publisherMappingError($id);
+        $mappingError = $this->vendorMappingError($id);
         if ($mappingError !== null) {
             return $mappingError;
         }
@@ -356,7 +356,7 @@ class Broker
             return ['success' => false, 'message' => 'Broker not found.'];
         }
 
-        $mappingError = $this->publisherMappingError($id);
+        $mappingError = $this->vendorMappingError($id);
         if ($mappingError !== null) {
             return $mappingError;
         }
@@ -547,10 +547,10 @@ class Broker
         return $exists;
     }
 
-    private function countPublisherMappings(int $brokerId): int
+    private function countVendorMappings(int $brokerId): int
     {
         $stmt = $this->conn->prepare(
-            'SELECT COUNT(*) AS total FROM vp_publishers WHERE broker_id = ?'
+            'SELECT COUNT(*) AS total FROM vp_vendors WHERE broker_id = ?'
         );
         if (!$stmt) {
             return 0;
@@ -563,14 +563,14 @@ class Broker
         return (int) ($row['total'] ?? 0);
     }
 
-    private function publisherMappingError(int $brokerId): ?array
+    private function vendorMappingError(int $brokerId): ?array
     {
-        $count = $this->countPublisherMappings($brokerId);
+        $count = $this->countVendorMappings($brokerId);
         if ($count <= 0) {
             return null;
         }
 
-        $label = $count === 1 ? '1 publisher' : $count . ' publishers';
+        $label = $count === 1 ? '1 vendor' : $count . ' vendors';
 
         return [
             'success' => false,
