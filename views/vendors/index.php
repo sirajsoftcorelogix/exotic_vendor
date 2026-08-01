@@ -388,8 +388,8 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                     <i class="fas fa-building text-sm" aria-hidden="true"></i>
                                 </span>
                                 <div>
-                                    <h3 class="text-sm font-bold text-gray-900">Basic information</h3>
-                                    <p class="text-xs text-gray-500 mt-0.5">Vendor identity, contact, and assignment.</p>
+                                    <h3 class="text-sm font-bold text-gray-900">Vendor profile</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Vendor identity, web presence, and assignment.</p>
                                 </div>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -399,32 +399,21 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                     <span id="addVendorNameMsg" class="text-sm text-red-500"></span>
                                 </div>
                                 <div>
-                                    <label class="<?= $vfLabel ?>">Contact person <span class="text-red-500 normal-case">*</span></label>
-                                    <input type="text" class="<?= $vfInput ?>" required name="addContactPerson" id="addContactPerson" placeholder="Primary contact" />
+                                    <label class="<?= $vfLabel ?>">Status <span class="text-red-500 normal-case">*</span></label>
+                                    <select class="<?= $vfInput ?>" required name="addStatus" id="addStatus">
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive</option>
+                                        <option value="blacklisted">Blacklisted</option>
+                                    </select>
                                 </div>
                                 <div class="md:col-span-2">
-                                    <label class="<?= $vfLabel ?>">Phone <span class="text-red-500 normal-case">*</span></label>
-                                    <div class="flex flex-col sm:flex-row gap-2">
-                                        <select class="<?= $vfInput ?> sm:max-w-[220px]" name="addCountryCode" id="addCountryCode" required>
-                                            <option value="" disabled>Select code</option>
-                                            <?php foreach ($countryList as $cl): ?>
-                                                <option value="<?php echo $cl['phone_code']; ?>" <?php if ($cl['name'] === 'India') { echo 'selected'; } ?>>
-                                                    <?php echo $cl['name'] . ' (+' . $cl['phone_code'] . ')'; ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                        <input type="number" class="<?= $vfInput ?> flex-1" required oninput="limitToTenDigits(this)" name="addPhone" id="addPhone" placeholder="10-digit mobile" />
+                                    <label class="<?= $vfLabel ?>">Website</label>
+                                    <div class="relative">
+                                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                            <i class="fas fa-globe text-xs" aria-hidden="true"></i>
+                                        </span>
+                                        <input type="url" class="<?= $vfInput ?> py-2.5 pl-9 pr-3" name="website" id="addWebsite" placeholder="https://example.com" />
                                     </div>
-                                    <span id="addPhoneMsg" class="text-sm text-red-500"></span>
-                                </div>
-                                <div>
-                                    <label class="<?= $vfLabel ?>">Email</label>
-                                    <input type="email" class="<?= $vfInput ?>" name="addEmail" id="addEmail" placeholder="name@vendor.com" />
-                                    <span id="addEmailMsg" class="text-sm text-red-500"></span>
-                                </div>
-                                <div>
-                                    <label class="<?= $vfLabel ?>">Alternate phone</label>
-                                    <input type="number" class="<?= $vfInput ?>" name="addAltPhone" id="addAltPhone" oninput="limitToTenDigits(this)" placeholder="Optional" />
                                 </div>
                                 <div>
                                     <label class="<?= $vfLabel ?>">Broker</label>
@@ -433,13 +422,84 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                     </select>
                                     <p class="<?= $vfHint ?>">Search active brokers from Broker Master.</p>
                                 </div>
+                            </div>
+                            <label class="flex items-start gap-3 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2.5 cursor-pointer">
+                                <input type="hidden" name="addWebpage" value="0">
+                                <input type="checkbox" class="mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="addWebpage" id="addWebpage" value="1" checked>
+                                <span>
+                                    <span class="block text-sm font-medium text-gray-800">Allow webpage on Exotic India</span>
+                                    <span class="block text-xs text-gray-500 mt-0.5">Maps to the <code class="text-[11px] bg-white/80 px-1 rounded">webpage</code> parameter on the vendor API.</span>
+                                </span>
+                            </label>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+                                    <i class="fas fa-address-book text-sm" aria-hidden="true"></i>
+                                </span>
                                 <div>
-                                    <label class="<?= $vfLabel ?>">Status <span class="text-red-500 normal-case">*</span></label>
-                                    <select class="<?= $vfInput ?>" required name="addStatus" id="addStatus">
-                                        <option value="active">Active</option>
-                                        <option value="inactive">Inactive</option>
-                                        <option value="blacklisted">Blacklisted</option>
+                                    <h3 class="text-sm font-bold text-gray-900">Contact details</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Primary contact plus optional alternate emails and phones.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="md:col-span-2">
+                                    <label class="<?= $vfLabel ?>">Contact person <span class="text-red-500 normal-case">*</span></label>
+                                    <input type="text" class="<?= $vfInput ?>" required name="addContactPerson" id="addContactPerson" placeholder="Primary contact name" />
+                                </div>
+                                <div class="md:col-span-2 rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+                                    <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Primary email</label>
+                                    <input type="email" class="<?= $vfInput ?>" name="addEmail" id="addEmail" placeholder="name@vendor.com" />
+                                    <span id="addEmailMsg" class="text-sm text-red-500"></span>
+                                    <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                        <input type="checkbox" name="vendor_email_is_primary" id="add_vendor_email_is_primary" value="1" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                                        <span>Mark as primary email</span>
+                                    </label>
+                                </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Country code <span class="text-red-500 normal-case">*</span></label>
+                                    <select class="<?= $vfInput ?>" name="addCountryCode" id="addCountryCode" required>
+                                        <option value="" disabled>Select code</option>
+                                        <?php foreach ($countryList as $cl): ?>
+                                            <option value="<?php echo $cl['phone_code']; ?>" <?php if ($cl['name'] === 'India') { echo 'selected'; } ?>>
+                                                <?php echo $cl['name'] . ' (+' . $cl['phone_code'] . ')'; ?>
+                                            </option>
+                                        <?php endforeach; ?>
                                     </select>
+                                </div>
+                                <div class="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+                                    <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Primary phone <span class="text-red-500 normal-case">*</span></label>
+                                    <input type="text" class="<?= $vfInput ?>" required name="addPhone" id="addPhone" oninput="limitToTenDigits(this)" placeholder="10-digit mobile" />
+                                    <span id="addPhoneMsg" class="text-sm text-red-500"></span>
+                                    <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                        <input type="checkbox" name="vendor_phone_is_whatsapp" id="add_vendor_phone_is_whatsapp" value="1" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                                        <span>WhatsApp number</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-1">
+                                <div class="rounded-lg border border-dashed border-gray-300 bg-white/80 p-3">
+                                    <div class="mb-2 flex items-center justify-between gap-3">
+                                        <h4 class="text-sm font-semibold text-gray-800">Additional emails</h4>
+                                        <button type="button" id="addVendorAltEmailBtn" class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                            <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                                            Add email
+                                        </button>
+                                    </div>
+                                    <div id="vendorAddAltEmailsList" class="space-y-2"></div>
+                                    <p class="mt-2 text-xs text-gray-500">Up to 5 alternate emails.</p>
+                                </div>
+                                <div class="rounded-lg border border-dashed border-gray-300 bg-white/80 p-3">
+                                    <div class="mb-2 flex items-center justify-between gap-3">
+                                        <h4 class="text-sm font-semibold text-gray-800">Additional phones</h4>
+                                        <button type="button" id="addVendorAltPhoneBtn" class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                            <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                                            Add phone
+                                        </button>
+                                    </div>
+                                    <div id="vendorAddAltPhonesList" class="space-y-2"></div>
+                                    <p class="mt-2 text-xs text-gray-500">Up to 5 alternate phones. Tick WhatsApp where applicable.</p>
                                 </div>
                             </div>
                         </section>
@@ -479,14 +539,6 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                 <span id="addGroupnameMsg" class="text-sm text-red-500"></span>
                                 <p class="<?= $vfHint ?>">Required for Exotic India API sync.</p>
                             </div>
-                            <label class="flex items-start gap-3 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2.5 cursor-pointer">
-                                <input type="hidden" name="addWebpage" value="0">
-                                <input type="checkbox" class="mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="addWebpage" id="addWebpage" value="1" checked>
-                                <span>
-                                    <span class="block text-sm font-medium text-gray-800">Allow webpage on Exotic India</span>
-                                    <span class="block text-xs text-gray-500 mt-0.5">Whether this vendor may have a public webpage.</span>
-                                </span>
-                            </label>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="<?= $vfLabel ?>">Team</label>
@@ -653,8 +705,8 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                     <i class="fas fa-building text-sm" aria-hidden="true"></i>
                                 </span>
                                 <div>
-                                    <h3 class="text-sm font-bold text-gray-900">Basic information</h3>
-                                    <p class="text-xs text-gray-500 mt-0.5">Vendor identity, contact, and assignment.</p>
+                                    <h3 class="text-sm font-bold text-gray-900">Vendor profile</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Vendor identity, web presence, and assignment.</p>
                                 </div>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -664,32 +716,21 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                     <span id="editVendorNameMsg" class="text-sm text-red-500"></span>
                                 </div>
                                 <div>
-                                    <label class="<?= $vfLabel ?>">Contact person <span class="text-red-500 normal-case">*</span></label>
-                                    <input type="text" class="<?= $vfInput ?>" required name="editContactPerson" id="editContactPerson" />
+                                    <label class="<?= $vfLabel ?>">Status <span class="text-red-500 normal-case">*</span></label>
+                                    <select class="<?= $vfInput ?>" required name="editStatus" id="editStatus">
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive</option>
+                                        <option value="blacklisted">Blacklisted</option>
+                                    </select>
                                 </div>
                                 <div class="md:col-span-2">
-                                    <label class="<?= $vfLabel ?>">Phone <span class="text-red-500 normal-case">*</span></label>
-                                    <div class="flex flex-col sm:flex-row gap-2">
-                                        <select class="<?= $vfInput ?> sm:max-w-[220px]" name="editCountryCode" id="editCountryCode" required>
-                                            <option value="" disabled>Select code</option>
-                                            <?php foreach ($countryList as $cl): ?>
-                                                <option value="<?php echo $cl['phone_code']; ?>">
-                                                    <?php echo $cl['name'] . ' (+' . $cl['phone_code'] . ')'; ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                        <input type="number" class="<?= $vfInput ?> flex-1" required name="editPhone" id="editPhone" oninput="limitToTenDigits(this)" placeholder="10-digit mobile" />
+                                    <label class="<?= $vfLabel ?>">Website</label>
+                                    <div class="relative">
+                                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                            <i class="fas fa-globe text-xs" aria-hidden="true"></i>
+                                        </span>
+                                        <input type="url" class="<?= $vfInput ?> py-2.5 pl-9 pr-3" name="website" id="editWebsite" placeholder="https://example.com" />
                                     </div>
-                                    <span id="editPhoneMsg" class="text-sm text-red-500"></span>
-                                </div>
-                                <div>
-                                    <label class="<?= $vfLabel ?>">Email</label>
-                                    <input type="email" class="<?= $vfInput ?>" name="editEmail" id="editEmail" />
-                                    <span id="editEmailMsg" class="text-sm text-red-500"></span>
-                                </div>
-                                <div>
-                                    <label class="<?= $vfLabel ?>">Alternate phone</label>
-                                    <input type="number" class="<?= $vfInput ?>" name="editAltPhone" id="editAltPhone" oninput="limitToTenDigits(this)" />
                                 </div>
                                 <div>
                                     <label class="<?= $vfLabel ?>">Broker</label>
@@ -698,13 +739,84 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                     </select>
                                     <p class="<?= $vfHint ?>">Search active brokers from Broker Master.</p>
                                 </div>
+                            </div>
+                            <label class="flex items-start gap-3 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2.5 cursor-pointer">
+                                <input type="hidden" name="editWebpage" value="0">
+                                <input type="checkbox" class="mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="editWebpage" id="editWebpage" value="1" checked>
+                                <span>
+                                    <span class="block text-sm font-medium text-gray-800">Allow webpage on Exotic India</span>
+                                    <span class="block text-xs text-gray-500 mt-0.5">Maps to the <code class="text-[11px] bg-white/80 px-1 rounded">webpage</code> parameter on the vendor API.</span>
+                                </span>
+                            </label>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+                                    <i class="fas fa-address-book text-sm" aria-hidden="true"></i>
+                                </span>
                                 <div>
-                                    <label class="<?= $vfLabel ?>">Status <span class="text-red-500 normal-case">*</span></label>
-                                    <select class="<?= $vfInput ?>" required name="editStatus" id="editStatus">
-                                        <option value="active">Active</option>
-                                        <option value="inactive">Inactive</option>
-                                        <option value="blacklisted">Blacklisted</option>
+                                    <h3 class="text-sm font-bold text-gray-900">Contact details</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Primary contact plus optional alternate emails and phones.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="md:col-span-2">
+                                    <label class="<?= $vfLabel ?>">Contact person <span class="text-red-500 normal-case">*</span></label>
+                                    <input type="text" class="<?= $vfInput ?>" required name="editContactPerson" id="editContactPerson" />
+                                </div>
+                                <div class="md:col-span-2 rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+                                    <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Primary email</label>
+                                    <input type="email" class="<?= $vfInput ?>" name="editEmail" id="editEmail" />
+                                    <span id="editEmailMsg" class="text-sm text-red-500"></span>
+                                    <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                        <input type="checkbox" name="vendor_email_is_primary" id="edit_vendor_email_is_primary" value="1" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                                        <span>Mark as primary email</span>
+                                    </label>
+                                </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Country code <span class="text-red-500 normal-case">*</span></label>
+                                    <select class="<?= $vfInput ?>" name="editCountryCode" id="editCountryCode" required>
+                                        <option value="" disabled>Select code</option>
+                                        <?php foreach ($countryList as $cl): ?>
+                                            <option value="<?php echo $cl['phone_code']; ?>">
+                                                <?php echo $cl['name'] . ' (+' . $cl['phone_code'] . ')'; ?>
+                                            </option>
+                                        <?php endforeach; ?>
                                     </select>
+                                </div>
+                                <div class="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+                                    <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Primary phone <span class="text-red-500 normal-case">*</span></label>
+                                    <input type="text" class="<?= $vfInput ?>" required name="editPhone" id="editPhone" oninput="limitToTenDigits(this)" placeholder="10-digit mobile" />
+                                    <span id="editPhoneMsg" class="text-sm text-red-500"></span>
+                                    <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                        <input type="checkbox" name="vendor_phone_is_whatsapp" id="edit_vendor_phone_is_whatsapp" value="1" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                                        <span>WhatsApp number</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-1">
+                                <div class="rounded-lg border border-dashed border-gray-300 bg-white/80 p-3">
+                                    <div class="mb-2 flex items-center justify-between gap-3">
+                                        <h4 class="text-sm font-semibold text-gray-800">Additional emails</h4>
+                                        <button type="button" id="editVendorAltEmailBtn" class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                            <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                                            Add email
+                                        </button>
+                                    </div>
+                                    <div id="vendorEditAltEmailsList" class="space-y-2"></div>
+                                    <p class="mt-2 text-xs text-gray-500">Up to 5 alternate emails.</p>
+                                </div>
+                                <div class="rounded-lg border border-dashed border-gray-300 bg-white/80 p-3">
+                                    <div class="mb-2 flex items-center justify-between gap-3">
+                                        <h4 class="text-sm font-semibold text-gray-800">Additional phones</h4>
+                                        <button type="button" id="editVendorAltPhoneBtn" class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                            <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                                            Add phone
+                                        </button>
+                                    </div>
+                                    <div id="vendorEditAltPhonesList" class="space-y-2"></div>
+                                    <p class="mt-2 text-xs text-gray-500">Up to 5 alternate phones. Tick WhatsApp where applicable.</p>
                                 </div>
                             </div>
                         </section>
@@ -744,14 +856,6 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                 <span id="editGroupnameMsg" class="text-sm text-red-500"></span>
                                 <p class="<?= $vfHint ?>">Required for Exotic India API sync.</p>
                             </div>
-                            <label class="flex items-start gap-3 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2.5 cursor-pointer">
-                                <input type="hidden" name="editWebpage" value="0">
-                                <input type="checkbox" class="mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="editWebpage" id="editWebpage" value="1" checked>
-                                <span>
-                                    <span class="block text-sm font-medium text-gray-800">Allow webpage on Exotic India</span>
-                                    <span class="block text-xs text-gray-500 mt-0.5">Whether this vendor may have a public webpage.</span>
-                                </span>
-                            </label>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="<?= $vfLabel ?>">Team</label>
@@ -1700,6 +1804,151 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
     });
 
     const vendorFieldInputClass = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition';
+    const VENDOR_MAX_ALT_PHONES = 5;
+    const VENDOR_MAX_ALT_EMAILS = 5;
+
+    function vendorAltRowClass() {
+        return 'grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_auto] gap-2 items-center rounded-lg border border-gray-200 bg-gray-50/60 p-3';
+    }
+
+    function updateVendorAltAddButtons(mode) {
+        const isEdit = mode === 'edit';
+        const phoneBtn = document.getElementById(isEdit ? 'editVendorAltPhoneBtn' : 'addVendorAltPhoneBtn');
+        const emailBtn = document.getElementById(isEdit ? 'editVendorAltEmailBtn' : 'addVendorAltEmailBtn');
+        const phoneListId = isEdit ? 'vendorEditAltPhonesList' : 'vendorAddAltPhonesList';
+        const emailListId = isEdit ? 'vendorEditAltEmailsList' : 'vendorAddAltEmailsList';
+        const phoneCount = document.querySelectorAll('#' + phoneListId + ' .vendor-alt-phone-row').length;
+        const emailCount = document.querySelectorAll('#' + emailListId + ' .vendor-alt-email-row').length;
+        if (phoneBtn) phoneBtn.disabled = phoneCount >= VENDOR_MAX_ALT_PHONES;
+        if (emailBtn) emailBtn.disabled = emailCount >= VENDOR_MAX_ALT_EMAILS;
+    }
+
+    function addVendorAltPhoneRow(mode, data) {
+        const isEdit = mode === 'edit';
+        const listId = isEdit ? 'vendorEditAltPhonesList' : 'vendorAddAltPhonesList';
+        const list = document.getElementById(listId);
+        if (!list || list.querySelectorAll('.vendor-alt-phone-row').length >= VENDOR_MAX_ALT_PHONES) {
+            return;
+        }
+        data = data || {};
+        const index = list.querySelectorAll('.vendor-alt-phone-row').length;
+        const row = document.createElement('div');
+        row.className = 'vendor-alt-phone-row ' + vendorAltRowClass();
+        row.innerHTML =
+            '<input type="text" name="alt_phones[' + index + '][phone]" value="' + String(data.phone || '').replace(/"/g, '&quot;') + '" oninput="limitToTenDigits(this)" placeholder="10-digit phone" class="' + vendorFieldInputClass + '">' +
+            '<label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer whitespace-nowrap">' +
+                '<input type="checkbox" name="alt_phones[' + index + '][is_whatsapp]" value="1"' + (data.is_whatsapp === 1 || data.is_whatsapp === '1' ? ' checked' : '') + ' class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">' +
+                '<span>WhatsApp</span>' +
+            '</label>' +
+            '<button type="button" class="vendor-alt-remove inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">Remove</button>';
+        list.appendChild(row);
+        reindexVendorAltPhoneRows(mode);
+        updateVendorAltAddButtons(mode);
+    }
+
+    function addVendorAltEmailRow(mode, data) {
+        const isEdit = mode === 'edit';
+        const listId = isEdit ? 'vendorEditAltEmailsList' : 'vendorAddAltEmailsList';
+        const list = document.getElementById(listId);
+        if (!list || list.querySelectorAll('.vendor-alt-email-row').length >= VENDOR_MAX_ALT_EMAILS) {
+            return;
+        }
+        data = data || {};
+        const index = list.querySelectorAll('.vendor-alt-email-row').length;
+        const row = document.createElement('div');
+        row.className = 'vendor-alt-email-row ' + vendorAltRowClass();
+        row.innerHTML =
+            '<input type="email" name="alt_emails[' + index + '][email]" value="' + String(data.email || '').replace(/"/g, '&quot;') + '" placeholder="email@example.com" class="' + vendorFieldInputClass + '">' +
+            '<label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer whitespace-nowrap">' +
+                '<input type="checkbox" name="alt_emails[' + index + '][is_primary]" value="1"' + (data.is_primary === 1 || data.is_primary === '1' ? ' checked' : '') + ' class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">' +
+                '<span>Primary</span>' +
+            '</label>' +
+            '<button type="button" class="vendor-alt-remove inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">Remove</button>';
+        list.appendChild(row);
+        reindexVendorAltEmailRows(mode);
+        updateVendorAltAddButtons(mode);
+    }
+
+    function reindexVendorAltPhoneRows(mode) {
+        const listId = mode === 'edit' ? 'vendorEditAltPhonesList' : 'vendorAddAltPhonesList';
+        document.querySelectorAll('#' + listId + ' .vendor-alt-phone-row').forEach(function (row, index) {
+            const phoneInput = row.querySelector('input[type="text"]');
+            const whatsappInput = row.querySelector('input[type="checkbox"]');
+            if (phoneInput) phoneInput.name = 'alt_phones[' + index + '][phone]';
+            if (whatsappInput) whatsappInput.name = 'alt_phones[' + index + '][is_whatsapp]';
+        });
+    }
+
+    function reindexVendorAltEmailRows(mode) {
+        const listId = mode === 'edit' ? 'vendorEditAltEmailsList' : 'vendorAddAltEmailsList';
+        document.querySelectorAll('#' + listId + ' .vendor-alt-email-row').forEach(function (row, index) {
+            const emailInput = row.querySelector('input[type="email"]');
+            const primaryInput = row.querySelector('input[type="checkbox"]');
+            if (emailInput) emailInput.name = 'alt_emails[' + index + '][email]';
+            if (primaryInput) primaryInput.name = 'alt_emails[' + index + '][is_primary]';
+        });
+    }
+
+    function renderVendorAltPhones(mode, rows) {
+        const listId = mode === 'edit' ? 'vendorEditAltPhonesList' : 'vendorAddAltPhonesList';
+        const list = document.getElementById(listId);
+        if (!list) return;
+        list.innerHTML = '';
+        (Array.isArray(rows) ? rows : []).forEach(function (row) {
+            addVendorAltPhoneRow(mode, row);
+        });
+        updateVendorAltAddButtons(mode);
+    }
+
+    function renderVendorAltEmails(mode, rows) {
+        const listId = mode === 'edit' ? 'vendorEditAltEmailsList' : 'vendorAddAltEmailsList';
+        const list = document.getElementById(listId);
+        if (!list) return;
+        list.innerHTML = '';
+        (Array.isArray(rows) ? rows : []).forEach(function (row) {
+            addVendorAltEmailRow(mode, row);
+        });
+        updateVendorAltAddButtons(mode);
+    }
+
+    function resetVendorAddContactLists() {
+        renderVendorAltPhones('add', []);
+        renderVendorAltEmails('add', []);
+        const emailPrimary = document.getElementById('add_vendor_email_is_primary');
+        const phoneWhatsapp = document.getElementById('add_vendor_phone_is_whatsapp');
+        if (emailPrimary) emailPrimary.checked = false;
+        if (phoneWhatsapp) phoneWhatsapp.checked = false;
+    }
+
+    document.getElementById('addVendorAltPhoneBtn')?.addEventListener('click', function () {
+        addVendorAltPhoneRow('add');
+    });
+    document.getElementById('addVendorAltEmailBtn')?.addEventListener('click', function () {
+        addVendorAltEmailRow('add');
+    });
+    document.getElementById('editVendorAltPhoneBtn')?.addEventListener('click', function () {
+        addVendorAltPhoneRow('edit');
+    });
+    document.getElementById('editVendorAltEmailBtn')?.addEventListener('click', function () {
+        addVendorAltEmailRow('edit');
+    });
+    document.addEventListener('click', function (event) {
+        const btn = event.target.closest('.vendor-alt-remove');
+        if (!btn) return;
+        const phoneRow = btn.closest('.vendor-alt-phone-row');
+        const emailRow = btn.closest('.vendor-alt-email-row');
+        if (phoneRow) {
+            const mode = phoneRow.closest('#vendorEditAltPhonesList') ? 'edit' : 'add';
+            phoneRow.remove();
+            reindexVendorAltPhoneRows(mode);
+            updateVendorAltAddButtons(mode);
+        } else if (emailRow) {
+            const mode = emailRow.closest('#vendorEditAltEmailsList') ? 'edit' : 'add';
+            emailRow.remove();
+            reindexVendorAltEmailRows(mode);
+            updateVendorAltAddButtons(mode);
+        }
+    });
 
     function populateVendorStateSelect(stateSelect, states, selectedValue) {
         const blankOption = document.createElement('option');
@@ -1779,6 +2028,7 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
     function openVendorPopup() {
         popupWrapper.classList.remove('hidden');
         updateVendorBookDiscountVisibility();
+        resetVendorAddContactLists();
         initVendorBrokerSelect2('add_broker_id', '#vendor-popup-panel', '', '');
         setTimeout(() => {
             modalSlider.classList.remove('translate-x-full');
@@ -1927,11 +2177,17 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
             // Populate form fields with vendor data
             document.getElementById("editVendorId").value   = vendor.id;
             document.getElementById("editVendorName").value = vendor.vendor_name;
+            document.getElementById("editWebsite").value = vendor.website || '';
             document.getElementById("editContactPerson").value = vendor.contact_name;
-            document.getElementById("editEmail").value = vendor.vendor_email;
+            document.getElementById("editEmail").value = vendor.vendor_email || '';
             document.getElementById("editCountryCode").value = vendor.country_code;
             document.getElementById("editPhone").value = vendor.vendor_phone;
-            document.getElementById("editAltPhone").value = vendor.alt_phone;
+            document.getElementById("edit_vendor_email_is_primary").checked =
+                vendor.vendor_email_is_primary === 1 || vendor.vendor_email_is_primary === '1';
+            document.getElementById("edit_vendor_phone_is_whatsapp").checked =
+                vendor.vendor_phone_is_whatsapp === 1 || vendor.vendor_phone_is_whatsapp === '1';
+            renderVendorAltEmails('edit', vendor.alt_emails || []);
+            renderVendorAltPhones('edit', vendor.alt_phones || []);
             document.getElementById("edit_stock_replenishment_months").value =
                 vendor.stock_replenishment_months != null && vendor.stock_replenishment_months !== 0
                     ? String(vendor.stock_replenishment_months)
