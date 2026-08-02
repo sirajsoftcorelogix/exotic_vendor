@@ -50,6 +50,7 @@ class OrderStatusController
 
         $data = $_POST;
         $id = isset($data['id']) ? (int) $data['id'] : 0;
+        $data['created_by'] = (int) ($_SESSION['user']['id'] ?? 0);
         if ($id > 0) {
             $result = $orderStatusModel->updateRecord($id, $data);
         } else {

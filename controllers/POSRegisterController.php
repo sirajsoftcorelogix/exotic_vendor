@@ -3818,6 +3818,14 @@ class POSRegisterController
         header('Content-Type: application/json; charset=utf-8');
 
         $op = trim((string)($_REQUEST['op'] ?? ''));
+        if ($op !== 'retrieve') {
+            require_once dirname(__DIR__) . '/helpers/order_follow_up.php';
+            if (!order_follow_up_is_cart_editable()) {
+                echo json_encode(['success' => false, 'message' => 'Cart editing is not allowed for Reship orders.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+        }
+
         switch ($op) {
             case 'retrieve':
                 // Same discount / gift query + header as add/modifyqty so cart totals reflect applied coupon.
