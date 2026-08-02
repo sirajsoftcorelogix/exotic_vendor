@@ -4,7 +4,7 @@
 /** @var list<array<string,mixed>> $order */
 /** @var bool $canFollowUpOrder */
 
-require_once dirname(__DIR__, 2) . '/helpers/order_follow_up.php';
+require_once dirname(__DIR__, 3) . '/helpers/order_follow_up.php';
 
 $displayOrderNumber = trim((string) ($displayOrderNumber ?? ''));
 $orderStatusPage = in_array(trim((string) ($orderStatusPage ?? '')), ['orders', 'posorders'], true)
