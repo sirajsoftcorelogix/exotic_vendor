@@ -211,6 +211,16 @@ function order_follow_up_seed_exotic_cart(mysqli $conn, RetailApiClient $client)
  * @param array<string, mixed> $session
  * @return array<string, mixed>
  */
+function order_follow_up_is_cart_editable(?array $session = null): bool
+{
+    $session = $session ?? order_follow_up_get_session();
+    if (!is_array($session)) {
+        return true;
+    }
+
+    return strtolower(trim((string) ($session['follow_up_type'] ?? ''))) !== 'reship';
+}
+
 function order_follow_up_public_session_view(array $session): array
 {
     return [
@@ -220,6 +230,7 @@ function order_follow_up_public_session_view(array $session): array
         'pricing_mode' => (string) ($session['pricing_mode'] ?? ''),
         'pricing_mode_label' => order_follow_up_pricing_mode_label((string) ($session['pricing_mode'] ?? '')),
         'scope' => (string) ($session['scope'] ?? 'full'),
+        'cart_editable' => order_follow_up_is_cart_editable($session),
         'pos_line_prices' => is_array($session['pos_line_prices'] ?? null) ? $session['pos_line_prices'] : [],
         'target_payable' => (float) ($session['target_payable'] ?? 0),
         'source_payable_total' => (float) (($session['source_pricing_snapshot']['payable_total'] ?? 0)),
