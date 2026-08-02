@@ -988,6 +988,143 @@ $proformaPrintDisabledReason = $canPrintProforma
                 </div>
             </div>
 
+            <!-- Dispatches Section -->
+            <?php
+            $dispatchRecordsList = is_array($dispatchRecords ?? null) ? $dispatchRecords : [];
+            ?>
+            <?php if (!empty($dispatchRecordsList)): ?>
+                <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm" id="order-dispatches-card">
+                    <div class="flex items-center justify-between gap-3 border-b border-blue-100 bg-gradient-to-r from-blue-50 to-white px-5 py-4">
+                        <div class="flex items-center gap-2.5">
+                            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.243c0-.621-.504-1.125-1.125-1.125H3.375A1.125 1.125 0 002.25 7.33v6.92c0 .621.504 1.125 1.125 1.125h1.5m10.5-6.75h2.909c.407 0 .783.197 1.011.53l2.25 3.3" />
+                                </svg>
+                            </span>
+                            <div>
+                                <h3 class="text-sm font-bold text-gray-900">Dispatches</h3>
+                                <p class="text-xs text-gray-500"><?php echo count($dispatchRecordsList); ?> shipment<?php echo count($dispatchRecordsList) === 1 ? '' : 's'; ?> found</p>
+                            </div>
+                        </div>
+                        <span class="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800">
+                            <?php echo count($dispatchRecordsList); ?> Box<?php echo count($dispatchRecordsList) === 1 ? '' : 'es'; ?>
+                        </span>
+                    </div>
+
+                    <div class="space-y-3 p-5">
+                        <?php foreach ($dispatchRecordsList as $dispatch):
+                            $dispatchId = (int)($dispatch['id'] ?? 0);
+                            $boxNo = trim((string)($dispatch['box_no'] ?? '1'));
+                            $courierName = trim((string)($dispatch['courier_name'] ?? 'Courier'));
+                            if ($courierName === '') {
+                                $courierName = 'Courier';
+                            }
+                            $awbCode = trim((string)($dispatch['awb_code'] ?? $dispatch['tracking_number'] ?? ''));
+                            $shipmentStatus = strtolower(trim((string)($dispatch['shipment_status'] ?? '')));
+                            $isCancelled = in_array($shipmentStatus, ['cancelled', 'cancellation requested', 'cancel'], true);
+                            
+                            $statusBadgeClass = match (true) {
+                                $isCancelled => 'bg-red-100 text-red-700 border-red-200',
+                                in_array($shipmentStatus, ['delivered', 'shipped'], true) => 'bg-emerald-100 text-emerald-700 border-emerald-200',
+                                in_array($shipmentStatus, ['manifest_generated', 'in_transit', 'out_for_delivery', 'pickup_scheduled', 'dispatched'], true) => 'bg-blue-100 text-blue-700 border-blue-200',
+                                default => 'bg-amber-100 text-amber-800 border-amber-200',
+                            };
+                            $statusLabel = $shipmentStatus !== '' ? ucwords(str_replace(['_', '-'], ' ', $shipmentStatus)) : 'Pending';
+
+                            $dispatchDateRaw = trim((string)($dispatch['dispatch_date'] ?? $dispatch['created_at'] ?? ''));
+                            $dispatchDateLabel = $dispatchDateRaw !== '' && $dispatchDateRaw !== '0000-00-00'
+                                ? date('d M Y', strtotime($dispatchDateRaw))
+                                : '—';
+
+                            $labelUrl = trim((string)($dispatch['label_url'] ?? ''));
+                            
+                            $trackingUrl = trim((string)($dispatch['tracking_url'] ?? ''));
+                            if ($trackingUrl === '' && $awbCode !== '') {
+                                $trackingUrl = 'https://shiprocket.co/tracking/' . urlencode($awbCode);
+                            }
+                        ?>
+                            <div class="rounded-lg border border-gray-200 bg-white p-3.5 shadow-2xs transition hover:border-gray-300">
+                                <div class="flex items-start justify-between gap-2 border-b border-gray-100 pb-2.5">
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xs font-bold text-gray-900">Box #<?php echo htmlspecialchars($boxNo); ?></span>
+                                            <span class="rounded border px-2 py-0.5 text-[10px] font-semibold <?php echo $statusBadgeClass; ?>">
+                                                <?php echo htmlspecialchars($statusLabel); ?>
+                                            </span>
+                                        </div>
+                                        <p class="mt-1 text-xs text-gray-600">
+                                            <span class="font-medium text-gray-800"><?php echo htmlspecialchars($courierName); ?></span>
+                                            <?php if ($dispatchDateLabel !== '—'): ?>
+                                                <span class="text-gray-400">•</span>
+                                                <span><?php echo htmlspecialchars($dispatchDateLabel); ?></span>
+                                            <?php endif; ?>
+                                        </p>
+                                    </div>
+                                    <?php if ($awbCode !== ''): ?>
+                                        <div class="text-right">
+                                            <span class="block text-[10px] font-semibold uppercase tracking-wide text-gray-400">AWB / Tracking</span>
+                                            <span class="text-xs font-mono font-semibold text-gray-800"><?php echo htmlspecialchars($awbCode); ?></span>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+
+                                <?php
+                                $weight = (float)($dispatch['weight'] ?? 0);
+                                $boxSize = trim((string)($dispatch['box_size'] ?? ''));
+                                if ($weight > 0 || $boxSize !== ''):
+                                ?>
+                                    <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-500">
+                                        <?php if ($weight > 0): ?>
+                                            <span>Weight: <strong class="text-gray-700"><?php echo $weight; ?> kg</strong></span>
+                                        <?php endif; ?>
+                                        <?php if ($boxSize !== ''): ?>
+                                            <span>Size: <strong class="text-gray-700"><?php echo htmlspecialchars($boxSize); ?></strong></span>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
+
+                                <div class="mt-3 flex flex-wrap items-center gap-2 pt-1 border-t border-gray-50">
+                                    <?php if ($labelUrl !== '' && !$isCancelled): ?>
+                                        <a href="<?php echo htmlspecialchars($labelUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="inline-flex items-center gap-1.5 rounded-md bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors">
+                                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.6 0-1.104-.467-1.12-1.066L5.88 18m11.78 0H5.88m11.78 0l-.33-3.63a3 3 0 00-2.986-2.728H9.656a3 3 0 00-2.986 2.728L6.34 18M18 10.5a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                                            </svg>
+                                            Print Label
+                                        </a>
+                                    <?php endif; ?>
+
+                                    <?php if ($trackingUrl !== ''): ?>
+                                        <a href="<?php echo htmlspecialchars($trackingUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 transition-colors">
+                                            <svg class="h-3.5 w-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                                            </svg>
+                                            Track Shipment
+                                        </a>
+                                    <?php endif; ?>
+
+                                    <?php if (!$isCancelled): ?>
+                                        <button type="button"
+                                            onclick="cancelSingleDispatch(<?php echo $dispatchId; ?>)"
+                                            class="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition-colors ml-auto">
+                                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                            Cancel Dispatch
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <!-- Note Section -->
             <div class="rounded-lg border bg-white p-5 shadow-sm relative" id="note-container-<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>">
                 <textarea id="note-remarks-source" class="hidden" aria-hidden="true"><?php echo htmlspecialchars($orderremarks['remarks'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
@@ -1900,7 +2037,112 @@ if ($canFollowUpOrder) {
 ?>
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[100]" onclick="closeImagePopup()">
     <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
-        <button type="button" onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm" aria-label="Close">âœ•</button>
+        <button type="button" onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm" aria-label="Close">✕</button>
         <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
     </div>
 </div>
+
+<!-- Cancel Dispatch Confirmation Modal -->
+<div id="cancelDispatchModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div class="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl ring-1 ring-gray-200">
+        <div class="flex items-center gap-3">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+            </span>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Cancel Dispatch</h3>
+                <p class="text-xs text-gray-500">Confirm shipment cancellation</p>
+            </div>
+        </div>
+        <p class="mt-4 text-sm text-gray-600">
+            Are you sure you want to cancel this dispatch? This will request cancellation with the courier.
+        </p>
+        <div class="mt-6 flex justify-end gap-2">
+            <button type="button"
+                onclick="closeCancelDispatchModal()"
+                class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                Back
+            </button>
+            <button type="button"
+                id="confirmCancelDispatchBtn"
+                class="rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-700">
+                Confirm Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<script src="<?php echo base_url('assets/js/pos_message_modal.js'); ?>"></script>
+<script>
+let pendingDispatchCancelId = null;
+
+function cancelSingleDispatch(dispatchId) {
+    pendingDispatchCancelId = dispatchId;
+    const modal = document.getElementById('cancelDispatchModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+    }
+}
+
+function closeCancelDispatchModal() {
+    pendingDispatchCancelId = null;
+    const modal = document.getElementById('cancelDispatchModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+document.getElementById('confirmCancelDispatchBtn')?.addEventListener('click', function() {
+    if (!pendingDispatchCancelId) return;
+    const dispatchId = pendingDispatchCancelId;
+    const btn = this;
+    btn.disabled = true;
+    btn.textContent = 'Cancelling...';
+
+    fetch('index.php?page=dispatch&action=cancel_dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dispatch_id: dispatchId })
+    })
+    .then(res => res.json())
+    .then(data => {
+        closeCancelDispatchModal();
+        btn.disabled = false;
+        btn.textContent = 'Confirm Cancel';
+        if (data.success) {
+            if (window.showPosMessageModal) {
+                window.showPosMessageModal({
+                    title: 'Dispatch Cancelled',
+                    message: data.message || 'Dispatch cancelled successfully.',
+                    tone: 'success',
+                    onClose: function() { location.reload(); }
+                });
+            } else {
+                location.reload();
+            }
+        } else {
+            if (window.showPosMessageModal) {
+                window.showPosMessageModal({
+                    title: 'Cancellation Failed',
+                    message: data.message || 'Failed to cancel dispatch.',
+                    tone: 'error'
+                });
+            }
+        }
+    })
+    .catch(err => {
+        closeCancelDispatchModal();
+        btn.disabled = false;
+        btn.textContent = 'Confirm Cancel';
+        if (window.showPosMessageModal) {
+            window.showPosMessageModal({
+                title: 'Error',
+                message: 'An error occurred while cancelling the dispatch.',
+                tone: 'error'
+            });
+        }
+    });
+});
+</script>

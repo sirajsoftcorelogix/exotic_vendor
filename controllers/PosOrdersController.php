@@ -1214,6 +1214,10 @@ class PosOrdersController
         ];
         $canFollowUpOrder = canSrEmpAccess();
 
+        require_once __DIR__ . '/../models/dispatch/dispatch.php';
+        $dispatchModel = new Dispatch($conn);
+        $dispatchRecords = $dispatchModel->getDispatchRecordsByOrderNumberOrInvoiceId($resolvedOrderNumber, $invoiceId);
+
         if ($type === 'inner') {
             $page = trim((string)($_GET['page'] ?? ''));
             $innerPartial = $page === 'orders'
@@ -1253,6 +1257,7 @@ class PosOrdersController
                 'canFollowUpOrder' => $canFollowUpOrder,
                 'followUpLinks' => $followUpLinks,
                 'followUpEligibility' => $followUpEligibility,
+                'dispatchRecords' => $dispatchRecords,
             ], 'Order Details');
         }
         exit;
