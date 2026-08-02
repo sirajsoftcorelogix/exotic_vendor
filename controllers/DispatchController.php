@@ -1395,20 +1395,37 @@ class DispatchController {
         }
 
         $input = json_decode(file_get_contents('php://input'), true);
-        if (!isset($input['invoice_id'])) {
-            $this->emitJsonResponse(['success' => false, 'message' => 'Missing invoice_id'], 400);
+        if (!isset($input['invoice_id']) && !isset($input['dispatch_id'])) {
+            $this->emitJsonResponse(['success' => false, 'message' => 'Missing invoice_id or dispatch_id'], 400);
         }
 
         global $dispatchModel;
         global $commanModel;
-        $invoiceId = intval($input['invoice_id']);
-        $dispatchRecords = $dispatchModel->getDispatchRecordsByInvoiceId($invoiceId);
+
+        $dispatchRecords = [];
+        $invoiceId = 0;
+
+        if (!empty($input['dispatch_id'])) {
+            $dispatchId = (int)$input['dispatch_id'];
+            $rec = $dispatchModel->getDispatchById($dispatchId);
+            if ($rec) {
+                $dispatchRecords = [$rec];
+                $invoiceId = (int)($rec['invoice_id'] ?? 0);
+            }
+        } elseif (!empty($input['invoice_id'])) {
+            $invoiceId = (int)$input['invoice_id'];
+            $dispatchRecords = $dispatchModel->getDispatchRecordsByInvoiceId($invoiceId);
+        }
+
+        if (empty($dispatchRecords)) {
+            $this->emitJsonResponse(['success' => false, 'message' => 'No dispatch record found'], 404);
+        }
 
         global $conn;
         try {
             foreach ($dispatchRecords as $record) {
-                $shiprocketOrderId = $record['shiprocket_order_id'];
-                if ($shiprocketOrderId) {
+                $shiprocketOrderId = $record['shiprocket_order_id'] ?? null;
+                if (!empty($shiprocketOrderId)) {
                     $response = $dispatchModel->cancelShiprocketShipment($shiprocketOrderId);
                     $commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], $record['id']);
                     if (!$response['success']) {
@@ -1417,21 +1434,17 @@ class DispatchController {
                             'message' => 'Failed to cancel shipment for dispatch ID ' . $record['id'] . ': ' . ($response['message'] ?? 'Unknown error'),
                         ]);
                     }
+                } else {
+                    $commanModel->updateRecord('vp_dispatch_details', ['shipment_status' => 'cancelled'], $record['id']);
                 }
             }
-            $stockModel = new Stock($conn);
-            $stockRestore = $stockModel->restoreStockByInvoiceId($invoiceId);
-            if (empty($stockRestore['success'])) {
-                $this->emitJsonResponse([
-                    'success' => false,
-                    'message' => 'Dispatch updated but stock could not be restored: ' . ($stockRestore['message'] ?? 'unknown'),
-                    'stock_restore' => $stockRestore,
-                ], 500);
+            if ($invoiceId > 0) {
+                $stockModel = new Stock($conn);
+                $stockRestore = $stockModel->restoreStockByInvoiceId($invoiceId);
             }
             $this->emitJsonResponse([
                 'success' => true,
                 'message' => 'Dispatch cancelled successfully',
-                'stock_restore' => $stockRestore,
             ]);
         } catch (Exception $e) {
             $this->emitJsonResponse(['success' => false, 'message' => 'Error cancelling dispatch: ' . $e->getMessage()], 500);
