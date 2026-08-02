@@ -382,9 +382,6 @@ class WorkflowTransition
         if (!$this->isLeafStatus($fromId) || !$this->isLeafStatus($toId)) {
             return ['success' => false, 'message' => 'Only child order statuses can be used in transitions.'];
         }
-        if ($this->isTerminalStatusId($fromId)) {
-            return ['success' => false, 'message' => 'Terminal statuses (cancelled, returned) cannot have outgoing transitions.'];
-        }
 
         $dup = $this->conn->prepare(
             'SELECT id FROM vp_workflow_transition WHERE from_status_id = ? AND to_status_id = ? LIMIT 1'
@@ -442,9 +439,6 @@ class WorkflowTransition
         }
         if (!$this->isLeafStatus($fromId) || !$this->isLeafStatus($toId)) {
             return ['success' => false, 'message' => 'Only child order statuses can be used in transitions.'];
-        }
-        if ($this->isTerminalStatusId($fromId)) {
-            return ['success' => false, 'message' => 'Terminal statuses (cancelled, returned) cannot have outgoing transitions.'];
         }
 
         $dup = $this->conn->prepare(
