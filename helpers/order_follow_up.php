@@ -55,11 +55,34 @@ function order_follow_up_start_session(
         $pricingMode = OrderFollowUp::defaultPricingModeForType($followUpType);
     }
 
-    if ($followUpType === 'copy' && $pricingMode === 'waived') {
-        $pricingMode = 'catalog';
+    if ($pricingMode === 'waived' && !in_array($followUpType, ['reship', 'replace'], true)) {
+        $pricingMode = OrderFollowUp::defaultPricingModeForType($followUpType);
     }
 
     $orderLines = is_array($eligibility['order_lines']) ? $eligibility['order_lines'] : [];
+
+    if (in_array($followUpType, ['reship', 'replace'], true)) {
+        $returnedLineIds = order_follow_up_get_returned_line_ids($conn, $sourceOrderNumber, $orderLines);
+        if ($returnedLineIds === []) {
+            return [
+                'success' => false,
+                'message' => 'Reship and Replacement follow-up orders require at least one returned line in the order.',
+            ];
+        }
+
+        if ($lineIds !== []) {
+            $invalidLines = array_diff($lineIds, $returnedLineIds);
+            if ($invalidLines !== []) {
+                return [
+                    'success' => false,
+                    'message' => 'Only returned items can be included in a Reship or Replacement order.',
+                ];
+            }
+        } else {
+            $lineIds = $returnedLineIds;
+        }
+    }
+
     $filteredLines = order_follow_up_filter_order_lines($orderLines, $lineIds);
     if ($filteredLines === []) {
         return ['success' => false, 'message' => 'Select at least one order line.'];
@@ -206,9 +229,18 @@ function order_follow_up_public_session_view(array $session): array
 function order_follow_up_is_waived_checkout(?array $session = null): bool
 {
     $session = $session ?? order_follow_up_get_session();
+    if (!is_array($session)) {
+        return false;
+    }
 
-    return is_array($session)
-        && strtolower(trim((string) ($session['pricing_mode'] ?? ''))) === 'waived';
+    $type = strtolower(trim((string) ($session['follow_up_type'] ?? '')));
+    $pricingMode = strtolower(trim((string) ($session['pricing_mode'] ?? '')));
+
+    if (!in_array($type, ['reship', 'replace'], true)) {
+        return false;
+    }
+
+    return $pricingMode === 'waived';
 }
 
 /**
@@ -273,4 +305,54 @@ function order_follow_up_order_details_url(string $orderNumber, string $page = '
     return base_url(
         'index.php?page=' . $page . '&action=get_order_details_html&type=outer&order_number=' . rawurlencode(trim($orderNumber))
     );
+}
+
+/**
+ * @param list<array<string, mixed>> $orderLines
+ * @return list<int>
+ */
+function order_follow_up_get_returned_line_ids(?mysqli $conn, string $sourceOrderNumber, array $orderLines = []): array
+{
+    $sourceOrderNumber = trim($sourceOrderNumber);
+    $returnedIds = [];
+
+    foreach ($orderLines as $line) {
+        if (!is_array($line)) {
+            continue;
+        }
+        $lineId = (int) ($line['id'] ?? 0);
+        if ($lineId <= 0) {
+            continue;
+        }
+        $status = strtolower(trim((string) ($line['status'] ?? '')));
+        if ($status === 'returned') {
+            $returnedIds[$lineId] = true;
+        }
+    }
+
+    if ($conn instanceof mysqli && $sourceOrderNumber !== '') {
+        $stmt = $conn->prepare(
+            "SELECT DISTINCT ri.order_row_id
+             FROM vp_sales_return_items ri
+             INNER JOIN vp_sales_returns r ON r.id = ri.sales_return_id
+             WHERE r.order_number = ? AND r.status = 'finalized' AND ri.order_row_id IS NOT NULL AND ri.order_row_id > 0"
+        );
+        if ($stmt) {
+            $stmt->bind_param('s', $sourceOrderNumber);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            while ($res && ($row = $res->fetch_assoc())) {
+                $rowId = (int) ($row['order_row_id'] ?? 0);
+                if ($rowId > 0) {
+                    $returnedIds[$rowId] = true;
+                }
+            }
+            $stmt->close();
+        }
+    }
+
+    $out = array_map('intval', array_keys($returnedIds));
+    sort($out);
+
+    return $out;
 }

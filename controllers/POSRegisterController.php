@@ -4487,7 +4487,7 @@ class POSRegisterController
             echo json_encode(['success' => false, 'message' => 'Cart total is missing or zero. Refresh the cart and try again.'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
-        if ($isWaivedFollowUp && $orderTotal < 0) {
+        if ($isWaivedFollowUp) {
             $orderTotal = 0.0;
         }
 
@@ -5481,7 +5481,9 @@ class POSRegisterController
      */
     private function allowedPosPaymentModes(): array
     {
-        return ['cash', 'cod', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque'];
+        require_once dirname(__DIR__) . '/helpers/pos_payment_receipt.php';
+
+        return pos_payment_allowed_modes();
     }
 
     /**
@@ -5503,24 +5505,24 @@ class POSRegisterController
                     continue;
                 }
                 $amount = round((float)($row['amount'] ?? $row['payment_amount'] ?? 0), 2);
-                if ($amount <= 0) {
+                if ($amount <= 0 && !pos_payment_is_waived_mode($mode)) {
                     continue;
                 }
                 $splits[] = [
                     'mode' => $mode,
-                    'amount' => $amount,
+                    'amount' => pos_payment_is_waived_mode($mode) ? 0.0 : $amount,
                     'transaction_id' => trim((string)($row['transaction_id'] ?? '')),
                 ];
             }
         }
 
         if ($splits === []) {
-            $mode = strtolower(trim((string)($payload['payment_mode'] ?? 'cash')));
-            $amount = round((float)($payload['payment_amount'] ?? 0), 2);
-            if ($amount > 0) {
+            $mode = strtolower(trim((string)($payload['payment_mode'] ?? $payload['payment_type'] ?? 'cash')));
+            $amount = round((float)($payload['payment_amount'] ?? $payload['amount'] ?? 0), 2);
+            if ($amount > 0 || pos_payment_is_waived_mode($mode)) {
                 $splits[] = [
                     'mode' => in_array($mode, $allowed, true) ? $mode : 'cash',
-                    'amount' => $amount,
+                    'amount' => pos_payment_is_waived_mode($mode) ? 0.0 : $amount,
                     'transaction_id' => trim((string)($payload['transaction_id'] ?? '')),
                 ];
             }
@@ -5553,7 +5555,9 @@ class POSRegisterController
      */
     private function validatePosPaymentSplits(array $splitBundle, float $orderTotal, string $paymentStage): array
     {
-        $errors = pos_payment_validate_splits($splitBundle, $orderTotal, $paymentStage);
+        require_once dirname(__DIR__) . '/helpers/order_follow_up.php';
+        $followUpSession = order_follow_up_get_session();
+        $errors = pos_payment_validate_splits($splitBundle, $orderTotal, $paymentStage, $followUpSession);
         $splits = $splitBundle['splits'] ?? [];
 
         foreach ($splits as $idx => $split) {

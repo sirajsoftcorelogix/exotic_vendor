@@ -432,12 +432,12 @@ function pos_payment_resolve_splits_from_payload(array $payload): array
                 continue;
             }
             $amount = round((float)($row['amount'] ?? $row['payment_amount'] ?? 0), 2);
-            if ($amount <= 0) {
+            if ($amount <= 0 && !pos_payment_is_waived_mode($mode)) {
                 continue;
             }
             $splits[] = [
                 'mode' => $mode,
-                'amount' => $amount,
+                'amount' => pos_payment_is_waived_mode($mode) ? 0.0 : $amount,
                 'transaction_id' => trim((string)($row['transaction_id'] ?? '')),
             ];
         }
@@ -446,10 +446,10 @@ function pos_payment_resolve_splits_from_payload(array $payload): array
     if ($splits === []) {
         $mode = strtolower(trim((string)($payload['payment_type'] ?? $payload['payment_mode'] ?? 'cash')));
         $amount = round((float)($payload['amount'] ?? $payload['payment_amount'] ?? 0), 2);
-        if ($amount > 0) {
+        if ($amount > 0 || pos_payment_is_waived_mode($mode)) {
             $splits[] = [
                 'mode' => in_array($mode, $allowed, true) ? $mode : 'cash',
-                'amount' => $amount,
+                'amount' => pos_payment_is_waived_mode($mode) ? 0.0 : $amount,
                 'transaction_id' => trim((string)($payload['transaction_id'] ?? '')),
             ];
         }
@@ -481,12 +481,52 @@ function pos_payment_resolve_splits_from_payload(array $payload): array
  *
  * @return list<string>
  */
-function pos_payment_validate_splits(array $splitBundle, float $targetTotal, string $paymentStage): array
-{
+function pos_payment_validate_splits(
+    array $splitBundle,
+    float $targetTotal,
+    string $paymentStage,
+    ?array $followUpSession = null
+): array {
     $errors = [];
     $splits = $splitBundle['splits'] ?? [];
     if ($splits === []) {
         return ['Add at least one payment line.'];
+    }
+
+    $isWaivedAllowed = false;
+    if (is_array($followUpSession)) {
+        $type = strtolower(trim((string) ($followUpSession['follow_up_type'] ?? '')));
+        $pricingMode = strtolower(trim((string) ($followUpSession['pricing_mode'] ?? '')));
+        if (in_array($type, ['reship', 'replace'], true) && $pricingMode === 'waived') {
+            $isWaivedAllowed = true;
+        }
+    }
+
+    $hasWaived = false;
+    foreach ($splits as $split) {
+        if (pos_payment_is_waived_mode((string)($split['mode'] ?? ''))) {
+            $hasWaived = true;
+            break;
+        }
+    }
+
+    if ($hasWaived && !$isWaivedAllowed) {
+        return ['Waived payment mode is only allowed for Reship or Replacement follow-up orders.'];
+    }
+
+    if ($isWaivedAllowed && $hasWaived) {
+        foreach ($splits as $split) {
+            $mode = strtolower(trim((string)($split['mode'] ?? '')));
+            if (!pos_payment_is_waived_mode($mode)) {
+                return ['For waived follow-up orders, all payment lines must be set to Waived.'];
+            }
+            $amount = round((float)($split['amount'] ?? 0), 2);
+            if ($amount > 0.001) {
+                return ['Waived payment line must be zero amount.'];
+            }
+        }
+
+        return [];
     }
 
     $advanceTotal = pos_payment_split_advance_total($splits);
@@ -499,10 +539,7 @@ function pos_payment_validate_splits(array $splitBundle, float $targetTotal, str
         $amount = round((float)($split['amount'] ?? 0), 2);
         $mode = strtolower(trim((string)($split['mode'] ?? '')));
         if (pos_payment_is_waived_mode($mode)) {
-            if ($amount > 0.001) {
-                return ['Waived payment line must be zero amount.'];
-            }
-            continue;
+            return ['Waived payment mode is only allowed for Reship or Replacement follow-up orders.'];
         }
         if ($amount <= 0) {
             return ['Each payment line must have amount greater than zero (line ' . ($idx + 1) . ').'];
@@ -510,18 +547,11 @@ function pos_payment_validate_splits(array $splitBundle, float $targetTotal, str
     }
 
     if ($targetTotal <= 0.001) {
-        $allWaived = true;
-        foreach ($splits as $split) {
-            if (!pos_payment_is_waived_mode((string)($split['mode'] ?? ''))) {
-                $allWaived = false;
-                break;
-            }
-        }
-        if ($allWaived) {
+        if ($isWaivedAllowed) {
             return [];
         }
 
-        return ['Order total is zero — use Waived payment mode.'];
+        return ['Order total is zero. Payment waiving is only allowed for Reship or Replacement follow-up orders.'];
     }
 
     if ($hasCod) {
@@ -990,7 +1020,7 @@ function pos_payment_compute_order_snapshots(
     }
 
     $orderTotal = 0.0;
-    if ($orderTotalOverride !== null && $orderTotalOverride > 0) {
+    if ($orderTotalOverride !== null && $orderTotalOverride >= 0) {
         $orderTotal = round($orderTotalOverride, 2);
     } else {
         $orderTotal = pos_payment_resolve_order_total($conn, $orderNumber);
