@@ -1596,10 +1596,15 @@
                 return;
             }
             
-            const selectedOption = boxSizeSelect.options[boxSizeSelect.selectedIndex];
-            const length = parseFloat(selectedOption.getAttribute('data-length')) || 0;
-            const breadth = parseFloat(selectedOption.getAttribute('data-width')) || 0;
-            const height = parseFloat(selectedOption.getAttribute('data-height')) || 0;
+            const selectedOption = boxSizeSelect ? boxSizeSelect.options[boxSizeSelect.selectedIndex] : null;
+            let length = selectedOption ? (parseFloat(selectedOption.getAttribute('data-length')) || 0) : 0;
+            let breadth = selectedOption ? (parseFloat(selectedOption.getAttribute('data-width')) || 0) : 0;
+            let height = selectedOption ? (parseFloat(selectedOption.getAttribute('data-height')) || 0) : 0;
+            if (boxSizeSelect && boxSizeSelect.value === 'CUSTOM') {
+                length = parseFloat(boxSizeSelect.getAttribute('data-custom-length')) || length;
+                breadth = parseFloat(boxSizeSelect.getAttribute('data-custom-width')) || breadth;
+                height = parseFloat(boxSizeSelect.getAttribute('data-custom-height')) || height;
+            }
             const weight = parseFloat(weightInput.value) || 0;
             
             console.log('Dimensions extracted:', { length, breadth, height, weight });
@@ -2363,12 +2368,17 @@
             // Validate box size (should not be CUSTOM with empty values)
             const boxSizeValue = boxSizeSelect.value;
             const selectedOption = boxSizeSelect.options[boxSizeSelect.selectedIndex];
-            const length = parseFloat(selectedOption.getAttribute('data-length')) || 0;
-            const breadth = parseFloat(selectedOption.getAttribute('data-width')) || 0;
-            const height = parseFloat(selectedOption.getAttribute('data-height')) || 0;
+            let length = selectedOption ? (parseFloat(selectedOption.getAttribute('data-length')) || 0) : 0;
+            let breadth = selectedOption ? (parseFloat(selectedOption.getAttribute('data-width')) || 0) : 0;
+            let height = selectedOption ? (parseFloat(selectedOption.getAttribute('data-height')) || 0) : 0;
+            if (boxSizeValue === 'CUSTOM') {
+                length = parseFloat(boxSizeSelect.getAttribute('data-custom-length')) || length;
+                breadth = parseFloat(boxSizeSelect.getAttribute('data-custom-width')) || breadth;
+                height = parseFloat(boxSizeSelect.getAttribute('data-custom-height')) || height;
+            }
             
-            if (boxSizeValue === 'CUSTOM' || length <= 0 || breadth <= 0 || height <= 0) {
-                showAlert('Please select a valid box size', 'warning');
+            if (length <= 0 || breadth <= 0 || height <= 0) {
+                showAlert('Please select or enter valid box dimensions', 'warning');
                 return;
             }
             
@@ -2444,9 +2454,14 @@
         const boxSizeSelect = boxElement.querySelector('select.BoxSize') || boxElement.querySelector('select');
         const selectedOption = boxSizeSelect ? boxSizeSelect.options[boxSizeSelect.selectedIndex] : null;
         const inchToCm = 2.54;
-        const lengthIn = selectedOption ? parseFloat(selectedOption.getAttribute('data-length')) || 0 : 0;
-        const widthIn = selectedOption ? parseFloat(selectedOption.getAttribute('data-width')) || 0 : 0;
-        const heightIn = selectedOption ? parseFloat(selectedOption.getAttribute('data-height')) || 0 : 0;
+        let lengthIn = selectedOption ? (parseFloat(selectedOption.getAttribute('data-length')) || 0) : 0;
+        let widthIn = selectedOption ? (parseFloat(selectedOption.getAttribute('data-width')) || 0) : 0;
+        let heightIn = selectedOption ? (parseFloat(selectedOption.getAttribute('data-height')) || 0) : 0;
+        if (boxSizeSelect && boxSizeSelect.value === 'CUSTOM') {
+            lengthIn = parseFloat(boxSizeSelect.getAttribute('data-custom-length')) || lengthIn;
+            widthIn = parseFloat(boxSizeSelect.getAttribute('data-custom-width')) || widthIn;
+            heightIn = parseFloat(boxSizeSelect.getAttribute('data-custom-height')) || heightIn;
+        }
         return {
             length_cm: lengthIn > 0 ? Math.round(lengthIn * inchToCm * 100) / 100 : 10,
             width_cm: widthIn > 0 ? Math.round(widthIn * inchToCm * 100) / 100 : 10,
@@ -3119,10 +3134,16 @@
             // Check if modal was opened from individual box select or main "Apply to All"
             if (window._targetBoxSelect) {
                 // Single box - set custom size on this specific box
-                window._targetBoxSelect.setAttribute('data-custom-length', customLength);
-                window._targetBoxSelect.setAttribute('data-custom-width', customWidth);
-                window._targetBoxSelect.setAttribute('data-custom-height', customHeight);
+                const targetSelect = window._targetBoxSelect;
+                targetSelect.setAttribute('data-custom-length', customLength);
+                targetSelect.setAttribute('data-custom-width', customWidth);
+                targetSelect.setAttribute('data-custom-height', customHeight);
                 window._targetBoxSelect = null;
+                
+                const targetBox = targetSelect.closest('[data-order-number]');
+                if (targetBox) {
+                    fetchCouriersForBox(targetBox);
+                }
                 
                 showAlert(`✓ Applied custom box size (${customLength}x${customWidth}x${customHeight}in)`, 'success');
             } else {
@@ -3141,6 +3162,10 @@
                     select.setAttribute('data-custom-length', customLength);
                     select.setAttribute('data-custom-width', customWidth);
                     select.setAttribute('data-custom-height', customHeight);
+                    const targetBox = select.closest('[data-order-number]');
+                    if (targetBox) {
+                        fetchCouriersForBox(targetBox);
+                    }
                 });
 
                 showAlert(`✓ Applied custom box size (${customLength}x${customWidth}x${customHeight}in) to all ${boxSizeSelects.length} boxes`, 'success');

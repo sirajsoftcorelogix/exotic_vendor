@@ -288,7 +288,11 @@ function bluedartParseInrAmount($value): ?float
  */
 function bluedartExtractShiprocketQuotes(array $serviceabilityPayload): array
 {
-    $companies = $serviceabilityPayload['data']['available_courier_companies'] ?? [];
+    $companies = $serviceabilityPayload['data']['available_courier_companies']
+        ?? $serviceabilityPayload['available_courier_companies']
+        ?? $serviceabilityPayload['debug']['input_before_filter']['data']['available_courier_companies']
+        ?? $serviceabilityPayload['debug']['input_before_filter']['available_courier_companies']
+        ?? [];
     if (!is_array($companies)) {
         return [];
     }
