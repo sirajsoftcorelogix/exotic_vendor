@@ -148,7 +148,7 @@ $proformaPrintDisabledReason = $canPrintProforma
             : 'Proforma is available when payment is pending.'));
 ?>
 
-<div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
+<div class="min-h-screen bg-gray-50 p-6 font-sans text-gray-900">
     <?php if (is_array($followUpFlash) && trim((string)($followUpFlash['text'] ?? '')) !== ''): ?>
         <?php
         $flashType = strtolower(trim((string)($followUpFlash['type'] ?? 'info')));
@@ -366,7 +366,7 @@ $proformaPrintDisabledReason = $canPrintProforma
                 <div class="mb-6 space-y-3">
                     <div class="flex items-center gap-2">
                         <?php /*<div
-                            class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-black-600">
+                            class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-gray-600">
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                                 stroke-width="1.5">
                                 <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -380,7 +380,7 @@ $proformaPrintDisabledReason = $canPrintProforma
                         $location = implode(', ', array_filter([$city, $state]));
                         ?>
                         <?php if (!empty($location)) : ?>
-                            <div class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-black-600">
+                            <div class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-gray-600">
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                                     stroke-width="1.5">
                                     <path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -393,12 +393,12 @@ $proformaPrintDisabledReason = $canPrintProforma
                     </div>
 
                     <div class="flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3">
-                        <svg class="h-5 w-5 text-black-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                             stroke-width="1.5">
                             <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                         </svg>
                         <span
-                            class="text-sm font-medium text-black-600"><?php echo date('d-M-Y', strtotime($orderremarks['created_at'] ?? '')); ?></span>
+                            class="text-sm font-medium text-gray-600"><?php echo date('d-M-Y', strtotime($orderremarks['created_at'] ?? '')); ?></span>
                     </div>
                 </div>
 
@@ -434,10 +434,10 @@ $proformaPrintDisabledReason = $canPrintProforma
                                 </div>
 
                                 <div class="flex-1">
-                                    <!-- <h4 class="mb-3 text-[12px] font-semibold leading-tight text-black-900">
+                                    <!-- <h4 class="mb-3 text-[12px] font-semibold leading-tight text-gray-900">
                                     <?php echo $item['groupname']; ?> / <?php echo $item['subcategories']; ?>
                                 </h4> -->
-                                    <h4 class="mb-3 text-[14px] leading-tight text-black-900">
+                                    <h4 class="mb-3 text-[14px] leading-tight text-gray-900">
                                         <?php echo $item['title']; ?>
                                     </h4>
 
@@ -446,18 +446,18 @@ $proformaPrintDisabledReason = $canPrintProforma
                                             <p>
                                                 <span class="inline-block w-12 font-bold text-black">SKU</span>
                                                 <span class="text-black">:</span>
-                                                <span class="ml-2 text-black-700"><?php echo htmlspecialchars(trim((string)($item['sku'] ?? '')) !== '' ? (string)$item['sku'] : 'â€”'); ?></span>
+                                                <span class="ml-2 text-gray-700"><?php echo htmlspecialchars(trim((string)($item['sku'] ?? '')) !== '' ? (string)$item['sku'] : 'â€”'); ?></span>
                                             </p>
                                             <p>
                                                 <span class="inline-block w-12 font-bold text-black">Color</span>
                                                 <span class="text-black">:</span>
-                                                <span class="ml-2 text-black-700"><?php echo $item['color']; ?></span>
+                                                <span class="ml-2 text-gray-700"><?php echo $item['color']; ?></span>
                                             </p>
                                             <div class="flex items-center pt-1">
                                                 <span class="inline-block w-12 font-bold text-black">Qty.</span>
                                                 <span class="text-black">:</span>
                                                 <span
-                                                    class="ml-4 rounded-full border border-gray-200 bg-gray-50 px-5 py-0.5 text-black-800">
+                                                    class="ml-4 rounded-full border border-gray-200 bg-gray-50 px-5 py-0.5 text-gray-800">
                                                     <?php echo str_pad($item['quantity'], 2, '0', STR_PAD_LEFT); ?>
                                                 </span>
                                             </div>
@@ -466,25 +466,25 @@ $proformaPrintDisabledReason = $canPrintProforma
                                                     <p>
                                                         <span class="inline-block font-bold text-black">Addon</span>
                                                         <span class="text-black">:</span>
-                                                        <span class="ml-2 text-black-700"><?php echo htmlspecialchars((string)($addonRow['name'] ?? '')); ?></span>
-                                                        <span class="ml-2 tabular-nums text-black-600"><?php echo $currencysymbol . number_format((float)($addonRow['price'] ?? 0), 2); ?></span>
+                                                        <span class="ml-2 text-gray-700"><?php echo htmlspecialchars((string)($addonRow['name'] ?? '')); ?></span>
+                                                        <span class="ml-2 tabular-nums text-gray-600"><?php echo $currencysymbol . number_format((float)($addonRow['price'] ?? 0), 2); ?></span>
                                                     </p>
                                                 <?php endforeach; ?>
                                             <?php endif; ?>
                                         </div>
                                         <div class="flex items-center gap-12">
                                             <?php if ($hasExtendedPricing): ?>
-                                                <div class="text-right text-[13px] text-black-500">
+                                                <div class="text-right text-[13px] text-gray-500">
                                                     <p class="text-[11px] uppercase tracking-wide text-gray-500">List price</p>
-                                                    <p class="tabular-nums font-bold text-[14px] text-black-900"><?php echo $currencysymbol . number_format($headlineLineAmount, 2); ?></p>
+                                                    <p class="tabular-nums font-bold text-[14px] text-gray-900"><?php echo $currencysymbol . number_format($headlineLineAmount, 2); ?></p>
                                                 </div>
                                             <?php else: ?>
-                                                <div class="flex items-center gap-2 text-[13px] text-black-500">
+                                                <div class="flex items-center gap-2 text-[13px] text-gray-500">
                                                     <span><?php echo $currencysymbol; ?><?php echo $item['finalprice']; ?> x</span>
-                                                    <span class="rounded bg-gray-100 px-2 py-0.5 text-black-700"><?php echo $item['quantity']; ?></span>
+                                                    <span class="rounded bg-gray-100 px-2 py-0.5 text-gray-700"><?php echo $item['quantity']; ?></span>
                                                 </div>
 
-                                                <div class="w-20 text-right text-[14px] font-bold text-black-900 tabular-nums">
+                                                <div class="w-20 text-right text-[14px] font-bold text-gray-900 tabular-nums">
                                                     <?php echo $currencysymbol . number_format($netLineAmount, 2); ?>
                                                 </div>
                                             <?php endif; ?>
@@ -603,13 +603,13 @@ $proformaPrintDisabledReason = $canPrintProforma
                 <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm relative mt-8" id="order-address-section">
                     <button type="button"
                         onclick="openNameEmailPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '', ENT_QUOTES, 'UTF-8') ?>')"
-                        class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors"
+                        class="absolute top-4 right-4 text-gray-500 hover:text-blue-600 transition-colors"
                         title="Edit addresses">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                         </svg>
                     </button>
-                    <h3 class="mb-4 text-sm font-bold text-black-700">Shipping &amp; Billing Address</h3>
+                    <h3 class="mb-4 text-sm font-bold text-gray-700">Shipping &amp; Billing Address</h3>
                     <?php
                     $customerNameParts = preg_split('/\s+/', trim((string)($customerdetails['customer_name'] ?? '')), 2);
                     $fallbackFirstName = trim((string)($customerNameParts[0] ?? ''));
@@ -637,8 +637,8 @@ $proformaPrintDisabledReason = $canPrintProforma
                     <span id="shipping_last_name" class="hidden"><?php echo htmlspecialchars($shippingLastName); ?></span>
                     <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
                         <div>
-                            <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Shipping address</h4>
-                            <address class="mt-2 text-sm not-italic text-black-800 leading-relaxed">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-gray-400">Shipping address</h4>
+                            <address class="mt-2 text-sm not-italic text-gray-800 leading-relaxed">
                                 <?php if ($shippingDisplayName !== ''): ?>
                                     <span class="block font-medium" id="shipping_display_name"><?php echo htmlspecialchars($shippingDisplayName); ?></span>
                                 <?php else: ?>
@@ -676,8 +676,8 @@ $proformaPrintDisabledReason = $canPrintProforma
                             </address>
                         </div>
                         <div>
-                            <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Billing address</h4>
-                            <address class="mt-2 text-sm not-italic text-black-800 leading-relaxed">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-gray-400">Billing address</h4>
+                            <address class="mt-2 text-sm not-italic text-gray-800 leading-relaxed">
                                 <?php if ($billingDisplayName !== ''): ?>
                                     <span class="block font-medium" id="billing_display_name"><?php echo htmlspecialchars($billingDisplayName); ?></span>
                                 <?php else: ?>
@@ -995,15 +995,15 @@ $proformaPrintDisabledReason = $canPrintProforma
                     id="note-edit-btn"
                     data-order-number="<?php echo htmlspecialchars($orderremarks['order_number'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
                     onclick="openNoteEditPopup()"
-                    class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors"
+                    class="absolute top-4 right-4 text-gray-500 hover:text-blue-600 transition-colors"
                     title="Edit Note">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                 </button>
-                <h3 class="mb-2 text-sm font-bold text-black-700">Note</h3>
+                <h3 class="mb-2 text-sm font-bold text-gray-700">Note</h3>
                 <?php if (!empty($orderremarks['remarks'])): ?>
-                    <div id="note-display-<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>" class="text-sm text-black-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
+                    <div id="note-display-<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>" class="text-sm text-gray-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
                         <?php echo ($orderremarks['remarks']); ?>
                     </div>
                 <?php endif; ?>
@@ -1036,13 +1036,13 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
 ?>
 <div id="noteEditPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
     <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-6 relative">
-        <button onclick="closeNotePopup()" class="absolute top-3 right-4 text-black-500 hover:text-black-800">
+        <button onclick="closeNotePopup()" class="absolute top-3 right-4 text-gray-500 hover:text-gray-800">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
         </button>
 
-        <h2 class="text-xl font-bold mb-4 text-black-800">Edit Customer Note</h2>
+        <h2 class="text-xl font-bold mb-4 text-gray-800">Edit Customer Note</h2>
 
         <form id="noteEditForm">
             <input type="hidden" id="note_order_number" name="order_number">
@@ -1052,7 +1052,7 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
                 placeholder="Enter note / remarks here..."></textarea>
 
             <div class="mt-6 flex justify-end gap-3">
-                <button type="button" onclick="closeNotePopup()" class="rounded-full px-5 py-2.5 bg-gray-200 text-black-800 rounded-md hover:bg-gray-300">
+                <button type="button" onclick="closeNotePopup()" class="rounded-full px-5 py-2.5 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">
                     Cancel
                 </button>
                 <button type="submit" class="rounded-full bg-[#D46B08] px-10 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700">
@@ -1324,7 +1324,7 @@ window.orderJsonModalConfig = {
                         if (remarks.trim()) {
                             displayEl.innerHTML = nl2br(escapeHtml(remarks));
                         } else {
-                            displayEl.innerHTML = '<em class="text-black-400">No notes from customer</em>';
+                            displayEl.innerHTML = '<em class="text-gray-400">No notes from customer</em>';
                         }
                     }
 

@@ -49,16 +49,21 @@ function is_login()
 			exit;
 		}
 
-		if (!isset($_SESSION['redirect_after_login']) || empty($_SESSION['redirect_after_login'])) {
-			if (strpos($currentUrl, 'get_order_details_html') !== false) {
+		$requestType = $_GET['type'] ?? '';
+		if (strpos($currentUrl, 'get_order_details_html') !== false && ($isAjax || $requestType === 'inner')) {
+			if (!isset($_SESSION['redirect_after_login']) || empty($_SESSION['redirect_after_login'])) {
 				$_SESSION['redirect_after_login'] = $domain . '?page=orders&action=list';
-				echo "Session Expired - Please <a href=\"$domain?page=users&action=login\" style=\"color:red;\">Login Again</a>.";
-				//On AJAX call login page link
-				//$_SESSION['ajax_redirect_after_login'] = $domain . '?page=orders&action=list';
-				//echo json_encode(['status' => 'error', 'message' => 'Session expired. Please login again.', 'redirect' => $domain . '?page=users&action=login']);
-				exit;
-			} else
-				$_SESSION['redirect_after_login'] = $currentUrl;
+			}
+			echo '<div style="font-family: system-ui, -apple-system, sans-serif; padding: 24px; text-align: center; color: #1f2937; background: #ffffff; border-radius: 8px; border: 1px solid #e5e7eb; max-width: 400px; margin: 40px auto;">'
+				. '<h3 style="font-size: 16px; font-weight: 600; margin: 0 0 8px 0; color: #111827;">Session Expired</h3>'
+				. '<p style="font-size: 14px; margin: 0 0 16px 0; color: #4b5563;">Please log in again to view order details.</p>'
+				. '<a href="' . htmlspecialchars($domain . '?page=users&action=login') . '" style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500;">Log In</a>'
+				. '</div>';
+			exit;
+		}
+
+		if (!isset($_SESSION['redirect_after_login']) || empty($_SESSION['redirect_after_login'])) {
+			$_SESSION['redirect_after_login'] = $currentUrl;
 		}
 
 		header('Location: ' . $domain . '?page=users&action=login');
