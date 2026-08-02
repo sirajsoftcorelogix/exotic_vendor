@@ -288,6 +288,35 @@ function bluedartParseInrAmount($value): ?float
  */
 function bluedartExtractShiprocketQuotes(array $serviceabilityPayload): array
 {
+    $quotes = [];
+
+    // Check top-level 'couriers' array first (formatted response from getCourierServiceability)
+    if (isset($serviceabilityPayload['couriers']) && is_array($serviceabilityPayload['couriers'])) {
+        foreach ($serviceabilityPayload['couriers'] as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $name = trim((string) ($row['name'] ?? $row['courier_name'] ?? ''));
+            if ($name === '' || !preg_match('/blue\s*dart|bluedart/i', $name)) {
+                continue;
+            }
+            $price = bluedartParseInrAmount($row['price'] ?? $row['freight'] ?? $row['freight_charge'] ?? $row['rate'] ?? null);
+            if ($price === null) {
+                continue;
+            }
+            $quotes[] = [
+                'id' => $row['id'] ?? $row['courier_company_id'] ?? null,
+                'name' => $name,
+                'price' => $price,
+                'etd' => (string) ($row['etd'] ?? $row['estimated_delivery_days'] ?? 'N/A'),
+                'rating' => (float) ($row['rating'] ?? 0),
+            ];
+        }
+        if (!empty($quotes)) {
+            return $quotes;
+        }
+    }
+
     $companies = $serviceabilityPayload['data']['available_courier_companies']
         ?? $serviceabilityPayload['available_courier_companies']
         ?? $serviceabilityPayload['debug']['input_before_filter']['data']['available_courier_companies']
@@ -297,21 +326,20 @@ function bluedartExtractShiprocketQuotes(array $serviceabilityPayload): array
         return [];
     }
 
-    $quotes = [];
     foreach ($companies as $row) {
         if (!is_array($row)) {
             continue;
         }
-        $name = trim((string) ($row['courier_name'] ?? ''));
+        $name = trim((string) ($row['courier_name'] ?? $row['name'] ?? ''));
         if ($name === '' || !preg_match('/blue\s*dart|bluedart/i', $name)) {
             continue;
         }
-        $price = bluedartParseInrAmount($row['freight_charge'] ?? $row['rate'] ?? null);
+        $price = bluedartParseInrAmount($row['freight_charge'] ?? $row['rate'] ?? $row['price'] ?? null);
         if ($price === null) {
             continue;
         }
         $quotes[] = [
-            'id' => $row['courier_company_id'] ?? null,
+            'id' => $row['courier_company_id'] ?? $row['id'] ?? null,
             'name' => $name,
             'price' => $price,
             'etd' => (string) ($row['etd'] ?? $row['estimated_delivery_days'] ?? 'N/A'),

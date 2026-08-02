@@ -251,6 +251,10 @@ class Dispatch {
         $json = $payload !== null ? json_encode($payload) : null;
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Content-Type: application/json',
             'Authorization: Bearer ' . $authToken,
@@ -317,7 +321,7 @@ class Dispatch {
             $params['mode'] = $mode;
         }
         
-        $path = '/v1/external/courier/serviceability/?' . http_build_query($params);
+        $path = '/v1/external/courier/serviceability?' . http_build_query($params);
         $url = $this->shiprocketUrl($path);
         $authToken = $this->getShiprocketToken();
         $authError = $this->shiprocket()->getLastAuthError();

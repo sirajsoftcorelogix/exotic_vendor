@@ -1322,7 +1322,7 @@
             const cid = courier.id != null ? String(courier.id) : '';
             const checkedAttr = idx === 0 ? ' checked' : '';
             const isDelhivery = courier.rate_source === 'delhivery';
-            const isBlueDart = courier.rate_source === 'bluedart';
+            const isBlueDart = courier.rate_source === 'bluedart' || isBlueDartShiprocketQuote(courier);
             let providerBadge = '<span class="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800 border border-violet-200">Shiprocket</span>';
             if (isDelhivery) {
                 providerBadge = '<span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800 border border-red-200">Delhivery</span>';

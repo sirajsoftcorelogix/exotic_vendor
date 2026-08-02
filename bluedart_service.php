@@ -909,6 +909,9 @@ class BlueDartService
             CURLOPT_CUSTOMREQUEST => strtoupper($method),
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_TIMEOUT => 60,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
         ]);
         if ($encoded !== null) {
             curl_setopt($ch, CURLOPT_POSTFIELDS, $encoded);
