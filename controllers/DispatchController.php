@@ -2685,7 +2685,11 @@ class DispatchController {
             // $order = $result->fetch_assoc();
             // $stmt->close();
 
-            $orderInfo = $ordersModel->getRemarksByOrderNumber($order_number);
+            $lookupOrderNumber = trim(explode(',', (string)$order_number)[0]);
+            $orderInfo = $ordersModel->getRemarksByOrderNumber($lookupOrderNumber);
+            if (!$orderInfo && $lookupOrderNumber !== (string)$order_number) {
+                $orderInfo = $ordersModel->getRemarksByOrderNumber($order_number);
+            }
             if (!$orderInfo) {
                 http_response_code(404);
                 echo json_encode([
@@ -2700,20 +2704,12 @@ class DispatchController {
             
             // Handle international orders via Aramex
             if ($isInternational) {
-                // Get the full invoice to access the complete address data
-                $invoice = $invoiceModel->getInvoiceByOrderNumber($order_number);
-                if (!$invoice) {
-                    http_response_code(404);
-                    echo json_encode([
-                        'success' => false,
-                        'message' => 'Invoice not found for order',
-                        'debug' => ['order_number' => $order_number]
-                    ]);
-                    exit;
+                // Get the dispatch address directly from order_info or invoice fallback
+                $invoice = $invoiceModel->getInvoiceByOrderNumber($lookupOrderNumber);
+                $address = $invoice ? ($commanModel->getDispatchAddress($invoice['vp_order_info_id'] ?? 0) ?? ($invoice['address'] ?? [])) : [];
+                if (empty($address)) {
+                    $address = $commanModel->getDispatchAddress($orderInfo['id'] ?? 0) ?? $orderInfo;
                 }
-                
-                // Get the dispatch address from the invoice
-                $address = $commanModel->getDispatchAddress($invoice['vp_order_info_id'] ?? 0) ?? ($invoice['address'] ?? []);
                 
                 // Extract destination country from address
                 $rawCountry = (string) ($address['shipping_country'] 
@@ -2793,25 +2789,29 @@ class DispatchController {
                 }
             }
 
-            if (empty($orderInfo['shipping_zipcode'])) {
-                http_response_code(404);
+            $delivery_postcode = trim((string)($orderInfo['shipping_zipcode'] ?? '')) ?: trim((string)($orderInfo['zipcode'] ?? ''));
+            if (empty($delivery_postcode)) {
+                http_response_code(400);
                 echo json_encode([
                     'success' => false,
-                    'message' => 'Order not found or delivery postcode missing'
+                    'message' => 'Delivery postcode missing for order'
                 ]);
                 exit;
             }
             
-            $delivery_postcode = $orderInfo['shipping_zipcode'];
-            
+            // Bulk dispatch box sizes are passed in inches; convert to cm for Shiprocket API
+            $lengthCm = round($length * 2.54, 2);
+            $breadthCm = round($breadth * 2.54, 2);
+            $heightCm = round($height * 2.54, 2);
+
             // Call Shiprocket serviceability API for domestic orders
             $serviceability = $dispatchModel->getCourierServiceability(
                 $pickup_postcode,
                 $delivery_postcode,
                 $weight,
-                $length,
-                $breadth,
-                $height,
+                $lengthCm,
+                $breadthCm,
+                $heightCm,
                 $cod,
                 0, // is_return
                 0  // qc_check
@@ -2926,7 +2926,11 @@ class DispatchController {
             $firm = app_setting_firm_details();
             $requestedPickupLocation = $this->resolveDefaultShiprocketPickupLocation($firm, $input['pickup_location'] ?? null);
 
-            $orderInfo = $ordersModel->getRemarksByOrderNumber($order_number);
+            $lookupOrderNumber = trim(explode(',', (string)$order_number)[0]);
+            $orderInfo = $ordersModel->getRemarksByOrderNumber($lookupOrderNumber);
+            if (!$orderInfo && $lookupOrderNumber !== (string)$order_number) {
+                $orderInfo = $ordersModel->getRemarksByOrderNumber($order_number);
+            }
             if (!$orderInfo) {
                 http_response_code(404);
                 echo json_encode(['success' => false, 'message' => 'Order not found']);
@@ -3011,18 +3015,22 @@ class DispatchController {
     ): array {
         $pickupResolution = $this->resolveShiprocketPickupPostcode($dispatchModel, $firm, $pickupLocation);
         $pickupPostcode = trim((string) ($pickupResolution['postcode'] ?? ''));
-        $deliveryPostcode = trim((string) ($orderInfo['shipping_zipcode'] ?? ''));
+        $deliveryPostcode = trim((string) ($orderInfo['shipping_zipcode'] ?? '')) ?: trim((string) ($orderInfo['zipcode'] ?? ''));
         if ($pickupPostcode === '' || $deliveryPostcode === '') {
             return [];
         }
+
+        $lengthCm = round($length * 2.54, 2);
+        $breadthCm = round($breadth * 2.54, 2);
+        $heightCm = round($height * 2.54, 2);
 
         $serviceability = $dispatchModel->getCourierServiceability(
             $pickupPostcode,
             $deliveryPostcode,
             $weight,
-            $length,
-            $breadth,
-            $height,
+            $lengthCm,
+            $breadthCm,
+            $heightCm,
             $cod
         );
         if (empty($serviceability['success']) || !is_array($serviceability['data'] ?? null)) {

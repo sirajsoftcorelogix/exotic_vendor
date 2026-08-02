@@ -214,7 +214,13 @@ function courierHasUsableRate(array $c): bool
 
 function courierHasUsableEtd(array $c): bool
 {
-    return trim((string)($c['etd'] ?? '')) !== '';
+    if (trim((string)($c['etd'] ?? '')) !== '') {
+        return true;
+    }
+    if (!empty($c['etd_hours']) || !empty($c['estimated_delivery_days'])) {
+        return true;
+    }
+    return courierEtdDays($c) > 0;
 }
 
 function calculateConfidence($c)
@@ -311,14 +317,18 @@ function prepareCouriers($shiprocketResponse, $isCOD = false, $isExpress = false
         'eligibleNotInTop' => [],
     ];
 
-    if (!isset($shiprocketResponse['data']['available_courier_companies'])) {
+    $companies = $shiprocketResponse['data']['available_courier_companies']
+        ?? $shiprocketResponse['available_courier_companies']
+        ?? null;
+
+    if (!is_array($companies)) {
         return $empty;
     }
 
     $normalized = [];
     $excludedFromFilters = [];
 
-    foreach ($shiprocketResponse['data']['available_courier_companies'] as $c) {
+    foreach ($companies as $c) {
         $exclusion = courierExclusionDetails($c, $isCOD);
         $reasons = $exclusion['reasons'];
         if (!empty($reasons)) {
