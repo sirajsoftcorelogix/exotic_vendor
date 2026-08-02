@@ -6,7 +6,7 @@ require_once __DIR__ . '/order_cancel_invoice.php';
 /** @return list<string> */
 function order_workflow_terminal_status_slugs(): array
 {
-    return ['cancelled', 'cancelled_returned', 'returned'];
+    return ['cancelled_returned', 'returned'];
 }
 
 function is_order_workflow_terminal_status(string $slug): bool
