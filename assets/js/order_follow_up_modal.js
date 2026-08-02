@@ -42,6 +42,58 @@
                 }
             }
         }
+
+        var lineCheckboxes = modal.querySelectorAll('.order-follow-up-line-checkbox');
+        var isReshipOrReplace = type === 'reship' || type === 'replace';
+        var returnedCount = 0;
+
+        lineCheckboxes.forEach(function (cb) {
+            var isReturned = cb.getAttribute('data-is-returned') === '1';
+            var label = cb.closest('label');
+            if (isReshipOrReplace) {
+                if (isReturned) {
+                    cb.checked = true;
+                    cb.disabled = false;
+                    if (label) {
+                        label.classList.remove('opacity-40', 'cursor-not-allowed');
+                    }
+                    returnedCount++;
+                } else {
+                    cb.checked = false;
+                    cb.disabled = true;
+                    if (label) {
+                        label.classList.add('opacity-40', 'cursor-not-allowed');
+                    }
+                }
+            } else {
+                cb.checked = true;
+                cb.disabled = false;
+                if (label) {
+                    label.classList.remove('opacity-40', 'cursor-not-allowed');
+                }
+            }
+        });
+
+        var submitBtn = form ? form.querySelector('button[type="submit"]') : null;
+        if (isReshipOrReplace && returnedCount === 0) {
+            if (formError) {
+                formError.textContent = 'No returned items found in this order for Reship or Replacement.';
+                formError.classList.remove('hidden');
+            }
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        } else {
+            if (formError && formError.textContent.indexOf('No returned items found') !== -1) {
+                formError.textContent = '';
+                formError.classList.add('hidden');
+            }
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
     }
 
     function openModal(type) {
@@ -85,12 +137,33 @@
 
     if (form) {
         form.addEventListener('submit', function (e) {
+            var currentType = typeInput ? typeInput.value : 'copy';
             var checked = form.querySelectorAll('input[name="line_ids[]"]:checked');
             if (!checked.length) {
                 e.preventDefault();
                 if (formError) {
-                    formError.textContent = 'Select at least one order line to copy.';
+                    formError.textContent = (currentType === 'reship' || currentType === 'replace')
+                        ? 'Select at least one returned order line.'
+                        : 'Select at least one order line.';
                     formError.classList.remove('hidden');
+                }
+                return;
+            }
+
+            if (currentType === 'reship' || currentType === 'replace') {
+                var hasNonReturned = false;
+                checked.forEach(function (cb) {
+                    if (cb.getAttribute('data-is-returned') !== '1') {
+                        hasNonReturned = true;
+                    }
+                });
+                if (hasNonReturned) {
+                    e.preventDefault();
+                    if (formError) {
+                        formError.textContent = 'Only returned items can be reshipped or replaced.';
+                        formError.classList.remove('hidden');
+                    }
+                    return;
                 }
             }
         });

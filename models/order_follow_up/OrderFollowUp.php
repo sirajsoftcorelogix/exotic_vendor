@@ -91,19 +91,11 @@ class OrderFollowUp
             return $result;
         }
 
-        $hasReturnedLine = false;
-        foreach ($lines as $line) {
-            if (!is_array($line)) {
-                continue;
-            }
-            if (strtolower(trim((string) ($line['status'] ?? ''))) === 'returned') {
-                $hasReturnedLine = true;
-                break;
-            }
-        }
+        require_once dirname(__DIR__, 2) . '/helpers/order_follow_up.php';
+        $returnedLineIds = order_follow_up_get_returned_line_ids($this->conn, $sourceOrderNumber, $lines);
 
-        if (!$hasReturnedLine && $result['latest_sales_return_id'] <= 0) {
-            $result['disabled_reason'] = 'Reship and replacement require a returned line or sales return. Use Copy order to reorder.';
+        if ($returnedLineIds === []) {
+            $result['disabled_reason'] = 'Reship and replacement require a returned item or sales return. Use Copy order to reorder.';
 
             return $result;
         }

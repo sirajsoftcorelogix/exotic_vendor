@@ -1206,11 +1206,17 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         ["bank_transfer", "Bank transfer"],
         ["pos_machine", "POS machine"],
         ["razorpay", "Razorpay"],
-        ["cheque", "Cheque"]
+        ["cheque", "Cheque"],
+        ["waived", "Waived (no charge)"]
       ];
     }
+    var isWaivedAllowed = typeof window.isPosFollowUpWaivedCheckout === "function" && window.isPosFollowUpWaivedCheckout();
     options.forEach(function(pair) {
       if (!Array.isArray(pair) || !pair[0]) return;
+      var mode = String(pair[0]).toLowerCase();
+      if (mode === "waived" && !isWaivedAllowed) {
+        return;
+      }
       var opt = document.createElement("option");
       opt.value = String(pair[0]);
       opt.textContent = String(pair[1] || pair[0]);
@@ -1306,8 +1312,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var container = getPaymentSplitRowsContainer();
     if (!container) return;
     container.innerHTML = "";
-    var total = parseFloat(String(grandTotal));
-    addPaymentSplitRow("cash", isFinite(total) && total > 0 ? total : "", "");
+    var isWaived = typeof window.isPosFollowUpWaivedCheckout === "function" && window.isPosFollowUpWaivedCheckout();
+    if (isWaived) {
+      addPaymentSplitRow("waived", 0, "");
+    } else {
+      var total = parseFloat(String(grandTotal));
+      addPaymentSplitRow("cash", isFinite(total) && total > 0 ? total : "", "");
+    }
   }
 
   function collectAllPaymentSplitRowsFromUi() {
@@ -1318,7 +1329,12 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       var mode = String(row.querySelector(".payment-split-mode")?.value || "").trim().toLowerCase();
       var amount = parseFloat(String(row.querySelector(".payment-split-amount")?.value || ""));
       var txn = String(row.querySelector(".payment-split-txn")?.value || "").trim();
-      if (!mode || !isFinite(amount) || amount <= 0) return;
+      if (!mode) return;
+      if (mode === "waived") {
+        out.push({ mode: "waived", amount: 0, transaction_id: txn });
+        return;
+      }
+      if (!isFinite(amount) || amount <= 0) return;
       out.push({ mode: mode, amount: Math.round(amount * 100) / 100, transaction_id: txn });
     });
     return out;
@@ -1470,11 +1486,43 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var paymentAmount = getPaymentSplitTotalFromUi();
     var hasCod = codTotal > 0.001;
 
+    var isWaivedAllowed = typeof window.isPosFollowUpWaivedCheckout === "function" && window.isPosFollowUpWaivedCheckout();
+
     for (var i = 0; i < splits.length; i++) {
+      if (splits[i].mode === "waived") {
+        if (!isWaivedAllowed) {
+          showErr("Waived payment mode is only allowed for Reship or Replacement follow-up orders.");
+          return null;
+        }
+        if (isFinite(splits[i].amount) && splits[i].amount > 0.001) {
+          showErr("Waived payment line must be zero amount.");
+          return null;
+        }
+        continue;
+      }
       if (!isFinite(splits[i].amount) || splits[i].amount <= 0) {
         showErr("Each payment line must have amount greater than zero.");
         return null;
       }
+    }
+
+    var allWaived = splits.every(function(s) { return s.mode === "waived"; });
+    if (allWaived) {
+      if (!isWaivedAllowed) {
+        showErr("Waived payment mode is only allowed for Reship or Replacement follow-up orders.");
+        return null;
+      }
+      var primaryWaived = splits[0] || { mode: "waived", transaction_id: "" };
+      return {
+        splits: splits,
+        total: 0,
+        advanceTotal: 0,
+        codTotal: 0,
+        paymentStage: "final",
+        hasCod: false,
+        primaryMode: "waived",
+        primaryTxn: primaryWaived.transaction_id || ""
+      };
     }
 
     if (hasCod) {

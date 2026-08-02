@@ -93,6 +93,14 @@
 
     window.isPosFollowUpWaivedCheckout = function () {
         var cfg = window.POS_FOLLOW_UP || null;
-        return !!(cfg && String(cfg.pricing_mode || '').toLowerCase() === 'waived');
+        if (!cfg) {
+            return false;
+        }
+        var type = String(cfg.follow_up_type || '').toLowerCase();
+        var mode = String(cfg.pricing_mode || '').toLowerCase();
+        if (type !== 'reship' && type !== 'replace') {
+            return false;
+        }
+        return mode === 'waived';
     };
 })();
