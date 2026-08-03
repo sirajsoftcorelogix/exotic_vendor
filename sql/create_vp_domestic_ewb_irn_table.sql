@@ -40,5 +40,5 @@ ALTER TABLE `vp_domestic_ewb_irn` ADD COLUMN IF NOT EXISTS `ewb_date` DATETIME C
 ALTER TABLE `vp_domestic_ewb_irn` ADD COLUMN IF NOT EXISTS `ewb_valid_till` DATETIME COMMENT 'E-way Bill validity date/time' AFTER `ewb_date`;
 ALTER TABLE `vp_domestic_ewb_irn` ADD COLUMN IF NOT EXISTS `gen_gstin` VARCHAR(20) COMMENT 'GSTIN used to generate E-way Bill' AFTER `ewb_valid_till`;
 ALTER TABLE `vp_domestic_ewb_irn` ADD COLUMN IF NOT EXISTS `info_dtls` LONGTEXT COMMENT 'InfoDtls from Alankit IRN/EWB response' AFTER `gen_gstin`;
-
+ALTER TABLE `vp_domestic_ewb_irn` ADD COLUMN IF NOT EXISTS `trade_name` VARCHAR(100) NULL AFTER `ewb_response`;
 
