@@ -161,7 +161,7 @@ function vendorEmailApiUrl(): string
 function vendorEmailApiRequestHeaders(): array
 {
     if (!function_exists('vendor_external_api_headers')) {
-        require_once __DIR__ . '/vendor_external_api.php';
+        require_once __DIR__ . '/../integrations/exotic/vendor_product_api.php';
     }
 
     return array_merge(vendor_external_api_headers(), [

@@ -2,7 +2,7 @@
 require_once 'models/author/Author.php';
 require_once 'models/country/country.php';
 require_once 'models/country/state.php';
-require_once __DIR__ . '/../helpers/vendor_external_api.php';
+require_once __DIR__ . '/../integrations/exotic/vendor_product_api.php';
 
 class AuthorsController
 {

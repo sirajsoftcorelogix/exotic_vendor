@@ -3,7 +3,7 @@ require_once 'models/vendor/vendor.php';
 require_once 'models/country/country.php';
 require_once 'models/country/state.php';
 require_once 'models/teams/Teams.php';
-require_once 'helpers/vendor_external_api.php';
+require_once 'integrations/exotic/vendor_product_api.php';
 
 $vendorsModel = new Vendor($conn);
 $countryModel = new Country($conn);
@@ -182,48 +182,7 @@ class VendorsController {
         return json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
     public function deleteVendorExternal($vendorId){
-        $vendorId = trim((string)$vendorId);
-        if ($vendorId === '') {
-            return ['success' => false, 'message' => 'Remote vendor_id is missing.'];
-        }
-
-        $apiUrl = 'https://www.exoticindia.com/vendor-api/product/vendordelete';
-        $headers = [
-            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-            'x-adminapitest: 1',
-            'Content-Type: application/x-www-form-urlencoded'
-        ];
-
-        $ch = curl_init($apiUrl);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query(['vendor_id' => $vendorId]));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-
-        $apiResponse = curl_exec($ch);
-        $apiError = curl_error($ch);
-        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($apiResponse === false) {
-            return ['success' => false, 'message' => 'Vendor delete API call failed: ' . $apiError];
-        }
-
-        $decoded = json_decode((string)$apiResponse, true);
-        if ($httpCode >= 400) {
-            $msg = is_array($decoded) && !empty($decoded['message']) ? (string)$decoded['message'] : 'HTTP ' . $httpCode;
-            return ['success' => false, 'message' => 'Vendor delete API failed: ' . $msg];
-        }
-
-        if (is_array($decoded)) {
-            if ((isset($decoded['success']) && $decoded['success'] === false) || (isset($decoded['status']) && strtolower((string)$decoded['status']) === 'error')) {
-                $msg = !empty($decoded['message']) ? (string)$decoded['message'] : 'Remote delete returned failure.';
-                return ['success' => false, 'message' => 'Vendor delete API failed: ' . $msg];
-            }
-        }
-
-        return ['success' => true, 'message' => 'Remote vendor deleted.'];
+        return vendor_external_api_delete(trim((string) $vendorId));
     }
     public function delete() {
         global $vendorsModel;

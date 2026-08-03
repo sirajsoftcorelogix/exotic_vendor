@@ -2,6 +2,18 @@
 $order_status_list = is_array($order_status_list ?? null) ? $order_status_list : [];
 $staff_list = is_array($staff_list ?? null) ? $staff_list : [];
 $showOrderVendorName = (bool)($showOrderVendorName ?? false);
+
+$orderPage = (string)($orderPage ?? 'orders');
+if (!in_array($orderPage, ['orders', 'posorders'], true)) {
+    $orderPage = 'orders';
+}
+
+$updateStatusUrl = (string)($updateStatusUrl ?? base_url('index.php?page=' . $orderPage . '&action=update_status'));
+$retryStatusApiUrl = (string)($retryStatusApiUrl ?? '');
+if ($retryStatusApiUrl === '' && $orderPage === 'posorders') {
+    $retryStatusApiUrl = base_url('index.php?page=posorders&action=retry_status_api');
+}
+$showExoticApiSyncModal = (bool)($showExoticApiSyncModal ?? ($orderPage === 'posorders'));
 ?>
 <div id="statusPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[250] p-4" onclick="closeStatusPopup(event)">
     <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative" onclick="event.stopPropagation();">
@@ -21,7 +33,7 @@ $showOrderVendorName = (bool)($showOrderVendorName ?? false);
             </div>
             <div class="p-6">
                 <h2 class="text-2xl font-bold mb-4">Update Order</h2>
-                <form id="statusForm" enctype="multipart/form-data" method="post" action="?page=orders&action=update_status">
+                <form id="statusForm" enctype="multipart/form-data" method="post" action="<?= htmlspecialchars($updateStatusUrl) ?>">
                     <input type="hidden" name="status_order_id" id="status_order_id">
                     <div class="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -81,118 +93,35 @@ $showOrderVendorName = (bool)($showOrderVendorName ?? false);
         </div>
     </div>
 </div>
+
+<?php if ($showExoticApiSyncModal): ?>
+<div id="exoticApiSyncModal" class="fixed inset-0 z-[10000] hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closeExoticApiSyncModal()"></div>
+    <div class="relative mx-auto mt-24 w-[92%] max-w-lg rounded-xl bg-white shadow-xl">
+        <div class="border-b border-amber-200 bg-amber-50 px-5 py-4 rounded-t-xl">
+            <h3 class="text-lg font-semibold text-amber-900">Exotic India sync failed</h3>
+            <p class="text-sm text-amber-800 mt-1">Local order status was saved, but the vendor portal could not be updated.</p>
+        </div>
+        <div class="px-5 py-4 space-y-3 text-sm text-gray-700">
+            <p id="exoticApiSyncSummary" class="font-medium text-gray-900"></p>
+            <div id="exoticApiSyncDetails" class="max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3 font-mono text-xs whitespace-pre-wrap text-gray-800"></div>
+        </div>
+        <div class="flex flex-wrap justify-end gap-2 border-t border-gray-200 px-5 py-4">
+            <button type="button" onclick="closeExoticApiSyncModal()" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Close</button>
+            <button type="button" id="exoticApiSyncRetryBtn" onclick="retryExoticApiSync()" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">Retry sync</button>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <script>
-(function() {
-    if (window.__orderStatusPopupInit) {
-        return;
-    }
-    window.__orderStatusPopupInit = true;
-
-    window.openStatusPopup = function(orderId) {
-        const popup = document.getElementById('statusPopup');
-        const orderEl = document.getElementById('order-id-' + orderId);
-        if (!popup || !orderEl) {
-            alert('Order data not found.');
-            return;
-        }
-
-        let orderData;
-        try {
-            orderData = JSON.parse(orderEl.getAttribute('data-order') || '{}');
-        } catch (err) {
-            alert('Order data is invalid.');
-            return;
-        }
-
-        document.getElementById('status_order_id').value = orderId;
-        document.getElementById('orderRemarks').value = orderData.remarks || '';
-        document.getElementById('orderStatus').value = orderData.status || '';
-        document.getElementById('status_order_number').textContent = orderData.order_number || 'N/A';
-        document.getElementById('status_item_code').textContent = orderData.item_code || 'N/A';
-        <?php if ($showOrderVendorName): ?>
-        document.getElementById('status_vendor_name').textContent = orderData.vendor_name || orderData.vendor || 'N/A';
-        <?php endif; ?>
-        document.getElementById('status_category').textContent = orderData.groupname || 'N/A';
-        document.getElementById('status_sub_category').textContent = orderData.subcategories || 'N/A';
-        document.getElementById('status_item').textContent = orderData.title || 'N/A';
-        document.getElementById('orderPriority').value = orderData.priority || '';
-        document.getElementById('previousStatus').value = orderData.status || '';
-        document.getElementById('previousAgent').value = orderData.agent_id || '';
-        document.getElementById('agentId').value = orderData.agent_id || '';
-        document.getElementById('previousPriority').value = orderData.priority || '';
-        document.getElementById('previousRemarks').value = orderData.remarks || '';
-        document.getElementById('previousESD').value = orderData.esd || '';
-
-        const statusESD = document.getElementById('statusESD');
-        const raw = orderData.esd || '';
-        if (statusESD) {
-            const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-            statusESD.value = m ? m[0] : (raw || '');
-        }
-
-        const imgElem = document.querySelector('#statusPopup img');
-        if (imgElem) {
-            imgElem.src = orderData.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=Item';
-        }
-
-        const errorDiv = document.getElementById('orderStatusError');
-        if (errorDiv) {
-            errorDiv.textContent = '';
-            errorDiv.classList.add('hidden');
-        }
-
-        popup.classList.remove('hidden');
-    };
-
-    window.closeStatusPopup = function(e) {
-        if (e && e.target && e.currentTarget !== e.target) {
-            return;
-        }
-        const popup = document.getElementById('statusPopup');
-        if (popup) {
-            popup.classList.add('hidden');
-        }
-    };
-
-    document.getElementById('agentId')?.addEventListener('change', function() {
-        const selectedOption = this.options[this.selectedIndex];
-        document.getElementById('agentName').value = selectedOption ? selectedOption.text : '';
-    });
-
-    document.getElementById('statusForm')?.addEventListener('submit', function(e) {
-        const statusSelect = document.getElementById('orderStatus');
-        const errorDiv = document.getElementById('orderStatusError');
-        if (!statusSelect || statusSelect.value === '') {
-            e.preventDefault();
-            if (errorDiv) {
-                errorDiv.textContent = 'Please select a status.';
-                errorDiv.classList.remove('hidden');
-            }
-            return;
-        }
-        e.preventDefault();
-        if (errorDiv) {
-            errorDiv.classList.add('hidden');
-        }
-
-        const formData = new FormData(document.getElementById('statusForm'));
-        fetch('index.php?page=orders&action=update_status', {
-            method: 'POST',
-            body: formData
-        })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
-                if (data.success) {
-                    window.closeStatusPopup();
-                    window.location.reload();
-                } else if (errorDiv) {
-                    errorDiv.textContent = data.message || 'Error updating order status.';
-                    errorDiv.classList.remove('hidden');
-                }
-            })
-            .catch(function() {
-                alert('An error occurred while updating order status.');
-            });
-    });
-})();
+window.OrderStatusPopupConfig = <?= json_encode([
+    'updateStatusUrl' => $updateStatusUrl,
+    'retryStatusApiUrl' => $retryStatusApiUrl,
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+window.OrderWorkflowStatusFilterConfig = <?= json_encode([
+    'allowedTargetsUrl' => base_url('index.php?page=workflow_transition&action=allowedTargets'),
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 </script>
+<script src="<?= htmlspecialchars(base_url('assets/js/order_workflow_status_filter.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
+<script src="<?= htmlspecialchars(base_url('assets/js/order_status_update_popup.js'), ENT_QUOTES, 'UTF-8') ?>"></script>

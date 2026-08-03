@@ -1,3 +1,11 @@
+<?php
+$vfInput = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition';
+$vfLabel = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600';
+$vfSection = 'rounded-xl border border-gray-200/90 bg-gradient-to-b from-gray-50/70 to-white p-4 sm:p-5 space-y-4';
+$vfHint = 'mt-1 text-xs text-gray-500';
+$vfCard = 'rounded-lg border border-gray-200 bg-white p-3 space-y-2';
+$vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
+?>
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
     <!-- Page Header -->
     <div class="relative overflow-hidden rounded-2xl border border-amber-200/45 bg-gradient-to-br from-amber-50/70 via-white to-slate-50/40 shadow-sm ring-1 ring-amber-900/[0.04]">
@@ -19,6 +27,11 @@
                 </p>
             </div>
             <div class="flex shrink-0 lg:pl-4 lg:self-center gap-3 flex-wrap">
+                <a href="?page=brokers&action=list"
+                    class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-gray-300 bg-white text-gray-800 text-sm font-semibold shadow-sm hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 transition whitespace-nowrap">
+                    <i class="fas fa-user-tie text-xs opacity-95" aria-hidden="true"></i>
+                    Manage brokers
+                </a>
                 <?php if (isset($_SESSION['user']['role_id']) && (int)$_SESSION['user']['role_id'] === 1): ?>
                     <button id="sync-vendors-api-btn"
                         class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-amber-300 bg-white text-amber-800 text-sm font-semibold shadow-sm hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-50/50 transition whitespace-nowrap">
@@ -175,6 +188,7 @@
                         <!-- <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider table-header-text">Email</th> -->
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">City</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">State</th>
+                        <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Broker</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Status</th>
                         <th scope="col" class="px-5 py-3.5 whitespace-nowrap">Action</th>
                     </tr>
@@ -239,6 +253,10 @@
                                 <!-- <td class="px-6 py-4 whitespace-wrap"><?= htmlspecialchars($vendor['vendor_email'] ?? '') ?></td> -->
                                 <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700"><?= htmlspecialchars($vendor['city'] ?? '') ?></td>
                                 <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700"><?= htmlspecialchars($vendor['state'] ?? '') ?></td>
+                                <td class="px-5 py-4 whitespace-wrap text-sm text-gray-700"><?php
+                                    $brokerName = trim((string)($vendor['broker_name'] ?? ''));
+                                    echo htmlspecialchars($brokerName !== '' ? $brokerName : '-', ENT_QUOTES, 'UTF-8');
+                                ?></td>
                                 <td class="px-5 py-4 whitespace-wrap text-sm">
                                     <?php
                                         $vendorStatus = strtolower(trim((string)($vendor['is_active'] ?? '')));
@@ -336,106 +354,304 @@
 </div>
 
 <!-- Add Vendor Modal -->
-<div id="popup-wrapper" class="hidden">
-    <!-- Background Overlay -->
-    <div id="popup-overlay" class="fixed inset-0 bg-black bg-opacity-25 z-40"></div>
-
-    <!-- Sliding Container -->
-    <div id="modal-slider" class="popup-transition fixed top-0 right-0 h-full flex transform translate-x-full z-50" style="width: 35%; min-width: 400px;">
-
-        <!-- Close Button -->
-        <div class="flex-shrink-0 flex items-start pt-5">
-            <button id="close-vendor-popup-btn" class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center shadow-lg" style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-            </button>
+<div id="vendorAddModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4 py-6">
+    <div class="w-full max-w-4xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col">
+        <div class="flex items-center justify-between border-b border-gray-200 bg-gradient-to-r from-amber-50/60 to-white px-6 py-4 shrink-0">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900">Add vendor</h2>
+                <p class="mt-0.5 text-xs text-gray-500">Create a supplier profile and sync with Exotic India when groups are selected.</p>
+            </div>
+            <button type="button" id="close-vendor-popup-btn" class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition" aria-label="Close">&times;</button>
         </div>
-        <!-- Popup Panel -->
-        <div id="vendor-popup-panel" class="h-full bg-white shadow-2xl" style="width: 100%;">
-            <div class="h-full w-full overflow-y-auto">
-                <div class="p-6">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Add Vendor</h2>
-                    <div id="addVendorMsg" style="margin-top:10px;" class="text-sm font-bold"></div>
-                    <form id="addVendorForm">
+        <form id="addVendorForm" class="overflow-y-auto px-4 py-5 sm:px-6 space-y-5 flex-1 min-h-0">
                         <input type="hidden" name="page" value="vendors">
                         <input type="hidden" name="action" value="addVendor">
 
-                        <!-- Basic Information -->
-                        <div class="pt-4">
-                            <h3 class="text-sm font-bold text-gray-800 mb-2">Basic Information</h3>
-                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div id="addVendorMsg" class="text-sm font-semibold"></div>
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
+                                    <i class="fas fa-building text-sm" aria-hidden="true"></i>
+                                </span>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Vendor Name <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="addVendorName" id="addVendorName" />
-                                    <span id="addVendorNameMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
+                                    <h3 class="text-sm font-bold text-gray-900">Vendor profile</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Identity, status, and web presence.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Vendor name <span class="text-red-500 normal-case">*</span></label>
+                                    <input type="text" class="<?= $vfInput ?>" required name="addVendorName" id="addVendorName" placeholder="Official vendor name" />
+                                    <span id="addVendorNameMsg" class="text-sm text-red-500"></span>
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Contact Person <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="addContactPerson" id="addContactPerson" />
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Phone <span class="text-red-500">*</span></label>
-                                    <select class="form-input w-1/4" style="width: 190px;" name="addCountryCode" id="addCountryCode" required>
-                                        <option value="" disabled>Select Code</option>
-                                        <?php foreach($countryList as $cl): ?>
-                                            <option value="<?php echo $cl['phone_code']; ?>" <?php if($cl["name"]=="India") { echo "selected"; }?>>
-                                                <?php echo $cl['name'] . " (+" .$cl['phone_code'].")"; ?>
-                                            </option>
-                                        <?php endforeach; ?>
+                                    <label class="<?= $vfLabel ?>">Status <span class="text-red-500 normal-case">*</span></label>
+                                    <select class="<?= $vfInput ?>" required name="addStatus" id="addStatus">
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive</option>
+                                        <option value="blacklisted">Blacklisted</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <input type="number" class="form-input w-full mt-1" required oninput="limitToTenDigits(this)" name="addPhone" id="addPhone" style="margin-top: 25px;" />
-                                    <span id="addPhoneMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
-                                </div>
-                                
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Email</label>
-                                    <input type="email" class="form-input w-full mt-1" name="addEmail" id="addEmail" />
-                                    <span id="addEmailMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
+                                    <label class="<?= $vfLabel ?>">Broker</label>
+                                    <select name="broker_id" id="add_broker_id" class="<?= $vfInput ?>">
+                                        <option value="">Select broker...</option>
+                                    </select>
+                                    <p class="<?= $vfHint ?>">Optional. From Broker Master.</p>
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Alternate Phone (optional)</label>
-                                    <input type="number" class="form-input w-full mt-1" name="addAltPhone" id="addAltPhone" oninput="limitToTenDigits(this)" />
+                                    <label class="<?= $vfLabel ?>">Rating</label>
+                                    <select class="<?= $vfInput ?>" name="addRating" id="addRating">
+                                        <option value="">Select rating (optional)</option>
+                                        <?php foreach ($vendorRatingOptions as $ratingOption): ?>
+                                            <option value="<?php echo htmlspecialchars($ratingOption, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($ratingOption, ENT_QUOTES, 'UTF-8'); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
                                 </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Stock Replenishment Months</label>
-                                    <input type="number" class="form-input w-full mt-1" name="stock_replenishment_months" id="add_stock_replenishment_months" min="0" step="1" placeholder="e.g. 3" />
-                                    <p class="mt-1 text-xs text-gray-500">Expected months to replenish stock for this vendor. Leave empty or 0 if not set.</p>
+                                <div class="md:col-span-2">
+                                    <label class="<?= $vfLabel ?>">Website</label>
+                                    <div class="relative">
+                                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                            <i class="fas fa-globe text-xs" aria-hidden="true"></i>
+                                        </span>
+                                        <input type="url" class="<?= $vfInput ?> py-2.5 pl-9 pr-3" name="website" id="addWebsite" placeholder="https://example.com" />
+                                    </div>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div style="width: 400px;">
-                                    <label class="text-sm font-medium text-gray-700">Team</label>
-                                    <br/>
-                                    <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="addTeam[]" id="addTeam" onchange="fillTeamAgent(this.value, 'AddForm');">
-                                        <option value="" disabled>Select Team</option>
-                                        <?php foreach($teamList as $team): ?>
+                            <label class="flex items-start gap-3 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2.5 cursor-pointer">
+                                <input type="hidden" name="addWebpage" value="0">
+                                <input type="checkbox" class="mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="addWebpage" id="addWebpage" value="1" checked>
+                                <span>
+                                    <span class="block text-sm font-medium text-gray-800">Allow webpage on Exotic India</span>
+                                    <span class="block text-xs text-gray-500 mt-0.5">Maps to the <code class="text-[11px] bg-white/80 px-1 rounded">webpage</code> parameter on the vendor API.</span>
+                                </span>
+                            </label>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                                    <i class="fas fa-handshake text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Commercial terms</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Default stock and discount settings.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Stock replenishment (months)</label>
+                                    <input type="number" class="<?= $vfInput ?>" name="stock_replenishment_months" id="add_stock_replenishment_months" min="0" step="1" placeholder="e.g. 3" />
+                                    <p class="<?= $vfHint ?>">Leave empty or 0 if not set.</p>
+                                </div>
+                                <div id="addBookDiscountField" class="hidden">
+                                    <label class="<?= $vfLabel ?>">Discount (%)</label>
+                                    <input type="number" class="<?= $vfInput ?>" name="discount" id="add_discount" min="0" step="0.01" placeholder="e.g. 10" />
+                                    <p class="<?= $vfHint ?>">For book vendors only.</p>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-700">
+                                    <i class="fas fa-layer-group text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Product groups</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Required for Exotic India API sync.</p>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="<?= $vfLabel ?>">Group name <span class="text-red-500 normal-case">*</span></label>
+                                <div id="groupname" class="mt-1 grid grid-cols-2 sm:grid-cols-3 gap-2 rounded-lg border border-amber-200/80 bg-amber-50/40 p-3 max-h-36 overflow-y-auto">
+                                    <?php foreach ($groupnameList as $groupSlug): ?>
+                                        <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 vendor-group-checkbox" name="groupname[]" value="<?php echo htmlspecialchars($groupSlug); ?>">
+                                            <span><?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupSlug, MB_CASE_TITLE, 'UTF-8') : ucwords($groupSlug)); ?></span>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                                <span id="addGroupnameMsg" class="text-sm text-red-500"></span>
+                            </div>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+                                    <i class="fas fa-address-book text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Contact details</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Primary contact plus optional alternate emails and phones.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="md:col-span-2">
+                                    <label class="<?= $vfLabel ?>">Contact person <span class="text-red-500 normal-case">*</span></label>
+                                    <input type="text" class="<?= $vfInput ?>" required name="addContactPerson" id="addContactPerson" placeholder="Primary contact name" />
+                                </div>
+                                <div class="<?= $vfCard ?>">
+                                    <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Primary email</label>
+                                    <input type="email" class="<?= $vfInput ?>" name="addEmail" id="addEmail" placeholder="name@vendor.com" />
+                                    <span id="addEmailMsg" class="text-sm text-red-500"></span>
+                                    <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                        <input type="checkbox" name="vendor_email_is_primary" id="add_vendor_email_is_primary" value="1" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                                        <span>Mark as primary email</span>
+                                    </label>
+                                </div>
+                                <div class="<?= $vfCard ?>">
+                                    <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Primary phone <span class="text-red-500 normal-case">*</span></label>
+                                    <div class="flex flex-col sm:flex-row gap-2">
+                                        <select class="<?= $vfInput ?> sm:max-w-[210px]" name="addCountryCode" id="addCountryCode" required>
+                                            <option value="" disabled>Select code</option>
+                                            <?php foreach ($countryList as $cl): ?>
+                                                <option value="<?php echo $cl['phone_code']; ?>" <?php if ($cl['name'] === 'India') { echo 'selected'; } ?>>
+                                                    <?php echo $cl['name'] . ' (+' . $cl['phone_code'] . ')'; ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <input type="text" class="<?= $vfInput ?> flex-1" required name="addPhone" id="addPhone" oninput="limitToTenDigits(this)" placeholder="10-digit mobile" />
+                                    </div>
+                                    <span id="addPhoneMsg" class="text-sm text-red-500"></span>
+                                    <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                        <input type="checkbox" name="vendor_phone_is_whatsapp" id="add_vendor_phone_is_whatsapp" value="1" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                                        <span>WhatsApp number</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-1">
+                                <div class="rounded-lg border border-dashed border-gray-300 bg-white/80 p-3">
+                                    <div class="mb-2 flex items-center justify-between gap-3">
+                                        <h4 class="text-sm font-semibold text-gray-800">Additional emails</h4>
+                                        <button type="button" id="addVendorAltEmailBtn" class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                            <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                                            Add email
+                                        </button>
+                                    </div>
+                                    <div id="vendorAddAltEmailsList" class="space-y-2"></div>
+                                    <p class="mt-2 text-xs text-gray-500">Up to 5 alternate emails.</p>
+                                </div>
+                                <div class="rounded-lg border border-dashed border-gray-300 bg-white/80 p-3">
+                                    <div class="mb-2 flex items-center justify-between gap-3">
+                                        <h4 class="text-sm font-semibold text-gray-800">Additional phones</h4>
+                                        <button type="button" id="addVendorAltPhoneBtn" class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                            <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                                            Add phone
+                                        </button>
+                                    </div>
+                                    <div id="vendorAddAltPhonesList" class="space-y-2"></div>
+                                    <p class="mt-2 text-xs text-gray-500">Up to 5 alternate phones. Tick WhatsApp where applicable.</p>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
+                                    <i class="fas fa-location-dot text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Address</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Business or correspondence address.</p>
+                                </div>
+                            </div>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Street address</label>
+                                    <input type="text" class="<?= $vfInput ?>" name="addAddress" id="addAddress" placeholder="Building, street, area" />
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="<?= $vfLabel ?>">City</label>
+                                        <input type="text" class="<?= $vfInput ?>" name="addCity" id="addCity" />
+                                    </div>
+                                    <div>
+                                        <label class="<?= $vfLabel ?>">State</label>
+                                        <span id="addStateBlock">
+                                            <select class="<?= $vfInput ?>" name="addState" id="addState">
+                                                <option value="">Select State</option>
+                                                <?php foreach ($stateList as $item): ?>
+                                                    <option value="<?php echo htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8'); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <label class="<?= $vfLabel ?>">Country</label>
+                                        <select class="<?= $vfInput ?>" name="addCountry" id="addCountry" onchange="fetchStates(this.value, 'AddForm');">
+                                            <?php foreach ($countryList as $item): ?>
+                                                <option value="<?php echo $item['name']; ?>" <?php if ($item['name'] === 'India') { echo 'selected'; } ?>><?php echo $item['name']; ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="<?= $vfLabel ?>">Postal code</label>
+                                        <input type="text" class="<?= $vfInput ?>" name="addPostalCode" id="addPostalCode" />
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
+                                    <i class="fas fa-file-invoice text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Tax &amp; compliance</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">GST and PAN for invoicing.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">GST number</label>
+                                    <input type="text" class="<?= $vfInput ?>" name="addGstNumber" id="addGstNumber" />
+                                </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">PAN number</label>
+                                    <input type="text" class="<?= $vfInput ?>" name="addPanNumber" id="addPanNumber" />
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+                                    <i class="fas fa-users text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Assignment &amp; notes</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Internal team, categories, and notes.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Team</label>
+                                    <select class="<?= $vfInput ?> min-h-[7rem]" multiple name="addTeam[]" id="addTeam" onchange="fillTeamAgent(this.value, 'AddForm');">
+                                        <option value="" disabled>Select team</option>
+                                        <?php foreach ($teamList as $team): ?>
                                             <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-                                <br />
-                                <div style="width: 400px;">
-                                    <label class="text-sm font-medium text-gray-700">Agent</label>
-                                    <br/>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Agent</label>
                                     <span id="addTeamMemberBlock">
-                                        <select class="form-input w-full mt-1" name="addTeamMember" id="addTeamMember">
-                                            <option value="" disabled selected>Select Team Member</option>
+                                        <select class="<?= $vfInput ?>" name="addTeamMember" id="addTeamMember">
+                                            <option value="" disabled selected>Select team member</option>
                                         </select>
                                     </span>
                                 </div>
                             </div>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Category</label>
-                                <br/>
-                                <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="addVendorCategory[]" id="addVendorCategory">
-                                    <option value="" disabled>Select Categories</option>
-                                    <?php foreach($category[0] as $key => $value): ?>
+                                <label class="<?= $vfLabel ?>">Category</label>
+                                <select class="<?= $vfInput ?> min-h-[7rem]" multiple name="addVendorCategory[]" id="addVendorCategory">
+                                    <option value="" disabled>Select categories</option>
+                                    <?php foreach ($category[0] as $key => $value): ?>
                                         <?php if ($value['parent_id'] == 0): ?>
                                             <optgroup label="<?php echo $value['category_name']; ?>">
-                                                <?php foreach($category[$value['id']] as $subKey => $subValue): 
+                                                <?php foreach ($category[$value['id']] as $subKey => $subValue):
                                                     if ($subValue['parent_id'] == $value['id']): ?>
                                                         <option value="<?php echo $subValue['id']; ?>"><?php echo $subValue['category_name']; ?></option>
                                                 <?php endif; endforeach; ?>
@@ -444,238 +660,326 @@
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-                            <!-- Groupname checkboxes -->
-                            <div class="mt-2">
-                                <label class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
-                                <div id="groupname" class="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-gray-200 p-3 max-h-36 overflow-y-auto">
-                                    <?php foreach($groupnameList as $groupSlug): ?>
-                                        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
-                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 vendor-group-checkbox" name="groupname[]" value="<?php echo htmlspecialchars($groupSlug); ?>">
-                                            <span><?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupSlug, MB_CASE_TITLE, 'UTF-8') : ucwords($groupSlug)); ?></span>
-                                        </label>
-                                    <?php endforeach; ?>
-                                </div>
-                                <span id="addGroupnameMsg" class="text-sm text-red-500"></span>
-                                <p class="mt-1 text-xs text-gray-500">Required for Exotic India API sync. Select at least one group.</p>
-                            </div>
-                            <div id="addBookDiscountField" class="mt-2 hidden">
-                                <label class="text-sm font-medium text-gray-700">Discount (%)</label>
-                                <input type="number" class="form-input w-full mt-1" name="discount" id="add_discount" min="0" step="0.01" placeholder="e.g. 10" />
-                                <p class="mt-1 text-xs text-gray-500">Default discount percentage for book vendors. Leave empty or 0 if not set.</p>
-                            </div>
-                            <div class="mt-2">
-                                <label for="addWebpage" class="text-sm font-medium text-gray-700">Webpage <span class="text-red-500">*</span></label>
-                                <div class="mt-1 flex items-center gap-2">
-                                    <input type="hidden" name="addWebpage" value="0">
-                                    <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="addWebpage" id="addWebpage" value="1" checked>
-                                    <label for="addWebpage" class="text-sm text-gray-700">Allow webpage</label>
-                                </div>
-                                <p class="mt-1 text-xs text-gray-500">Whether to allow a webpage for this vendor.</p>
-                            </div>
-                        </div>
-
-                        <!-- Address -->
-                        <div class="pt-4">
-                            <h3 class="text-sm font-bold text-gray-800 mb-2">Address</h3>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Address</label>
-                                <input type="text" class="form-input w-full mt-1" name="addAddress" id="addAddress" />
+                                <label class="<?= $vfLabel ?>">Notes</label>
+                                <textarea class="<?= $vfInput ?> min-h-[88px] resize-y" name="addNotes" id="addNotes" placeholder="Internal notes about this vendor"></textarea>
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">City</label>
-                                    <input type="text" class="form-input w-full mt-1" name="addCity" id="addCity" />
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">State</label>
-                                    <span id="addStateBlock">
-                                        <select class="form-input w-full mt-1" name="addState" id="addState">
-                                            <?php foreach($stateList as $item): ?>
-                                                <option value="<?php echo $item["name"];?>"><?php echo $item["name"];?></option>
-                                            <?php endforeach?>
-                                        </select>
-                                    </span>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Country</label>
-                                    <select class="form-input w-full mt-1" name="addCountry" id="addCountry" onchange="fetchStates(this.value, 'AddForm');">
-                                        <?php foreach($countryList as $item): ?>
-                                            <option value="<?php echo $item["name"];?>" <?php if($item["name"]=="India") { echo "selected"; }?>><?php echo $item["name"];?></option>
-                                        <?php endforeach?>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Postal Code</label>
-                                    <input type="text" class="form-input w-full mt-1" name="addPostalCode" id="addPostalCode" />
-                                </div>
-                            </div>
-                        </div>
+                        </section>
 
-                        <!-- Tax Information -->
-                        <div class="pt-4">
-                            <h3 class="text-sm font-bold text-gray-800 mb-2">Tax Information</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">GST Number </label>
-                                    <input type="text" class="form-input w-full mt-1" name="addGstNumber" id="addGstNumber" />
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">PAN Number</label>
-                                    <input type="text" class="form-input w-full mt-1" name="addPanNumber" id="addPanNumber" />
-                                </div>
-                            </div>
+                        <div class="sticky bottom-0 -mx-4 sm:-mx-6 flex justify-end gap-3 border-t border-gray-200 bg-white/95 px-4 sm:px-6 py-4 backdrop-blur-sm">
+                            <button type="button" id="cancel-vendor-btn" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
+                            <button type="submit" class="rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 transition">Save vendor</button>
                         </div>
-
-                        <!-- Ratings & Notes -->
-                        <div class="pt-4">
-                            <h3 class="text-sm font-bold text-gray-800 mb-2">Ratings & Notes</h3>
-                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">
-                                        Rating <span class="text-red-500">*</span>
-                                    </label>
-                                    <select class="form-input w-full mt-1" required name="addRating" id="addRating">
-                                        <option>5 Star</option>
-                                        <option>4 Star</option>
-                                        <option>3 Star</option>
-                                        <option>2 Star</option>
-                                        <option>1 Star</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
-                                    <select class="form-input w-full mt-1" required name="addStatus" id="addStatus">
-                                        <option value="active">Active</option>
-                                        <option value="inactive">Inactive </option>
-                                        <option value="blacklisted">Blacklisted</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="text-sm font-medium text-gray-700">Notes</label>
-                                <textarea class="w-full min-h-[120px] p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" name="addNotes" id="addNotes"></textarea>
-                            </div>
-                        </div>
-
-                        <div class="flex justify-center items-center gap-4 pt-6 border-t">
-                            <button type="button" id="cancel-vendor-btn" class="action-btn cancel-btn">Back</button>
-                            <button type="submit" class="action-btn save-btn">Save</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
+        </form>
     </div>
 </div>
 <!-- End Add Model Popup -->
 
 <!-- Edit Vendor Modal -->
-<div class="modal fade hidden" id="editVendorModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-    <!-- Sliding Container -->
-    <div id="modal-slider-edit" class="popup-transition fixed top-0 right-0 h-full flex transform translate-x-full z-50" style="width: 35%; min-width: 400px;">
-        <!-- Close Button -->
-        <div class="flex-shrink-0 flex items-start pt-5">
-            <button id="close-vendor-popup-btn-edit" class="bg-white text-gray-800 hover:bg-gray-100 transition flex items-center justify-center shadow-lg" style="width: 61px; height: 61px; border-top-left-radius: 8px; border-bottom-left-radius: 8px;">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-            </button>
+<div id="editVendorModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4 py-6">
+    <div class="w-full max-w-4xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col">
+        <div class="flex items-center justify-between border-b border-gray-200 bg-gradient-to-r from-amber-50/60 to-white px-6 py-4 shrink-0">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900">Edit vendor</h2>
+                <p class="mt-0.5 text-xs text-gray-500">Update supplier profile, groups, and contact details.</p>
+            </div>
+            <button type="button" id="close-vendor-popup-btn-edit" class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition" aria-label="Close">&times;</button>
         </div>
-
-        <!-- Popup Panel -->
-        <div class="h-full bg-white shadow-2xl" style="width: 100%;">
-            <div class="h-full w-full overflow-y-auto">
-                <div class="p-8">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6 pb-6 border-b">Edit Vendor</h2>
-                    <div id="editVendorMsg" style="margin-top:10px;"></div>
-                    <form id="editUserForm">
+        <form id="editUserForm" class="overflow-y-auto px-4 py-5 sm:px-6 space-y-5 flex-1 min-h-0">
                         <input type="hidden" id="editVendorId" name="id" value="">
                         <input type="hidden" id="editAgentIds" value="">
                         <input type="hidden" id="editPreviousState" name="editPreviousState" value="">
-                        <!-- Basic Information -->
-                        <div class="pt-4">
-                            <h3 class="text-sm font-bold text-gray-800 mb-2">Basic Information</h3>
-                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                        <div id="editVendorMsg" class="text-sm font-semibold"></div>
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
+                                    <i class="fas fa-building text-sm" aria-hidden="true"></i>
+                                </span>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Vendor Name <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="editVendorName" id="editVendorName" />
-                                    <span id="editVendorNameMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
+                                    <h3 class="text-sm font-bold text-gray-900">Vendor profile</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Identity, status, and web presence.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Vendor name <span class="text-red-500 normal-case">*</span></label>
+                                    <input type="text" class="<?= $vfInput ?>" required name="editVendorName" id="editVendorName" />
+                                    <span id="editVendorNameMsg" class="text-sm text-red-500"></span>
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Contact Person <span class="text-red-500">*</span></label>
-                                    <input type="text" class="form-input w-full mt-1" required name="editContactPerson" id="editContactPerson" />
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Phone <span class="text-red-500">*</span></label>
-                                    <select class="form-input w-1/4" style="width: 190px;" name="editCountryCode" id="editCountryCode" required>
-                                        <option value="" disabled>Select Code</option>
-                                        <?php foreach($countryList as $cl): ?>
-                                            <option value="<?php echo $cl['phone_code']; ?>">
-                                                <?php echo $cl['name'] . " (+" .$cl['phone_code'].")"; ?>
-                                            </option>
-                                        <?php endforeach; ?>
+                                    <label class="<?= $vfLabel ?>">Status <span class="text-red-500 normal-case">*</span></label>
+                                    <select class="<?= $vfInput ?>" required name="editStatus" id="editStatus">
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive</option>
+                                        <option value="blacklisted">Blacklisted</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <input type="number" class="form-input w-full mt-1" required name="editPhone" id="editPhone" oninput="limitToTenDigits(this)" style="margin-top: 25px;" />
-                                    <span id="editPhoneMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
+                                    <label class="<?= $vfLabel ?>">Broker</label>
+                                    <select name="broker_id" id="edit_broker_id" class="<?= $vfInput ?>">
+                                        <option value="">Select broker...</option>
+                                    </select>
+                                    <p class="<?= $vfHint ?>">Optional. From Broker Master.</p>
                                 </div>
                                 <div>
-                                    <label class="text-sm font-medium text-gray-700">Email</label>
-                                    <input type="email" class="form-input w-full mt-1" name="editEmail" id="editEmail" />
-                                    <span id="editEmailMsg" class="text-sm text-red-500 whitespace-nowrap"></span>
+                                    <label class="<?= $vfLabel ?>">Rating</label>
+                                    <select class="<?= $vfInput ?>" name="editRating" id="editRating">
+                                        <option value="">Select rating (optional)</option>
+                                        <?php foreach ($vendorRatingOptions as $ratingOption): ?>
+                                            <option value="<?php echo htmlspecialchars($ratingOption, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($ratingOption, ENT_QUOTES, 'UTF-8'); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
                                 </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Alternate Phone (optional)</label>
-                                    <input type="number" class="form-input w-full mt-1" name="editAltPhone" id="editAltPhone" oninput="limitToTenDigits(this)" />
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Stock Replenishment Months</label>
-                                    <input type="number" class="form-input w-full mt-1" name="stock_replenishment_months" id="edit_stock_replenishment_months" min="0" step="1" placeholder="e.g. 3" />
-                                    <p class="mt-1 text-xs text-gray-500">Expected months to replenish stock for this vendor. Leave empty or 0 if not set.</p>
+                                <div class="md:col-span-2">
+                                    <label class="<?= $vfLabel ?>">Website</label>
+                                    <div class="relative">
+                                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                            <i class="fas fa-globe text-xs" aria-hidden="true"></i>
+                                        </span>
+                                        <input type="url" class="<?= $vfInput ?> py-2.5 pl-9 pr-3" name="website" id="editWebsite" placeholder="https://example.com" />
+                                    </div>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div style="width: 400px;">
-                                    <label class="text-sm font-medium text-gray-700">Team</label>
-                                    <br />
-                                    <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="editTeam[]" id="editTeam" onchange="fillTeamAgent(this.value, 'EditForm');">
-                                        <option value="" disabled>Select Team</option>
-                                        <?php foreach($teamList as $team): ?>
+                            <label class="flex items-start gap-3 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2.5 cursor-pointer">
+                                <input type="hidden" name="editWebpage" value="0">
+                                <input type="checkbox" class="mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="editWebpage" id="editWebpage" value="1" checked>
+                                <span>
+                                    <span class="block text-sm font-medium text-gray-800">Allow webpage on Exotic India</span>
+                                    <span class="block text-xs text-gray-500 mt-0.5">Maps to the <code class="text-[11px] bg-white/80 px-1 rounded">webpage</code> parameter on the vendor API.</span>
+                                </span>
+                            </label>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                                    <i class="fas fa-handshake text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Commercial terms</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Default stock and discount settings.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Stock replenishment (months)</label>
+                                    <input type="number" class="<?= $vfInput ?>" name="stock_replenishment_months" id="edit_stock_replenishment_months" min="0" step="1" placeholder="e.g. 3" />
+                                    <p class="<?= $vfHint ?>">Leave empty or 0 if not set.</p>
+                                </div>
+                                <div id="editBookDiscountField" class="hidden">
+                                    <label class="<?= $vfLabel ?>">Discount (%)</label>
+                                    <input type="number" class="<?= $vfInput ?>" name="discount" id="edit_discount" min="0" step="0.01" placeholder="e.g. 10" />
+                                    <p class="<?= $vfHint ?>">For book vendors only.</p>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-700">
+                                    <i class="fas fa-layer-group text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Product groups</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Required for Exotic India API sync.</p>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="<?= $vfLabel ?>">Group name <span class="text-red-500 normal-case">*</span></label>
+                                <div id="editGroupname" class="mt-1 grid grid-cols-2 sm:grid-cols-3 gap-2 rounded-lg border border-amber-200/80 bg-amber-50/40 p-3 max-h-36 overflow-y-auto">
+                                    <?php foreach ($groupnameList as $groupSlug): ?>
+                                        <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 vendor-group-checkbox" name="editGroupname[]" value="<?php echo htmlspecialchars($groupSlug); ?>">
+                                            <span><?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupSlug, MB_CASE_TITLE, 'UTF-8') : ucwords($groupSlug)); ?></span>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                                <span id="editGroupnameMsg" class="text-sm text-red-500"></span>
+                            </div>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+                                    <i class="fas fa-address-book text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Contact details</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Primary contact plus optional alternate emails and phones.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="md:col-span-2">
+                                    <label class="<?= $vfLabel ?>">Contact person <span class="text-red-500 normal-case">*</span></label>
+                                    <input type="text" class="<?= $vfInput ?>" required name="editContactPerson" id="editContactPerson" />
+                                </div>
+                                <div class="<?= $vfCard ?>">
+                                    <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Primary email</label>
+                                    <input type="email" class="<?= $vfInput ?>" name="editEmail" id="editEmail" />
+                                    <span id="editEmailMsg" class="text-sm text-red-500"></span>
+                                    <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                        <input type="checkbox" name="vendor_email_is_primary" id="edit_vendor_email_is_primary" value="1" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                                        <span>Mark as primary email</span>
+                                    </label>
+                                </div>
+                                <div class="<?= $vfCard ?>">
+                                    <label class="block text-xs font-semibold uppercase tracking-wide text-gray-600">Primary phone <span class="text-red-500 normal-case">*</span></label>
+                                    <div class="flex flex-col sm:flex-row gap-2">
+                                        <select class="<?= $vfInput ?> sm:max-w-[210px]" name="editCountryCode" id="editCountryCode" required>
+                                            <option value="" disabled>Select code</option>
+                                            <?php foreach ($countryList as $cl): ?>
+                                                <option value="<?php echo $cl['phone_code']; ?>">
+                                                    <?php echo $cl['name'] . ' (+' . $cl['phone_code'] . ')'; ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <input type="text" class="<?= $vfInput ?> flex-1" required name="editPhone" id="editPhone" oninput="limitToTenDigits(this)" placeholder="10-digit mobile" />
+                                    </div>
+                                    <span id="editPhoneMsg" class="text-sm text-red-500"></span>
+                                    <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                        <input type="checkbox" name="vendor_phone_is_whatsapp" id="edit_vendor_phone_is_whatsapp" value="1" class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                                        <span>WhatsApp number</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-1">
+                                <div class="rounded-lg border border-dashed border-gray-300 bg-white/80 p-3">
+                                    <div class="mb-2 flex items-center justify-between gap-3">
+                                        <h4 class="text-sm font-semibold text-gray-800">Additional emails</h4>
+                                        <button type="button" id="editVendorAltEmailBtn" class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                            <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                                            Add email
+                                        </button>
+                                    </div>
+                                    <div id="vendorEditAltEmailsList" class="space-y-2"></div>
+                                    <p class="mt-2 text-xs text-gray-500">Up to 5 alternate emails.</p>
+                                </div>
+                                <div class="rounded-lg border border-dashed border-gray-300 bg-white/80 p-3">
+                                    <div class="mb-2 flex items-center justify-between gap-3">
+                                        <h4 class="text-sm font-semibold text-gray-800">Additional phones</h4>
+                                        <button type="button" id="editVendorAltPhoneBtn" class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                            <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                                            Add phone
+                                        </button>
+                                    </div>
+                                    <div id="vendorEditAltPhonesList" class="space-y-2"></div>
+                                    <p class="mt-2 text-xs text-gray-500">Up to 5 alternate phones. Tick WhatsApp where applicable.</p>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
+                                    <i class="fas fa-location-dot text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Address</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Business or correspondence address.</p>
+                                </div>
+                            </div>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Street address</label>
+                                    <input type="text" class="<?= $vfInput ?>" name="editAddress" id="editAddress" />
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="<?= $vfLabel ?>">City</label>
+                                        <input type="text" class="<?= $vfInput ?>" name="editCity" id="editCity" />
+                                    </div>
+                                    <div>
+                                        <label class="<?= $vfLabel ?>">State</label>
+                                        <span id="editStateBlock">
+                                            <select class="<?= $vfInput ?>" name="editState" id="editState">
+                                                <option value="">Select State</option>
+                                                <?php foreach ($stateList as $item): ?>
+                                                    <option value="<?php echo htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8'); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <label class="<?= $vfLabel ?>">Country</label>
+                                        <select class="<?= $vfInput ?>" name="editCountry" id="editCountry" onchange="fetchStates(this.value, 'EditForm');">
+                                            <?php foreach ($countryList as $item): ?>
+                                                <option value="<?php echo $item['name']; ?>" <?php if ($item['name'] === 'India') { echo 'selected'; } ?>><?php echo $item['name']; ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="<?= $vfLabel ?>">Postal code</label>
+                                        <input type="text" class="<?= $vfInput ?>" name="editPostalCode" id="editPostalCode" />
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
+                                    <i class="fas fa-file-invoice text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Tax &amp; compliance</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">GST and PAN for invoicing.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">GST number</label>
+                                    <input type="text" class="<?= $vfInput ?>" name="editGstNumber" id="editGstNumber" />
+                                </div>
+                                <div>
+                                    <label class="<?= $vfLabel ?>">PAN number</label>
+                                    <input type="text" class="<?= $vfInput ?>" name="editPanNumber" id="editPanNumber" />
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="<?= $vfSection ?>">
+                            <div class="flex items-start gap-3 border-b border-gray-200/70 pb-3">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+                                    <i class="fas fa-users text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900">Assignment &amp; notes</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5">Internal team, categories, and notes.</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Team</label>
+                                    <select class="<?= $vfInput ?> min-h-[7rem]" multiple name="editTeam[]" id="editTeam" onchange="fillTeamAgent(this.value, 'EditForm');">
+                                        <option value="" disabled>Select team</option>
+                                        <?php foreach ($teamList as $team): ?>
                                             <option value="<?php echo $team['id']; ?>"><?php echo $team['team_name']; ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-                                <br />
-                                <div style="width: 400px;">
-                                    <label class="text-sm font-medium text-gray-700">Agent</label>
-                                    <br />
+                                <div>
+                                    <label class="<?= $vfLabel ?>">Agent</label>
                                     <span id="editTeamMemberBlock">
-                                        <select class="form-input w-full mt-1" name="editTeamMember" id="editTeamMember">
-                                            <option value="" disabled selected>Select Agent</option>
+                                        <select class="<?= $vfInput ?>" name="editTeamMember" id="editTeamMember">
+                                            <option value="" disabled selected>Select agent</option>
                                         </select>
                                     </span>
                                 </div>
                             </div>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Category</label>
-                                <select class="form-input w-full mt-1 h-32 advanced-multiselect" multiple name="addVendorCategory[]" id="editVendorCategory">
-                                    <option value="" disabled>Select Categories</option>
-                                    <?php                                     
+                                <label class="<?= $vfLabel ?>">Category</label>
+                                <select class="<?= $vfInput ?> min-h-[7rem]" multiple name="addVendorCategory[]" id="editVendorCategory">
+                                    <option value="" disabled>Select categories</option>
+                                    <?php
                                     if (isset($category[0]) && is_array($category[0])) {
                                         foreach ($category[0] as $parent) {
                                             $parentId = $parent['id'];
                                             $parentName = $parent['category_name'];
-
-                                            // Only show parent as optgroup label, not as selectable option
-                                            echo '<optgroup label="' . htmlspecialchars($parentName) . '" style="font-weight: bold;">';
-
-                                            // Show subcategories if exist
+                                            echo '<optgroup label="' . htmlspecialchars($parentName) . '">';
                                             if (isset($category[$parentId]) && is_array($category[$parentId])) {
                                                 foreach ($category[$parentId] as $child) {
-                                                    echo '<option value="' . $child['id'] . '">' . htmlspecialchars($child['category_name']) . '</option>';
+                                                    echo '<option value="' . (int) $child['id'] . '">' . htmlspecialchars($child['category_name']) . '</option>';
                                                 }
                                             }
                                             echo '</optgroup>';
@@ -683,134 +987,45 @@
                                     }
                                     ?>
                                 </select>
-                                
-                            </div>
-                            <!-- Groupname checkboxes -->
-                            <div class="mt-2">
-                                <label class="text-sm font-medium text-gray-700">Group Name <span class="text-red-500">*</span></label>
-                                <div id="editGroupname" class="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-gray-200 p-3 max-h-36 overflow-y-auto">
-                                    <?php foreach($groupnameList as $groupSlug): ?>
-                                        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
-                                            <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 vendor-group-checkbox" name="editGroupname[]" value="<?php echo htmlspecialchars($groupSlug); ?>">
-                                            <span><?php echo htmlspecialchars(function_exists('mb_convert_case') ? mb_convert_case($groupSlug, MB_CASE_TITLE, 'UTF-8') : ucwords($groupSlug)); ?></span>
-                                        </label>
-                                    <?php endforeach; ?>
-                                </div>
-                                <span id="editGroupnameMsg" class="text-sm text-red-500"></span>
-                                <p class="mt-1 text-xs text-gray-500">Required for Exotic India API sync. Select at least one group.</p>
-                            </div>
-                            <div id="editBookDiscountField" class="mt-2 hidden">
-                                <label class="text-sm font-medium text-gray-700">Discount (%)</label>
-                                <input type="number" class="form-input w-full mt-1" name="discount" id="edit_discount" min="0" step="0.01" placeholder="e.g. 10" />
-                                <p class="mt-1 text-xs text-gray-500">Default discount percentage for book vendors. Leave empty or 0 if not set.</p>
-                            </div>
-                            <div class="mt-2">
-                                <label for="editWebpage" class="text-sm font-medium text-gray-700">Webpage <span class="text-red-500">*</span></label>
-                                <div class="mt-1 flex items-center gap-2">
-                                    <input type="hidden" name="editWebpage" value="0">
-                                    <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500" name="editWebpage" id="editWebpage" value="1" checked>
-                                    <label for="editWebpage" class="text-sm text-gray-700">Allow webpage</label>
-                                </div>
-                                <p class="mt-1 text-xs text-gray-500">Whether to allow a webpage for this vendor.</p>
-                            </div>
-                        </div>
-
-                        <!-- Address -->
-                        <div class="pt-4">
-                            <h3 class="text-sm font-bold text-gray-800 mb-2">Address</h3>
-                            <div>
-                                <label class="text-sm font-medium text-gray-700">Address</label>
-                                <input type="text" class="form-input w-full mt-1" name="editAddress" id="editAddress" />
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">City</label>
-                                    <input type="text" class="form-input w-full mt-1" name="editCity" id="editCity" />
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">State</label>
-                                    <span id="editStateBlock">
-                                        <select class="form-input w-full mt-1" name="editState" id="editState">
-                                            <?php foreach($stateList as $item): ?>
-                                                <option value="<?php echo $item["name"];?>"><?php echo $item["name"];?></option>
-                                            <?php endforeach?>
-                                        </select>
-                                    </span>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Country</label>
-                                    <select class="form-input w-full mt-1" name="editCountry" id="editCountry" onchange="fetchStates(this.value, 'EditForm');">
-                                        <?php foreach($countryList as $item): ?>
-                                            <option value="<?php echo $item["name"];?>" <?php if($item["name"]=="India") { echo "selected"; }?>><?php echo $item["name"];?></option>
-                                        <?php endforeach?>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Postal Code</label>
-                                    <input type="text" class="form-input w-full mt-1" name="editPostalCode" id="editPostalCode" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Tax Information -->
-                        <div class="pt-4">
-                            <h3 class="text-sm font-bold text-gray-800 mb-2">Tax Information</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">GST Number </label>
-                                    <input type="text" class="form-input w-full mt-1"  name="editGstNumber" id="editGstNumber" />
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">PAN Number</label>
-                                    <input type="text" class="form-input w-full mt-1" name="editPanNumber" id="editPanNumber" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Ratings & Notes -->
-                        <div class="pt-4">
-                            <h3 class="text-sm font-bold text-gray-800 mb-2">Ratings & Notes</h3>
-                            <div class="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">
-                                        Rating <span class="text-red-500">*</span>
-                                    </label>
-                                    <select class="form-input w-full mt-1" required name="editRating" id="editRating">
-                                        <option>5 Star</option>
-                                        <option>4 Star</option>
-                                        <option>3 Star</option>
-                                        <option>2 Star</option>
-                                        <option>1 Star</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="text-sm font-medium text-gray-700">Status <span class="text-red-500">*</span></label>
-                                    <select class="form-input w-full mt-1" required name="editStatus" id="editStatus">
-                                        <option value="active">Active</option>
-                                        <option value="inactive">Inactive </option>
-                                        <option value="blacklisted">Blacklisted</option>
-                                    </select>
-                                </div>
                             </div>
                             <div>
-                                <label class="text-sm font-medium text-gray-700">Notes</label>
-                                <textarea class="w-full min-h-[120px] p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" name="editNotes" id="editNotes"></textarea>
+                                <label class="<?= $vfLabel ?>">Notes</label>
+                                <textarea class="<?= $vfInput ?> min-h-[88px] resize-y" name="editNotes" id="editNotes"></textarea>
                             </div>
-                        </div>
+                        </section>
 
-                        <div class="flex justify-center items-center gap-4 pt-6 border-t">
-                            <button type="button" id="cancel-vendor-btn-edit" class="action-btn cancel-btn">Back</button>
-                            <button type="submit" class="action-btn save-btn">Save</button>
+                        <div class="sticky bottom-0 -mx-4 sm:-mx-6 flex justify-end gap-3 border-t border-gray-200 bg-white/95 px-4 sm:px-6 py-4 backdrop-blur-sm">
+                            <button type="button" id="cancel-vendor-btn-edit" class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">Cancel</button>
+                            <button type="submit" class="rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 transition">Save changes</button>
                         </div>
-                    </form>
-                </div>
-            </div>
-        </div>
+        </form>
     </div>
-    </div>
-  </div>
 </div>
 <!-- End Edit Model Popup -->
+
+<div id="vendorDeleteConfirmModal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-black/50 px-4 py-6" role="dialog" aria-modal="true" aria-labelledby="vendorDeleteConfirmTitle">
+    <div class="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
+        <div class="px-6 pt-6 pb-4 text-center">
+            <span class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600">
+                <i class="fas fa-trash-can text-xl" aria-hidden="true"></i>
+            </span>
+            <h3 id="vendorDeleteConfirmTitle" class="text-lg font-semibold text-gray-900">Delete vendor?</h3>
+            <p class="mt-2 text-sm text-gray-600 leading-relaxed">
+                Delete this vendor on Exotic India (when linked) and locally? This cannot be undone.
+            </p>
+        </div>
+        <div class="flex justify-end gap-3 border-t border-gray-200 bg-gray-50/80 px-6 py-4">
+            <button type="button" id="vendorDeleteConfirmCancelBtn"
+                class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                Cancel
+            </button>
+            <button type="button" id="vendorDeleteConfirmBtn"
+                class="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700 transition">
+                Delete vendor
+            </button>
+        </div>
+    </div>
+</div>
 
 <!-- Bank Detail Modal -->
 <div class="modal fade hidden" id="bankDetailModal" tabindex="-1" aria-hidden="true">
@@ -1172,6 +1387,57 @@
             url += '&excludeId=' + encodeURIComponent(String(excludeId));
         }
         return url;
+    }
+
+    function destroyVendorBrokerSelect2(selectId) {
+        if (!window.jQuery || !jQuery.fn.select2) {
+            return;
+        }
+        const $broker = jQuery('#' + selectId);
+        if ($broker.length && $broker.hasClass('select2-hidden-accessible')) {
+            $broker.select2('destroy');
+        }
+    }
+
+    function initVendorBrokerSelect2(selectId, dropdownParentSelector, brokerId, brokerName) {
+        if (!window.jQuery || !jQuery.fn.select2) {
+            return;
+        }
+
+        const $broker = jQuery('#' + selectId);
+        if (!$broker.length) {
+            return;
+        }
+
+        destroyVendorBrokerSelect2(selectId);
+        $broker.empty().append(new Option('Select broker...', '', true, false));
+
+        const selectedId = parseInt(String(brokerId || '0'), 10);
+        const selectedName = String(brokerName || '').trim();
+        if (selectedId > 0 && selectedName !== '') {
+            $broker.append(new Option(selectedName, String(selectedId), true, true));
+        }
+
+        $broker.select2({
+            width: '100%',
+            placeholder: 'Type at least 2 characters to search...',
+            allowClear: true,
+            minimumInputLength: 2,
+            dropdownParent: jQuery(dropdownParentSelector),
+            ajax: {
+                url: 'index.php?page=brokers&action=searchBrokers',
+                type: 'GET',
+                dataType: 'json',
+                delay: 300,
+                data: function (params) {
+                    return { q: params.term || '' };
+                },
+                processResults: function (data) {
+                    return { results: Array.isArray(data) ? data : [] };
+                },
+                cache: true
+            }
+        });
     }
 
     function bindVendorDuplicateCheck(inputEl, msgEl, action, paramName, minLen, existsFlagSetter, excludeIdGetter, duplicateMessage) {
@@ -1570,13 +1836,194 @@
         });
     });
 
+    const vendorFieldInputClass = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition';
+    const VENDOR_MAX_ALT_PHONES = 5;
+    const VENDOR_MAX_ALT_EMAILS = 5;
+
+    function vendorAltRowClass() {
+        return 'grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_auto] gap-2 items-center rounded-lg border border-gray-200 bg-gray-50/60 p-3';
+    }
+
+    function updateVendorAltAddButtons(mode) {
+        const isEdit = mode === 'edit';
+        const phoneBtn = document.getElementById(isEdit ? 'editVendorAltPhoneBtn' : 'addVendorAltPhoneBtn');
+        const emailBtn = document.getElementById(isEdit ? 'editVendorAltEmailBtn' : 'addVendorAltEmailBtn');
+        const phoneListId = isEdit ? 'vendorEditAltPhonesList' : 'vendorAddAltPhonesList';
+        const emailListId = isEdit ? 'vendorEditAltEmailsList' : 'vendorAddAltEmailsList';
+        const phoneCount = document.querySelectorAll('#' + phoneListId + ' .vendor-alt-phone-row').length;
+        const emailCount = document.querySelectorAll('#' + emailListId + ' .vendor-alt-email-row').length;
+        if (phoneBtn) phoneBtn.disabled = phoneCount >= VENDOR_MAX_ALT_PHONES;
+        if (emailBtn) emailBtn.disabled = emailCount >= VENDOR_MAX_ALT_EMAILS;
+    }
+
+    function addVendorAltPhoneRow(mode, data) {
+        const isEdit = mode === 'edit';
+        const listId = isEdit ? 'vendorEditAltPhonesList' : 'vendorAddAltPhonesList';
+        const list = document.getElementById(listId);
+        if (!list || list.querySelectorAll('.vendor-alt-phone-row').length >= VENDOR_MAX_ALT_PHONES) {
+            return;
+        }
+        data = data || {};
+        const index = list.querySelectorAll('.vendor-alt-phone-row').length;
+        const row = document.createElement('div');
+        row.className = 'vendor-alt-phone-row ' + vendorAltRowClass();
+        row.innerHTML =
+            '<input type="text" name="alt_phones[' + index + '][phone]" value="' + String(data.phone || '').replace(/"/g, '&quot;') + '" oninput="limitToTenDigits(this)" placeholder="10-digit phone" class="' + vendorFieldInputClass + '">' +
+            '<label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer whitespace-nowrap">' +
+                '<input type="checkbox" name="alt_phones[' + index + '][is_whatsapp]" value="1"' + (data.is_whatsapp === 1 || data.is_whatsapp === '1' ? ' checked' : '') + ' class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">' +
+                '<span>WhatsApp</span>' +
+            '</label>' +
+            '<button type="button" class="vendor-alt-remove inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">Remove</button>';
+        list.appendChild(row);
+        reindexVendorAltPhoneRows(mode);
+        updateVendorAltAddButtons(mode);
+    }
+
+    function addVendorAltEmailRow(mode, data) {
+        const isEdit = mode === 'edit';
+        const listId = isEdit ? 'vendorEditAltEmailsList' : 'vendorAddAltEmailsList';
+        const list = document.getElementById(listId);
+        if (!list || list.querySelectorAll('.vendor-alt-email-row').length >= VENDOR_MAX_ALT_EMAILS) {
+            return;
+        }
+        data = data || {};
+        const index = list.querySelectorAll('.vendor-alt-email-row').length;
+        const row = document.createElement('div');
+        row.className = 'vendor-alt-email-row ' + vendorAltRowClass();
+        row.innerHTML =
+            '<input type="email" name="alt_emails[' + index + '][email]" value="' + String(data.email || '').replace(/"/g, '&quot;') + '" placeholder="email@example.com" class="' + vendorFieldInputClass + '">' +
+            '<label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer whitespace-nowrap">' +
+                '<input type="checkbox" name="alt_emails[' + index + '][is_primary]" value="1"' + (data.is_primary === 1 || data.is_primary === '1' ? ' checked' : '') + ' class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">' +
+                '<span>Primary</span>' +
+            '</label>' +
+            '<button type="button" class="vendor-alt-remove inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">Remove</button>';
+        list.appendChild(row);
+        reindexVendorAltEmailRows(mode);
+        updateVendorAltAddButtons(mode);
+    }
+
+    function reindexVendorAltPhoneRows(mode) {
+        const listId = mode === 'edit' ? 'vendorEditAltPhonesList' : 'vendorAddAltPhonesList';
+        document.querySelectorAll('#' + listId + ' .vendor-alt-phone-row').forEach(function (row, index) {
+            const phoneInput = row.querySelector('input[type="text"]');
+            const whatsappInput = row.querySelector('input[type="checkbox"]');
+            if (phoneInput) phoneInput.name = 'alt_phones[' + index + '][phone]';
+            if (whatsappInput) whatsappInput.name = 'alt_phones[' + index + '][is_whatsapp]';
+        });
+    }
+
+    function reindexVendorAltEmailRows(mode) {
+        const listId = mode === 'edit' ? 'vendorEditAltEmailsList' : 'vendorAddAltEmailsList';
+        document.querySelectorAll('#' + listId + ' .vendor-alt-email-row').forEach(function (row, index) {
+            const emailInput = row.querySelector('input[type="email"]');
+            const primaryInput = row.querySelector('input[type="checkbox"]');
+            if (emailInput) emailInput.name = 'alt_emails[' + index + '][email]';
+            if (primaryInput) primaryInput.name = 'alt_emails[' + index + '][is_primary]';
+        });
+    }
+
+    function renderVendorAltPhones(mode, rows) {
+        const listId = mode === 'edit' ? 'vendorEditAltPhonesList' : 'vendorAddAltPhonesList';
+        const list = document.getElementById(listId);
+        if (!list) return;
+        list.innerHTML = '';
+        (Array.isArray(rows) ? rows : []).forEach(function (row) {
+            addVendorAltPhoneRow(mode, row);
+        });
+        updateVendorAltAddButtons(mode);
+    }
+
+    function renderVendorAltEmails(mode, rows) {
+        const listId = mode === 'edit' ? 'vendorEditAltEmailsList' : 'vendorAddAltEmailsList';
+        const list = document.getElementById(listId);
+        if (!list) return;
+        list.innerHTML = '';
+        (Array.isArray(rows) ? rows : []).forEach(function (row) {
+            addVendorAltEmailRow(mode, row);
+        });
+        updateVendorAltAddButtons(mode);
+    }
+
+    function resetVendorAddContactLists() {
+        renderVendorAltPhones('add', []);
+        renderVendorAltEmails('add', []);
+        const emailPrimary = document.getElementById('add_vendor_email_is_primary');
+        const phoneWhatsapp = document.getElementById('add_vendor_phone_is_whatsapp');
+        if (emailPrimary) emailPrimary.checked = false;
+        if (phoneWhatsapp) phoneWhatsapp.checked = false;
+    }
+
+    document.getElementById('addVendorAltPhoneBtn')?.addEventListener('click', function () {
+        addVendorAltPhoneRow('add');
+    });
+    document.getElementById('addVendorAltEmailBtn')?.addEventListener('click', function () {
+        addVendorAltEmailRow('add');
+    });
+    document.getElementById('editVendorAltPhoneBtn')?.addEventListener('click', function () {
+        addVendorAltPhoneRow('edit');
+    });
+    document.getElementById('editVendorAltEmailBtn')?.addEventListener('click', function () {
+        addVendorAltEmailRow('edit');
+    });
+    document.addEventListener('click', function (event) {
+        const btn = event.target.closest('.vendor-alt-remove');
+        if (!btn) return;
+        const phoneRow = btn.closest('.vendor-alt-phone-row');
+        const emailRow = btn.closest('.vendor-alt-email-row');
+        if (phoneRow) {
+            const mode = phoneRow.closest('#vendorEditAltPhonesList') ? 'edit' : 'add';
+            phoneRow.remove();
+            reindexVendorAltPhoneRows(mode);
+            updateVendorAltAddButtons(mode);
+        } else if (emailRow) {
+            const mode = emailRow.closest('#vendorEditAltEmailsList') ? 'edit' : 'add';
+            emailRow.remove();
+            reindexVendorAltEmailRows(mode);
+            updateVendorAltAddButtons(mode);
+        }
+    });
+
+    function populateVendorStateSelect(stateSelect, states, selectedValue) {
+        const blankOption = document.createElement('option');
+        blankOption.value = '';
+        blankOption.textContent = 'Select State';
+        stateSelect.appendChild(blankOption);
+
+        const stateRows = Array.isArray(states) ? states : [states];
+        stateRows.forEach(function (state) {
+            if (!state || !state.name) {
+                return;
+            }
+            const option = document.createElement('option');
+            option.value = state.name;
+            option.textContent = state.name;
+            stateSelect.appendChild(option);
+        });
+
+        const normalizedSelected = String(selectedValue || '').trim();
+        if (normalizedSelected !== '') {
+            stateSelect.value = normalizedSelected;
+            if (stateSelect.value !== normalizedSelected) {
+                const fallback = document.createElement('option');
+                fallback.value = normalizedSelected;
+                fallback.textContent = normalizedSelected;
+                fallback.selected = true;
+                stateSelect.appendChild(fallback);
+            }
+        } else {
+            stateSelect.value = '';
+        }
+    }
+
     function fetchStates(countryId, formType) {
         if(countryId === "") return;
         if(countryId !== "India") {
+            const inputClass = vendorFieldInputClass;
             if(formType === 'AddForm') {
-                document.getElementById('addStateBlock').innerHTML = '<input type="text" class="form-input w-full mt-1" name="addState" id="addState" />';
+                document.getElementById('addStateBlock').innerHTML = '<input type="text" class="' + inputClass + '" name="addState" id="addState" placeholder="State / province" />';
             } else {
-                document.getElementById('editStateBlock').innerHTML = '<input type="text" class="form-input w-full mt-1" name="editState" id="editState" />';
+                const previous = document.getElementById('editPreviousState') ? document.getElementById('editPreviousState').value : '';
+                document.getElementById('editStateBlock').innerHTML = '<input type="text" class="' + inputClass + '" name="editState" id="editState" value="' + String(previous || '').replace(/"/g, '&quot;') + '" placeholder="State / province" />';
             }
             return;
         } else {
@@ -1585,42 +2032,20 @@
             .then(response => response.json())
             .then(data => {
                 if (formType === 'AddForm') {
-                    // Create a new select element
                     let stateSelect = document.createElement('select');
-
-                    // add attributes
-                    stateSelect.id = "addState";
-                    stateSelect.name = "addState";
-                    stateSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
-
-                    // Populate the select element with options
-                    let states = Array.isArray(data) ? data : [data]; 
-                    states.forEach(state => {
-                        const option = document.createElement('option');
-                        option.value = state.name;
-                        option.textContent = state.name;
-                        stateSelect.appendChild(option);
-                    });
+                    stateSelect.id = 'addState';
+                    stateSelect.name = 'addState';
+                    stateSelect.className = vendorFieldInputClass;
+                    populateVendorStateSelect(stateSelect, data, '');
                     document.getElementById('addStateBlock').innerHTML = stateSelect.outerHTML;
                 } else {
-                    // Create a new select element
                     let stateSelect = document.createElement('select');
-
-                    // add attributes
-                    stateSelect.id = "editState";
-                    stateSelect.name = "editState";
-                    stateSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
-
-                    // Populate the select element with options
-                    let states = Array.isArray(data) ? data : [data]; 
-                    states.forEach(state => {
-                        const option = document.createElement('option');
-                        option.value = state.name;
-                        option.textContent = state.name;
-                        stateSelect.appendChild(option);
-                    });
+                    stateSelect.id = 'editState';
+                    stateSelect.name = 'editState';
+                    stateSelect.className = vendorFieldInputClass;
+                    const previousState = document.getElementById('editPreviousState') ? document.getElementById('editPreviousState').value : '';
+                    populateVendorStateSelect(stateSelect, data, previousState);
                     document.getElementById('editStateBlock').innerHTML = stateSelect.outerHTML;
-                    document.getElementById("editState").value = document.getElementById("editPreviousState").value;
                 }
                 return;
             });
@@ -1628,28 +2053,22 @@
     }
 
     const openVendorPopupBtn = document.getElementById('open-vendor-popup-btn');
-    const popupWrapper = document.getElementById('popup-wrapper');
-    const modalSlider = document.getElementById('modal-slider');
+    const vendorAddModal = document.getElementById('vendorAddModal');
     const cancelVendorBtn = document.getElementById('cancel-vendor-btn');
     const closeVendorPopupBtn = document.getElementById('close-vendor-popup-btn');
 
     function openVendorPopup() {
-        popupWrapper.classList.remove('hidden');
         updateVendorBookDiscountVisibility();
-        setTimeout(() => {
-            modalSlider.classList.remove('translate-x-full');
-        }, 10);
+        resetVendorAddContactLists();
+        initVendorBrokerSelect2('add_broker_id', '#vendorAddModal', '', '');
+        vendorAddModal.classList.remove('hidden');
+        vendorAddModal.classList.add('flex');
     }
-	
+
     function closeVendorPopup() {
-        modalSlider.classList.add('translate-x-full');
+        vendorAddModal.classList.add('hidden');
+        vendorAddModal.classList.remove('flex');
     }
-	
-	modalSlider.addEventListener('transitionend', (event) => {
-        if (event.propertyName === 'transform' && modalSlider.classList.contains('translate-x-full')) {
-            popupWrapper.classList.add('hidden');
-        }
-    });
 
     openVendorPopupBtn.addEventListener('click', openVendorPopup);
     cancelVendorBtn.addEventListener('click', closeVendorPopup);
@@ -1704,50 +2123,111 @@
     };
 
     let successModalTimer;
+    let vendorDeletePendingId = null;
+
+    function openVendorDeleteConfirm(id) {
+        vendorDeletePendingId = parseInt(id, 10) || 0;
+        const modal = document.getElementById('vendorDeleteConfirmModal');
+        if (!modal || vendorDeletePendingId <= 0) {
+            return;
+        }
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeVendorDeleteConfirm() {
+        vendorDeletePendingId = null;
+        const modal = document.getElementById('vendorDeleteConfirmModal');
+        const confirmBtn = document.getElementById('vendorDeleteConfirmBtn');
+        const cancelBtn = document.getElementById('vendorDeleteConfirmCancelBtn');
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Delete vendor';
+        }
+        if (cancelBtn) {
+            cancelBtn.disabled = false;
+        }
+        if (!modal) {
+            return;
+        }
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+    function executeVendorDelete() {
+        const id = vendorDeletePendingId;
+        if (!id || id <= 0) {
+            return;
+        }
+
+        const confirmBtn = document.getElementById('vendorDeleteConfirmBtn');
+        const cancelBtn = document.getElementById('vendorDeleteConfirmCancelBtn');
+        const oldLabel = confirmBtn ? confirmBtn.textContent : '';
+        if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Deleting...';
+        }
+        if (cancelBtn) {
+            cancelBtn.disabled = true;
+        }
+
+        fetch("?page=vendors&action=delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: "id=" + id
+        })
+        .then(res => res.json())
+        .then(data => {
+            closeVendorDeleteConfirm();
+            if (!data.success) {
+                redirectToVendorListWithFlash(data.message || 'Delete vendor failed.', false);
+                return;
+            }
+            const title = document.getElementById("modalTitle");
+            title.innerText = "Success 🎉";
+            title.className = "text-2xl font-bold text-green-600 mb-4";
+            document.getElementById("showMessage").innerText = data.message;
+            const modal = document.getElementById("deleteMsgBox");
+            modal.classList.remove("hidden");
+            clearTimeout(successModalTimer);
+            successModalTimer = setTimeout(() => {
+                closeDeleteModal();
+            }, 1500);
+        })
+        .catch(err => {
+            console.error("AJAX Error:", err);
+            closeVendorDeleteConfirm();
+            redirectToVendorListWithFlash('Delete request failed. Please try again.', false);
+        })
+        .finally(function () {
+            if (confirmBtn) {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = oldLabel;
+            }
+            if (cancelBtn) {
+                cancelBtn.disabled = false;
+            }
+        });
+    }
+
+    document.getElementById('vendorDeleteConfirmCancelBtn')?.addEventListener('click', closeVendorDeleteConfirm);
+    document.getElementById('vendorDeleteConfirmBtn')?.addEventListener('click', executeVendorDelete);
+    document.getElementById('vendorDeleteConfirmModal')?.addEventListener('click', function (event) {
+        if (event.target === this) {
+            closeVendorDeleteConfirm();
+        }
+    });
+
     // Delete Vendor
     document.addEventListener("DOMContentLoaded", () => {
         const deleteButtons = document.querySelectorAll(".delete-btn");
-        
+
         deleteButtons.forEach(btn => {
             btn.addEventListener("click", (e) => {
                 e.preventDefault();
                 const id = btn.getAttribute("data-id");
                 window.closeAllMenus();
-                if (!confirm("Are you sure you want to delete this record?")) return;
-
-                fetch("?page=vendors&action=delete", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body: "id=" + id
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (!data.success) {
-                        redirectToVendorListWithFlash(data.message || 'Delete vendor failed.', false);
-                        return;
-                    }
-                    const title = document.getElementById("modalTitle");
-                    var type = "error";
-                    title.innerText = "Error ⚠️";
-                    title.className = "text-2xl font-bold text-red-600 mb-4";
-                    title.innerText = "Success 🎉";
-                    title.className = "text-2xl font-bold text-green-600 mb-4";
-
-                    document.getElementById("showMessage").innerText = data.message;
-                    const modal = document.getElementById("deleteMsgBox");
-                    modal.classList.remove("hidden");
-
-                    // Auto-close after 3 seconds
-                    clearTimeout(successModalTimer);
-                    successModalTimer = setTimeout(() => {
-                        closeDeleteModal();
-                    }, 1500);
-                    
-                })
-                .catch(err => {
-                    console.error("AJAX Error:", err);
-                    redirectToVendorListWithFlash('Delete request failed. Please try again.', false);
-                });
+                openVendorDeleteConfirm(id);
             });
         });
     });
@@ -1758,9 +2238,8 @@
         window.location.reload();
     }
 
-    // Edit User Modal Logic    
+    // Edit User Modal Logic
     const popupWrapperEdit = document.getElementById('editVendorModal');
-    const modalSliderEdit = document.getElementById('modal-slider-edit');
     const cancelVendorBtnEdit = document.getElementById('cancel-vendor-btn-edit');
     const closeVendorPopupBtnEdit = document.getElementById('close-vendor-popup-btn-edit');
 
@@ -1783,11 +2262,17 @@
             // Populate form fields with vendor data
             document.getElementById("editVendorId").value   = vendor.id;
             document.getElementById("editVendorName").value = vendor.vendor_name;
+            document.getElementById("editWebsite").value = vendor.website || '';
             document.getElementById("editContactPerson").value = vendor.contact_name;
-            document.getElementById("editEmail").value = vendor.vendor_email;
+            document.getElementById("editEmail").value = vendor.vendor_email || '';
             document.getElementById("editCountryCode").value = vendor.country_code;
             document.getElementById("editPhone").value = vendor.vendor_phone;
-            document.getElementById("editAltPhone").value = vendor.alt_phone;
+            document.getElementById("edit_vendor_email_is_primary").checked =
+                vendor.vendor_email_is_primary === 1 || vendor.vendor_email_is_primary === '1';
+            document.getElementById("edit_vendor_phone_is_whatsapp").checked =
+                vendor.vendor_phone_is_whatsapp === 1 || vendor.vendor_phone_is_whatsapp === '1';
+            renderVendorAltEmails('edit', vendor.alt_emails || []);
+            renderVendorAltPhones('edit', vendor.alt_phones || []);
             document.getElementById("edit_stock_replenishment_months").value =
                 vendor.stock_replenishment_months != null && vendor.stock_replenishment_months !== 0
                     ? String(vendor.stock_replenishment_months)
@@ -1810,6 +2295,12 @@
                 vendor.discount != null && vendor.discount !== 0
                     ? String(vendor.discount)
                     : '';
+            initVendorBrokerSelect2(
+                'edit_broker_id',
+                '#editVendorModal',
+                vendor.broker_id,
+                vendor.broker_name
+            );
             
             document.getElementById("editAgentIds").value = vendor.agent_id;
             
@@ -1817,40 +2308,27 @@
 
             //document.getElementById("editTeamMember").value = vendor.agent_id;
 
+            document.getElementById("editPreviousState").value = vendor.state || '';
+
             if(vendor.country !== "India") {
-                document.getElementById("editStateBlock").innerHTML = '<input type="text" class="form-input w-full mt-1" name="editState" id="editState" value="' + vendor.state + '" />';
-                document.getElementById("editPreviousState").value = vendor.state;
+                document.getElementById("editStateBlock").innerHTML = '<input type="text" class="' + vendorFieldInputClass + '" name="editState" id="editState" value="' + String(vendor.state || '').replace(/"/g, '&quot;') + '" placeholder="State / province" />';
             } else {
-                // Fetch states from the server
                 fetch('?page=vendors&action=getStates')
                 .then(response => response.json())
                 .then(data => {
-                    // Create a new select element
                     let stateSelect = document.createElement('select');
-
-                    // add attributes
-                    stateSelect.id = "editState";
-                    stateSelect.name = "editState";
-                    stateSelect.className = "form-input w-full mt-1"; // Tailwind or custom CSS
-
-                    // Populate the select element with options
-                    let states = Array.isArray(data) ? data : [data]; 
-                    states.forEach(state => {
-                        const option = document.createElement('option');
-                        option.value = state.name;
-                        option.textContent = state.name;
-                        stateSelect.appendChild(option);
-                    });
-
+                    stateSelect.id = 'editState';
+                    stateSelect.name = 'editState';
+                    stateSelect.className = vendorFieldInputClass;
+                    populateVendorStateSelect(stateSelect, data, vendor.state || '');
                     document.getElementById('editStateBlock').innerHTML = stateSelect.outerHTML;
-                    document.getElementById("editState").value = vendor.state;
-                    document.getElementById("editPreviousState").value = vendor.state;
+                    document.getElementById('editPreviousState').value = vendor.state || '';
                     return;
                 });
             }
 
             document.getElementById("editPostalCode").value = vendor.postal_code;
-            document.getElementById("editRating").value = vendor.rating;
+            document.getElementById("editRating").value = vendor.rating || '';
             document.getElementById("editTeam").value = vendor.team_id;
             document.getElementById("editNotes").value = vendor.notes;
             document.getElementById("editStatus").value = vendor.is_active;
@@ -1900,14 +2378,13 @@
             });
 
             popupWrapperEdit.classList.remove('hidden');
-            setTimeout(() => {
-                modalSliderEdit.classList.remove('translate-x-full');
-            }, 10);
+            popupWrapperEdit.classList.add('flex');
         });
     }
 
     function closeVendorPopupEdit() {
-        modalSliderEdit.classList.add('translate-x-full');
+        popupWrapperEdit.classList.add('hidden');
+        popupWrapperEdit.classList.remove('flex');
     }
 
     closeVendorPopupBtnEdit.addEventListener('click', closeVendorPopupEdit);

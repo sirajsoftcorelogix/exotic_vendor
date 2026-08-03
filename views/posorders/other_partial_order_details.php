@@ -1,4 +1,4 @@
-<style>
+﻿<style>
     .scrollbar-visible::-webkit-scrollbar {
         height: 6px;
     }
@@ -30,7 +30,6 @@ foreach ($order as $items => $item):
         $total_price += (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
     }
 endforeach;
-$currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
 $orderremarks = is_array($orderremarks ?? null) ? $orderremarks : [];
 $customerdetails = is_array($customerdetails ?? null) ? $customerdetails : [];
 $statusList = is_array($statusList ?? null) ? $statusList : [];
@@ -65,6 +64,11 @@ $resolveCountryLabel = static function (?string $code) use ($countries): string 
 $displayOrderNumber = (string)($orderremarks['order_number'] ?? ($order[0]['order_number'] ?? ''));
 $invoicePdfUrl = trim((string)($invoicePdfUrl ?? ''));
 $invoiceDisplay = is_array($invoiceDisplay ?? null) ? $invoiceDisplay : null;
+$orderCurrencyCode = strtoupper(trim((string)($order[0]['currency'] ?? ($invoiceDisplay['currency'] ?? 'INR'))));
+if ($orderCurrencyCode === '') {
+    $orderCurrencyCode = 'INR';
+}
+$orderCurrencySymbol = vendor_currency_symbol($orderCurrencyCode);
 $canEditInvoiceNumber = !empty($canEditInvoiceNumber);
 $invoiceStatus = strtolower(trim((string)($invoiceDisplay['status'] ?? '')));
 $invoiceStatusBadgeClass = match ($invoiceStatus) {
@@ -76,7 +80,7 @@ $invoiceStatusBadgeClass = match ($invoiceStatus) {
 $invoiceNumberDisplay = (string)($invoiceDisplay['invoice_number'] ?? '');
 $invoiceDateDisplay = !empty($invoiceDisplay['invoice_date'])
     ? date('d M Y', strtotime((string)$invoiceDisplay['invoice_date']))
-    : '—';
+    : 'â€”';
 $invoiceSubtotalDisplay = number_format((float)($invoiceDisplay['subtotal'] ?? 0), 2);
 $invoiceTaxDisplay = number_format((float)($invoiceDisplay['tax_amount'] ?? 0), 2);
 $invoiceSummaryRows = (is_array($invoiceDisplay) && is_array($invoiceDisplay['summary_rows'] ?? null))
@@ -107,6 +111,31 @@ if ($invoiceIdForReturn <= 0) {
 if ($invoiceIdForReturn > 0) {
     $salesReturnUrl .= '&invoice_id=' . $invoiceIdForReturn;
 }
+$salesReturnEligibility = is_array($salesReturnEligibility ?? null) ? $salesReturnEligibility : [];
+$canCreateSalesReturn = !empty($salesReturnEligibility['can_create']);
+$salesReturnDisabledReason = trim((string)($salesReturnEligibility['disabled_reason'] ?? ''));
+if ($salesReturnDisabledReason === '' && !$canCreateSalesReturn) {
+    $salesReturnDisabledReason = 'Sales return is not available for this order.';
+}
+$latestSalesReturnViewUrl = (int)($salesReturnEligibility['latest_return_id'] ?? 0) > 0
+    ? base_url('?page=sales_returns&action=view&id=' . (int) $salesReturnEligibility['latest_return_id'])
+    : '';
+$canFollowUpOrder = !empty($canFollowUpOrder);
+$followUpLinks = is_array($followUpLinks ?? null) ? $followUpLinks : ['outbound' => [], 'inbound' => null];
+$followUpEligibility = is_array($followUpEligibility ?? null) ? $followUpEligibility : [];
+$orderStatusPage = in_array(trim((string)($orderStatusPage ?? '')), ['orders', 'posorders'], true)
+    ? trim((string) $orderStatusPage)
+    : 'posorders';
+$followUpReshipEligible = !empty($followUpEligibility['reship']['can_start']);
+$followUpReplaceEligible = !empty($followUpEligibility['replace']['can_start']);
+$followUpCopyEligible = !empty($followUpEligibility['copy']['can_start']);
+$followUpReshipReason = trim((string)($followUpEligibility['reship']['disabled_reason'] ?? ''));
+$followUpReplaceReason = trim((string)($followUpEligibility['replace']['disabled_reason'] ?? ''));
+$followUpInboundLink = is_array($followUpLinks['inbound'] ?? null) ? $followUpLinks['inbound'] : null;
+$followUpOutboundLinks = is_array($followUpLinks['outbound'] ?? null) ? $followUpLinks['outbound'] : [];
+$followUpFlash = $_SESSION['order_follow_up_flash'] ?? null;
+unset($_SESSION['order_follow_up_flash']);
+require_once dirname(__DIR__, 2) . '/helpers/order_follow_up.php';
 $proformaPrintUrl = trim((string)($proformaPrintUrl ?? ''));
 $canPrintProforma = !empty($canPrintProforma);
 $canPrintTaxInvoice = $invoicePdfUrl !== '' && $invoiceStatus === 'final';
@@ -119,12 +148,70 @@ $proformaPrintDisabledReason = $canPrintProforma
             : 'Proforma is available when payment is pending.'));
 ?>
 
-<div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
+<div class="min-h-screen bg-gray-50 p-6 font-sans text-gray-900">
+    <?php if (is_array($followUpFlash) && trim((string)($followUpFlash['text'] ?? '')) !== ''): ?>
+        <?php
+        $flashType = strtolower(trim((string)($followUpFlash['type'] ?? 'info')));
+        $flashClass = match ($flashType) {
+            'error' => 'border-red-300 bg-red-50 text-red-950',
+            'success' => 'border-green-300 bg-green-50 text-green-950',
+            default => 'border-indigo-300 bg-indigo-50 text-indigo-950',
+        };
+        ?>
+        <div class="mb-4 rounded-lg border px-4 py-3 text-sm <?= htmlspecialchars($flashClass, ENT_QUOTES, 'UTF-8') ?>">
+            <?= htmlspecialchars((string) $followUpFlash['text'], ENT_QUOTES, 'UTF-8') ?>
+        </div>
+    <?php endif; ?>
+    <?php if (is_array($followUpInboundLink)): ?>
+        <?php
+        $sourceOrderNumber = trim((string)($followUpInboundLink['source_order_number'] ?? ''));
+        $followUpTypeLabel = order_follow_up_type_label((string)($followUpInboundLink['follow_up_type'] ?? ''));
+        $sourceOrderUrl = $sourceOrderNumber !== ''
+            ? order_follow_up_order_details_url($sourceOrderNumber, $orderStatusPage)
+            : '';
+        ?>
+        <div class="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-950">
+            <p class="font-semibold"><?= htmlspecialchars($followUpTypeLabel, ENT_QUOTES, 'UTF-8') ?> order</p>
+            <p class="mt-1 text-xs text-indigo-900/90">
+                Created from
+                <?php if ($sourceOrderUrl !== ''): ?>
+                    <a href="<?= htmlspecialchars($sourceOrderUrl, ENT_QUOTES, 'UTF-8') ?>" class="font-medium underline hover:text-indigo-700">
+                        #<?= htmlspecialchars($sourceOrderNumber, ENT_QUOTES, 'UTF-8') ?>
+                    </a>
+                <?php else: ?>
+                    #<?= htmlspecialchars($sourceOrderNumber, ENT_QUOTES, 'UTF-8') ?>
+                <?php endif; ?>
+                · Pricing: <?= htmlspecialchars(order_follow_up_pricing_mode_label((string)($followUpInboundLink['pricing_mode'] ?? '')), ENT_QUOTES, 'UTF-8') ?>
+            </p>
+        </div>
+    <?php endif; ?>
+    <?php if ($followUpOutboundLinks !== []): ?>
+        <div class="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800">
+            <p class="font-semibold">Follow-up orders</p>
+            <ul class="mt-2 space-y-1 text-xs">
+                <?php foreach ($followUpOutboundLinks as $followUpRow): ?>
+                    <?php if (!is_array($followUpRow)) { continue; } ?>
+                    <?php
+                    $childOrderNumber = trim((string)($followUpRow['follow_up_order_number'] ?? ''));
+                    if ($childOrderNumber === '') { continue; }
+                    $childOrderUrl = order_follow_up_order_details_url($childOrderNumber, $orderStatusPage);
+                    ?>
+                    <li>
+                        <a href="<?= htmlspecialchars($childOrderUrl, ENT_QUOTES, 'UTF-8') ?>" class="font-medium text-indigo-700 underline hover:text-indigo-900">
+                            #<?= htmlspecialchars($childOrderNumber, ENT_QUOTES, 'UTF-8') ?>
+                        </a>
+                        · <?= htmlspecialchars(order_follow_up_type_label((string)($followUpRow['follow_up_type'] ?? '')), ENT_QUOTES, 'UTF-8') ?>
+                        · <?= htmlspecialchars(order_follow_up_pricing_mode_label((string)($followUpRow['pricing_mode'] ?? '')), ENT_QUOTES, 'UTF-8') ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+    <?php endif; ?>
     <?php if ($canPublishExoticSync): ?>
         <div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <p class="font-semibold">Local temp order — not on Exotic website yet</p>
+                    <p class="font-semibold">Local temp order â€” not on Exotic website yet</p>
                     <p class="mt-1 text-xs text-amber-900/90">
                         Use the publish icon next to the order number to send this order to Exotic.
                         <?php if (!$hasExoticSyncPayload): ?>
@@ -171,13 +258,58 @@ $proformaPrintDisabledReason = $canPrintProforma
 
         <div class="flex items-center gap-2">
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Restock</button>
-            <button type="button"
-                data-sales-return-create
-                data-sales-return-url="<?= htmlspecialchars($salesReturnUrl, ENT_QUOTES, 'UTF-8') ?>"
-                data-order-number="<?= htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8') ?>"
-                class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">
-                Return
-            </button>
+            <?php if ($canCreateSalesReturn): ?>
+                <button type="button"
+                    data-sales-return-create
+                    data-sales-return-url="<?= htmlspecialchars($salesReturnUrl, ENT_QUOTES, 'UTF-8') ?>"
+                    data-order-number="<?= htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8') ?>"
+                    class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">
+                    Return
+                </button>
+            <?php elseif ($latestSalesReturnViewUrl !== ''): ?>
+                <a href="<?= htmlspecialchars($latestSalesReturnViewUrl, ENT_QUOTES, 'UTF-8') ?>"
+                    class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">
+                    View Return
+                </a>
+            <?php else: ?>
+                <button type="button"
+                    disabled
+                    title="<?= htmlspecialchars($salesReturnDisabledReason, ENT_QUOTES, 'UTF-8') ?>"
+                    class="rounded border border-gray-200 bg-gray-100 px-4 py-1.5 text-sm font-medium text-gray-400 cursor-not-allowed">
+                    Return
+                </button>
+            <?php endif; ?>
+            <?php if ($canFollowUpOrder): ?>
+                <div class="relative inline-block text-left">
+                    <input type="checkbox" id="follow-up-dropdown-toggle" class="peer hidden">
+                    <label for="follow-up-dropdown-toggle" class="flex cursor-pointer items-center gap-2 rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50 transition-colors select-none">
+                        Follow-up
+                        <svg class="w-4 h-4 transition-transform duration-200 peer-checked:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </label>
+                    <div class="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden opacity-0 invisible scale-95 transition-all duration-200 peer-checked:opacity-100 peer-checked:visible peer-checked:scale-100">
+                        <div class="py-1">
+                            <?php if ($followUpReshipEligible): ?>
+                                <button type="button" data-open-follow-up="reship" class="flex w-full items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100 text-left">Reship (waived)</button>
+                            <?php else: ?>
+                                <span class="flex items-center px-4 py-2 text-[13px] text-gray-400 cursor-not-allowed" title="<?= htmlspecialchars($followUpReshipReason, ENT_QUOTES, 'UTF-8') ?>">Reship</span>
+                            <?php endif; ?>
+                            <?php if ($followUpReplaceEligible): ?>
+                                <button type="button" data-open-follow-up="replace" class="flex w-full items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100 border-t border-gray-50 text-left">Replace (same price)</button>
+                            <?php else: ?>
+                                <span class="flex items-center px-4 py-2 text-[13px] text-gray-400 cursor-not-allowed border-t border-gray-50" title="<?= htmlspecialchars($followUpReplaceReason, ENT_QUOTES, 'UTF-8') ?>">Replace</span>
+                            <?php endif; ?>
+                            <?php if ($followUpCopyEligible): ?>
+                                <button type="button" data-open-follow-up="copy" class="flex w-full items-center px-4 py-2 text-[13px] text-gray-700 hover:bg-gray-100 border-t border-gray-50 text-left">Copy order</button>
+                            <?php else: ?>
+                                <span class="flex items-center px-4 py-2 text-[13px] text-gray-400 cursor-not-allowed border-t border-gray-50">Copy order</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <label for="follow-up-dropdown-toggle" class="fixed inset-0 h-full w-full cursor-default hidden peer-checked:block z-40"></label>
+                </div>
+            <?php endif; ?>
             <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Edit</button>
             <div class="relative inline-block text-left">
                 <input type="checkbox" id="dropdown-toggle" class="peer hidden">
@@ -234,7 +366,7 @@ $proformaPrintDisabledReason = $canPrintProforma
                 <div class="mb-6 space-y-3">
                     <div class="flex items-center gap-2">
                         <?php /*<div
-                            class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-black-600">
+                            class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-gray-600">
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                                 stroke-width="1.5">
                                 <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -248,7 +380,7 @@ $proformaPrintDisabledReason = $canPrintProforma
                         $location = implode(', ', array_filter([$city, $state]));
                         ?>
                         <?php if (!empty($location)) : ?>
-                            <div class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-black-600">
+                            <div class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-gray-600">
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                                     stroke-width="1.5">
                                     <path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -261,23 +393,18 @@ $proformaPrintDisabledReason = $canPrintProforma
                     </div>
 
                     <div class="flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3">
-                        <svg class="h-5 w-5 text-black-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                             stroke-width="1.5">
                             <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                         </svg>
                         <span
-                            class="text-sm font-medium text-black-600"><?php echo date('d-M-Y', strtotime($orderremarks['created_at'] ?? '')); ?></span>
+                            class="text-sm font-medium text-gray-600"><?php echo date('d-M-Y', strtotime($orderremarks['created_at'] ?? '')); ?></span>
                     </div>
                 </div>
 
                 <div class="space-y-4">
                     <?php foreach ($order as $item):
-                        $currencyCode = strtoupper(trim($item['currency'] ?? ''));
-                        if (isset($currencyIcons[$currencyCode]) && $currencyIcons[$currencyCode] !== '') {
-                            $currencysymbol = $currencyIcons[$currencyCode] ?? $currencyCode;
-                        } else {
-                            $currencysymbol = $currencyCode . ' ';
-                        }
+                        $currencysymbol = vendor_currency_symbol($item['currency'] ?? $orderCurrencyCode);
                         $linePricing = ($linePricingByLineId ?? [])[(int)($item['id'] ?? 0)] ?? null;
                         $netLineAmount = is_array($linePricing)
                             ? (float)($linePricing['chargeable_value'] ?? 0)
@@ -307,10 +434,10 @@ $proformaPrintDisabledReason = $canPrintProforma
                                 </div>
 
                                 <div class="flex-1">
-                                    <!-- <h4 class="mb-3 text-[12px] font-semibold leading-tight text-black-900">
+                                    <!-- <h4 class="mb-3 text-[12px] font-semibold leading-tight text-gray-900">
                                     <?php echo $item['groupname']; ?> / <?php echo $item['subcategories']; ?>
                                 </h4> -->
-                                    <h4 class="mb-3 text-[14px] leading-tight text-black-900">
+                                    <h4 class="mb-3 text-[14px] leading-tight text-gray-900">
                                         <?php echo $item['title']; ?>
                                     </h4>
 
@@ -319,18 +446,18 @@ $proformaPrintDisabledReason = $canPrintProforma
                                             <p>
                                                 <span class="inline-block w-12 font-bold text-black">SKU</span>
                                                 <span class="text-black">:</span>
-                                                <span class="ml-2 text-black-700"><?php echo $item['sku']; ?></span>
+                                                <span class="ml-2 text-gray-700"><?php echo htmlspecialchars(trim((string)($item['sku'] ?? '')) !== '' ? (string)$item['sku'] : 'â€”'); ?></span>
                                             </p>
                                             <p>
                                                 <span class="inline-block w-12 font-bold text-black">Color</span>
                                                 <span class="text-black">:</span>
-                                                <span class="ml-2 text-black-700"><?php echo $item['color']; ?></span>
+                                                <span class="ml-2 text-gray-700"><?php echo $item['color']; ?></span>
                                             </p>
                                             <div class="flex items-center pt-1">
                                                 <span class="inline-block w-12 font-bold text-black">Qty.</span>
                                                 <span class="text-black">:</span>
                                                 <span
-                                                    class="ml-4 rounded-full border border-gray-200 bg-gray-50 px-5 py-0.5 text-black-800">
+                                                    class="ml-4 rounded-full border border-gray-200 bg-gray-50 px-5 py-0.5 text-gray-800">
                                                     <?php echo str_pad($item['quantity'], 2, '0', STR_PAD_LEFT); ?>
                                                 </span>
                                             </div>
@@ -339,25 +466,25 @@ $proformaPrintDisabledReason = $canPrintProforma
                                                     <p>
                                                         <span class="inline-block font-bold text-black">Addon</span>
                                                         <span class="text-black">:</span>
-                                                        <span class="ml-2 text-black-700"><?php echo htmlspecialchars((string)($addonRow['name'] ?? '')); ?></span>
-                                                        <span class="ml-2 tabular-nums text-black-600"><?php echo $currencysymbol . number_format((float)($addonRow['price'] ?? 0), 2); ?></span>
+                                                        <span class="ml-2 text-gray-700"><?php echo htmlspecialchars((string)($addonRow['name'] ?? '')); ?></span>
+                                                        <span class="ml-2 tabular-nums text-gray-600"><?php echo $currencysymbol . number_format((float)($addonRow['price'] ?? 0), 2); ?></span>
                                                     </p>
                                                 <?php endforeach; ?>
                                             <?php endif; ?>
                                         </div>
                                         <div class="flex items-center gap-12">
                                             <?php if ($hasExtendedPricing): ?>
-                                                <div class="text-right text-[13px] text-black-500">
+                                                <div class="text-right text-[13px] text-gray-500">
                                                     <p class="text-[11px] uppercase tracking-wide text-gray-500">List price</p>
-                                                    <p class="tabular-nums font-bold text-[14px] text-black-900"><?php echo $currencysymbol . number_format($headlineLineAmount, 2); ?></p>
+                                                    <p class="tabular-nums font-bold text-[14px] text-gray-900"><?php echo $currencysymbol . number_format($headlineLineAmount, 2); ?></p>
                                                 </div>
                                             <?php else: ?>
-                                                <div class="flex items-center gap-2 text-[13px] text-black-500">
+                                                <div class="flex items-center gap-2 text-[13px] text-gray-500">
                                                     <span><?php echo $currencysymbol; ?><?php echo $item['finalprice']; ?> x</span>
-                                                    <span class="rounded bg-gray-100 px-2 py-0.5 text-black-700"><?php echo $item['quantity']; ?></span>
+                                                    <span class="rounded bg-gray-100 px-2 py-0.5 text-gray-700"><?php echo $item['quantity']; ?></span>
                                                 </div>
 
-                                                <div class="w-20 text-right text-[14px] font-bold text-black-900 tabular-nums">
+                                                <div class="w-20 text-right text-[14px] font-bold text-gray-900 tabular-nums">
                                                     <?php echo $currencysymbol . number_format($netLineAmount, 2); ?>
                                                 </div>
                                             <?php endif; ?>
@@ -476,13 +603,13 @@ $proformaPrintDisabledReason = $canPrintProforma
                 <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm relative mt-8" id="order-address-section">
                     <button type="button"
                         onclick="openNameEmailPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '', ENT_QUOTES, 'UTF-8') ?>')"
-                        class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors"
+                        class="absolute top-4 right-4 text-gray-500 hover:text-blue-600 transition-colors"
                         title="Edit addresses">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                         </svg>
                     </button>
-                    <h3 class="mb-4 text-sm font-bold text-black-700">Shipping &amp; Billing Address</h3>
+                    <h3 class="mb-4 text-sm font-bold text-gray-700">Shipping &amp; Billing Address</h3>
                     <?php
                     $customerNameParts = preg_split('/\s+/', trim((string)($customerdetails['customer_name'] ?? '')), 2);
                     $fallbackFirstName = trim((string)($customerNameParts[0] ?? ''));
@@ -510,8 +637,8 @@ $proformaPrintDisabledReason = $canPrintProforma
                     <span id="shipping_last_name" class="hidden"><?php echo htmlspecialchars($shippingLastName); ?></span>
                     <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
                         <div>
-                            <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Shipping address</h4>
-                            <address class="mt-2 text-sm not-italic text-black-800 leading-relaxed">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-gray-400">Shipping address</h4>
+                            <address class="mt-2 text-sm not-italic text-gray-800 leading-relaxed">
                                 <?php if ($shippingDisplayName !== ''): ?>
                                     <span class="block font-medium" id="shipping_display_name"><?php echo htmlspecialchars($shippingDisplayName); ?></span>
                                 <?php else: ?>
@@ -549,8 +676,8 @@ $proformaPrintDisabledReason = $canPrintProforma
                             </address>
                         </div>
                         <div>
-                            <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Billing address</h4>
-                            <address class="mt-2 text-sm not-italic text-black-800 leading-relaxed">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-gray-400">Billing address</h4>
+                            <address class="mt-2 text-sm not-italic text-gray-800 leading-relaxed">
                                 <?php if ($billingDisplayName !== ''): ?>
                                     <span class="block font-medium" id="billing_display_name"><?php echo htmlspecialchars($billingDisplayName); ?></span>
                                 <?php else: ?>
@@ -637,22 +764,22 @@ $proformaPrintDisabledReason = $canPrintProforma
                         <?php if ($invoiceSummaryRows !== []): ?>
                             <?php renderPartial('views/posorders/partials/invoice_pdf_summary.php', [
                                 'summaryRows' => $invoiceSummaryRows,
-                                'currencySymbol' => '₹',
+                                'currencySymbol' => $orderCurrencySymbol,
                             ]); ?>
                         <?php else: ?>
                             <div class="rounded-lg border border-gray-200 bg-white">
                                 <div class="divide-y divide-gray-100 px-4 py-1 text-sm">
                                     <div class="flex items-center justify-between gap-4 py-2.5">
                                         <span class="text-gray-600">Subtotal</span>
-                                        <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceSubtotalDisplay; ?></span>
+                                        <span class="tabular-nums font-medium text-gray-900"><?php echo htmlspecialchars($orderCurrencySymbol, ENT_QUOTES, 'UTF-8'); ?> <?php echo $invoiceSubtotalDisplay; ?></span>
                                     </div>
                                     <div class="flex items-center justify-between gap-4 py-2.5">
                                         <span class="text-gray-600">Tax</span>
-                                        <span class="tabular-nums font-medium text-gray-900">₹ <?php echo $invoiceTaxDisplay; ?></span>
+                                        <span class="tabular-nums font-medium text-gray-900"><?php echo htmlspecialchars($orderCurrencySymbol, ENT_QUOTES, 'UTF-8'); ?> <?php echo $invoiceTaxDisplay; ?></span>
                                     </div>
                                     <div class="flex items-center justify-between gap-4 border-t border-gray-200 bg-gray-50 px-4 py-3 -mx-4 mt-1">
                                         <span class="text-sm font-bold text-gray-900">Net chargeable amount</span>
-                                        <span class="text-base font-bold tabular-nums text-gray-900">₹ <?php echo $invoiceGrandTotalDisplay; ?></span>
+                                        <span class="text-base font-bold tabular-nums text-gray-900"><?php echo htmlspecialchars($orderCurrencySymbol, ENT_QUOTES, 'UTF-8'); ?> <?php echo $invoiceGrandTotalDisplay; ?></span>
                                     </div>
                                 </div>
                             </div>
@@ -692,7 +819,7 @@ $proformaPrintDisabledReason = $canPrintProforma
                             </span>
                             <div>
                                 <h3 class="text-sm font-bold text-gray-900">Tax Invoice</h3>
-                                <p class="text-xs text-gray-500">Payment received in full — invoice not generated yet</p>
+                                <p class="text-xs text-gray-500">Payment received in full â€” invoice not generated yet</p>
                             </div>
                         </div>
                     </div>
@@ -747,15 +874,15 @@ $proformaPrintDisabledReason = $canPrintProforma
                     <div class="grid grid-cols-3 gap-2 text-center">
                         <div class="rounded-lg border border-gray-100 bg-gray-50 px-2 py-2.5">
                             <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Order Total</p>
-                            <p class="mt-1 text-sm font-bold tabular-nums text-gray-900">₹ <?php echo $paymentOrderTotalDisplay; ?></p>
+                            <p class="mt-1 text-sm font-bold tabular-nums text-gray-900"><?php echo htmlspecialchars($orderCurrencySymbol, ENT_QUOTES, 'UTF-8'); ?> <?php echo $paymentOrderTotalDisplay; ?></p>
                         </div>
                         <div class="rounded-lg border border-emerald-100 bg-emerald-50/60 px-2 py-2.5">
                             <p class="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Paid</p>
-                            <p class="mt-1 text-sm font-bold tabular-nums text-emerald-800">₹ <?php echo $paymentPaidTotalDisplay; ?></p>
+                            <p class="mt-1 text-sm font-bold tabular-nums text-emerald-800"><?php echo htmlspecialchars($orderCurrencySymbol, ENT_QUOTES, 'UTF-8'); ?> <?php echo $paymentPaidTotalDisplay; ?></p>
                         </div>
                         <div class="rounded-lg border border-gray-100 bg-gray-50 px-2 py-2.5">
                             <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Pending</p>
-                            <p class="mt-1 text-sm font-bold tabular-nums <?php echo (float)($paymentSummary['pending'] ?? 0) > 0.02 ? 'text-red-600' : 'text-gray-900'; ?>">₹ <?php echo $paymentPendingDisplay; ?></p>
+                            <p class="mt-1 text-sm font-bold tabular-nums <?php echo (float)($paymentSummary['pending'] ?? 0) > 0.02 ? 'text-red-600' : 'text-gray-900'; ?>"><?php echo htmlspecialchars($orderCurrencySymbol, ENT_QUOTES, 'UTF-8'); ?> <?php echo $paymentPendingDisplay; ?></p>
                         </div>
                     </div>
 
@@ -772,7 +899,7 @@ $proformaPrintDisabledReason = $canPrintProforma
                                             <p class="text-sm font-semibold text-gray-900">Credit</p>
                                             <p class="mt-0.5 text-xs text-gray-500">Store credit applied to this order</p>
                                         </div>
-                                        <p class="text-sm font-bold tabular-nums text-gray-900">₹ <?php echo $creditAmountDisplay; ?></p>
+                                        <p class="text-sm font-bold tabular-nums text-gray-900"><?php echo htmlspecialchars($orderCurrencySymbol, ENT_QUOTES, 'UTF-8'); ?> <?php echo $creditAmountDisplay; ?></p>
                                     </div>
                                     <div class="mt-2 flex flex-wrap gap-1.5">
                                         <span class="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">Credit</span>
@@ -788,7 +915,7 @@ $proformaPrintDisabledReason = $canPrintProforma
                                 $paymentDateRaw = trim((string)($paymentRow['payment_date'] ?? ''));
                                 $paymentDateLabel = $paymentDateRaw !== ''
                                     ? date('d M Y', strtotime($paymentDateRaw))
-                                    : '—';
+                                    : 'â€”';
                                 $paymentAmount = number_format((float)($paymentRow['payment_amount'] ?? 0), 2);
                                 $paymentMode = trim((string)($paymentRow['payment_mode'] ?? ''));
                                 $paymentStage = trim((string)($paymentRow['payment_stage'] ?? ''));
@@ -808,7 +935,7 @@ $proformaPrintDisabledReason = $canPrintProforma
                                             <p class="mt-0.5 text-xs text-gray-500"><?php echo htmlspecialchars($paymentDateLabel); ?></p>
                                         </div>
                                         <div class="flex shrink-0 flex-col items-end gap-1.5">
-                                            <p class="text-sm font-bold tabular-nums text-gray-900">₹ <?php echo $paymentAmount; ?></p>
+                                            <p class="text-sm font-bold tabular-nums text-gray-900"><?php echo htmlspecialchars($orderCurrencySymbol, ENT_QUOTES, 'UTF-8'); ?> <?php echo $paymentAmount; ?></p>
                                             <button type="button"
                                                 onclick="printOrderPaymentReceipt(<?php echo $paymentId; ?>)"
                                                 class="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100">
@@ -861,6 +988,143 @@ $proformaPrintDisabledReason = $canPrintProforma
                 </div>
             </div>
 
+            <!-- Dispatches Section -->
+            <?php
+            $dispatchRecordsList = is_array($dispatchRecords ?? null) ? $dispatchRecords : [];
+            ?>
+            <?php if (!empty($dispatchRecordsList)): ?>
+                <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm" id="order-dispatches-card">
+                    <div class="flex items-center justify-between gap-3 border-b border-blue-100 bg-gradient-to-r from-blue-50 to-white px-5 py-4">
+                        <div class="flex items-center gap-2.5">
+                            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.243c0-.621-.504-1.125-1.125-1.125H3.375A1.125 1.125 0 002.25 7.33v6.92c0 .621.504 1.125 1.125 1.125h1.5m10.5-6.75h2.909c.407 0 .783.197 1.011.53l2.25 3.3" />
+                                </svg>
+                            </span>
+                            <div>
+                                <h3 class="text-sm font-bold text-gray-900">Dispatches</h3>
+                                <p class="text-xs text-gray-500"><?php echo count($dispatchRecordsList); ?> shipment<?php echo count($dispatchRecordsList) === 1 ? '' : 's'; ?> found</p>
+                            </div>
+                        </div>
+                        <span class="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800">
+                            <?php echo count($dispatchRecordsList); ?> Box<?php echo count($dispatchRecordsList) === 1 ? '' : 'es'; ?>
+                        </span>
+                    </div>
+
+                    <div class="space-y-3 p-5">
+                        <?php foreach ($dispatchRecordsList as $dispatch):
+                            $dispatchId = (int)($dispatch['id'] ?? 0);
+                            $boxNo = trim((string)($dispatch['box_no'] ?? '1'));
+                            $courierName = trim((string)($dispatch['courier_name'] ?? 'Courier'));
+                            if ($courierName === '') {
+                                $courierName = 'Courier';
+                            }
+                            $awbCode = trim((string)($dispatch['awb_code'] ?? $dispatch['tracking_number'] ?? ''));
+                            $shipmentStatus = strtolower(trim((string)($dispatch['shipment_status'] ?? '')));
+                            $isCancelled = in_array($shipmentStatus, ['cancelled', 'cancellation requested', 'cancel'], true);
+                            
+                            $statusBadgeClass = match (true) {
+                                $isCancelled => 'bg-red-100 text-red-700 border-red-200',
+                                in_array($shipmentStatus, ['delivered', 'shipped'], true) => 'bg-emerald-100 text-emerald-700 border-emerald-200',
+                                in_array($shipmentStatus, ['manifest_generated', 'in_transit', 'out_for_delivery', 'pickup_scheduled', 'dispatched'], true) => 'bg-blue-100 text-blue-700 border-blue-200',
+                                default => 'bg-amber-100 text-amber-800 border-amber-200',
+                            };
+                            $statusLabel = $shipmentStatus !== '' ? ucwords(str_replace(['_', '-'], ' ', $shipmentStatus)) : 'Pending';
+
+                            $dispatchDateRaw = trim((string)($dispatch['dispatch_date'] ?? $dispatch['created_at'] ?? ''));
+                            $dispatchDateLabel = $dispatchDateRaw !== '' && $dispatchDateRaw !== '0000-00-00'
+                                ? date('d M Y', strtotime($dispatchDateRaw))
+                                : '—';
+
+                            $labelUrl = trim((string)($dispatch['label_url'] ?? ''));
+                            
+                            $trackingUrl = trim((string)($dispatch['tracking_url'] ?? ''));
+                            if ($trackingUrl === '' && $awbCode !== '') {
+                                $trackingUrl = 'https://shiprocket.co/tracking/' . urlencode($awbCode);
+                            }
+                        ?>
+                            <div class="rounded-lg border border-gray-200 bg-white p-3.5 shadow-2xs transition hover:border-gray-300">
+                                <div class="flex items-start justify-between gap-2 border-b border-gray-100 pb-2.5">
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xs font-bold text-gray-900">Box #<?php echo htmlspecialchars($boxNo); ?></span>
+                                            <span class="rounded border px-2 py-0.5 text-[10px] font-semibold <?php echo $statusBadgeClass; ?>">
+                                                <?php echo htmlspecialchars($statusLabel); ?>
+                                            </span>
+                                        </div>
+                                        <p class="mt-1 text-xs text-gray-600">
+                                            <span class="font-medium text-gray-800"><?php echo htmlspecialchars($courierName); ?></span>
+                                            <?php if ($dispatchDateLabel !== '—'): ?>
+                                                <span class="text-gray-400">•</span>
+                                                <span><?php echo htmlspecialchars($dispatchDateLabel); ?></span>
+                                            <?php endif; ?>
+                                        </p>
+                                    </div>
+                                    <?php if ($awbCode !== ''): ?>
+                                        <div class="text-right">
+                                            <span class="block text-[10px] font-semibold uppercase tracking-wide text-gray-400">AWB / Tracking</span>
+                                            <span class="text-xs font-mono font-semibold text-gray-800"><?php echo htmlspecialchars($awbCode); ?></span>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+
+                                <?php
+                                $weight = (float)($dispatch['weight'] ?? 0);
+                                $boxSize = trim((string)($dispatch['box_size'] ?? ''));
+                                if ($weight > 0 || $boxSize !== ''):
+                                ?>
+                                    <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-500">
+                                        <?php if ($weight > 0): ?>
+                                            <span>Weight: <strong class="text-gray-700"><?php echo $weight; ?> kg</strong></span>
+                                        <?php endif; ?>
+                                        <?php if ($boxSize !== ''): ?>
+                                            <span>Size: <strong class="text-gray-700"><?php echo htmlspecialchars($boxSize); ?></strong></span>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
+
+                                <div class="mt-3 flex flex-wrap items-center gap-2 pt-1 border-t border-gray-50">
+                                    <?php if ($labelUrl !== '' && !$isCancelled): ?>
+                                        <a href="<?php echo htmlspecialchars($labelUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="inline-flex items-center gap-1.5 rounded-md bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors">
+                                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.6 0-1.104-.467-1.12-1.066L5.88 18m11.78 0H5.88m11.78 0l-.33-3.63a3 3 0 00-2.986-2.728H9.656a3 3 0 00-2.986 2.728L6.34 18M18 10.5a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                                            </svg>
+                                            Print Label
+                                        </a>
+                                    <?php endif; ?>
+
+                                    <?php if ($trackingUrl !== ''): ?>
+                                        <a href="<?php echo htmlspecialchars($trackingUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 transition-colors">
+                                            <svg class="h-3.5 w-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                                            </svg>
+                                            Track Shipment
+                                        </a>
+                                    <?php endif; ?>
+
+                                    <?php if (!$isCancelled): ?>
+                                        <button type="button"
+                                            onclick="cancelSingleDispatch(<?php echo $dispatchId; ?>)"
+                                            class="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition-colors ml-auto">
+                                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                            Cancel Dispatch
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <!-- Note Section -->
             <div class="rounded-lg border bg-white p-5 shadow-sm relative" id="note-container-<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>">
                 <textarea id="note-remarks-source" class="hidden" aria-hidden="true"><?php echo htmlspecialchars($orderremarks['remarks'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
@@ -868,15 +1132,15 @@ $proformaPrintDisabledReason = $canPrintProforma
                     id="note-edit-btn"
                     data-order-number="<?php echo htmlspecialchars($orderremarks['order_number'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
                     onclick="openNoteEditPopup()"
-                    class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors"
+                    class="absolute top-4 right-4 text-gray-500 hover:text-blue-600 transition-colors"
                     title="Edit Note">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                 </button>
-                <h3 class="mb-2 text-sm font-bold text-black-700">Note</h3>
+                <h3 class="mb-2 text-sm font-bold text-gray-700">Note</h3>
                 <?php if (!empty($orderremarks['remarks'])): ?>
-                    <div id="note-display-<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>" class="text-sm text-black-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
+                    <div id="note-display-<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>" class="text-sm text-gray-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
                         <?php echo ($orderremarks['remarks']); ?>
                     </div>
                 <?php endif; ?>
@@ -909,13 +1173,13 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
 ?>
 <div id="noteEditPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
     <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-6 relative">
-        <button onclick="closeNotePopup()" class="absolute top-3 right-4 text-black-500 hover:text-black-800">
+        <button onclick="closeNotePopup()" class="absolute top-3 right-4 text-gray-500 hover:text-gray-800">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
         </button>
 
-        <h2 class="text-xl font-bold mb-4 text-black-800">Edit Customer Note</h2>
+        <h2 class="text-xl font-bold mb-4 text-gray-800">Edit Customer Note</h2>
 
         <form id="noteEditForm">
             <input type="hidden" id="note_order_number" name="order_number">
@@ -925,7 +1189,7 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
                 placeholder="Enter note / remarks here..."></textarea>
 
             <div class="mt-6 flex justify-end gap-3">
-                <button type="button" onclick="closeNotePopup()" class="rounded-full px-5 py-2.5 bg-gray-200 text-black-800 rounded-md hover:bg-gray-300">
+                <button type="button" onclick="closeNotePopup()" class="rounded-full px-5 py-2.5 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">
                     Cancel
                 </button>
                 <button type="submit" class="rounded-full bg-[#D46B08] px-10 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700">
@@ -1063,13 +1327,13 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
 <?php if ($canFetchOrderJson): ?>
 <div id="orderJsonModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[90] p-4" onclick="closeOrderJsonModal(event)">
     <div class="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col relative" onclick="event.stopPropagation();">
-        <button type="button" onclick="closeOrderJsonModal()" class="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-sm z-10">✕</button>
+        <button type="button" onclick="closeOrderJsonModal()" class="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-sm z-10">âœ•</button>
         <div class="p-5 border-b border-gray-200 pr-14">
             <h2 class="text-lg font-bold text-gray-900">Exotic vendor API JSON</h2>
-            <p class="text-sm text-gray-600 mt-1">Live response from <code class="text-xs bg-gray-100 px-1 rounded">vendor-api/order/fetch</code> for order <strong id="orderJsonOrderLabel"><?php echo htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8'); ?></strong>. Read-only — does not update local data.</p>
+            <p class="text-sm text-gray-600 mt-1">Live response from <code class="text-xs bg-gray-100 px-1 rounded">vendor-api/order/fetch</code> for order <strong id="orderJsonOrderLabel"><?php echo htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8'); ?></strong>. Read-only â€” does not update local data.</p>
         </div>
         <div class="p-5 overflow-y-auto flex-1 min-h-0">
-            <div id="orderJsonLoading" class="hidden text-sm text-gray-600 mb-3">Fetching latest JSON from Exotic…</div>
+            <div id="orderJsonLoading" class="hidden text-sm text-gray-600 mb-3">Fetching latest JSON from Exoticâ€¦</div>
             <div id="orderJsonError" class="hidden text-sm text-red-600 mb-3"></div>
             <div id="orderJsonMeta" class="hidden text-xs text-gray-500 mb-2"></div>
             <pre id="orderJsonPre" class="hidden text-xs leading-relaxed bg-gray-900 text-green-100 rounded-lg p-4 overflow-x-auto whitespace-pre-wrap break-words max-h-[60vh]"></pre>
@@ -1083,84 +1347,15 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
 </div>
 <?php endif; ?>
 
-<div id="statusPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50 p-4" onclick="closeStatusPopup(event)">
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative" onclick="event.stopPropagation();">
-        <button type="button" onclick="closeStatusPopup()" class="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
-        <div class="grid grid-cols-1 md:grid-cols-[38%_62%] gap-0">
-            <div class="p-6 border-b md:border-b-0 md:border-r border-gray-200">
-                <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md border h-36 w-full max-w-[220px] object-cover mb-4">
-                <p class="text-sm text-gray-600 space-y-1">
-                    <strong>Order Number:</strong> <span id="status_order_number"></span><br>
-                    <strong>Item Code:</strong> <span id="status_item_code"></span><br>
-                    <?php if ($showOrderVendorName): ?>
-                    <strong>Vendor Name:</strong> <span id="status_vendor_name"></span><br>
-                    <?php endif; ?>
-                    <span id="status_category"></span> / <span id="status_sub_category"></span><br>
-                    <span id="status_item" class="font-bold"></span>
-                </p>
-            </div>
-            <div class="p-6">
-                <h2 class="text-2xl font-bold mb-4">Update Order</h2>
-                <form id="statusForm" enctype="multipart/form-data" method="post" action="?page=posorders&action=update_status">
-                    <input type="hidden" name="status_order_id" id="status_order_id">
-                    <div class="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label for="orderStatus" class="block text-gray-700 font-bold mb-2">Order Status</label>
-                            <select id="orderStatus" name="orderStatus" class="border border-gray-300 rounded px-3 py-2 w-full">
-                                <option value="">-- Order Status --</option>
-                                <?php renderPartial('views/shared/partials/order_status_select_options.php', [
-                                    'order_status_list' => $order_status_list,
-                                ]); ?>
-                            </select>
-                            <input type="hidden" id="previousStatus" name="previousStatus" value="">
-                        </div>
-                        <div>
-                            <label for="statusESD" class="block text-gray-700 font-bold mb-2">Ship By Date</label>
-                            <input type="date" id="statusESD" name="esd" class="border border-gray-300 rounded px-2 py-1.5 w-full">
-                            <input type="hidden" id="previousESD" name="previous_esd" value="">
-                        </div>
-                    </div>
-                    <div class="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label for="agentId" class="block text-gray-700 font-bold mb-2">Assign agent</label>
-                            <select name="agent_id" id="agentId" class="border border-gray-300 rounded px-3 py-2 w-full">
-                                <option value="">Select User</option>
-                                <?php foreach ($staff_list as $id => $name): ?>
-                                    <option value="<?= (int)$id ?>"><?= htmlspecialchars((string)$name) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                            <input type="hidden" id="agentName" name="agent_name" value="">
-                            <input type="hidden" id="previousAgent" name="previous_agent" value="">
-                        </div>
-                        <div>
-                            <label for="orderPriority" class="block text-gray-700 font-bold mb-2">Priority</label>
-                            <select id="orderPriority" name="orderPriority" class="border border-gray-300 rounded px-3 py-2 w-full">
-                                <option value="">-Select-</option>
-                                <option value="critical">Critical</option>
-                                <option value="urgent">Urgent</option>
-                                <option value="high">High</option>
-                                <option value="medium">Medium</option>
-                                <option value="low">Low</option>
-                            </select>
-                            <input type="hidden" id="previousPriority" name="previous_priority" value="">
-                        </div>
-                    </div>
-                    <div class="mb-4">
-                        <label for="orderRemarks" class="block text-gray-700 font-bold mb-2">Notes</label>
-                        <textarea id="orderRemarks" name="orderRemarks" class="border border-gray-300 rounded px-3 py-2 w-full" rows="4"></textarea>
-                        <input type="hidden" id="previousRemarks" name="previous_remarks" value="">
-                    </div>
-                    <p class="text-xs text-gray-500 mb-3">Saving updates the local status and syncs to Exotic India when supported for this status.</p>
-                    <div id="orderStatusError" class="text-red-500 text-sm mt-1 hidden">Please select a status.</div>
-                    <div class="flex justify-end gap-3">
-                        <button type="button" onclick="closeStatusPopup()" class="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-600">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700">Save</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
+<?php
+$orderStatusPage = in_array($orderStatusPage ?? '', ['orders', 'posorders'], true) ? $orderStatusPage : 'posorders';
+renderPartial('views/shared/partials/order_status_update_popup.php', [
+    'order_status_list' => $order_status_list ?? [],
+    'staff_list' => $staff_list ?? [],
+    'showOrderVendorName' => !empty($showOrderVendorName),
+    'orderPage' => $orderStatusPage,
+]);
+?>
 
 <script src="<?php echo base_url(); ?>assets/js/pos_payment_split.js"></script>
 <?php if ($canFetchOrderJson): ?>
@@ -1266,7 +1461,7 @@ window.orderJsonModalConfig = {
                         if (remarks.trim()) {
                             displayEl.innerHTML = nl2br(escapeHtml(remarks));
                         } else {
-                            displayEl.innerHTML = '<em class="text-black-400">No notes from customer</em>';
+                            displayEl.innerHTML = '<em class="text-gray-400">No notes from customer</em>';
                         }
                     }
 
@@ -1501,93 +1696,6 @@ window.orderJsonModalConfig = {
             });
     });
 
-    function openStatusPopup(orderId) {
-        document.getElementById('status_order_id').value = orderId;
-        document.getElementById('statusPopup').classList.remove('hidden');
-        document.getElementById('orderStatusError').textContent = '';
-        document.getElementById('orderStatusError').classList.add('hidden');
-        document.getElementById('orderRemarks').value = '';
-        document.getElementById('orderPriority').value = '';
-
-        const orderEl = document.querySelector('#order-id-' + orderId);
-        if (!orderEl) {
-            alert('Order data not found.');
-            return;
-        }
-        const orderData = JSON.parse(orderEl.getAttribute('data-order'));
-        document.getElementById('orderRemarks').value = orderData.remarks || '';
-        document.getElementById('orderStatus').value = orderData.status || '';
-        document.getElementById('status_order_number').textContent = orderData.order_number || 'N/A';
-        document.getElementById('status_item_code').textContent = orderData.item_code || 'N/A';
-        <?php if ($showOrderVendorName): ?>
-        document.getElementById('status_vendor_name').textContent = orderData.vendor_name || orderData.vendor || 'N/A';
-        <?php endif; ?>
-        document.getElementById('status_category').textContent = orderData.groupname || 'N/A';
-        document.getElementById('status_sub_category').textContent = orderData.subcategories || 'N/A';
-        document.getElementById('status_item').textContent = orderData.title || 'N/A';
-        document.getElementById('orderPriority').value = orderData.priority || '';
-        document.getElementById('previousStatus').value = orderData.status || '';
-        document.getElementById('previousAgent').value = orderData.agent_id || '';
-        document.getElementById('agentId').value = orderData.agent_id || '';
-        document.getElementById('previousPriority').value = orderData.priority || '';
-        document.getElementById('previousRemarks').value = orderData.remarks || '';
-        document.getElementById('previousESD').value = orderData.esd || '';
-
-        const statusESD = document.getElementById('statusESD');
-        const raw = orderData.esd || '';
-        if (statusESD) {
-            const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-            statusESD.value = m ? raw : (raw || '');
-        }
-
-        const imgElem = document.querySelector('#statusPopup img');
-        if (imgElem) {
-            imgElem.src = orderData.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=Item';
-        }
-    }
-
-    function closeStatusPopup(e) {
-        if (e && e.target && e.currentTarget !== e.target) {
-            return;
-        }
-        document.getElementById('statusPopup').classList.add('hidden');
-    }
-
-    document.getElementById('agentId')?.addEventListener('change', function() {
-        const selectedOption = this.options[this.selectedIndex];
-        document.getElementById('agentName').value = selectedOption.text;
-    });
-
-    document.getElementById('statusForm')?.addEventListener('submit', function(e) {
-        const statusSelect = document.getElementById('orderStatus');
-        const errorDiv = document.getElementById('orderStatusError');
-        if (statusSelect.value === '') {
-            e.preventDefault();
-            errorDiv.classList.remove('hidden');
-            return;
-        }
-        errorDiv.classList.add('hidden');
-        e.preventDefault();
-        const formData = new FormData(document.getElementById('statusForm'));
-        fetch('index.php?page=posorders&action=update_status', {
-            method: 'POST',
-            body: formData
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Order status updated successfully.');
-                    closeStatusPopup();
-                    window.location.reload();
-                } else {
-                    errorDiv.textContent = data.message || 'Error updating order status.';
-                    errorDiv.classList.remove('hidden');
-                }
-            })
-            .catch(function() {
-                alert('An error occurred while updating order status.');
-            });
-    });
 
     document.addEventListener('DOMContentLoaded', function() {
         const accordionTriggers = document.querySelectorAll('.accordion-trigger');
@@ -1782,7 +1890,7 @@ window.orderJsonModalConfig = {
         }
         if (btn) {
             btn.disabled = true;
-            btn.textContent = 'Publishing…';
+            btn.textContent = 'Publishingâ€¦';
         }
         if (iconBtn) {
             iconBtn.disabled = true;
@@ -1922,9 +2030,119 @@ window.orderJsonModalConfig = {
         });
     });
 </script>
+<?php
+if ($canFollowUpOrder) {
+    require dirname(__DIR__) . '/shared/partials/order_follow_up_modal.php';
+}
+?>
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[100]" onclick="closeImagePopup()">
     <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
         <button type="button" onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm" aria-label="Close">✕</button>
         <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
     </div>
 </div>
+
+<!-- Cancel Dispatch Confirmation Modal -->
+<div id="cancelDispatchModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div class="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl ring-1 ring-gray-200">
+        <div class="flex items-center gap-3">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+            </span>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Cancel Dispatch</h3>
+                <p class="text-xs text-gray-500">Confirm shipment cancellation</p>
+            </div>
+        </div>
+        <p class="mt-4 text-sm text-gray-600">
+            Are you sure you want to cancel this dispatch? This will request cancellation with the courier.
+        </p>
+        <div class="mt-6 flex justify-end gap-2">
+            <button type="button"
+                onclick="closeCancelDispatchModal()"
+                class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                Back
+            </button>
+            <button type="button"
+                id="confirmCancelDispatchBtn"
+                class="rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-700">
+                Confirm Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<script src="<?php echo base_url('assets/js/pos_message_modal.js'); ?>"></script>
+<script>
+let pendingDispatchCancelId = null;
+
+function cancelSingleDispatch(dispatchId) {
+    pendingDispatchCancelId = dispatchId;
+    const modal = document.getElementById('cancelDispatchModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+    }
+}
+
+function closeCancelDispatchModal() {
+    pendingDispatchCancelId = null;
+    const modal = document.getElementById('cancelDispatchModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+document.getElementById('confirmCancelDispatchBtn')?.addEventListener('click', function() {
+    if (!pendingDispatchCancelId) return;
+    const dispatchId = pendingDispatchCancelId;
+    const btn = this;
+    btn.disabled = true;
+    btn.textContent = 'Cancelling...';
+
+    fetch('index.php?page=dispatch&action=cancel_dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dispatch_id: dispatchId })
+    })
+    .then(res => res.json())
+    .then(data => {
+        closeCancelDispatchModal();
+        btn.disabled = false;
+        btn.textContent = 'Confirm Cancel';
+        if (data.success) {
+            if (window.showPosMessageModal) {
+                window.showPosMessageModal({
+                    title: 'Dispatch Cancelled',
+                    message: data.message || 'Dispatch cancelled successfully.',
+                    tone: 'success',
+                    onClose: function() { location.reload(); }
+                });
+            } else {
+                location.reload();
+            }
+        } else {
+            if (window.showPosMessageModal) {
+                window.showPosMessageModal({
+                    title: 'Cancellation Failed',
+                    message: data.message || 'Failed to cancel dispatch.',
+                    tone: 'error'
+                });
+            }
+        }
+    })
+    .catch(err => {
+        closeCancelDispatchModal();
+        btn.disabled = false;
+        btn.textContent = 'Confirm Cancel';
+        if (window.showPosMessageModal) {
+            window.showPosMessageModal({
+                title: 'Error',
+                message: 'An error occurred while cancelling the dispatch.',
+                tone: 'error'
+            });
+        }
+    });
+});
+</script>

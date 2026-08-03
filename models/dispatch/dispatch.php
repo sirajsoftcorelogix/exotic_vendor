@@ -251,6 +251,10 @@ class Dispatch {
         $json = $payload !== null ? json_encode($payload) : null;
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Content-Type: application/json',
             'Authorization: Bearer ' . $authToken,
@@ -317,7 +321,7 @@ class Dispatch {
             $params['mode'] = $mode;
         }
         
-        $path = '/v1/external/courier/serviceability/?' . http_build_query($params);
+        $path = '/v1/external/courier/serviceability?' . http_build_query($params);
         $url = $this->shiprocketUrl($path);
         $authToken = $this->getShiprocketToken();
         $authError = $this->shiprocket()->getLastAuthError();
@@ -549,6 +553,45 @@ class Dispatch {
             return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         }
         return false;
+    }
+
+    public function getDispatchRecordsByOrderNumberOrInvoiceId(string $orderNumber, int $invoiceId = 0): array
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '' && $invoiceId <= 0) {
+            return [];
+        }
+
+        $whereParts = [];
+        $types = '';
+        $params = [];
+
+        if ($orderNumber !== '') {
+            $whereParts[] = "(order_number = ? OR FIND_IN_SET(?, REPLACE(order_number, ' ', '')) OR order_number LIKE ?)";
+            $types .= 'sss';
+            $params[] = $orderNumber;
+            $params[] = $orderNumber;
+            $params[] = '%' . $orderNumber . '%';
+        }
+
+        if ($invoiceId > 0) {
+            $whereParts[] = "(invoice_id = ?)";
+            $types .= 'i';
+            $params[] = $invoiceId;
+        }
+
+        $sql = "SELECT * FROM vp_dispatch_details WHERE " . implode(' OR ', $whereParts) . " ORDER BY id DESC";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+
+        $stmt->bind_param($types, ...$params);
+        if ($stmt->execute()) {
+            $res = $stmt->get_result();
+            return $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
+        }
+        return [];
     }
     public function retryShiprocketApiCalls($dispatchId) {
         //fetch dispatch record

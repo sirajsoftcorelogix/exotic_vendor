@@ -676,6 +676,17 @@ $(function () {
 
   $('#productModal').on('click', '#pmAddToCartBtn', function (e) {
     e.preventDefault();
+    if (typeof window.isPosCartEditable === 'function' && !window.isPosCartEditable()) {
+      const msg = typeof window.getPosCartLockedMessage === 'function'
+        ? window.getPosCartLockedMessage()
+        : 'Adding or modifying products is not allowed for Reship orders.';
+      if (typeof window.showPosMessageModal === 'function') {
+        window.showPosMessageModal({ title: 'Reship order', message: msg, tone: 'warning' });
+      } else {
+        alert(msg);
+      }
+      return;
+    }
     if (String($('#modal_item_level').val() || '').trim().toLowerCase() === 'parent') {
       notifyParentItemCartBlocked();
       return;
@@ -812,10 +823,15 @@ $(function () {
     const parentItem = isParentLevelProduct(p);
     $('#modal_item_level').val(parentItem ? 'parent' : String(p.item_level || '').trim());
     const $addBtn = $('#pmAddToCartBtn');
+    const cartLocked = typeof window.isPosCartEditable === 'function' && !window.isPosCartEditable();
+    const addBlocked = parentItem || cartLocked;
     if ($addBtn.length) {
-      $addBtn.prop('disabled', parentItem);
-      $addBtn.toggleClass('opacity-50 cursor-not-allowed', parentItem);
-      $addBtn.attr('title', parentItem ? POS_PARENT_ITEM_CART_MSG : '');
+      $addBtn.prop('disabled', addBlocked);
+      $addBtn.toggleClass('opacity-50 cursor-not-allowed', addBlocked);
+      $addBtn.attr(
+        'title',
+        parentItem ? POS_PARENT_ITEM_CART_MSG : (cartLocked ? 'Cart is locked for Reship orders.' : '')
+      );
     }
 
     const badges = [];
@@ -1193,10 +1209,6 @@ data-code="${lookupCode}">
       $('#pmDetails').html('Loading...');
       $('#pmModalPrice').addClass('hidden').text('');
       $('#modal_item_level').val('');
-      $('#pmAddToCartBtn')
-        .prop('disabled', false)
-        .removeClass('opacity-50 cursor-not-allowed')
-        .attr('title', '');
     }
 
     fetchProductApiDetails(code, modalPreselectedAddonEntries);

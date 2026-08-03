@@ -37,6 +37,7 @@ class PosOrdersController
         $offset = ($page - 1) * $limit;
 
         $filters = buildOrderListFiltersFromRequest($_GET);
+        $filters = applyPosOrderListWarehouseScope($filters);
         //order status list
         $statusList = $commanModel->get_order_status_list();
         $order_status_row = $commanModel->get_order_status();
@@ -63,10 +64,13 @@ class PosOrdersController
         //     }
         //print_array($orders);  
         $total_orders = $ordersModel->getOrdersCount($filters);
+        $list_debug = buildPosOrderListDebugContext($filters, $ordersModel);
         $total_pages = $limit > 0 ? ceil($total_orders / $limit) : 1;
 
         // Pending orders badge (for selected warehouse)
-        $pending_orders_count = $ordersModel->getOrdersCount(['status_filter' => 'pending']);
+        $pending_orders_count = $ordersModel->getOrdersCount(
+            applyPosOrderListWarehouseScope(['status_filter' => 'pending'])
+        );
         // Prepare saved searches for current user
         $user_id = $_SESSION['user']['id'] ?? 0;
         $saved_searches = [];
@@ -92,6 +96,7 @@ class PosOrdersController
                 'saved_searches' => $saved_searches,
                 'warehouses' => $commanModel->get_exotic_address(),
                 'default_warehouse_id' => resolveOrderListDefaultWarehouseId(),
+                'list_debug' => $list_debug,
             ],
             preparePaymentTypeFilterData($paymentTypes, $_GET['payment_type'] ?? null)
         ), 'Manage Orders');
@@ -519,7 +524,21 @@ class PosOrdersController
             $previous_remarks = isset($_POST['previous_remarks']) ? trim($_POST['previous_remarks']) : NULL;
 
             if ($order_id > 0 && !empty($new_status)) {
+                require_once __DIR__ . '/../helpers/order_workflow.php';
+                global $conn;
+                $workflowError = assert_order_status_transition_allowed(
+                    $conn,
+                    (string) $previous_status,
+                    (string) $new_status,
+                    (int) ($_SESSION['user']['id'] ?? 0)
+                );
+                if ($workflowError !== null) {
+                    echo json_encode(['success' => false, 'message' => $workflowError]);
+                    exit;
+                }
+
                 $invoiceCancel = null;
+                $stockRestore = null;
                 $update_data = [
                     'status' => $new_status,
                     'remarks' => $remarks,
@@ -553,13 +572,14 @@ class PosOrdersController
                 if ($new_status != $_POST['previousStatus']) {
                     $commanModel->add_order_status_log($logData);
                 }
-                if (strtolower(trim((string) $new_status)) === 'cancelled'
-                    && strtolower(trim((string) $previous_status)) !== 'cancelled'
+                require_once __DIR__ . '/../helpers/order_status_stock.php';
+                if (order_status_triggers_stock_restore($new_status)
+                    && !order_status_triggers_stock_restore((string) $previous_status)
                     && is_array($orderval)
                 ) {
                     global $conn;
-                    require_once __DIR__ . '/../helpers/order_cancel_invoice.php';
-                    $invoiceCancel = order_cancel_linked_invoice_for_order_row($conn, $orderval);
+                    $stockRestore = order_handle_status_change_stock($conn, $orderval, $new_status, (string) $previous_status);
+                    $invoiceCancel = is_array($stockRestore['invoice_cancel'] ?? null) ? $stockRestore['invoice_cancel'] : null;
                 }
                 if ($agent_id != $previous_agent) {
                     //log agent change
@@ -622,6 +642,9 @@ class PosOrdersController
                         $localMessage .= empty($invoiceCancel['success'])
                             ? ' Linked invoice cancel failed: ' . (string) ($invoiceCancel['message'] ?? '')
                             : ' Linked invoice cancelled.';
+                    }
+                    if (isset($stockRestore) && is_array($stockRestore)) {
+                        $localMessage .= order_status_stock_summary_message($stockRestore);
                     }
                     echo json_encode([
                         'success' => true,
@@ -1173,6 +1196,28 @@ class PosOrdersController
         $viewerUserId = (int) ($_SESSION['user']['id'] ?? 0);
         $canFetchOrderJson = hasTieredAccess($viewerUserId, 'Sr Emp Access', ['Orders', 'POS Orders']);
 
+        require_once __DIR__ . '/../models/sales_return/SalesReturn.php';
+        $salesReturnModel = new SalesReturn($conn);
+        $salesReturnEligibility = $salesReturnModel->resolveSalesReturnCreateEligibility(
+            $resolvedOrderNumber,
+            $invoiceId > 0 ? $invoiceId : null
+        );
+
+        require_once __DIR__ . '/../helpers/order_follow_up.php';
+        require_once __DIR__ . '/../models/order_follow_up/OrderFollowUp.php';
+        $followUpModel = new OrderFollowUp($conn);
+        $followUpLinks = order_follow_up_links_for_order($conn, $resolvedOrderNumber);
+        $followUpEligibility = [
+            'reship' => $followUpModel->resolveStartEligibility($resolvedOrderNumber, 'reship'),
+            'replace' => $followUpModel->resolveStartEligibility($resolvedOrderNumber, 'replace'),
+            'copy' => $followUpModel->resolveStartEligibility($resolvedOrderNumber, 'copy'),
+        ];
+        $canFollowUpOrder = canSrEmpAccess();
+
+        require_once __DIR__ . '/../models/dispatch/dispatch.php';
+        $dispatchModel = new Dispatch($conn);
+        $dispatchRecords = $dispatchModel->getDispatchRecordsByOrderNumberOrInvoiceId($resolvedOrderNumber, $invoiceId);
+
         if ($type === 'inner') {
             $page = trim((string)($_GET['page'] ?? ''));
             $innerPartial = $page === 'orders'
@@ -1205,6 +1250,14 @@ class PosOrdersController
                 'staff_list' => $commanModel->get_staff_list(),
                 'showOrderVendorName' => function_exists('canViewOrderVendorName') && canViewOrderVendorName(),
                 'canFetchOrderJson' => $canFetchOrderJson,
+                'salesReturnEligibility' => $salesReturnEligibility,
+                'orderStatusPage' => in_array(trim((string)($_GET['page'] ?? '')), ['orders', 'posorders'], true)
+                    ? trim((string)$_GET['page'])
+                    : 'posorders',
+                'canFollowUpOrder' => $canFollowUpOrder,
+                'followUpLinks' => $followUpLinks,
+                'followUpEligibility' => $followUpEligibility,
+                'dispatchRecords' => $dispatchRecords,
             ], 'Order Details');
         }
         exit;
@@ -1751,19 +1804,39 @@ class PosOrdersController
             //print_array($_POST);
             //exit;
             if (!empty($order_ids) && !empty($new_status)) {
-                $ordersToCancelInvoice = [];
-                if (strtolower(trim((string) $new_status)) === 'cancelled') {
-                    require_once __DIR__ . '/../helpers/order_cancel_invoice.php';
+                require_once __DIR__ . '/../helpers/order_workflow.php';
+                global $conn;
+                $ordersForWorkflowCheck = [];
+                foreach ($order_ids as $oid) {
+                    $row = $ordersModel->getOrderById((int) $oid);
+                    if (is_array($row)) {
+                        $ordersForWorkflowCheck[] = $row;
+                    }
+                }
+                $workflowError = assert_bulk_order_status_transitions_allowed(
+                    $conn,
+                    $ordersForWorkflowCheck,
+                    (string) $new_status,
+                    (int) ($_SESSION['user']['id'] ?? 0)
+                );
+                if ($workflowError !== null) {
+                    echo json_encode(['success' => false, 'message' => $workflowError]);
+                    exit;
+                }
+
+                $ordersForStockRestore = [];
+                require_once __DIR__ . '/../helpers/order_status_stock.php';
+                if (order_status_triggers_stock_restore($new_status)) {
                     foreach ($order_ids as $oid) {
                         $oid = (int) $oid;
                         if ($oid <= 0) {
                             continue;
                         }
                         $row = $ordersModel->getOrderById($oid);
-                        if (!is_array($row) || is_order_status_cancelled((string) ($row['status'] ?? ''))) {
+                        if (!is_array($row) || order_status_triggers_stock_restore((string) ($row['status'] ?? ''))) {
                             continue;
                         }
-                        $ordersToCancelInvoice[] = $row;
+                        $ordersForStockRestore[] = $row;
                     }
                 }
                 $result = $ordersModel->updateStatusBulk($order_ids, $new_status);
@@ -1805,13 +1878,15 @@ class PosOrdersController
                     if (!empty($apiFailures)) {
                         $message .= ' Exotic India sync failed for ' . count($apiFailures) . ' item(s).';
                     }
-                    if (!empty($ordersToCancelInvoice)) {
+                    if (!empty($ordersForStockRestore)) {
                         global $conn;
-                        require_once __DIR__ . '/../helpers/order_cancel_invoice.php';
-                        $invoiceCancelResults = order_cancel_linked_invoices_for_order_rows($conn, $ordersToCancelInvoice);
-                        $invoiceCancelMessage = order_cancel_invoice_summary_message($invoiceCancelResults);
-                        if ($invoiceCancelMessage !== '') {
-                            $message .= $invoiceCancelMessage;
+                        foreach ($ordersForStockRestore as $orderRow) {
+                            $previousStatus = (string) ($orderRow['status'] ?? '');
+                            $stockResult = order_handle_status_change_stock($conn, $orderRow, $new_status, $previousStatus);
+                            $stockMessage = order_status_stock_summary_message($stockResult);
+                            if ($stockMessage !== '') {
+                                $message .= $stockMessage;
+                            }
                         }
                     }
                     echo json_encode([

@@ -152,6 +152,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       confirm_city: "Delhi",
       confirm_state: "Delhi"
     };
+    window.POS_FOLLOW_UP = <?= json_encode($pos_follow_up ?? null, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
+    window.POS_FOLLOW_UP_SEED = <?= !empty($pos_follow_up_seed) ? 'true' : 'false' ?>;
   </script>
   <!-- ===== TOP BAR ===== -->
   <header class="border-b bg-white">
@@ -1042,6 +1044,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 <!-- ===== END PAGE WRAPPER ===== -->
 <script src="<?php echo base_url(); ?>assets/js/pos_message_modal.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos_cart_hooks.js"></script>
+<script src="<?php echo base_url(); ?>assets/js/order_follow_up_pos.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos.js"></script>
 <!-- <script src="<?php echo 'http://' . $_SERVER['HTTP_HOST']; ?>/assets/js/pos.js"></script> -->
 <script>
@@ -1274,11 +1277,17 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         ["bank_transfer", "Bank transfer"],
         ["pos_machine", "POS machine"],
         ["razorpay", "Razorpay"],
-        ["cheque", "Cheque"]
+        ["cheque", "Cheque"],
+        ["waived", "Waived (no charge)"]
       ];
     }
+    var isWaivedAllowed = typeof window.isPosFollowUpWaivedCheckout === "function" && window.isPosFollowUpWaivedCheckout();
     options.forEach(function(pair) {
       if (!Array.isArray(pair) || !pair[0]) return;
+      var mode = String(pair[0]).toLowerCase();
+      if (mode === "waived" && !isWaivedAllowed) {
+        return;
+      }
       var opt = document.createElement("option");
       opt.value = String(pair[0]);
       opt.textContent = String(pair[1] || pair[0]);
@@ -1374,8 +1383,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var container = getPaymentSplitRowsContainer();
     if (!container) return;
     container.innerHTML = "";
-    var total = parseFloat(String(grandTotal));
-    addPaymentSplitRow("cash", isFinite(total) && total > 0 ? total : "", "");
+    var isWaived = typeof window.isPosFollowUpWaivedCheckout === "function" && window.isPosFollowUpWaivedCheckout();
+    if (isWaived) {
+      addPaymentSplitRow("waived", 0, "");
+    } else {
+      var total = parseFloat(String(grandTotal));
+      addPaymentSplitRow("cash", isFinite(total) && total > 0 ? total : "", "");
+    }
   }
 
   function collectAllPaymentSplitRowsFromUi() {
@@ -1386,7 +1400,12 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       var mode = String(row.querySelector(".payment-split-mode")?.value || "").trim().toLowerCase();
       var amount = parseFloat(String(row.querySelector(".payment-split-amount")?.value || ""));
       var txn = String(row.querySelector(".payment-split-txn")?.value || "").trim();
-      if (!mode || !isFinite(amount) || amount <= 0) return;
+      if (!mode) return;
+      if (mode === "waived") {
+        out.push({ mode: "waived", amount: 0, transaction_id: txn });
+        return;
+      }
+      if (!isFinite(amount) || amount <= 0) return;
       out.push({ mode: mode, amount: Math.round(amount * 100) / 100, transaction_id: txn });
     });
     return out;
@@ -1538,11 +1557,43 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var paymentAmount = getPaymentSplitTotalFromUi();
     var hasCod = codTotal > 0.001;
 
+    var isWaivedAllowed = typeof window.isPosFollowUpWaivedCheckout === "function" && window.isPosFollowUpWaivedCheckout();
+
     for (var i = 0; i < splits.length; i++) {
+      if (splits[i].mode === "waived") {
+        if (!isWaivedAllowed) {
+          showErr("Waived payment mode is only allowed for Reship or Replacement follow-up orders.");
+          return null;
+        }
+        if (isFinite(splits[i].amount) && splits[i].amount > 0.001) {
+          showErr("Waived payment line must be zero amount.");
+          return null;
+        }
+        continue;
+      }
       if (!isFinite(splits[i].amount) || splits[i].amount <= 0) {
         showErr("Each payment line must have amount greater than zero.");
         return null;
       }
+    }
+
+    var allWaived = splits.every(function(s) { return s.mode === "waived"; });
+    if (allWaived) {
+      if (!isWaivedAllowed) {
+        showErr("Waived payment mode is only allowed for Reship or Replacement follow-up orders.");
+        return null;
+      }
+      var primaryWaived = splits[0] || { mode: "waived", transaction_id: "" };
+      return {
+        splits: splits,
+        total: 0,
+        advanceTotal: 0,
+        codTotal: 0,
+        paymentStage: "final",
+        hasCod: false,
+        primaryMode: "waived",
+        primaryTxn: primaryWaived.transaction_id || ""
+      };
     }
 
     if (hasCod) {
@@ -2474,6 +2525,73 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     }
     if (!String(out.confirm_phone || "").trim() && defaults.confirm_phone) {
       out.confirm_phone = String(defaults.confirm_phone).trim();
+    }
+    out = applyShippingSameAsBillingToPayload(out);
+    return out;
+  }
+
+  function applyShippingSameAsBillingToPayload(payload) {
+    var out = Object.assign({}, payload);
+    var sameAsBilling = out.confirm_shipping_same_as_billing === "1"
+      || out.confirm_shipping_same_as_billing === 1
+      || out.confirm_shipping_same_as_billing === true;
+    if (!sameAsBilling) {
+      return applyBillingFallbacksToShippingPayload(out);
+    }
+    var pairs = [
+      ["confirm_first_name", "confirm_sfirst_name"],
+      ["confirm_last_name", "confirm_slast_name"],
+      ["confirm_address1", "confirm_saddress1"],
+      ["confirm_address2", "confirm_saddress2"],
+      ["confirm_city", "confirm_scity"],
+      ["confirm_state", "confirm_sstate"],
+      ["confirm_zip", "confirm_szip"],
+      ["confirm_country", "confirm_scountry"],
+      ["confirm_phone", "confirm_sphone"],
+      ["confirm_phone_code", "confirm_sphone_code"],
+      ["confirm_gstin", "confirm_sgstin"]
+    ];
+    pairs.forEach(function(pair) {
+      var billingVal = String(out[pair[0]] || "").trim();
+      if (billingVal !== "") {
+        out[pair[1]] = billingVal;
+      }
+    });
+    var sf = String(out.confirm_sfirst_name || "").trim();
+    var sl = String(out.confirm_slast_name || "").trim();
+    out.confirm_sname = [sf, sl].filter(Boolean).join(" ").trim();
+    return out;
+  }
+
+  function applyBillingFallbacksToShippingPayload(payload) {
+    var out = Object.assign({}, payload);
+    var pairs = [
+      ["confirm_sfirst_name", "confirm_first_name"],
+      ["confirm_slast_name", "confirm_last_name"],
+      ["confirm_saddress1", "confirm_address1"],
+      ["confirm_saddress2", "confirm_address2"],
+      ["confirm_scity", "confirm_city"],
+      ["confirm_sstate", "confirm_state"],
+      ["confirm_szip", "confirm_zip"],
+      ["confirm_scountry", "confirm_country"],
+      ["confirm_sphone", "confirm_phone"],
+      ["confirm_sgstin", "confirm_gstin"]
+    ];
+    pairs.forEach(function(pair) {
+      if (!String(out[pair[0]] || "").trim()) {
+        var billingVal = String(out[pair[1]] || "").trim();
+        if (billingVal !== "") {
+          out[pair[0]] = billingVal;
+        }
+      }
+    });
+    if (!String(out.confirm_sname || "").trim()) {
+      out.confirm_sname = [out.confirm_sfirst_name, out.confirm_slast_name].filter(Boolean).join(" ").trim();
+    } else if (!String(out.confirm_slast_name || "").trim() && String(out.confirm_last_name || "").trim()) {
+      var firstPart = String(out.confirm_sfirst_name || out.confirm_sname || "").trim();
+      var lastPart = String(out.confirm_last_name || "").trim();
+      out.confirm_slast_name = lastPart;
+      out.confirm_sname = [firstPart, lastPart].filter(Boolean).join(" ").trim();
     }
     return out;
   }
@@ -3417,23 +3535,30 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       typeof window.getPosReceiptDiscountsForCheckout === "function"
         ? window.getPosReceiptDiscountsForCheckout()
         : null;
+    var waivedFollowUp =
+      typeof window.isPosFollowUpWaivedCheckout === "function" && window.isPosFollowUpWaivedCheckout();
     var orderTotal =
       disc && disc.grandTotal > 0
         ? disc.grandTotal
         : live && live.grandTotal != null
           ? parseFloat(String(live.grandTotal))
           : NaN;
-    if (!isFinite(orderTotal) || orderTotal <= 0) {
-      showToast("Cart total unavailable — add items or refresh the cart.", "red");
-      return;
-    }
     var payStage = document.getElementById("payment_stage").value;
     var paySplits = collectPaymentSplitsFromUi();
     var payAmt = getPaymentSplitTotalFromUi();
+    if (waivedFollowUp) {
+      orderTotal = 0;
+      payStage = "final";
+      paySplits = [{ mode: "waived", amount: 0, transaction_id: "" }];
+      payAmt = 0;
+    } else if (!isFinite(orderTotal) || orderTotal <= 0) {
+      showToast("Cart total unavailable — add items or refresh the cart.", "red");
+      return;
+    }
     var primarySplit = paySplits.reduce(function(best, s) {
       return s.amount > best.amount ? s : best;
     }, paySplits[0] || { mode: "cash", amount: 0, transaction_id: "" });
-    var payMode = primarySplit.mode || "cash";
+    var payMode = waivedFollowUp ? "waived" : (primarySplit.mode || "cash");
     var txn = primarySplit.transaction_id || "";
     var note = (document.getElementById("payment_note") && document.getElementById("payment_note").value) || "";
     var subTotalGoods = live && live.subtotal != null ? parseFloat(String(live.subtotal)) : NaN;
@@ -3490,6 +3615,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       typeof window.getPosLinePricesPayloadForCheckout === "function"
         ? window.getPosLinePricesPayloadForCheckout()
         : [];
+    var followUpLinePrices =
+      typeof window.getPosFollowUpLinePricesOverride === "function"
+        ? window.getPosFollowUpLinePricesOverride()
+        : null;
+    if (Array.isArray(followUpLinePrices) && followUpLinePrices.length > 0) {
+      linePricePayload = followUpLinePrices;
+    }
     if (Array.isArray(linePricePayload) && linePricePayload.length > 0) {
       body.pos_line_prices = linePricePayload;
     }

@@ -2,22 +2,23 @@
 require_once 'models/publisher/Publisher.php';
 require_once 'models/country/country.php';
 require_once 'models/country/state.php';
-require_once 'models/user/user.php';
-require_once __DIR__ . '/../helpers/vendor_external_api.php';
+require_once 'models/vendor/vendor.php';
+require_once __DIR__ . '/../integrations/exotic/vendor_product_api.php';
+require_once __DIR__ . '/../helpers/publisher_vendor_sync.php';
 
 class PublishersController
 {
     private Publisher $publisherModel;
     private Country $countryModel;
     private State $stateModel;
-    private User $userModel;
+    private vendor $vendorModel;
 
     public function __construct(mysqli $conn)
     {
         $this->publisherModel = new Publisher($conn);
         $this->countryModel = new Country($conn);
         $this->stateModel = new State($conn);
-        $this->userModel = new User($conn);
+        $this->vendorModel = new vendor($conn);
     }
 
     public function index(): void
@@ -117,9 +118,95 @@ class PublishersController
         $result = $this->publisherModel->insertPublisher($remoteId, $name, $isActive, $extra);
         if ($result['success']) {
             $result['message'] = 'Publisher created on Exotic India and saved locally.';
+            $alsoCreateVendor = (string) ($_POST['also_create_vendor'] ?? '') === '1';
+            if ($alsoCreateVendor) {
+                $publisherLocalId = (int) ($result['id'] ?? 0);
+                $vendorResult = $this->createLinkedVendorFromPublisher($publisherLocalId, $name, $isActive, $extra);
+                if ($vendorResult['success']) {
+                    $result['message'] .= ' Linked vendor created and mapped as distributor (Manage Distributors).';
+                    if (!empty($vendorResult['vendor_api_warning'])) {
+                        $result['vendor_create_warning'] = true;
+                    }
+                } else {
+                    $result['vendor_create_warning'] = true;
+                    $result['message'] .= ' Vendor was not created: ' . ($vendorResult['message'] ?? 'Unknown error.');
+                }
+            }
         }
         echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
+    }
+
+    /**
+     * Create vp_vendors row from publisher data, sync book vendor to Exotic India, and map to publisher.
+     *
+     * @return array{success:bool,message?:string,vendor_id?:int}
+     */
+    private function createLinkedVendorFromPublisher(int $publisherLocalId, string $name, int $isActive, array $extra): array
+    {
+        if ($publisherLocalId <= 0) {
+            return ['success' => false, 'message' => 'Publisher id missing after save.'];
+        }
+
+        $vendorPayload = build_vendor_add_payload_from_publisher($name, $extra, $isActive);
+        $validationError = publisher_vendor_create_validation_error($vendorPayload);
+        if ($validationError !== null) {
+            return $validationError;
+        }
+
+        $groupsCsv = vendor_external_api_normalize_groupnames_csv($vendorPayload['groupname'] ?? 'book');
+        $apiFieldError = vendor_external_api_validate_vendor_fields($name, $groupsCsv);
+        if ($apiFieldError !== null) {
+            return $apiFieldError;
+        }
+
+        $insertResult = $this->vendorModel->addVendor($vendorPayload);
+        if (empty($insertResult['success'])) {
+            return [
+                'success' => false,
+                'message' => (string) ($insertResult['message'] ?? 'Could not create vendor locally.'),
+            ];
+        }
+
+        $localVendorId = (int) ($insertResult['inserted_id'] ?? 0);
+        if ($localVendorId <= 0) {
+            return ['success' => false, 'message' => 'Vendor insert did not return an id.'];
+        }
+
+        $mapResult = $this->publisherModel->addPublisherVendorMapping($publisherLocalId, $localVendorId, [
+            'allow_inactive_vendor' => true,
+            'idempotent' => true,
+        ]);
+        if (empty($mapResult['success'])) {
+            return [
+                'success' => false,
+                'message' => (string) ($mapResult['message'] ?? 'Vendor created but could not map as distributor.'),
+                'vendor_id' => $localVendorId,
+            ];
+        }
+
+        $webpage = (string) ($vendorPayload['addWebpage'] ?? '0');
+        $apiWarning = null;
+        $api = vendor_external_api_sync_catalog($name, $groupsCsv, $webpage, null);
+        if (!empty($api['vendor_id'])) {
+            $this->vendorModel->updateVendorRemoteId($localVendorId, (string) $api['vendor_id']);
+        } elseif (!vendor_external_api_allows_local_save($api)) {
+            $apiWarning = (string) ($api['message'] ?? 'Exotic India vendor sync failed.');
+        }
+
+        $message = 'Vendor created and mapped as distributor.';
+        if ($apiWarning !== null) {
+            $message .= ' ' . $apiWarning;
+        }
+
+        return [
+            'success' => true,
+            'message' => $message,
+            'vendor_id' => $localVendorId,
+            'mapping_id' => (int) ($mapResult['mapping_id'] ?? 0),
+            'vendor_api_warning' => $apiWarning !== null,
+            'mappings' => $mapResult['mappings'] ?? [],
+        ];
     }
 
     public function details(): void
@@ -207,19 +294,6 @@ class PublishersController
         exit;
     }
 
-    public function searchBrokers(): void
-    {
-        is_login();
-        header('Content-Type: application/json; charset=utf-8');
-
-        $query = trim((string)($_GET['q'] ?? ''));
-        echo json_encode(
-            $this->userModel->searchActiveUsers($query),
-            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
-        );
-        exit;
-    }
-
     public function getBankDetails(): void
     {
         is_login();
@@ -298,7 +372,6 @@ class PublishersController
             'publisher' => [
                 'id' => (int) ($publisher['id'] ?? 0),
                 'publishers' => (string) ($publisher['publishers'] ?? ''),
-                'display_name' => (string) ($publisher['display_name'] ?? ''),
             ],
             'mappings' => $this->publisherModel->getVendorMappingsByPublisherId($publisherId),
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);

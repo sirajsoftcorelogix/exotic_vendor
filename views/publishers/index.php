@@ -123,7 +123,6 @@ $queryBase = [
                         <th class="px-5 py-3.5 whitespace-nowrap">Phone</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">City</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">State</th>
-                        <th class="px-5 py-3.5 whitespace-nowrap">Broker</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Status</th>
                         <th class="px-5 py-3.5 whitespace-nowrap">Updated</th>
                         <th class="px-5 py-3.5 whitespace-nowrap text-right">Action</th>
@@ -142,12 +141,12 @@ $queryBase = [
                             $phone = (string)($publisher['publisher_phone'] ?? '');
                             $city = (string)($publisher['city'] ?? '');
                             $state = (string)($publisher['state'] ?? '');
-                            $brokerName = (string)($publisher['broker_name'] ?? '');
+                            $usageCount = (int)($publisher['usage_count'] ?? 0);
+                            $isMapped = $usageCount > 0;
                             $publisherPayload = [
                                 'id' => $id,
                                 'publishers_id' => $publisherExternalId,
                                 'publishers' => $name,
-                                'display_name' => (string)($publisher['display_name'] ?? ''),
                                 'website' => (string)($publisher['website'] ?? ''),
                                 'contact_name' => $contactName,
                                 'publisher_email' => (string)($publisher['publisher_email'] ?? ''),
@@ -167,8 +166,6 @@ $queryBase = [
                                 'webpage' => (int)($publisher['webpage'] ?? 0),
                                 'stock_replenishment_months' => (int)($publisher['stock_replenishment_months'] ?? 0),
                                 'discount' => (float)($publisher['discount'] ?? 0),
-                                'broker_id' => (int)($publisher['broker_id'] ?? 0),
-                                'broker_name' => $brokerName,
                                 'is_active' => $active ? 1 : 0,
                             ];
                             ?>
@@ -180,7 +177,6 @@ $queryBase = [
                                 <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($phone, ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($city, ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($state, ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td class="px-5 py-4 text-sm text-gray-700"><?php echo htmlspecialchars($brokerName !== '' ? $brokerName : '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="px-5 py-4 text-sm">
                                     <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold <?php echo $active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200'; ?>">
                                         <?php echo $active ? 'Active' : 'Inactive'; ?>
@@ -192,10 +188,22 @@ $queryBase = [
                                         <button type="button" class="menu-button" aria-label="Publisher actions">&#x22EE;</button>
                                         <ul class="menu-popup text-left">
                                             <li data-action="edit" data-publisher="<?php echo htmlspecialchars(json_encode($publisherPayload), ENT_QUOTES, 'UTF-8'); ?>"><i class="fa-solid fa-pencil"></i> Edit</li>
-                                            <li data-action="status" data-id="<?php echo $id; ?>" data-active="<?php echo $active ? 0 : 1; ?>"><i class="fa-solid fa-power-off"></i> <?php echo $active ? 'Deactivate' : 'Activate'; ?></li>
+                                            <?php if ($isMapped && $active): ?>
+                                                <li class="text-gray-400 cursor-not-allowed" title="Used by <?php echo (int) ($publisher['inbound_usage_count'] ?? 0); ?> inbound and <?php echo (int) ($publisher['product_usage_count'] ?? 0); ?> product record(s)">
+                                                    <i class="fa-solid fa-power-off"></i> Deactivate (mapped)
+                                                </li>
+                                            <?php else: ?>
+                                                <li data-action="status" data-id="<?php echo $id; ?>" data-active="<?php echo $active ? 0 : 1; ?>"><i class="fa-solid fa-power-off"></i> <?php echo $active ? 'Deactivate' : 'Activate'; ?></li>
+                                            <?php endif; ?>
                                             <li data-action="bank" data-id="<?php echo $id; ?>"><i class="fa-solid fa-building-columns"></i> Bank Details</li>
                                             <li data-action="distributors" data-id="<?php echo $id; ?>" data-name="<?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?>"><i class="fa-solid fa-truck"></i> Manage Distributors</li>
-                                            <li class="text-red-700" data-action="delete" data-id="<?php echo $id; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
+                                            <?php if ($isMapped): ?>
+                                                <li class="text-gray-400 cursor-not-allowed" title="Used by <?php echo (int) ($publisher['inbound_usage_count'] ?? 0); ?> inbound and <?php echo (int) ($publisher['product_usage_count'] ?? 0); ?> product record(s)">
+                                                    <i class="fa-solid fa-trash"></i> Delete (mapped)
+                                                </li>
+                                            <?php else: ?>
+                                                <li class="text-red-700" data-action="delete" data-id="<?php echo $id; ?>"><i class="fa-solid fa-trash"></i> Delete</li>
+                                            <?php endif; ?>
                                         </ul>
                                     </div>
                                 </td>
@@ -252,7 +260,7 @@ $queryBase = [
                     </span>
                     <div>
                         <h3 class="text-sm font-bold text-gray-900">Publisher profile</h3>
-                        <p class="text-xs text-gray-500 mt-0.5">Legal name synced with Exotic India, plus display and web presence.</p>
+                        <p class="text-xs text-gray-500 mt-0.5">Legal name synced with Exotic India and web presence.</p>
                     </div>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -264,27 +272,12 @@ $queryBase = [
                         <span id="publisherNameMsg" class="text-sm text-red-500"></span>
                     </div>
                     <div>
-                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Display name</label>
-                        <input type="text" name="display_name" id="publisher_display_name"
-                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition"
-                            placeholder="Friendly name shown in listings">
-                        <p class="mt-1 text-xs text-gray-500">Optional. Use when the display label differs from the official name.</p>
-                    </div>
-                    <div>
                         <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Status</label>
                         <select name="is_active" id="publisher_is_active"
                             class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
                             <option value="1">Active</option>
                             <option value="0">Inactive</option>
                         </select>
-                    </div>
-                    <div>
-                        <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Broker</label>
-                        <select name="broker_id" id="publisher_broker_id"
-                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition">
-                            <option value="">Select broker...</option>
-                        </select>
-                        <p class="mt-1 text-xs text-gray-500">Search active portal users. Leave empty if not assigned.</p>
                     </div>
                     <div class="md:col-span-2">
                         <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Website</label>
@@ -304,6 +297,14 @@ $queryBase = [
                     <span>
                         <span class="block text-sm font-medium text-gray-800">Allow webpage on Exotic India</span>
                         <span class="block text-xs text-gray-500 mt-0.5">Maps to the <code class="text-[11px] bg-white/80 px-1 rounded">webpage</code> parameter (0 or 1) on the vendor API.</span>
+                    </span>
+                </label>
+                <label id="publisher_also_create_vendor_wrap" class="flex items-start gap-3 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2.5 cursor-pointer">
+                    <input type="checkbox" name="also_create_vendor" id="publisher_also_create_vendor" value="1"
+                        class="mt-0.5 rounded border-gray-300 text-sky-600 focus:ring-sky-500">
+                    <span>
+                        <span class="block text-sm font-medium text-gray-800">Also create vendor</span>
+                        <span class="block text-xs text-gray-500 mt-0.5">Creates a matching <strong class="font-semibold">book</strong> vendor in Vendor Master with the same contact, address, and tax details, and links it under <strong class="font-semibold">Manage Distributors</strong>. Primary phone is required.</span>
                     </span>
                 </label>
             </section>
@@ -597,6 +598,30 @@ $queryBase = [
     </div>
 </div>
 
+<div id="publisherDeleteConfirmModal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-black/50 px-4 py-6" role="dialog" aria-modal="true" aria-labelledby="publisherDeleteConfirmTitle">
+    <div class="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
+        <div class="px-6 pt-6 pb-4 text-center">
+            <span class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600">
+                <i class="fas fa-trash-can text-xl" aria-hidden="true"></i>
+            </span>
+            <h3 id="publisherDeleteConfirmTitle" class="text-lg font-semibold text-gray-900">Delete publisher?</h3>
+            <p class="mt-2 text-sm text-gray-600 leading-relaxed">
+                Delete this publisher on Exotic India and locally? This cannot be undone.
+            </p>
+        </div>
+        <div class="flex justify-end gap-3 border-t border-gray-200 bg-gray-50/80 px-6 py-4">
+            <button type="button" id="publisherDeleteConfirmCancelBtn"
+                class="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                Cancel
+            </button>
+            <button type="button" id="publisherDeleteConfirmBtn"
+                class="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700 transition">
+                Delete publisher
+            </button>
+        </div>
+    </div>
+</div>
+
 <script src="<?php echo base_url('assets/js/creator_form.js'); ?>"></script>
 <script>
 let publisherNameExists = false;
@@ -772,57 +797,6 @@ function showPublisherAlert(message, success) {
     box.classList.add(success ? 'border-green-200' : 'border-red-200', success ? 'bg-green-50' : 'bg-red-50', success ? 'text-green-700' : 'text-red-700');
 }
 
-function destroyPublisherBrokerSelect2() {
-    if (!window.jQuery || !jQuery.fn.select2) {
-        return;
-    }
-    const $broker = jQuery('#publisher_broker_id');
-    if ($broker.length && $broker.hasClass('select2-hidden-accessible')) {
-        $broker.select2('destroy');
-    }
-}
-
-function initPublisherBrokerSelect2(brokerId, brokerName) {
-    if (!window.jQuery || !jQuery.fn.select2) {
-        return;
-    }
-
-    const $broker = jQuery('#publisher_broker_id');
-    if (!$broker.length) {
-        return;
-    }
-
-    destroyPublisherBrokerSelect2();
-    $broker.empty().append(new Option('Select broker...', '', true, false));
-
-    const selectedId = parseInt(String(brokerId || '0'), 10);
-    const selectedName = String(brokerName || '').trim();
-    if (selectedId > 0 && selectedName !== '') {
-        $broker.append(new Option(selectedName, String(selectedId), true, true));
-    }
-
-    $broker.select2({
-        width: '100%',
-        placeholder: 'Type at least 2 characters to search...',
-        allowClear: true,
-        minimumInputLength: 2,
-        dropdownParent: jQuery('#publisherModal'),
-        ajax: {
-            url: 'index.php?page=publishers&action=searchBrokers',
-            type: 'GET',
-            dataType: 'json',
-            delay: 300,
-            data: function (params) {
-                return { q: params.term || '' };
-            },
-            processResults: function (data) {
-                return { results: Array.isArray(data) ? data : [] };
-            },
-            cache: true
-        }
-    });
-}
-
 function openPublisherModal(publisher) {
     if (typeof closeAllMenus === 'function') {
         closeAllMenus();
@@ -833,9 +807,16 @@ function openPublisherModal(publisher) {
     const publisherNameMsg = document.getElementById('publisherNameMsg');
     if (publisherNameMsg) publisherNameMsg.textContent = '';
     document.getElementById('publisherModalTitle').textContent = publisher.id ? 'Edit Publisher' : 'Add Publisher';
+    const alsoCreateWrap = document.getElementById('publisher_also_create_vendor_wrap');
+    const alsoCreateCheckbox = document.getElementById('publisher_also_create_vendor');
+    if (alsoCreateWrap) {
+        alsoCreateWrap.classList.toggle('hidden', !!publisher.id);
+    }
+    if (alsoCreateCheckbox) {
+        alsoCreateCheckbox.checked = false;
+    }
     document.getElementById('publisher_id').value = publisher.id || '';
     document.getElementById('publisher_name').value = publisher.publishers || '';
-    document.getElementById('publisher_display_name').value = publisher.display_name || '';
     document.getElementById('publisher_website').value = publisher.website || '';
     document.getElementById('publisher_is_active').value = publisher.is_active != null ? String(publisher.is_active) : '1';
     document.getElementById('publisher_webpage').checked = publisher.webpage === 1 || publisher.webpage === '1';
@@ -870,15 +851,12 @@ function openPublisherModal(publisher) {
     }
     setPublisherStateControl(countryValue, publisher.state || '');
 
-    initPublisherBrokerSelect2(publisher.broker_id, publisher.broker_name);
-
     document.getElementById('publisherModal').classList.remove('hidden');
     document.getElementById('publisherModal').classList.add('flex');
     setTimeout(function () { document.getElementById('publisher_name').focus(); }, 50);
 }
 
 function closePublisherModal() {
-    destroyPublisherBrokerSelect2();
     document.getElementById('publisherModal').classList.add('hidden');
     document.getElementById('publisherModal').classList.remove('flex');
 }
@@ -921,6 +899,15 @@ document.getElementById('publisherForm')?.addEventListener('submit', function (e
         showPublisherAlert('Publisher name already exists', false);
         return;
     }
+    const alsoCreateVendor = document.getElementById('publisher_also_create_vendor');
+    const isAddPublisher = !String(document.getElementById('publisher_id')?.value || '').trim();
+    if (isAddPublisher && alsoCreateVendor && alsoCreateVendor.checked) {
+        const phone = String(document.getElementById('publisher_phone')?.value || '').replace(/\D+/g, '');
+        if (phone.length < 10) {
+            showPublisherAlert('Primary phone (10 digits) is required when "Also create vendor" is checked.', false);
+            return;
+        }
+    }
     const form = new FormData(this);
     if (!document.getElementById('publisher_webpage').checked) {
         form.set('webpage', '0');
@@ -938,7 +925,10 @@ document.getElementById('publisherForm')?.addEventListener('submit', function (e
         btn.textContent = 'Saving...';
     }
     postPublisherAction('save', form).then(function (res) {
-        showPublisherAlert(res.message || (res.success ? 'Publisher saved.' : 'Could not save publisher.'), !!res.success);
+        showPublisherAlert(
+            res.message || (res.success ? 'Publisher saved.' : 'Could not save publisher.'),
+            !!res.success && !res.vendor_create_warning
+        );
         if (res.success) {
             closePublisherModal();
             setTimeout(function () { window.location.reload(); }, 700);
@@ -972,16 +962,86 @@ function deletePublisher(id) {
     if (typeof closeAllMenus === 'function') {
         closeAllMenus();
     }
-    if (!confirm('Delete this publisher on Exotic India and locally? This cannot be undone.')) return;
+    openPublisherDeleteConfirm(id);
+}
+
+let publisherDeletePendingId = null;
+
+function openPublisherDeleteConfirm(id) {
+    publisherDeletePendingId = parseInt(id, 10) || 0;
+    const modal = document.getElementById('publisherDeleteConfirmModal');
+    if (!modal || publisherDeletePendingId <= 0) {
+        return;
+    }
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closePublisherDeleteConfirm() {
+    publisherDeletePendingId = null;
+    const modal = document.getElementById('publisherDeleteConfirmModal');
+    const confirmBtn = document.getElementById('publisherDeleteConfirmBtn');
+    const cancelBtn = document.getElementById('publisherDeleteConfirmCancelBtn');
+    if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Delete publisher';
+    }
+    if (cancelBtn) {
+        cancelBtn.disabled = false;
+    }
+    if (!modal) {
+        return;
+    }
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+function executePublisherDelete() {
+    const id = publisherDeletePendingId;
+    if (!id || id <= 0) {
+        return;
+    }
+
+    const confirmBtn = document.getElementById('publisherDeleteConfirmBtn');
+    const cancelBtn = document.getElementById('publisherDeleteConfirmCancelBtn');
+    const oldLabel = confirmBtn ? confirmBtn.textContent : '';
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Deleting...';
+    }
+    if (cancelBtn) {
+        cancelBtn.disabled = true;
+    }
+
     const form = new FormData();
     form.append('id', id);
     postPublisherAction('delete', form).then(function (res) {
+        closePublisherDeleteConfirm();
         showPublisherAlert(res.message || 'Delete complete.', !!res.success);
-        if (res.success) setTimeout(function () { window.location.reload(); }, 700);
+        if (res.success) {
+            setTimeout(function () { window.location.reload(); }, 700);
+        }
     }).catch(function () {
+        closePublisherDeleteConfirm();
         showPublisherAlert('Could not delete publisher.', false);
+    }).finally(function () {
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = oldLabel;
+        }
+        if (cancelBtn) {
+            cancelBtn.disabled = false;
+        }
     });
 }
+
+document.getElementById('publisherDeleteConfirmCancelBtn')?.addEventListener('click', closePublisherDeleteConfirm);
+document.getElementById('publisherDeleteConfirmBtn')?.addEventListener('click', executePublisherDelete);
+document.getElementById('publisherDeleteConfirmModal')?.addEventListener('click', function (event) {
+    if (event.target === this) {
+        closePublisherDeleteConfirm();
+    }
+});
 
 document.getElementById('syncPublishersBtn')?.addEventListener('click', function () {
     if (!confirm('Sync publishers from Admin now? Existing publisher names will be updated by publisher ID.')) return;

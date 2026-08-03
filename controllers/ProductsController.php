@@ -9412,7 +9412,7 @@ class ProductsController
     public function groupApiImport()
     {
         is_login();
-        require_once __DIR__ . '/../helpers/vendor_external_api.php';
+        require_once __DIR__ . '/../integrations/exotic/vendor_product_api.php';
         renderTemplate('views/products/group_api_import.php', [
             'groups' => vendor_external_api_allowed_groupnames(),
         ], 'Import missing products from API');
@@ -9425,7 +9425,7 @@ class ProductsController
         set_time_limit(300);
 
         require_once __DIR__ . '/../helpers/exotic_india_api.php';
-        require_once __DIR__ . '/../helpers/vendor_external_api.php';
+        require_once __DIR__ . '/../integrations/exotic/vendor_product_api.php';
         global $conn;
 
         if (session_status() === PHP_SESSION_NONE) {

@@ -49,16 +49,21 @@ function is_login()
 			exit;
 		}
 
-		if (!isset($_SESSION['redirect_after_login']) || empty($_SESSION['redirect_after_login'])) {
-			if (strpos($currentUrl, 'get_order_details_html') !== false) {
+		$requestType = $_GET['type'] ?? '';
+		if (strpos($currentUrl, 'get_order_details_html') !== false && ($isAjax || $requestType === 'inner')) {
+			if (!isset($_SESSION['redirect_after_login']) || empty($_SESSION['redirect_after_login'])) {
 				$_SESSION['redirect_after_login'] = $domain . '?page=orders&action=list';
-				echo "Session Expired - Please <a href=\"$domain?page=users&action=login\" style=\"color:red;\">Login Again</a>.";
-				//On AJAX call login page link
-				//$_SESSION['ajax_redirect_after_login'] = $domain . '?page=orders&action=list';
-				//echo json_encode(['status' => 'error', 'message' => 'Session expired. Please login again.', 'redirect' => $domain . '?page=users&action=login']);
-				exit;
-			} else
-				$_SESSION['redirect_after_login'] = $currentUrl;
+			}
+			echo '<div style="font-family: system-ui, -apple-system, sans-serif; padding: 24px; text-align: center; color: #1f2937; background: #ffffff; border-radius: 8px; border: 1px solid #e5e7eb; max-width: 400px; margin: 40px auto;">'
+				. '<h3 style="font-size: 16px; font-weight: 600; margin: 0 0 8px 0; color: #111827;">Session Expired</h3>'
+				. '<p style="font-size: 14px; margin: 0 0 16px 0; color: #4b5563;">Please log in again to view order details.</p>'
+				. '<a href="' . htmlspecialchars($domain . '?page=users&action=login') . '" style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500;">Log In</a>'
+				. '</div>';
+			exit;
+		}
+
+		if (!isset($_SESSION['redirect_after_login']) || empty($_SESSION['redirect_after_login'])) {
+			$_SESSION['redirect_after_login'] = $currentUrl;
 		}
 
 		header('Location: ' . $domain . '?page=users&action=login');
@@ -73,6 +78,8 @@ function base_url($path = '')
 	return $domain . '/' . ltrim($path, '/');
 	//return 'http://localhost:8082/' . ltrim($path, '/');
 }
+
+require_once __DIR__ . '/currency_display.php';
 
 /** Tax invoice PDF for POS orders (PosInvoiceController layout with checkout discounts). */
 function pos_invoice_pdf_url(int $invoiceId): string
@@ -628,42 +635,223 @@ function canAccessProductCp(): bool
 }
 
 /**
- * Orders / POS orders listing: vendor name hidden for front-line store roles.
+ * Permission module_name values for a portal page (modules.slug + optional action).
+ *
+ * @return string[]
  */
-function canViewOrderVendorName(): bool
+function resolvePagePermissionModuleNames(?string $pageSlug = null, ?string $pageAction = null): array
 {
-	if (!isset($_SESSION['user']['role_id'])) {
-		return false;
+	$pageSlug = basename(trim((string) ($pageSlug ?? $_GET['page'] ?? '')));
+	$pageAction = trim((string) ($pageAction ?? $_GET['action'] ?? ''));
+	if ($pageSlug === '') {
+		return [];
 	}
-	$roleId = (int) $_SESSION['user']['role_id'];
-	if ($roleId === 1) {
-		return true;
+
+	static $cache = [];
+	$cacheKey = $pageSlug . '|' . $pageAction;
+	if (array_key_exists($cacheKey, $cache)) {
+		return $cache[$cacheKey];
 	}
+
+	$names = [];
 	global $conn;
-	if (!$conn) {
-		return false;
+	if (!$conn instanceof mysqli) {
+		return $cache[$cacheKey] = $names;
 	}
-	$stmt = $conn->prepare('SELECT role_name FROM vp_roles WHERE id = ? AND is_active = 1 LIMIT 1');
+
+	$stmt = $conn->prepare(
+		"SELECT m.id, m.module_name
+		 FROM modules m
+		 WHERE m.slug = ? AND m.active = 1
+		 ORDER BY CASE WHEN ? <> '' AND m.`action` = ? THEN 0 ELSE 1 END, m.id ASC
+		 LIMIT 1"
+	);
 	if (!$stmt) {
-		return false;
+		return $cache[$cacheKey] = $names;
 	}
-	$stmt->bind_param('i', $roleId);
+	$stmt->bind_param('sss', $pageSlug, $pageAction, $pageAction);
 	$stmt->execute();
 	$result = $stmt->get_result();
 	$row = $result ? $result->fetch_assoc() : null;
 	$stmt->close();
+
 	if (!$row) {
+		return $cache[$cacheKey] = $names;
+	}
+
+	$moduleId = (int) ($row['id'] ?? 0);
+	$moduleLabel = trim((string) ($row['module_name'] ?? ''));
+	if ($moduleLabel !== '') {
+		$names[] = $moduleLabel;
+	}
+
+	if ($moduleId > 0) {
+		$permStmt = $conn->prepare(
+			'SELECT DISTINCT module_name FROM vp_permissions
+			 WHERE module_id = ? AND module_name IS NOT NULL AND TRIM(module_name) <> \'\''
+		);
+		if ($permStmt) {
+			$permStmt->bind_param('i', $moduleId);
+			$permStmt->execute();
+			$permResult = $permStmt->get_result();
+			while ($permRow = $permResult->fetch_assoc()) {
+				$permName = trim((string) ($permRow['module_name'] ?? ''));
+				if ($permName !== '' && !in_array($permName, $names, true)) {
+					$names[] = $permName;
+				}
+			}
+			$permStmt->close();
+		}
+	}
+
+	return $cache[$cacheKey] = $names;
+}
+
+/**
+ * Tiered page permissions granted to a user (for debug / auditing).
+ *
+ * @param string[] $moduleNames
+ * @return array<int, array{module_name:string,action_name:string}>
+ */
+function resolveTieredPagePermissionMatches(int $userId, array $moduleNames, string $minimumAccess = 'Sr Emp Access'): array
+{
+	if ($userId <= 0 || $moduleNames === []) {
+		return [];
+	}
+
+	global $conn;
+	if (!$conn instanceof mysqli) {
+		return [];
+	}
+
+	$actions = getAccessTiersIncluding($minimumAccess);
+	if ($actions === []) {
+		return [];
+	}
+
+	$modulePlaceholders = implode(',', array_fill(0, count($moduleNames), '?'));
+	$actionPlaceholders = implode(',', array_fill(0, count($actions), '?'));
+	$sql = "SELECT DISTINCT p.module_name, p.action_name
+			FROM vp_role_permissions rp
+			INNER JOIN vp_permissions p ON rp.permission_id = p.id
+			INNER JOIN vp_users u ON u.role_id = rp.role_id
+			INNER JOIN vp_roles r ON r.id = u.role_id
+			WHERE u.id = ?
+			  AND r.is_active = 1
+			  AND p.module_name IN ({$modulePlaceholders})
+			  AND p.action_name IN ({$actionPlaceholders})
+			ORDER BY p.module_name ASC, p.action_name ASC";
+
+	$stmt = $conn->prepare($sql);
+	if (!$stmt) {
+		return [];
+	}
+
+	$types = 'i' . str_repeat('s', count($moduleNames) + count($actions));
+	$params = array_merge([$userId], $moduleNames, $actions);
+	$stmt->bind_param($types, ...$params);
+	$stmt->execute();
+	$result = $stmt->get_result();
+
+	$matches = [];
+	while ($row = $result->fetch_assoc()) {
+		$matches[] = [
+			'module_name' => (string) ($row['module_name'] ?? ''),
+			'action_name' => (string) ($row['action_name'] ?? ''),
+		];
+	}
+	$stmt->close();
+
+	return $matches;
+}
+
+/**
+ * Explain why warehouse scope is or is not applied on an order list page.
+ *
+ * @return array<string, mixed>
+ */
+function resolveWarehouseScopeDecision(?string $pageSlug = null, ?string $pageAction = null): array
+{
+	$userId = (int) ($_SESSION['user']['id'] ?? 0);
+	$warehouseId = resolveOrderListDefaultWarehouseId();
+	$moduleNames = resolvePagePermissionModuleNames($pageSlug, $pageAction);
+	$tieredMatches = $moduleNames !== [] && $userId > 0
+		? resolveTieredPagePermissionMatches($userId, $moduleNames, 'Sr Emp Access')
+		: [];
+	$hasTieredPageAccess = $tieredMatches !== [];
+
+	if (isAdministratorUser()) {
+		return [
+			'can_view_all_warehouses' => true,
+			'reason' => 'administrator',
+			'tiered_page_permissions' => $tieredMatches,
+		];
+	}
+
+	if ($warehouseId > 0) {
+		return [
+			'can_view_all_warehouses' => false,
+			'reason' => 'assigned_warehouse',
+			'warehouse_id' => $warehouseId,
+			'tiered_page_permissions' => $tieredMatches,
+			'note' => $hasTieredPageAccess
+				? 'User has Sr Emp / Top Management on this page, but vp_users.warehouse_id is set so the list stays warehouse-scoped.'
+				: 'User is scoped to vp_users.warehouse_id.',
+		];
+	}
+
+	if ($moduleNames === []) {
+		return [
+			'can_view_all_warehouses' => false,
+			'reason' => 'page_module_not_found',
+			'tiered_page_permissions' => [],
+		];
+	}
+
+	if ($hasTieredPageAccess) {
+		return [
+			'can_view_all_warehouses' => true,
+			'reason' => 'tiered_page_access',
+			'tiered_page_permissions' => $tieredMatches,
+		];
+	}
+
+	return [
+		'can_view_all_warehouses' => false,
+		'reason' => 'no_tiered_page_access',
+		'tiered_page_permissions' => [],
+	];
+}
+
+/**
+ * Whether the current user may see orders from all warehouses on a page.
+ * Administrator always sees all. Users with vp_users.warehouse_id set are always scoped
+ * to that warehouse. Otherwise Sr Emp / Top Management on the page module sees all.
+ */
+function canViewAllWarehousesForPage(?string $pageSlug = null, ?string $pageAction = null): bool
+{
+	return (bool) (resolveWarehouseScopeDecision($pageSlug, $pageAction)['can_view_all_warehouses'] ?? false);
+}
+
+/**
+ * Orders / POS orders listing: vendor name visible for Admin or Sr Emp+ on the page module.
+ */
+function canViewOrderVendorName(?string $pageSlug = null, ?string $pageAction = null): bool
+{
+	if (isAdministratorUser()) {
+		return true;
+	}
+
+	$moduleNames = resolvePagePermissionModuleNames($pageSlug, $pageAction ?? 'list');
+	if ($moduleNames === []) {
 		return false;
 	}
-	$roleName = strtolower(trim((string) ($row['role_name'] ?? '')));
-	$hiddenRoles = [
-		'pos executive',
-		'showroom',
-		'picker',
-		'designer',
-		'customer support',
-	];
-	return !in_array($roleName, $hiddenRoles, true);
+
+	return hasTieredAccess(
+		(int) ($_SESSION['user']['id'] ?? 0),
+		'Sr Emp Access',
+		$moduleNames
+	);
 }
 
 /**
@@ -741,6 +929,14 @@ function hasTieredAccess(int $userId, string $minimumAccess, array $moduleNames 
 function canSrEmpAccess(): bool
 {
 	return hasTieredAccess((int)($_SESSION['user']['id'] ?? 0), 'Sr Emp Access');
+}
+
+/**
+ * POS Orders list: Admin, Top Management, or Sr Emp on the page module see all warehouses.
+ */
+function canViewAllPosOrders(): bool
+{
+	return canViewAllWarehousesForPage(null, null);
 }
 
 /**

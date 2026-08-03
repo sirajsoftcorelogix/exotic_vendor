@@ -24,6 +24,16 @@
   /** Stable keys (sku+qty+local stock) persisted in sessionStorage across page reload. */
   var POS_LOCAL_STOCK_CONFIRM_SS_KEY = 'pos_local_stock_confirmed_v1';
 
+  function isCartLocked() {
+    return typeof window.isPosCartEditable === 'function' && !window.isPosCartEditable();
+  }
+
+  function cartLockedMessage() {
+    return typeof window.getPosCartLockedMessage === 'function'
+      ? window.getPosCartLockedMessage()
+      : 'Cart editing is not allowed for Reship orders.';
+  }
+
   function loadLocalStockConfirmedMap() {
     try {
       var raw = sessionStorage.getItem(POS_LOCAL_STOCK_CONFIRM_SS_KEY);
@@ -501,6 +511,13 @@
   }
 
   function cartRequest(op, opt) {
+    if (op !== 'retrieve' && isCartLocked()) {
+      toast(cartLockedMessage(), 'red');
+      return Promise.resolve({
+        success: false,
+        message: cartLockedMessage()
+      });
+    }
     opt = opt || {};
     var method = (opt.method || 'GET').toUpperCase();
     var url = cartUrl(op, opt.query);
@@ -1523,6 +1540,7 @@
       return '';
     }
     var ref = String(cartRef || lineCartRef(row) || '').trim();
+    var isReshipLocked = isCartLocked();
     var chips = addonItems
       .map(function (item) {
         return (
@@ -1530,7 +1548,7 @@
           '<span class="pos-cart-line-addon-label min-w-0 truncate">' +
           escapeHtml(item.label) +
           '</span>' +
-          (ref
+          (ref && !isReshipLocked
             ? '<button type="button" class="pos-cart-line-addon-remove inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[11px] leading-none text-emerald-700/90 hover:bg-red-50 hover:text-red-600" data-cartref="' +
               escapeHtml(ref) +
               '" data-addon-key="' +
@@ -1555,6 +1573,9 @@
   }
 
   function buildCartLineDiscountBlockHtml(row, ref, idx, items, lineCartAllocs, opts) {
+    if (isCartLocked()) {
+      return '';
+    }
     opts = opts || {};
     if (!ref) {
       return '';
@@ -3114,6 +3135,9 @@
   }
 
   function buildCartDraftSectionHtml(draftRows) {
+    if (isCartLocked()) {
+      return '';
+    }
     var rows = Array.isArray(draftRows) && draftRows.length ? draftRows : [{ sku: '', qty: '1' }];
     var body = rows
       .map(function (row, idx) {
@@ -3472,6 +3496,7 @@
   function buildCartTableCartHtml(items, data, lineCartAllocs) {
     var metricHdr = 'pos-cart-table-metric-col py-1.5 font-semibold whitespace-nowrap';
     var metricCell = 'pos-cart-table-metric-col py-2 align-top tabular-nums whitespace-nowrap';
+    var isReshipLocked = isCartLocked();
     var html =
       '<div class="pos-cart-table-wrap overflow-x-auto -mx-0.5">' +
       '<table class="pos-cart-table w-full border-collapse text-[11px]">' +
@@ -3540,7 +3565,7 @@
           disp.listUnitDisp +
           '</td>' +
           '<td class="' + metricCell + ' text-center">';
-        if (ref) {
+        if (ref && !isReshipLocked) {
           html +=
             '<input type="number" min="1" step="1" class="pos-cart-qty-input w-11 rounded border border-slate-300 bg-white px-1 py-1 text-center text-[11px] font-semibold outline-none focus:border-orange-500"' +
             maxAttr +
@@ -3550,7 +3575,7 @@
             escapeHtml(String(qty)) +
             '" />';
         } else {
-          html += escapeHtml(String(qty));
+          html += '<span class="font-semibold text-slate-800">' + escapeHtml(String(qty)) + '</span>';
         }
         html +=
           '</td>' +
@@ -3564,7 +3589,7 @@
           disp.lineDisp +
           '</td>' +
           '<td class="py-2 align-top text-right">';
-        if (ref) {
+        if (ref && !isReshipLocked) {
           html +=
             '<button type="button" class="pos-cart-delete-btn inline-flex h-7 w-7 items-center justify-center rounded-full text-red-500 hover:bg-red-50" data-cartref="' +
             escapeHtml(ref) +
@@ -3619,6 +3644,7 @@
     var existingPanel = document.getElementById(PANEL_ID);
     var draftSnapshot =
       isCartTablePage() || cartViewMode === 'table' ? captureCartDraftRows(existingPanel) : null;
+    var cartLocked = isCartLocked();
     var html = '';
 
     html += buildCartViewToggleHtml();
@@ -3634,6 +3660,7 @@
         '<p class="text-[11px] text-slate-400 mt-1 max-w-[14rem]">Add products from the grid to see them here.</p>' +
         '</div>';
     } else {
+      var isReshipCardLocked = cartLocked;
       html += '<div class="flex flex-col pr-0.5">';
       items.forEach(function (row, idx) {
         var ref = lineCartRef(row);
@@ -3698,7 +3725,7 @@
           '<span class="text-[11px] font-medium text-slate-500 tabular-nums">' +
           escapeHtml(codeLbl) +
           '</span>';
-        if (ref) {
+        if (ref && !isReshipCardLocked) {
           html +=
             '<button type="button" class="pos-cart-delete-btn -mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600 shadow-sm transition hover:bg-red-100" data-cartref="' +
             escapeHtml(ref) +
@@ -3732,7 +3759,7 @@
         html += '</div>';
         html += buildCartLineLocalStockBlockHtml(row, ref, qty, productCode);
         html += '<div class="flex flex-wrap items-center gap-2 mt-1">';
-        if (ref) {
+        if (ref && !isReshipCardLocked) {
           var maxAttr =
             maxSell != null && maxSell >= 1
               ? ' max="' + escapeHtml(String(maxSell)) + '" data-max-qty="' + escapeHtml(String(maxSell)) + '"'
@@ -3755,6 +3782,8 @@
             (maxSell != null && maxSell >= 1 ? escapeHtml('Maximum ' + maxSell + ' per order') : '') +
             '" />' +
             maxHint;
+        } else if (ref) {
+          html += '<span class="text-[11px] font-bold text-slate-600 tracking-wide">QTY : <span class="text-xs font-semibold text-slate-900 tabular-nums">' + escapeHtml(String(qty)) + '</span></span>';
         } else {
           html +=
             '<span class="text-[10px] text-amber-700">Missing cart reference \u2014 cannot update line.</span>';
@@ -3789,6 +3818,7 @@
         isAmountGreaterThanZero(manualLineDisc) ? manualLineDisc : 0,
         false
       );
+      var isReshipSummaryLocked = cartLocked;
       if (isAmountGreaterThanZero(totals.customDeduction)) {
         var cdLbl = 'Custom Discount';
         if (posCustomDiscountPersist && posCustomDiscountPersist.mode === 'percent') {
@@ -3801,7 +3831,7 @@
           totals.customDeduction,
           totals.cartDiscountAbsorbed ? '(included in line totals)' : '',
           false,
-          'pos-cart-summary-remove-custom'
+          isReshipSummaryLocked ? '' : 'pos-cart-summary-remove-custom'
         );
       }
       if (isAmountGreaterThanZero(totals.couponDeduction)) {
@@ -3814,7 +3844,7 @@
           totals.couponDeduction,
           totals.cartDiscountAbsorbed ? '(included in line totals)' : '',
           false,
-          'pos-cart-summary-remove-coupon'
+          isReshipSummaryLocked ? '' : 'pos-cart-summary-remove-coupon'
         );
       }
       if (isAmountGreaterThanZero(totals.giftDeduction)) {
@@ -3831,28 +3861,33 @@
       summaryBoxHtml += '</div></div>';
     }
 
-    var discountBoxHtml =
-      '<div class="pos-cart-discount-box rounded-lg border border-slate-200 bg-white p-3 shadow-sm space-y-3' +
-      (isCartTablePage() ? ' h-full' : ' mt-4') +
-      '">' +
-      '<p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Discount</p>' +
-      '<div class="space-y-1">' +
-      '<div class="flex gap-2 flex-wrap items-stretch">' +
-      '<input type="text" class="pos-cart-coupon-input flex-1 min-w-[8rem] rounded border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-orange-500 placeholder:text-slate-400" placeholder="Discount Coupon" />' +
-      '<button type="button" class="pos-cart-coupon-apply shrink-0 rounded bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800">Apply</button>' +
-      '<button type="button" class="pos-cart-coupon-clear shrink-0 rounded border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Clear</button>' +
-      '</div></div>' +
-      '<div class="space-y-1 border-t border-slate-100 pt-3">' +
-      '<div class="flex flex-wrap items-stretch gap-2">' +
-      '<select class="pos-cart-customdisc-mode shrink-0 rounded border border-slate-300 bg-white px-2 py-2 text-xs font-medium text-slate-800 shadow-sm outline-none focus:border-orange-500" aria-label="Discount type">' +
-      '<option value="percent">% Off</option>' +
-      '<option value="fixed">Fixed (₹)</option>' +
-      '</select>' +
-      '<input type="number" step="0.01" min="0" class="pos-cart-customdisc-input min-w-[5rem] flex-1 rounded border border-slate-300 bg-white px-3 py-2 text-xs shadow-sm outline-none focus:border-orange-500 placeholder:text-slate-400" placeholder="Amount" />' +
-      '<button type="button" class="pos-cart-customdisc-apply shrink-0 rounded bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800">Apply</button>' +
-      '<button type="button" class="pos-cart-customdisc-clear inline-flex h-9 w-9 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:bg-red-50 hover:border-red-200 hover:text-red-700" title="Remove custom discount" aria-label="Remove custom discount">' +
-      '<i class="fas fa-trash-alt text-sm" aria-hidden="true"></i></button>' +
-      '</div></div></div>';
+    var discountBoxHtml = cartLocked
+      ? '<div class="pos-cart-discount-box rounded-lg border border-indigo-200 bg-indigo-50/80 p-3 shadow-sm text-xs font-semibold text-indigo-950 flex items-center gap-2' +
+        (isCartTablePage() ? ' h-full' : ' mt-4') +
+        '">' +
+        '<span>🔒 Cart items and discounts are locked for Reship orders.</span>' +
+        '</div>'
+      : '<div class="pos-cart-discount-box rounded-lg border border-slate-200 bg-white p-3 shadow-sm space-y-3' +
+        (isCartTablePage() ? ' h-full' : ' mt-4') +
+        '">' +
+        '<p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Discount</p>' +
+        '<div class="space-y-1">' +
+        '<div class="flex gap-2 flex-wrap items-stretch">' +
+        '<input type="text" class="pos-cart-coupon-input flex-1 min-w-[8rem] rounded border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-orange-500 placeholder:text-slate-400" placeholder="Discount Coupon" />' +
+        '<button type="button" class="pos-cart-coupon-apply shrink-0 rounded bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800">Apply</button>' +
+        '<button type="button" class="pos-cart-coupon-clear shrink-0 rounded border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Clear</button>' +
+        '</div></div>' +
+        '<div class="space-y-1 border-t border-slate-100 pt-3">' +
+        '<div class="flex flex-wrap items-stretch gap-2">' +
+        '<select class="pos-cart-customdisc-mode shrink-0 rounded border border-slate-300 bg-white px-2 py-2 text-xs font-medium text-slate-800 shadow-sm outline-none focus:border-orange-500" aria-label="Discount type">' +
+        '<option value="percent">% Off</option>' +
+        '<option value="fixed">Fixed (₹)</option>' +
+        '</select>' +
+        '<input type="number" step="0.01" min="0" class="pos-cart-customdisc-input min-w-[5rem] flex-1 rounded border border-slate-300 bg-white px-3 py-2 text-xs shadow-sm outline-none focus:border-orange-500 placeholder:text-slate-400" placeholder="Amount" />' +
+        '<button type="button" class="pos-cart-customdisc-apply shrink-0 rounded bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800">Apply</button>' +
+        '<button type="button" class="pos-cart-customdisc-clear inline-flex h-9 w-9 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:bg-red-50 hover:border-red-200 hover:text-red-700" title="Remove custom discount" aria-label="Remove custom discount">' +
+        '<i class="fas fa-trash-alt text-sm" aria-hidden="true"></i></button>' +
+        '</div></div></div>';
 
     if (isCartTablePage()) {
       html +=
@@ -5010,11 +5045,21 @@
 
   window.formatPosLocalStockWarning = formatLocalStockWarning;
 
+  function shouldDeferInitialCartRefreshForFollowUpSeed() {
+    return !!(
+      window.POS_FOLLOW_UP_SEED &&
+      window.POS_FOLLOW_UP &&
+      window.POS_FOLLOW_UP.source_order_number
+    );
+  }
+
   function initPosCartHooks() {
     bindCartDelegatesOnce();
     ensureCartPanel();
     ensurePosCartImageLightbox();
-    window.refreshCart();
+    if (!shouldDeferInitialCartRefreshForFollowUpSeed()) {
+      window.refreshCart();
+    }
   }
 
   if (document.readyState === 'loading') {

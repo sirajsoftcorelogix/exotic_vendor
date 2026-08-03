@@ -235,7 +235,13 @@ function pos_local_checkout_persist_order(
         if (!is_array($row)) {
             continue;
         }
-        $itemCode = trim((string)($row['code'] ?? $row['item_code'] ?? $row['itemcode'] ?? ''));
+        require_once dirname(__DIR__) . '/integrations/exotic/Support/CartAddPayloadResolver.php';
+        $row = exotic_cart_normalize_line_for_local_persist($conn, $row);
+
+        $itemCode = trim((string)($row['item_code'] ?? ''));
+        if ($itemCode === '') {
+            $itemCode = trim((string)($row['code'] ?? $row['itemcode'] ?? ''));
+        }
         if ($itemCode === '') {
             continue;
         }
@@ -364,6 +370,10 @@ function pos_local_checkout_build_address_order_payload(
     string $paymentMode,
     string $txn
 ): array {
+    require_once dirname(__DIR__) . '/integrations/exotic/Support/OrderCreatePayload.php';
+    $payload = pos_order_create_apply_shipping_same_as_billing($payload);
+    $payload = pos_order_create_apply_billing_fallbacks_to_shipping($payload);
+
     $billingCountry = strtoupper(substr(trim((string)($payload['confirm_country'] ?? 'IN')), 0, 2));
     if ($billingCountry === '') {
         $billingCountry = 'IN';
@@ -621,66 +631,9 @@ function pos_local_checkout_resolve_warehouse_for_order(mysqli $conn, string $or
  */
 function pos_local_checkout_build_confirm_payload_from_order_info(array $orderInfo, array $payments): array
 {
-    $splits = [];
-    $codAmount = 0.0;
-    $primaryMode = 'cash';
-    $primaryTxn = '';
-    foreach ($payments as $pay) {
-        $mode = strtolower(trim((string)($pay['payment_mode'] ?? '')));
-        $amount = round((float)($pay['payment_amount'] ?? 0), 2);
-        $txn = trim((string)($pay['transaction_id'] ?? ''));
-        $splits[] = [
-            'mode' => $mode !== '' ? $mode : 'cash',
-            'amount' => $amount,
-            'transaction_id' => $txn,
-        ];
-        if ($mode === 'cod') {
-            $codAmount += $amount;
-        } elseif ($primaryTxn === '' && $txn !== '') {
-            $primaryTxn = $txn;
-        }
-        if ($mode !== 'cod' && $primaryMode === 'cash' && $mode !== '') {
-            $primaryMode = $mode;
-        }
-    }
-    if ($codAmount > 0.001) {
-        $primaryMode = 'cod';
-    }
+    require_once dirname(__DIR__) . '/integrations/exotic/Support/OrderCreatePayload.php';
 
-    return [
-        'customer_id' => (int)($orderInfo['customer_id'] ?? 0),
-        'payment_mode' => $primaryMode,
-        'transaction_id' => $primaryTxn,
-        'cod_amount' => round($codAmount, 2),
-        'payment_splits' => $splits,
-        'confirm_first_name' => trim((string)($orderInfo['first_name'] ?? '')),
-        'confirm_last_name' => trim((string)($orderInfo['last_name'] ?? '')),
-        'confirm_company' => trim((string)($orderInfo['company'] ?? '')),
-        'confirm_address1' => trim((string)($orderInfo['address_line1'] ?? '')),
-        'confirm_address2' => trim((string)($orderInfo['address_line2'] ?? '')),
-        'confirm_city' => trim((string)($orderInfo['city'] ?? '')),
-        'confirm_state' => trim((string)($orderInfo['state'] ?? '')),
-        'confirm_state_iso' => trim((string)($orderInfo['state_iso'] ?? '')),
-        'confirm_state_code' => trim((string)($orderInfo['state_code'] ?? '')),
-        'confirm_country' => trim((string)($orderInfo['country'] ?? 'IN')),
-        'confirm_zip' => trim((string)($orderInfo['zipcode'] ?? '')),
-        'confirm_phone' => trim((string)($orderInfo['mobile'] ?? '')),
-        'confirm_email' => trim((string)($orderInfo['email'] ?? '')),
-        'confirm_gstin' => trim((string)($orderInfo['gstin'] ?? '')),
-        'confirm_sfirst_name' => trim((string)($orderInfo['shipping_first_name'] ?? '')),
-        'confirm_slast_name' => trim((string)($orderInfo['shipping_last_name'] ?? '')),
-        'confirm_scompany' => trim((string)($orderInfo['shipping_company'] ?? '')),
-        'confirm_saddress1' => trim((string)($orderInfo['shipping_address_line1'] ?? '')),
-        'confirm_saddress2' => trim((string)($orderInfo['shipping_address_line2'] ?? '')),
-        'confirm_scity' => trim((string)($orderInfo['shipping_city'] ?? '')),
-        'confirm_sstate' => trim((string)($orderInfo['shipping_state'] ?? '')),
-        'confirm_sstate_iso' => trim((string)($orderInfo['shipping_state_iso'] ?? '')),
-        'confirm_sstate_code' => trim((string)($orderInfo['shipping_state_code'] ?? '')),
-        'confirm_scountry' => trim((string)($orderInfo['shipping_country'] ?? '')),
-        'confirm_szip' => trim((string)($orderInfo['shipping_zipcode'] ?? '')),
-        'confirm_sphone' => trim((string)($orderInfo['shipping_mobile'] ?? '')),
-        'confirm_sgstin' => trim((string)($orderInfo['shipping_gstin'] ?? '')),
-    ];
+    return pos_order_create_confirm_payload_from_order_info($orderInfo, $payments);
 }
 
 /**
@@ -691,6 +644,10 @@ function pos_local_checkout_build_confirm_payload_from_order_info(array $orderIn
  */
 function pos_local_checkout_build_order_create_post(array $payload, array $cartData, int $warehouseId): array
 {
+    require_once dirname(__DIR__) . '/integrations/exotic/Support/OrderCreatePayload.php';
+    $payload = pos_order_create_apply_shipping_same_as_billing($payload);
+    $payload = pos_order_create_apply_billing_fallbacks_to_shipping($payload);
+
     $posMode = strtolower(trim((string)($payload['payment_mode'] ?? 'cash')));
     $codAmount = round((float)($payload['cod_amount'] ?? 0), 2);
     if ($codAmount <= 0.001) {
@@ -757,7 +714,7 @@ function pos_local_checkout_build_order_create_post(array $payload, array $cartD
         'store_payment_details' => $storeId . '|' . $storePaymentMode . '|' . $txnField,
     ];
 
-    pos_local_checkout_append_order_create_shipping_fields($out, $payload);
+    pos_order_create_append_shipping_fields($out, $payload);
 
     foreach ([
         'cardnumber' => '',
@@ -784,70 +741,6 @@ function pos_local_checkout_build_order_create_post(array $payload, array $cartD
     }
 
     return $out;
-}
-
-/**
- * @param array<string, string> $out
- * @param array<string, mixed>  $payload
- */
-function pos_local_checkout_append_order_create_shipping_fields(array &$out, array $payload): void
-{
-    $sf = trim((string)($payload['confirm_sfirst_name'] ?? ''));
-    $sl = trim((string)($payload['confirm_slast_name'] ?? ''));
-    $sname = trim((string)($payload['confirm_sname'] ?? ''));
-    if ($sname === '') {
-        $sname = trim($sf . ' ' . $sl);
-    }
-    if ($sname === '') {
-        $sname = trim((string)($out['first_name'] ?? '') . ' ' . (string)($out['last_name'] ?? ''));
-    }
-
-    $saddress1 = trim((string)($payload['confirm_saddress1'] ?? ''));
-    $saddress2 = trim((string)($payload['confirm_saddress2'] ?? ''));
-    $scity = trim((string)($payload['confirm_scity'] ?? ''));
-    $sstate = trim((string)($payload['confirm_sstate'] ?? ''));
-    $szip = trim((string)($payload['confirm_szip'] ?? ''));
-    $sphone = trim((string)($payload['confirm_sphone'] ?? ''));
-    $sgstin = strtoupper(trim((string)($payload['confirm_sgstin'] ?? '')));
-
-    if ($saddress1 === '') {
-        $saddress1 = (string)($out['address1'] ?? '');
-    }
-    if ($saddress2 === '') {
-        $saddress2 = (string)($out['address2'] ?? '');
-    }
-    if ($scity === '') {
-        $scity = (string)($out['city'] ?? '');
-    }
-    if ($sstate === '') {
-        $sstate = (string)($out['state'] ?? '');
-    }
-    if ($szip === '') {
-        $szip = (string)($out['zip'] ?? '');
-    }
-    if ($sphone === '') {
-        $sphone = (string)($out['phone'] ?? '');
-    }
-    if ($sgstin === '') {
-        $sgstin = strtoupper(trim((string)($out['gstin'] ?? '')));
-    }
-
-    $scountry = strtoupper(substr(trim((string)($payload['confirm_scountry'] ?? 'IN')), 0, 2));
-    if ($scountry === '') {
-        $scountry = (string)($out['country'] ?? 'IN');
-    }
-    if ($scountry === '') {
-        $scountry = 'IN';
-    }
-
-    $out['sname'] = $sname;
-    $out['saddress1'] = $saddress1;
-    $out['saddress2'] = $saddress2;
-    $out['scity'] = $scity;
-    $out['sstate'] = $sstate;
-    $out['szip'] = $szip;
-    $out['scountry'] = $scountry;
-    $out['sphone'] = $sphone;
 }
 
 function pos_local_checkout_clear_exotic_cart(RetailApiClient $client): void
@@ -885,9 +778,11 @@ function pos_local_checkout_clear_exotic_cart(RetailApiClient $client): void
 function pos_local_checkout_rebuild_exotic_cart_from_order_lines(
     RetailApiClient $client,
     array $orderLines,
-    float $customReduce
+    float $customReduce,
+    ?mysqli $conn = null
 ): array {
     require_once dirname(__DIR__) . '/integrations/exotic/Support/CartResponseParser.php';
+    require_once dirname(__DIR__) . '/integrations/exotic/Support/CartAddPayloadResolver.php';
 
     $client->call('/cart/addcustomdiscount', 'GET', ['custom_reduce' => '0']);
     pos_local_checkout_clear_exotic_cart($client);
@@ -897,32 +792,18 @@ function pos_local_checkout_rebuild_exotic_cart_from_order_lines(
         if (!is_array($row)) {
             continue;
         }
-        $itemCode = trim((string)($row['item_code'] ?? ''));
-        if ($itemCode === '') {
-            continue;
-        }
 
-        $size = trim((string)($row['size'] ?? ''));
-        $color = trim((string)($row['color'] ?? ''));
-        $variation = pos_local_checkout_build_variation_from_size_color($size, $color);
         $qty = max(1, (int)($row['quantity'] ?? 1));
+        $built = exotic_cart_build_add_post_from_order_line($conn, $row, $qty);
+        if (empty($built['success'])) {
+            return [
+                'success' => false,
+                'message' => (string)($built['message'] ?? 'Could not rebuild cart line.'),
+            ];
+        }
 
-        $post = [
-            'buynow' => '0',
-            'code' => $itemCode,
-            'qty' => (string)$qty,
-        ];
-        if ($variation !== '') {
-            $post['variation'] = $variation;
-        }
-        $options = $row['options'] ?? '';
-        if (is_array($options)) {
-            $options = json_encode($options, JSON_UNESCAPED_UNICODE);
-        }
-        $options = trim((string)$options);
-        if ($options !== '' && $options !== '0') {
-            $post['options'] = $options;
-        }
+        $post = is_array($built['post'] ?? null) ? $built['post'] : [];
+        $label = trim((string)($built['label'] ?? ($row['item_code'] ?? '')));
 
         $addRes = $client->call('/cart/add', 'POST', [], $post);
         if (!CartResponseParser::isSuccess($addRes)) {
@@ -930,7 +811,7 @@ function pos_local_checkout_rebuild_exotic_cart_from_order_lines(
 
             return [
                 'success' => false,
-                'message' => 'Could not add ' . $itemCode . ' to Exotic cart'
+                'message' => 'Could not add ' . ($label !== '' ? $label : 'item') . ' to Exotic cart'
                     . ($em !== '' ? ': ' . $em : ''),
             ];
         }
@@ -1120,7 +1001,7 @@ function pos_local_checkout_prepare_publish_from_database(
         }
     }
 
-    $rebuild = pos_local_checkout_rebuild_exotic_cart_from_order_lines($client, $orderLines, $customReduce);
+    $rebuild = pos_local_checkout_rebuild_exotic_cart_from_order_lines($client, $orderLines, $customReduce, $conn);
     if (empty($rebuild['success'])) {
         return $rebuild;
     }

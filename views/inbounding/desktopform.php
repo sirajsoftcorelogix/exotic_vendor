@@ -1028,7 +1028,20 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-[#555] mb-1">ISBN</label>
-                                <input type="text" name="isbn" value="<?php echo htmlspecialchars($data['form2']['isbn'] ?? ''); ?>" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white">
+                                <div class="flex gap-2">
+                                    <input type="text"
+                                           name="isbn"
+                                           id="isbn_input"
+                                           value="<?php echo htmlspecialchars($data['form2']['isbn'] ?? ''); ?>"
+                                           class="flex-1 min-w-0 h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824] bg-white"
+                                           placeholder="978-0-14-032872-1"
+                                           autocomplete="off">
+                                    <button type="button"
+                                            id="isbn-lookup-btn"
+                                            class="shrink-0 h-10 bg-[#d97824] hover:bg-[#bf7326] text-white font-bold px-3 rounded-[3px] text-xs uppercase whitespace-nowrap">
+                                        Lookup
+                                    </button>
+                                </div>
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-[#555] mb-1">Cover Type</label>
@@ -2258,6 +2271,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         
     </div>
 </div>
+<?php
+$isbnLookupApplyBtnClass = 'bg-[#d97824] hover:bg-[#bf7326]';
+require __DIR__ . '/partials/isbn_lookup_modal.php';
+require __DIR__ . '/partials/isbn_lookup_script.php';
+?>
 <div id="deleteConfirmPopup" class="desktop-form-modal" hidden aria-hidden="true">
     <div class="bg-white p-6 rounded-md w-[90%] max-w-[400px] shadow-lg relative text-center font-['Segoe_UI']" onclick="event.stopPropagation();">
         <h3 class="text-lg font-bold mb-2 text-gray-800">Remove Invoice?</h3>
@@ -2922,9 +2940,10 @@ document.addEventListener('DOMContentLoaded', function() {
             CKEDITOR?.instances?.long_description_india_input?.setData(html);
         });
 
+        let publisherSelect = null;
         const publisherEl = document.getElementById('publisher_select');
         if (publisherEl && typeof window.safeTomSelect === 'function') {
-            window.safeTomSelect(publisherEl, {
+            publisherSelect = window.safeTomSelect(publisherEl, {
                 valueField: 'id',
                 labelField: 'name',
                 searchField: ['name'],
@@ -2941,6 +2960,84 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
+
+        function resolveOriginalLanguageIdsFromLookup(languageText) {
+            const selectEl = document.getElementById('original_languages_select');
+            if (!selectEl || !languageText) {
+                return [];
+            }
+
+            const normalized = String(languageText).trim().toLowerCase();
+            if (normalized === '') {
+                return [];
+            }
+
+            const matchedIds = [];
+            Array.prototype.forEach.call(selectEl.options, function (option) {
+                const optionId = String(option.value || '').trim();
+                if (!optionId) {
+                    return;
+                }
+
+                const optionText = String(option.textContent || '').trim();
+                const optionTextLower = optionText.toLowerCase();
+                const namePart = optionTextLower.split('(')[0].trim();
+                const isoMatch = optionText.match(/\(([A-Za-z]{2,3})\)\s*$/);
+                const iso = isoMatch ? isoMatch[1].toLowerCase() : '';
+
+                const isMatch = optionTextLower === normalized
+                    || namePart === normalized
+                    || iso === normalized
+                    || (namePart !== '' && (namePart.indexOf(normalized) !== -1 || normalized.indexOf(namePart) !== -1));
+
+                if (isMatch && matchedIds.indexOf(optionId) === -1) {
+                    matchedIds.push(optionId);
+                }
+            });
+
+            return matchedIds;
+        }
+
+        function applyIsbnLookupDesktopBookFields(data) {
+            data = data || {};
+
+            const title = String(data.title || '').trim();
+            if (title) {
+                const titleField = document.querySelector('[name="product_title"]');
+                if (titleField) {
+                    titleField.value = title;
+                }
+            }
+
+            const description = String(data.description || '').trim();
+            if (description) {
+                if (window.CKEDITOR && CKEDITOR.instances && CKEDITOR.instances.snippet_description_input) {
+                    CKEDITOR.instances.snippet_description_input.setData(description);
+                } else {
+                    const snippetEl = document.getElementById('snippet_description_input');
+                    if (snippetEl) {
+                        snippetEl.value = description;
+                    }
+                }
+            }
+
+            const languageIds = resolveOriginalLanguageIdsFromLookup(data.language);
+            const originalLangTs = bookLanguageTomSelects.original_languages;
+            if (originalLangTs && languageIds.length) {
+                originalLangTs.setValue(languageIds);
+                syncBookLanguageHiddenValue(originalLangTs, 'original_languages');
+                updateFormattedBookLanguageDisplay();
+            }
+        }
+
+        initIsbnLookup({
+            authorTomSelect: authorTomSelect,
+            publisherSelect: publisherSelect,
+            syncAuthorPipeValue: syncAuthorPipeValue,
+            onApply: function (payload) {
+                applyIsbnLookupDesktopBookFields((payload && payload.data) || {});
+            }
+        });
     });
 </script>
 <script>

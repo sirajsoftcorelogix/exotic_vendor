@@ -475,14 +475,15 @@ class OrderStatus
         }
 
         $isActive = $isActive ? 1 : 0;
+        $createdBy = (int) ($data['created_by'] ?? 0);
 
-        $sql = 'INSERT INTO vp_order_status (title, slug, parent_id, admin_id, is_active) VALUES (?, ?, ?, ?, ?)';
+        $sql = 'INSERT INTO vp_order_status (title, slug, parent_id, admin_id, is_active, created_by) VALUES (?, ?, ?, ?, ?, ?)';
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
             return ['success' => false, 'message' => 'Database error: ' . $this->conn->error];
         }
 
-        $stmt->bind_param('ssiii', $title, $slug, $parentId, $adminId, $isActive);
+        $stmt->bind_param('ssiiii', $title, $slug, $parentId, $adminId, $isActive, $createdBy);
         if ($stmt->execute()) {
             $stmt->close();
             return ['success' => true, 'message' => 'Order status added successfully.'];

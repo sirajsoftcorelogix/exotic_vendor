@@ -320,8 +320,13 @@ class SalesReturn
      * @param array<int, array<string, mixed>> $lines
      * @return array{valid:bool,errors:array<int,string>,normalized_lines:array<int,array<string,mixed>>}
      */
-    public function validateReturnLines(array $header, array $lines, int $sessionWarehouseId, bool $isAdmin): array
-    {
+    public function validateReturnLines(
+        array $header,
+        array $lines,
+        int $sessionWarehouseId,
+        bool $isAdmin,
+        bool $autoFromOrderStatus = false
+    ): array {
         $errors = [];
         $orderNumber = trim((string) ($header['order_number'] ?? ''));
         if ($orderNumber === '') {
@@ -339,7 +344,12 @@ class SalesReturn
         }
         if ($warehouseId <= 0) {
             $errors[] = 'Warehouse could not be determined. Select a warehouse in your session.';
-        } elseif (!$isAdmin && $sessionWarehouseId > 0 && $warehouseId !== $sessionWarehouseId) {
+        } elseif (
+            !$autoFromOrderStatus
+            && !$isAdmin
+            && $sessionWarehouseId > 0
+            && $warehouseId !== $sessionWarehouseId
+        ) {
             $errors[] = 'This order belongs to a different warehouse.';
         }
 
@@ -494,6 +504,157 @@ class SalesReturn
         } catch (Throwable $e) {
             $this->conn->rollback();
             throw $e;
+        }
+    }
+
+    /**
+     * Create a finalized sales return when an order line moves to status "returned".
+     *
+     * @param array<string, mixed> $orderRow vp_orders row (must include id, order_number)
+     * @return array{
+     *   attempted:bool,
+     *   success:bool,
+     *   skipped:bool,
+     *   message:string,
+     *   return_id:int,
+     *   return_number:string,
+     *   stock_applied:int,
+     *   stock_skipped:int
+     * }
+     */
+    public function createAutoReturnForOrderRow(array $orderRow, int $userId, bool $isAdmin = false): array
+    {
+        $base = [
+            'attempted' => false,
+            'success' => false,
+            'skipped' => false,
+            'message' => '',
+            'return_id' => 0,
+            'return_number' => '',
+            'stock_applied' => 0,
+            'stock_skipped' => 0,
+        ];
+
+        $orderRowId = (int) ($orderRow['id'] ?? 0);
+        $orderNumber = trim((string) ($orderRow['order_number'] ?? ''));
+        if ($orderRowId <= 0 || $orderNumber === '') {
+            return $base;
+        }
+
+        $base['attempted'] = true;
+        $invoiceId = (int) ($orderRow['invoice_id'] ?? 0);
+        if ($invoiceId <= 0) {
+            require_once __DIR__ . '/../../helpers/order_cancel_invoice.php';
+            $invoiceId = order_cancel_resolve_invoice_id_for_row($this->conn, $orderRow);
+        }
+        $context = $this->getReturnContext($orderNumber, $invoiceId > 0 ? $invoiceId : null);
+
+        $targetLine = null;
+        foreach ($context['lines'] as $line) {
+            if ((int) ($line['order_row_id'] ?? 0) === $orderRowId) {
+                $targetLine = $line;
+                break;
+            }
+        }
+
+        if ($targetLine === null) {
+            $base['skipped'] = true;
+            $base['success'] = true;
+            $base['message'] = 'Sales return already recorded or no returnable quantity for this line.';
+
+            return $base;
+        }
+
+        $returnQty = (float) ($targetLine['max_return_qty'] ?? 0);
+        if ($returnQty <= 0) {
+            $base['skipped'] = true;
+            $base['success'] = true;
+            $base['message'] = 'Sales return already recorded for this line.';
+
+            return $base;
+        }
+
+        $sessionWarehouseId = (int) ($_SESSION['warehouse_id'] ?? 0);
+        if ($sessionWarehouseId <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+            $sessionWarehouseId = (int) $_SESSION['user']['warehouse_id'];
+        }
+
+        $resolvedInvoiceId = !empty($context['invoice']['id']) ? (int) $context['invoice']['id'] : null;
+        $validation = $this->validateReturnLines(
+            [
+                'order_number' => $orderNumber,
+                'invoice_id' => $resolvedInvoiceId,
+            ],
+            [
+                [
+                    'order_row_id' => $orderRowId,
+                    'return_qty' => $returnQty,
+                ],
+            ],
+            $sessionWarehouseId,
+            $isAdmin,
+            true
+        );
+
+        if (!$validation['valid']) {
+            $base['message'] = implode(' ', $validation['errors']);
+
+            return $base;
+        }
+
+        $warehouseId = (int) ($validation['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0) {
+            $warehouseId = (int) ($context['warehouse_id'] ?? 0);
+        }
+
+        try {
+            $returnId = $this->insertReturn([
+                'order_number' => $orderNumber,
+                'invoice_id' => $validation['invoice_id'] ?? $resolvedInvoiceId,
+                'warehouse_id' => $warehouseId,
+                'return_date' => date('Y-m-d'),
+                'return_type' => 'customer_request',
+                'remarks' => 'Auto-created when order status set to Returned.',
+                'status' => 'finalized',
+                'created_by' => $userId,
+            ], $validation['normalized_lines']);
+
+            require_once __DIR__ . '/../order/stock.php';
+            $stockModel = new Stock($this->conn);
+            $stockResult = $stockModel->applySalesReturnStockIn($returnId, $warehouseId);
+            $this->updateStockAppliedFlags($returnId, $stockResult);
+
+            $returnRow = $this->getById($returnId);
+            $returnNumber = (string) ($returnRow['return_number'] ?? ('#' . $returnId));
+            $applied = (int) ($stockResult['applied_lines'] ?? 0);
+            $skipped = (int) ($stockResult['skipped_lines'] ?? 0);
+
+            $message = 'Sales return ' . $returnNumber . ' created.';
+            if ($applied > 0) {
+                $message .= ' Stock updated for ' . $applied . ' line(s).';
+            }
+            if ($skipped > 0) {
+                $message .= ' ' . $skipped . ' line(s) had no prior stock OUT.';
+            }
+
+            $this->updateOrderReturnStatus($orderNumber, [$orderRowId], $userId);
+
+            return [
+                'attempted' => true,
+                'success' => true,
+                'skipped' => false,
+                'message' => $message,
+                'return_id' => $returnId,
+                'return_number' => $returnNumber,
+                'stock_applied' => $applied,
+                'stock_skipped' => $skipped,
+            ];
+        } catch (Throwable $e) {
+            error_log('[SalesReturn auto from order status] order row ' . $orderRowId . ': ' . $e->getMessage());
+
+            $base['message'] = 'Failed to create sales return: ' . $e->getMessage();
+
+            return $base;
         }
     }
 
@@ -688,6 +849,98 @@ class SalesReturn
         } else {
             $result['message'] = 'Order line(s) marked returned locally.';
         }
+
+        return $result;
+    }
+
+    /**
+     * Whether the order details "Return" action may start a new sales return.
+     *
+     * @return array{
+     *   can_create:bool,
+     *   disabled_reason:string,
+     *   has_invoice:bool,
+     *   invoice_id:int,
+     *   existing_return_numbers:list<string>,
+     *   latest_return_id:int,
+     *   latest_return_number:string
+     * }
+     */
+    public function resolveSalesReturnCreateEligibility(string $orderNumber, ?int $invoiceId = null): array
+    {
+        $orderNumber = trim($orderNumber);
+        $result = [
+            'can_create' => false,
+            'disabled_reason' => '',
+            'has_invoice' => false,
+            'invoice_id' => 0,
+            'existing_return_numbers' => [],
+            'latest_return_id' => 0,
+            'latest_return_number' => '',
+        ];
+
+        if ($orderNumber === '') {
+            $result['disabled_reason'] = 'Order number is required.';
+
+            return $result;
+        }
+
+        $invoiceModel = new POSInvoice($this->conn);
+        $activeInvoice = null;
+        if ($invoiceId !== null && $invoiceId > 0) {
+            $activeInvoice = $invoiceModel->getInvoiceById($invoiceId);
+            if ($activeInvoice && strtolower(trim((string) ($activeInvoice['status'] ?? ''))) === 'cancelled') {
+                $activeInvoice = null;
+            }
+        }
+        if (!$activeInvoice) {
+            $activeInvoice = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
+        }
+
+        if (!$activeInvoice) {
+            $result['disabled_reason'] = 'Generate an invoice before creating a sales return.';
+
+            return $result;
+        }
+
+        $resolvedInvoiceId = (int) ($activeInvoice['id'] ?? 0);
+        $result['has_invoice'] = $resolvedInvoiceId > 0;
+        $result['invoice_id'] = $resolvedInvoiceId;
+
+        $stmt = $this->conn->prepare(
+            "SELECT id, return_number FROM vp_sales_returns
+             WHERE order_number = ? AND status = 'finalized'
+             ORDER BY id DESC"
+        );
+        if ($stmt) {
+            $stmt->bind_param('s', $orderNumber);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            while ($row = $res->fetch_assoc()) {
+                $returnNumber = trim((string) ($row['return_number'] ?? ''));
+                if ($returnNumber !== '') {
+                    $result['existing_return_numbers'][] = $returnNumber;
+                }
+                if ($result['latest_return_id'] <= 0) {
+                    $result['latest_return_id'] = (int) ($row['id'] ?? 0);
+                    $result['latest_return_number'] = $returnNumber;
+                }
+            }
+            $stmt->close();
+        }
+
+        $context = $this->getReturnContext($orderNumber, $resolvedInvoiceId);
+        if ($context['lines'] === []) {
+            if ($result['existing_return_numbers'] !== []) {
+                $result['disabled_reason'] = 'Sales return already recorded for this order.';
+            } else {
+                $result['disabled_reason'] = 'No returnable items for this order.';
+            }
+
+            return $result;
+        }
+
+        $result['can_create'] = true;
 
         return $result;
     }

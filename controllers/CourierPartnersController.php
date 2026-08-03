@@ -96,7 +96,7 @@ class CourierPartnersController
             exit;
         }
 
-        require_once dirname(__DIR__) . '/helpers/vendor_external_api.php';
+        require_once dirname(__DIR__) . '/integrations/exotic/vendor_product_api.php';
         $ch = curl_init('https://www.exoticindia.com/vendor-api/order/shipper-fetch');
         curl_setopt_array($ch, [
             CURLOPT_POST => true,

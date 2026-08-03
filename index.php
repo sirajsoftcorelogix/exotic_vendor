@@ -140,9 +140,6 @@ switch ($page) {
             case 'checkName':
                 $controller->checkName();
                 break;
-            case 'searchBrokers':
-                $controller->searchBrokers();
-                break;
             case 'syncFromAdmin':
                 $controller->syncFromAdmin();
                 break;
@@ -163,6 +160,33 @@ switch ($page) {
                 break;
             case 'removeVendorMapping':
                 $controller->removeVendorMapping();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
+    case 'brokers':
+        require_once 'controllers/BrokersController.php';
+        $controller = new BrokersController();
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'addRecord':
+                $controller->addRecord();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'permanentDelete':
+                $controller->permanentDelete();
+                break;
+            case 'getDetails':
+                $controller->getDetails();
+                break;
+            case 'searchBrokers':
+                $controller->searchBrokers();
                 break;
             default:
                 $controller->index();
@@ -555,6 +579,22 @@ switch ($page) {
             default:
                 $controller->index();
                 break;
+        }
+        break;
+
+    case 'order_follow_up':
+        require_once 'controllers/OrderFollowUpController.php';
+        $controller = new OrderFollowUpController();
+        switch ($action) {
+            case 'start':
+                $controller->start();
+                break;
+            case 'preview':
+                $controller->preview();
+                break;
+            default:
+                header('Location: ' . base_url('index.php?page=posorders&action=list'));
+                exit;
         }
         break;
 
@@ -1021,6 +1061,9 @@ switch ($page) {
             case 'edit_role':
                 $controller->updateRecord();
                 break;
+            case 'copy_role':
+                $controller->copyRecord();
+                break;
             /*case 'updateRecord':
                 $controller->addRecord();
                 break;*/
@@ -1153,6 +1196,33 @@ switch ($page) {
                 break;
             case 'getDetails':
                 $controller->getDetails();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
+    case 'workflow_transition':
+        require_once 'controllers/WorkflowTransitionController.php';
+        $controller = new WorkflowTransitionController();
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'addRecord':
+                $controller->addRecord();
+                break;
+            case 'deleteRecord':
+                $controller->delete();
+                break;
+            case 'toggleActive':
+                $controller->toggleActive();
+                break;
+            case 'getDetails':
+                $controller->getDetails();
+                break;
+            case 'allowedTargets':
+                $controller->allowedTargets();
                 break;
             default:
                 $controller->index();
@@ -1500,6 +1570,9 @@ switch ($page) {
                 break;
             case 'checkout-create':
                 $controller->checkout_create();
+                break;
+            case 'follow-up-seed':
+                $controller->follow_up_seed();
                 break;
             case 'checkout-receipt':
                 $controller->checkout_receipt();

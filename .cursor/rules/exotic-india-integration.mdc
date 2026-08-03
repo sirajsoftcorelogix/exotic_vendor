@@ -1,6 +1,6 @@
 ---
 description: Exotic India API integration layout (vendor-api + retail-api)
-globs: integrations/exotic/**,helpers/exotic_india_api.php,controllers/POSRegisterController.php
+globs: integrations/exotic/**,helpers/exotic_india_api.php,helpers/pos_local_checkout_order.php,controllers/POSRegisterController.php
 alwaysApply: false
 ---
 
@@ -19,6 +19,8 @@ All Exotic India HTTP clients live here. Do not add new cURL blocks in controlle
 | `Support/OrderResponseParser.php` | — | Parse order/create order number |
 | `Support/RetailApiDeviceIdResolver.php` | — | `x-api-deviceid` from warehouse name |
 | `ExoticIndiaGateway.php` | both | Facade: `create()`, `retail()`, order status sync |
+| `integrations/exotic/Support/OrderCreatePayload.php` | — | Shared POST `/order/create` billing/shipping + same-as-billing |
+| `integrations/exotic/Support/CartAddPayloadResolver.php` | — | POST `/cart/add` code + variation from order lines / cart JSON |
 
 ## Usage
 
@@ -38,10 +40,25 @@ $gateway->updateOrderLineFromSlug($slug, $orderRow);
 $gateway->retail()->call('/product/code', 'GET', ['code' => $sku]);
 ```
 
+## POST `/order/create` (POS)
+
+Full field reference: **`docs/exotic-order-create-api.md`**.
+
+| Rule | Detail |
+|------|--------|
+| Client | `RetailApiClient::call('/order/create', 'POST', …)` only |
+| Body builder | `POSRegisterController::buildOrderCreatePostFromPayload()` or `pos_local_checkout_build_order_create_post()` |
+| Same-as-billing | Always run `pos_order_create_apply_shipping_same_as_billing()` before building POST |
+| Recipient name | API field is **`sname`** (full name). Partial names cause internal `shipping_last_name` errors |
+| `payment_type` | **`offline`** for counter sales; real mode in `store_payment_details` |
+| `checkoutdata` | Verbatim string from `/cart/retrieve`; short tokens do not include address — send all `s*` fields |
+
 ## Rules
 
 - **New retail endpoints** → `RetailApiClient::call()` only.
 - **New vendor-api endpoints** → add to `vendor_api.php` or a new `Clients/*Client.php`.
 - **Cart response parsing** → `CartResponseParser` (never duplicate in controllers).
+- **Order/create shipping** → `integrations/exotic/Support/OrderCreatePayload.php` (do not duplicate in controllers).
+- **Cart/add rebuild (publish)** → `integrations/exotic/Support/CartAddPayloadResolver.php` — variation items need `code` + `size:color` variation string.
 - `helpers/exotic_india_api.php` is a **shim** — implement in `integrations/exotic/vendor_api.php`.
 - `POSRegisterController::exotic_api_call()` is deprecated; delegates to `RetailApiClient`.

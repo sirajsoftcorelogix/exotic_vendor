@@ -40,7 +40,7 @@ Phone numbers must use a dial code consistent with the selected **billing** and 
 |-------|------|
 | Billing | `confirm_phone_code` must match `confirm_country`; combined `confirm_phone` validated |
 | Shipping (separate address) | `confirm_sphone_code` vs `confirm_scountry` when shipping phone is filled |
-| Same as billing | Only billing phone/country checked (shipping fields copied) |
+| Same as billing | Server + client copy billing → shipping; API field is `sname` (full recipient name). See `integrations/exotic/Support/OrderCreatePayload.php` and `docs/exotic-order-create-api.md` |
 | Country change | `syncPosPhoneCodeFromCountry()` updates the phone code selector to match |
 
 **Accepted formats** (examples):
@@ -86,7 +86,7 @@ Phone numbers must use a dial code consistent with the selected **billing** and 
 | `buynow` | `'0'` |
 | `cod` / `codcharges` | `'1'` if COD split amount > 0 (independent of `payment_type`) |
 | Billing | `confirm_*` fields from payment modal; dummies if empty (`POS_DUMMY_*` constants) |
-| Shipping | `confirm_s*` unless `shouldOmitShippingOnOrderCreate()` |
+| Shipping | `sname`, `saddress1`, `sstate`, `szip`, `scountry`, `sphone` from `confirm_s*` via `pos_order_create_append_shipping_fields()` |
 | `store_payment_details` | `{warehouse_id}\|{POS payment mode label}\|{txn}` — **actual counter payment mode lives here** |
 | Razorpay | Optional `razorpay_payment_id`, `razorpay_order_id`, `razorpay_signature` |
 

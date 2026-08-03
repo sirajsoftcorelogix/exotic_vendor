@@ -1,4 +1,4 @@
-<style>
+﻿<style>
     .scrollbar-visible::-webkit-scrollbar {
         height: 6px;
     }
@@ -24,7 +24,6 @@ $currency = '';
 foreach ($order as $items => $item):
     $total_price += $item['finalprice'] * $item['quantity'];
 endforeach;
-$currencyIcons = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'JPY' => '¥'];
 $orderremarks = is_array($orderremarks ?? null) ? $orderremarks : [];
 $customerdetails = is_array($customerdetails ?? null) ? $customerdetails : [];
 $statusList = is_array($statusList ?? null) ? $statusList : [];
@@ -50,6 +49,11 @@ $buildStatusOrderPayload = static function (array $item): array {
     ];
 };
 $displayOrderNumber = (string)($orderremarks['order_number'] ?? ($order[0]['order_number'] ?? ''));
+$orderCurrencyCode = strtoupper(trim((string)($order[0]['currency'] ?? 'INR')));
+if ($orderCurrencyCode === '') {
+    $orderCurrencyCode = 'INR';
+}
+$orderCurrencySymbol = vendor_currency_symbol($orderCurrencyCode);
 $resolveCountryLabel = static function (?string $code) use ($countries): string {
     $code = trim((string)$code);
     if ($code === '') {
@@ -64,7 +68,7 @@ if ($invoiceIdForReturn > 0) {
 }
 ?>
 
-<div class="min-h-screen bg-gray-50 p-6 font-sans text-black-900">
+<div class="min-h-screen bg-gray-50 p-6 font-sans text-gray-900">
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-3">
             <h1 class="text-xl font-bold"><?php echo htmlspecialchars((string)($orderremarks['order_number'] ?? '')); ?></h1>
@@ -115,7 +119,7 @@ if ($invoiceIdForReturn > 0) {
                 <div class="mb-6 space-y-3">
                     <div class="flex items-center gap-2">
                         <?php /*<div
-                            class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-black-600">
+                            class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-gray-600">
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                                 stroke-width="1.5">
                                 <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -129,7 +133,7 @@ if ($invoiceIdForReturn > 0) {
                         $location = implode(', ', array_filter([$city, $state]));
                         ?>
                         <?php if (!empty($location)) : ?>
-                            <div class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-black-600">
+                            <div class="flex items-center gap-2 rounded bg-[#E5E7EB] px-3 py-1 text-xs font-medium text-gray-600">
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                                     stroke-width="1.5">
                                     <path d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -142,23 +146,18 @@ if ($invoiceIdForReturn > 0) {
                     </div>
 
                     <div class="flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3">
-                        <svg class="h-5 w-5 text-black-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                             stroke-width="1.5">
                             <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                         </svg>
                         <span
-                            class="text-sm font-medium text-black-600"><?php echo date('d-M-Y', strtotime($orderremarks['created_at'] ?? '')); ?></span>
+                            class="text-sm font-medium text-gray-600"><?php echo date('d-M-Y', strtotime($orderremarks['created_at'] ?? '')); ?></span>
                     </div>
                 </div>
 
                 <div class="space-y-4">
                     <?php foreach ($order as $item):
-                        $currencyCode = strtoupper(trim($item['currency'] ?? ''));
-                        if (isset($currencyIcons[$currencyCode]) && $currencyIcons[$currencyCode] !== '') {
-                            $currencysymbol = $currencyIcons[$currencyCode] ?? $currencyCode;
-                        } else {
-                            $currencysymbol = $currencyCode . ' ';
-                        }
+                        $currencysymbol = vendor_currency_symbol($item['currency'] ?? $orderCurrencyCode);
                         $lineId = (int)($item['id'] ?? 0);
                         $lineStatus = (string)($item['status'] ?? '');
                         $lineStatusLabel = (string)($statusList[$lineStatus] ?? ucwords(str_replace('_', ' ', $lineStatus)));
@@ -177,10 +176,10 @@ if ($invoiceIdForReturn > 0) {
                                 </div>
 
                                 <div class="flex-1">
-                                    <!-- <h4 class="mb-3 text-[12px] font-semibold leading-tight text-black-900">
+                                    <!-- <h4 class="mb-3 text-[12px] font-semibold leading-tight text-gray-900">
                                     <?php echo $item['groupname']; ?> / <?php echo $item['subcategories']; ?>
                                 </h4> -->
-                                    <h4 class="mb-3 text-[14px] leading-tight text-black-900">
+                                    <h4 class="mb-3 text-[14px] leading-tight text-gray-900">
                                         <?php echo $item['title']; ?>
                                     </h4>
 
@@ -189,34 +188,34 @@ if ($invoiceIdForReturn > 0) {
                                             <p>
                                                 <span class="inline-block w-12 font-bold text-black">SKU</span>
                                                 <span class="text-black">:</span>
-                                                <span class="ml-2 text-black-700"><?php echo $item['sku']; ?></span>
+                                                <span class="ml-2 text-gray-700"><?php echo $item['sku']; ?></span>
                                             </p>
                                             <p>
                                                 <span class="inline-block w-12 font-bold text-black">Color</span>
                                                 <span class="text-black">:</span>
-                                                <span class="ml-2 text-black-700"><?php echo $item['color']; ?></span>
+                                                <span class="ml-2 text-gray-700"><?php echo $item['color']; ?></span>
                                             </p>
                                             <div class="flex items-center pt-1">
                                                 <span class="inline-block w-12 font-bold text-black">Qty.</span>
                                                 <span class="text-black">:</span>
                                                 <span
-                                                    class="ml-4 rounded-full border border-gray-200 bg-gray-50 px-5 py-0.5 text-black-800">
+                                                    class="ml-4 rounded-full border border-gray-200 bg-gray-50 px-5 py-0.5 text-gray-800">
                                                     <?php echo str_pad($item['quantity'], 2, '0', STR_PAD_LEFT); ?>
                                                 </span>
                                             </div>
-                                            <div class="grid grid-cols-1 gap-1 pt-2 text-[12px] text-black-600">
-                                                <p><span class="font-bold text-black">Priority</span>: <?php echo $linePriority !== '' ? htmlspecialchars(ucfirst($linePriority)) : '—'; ?></p>
+                                            <div class="grid grid-cols-1 gap-1 pt-2 text-[12px] text-gray-600">
+                                                <p><span class="font-bold text-black">Priority</span>: <?php echo $linePriority !== '' ? htmlspecialchars(ucfirst($linePriority)) : 'â€”'; ?></p>
                                                 <p><span class="font-bold text-black">Agent</span>: <?php echo htmlspecialchars($lineAgentName); ?></p>
-                                                <p><span class="font-bold text-black">Ship by</span>: <?php echo $lineEsd !== '' ? htmlspecialchars(date('d M Y', strtotime($lineEsd))) : '—'; ?></p>
+                                                <p><span class="font-bold text-black">Ship by</span>: <?php echo $lineEsd !== '' ? htmlspecialchars(date('d M Y', strtotime($lineEsd))) : 'â€”'; ?></p>
                                             </div>
                                         </div>
                                         <div class="flex items-center gap-12">
-                                            <div class="flex items-center gap-2 text-[13px] text-black-500">
+                                            <div class="flex items-center gap-2 text-[13px] text-gray-500">
                                                 <span><?php echo $currencysymbol; ?><?php echo $item['finalprice']; ?> x</span>
-                                                <span class="rounded bg-gray-100 px-2 py-0.5 text-black-700"><?php echo $item['quantity']; ?></span>
+                                                <span class="rounded bg-gray-100 px-2 py-0.5 text-gray-700"><?php echo $item['quantity']; ?></span>
                                             </div>
 
-                                            <div class="w-20 text-right text-[14px] font-bold text-black-900">
+                                            <div class="w-20 text-right text-[14px] font-bold text-gray-900">
                                                 <?php echo $currencysymbol; ?><?php echo $item['finalprice'] * $item['quantity']; ?>
                                             </div>
                                             <div class="flex-shrink-0 flex flex-col items-end gap-2">
@@ -313,8 +312,8 @@ if ($invoiceIdForReturn > 0) {
                 $tax_amount = 0.0;
                 foreach ($order as $item) {
                     $qty        = (int)($item['quantity'] ?? 1);
-                    $unit_price = floatval($item['finalprice'] ?? 0);   // ← Pre-GST unit price
-                    $gst_percent = floatval($item['gst'] ?? 0);         // ← GST percentage from DB
+                    $unit_price = floatval($item['finalprice'] ?? 0);   // â† Pre-GST unit price
+                    $gst_percent = floatval($item['gst'] ?? 0);         // â† GST percentage from DB
                     $line_total_excl_gst = $unit_price * $qty;
                     $line_gst_amount     = $line_total_excl_gst * ($gst_percent / 100);
                     $tax_amount += $line_gst_amount;
@@ -339,9 +338,9 @@ if ($invoiceIdForReturn > 0) {
 
                         <div class="p-6 space-y-5">
                             <div class="grid grid-cols-12 items-start text-sm">
-                                <div class="col-span-3 font-bold text-black-800">Subtotal</div>
-                                <div class="col-span-6 text-black-500"><?php echo count($order); ?> items</div>
-                                <div class="col-span-3 text-right font-bold text-black-900">
+                                <div class="col-span-3 font-bold text-gray-800">Subtotal</div>
+                                <div class="col-span-6 text-gray-500"><?php echo count($order); ?> items</div>
+                                <div class="col-span-3 text-right font-bold text-gray-900">
                                     <?php echo $currencysymbol; ?><?php echo number_format($subtotal_before_discounts, 2); ?>
                                 </div>
                             </div>
@@ -389,24 +388,24 @@ if ($invoiceIdForReturn > 0) {
                             <?php endif; ?>
                             <!-- Taxes -->
                             <div class="grid grid-cols-12 items-start text-sm">
-                                <div class="col-span-3 font-bold text-black-800">Taxes</div>
-                                <div class="col-span-6 text-black-500">SGST + CGST</div>
-                                <div class="col-span-3 text-right font-bold text-black-900">
+                                <div class="col-span-3 font-bold text-gray-800">Taxes</div>
+                                <div class="col-span-6 text-gray-500">SGST + CGST</div>
+                                <div class="col-span-3 text-right font-bold text-gray-900">
                                     <?php echo $currencysymbol; ?><?php echo number_format($tax_amount, 2); ?>
                                 </div>
                             </div>
                             <!-- Final Total -->
                             <div class="grid grid-cols-12 items-start text-sm pt-1 border-t border-gray-200 pt-3">
-                                <div class="col-span-3 font-bold text-black-800">Total</div>
+                                <div class="col-span-3 font-bold text-gray-800">Total</div>
                                 <div class="col-span-6"></div>
-                                <div class="col-span-3 text-right font-bold text-black-900 text-lg">
+                                <div class="col-span-3 text-right font-bold text-gray-900 text-lg">
                                     <?php echo $currencysymbol; ?><?php echo number_format($final_paid, 2); ?>
                                 </div>
                             </div>
                         </div>
                         <div class="bg-[#F9FAFB] border-t border-gray-200 p-6 flex justify-between items-center">
-                            <span class="text-sm font-bold text-black-800">Paid</span>
-                            <span class="text-sm font-bold text-black-900">
+                            <span class="text-sm font-bold text-gray-800">Paid</span>
+                            <span class="text-sm font-bold text-gray-900">
                                 <?php echo $currencysymbol; ?><?php echo number_format($final_paid, 2); ?>
                             </span>
                         </div>
@@ -457,13 +456,13 @@ if ($invoiceIdForReturn > 0) {
                 <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm relative mt-8" id="order-address-section">
                     <button type="button"
                         onclick="openNameEmailPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '', ENT_QUOTES, 'UTF-8') ?>')"
-                        class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors"
+                        class="absolute top-4 right-4 text-gray-500 hover:text-blue-600 transition-colors"
                         title="Edit addresses">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                         </svg>
                     </button>
-                    <h3 class="mb-4 text-sm font-bold text-black-700">Shipping &amp; Billing Address</h3>
+                    <h3 class="mb-4 text-sm font-bold text-gray-700">Shipping &amp; Billing Address</h3>
                     <?php
                     $customerNameParts = preg_split('/\s+/', trim((string)($customerdetails['customer_name'] ?? '')), 2);
                     $fallbackFirstName = trim((string)($customerNameParts[0] ?? ''));
@@ -491,8 +490,8 @@ if ($invoiceIdForReturn > 0) {
                     <span id="shipping_last_name" class="hidden"><?php echo htmlspecialchars($shippingLastName); ?></span>
                     <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
                         <div>
-                            <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Shipping address</h4>
-                            <address class="mt-2 text-sm not-italic text-black-800 leading-relaxed">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-gray-400">Shipping address</h4>
+                            <address class="mt-2 text-sm not-italic text-gray-800 leading-relaxed">
                                 <?php if ($shippingDisplayName !== ''): ?>
                                     <span class="block font-medium" id="shipping_display_name"><?php echo htmlspecialchars($shippingDisplayName); ?></span>
                                 <?php else: ?>
@@ -530,8 +529,8 @@ if ($invoiceIdForReturn > 0) {
                             </address>
                         </div>
                         <div>
-                            <h4 class="text-xs font-bold uppercase tracking-wider text-black-400">Billing address</h4>
-                            <address class="mt-2 text-sm not-italic text-black-800 leading-relaxed">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-gray-400">Billing address</h4>
+                            <address class="mt-2 text-sm not-italic text-gray-800 leading-relaxed">
                                 <?php if ($billingDisplayName !== ''): ?>
                                     <span class="block font-medium" id="billing_display_name"><?php echo htmlspecialchars($billingDisplayName); ?></span>
                                 <?php else: ?>
@@ -570,14 +569,14 @@ if ($invoiceIdForReturn > 0) {
         <div class="space-y-6">
             <!-- Note Section -->
             <div class="rounded-lg border bg-white p-5 shadow-sm relative" id="note-container-<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>">
-                <button type="button" onclick="openNoteEditPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>','<?= htmlspecialchars($orderremarks['remarks'] ?? '', ENT_QUOTES) ?>')" class="absolute top-4 right-4 text-black-500 hover:text-blue-600 transition-colors" title="Edit Note">
+                <button type="button" onclick="openNoteEditPopup('<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>','<?= htmlspecialchars($orderremarks['remarks'] ?? '', ENT_QUOTES) ?>')" class="absolute top-4 right-4 text-gray-500 hover:text-blue-600 transition-colors" title="Edit Note">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                 </button>
-                <h3 class="mb-2 text-sm font-bold text-black-700">Note</h3>
+                <h3 class="mb-2 text-sm font-bold text-gray-700">Note</h3>
                 <?php if (!empty($orderremarks['remarks'])): ?>
-                    <div id="note-display-<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>" class="text-sm text-black-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
+                    <div id="note-display-<?= htmlspecialchars($orderremarks['order_number'] ?? '') ?>" class="text-sm text-gray-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
                         <?php echo ($orderremarks['remarks']); ?>
                     </div>
                 <?php endif; ?>
@@ -585,9 +584,9 @@ if ($invoiceIdForReturn > 0) {
             <!-- Conversion Summary -->
             <?php if (!empty($orderremarks['payment_type']) || !empty($orderremarks['country'])): ?>
                 <div class="rounded-lg border bg-white p-5 shadow-sm relative">
-                    <h3 class="mb-2 text-sm font-bold text-black-700">Conversion Summary</h3>
+                    <h3 class="mb-2 text-sm font-bold text-gray-700">Conversion Summary</h3>
                     <div
-                        class="text-sm text-black-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
+                        class="text-sm text-gray-700 max-h-[180px] overflow-y-auto break-words leading-relaxed bg-gray-50 p-3 rounded-md border border-gray-200">
                         <b>Payment Type:</b> <?php echo ($orderremarks['payment_type'] ?? 'N/A'); ?>
                         <br>
                         <b>Payment ID:</b> <?php echo ($orderremarks['transid'] ?? 'N/A'); ?>
@@ -601,13 +600,13 @@ if ($invoiceIdForReturn > 0) {
 </div>
 <div id="noteEditPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
     <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-6 relative">
-        <button onclick="closeNotePopup()" class="absolute top-3 right-4 text-black-500 hover:text-black-800">
+        <button onclick="closeNotePopup()" class="absolute top-3 right-4 text-gray-500 hover:text-gray-800">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
         </button>
 
-        <h2 class="text-xl font-bold mb-4 text-black-800">Edit Customer Note</h2>
+        <h2 class="text-xl font-bold mb-4 text-gray-800">Edit Customer Note</h2>
 
         <form id="noteEditForm">
             <input type="hidden" id="note_order_number" name="order_number">
@@ -617,7 +616,7 @@ if ($invoiceIdForReturn > 0) {
                 placeholder="Enter note / remarks here..."></textarea>
 
             <div class="mt-6 flex justify-end gap-3">
-                <button type="button" onclick="closeNotePopup()" class="rounded-full px-5 py-2.5 bg-gray-200 text-black-800 rounded-md hover:bg-gray-300">
+                <button type="button" onclick="closeNotePopup()" class="rounded-full px-5 py-2.5 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">
                     Cancel
                 </button>
                 <button type="submit" class="rounded-full bg-[#D46B08] px-10 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700">
@@ -719,84 +718,12 @@ if ($invoiceIdForReturn > 0) {
     </div>
 </div>
 
-<div id="statusPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50 p-4" onclick="closeStatusPopup(event)">
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative" onclick="event.stopPropagation();">
-        <button type="button" onclick="closeStatusPopup()" class="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
-        <div class="grid grid-cols-1 md:grid-cols-[38%_62%] gap-0">
-            <div class="p-6 border-b md:border-b-0 md:border-r border-gray-200">
-                <img src="https://placehold.co/100x80/e2e8f0/4a5568?text=Item" alt="Product Image" class="rounded-md border h-36 w-full max-w-[220px] object-cover mb-4">
-                <p class="text-sm text-gray-600 space-y-1">
-                    <strong>Order Number:</strong> <span id="status_order_number"></span><br>
-                    <strong>Item Code:</strong> <span id="status_item_code"></span><br>
-                    <?php if ($showOrderVendorName): ?>
-                    <strong>Vendor Name:</strong> <span id="status_vendor_name"></span><br>
-                    <?php endif; ?>
-                    <span id="status_category"></span> / <span id="status_sub_category"></span><br>
-                    <span id="status_item" class="font-bold"></span>
-                </p>
-            </div>
-            <div class="p-6">
-                <h2 class="text-2xl font-bold mb-4">Update Order</h2>
-                <form id="statusForm" enctype="multipart/form-data" method="post" action="?page=orders&action=update_status">
-                    <input type="hidden" name="status_order_id" id="status_order_id">
-                    <div class="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label for="orderStatus" class="block text-gray-700 font-bold mb-2">Order Status</label>
-                            <select id="orderStatus" name="orderStatus" class="border border-gray-300 rounded px-3 py-2 w-full">
-                                <option value="">-- Order Status --</option>
-                                <?php renderPartial('views/shared/partials/order_status_select_options.php', [
-                                    'order_status_list' => $order_status_list,
-                                ]); ?>
-                            </select>
-                            <input type="hidden" id="previousStatus" name="previousStatus" value="">
-                        </div>
-                        <div>
-                            <label for="statusESD" class="block text-gray-700 font-bold mb-2">Ship By Date</label>
-                            <input type="date" id="statusESD" name="esd" class="border border-gray-300 rounded px-2 py-1.5 w-full">
-                            <input type="hidden" id="previousESD" name="previous_esd" value="">
-                        </div>
-                    </div>
-                    <div class="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label for="agentId" class="block text-gray-700 font-bold mb-2">Assign agent</label>
-                            <select name="agent_id" id="agentId" class="border border-gray-300 rounded px-3 py-2 w-full">
-                                <option value="">Select User</option>
-                                <?php foreach ($staff_list as $id => $name): ?>
-                                    <option value="<?= (int)$id ?>"><?= htmlspecialchars((string)$name) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                            <input type="hidden" id="agentName" name="agent_name" value="">
-                            <input type="hidden" id="previousAgent" name="previous_agent" value="">
-                        </div>
-                        <div>
-                            <label for="orderPriority" class="block text-gray-700 font-bold mb-2">Priority</label>
-                            <select id="orderPriority" name="orderPriority" class="border border-gray-300 rounded px-3 py-2 w-full">
-                                <option value="">-Select-</option>
-                                <option value="critical">Critical</option>
-                                <option value="urgent">Urgent</option>
-                                <option value="high">High</option>
-                                <option value="medium">Medium</option>
-                                <option value="low">Low</option>
-                            </select>
-                            <input type="hidden" id="previousPriority" name="previous_priority" value="">
-                        </div>
-                    </div>
-                    <div class="mb-4">
-                        <label for="orderRemarks" class="block text-gray-700 font-bold mb-2">Notes</label>
-                        <textarea id="orderRemarks" name="orderRemarks" class="border border-gray-300 rounded px-3 py-2 w-full" rows="4"></textarea>
-                        <input type="hidden" id="previousRemarks" name="previous_remarks" value="">
-                    </div>
-                    <p class="text-xs text-gray-500 mb-3">Saving updates the local status and syncs to Exotic India when supported for this status.</p>
-                    <div id="orderStatusError" class="text-red-500 text-sm mt-1 hidden">Please select a status.</div>
-                    <div class="flex justify-end gap-3">
-                        <button type="button" onclick="closeStatusPopup()" class="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-600">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700">Save</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
+<?php renderPartial('views/shared/partials/order_status_update_popup.php', [
+    'order_status_list' => $order_status_list ?? [],
+    'staff_list' => $staff_list ?? [],
+    'showOrderVendorName' => !empty($showOrderVendorName),
+    'orderPage' => 'orders',
+]); ?>
 
 <script>
     function openNoteEditPopup(orderNumber, currentRemarks) {
@@ -838,7 +765,7 @@ if ($invoiceIdForReturn > 0) {
                         if (remarks.trim()) {
                             displayEl.innerHTML = nl2br(escapeHtml(remarks));
                         } else {
-                            displayEl.innerHTML = '<em class="text-black-400">No notes from customer</em>';
+                            displayEl.innerHTML = '<em class="text-gray-400">No notes from customer</em>';
                         }
                     }
 
@@ -1059,7 +986,7 @@ if ($invoiceIdForReturn > 0) {
                     alert("Customer information updated successfully!");
                     closeNameEmailPopup();
 
-                    // Optional – safer for consistency with other parts of the page
+                    // Optional â€“ safer for consistency with other parts of the page
                     window.location.reload();
                 } else {
                     alert("Failed to save: " + (data.message || "Unknown error"));
@@ -1070,93 +997,6 @@ if ($invoiceIdForReturn > 0) {
             });
     });
 
-    function openStatusPopup(orderId) {
-        document.getElementById('status_order_id').value = orderId;
-        document.getElementById('statusPopup').classList.remove('hidden');
-        document.getElementById('orderStatusError').textContent = '';
-        document.getElementById('orderStatusError').classList.add('hidden');
-        document.getElementById('orderRemarks').value = '';
-        document.getElementById('orderPriority').value = '';
-
-        const orderEl = document.querySelector('#order-id-' + orderId);
-        if (!orderEl) {
-            alert('Order data not found.');
-            return;
-        }
-        const orderData = JSON.parse(orderEl.getAttribute('data-order'));
-        document.getElementById('orderRemarks').value = orderData.remarks || '';
-        document.getElementById('orderStatus').value = orderData.status || '';
-        document.getElementById('status_order_number').textContent = orderData.order_number || 'N/A';
-        document.getElementById('status_item_code').textContent = orderData.item_code || 'N/A';
-        <?php if ($showOrderVendorName): ?>
-        document.getElementById('status_vendor_name').textContent = orderData.vendor_name || orderData.vendor || 'N/A';
-        <?php endif; ?>
-        document.getElementById('status_category').textContent = orderData.groupname || 'N/A';
-        document.getElementById('status_sub_category').textContent = orderData.subcategories || 'N/A';
-        document.getElementById('status_item').textContent = orderData.title || 'N/A';
-        document.getElementById('orderPriority').value = orderData.priority || '';
-        document.getElementById('previousStatus').value = orderData.status || '';
-        document.getElementById('previousAgent').value = orderData.agent_id || '';
-        document.getElementById('agentId').value = orderData.agent_id || '';
-        document.getElementById('previousPriority').value = orderData.priority || '';
-        document.getElementById('previousRemarks').value = orderData.remarks || '';
-        document.getElementById('previousESD').value = orderData.esd || '';
-
-        const statusESD = document.getElementById('statusESD');
-        const raw = orderData.esd || '';
-        if (statusESD) {
-            const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-            statusESD.value = m ? raw : (raw || '');
-        }
-
-        const imgElem = document.querySelector('#statusPopup img');
-        if (imgElem) {
-            imgElem.src = orderData.image || 'https://placehold.co/100x80/e2e8f0/4a5568?text=Item';
-        }
-    }
-
-    function closeStatusPopup(e) {
-        if (e && e.target && e.currentTarget !== e.target) {
-            return;
-        }
-        document.getElementById('statusPopup').classList.add('hidden');
-    }
-
-    document.getElementById('agentId')?.addEventListener('change', function() {
-        const selectedOption = this.options[this.selectedIndex];
-        document.getElementById('agentName').value = selectedOption.text;
-    });
-
-    document.getElementById('statusForm')?.addEventListener('submit', function(e) {
-        const statusSelect = document.getElementById('orderStatus');
-        const errorDiv = document.getElementById('orderStatusError');
-        if (statusSelect.value === '') {
-            e.preventDefault();
-            errorDiv.classList.remove('hidden');
-            return;
-        }
-        errorDiv.classList.add('hidden');
-        e.preventDefault();
-        const formData = new FormData(document.getElementById('statusForm'));
-        fetch('index.php?page=orders&action=update_status', {
-            method: 'POST',
-            body: formData
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Order status updated successfully.');
-                    closeStatusPopup();
-                    window.location.reload();
-                } else {
-                    errorDiv.textContent = data.message || 'Error updating order status.';
-                    errorDiv.classList.remove('hidden');
-                }
-            })
-            .catch(function() {
-                alert('An error occurred while updating order status.');
-            });
-    });
 
     document.addEventListener('DOMContentLoaded', function() {
         const accordionTriggers = document.querySelectorAll('.accordion-trigger');

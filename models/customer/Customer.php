@@ -11,6 +11,14 @@ class Customer
     }
 
     /**
+     * Link order header rows via invoice FK (avoids order_number string collation mismatches).
+     */
+    private function orderInfoJoinViaInvoiceSql(string $orderInfoAlias, string $invoiceAlias): string
+    {
+        return "{$orderInfoAlias}.id = {$invoiceAlias}.vp_order_info_id";
+    }
+
+    /**
      * @return array{sql:string,types:string,params:array<int,mixed>}
      */
     private function buildCustomerOrdersFilterClause(int $customerId, array $filters): array
@@ -98,13 +106,8 @@ class Customer
     public function getOrderItemsByCustomerIdForExport(int $customerId, array $filters = []): array
     {
         $clause = $this->buildCustomerOrdersFilterClause($customerId, $filters);
-        // Re-assert o.* keys after oi.* — mysqli assoc overwrites duplicate column names.
-        $sql = 'SELECT o.*, oi.*, inv.invoice_number, inv.id AS linked_invoice_id,
-                       o.id AS order_line_id, o.id AS id, o.customer_id AS customer_id,
-                       o.order_number AS order_number, o.status AS status,
-                       o.item_code AS item_code, o.sku AS sku
+        $sql = 'SELECT o.*, inv.invoice_number, inv.id AS linked_invoice_id
                 FROM vp_orders AS o
-                LEFT JOIN vp_order_info AS oi ON oi.order_number = o.order_number
                 LEFT JOIN vp_invoices inv ON inv.id = o.invoice_id
                 WHERE o.customer_id = ?' . $clause['sql'] . $this->customerOrdersOrderBy($filters);
 
@@ -379,7 +382,8 @@ class Customer
                     SUBSTRING_INDEX(GROUP_CONCAT(voi.state ORDER BY o.id DESC SEPARATOR ','), ',', 1) AS state
                 FROM vp_customers AS vc
                 LEFT JOIN vp_orders AS o ON o.customer_id = vc.id
-                LEFT JOIN vp_order_info AS voi ON voi.order_number = o.order_number";
+                LEFT JOIN vp_invoices AS inv ON inv.id = o.invoice_id
+                LEFT JOIN vp_order_info AS voi ON " . $this->orderInfoJoinViaInvoiceSql('voi', 'inv');
 
         // Build WHERE Clause
         $where = [];
@@ -425,7 +429,8 @@ class Customer
         // --- FIX: Use DISTINCT to count unique customers only ---
         $sql = "SELECT COUNT(DISTINCT vc.id) as total FROM vp_customers AS vc
                 LEFT JOIN vp_orders AS o ON o.customer_id = vc.id
-                LEFT JOIN vp_order_info AS voi ON voi.order_number = o.order_number";
+                LEFT JOIN vp_invoices AS inv ON inv.id = o.invoice_id
+                LEFT JOIN vp_order_info AS voi ON " . $this->orderInfoJoinViaInvoiceSql('voi', 'inv');
 
         $where = [];
         $params = [];
@@ -729,13 +734,8 @@ class Customer
     {
         $customerId = (int)$customer_id;
         $clause = $this->buildCustomerOrdersFilterClause($customerId, $filters);
-        // Re-assert o.* keys after oi.* — mysqli assoc overwrites duplicate column names.
-        $sql = 'SELECT o.*, oi.*, inv.invoice_number, inv.id AS linked_invoice_id,
-                       o.id AS order_line_id, o.id AS id, o.customer_id AS customer_id,
-                       o.order_number AS order_number, o.status AS status,
-                       o.item_code AS item_code, o.sku AS sku
+        $sql = 'SELECT o.*, inv.invoice_number, inv.id AS linked_invoice_id
                 FROM vp_orders AS o
-                LEFT JOIN vp_order_info AS oi ON oi.order_number = o.order_number
                 LEFT JOIN vp_invoices inv ON inv.id = o.invoice_id
                 WHERE o.customer_id = ?' . $clause['sql'] . $this->customerOrdersOrderBy($filters) . ' LIMIT ? OFFSET ?';
 

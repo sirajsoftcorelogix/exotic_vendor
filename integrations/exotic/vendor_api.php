@@ -2,7 +2,8 @@
 
 /**
  * Shared cURL client for https://www.exoticindia.com/vendor-api/* endpoints.
- * Matches helpers/vendor_external_api.php request structure (auth headers + curl options).
+ * Vendor/publisher/author product sync (vendorcreate, vendormodify, vendordelete) lives in
+ * integrations/exotic/vendor_product_api.php.
  */
 
 function exotic_india_api_base_url(): string

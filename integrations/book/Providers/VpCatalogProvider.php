@@ -4,7 +4,7 @@ require_once __DIR__ . '/../Contracts/BookMetadataProviderInterface.php';
 require_once __DIR__ . '/../Dto/BookMetadata.php';
 require_once __DIR__ . '/../Support/BookPageFormatter.php';
 require_once __DIR__ . '/../Support/PublicationDateNormalizer.php';
-require_once __DIR__ . '/../../../models/book/BookIsbnCatalog.php';
+require_once __DIR__ . '/../Catalog/BookIsbnCatalog.php';
 
 class VpCatalogProvider implements BookMetadataProviderInterface
 {

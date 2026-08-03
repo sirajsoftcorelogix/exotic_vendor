@@ -2,7 +2,19 @@
 
 function is_order_status_cancelled(string $status): bool
 {
-    return strtolower(trim($status)) === 'cancelled';
+    $slug = strtolower(trim($status));
+
+    return in_array($slug, ['cancelled', 'cancelled_returned'], true);
+}
+
+function is_order_status_returned(string $status): bool
+{
+    return strtolower(trim($status)) === 'returned';
+}
+
+function order_status_triggers_stock_restore(string $status): bool
+{
+    return is_order_status_cancelled($status) || is_order_status_returned($status);
 }
 
 function order_cancel_resolve_invoice_id_for_row(mysqli $conn, array $orderRow): int
@@ -22,6 +34,33 @@ function order_cancel_resolve_invoice_id_for_row(mysqli $conn, array $orderRow):
     $invoice = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
 
     return (int) ($invoice['id'] ?? 0);
+}
+
+/**
+ * Stock restore failure that still allows marking the invoice cancelled (e.g. proforma, no prior OUT).
+ */
+function order_cancel_stock_restore_allows_invoice_cancel(array $stockRestore): bool
+{
+    if (!empty($stockRestore['success'])) {
+        return true;
+    }
+
+    $message = strtolower(trim((string) ($stockRestore['message'] ?? '')));
+    if ($message === '') {
+        return false;
+    }
+
+    foreach ([
+        'no matching invoice out',
+        'stock not restored',
+        'stock already restored',
+    ] as $pattern) {
+        if (str_contains($message, $pattern)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -93,7 +132,7 @@ function order_cancel_vp_invoice_by_id(mysqli $conn, int $invoiceId): array
 
         $stockModel = new Stock($conn);
         $stockRestore = $stockModel->restoreStockByInvoiceId($invoiceId);
-        if (empty($stockRestore['success'])) {
+        if (!order_cancel_stock_restore_allows_invoice_cancel(is_array($stockRestore) ? $stockRestore : [])) {
             return [
                 'success' => false,
                 'attempted' => true,

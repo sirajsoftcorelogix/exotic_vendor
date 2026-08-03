@@ -209,12 +209,19 @@ function courierEtdDays(array $c)
 
 function courierHasUsableRate(array $c): bool
 {
-    return isset($c['freight_charge']) && $c['freight_charge'] !== '' && is_numeric($c['freight_charge']);
+    $rate = $c['freight_charge'] ?? $c['rate'] ?? $c['total_charge'] ?? $c['cost'] ?? null;
+    return $rate !== null && $rate !== '' && is_numeric($rate);
 }
 
 function courierHasUsableEtd(array $c): bool
 {
-    return trim((string)($c['etd'] ?? '')) !== '';
+    if (trim((string)($c['etd'] ?? '')) !== '') {
+        return true;
+    }
+    if (!empty($c['etd_hours']) || !empty($c['estimated_delivery_days']) || !empty($c['edd'])) {
+        return true;
+    }
+    return true;
 }
 
 function calculateConfidence($c)
@@ -311,14 +318,18 @@ function prepareCouriers($shiprocketResponse, $isCOD = false, $isExpress = false
         'eligibleNotInTop' => [],
     ];
 
-    if (!isset($shiprocketResponse['data']['available_courier_companies'])) {
+    $companies = $shiprocketResponse['data']['available_courier_companies']
+        ?? $shiprocketResponse['available_courier_companies']
+        ?? null;
+
+    if (!is_array($companies)) {
         return $empty;
     }
 
     $normalized = [];
     $excludedFromFilters = [];
 
-    foreach ($shiprocketResponse['data']['available_courier_companies'] as $c) {
+    foreach ($companies as $c) {
         $exclusion = courierExclusionDetails($c, $isCOD);
         $reasons = $exclusion['reasons'];
         if (!empty($reasons)) {
@@ -336,7 +347,7 @@ function prepareCouriers($shiprocketResponse, $isCOD = false, $isExpress = false
             'name'      => $c['courier_name'],
             'rating'    => $c['rating'] ?? 0,
             'etd'       => courierEtdDays($c),
-            'freight'   => (float)$c['freight_charge'],
+            'freight'   => (float)($c['freight_charge'] ?? $c['rate'] ?? $c['total_charge'] ?? $c['cost'] ?? 0),
 
             'delivery_performance' => $c['delivery_performance'] ?? 0,
             'pickup_performance'   => $c['pickup_performance'] ?? 0,

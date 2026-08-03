@@ -782,7 +782,21 @@ class OrdersController
             $previous_remarks = isset($_POST['previous_remarks']) ? trim($_POST['previous_remarks']) : NULL;
 
             if ($order_id > 0 && !empty($new_status)) {
+                require_once __DIR__ . '/../helpers/order_workflow.php';
+                global $conn;
+                $workflowError = assert_order_status_transition_allowed(
+                    $conn,
+                    (string) $previous_status,
+                    (string) $new_status,
+                    (int) ($_SESSION['user']['id'] ?? 0)
+                );
+                if ($workflowError !== null) {
+                    echo json_encode(['success' => false, 'message' => $workflowError]);
+                    exit;
+                }
+
                 $invoiceCancel = null;
+                $stockRestore = null;
                 $update_data = [
                     'status' => $new_status,
                     'remarks' => $remarks,
@@ -814,14 +828,15 @@ class OrdersController
                 if ($new_status != $_POST['previousStatus']) {
                     $commanModel->add_order_status_log($logData);
                 }
-                if ($this->isCancelledOrderStatus($new_status)
-                    && !$this->isCancelledOrderStatus((string) $previous_status)
+                require_once __DIR__ . '/../helpers/order_status_stock.php';
+                if (order_status_triggers_stock_restore($new_status)
+                    && !order_status_triggers_stock_restore((string) $previous_status)
                     && is_array($orderval)
                 ) {
                     $this->syncLocalStockFromVendorApiForOrder($orderval);
                     global $conn;
-                    require_once __DIR__ . '/../helpers/order_cancel_invoice.php';
-                    $invoiceCancel = order_cancel_linked_invoice_for_order_row($conn, $orderval);
+                    $stockRestore = order_handle_status_change_stock($conn, $orderval, $new_status, (string) $previous_status);
+                    $invoiceCancel = is_array($stockRestore['invoice_cancel'] ?? null) ? $stockRestore['invoice_cancel'] : null;
                 }
                 if ($agent_id != $previous_agent) {
                     //log agent change
@@ -881,6 +896,9 @@ class OrdersController
                         $message .= empty($invoiceCancel['success'])
                             ? ' Linked invoice cancel failed: ' . (string) ($invoiceCancel['message'] ?? '')
                             : ' Linked invoice cancelled.';
+                    }
+                    if (isset($stockRestore) && is_array($stockRestore)) {
+                        $message .= order_status_stock_summary_message($stockRestore);
                     }
                     echo json_encode(['success' => true, 'message' => $message]);
                 } else {
@@ -1476,20 +1494,39 @@ class OrdersController
             //print_array($_POST);
             //exit;
             if (!empty($order_ids) && !empty($new_status)) {
-                $ordersToSyncLocalStock = [];
-                $ordersToCancelInvoice = [];
-                if ($this->isCancelledOrderStatus($new_status)) {
+                require_once __DIR__ . '/../helpers/order_workflow.php';
+                global $conn;
+                $ordersForWorkflowCheck = [];
+                foreach ($order_ids as $oid) {
+                    $row = $ordersModel->getOrderById((int) $oid);
+                    if (is_array($row)) {
+                        $ordersForWorkflowCheck[] = $row;
+                    }
+                }
+                $workflowError = assert_bulk_order_status_transitions_allowed(
+                    $conn,
+                    $ordersForWorkflowCheck,
+                    (string) $new_status,
+                    (int) ($_SESSION['user']['id'] ?? 0)
+                );
+                if ($workflowError !== null) {
+                    echo json_encode(['success' => false, 'message' => $workflowError]);
+                    exit;
+                }
+
+                $ordersForStockRestore = [];
+                require_once __DIR__ . '/../helpers/order_status_stock.php';
+                if (order_status_triggers_stock_restore($new_status)) {
                     foreach ($order_ids as $oid) {
                         $oid = (int) $oid;
                         if ($oid <= 0) {
                             continue;
                         }
                         $row = $ordersModel->getOrderById($oid);
-                        if (!is_array($row) || $this->isCancelledOrderStatus((string) ($row['status'] ?? ''))) {
+                        if (!is_array($row) || order_status_triggers_stock_restore((string) ($row['status'] ?? ''))) {
                             continue;
                         }
-                        $ordersToSyncLocalStock[] = $row;
-                        $ordersToCancelInvoice[] = $row;
+                        $ordersForStockRestore[] = $row;
                     }
                 }
                 $result = $ordersModel->updateStatusBulk($order_ids, $new_status);
@@ -1516,15 +1553,15 @@ class OrdersController
                     }
                 }
                 if ($result) {
-                    foreach ($ordersToSyncLocalStock as $orderRow) {
-                        $this->syncLocalStockFromVendorApiForOrder($orderRow);
-                    }
                     global $conn;
-                    require_once __DIR__ . '/../helpers/order_cancel_invoice.php';
-                    $invoiceCancelResults = order_cancel_linked_invoices_for_order_rows($conn, $ordersToCancelInvoice);
-                    $invoiceCancelMessage = order_cancel_invoice_summary_message($invoiceCancelResults);
-                    if ($invoiceCancelMessage !== '') {
-                        $result['message'] = trim((string) ($result['message'] ?? 'Order statuses updated successfully.')) . $invoiceCancelMessage;
+                    foreach ($ordersForStockRestore as $orderRow) {
+                        $previousStatus = (string) ($orderRow['status'] ?? '');
+                        $this->syncLocalStockFromVendorApiForOrder($orderRow);
+                        $stockResult = order_handle_status_change_stock($conn, $orderRow, $new_status, $previousStatus);
+                        $stockMessage = order_status_stock_summary_message($stockResult);
+                        if ($stockMessage !== '') {
+                            $result['message'] = trim((string) ($result['message'] ?? 'Order statuses updated successfully.')) . $stockMessage;
+                        }
                     }
                     //session poitem array clean
 

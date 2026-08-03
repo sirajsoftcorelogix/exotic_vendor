@@ -1,0 +1,148 @@
+<?php
+
+require_once __DIR__ . '/order_cancel_invoice.php';
+
+/**
+ * Restore warehouse stock when an order line moves to cancelled / cancelled_returned / returned.
+ *
+ * @return array<string, mixed>
+ */
+function order_handle_status_change_stock(mysqli $conn, array $orderRow, string $newStatus, string $previousStatus): array
+{
+    if (!order_status_triggers_stock_restore($newStatus)) {
+        return ['attempted' => false];
+    }
+
+    if (order_status_triggers_stock_restore($previousStatus)) {
+        return [
+            'attempted' => false,
+            'message' => 'Order line already in a stock-restore status.',
+        ];
+    }
+
+    $invoiceCancel = null;
+    if (is_order_status_returned($newStatus)) {
+        require_once __DIR__ . '/html_helpers.php';
+        require_once __DIR__ . '/../models/sales_return/SalesReturn.php';
+        $salesReturnModel = new SalesReturn($conn);
+        $salesReturnResult = $salesReturnModel->createAutoReturnForOrderRow(
+            $orderRow,
+            (int) ($_SESSION['user']['id'] ?? 0),
+            isAdministratorUser()
+        );
+
+        if (!empty($salesReturnResult['attempted'])) {
+            return [
+                'attempted' => true,
+                'via' => 'sales_return',
+                'success' => !empty($salesReturnResult['success']),
+                'skipped' => !empty($salesReturnResult['skipped']),
+                'message' => (string) ($salesReturnResult['message'] ?? ''),
+                'return_id' => (int) ($salesReturnResult['return_id'] ?? 0),
+                'return_number' => (string) ($salesReturnResult['return_number'] ?? ''),
+                'stock_applied' => (int) ($salesReturnResult['stock_applied'] ?? 0),
+                'sales_return' => $salesReturnResult,
+            ];
+        }
+    }
+
+    if (is_order_status_cancelled($newStatus)) {
+        $invoiceCancel = order_cancel_linked_invoice_for_order_row($conn, $orderRow);
+        if (!empty($invoiceCancel['attempted']) && !empty($invoiceCancel['success'])) {
+            return [
+                'attempted' => true,
+                'via' => 'invoice',
+                'success' => true,
+                'message' => (string) ($invoiceCancel['message'] ?? 'Linked invoice cancelled.'),
+                'invoice_cancel' => $invoiceCancel,
+            ];
+        }
+    }
+
+    if (is_order_status_cancelled($newStatus) && is_array($invoiceCancel) && !empty($invoiceCancel['attempted']) && empty($invoiceCancel['success'])) {
+        require_once __DIR__ . '/../models/order/stock.php';
+        $stockModel = new Stock($conn);
+        $orderStockRestore = $stockModel->restoreStockByOrderRow($orderRow, 'ORDER_CANCEL');
+
+        return [
+            'attempted' => true,
+            'via' => 'order_row',
+            'success' => !empty($orderStockRestore['success']),
+            'message' => (string) ($orderStockRestore['message'] ?? ''),
+            'applied' => (int) ($orderStockRestore['applied'] ?? 0),
+            'invoice_cancel' => $invoiceCancel,
+            'order_stock_restore' => $orderStockRestore,
+        ];
+    }
+
+    require_once __DIR__ . '/../models/order/stock.php';
+    $stockModel = new Stock($conn);
+    $statusSlug = strtolower(trim($newStatus));
+    $refType = in_array($statusSlug, ['returned', 'cancelled_returned'], true)
+        ? 'ORDER_RETURN'
+        : 'ORDER_CANCEL';
+    $orderStockRestore = $stockModel->restoreStockByOrderRow($orderRow, $refType);
+
+    $success = !empty($orderStockRestore['success']);
+    $applied = (int) ($orderStockRestore['applied'] ?? 0);
+
+    return [
+        'attempted' => true,
+        'via' => 'order_row',
+        'success' => $success,
+        'message' => (string) ($orderStockRestore['message'] ?? ''),
+        'applied' => $applied,
+        'invoice_cancel' => $invoiceCancel,
+        'order_stock_restore' => $orderStockRestore,
+    ];
+}
+
+/**
+ * @param array<string, mixed>|null $stockResult
+ */
+function order_status_stock_summary_message(?array $stockResult): string
+{
+    if (!is_array($stockResult) || empty($stockResult['attempted'])) {
+        return '';
+    }
+
+    if (!empty($stockResult['success'])) {
+        if (($stockResult['via'] ?? '') === 'sales_return') {
+            $message = trim((string) ($stockResult['message'] ?? ''));
+            if ($message !== '') {
+                return ' ' . $message;
+            }
+            $returnNumber = trim((string) ($stockResult['return_number'] ?? ''));
+            if ($returnNumber !== '') {
+                return ' Sales return ' . $returnNumber . ' created.';
+            }
+
+            return ' Sales return created.';
+        }
+        if (($stockResult['via'] ?? '') === 'invoice') {
+            $message = trim((string) ($stockResult['message'] ?? ''));
+
+            return $message !== '' ? ' ' . $message : ' Linked invoice cancelled.';
+        }
+        $applied = (int) ($stockResult['applied'] ?? $stockResult['order_stock_restore']['applied'] ?? 0);
+        if ($applied > 0) {
+            return ' Stock increased by order quantity (' . $applied . ' movement(s)).';
+        }
+
+        return ' Stock restore skipped (already applied or no prior stock OUT).';
+    }
+
+    $message = trim((string) ($stockResult['message'] ?? ''));
+    if ($message === '') {
+        $message = trim((string) ($stockResult['order_stock_restore']['message'] ?? ''));
+        if ($message === '' && ($stockResult['via'] ?? '') === 'sales_return') {
+            $message = trim((string) ($stockResult['sales_return']['message'] ?? ''));
+        }
+    }
+
+    if (($stockResult['via'] ?? '') === 'sales_return' && $message !== '') {
+        return ' Sales return failed: ' . $message;
+    }
+
+    return $message !== '' ? ' Stock restore failed: ' . $message : ' Stock restore failed.';
+}

@@ -1,12 +1,14 @@
 <?php
 
+require_once __DIR__ . '/../../helpers/creator_master_usage.php';
+
 class Publisher
 {
     private mysqli $conn;
 
-    private const LIST_COLUMNS = 'p.id, p.publishers_id, p.publishers, p.display_name, p.website, p.contact_name, p.publisher_email, p.publisher_email_is_primary, p.country_code, p.publisher_phone, p.publisher_phone_is_whatsapp, p.gst_number, p.pan_number, p.address, p.city, p.state, p.country, p.postal_code, p.webpage, p.stock_replenishment_months, p.discount, p.broker_id, bu.name AS broker_name, p.is_active, p.create_at, p.update_at';
+    private const LIST_COLUMNS = 'p.id, p.publishers_id, p.publishers, p.website, p.contact_name, p.publisher_email, p.publisher_email_is_primary, p.country_code, p.publisher_phone, p.publisher_phone_is_whatsapp, p.gst_number, p.pan_number, p.address, p.city, p.state, p.country, p.postal_code, p.webpage, p.stock_replenishment_months, p.discount, p.is_active, p.create_at, p.update_at';
 
-    private const LIST_FROM = ' FROM vp_publishers p LEFT JOIN vp_users bu ON bu.id = p.broker_id AND bu.is_deleted = 0';
+    private const LIST_FROM = ' FROM vp_publishers p';
 
     private const MAX_ALT_PHONES = 5;
 
@@ -23,7 +25,6 @@ class Publisher
     public function normalizePublisherFormData(array $data): array
     {
         return [
-            'display_name' => trim((string)($data['display_name'] ?? '')),
             'website' => trim((string)($data['website'] ?? '')),
             'contact_name' => trim((string)($data['contact_name'] ?? '')),
             'publisher_email' => trim((string)($data['publisher_email'] ?? '')),
@@ -45,9 +46,6 @@ class Publisher
             'discount' => trim((string)($data['discount'] ?? '')) === ''
                 ? 0.0
                 : max(0.0, (float)$data['discount']),
-            'broker_id' => trim((string)($data['broker_id'] ?? '')) === ''
-                ? null
-                : max(0, (int)$data['broker_id']),
             'alt_phones' => $this->parseAlternatePhonesFromPost($data),
             'alt_emails' => $this->parseAlternateEmailsFromPost($data),
         ];
@@ -459,37 +457,6 @@ class Publisher
         return null;
     }
 
-    private function normalizeBrokerId(?int $brokerId): ?int
-    {
-        if ($brokerId === null || $brokerId <= 0) {
-            return null;
-        }
-
-        return $brokerId;
-    }
-
-    private function validateBrokerId(?int $brokerId): ?array
-    {
-        $brokerId = $this->normalizeBrokerId($brokerId);
-        if ($brokerId === null) {
-            return null;
-        }
-
-        $stmt = $this->conn->prepare(
-            'SELECT id FROM vp_users WHERE id = ? AND is_active = 1 AND is_deleted = 0 LIMIT 1'
-        );
-        if (!$stmt) {
-            return ['success' => false, 'message' => 'Could not validate broker.'];
-        }
-        $stmt->bind_param('i', $brokerId);
-        $stmt->execute();
-        $stmt->store_result();
-        $ok = $stmt->num_rows > 0;
-        $stmt->close();
-
-        return $ok ? null : ['success' => false, 'message' => 'Selected broker is invalid or inactive.'];
-    }
-
     private function publisherFieldExists(string $column, string $value, ?int $excludeId = null): bool
     {
         $allowed = ['publisher_phone', 'publisher_email', 'gst_number', 'pan_number'];
@@ -557,14 +524,12 @@ class Publisher
         $params = [];
 
         if ($search !== '') {
-            $where[] = '(p.publishers LIKE ? OR p.display_name LIKE ? OR p.website LIKE ? OR p.publishers_id = ? OR p.id = ? OR p.city LIKE ? OR p.state LIKE ? OR p.contact_name LIKE ? OR p.publisher_phone LIKE ? OR bu.name LIKE ?)';
-            $types .= 'ssssiissss';
-            $params[] = '%' . $search . '%';
+            $where[] = '(p.publishers LIKE ? OR p.website LIKE ? OR p.publishers_id = ? OR p.id = ? OR p.city LIKE ? OR p.state LIKE ? OR p.contact_name LIKE ? OR p.publisher_phone LIKE ?)';
+            $types .= 'sssiisss';
             $params[] = '%' . $search . '%';
             $params[] = '%' . $search . '%';
             $params[] = (int)$search;
             $params[] = (int)$search;
-            $params[] = '%' . $search . '%';
             $params[] = '%' . $search . '%';
             $params[] = '%' . $search . '%';
             $params[] = '%' . $search . '%';
@@ -578,7 +543,7 @@ class Publisher
         }
 
         $whereSql = $where ? (' WHERE ' . implode(' AND ', $where)) : '';
-        $countStmt = $this->conn->prepare('SELECT COUNT(*) AS total FROM vp_publishers p LEFT JOIN vp_users bu ON bu.id = p.broker_id AND bu.is_deleted = 0' . $whereSql);
+        $countStmt = $this->conn->prepare('SELECT COUNT(*) AS total FROM vp_publishers p' . $whereSql);
         if (!$countStmt) {
             return ['publishers' => [], 'totalRecords' => 0, 'totalPages' => 1, 'currentPage' => $page, 'limit' => $limit];
         }
@@ -606,6 +571,7 @@ class Publisher
         $stmt->close();
 
         $this->attachContactsToPublishers($publishers);
+        $this->attachUsageCountsToPublishers($publishers);
 
         return [
             'publishers' => $publishers,
@@ -721,16 +687,17 @@ class Publisher
             return $contactError;
         }
 
-        $brokerError = $this->validateBrokerId($fields['broker_id']);
-        if ($brokerError !== null) {
-            return $brokerError;
+        if ($isActive === 0) {
+            $usageError = $this->publisherUsageError($id);
+            if ($usageError !== null) {
+                return $usageError;
+            }
         }
-        $brokerId = $this->normalizeBrokerId($fields['broker_id']);
 
         $this->conn->begin_transaction();
 
         $stmt = $this->conn->prepare(
-            'UPDATE vp_publishers SET publishers = ?, display_name = ?, website = ?, contact_name = ?, publisher_email = ?, publisher_email_is_primary = ?, country_code = ?, publisher_phone = ?, publisher_phone_is_whatsapp = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, stock_replenishment_months = ?, discount = ?, broker_id = ?, is_active = ? WHERE id = ?'
+            'UPDATE vp_publishers SET publishers = ?, website = ?, contact_name = ?, publisher_email = ?, publisher_email_is_primary = ?, country_code = ?, publisher_phone = ?, publisher_phone_is_whatsapp = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, stock_replenishment_months = ?, discount = ?, is_active = ? WHERE id = ?'
         );
         if (!$stmt) {
             $this->conn->rollback();
@@ -743,9 +710,8 @@ class Publisher
         $publisherEmailIsPrimary = (int)$fields['publisher_email_is_primary'];
         $publisherPhoneIsWhatsapp = (int)$fields['publisher_phone_is_whatsapp'];
         $stmt->bind_param(
-            'sssssississsssssiddiii',
+            'ssssississsssssiddii',
             $name,
-            $fields['display_name'],
             $fields['website'],
             $fields['contact_name'],
             $fields['publisher_email'],
@@ -763,7 +729,6 @@ class Publisher
             $webpage,
             $stockReplenishmentMonths,
             $discount,
-            $brokerId,
             $isActive,
             $id
         );
@@ -832,16 +797,10 @@ class Publisher
             return $contactError;
         }
 
-        $brokerError = $this->validateBrokerId($fields['broker_id']);
-        if ($brokerError !== null) {
-            return $brokerError;
-        }
-        $brokerId = $this->normalizeBrokerId($fields['broker_id']);
-
         $this->conn->begin_transaction();
 
         $stmt = $this->conn->prepare(
-            'INSERT INTO vp_publishers (publishers_id, publishers, display_name, website, contact_name, publisher_email, publisher_email_is_primary, country_code, publisher_phone, publisher_phone_is_whatsapp, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_months, discount, broker_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO vp_publishers (publishers_id, publishers, website, contact_name, publisher_email, publisher_email_is_primary, country_code, publisher_phone, publisher_phone_is_whatsapp, gst_number, pan_number, address, city, state, country, postal_code, webpage, stock_replenishment_months, discount, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         if (!$stmt) {
             $this->conn->rollback();
@@ -854,10 +813,9 @@ class Publisher
         $publisherEmailIsPrimary = (int)$fields['publisher_email_is_primary'];
         $publisherPhoneIsWhatsapp = (int)$fields['publisher_phone_is_whatsapp'];
         $stmt->bind_param(
-            'isssssississsssssiddii',
+            'issssississsssssiddi',
             $publishersId,
             $name,
-            $fields['display_name'],
             $fields['website'],
             $fields['contact_name'],
             $fields['publisher_email'],
@@ -875,7 +833,6 @@ class Publisher
             $webpage,
             $stockReplenishmentMonths,
             $discount,
-            $brokerId,
             $isActive
         );
 
@@ -937,6 +894,13 @@ class Publisher
             return ['success' => false, 'message' => 'Invalid publisher id.'];
         }
         $isActive = $isActive ? 1 : 0;
+        if ($isActive === 0) {
+            $usageError = $this->publisherUsageError($id);
+            if ($usageError !== null) {
+                return $usageError;
+            }
+        }
+
         $stmt = $this->conn->prepare('UPDATE vp_publishers SET is_active = ? WHERE id = ?');
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
@@ -1182,21 +1146,29 @@ class Publisher
         return $options;
     }
 
-    public function addPublisherVendorMapping(int $publisherId, int $vendorId): array
+    /**
+     * @param array{allow_inactive_vendor?:bool,idempotent?:bool} $options
+     */
+    public function addPublisherVendorMapping(int $publisherId, int $vendorId, array $options = []): array
     {
         if ($publisherId <= 0 || $vendorId <= 0) {
             return ['success' => false, 'message' => 'Invalid publisher or vendor.'];
         }
 
+        $allowInactiveVendor = !empty($options['allow_inactive_vendor']);
+        $idempotent = !empty($options['idempotent']);
+
         if (!$this->getPublisherById($publisherId)) {
             return ['success' => false, 'message' => 'Publisher not found.'];
         }
 
-        $vendorStmt = $this->conn->prepare(
-            'SELECT id, vendor_name FROM vp_vendors
-             WHERE id = ? AND (is_active = 1 OR is_active = \'active\')
-             LIMIT 1'
-        );
+        $vendorSql = 'SELECT id, vendor_name FROM vp_vendors WHERE id = ?';
+        if (!$allowInactiveVendor) {
+            $vendorSql .= ' AND (is_active = 1 OR is_active = \'active\')';
+        }
+        $vendorSql .= ' LIMIT 1';
+
+        $vendorStmt = $this->conn->prepare($vendorSql);
         if (!$vendorStmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
         }
@@ -1205,7 +1177,7 @@ class Publisher
         $vendor = $vendorStmt->get_result()->fetch_assoc();
         $vendorStmt->close();
         if (!$vendor) {
-            return ['success' => false, 'message' => 'Active vendor not found.'];
+            return ['success' => false, 'message' => $allowInactiveVendor ? 'Vendor not found.' : 'Active vendor not found.'];
         }
 
         $dupStmt = $this->conn->prepare(
@@ -1219,6 +1191,15 @@ class Publisher
         $existing = $dupStmt->get_result()->fetch_assoc();
         $dupStmt->close();
         if ($existing) {
+            if ($idempotent) {
+                return [
+                    'success' => true,
+                    'message' => 'Vendor already mapped to publisher.',
+                    'mapping_id' => (int) ($existing['id'] ?? 0),
+                    'mappings' => $this->getVendorMappingsByPublisherId($publisherId),
+                ];
+            }
+
             return ['success' => false, 'message' => 'This vendor is already mapped to the publisher.'];
         }
 
@@ -1320,10 +1301,46 @@ class Publisher
         return $label;
     }
 
+    private function publisherUsageError(int $localId, string $action = 'delete or deactivate'): ?array
+    {
+        $row = $this->getPublisherById($localId);
+        if (!$row) {
+            return null;
+        }
+
+        $usage = creatorMasterCountPublisherUsage(
+            $this->conn,
+            (int) ($row['publishers_id'] ?? 0),
+            (string) ($row['publishers'] ?? '')
+        );
+
+        return creatorMasterUsageError('publisher', $usage['inbound'], $usage['products'], $action);
+    }
+
+    private function attachUsageCountsToPublishers(array &$publishers): void
+    {
+        foreach ($publishers as &$publisher) {
+            $usage = creatorMasterCountPublisherUsage(
+                $this->conn,
+                (int) ($publisher['publishers_id'] ?? 0),
+                (string) ($publisher['publishers'] ?? '')
+            );
+            $publisher['inbound_usage_count'] = $usage['inbound'];
+            $publisher['product_usage_count'] = $usage['products'];
+            $publisher['usage_count'] = $usage['total'];
+        }
+        unset($publisher);
+    }
+
     public function deletePublisher(int $id): array
     {
         if ($id <= 0) {
             return ['success' => false, 'message' => 'Invalid publisher id.'];
+        }
+
+        $usageError = $this->publisherUsageError($id, 'delete');
+        if ($usageError !== null) {
+            return $usageError;
         }
 
         $bankStmt = $this->conn->prepare('DELETE FROM publisher_bank_details WHERE publisher_id = ?');
