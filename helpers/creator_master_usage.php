@@ -6,10 +6,14 @@ function creatorMasterAuthorFieldNames(): array
     return ['author', 'edited_by', 'compiled_by', 'translated_by', 'commentary_by'];
 }
 
-function creatorMasterAuthorMatchSql(string $tableAlias, string $authorIdExpr): string
+/**
+ * @param list<string>|null $fields
+ */
+function creatorMasterAuthorMatchSql(string $tableAlias, string $authorIdExpr, ?array $fields = null): string
 {
+    $fields = $fields ?? creatorMasterAuthorFieldNames();
     $parts = [];
-    foreach (creatorMasterAuthorFieldNames() as $column) {
+    foreach ($fields as $column) {
         $parts[] = "FIND_IN_SET({$authorIdExpr}, REPLACE(IFNULL({$tableAlias}.{$column}, ''), ' ', ''))";
         $parts[] = "CAST({$tableAlias}.{$column} AS CHAR) = CAST({$authorIdExpr} AS CHAR)";
     }
@@ -27,11 +31,14 @@ function creatorMasterCountAuthorUsage(mysqli $conn, int $authorId): array
     }
 
     $authorIdExpr = (string) $authorId;
-    $inboundSql = 'SELECT COUNT(*) AS total FROM vp_inbound t WHERE ' . creatorMasterAuthorMatchSql('t', '?');
-    $productSql = 'SELECT COUNT(*) AS total FROM vp_products t WHERE ' . creatorMasterAuthorMatchSql('t', '?');
+    $inboundFields = creatorMasterAuthorFieldNames();
+    $productFields = ['edited_by'];
 
-    $inbound = creatorMasterRunAuthorUsageCount($conn, $inboundSql, $authorIdExpr);
-    $products = creatorMasterRunAuthorUsageCount($conn, $productSql, $authorIdExpr);
+    $inboundSql = 'SELECT COUNT(*) AS total FROM vp_inbound t WHERE ' . creatorMasterAuthorMatchSql('t', '?', $inboundFields);
+    $productSql = 'SELECT COUNT(*) AS total FROM vp_products t WHERE ' . creatorMasterAuthorMatchSql('t', '?', $productFields);
+
+    $inbound = creatorMasterRunAuthorUsageCount($conn, $inboundSql, $authorIdExpr, $inboundFields);
+    $products = creatorMasterRunAuthorUsageCount($conn, $productSql, $authorIdExpr, $productFields);
 
     return [
         'inbound' => $inbound,
@@ -100,16 +107,17 @@ function creatorMasterUsageError(string $entityLabel, int $inboundCount, int $pr
     ];
 }
 
-function creatorMasterRunAuthorUsageCount(mysqli $conn, string $sql, string $authorIdExpr): int
+function creatorMasterRunAuthorUsageCount(mysqli $conn, string $sql, string $authorIdExpr, ?array $fields = null): int
 {
+    $fields = $fields ?? creatorMasterAuthorFieldNames();
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
         return 0;
     }
 
-    $types = str_repeat('is', count(creatorMasterAuthorFieldNames()));
+    $types = str_repeat('is', count($fields));
     $params = [];
-    for ($i = 0, $count = count(creatorMasterAuthorFieldNames()); $i < $count; $i++) {
+    foreach ($fields as $field) {
         $params[] = $authorIdExpr;
         $params[] = $authorIdExpr;
     }
@@ -125,7 +133,7 @@ function creatorMasterRunAuthorUsageCount(mysqli $conn, string $sql, string $aut
 function creatorMasterAuthorUsageSelectSql(string $authorIdColumnExpr, string $inboundAlias = 'vi', string $productAlias = 'pr'): string
 {
     return '(SELECT COUNT(*) FROM vp_inbound ' . $inboundAlias . ' WHERE ' . creatorMasterAuthorMatchSql($inboundAlias, $authorIdColumnExpr) . ') AS inbound_usage_count, '
-        . '(SELECT COUNT(*) FROM vp_products ' . $productAlias . ' WHERE ' . creatorMasterAuthorMatchSql($productAlias, $authorIdColumnExpr) . ') AS product_usage_count';
+        . '(SELECT COUNT(*) FROM vp_products ' . $productAlias . ' WHERE ' . creatorMasterAuthorMatchSql($productAlias, $authorIdColumnExpr, ['edited_by']) . ') AS product_usage_count';
 }
 
 function creatorMasterPublisherUsageSelectSql(string $publishersIdColumnExpr, string $publisherNameColumnExpr): string
