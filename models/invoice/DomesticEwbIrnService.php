@@ -8,6 +8,7 @@ class DomesticEwbIrnService {
     private $db;
     private $lastError;
     private $alankitConfig;
+    private $infoDtlsColumnChecked = false;
     
     public function __construct($db, $alankitConfig = []) {
         $this->db = $db;
@@ -36,7 +37,8 @@ class DomesticEwbIrnService {
      */
     public function generateIrnAndEwb($invoiceId, $invoice, $items, $customer, $firm, $ewbData = []) {
         try {
-            echo "Domestic EWB: Starting IRN and EWB generation for invoice #$invoiceId\n";
+            //echo "Domestic EWB: Starting IRN and EWB generation for invoice #$invoiceId\n";
+            $this->ensureInfoDtlsColumn();
             // Validate required data
             if (!$invoice || empty($items) || !$customer || !$firm) {
                 $this->lastError = "Missing required invoice, items, customer, or firm data";
@@ -60,7 +62,7 @@ class DomesticEwbIrnService {
                 error_log("Alankit IRN: " . $this->lastError);
                 return ['status' => false, 'message' => $this->lastError];
             }
-            echo "Domestic EWB: Alankit API credentials loaded successfully.\n";
+            //echo "Domestic EWB: Alankit API credentials loaded successfully.\n";
             $alankitClient = new AlankitIrnNew(
                 $this->alankitConfig['username'],
                 $this->alankitConfig['password'],
@@ -81,8 +83,8 @@ class DomesticEwbIrnService {
             
             // Step 1: Prepare IRN payload from invoice data (includes EwbDtls if vehicle data provided)
             $irnPayload = $this->prepareIrnPayload($invoice, $items, $customer, $firm, $ewbData);
-            print_r($irnPayload); // Debug: Show prepared payload
-            error_log("Domestic EWB: Prepared IRN payload for invoice #$invoiceId");
+            //print_r($irnPayload); // Debug: Show prepared payload
+            //error_log("Domestic EWB: Prepared IRN payload for invoice #$invoiceId");
             
             // Step 2: Authenticate and get access token
             $authreq = $alankitClient->authRequest();
@@ -93,7 +95,7 @@ class DomesticEwbIrnService {
             ];
             //echo "Alankit IRN: Sending authentication request for invoice #$invoiceId\n";
             $authResponse = $alankitClient->sendRequest('AUTH_ENDPOINT', $data, false);
-            //$authResponse = $alankitClient->sendRequest('AUTH_ENDPOINT', []);
+            
             if (!$authResponse || !isset($authResponse['Data']['AuthToken'])) {
                 $result['status'] = false;
                 $result['errors'][] = 'Authentication failed: ' . ($authResponse['message'] ?? 'Unknown error');
@@ -101,7 +103,7 @@ class DomesticEwbIrnService {
                 $this->lastError = $result['errors'][0];
                 return $result;
             }
-            echo "Domestic EWB: Authentication successful, received access token\n";
+            //echo "Domestic EWB: Authentication successful, received access token\n";
             $accessToken = $authResponse['Data']['AuthToken'];
             $encryptedSek = $authResponse['Data']['Sek'] ?? null;
             
@@ -123,10 +125,10 @@ class DomesticEwbIrnService {
                 return $result;
             }
             
-            error_log("Domestic EWB: SEK decrypted successfully");
+            //error_log("Domestic EWB: SEK decrypted successfully");
             
             // Step 4: Generate IRN
-            error_log("Domestic EWB: Generating IRN for invoice #$invoiceId");
+            //error_log("Domestic EWB: Generating IRN for invoice #$invoiceId");
             //$irnResponse = $alankitClient->generateIrn($irnPayload, $accessToken);
             $payloadreq = base64_encode(json_encode($irnPayload));
             $encryptedPayload = $alankitClient->encryptBySymmetricKey($payloadreq, $decryptedSek);
@@ -137,20 +139,29 @@ class DomesticEwbIrnService {
             //echo '<br><br>'.$encryptedPayload.'<br><br>';
             // Send IRN generation request with encrypted payload
             //$irnResponse = $alankitClient->sendRequest('IRN_GENERATE_ENDPOINT', ['Data' => $encryptedPayload], true, $accessToken);
-            $irnResponse = $alankitClient->generateIrn(['Data' => $encryptedPayload], $accessToken);            
+            $irnResponse = $alankitClient->generateIrn(['Data' => $encryptedPayload], $accessToken);   
+            //print_r($irnResponse);
+                  
             if ($irnResponse && isset($irnResponse['Data'])) {
                 $decryptedResponse = $alankitClient->decrypt_irn($irnResponse['Data'], $decryptedSek);
                 $irnResponse = json_decode($decryptedResponse, true);
-                echo "Alankit IRN: IRN generation response decrypted for invoice #$invoiceId\n";
+                //echo "Alankit IRN: IRN generation response decrypted for invoice #$invoiceId\n";
                 //print_r($irnResponse);
             } else {
                 error_log("Alankit IRN: No response data received for invoice #$invoiceId");
                 //$irnResponse = null;
             }
+
+            $infoDtls = null;
+            if (is_array($irnResponse) && array_key_exists('InfoDtls', $irnResponse)) {
+                $infoDtls = is_array($irnResponse['InfoDtls']) ? json_encode($irnResponse['InfoDtls']) : (string)$irnResponse['InfoDtls'];
+            }
+
             if (!$irnResponse || !isset($irnResponse['Irn'])) {
                 $result['status'] = false;
                 $result['errors'][] = 'IRN generation failed: ' . ($irnResponse['message'] ?? 'Unknown error');
                 $this->updateIrnStatus($invoiceId, 'failed', $result['errors'][0], $irnPayload, $irnResponse);
+                $this->updateEwbStatus($invoiceId, 'failed', $result['errors'][0], $irnPayload, $irnResponse, null, null, null, null, null, null, null, $infoDtls);
                 $this->lastError = $result['errors'][0];
                 error_log("Domestic EWB: " . $result['errors'][0]);
                 return $result;
@@ -161,11 +172,51 @@ class DomesticEwbIrnService {
                 $result['irn'] = $irn;
                 $result['irn_message'] = 'IRN generated successfully';                
                 // Update IRN status in database
-                $this->updateIrnStatus($invoiceId, 'generated', null, $irnPayload, $irnResponse, $irn);                
+                $this->updateIrnStatus($invoiceId, 'generated', null, $irnPayload, $irnResponse, $irn); 
+
+                $ewbNo = isset($irnResponse['EwbNo']) ? (string)$irnResponse['EwbNo'] : null;
+                $genGstin = isset($irnResponse['GenGstin']) ? (string)$irnResponse['GenGstin'] : null;
+                $ewbDate = $this->normalizeDbDateTime($irnResponse['EwbDt'] ?? null);
+                $ewbValidTill = $this->normalizeDbDateTime($irnResponse['EwbValidTill'] ?? null);
+                $ewbStatus = !empty($ewbNo) ? 'generated' : 'pending';
+
+                $this->updateEwbStatus(
+                    $invoiceId,
+                    $ewbStatus,
+                    null,
+                    $irnPayload,
+                    $irnResponse,
+                    $ewbNo,
+                    !empty($ewbData['veh_no']) ? (string)$ewbData['veh_no'] : null,
+                    !empty($ewbData['veh_type']) ? (string)$ewbData['veh_type'] : null,
+                    $ewbNo,
+                    $ewbDate,
+                    $ewbValidTill,
+                    $genGstin,
+                    $infoDtls
+                );
+                               
+            } else {
+                $this->updateEwbStatus(
+                    $invoiceId,
+                    'failed',
+                    null,
+                    $irnPayload,
+                    $irnResponse,
+                    null,
+                    !empty($ewbData['veh_no']) ? (string)$ewbData['veh_no'] : null,
+                    !empty($ewbData['veh_type']) ? (string)$ewbData['veh_type'] : null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    $infoDtls
+                );
             }
             
+            
             // Save vehicle data if E-way bill was included
-            if (!empty($ewbData['veh_no']) && !empty($ewbData['veh_type'])) {
+            if (!empty($ewbData['veh_no']) && !empty($ewbData['veh_type']) && empty($irnResponse['EwbNo'])) {
                 $this->updateEwbStatus(
                     $invoiceId,
                     'generated',
@@ -174,7 +225,12 @@ class DomesticEwbIrnService {
                     null,
                     null,
                     $ewbData['veh_no'],
-                    $ewbData['veh_type']
+                    $ewbData['veh_type'],
+                    null,
+                    null,
+                    null,
+                    null,
+                    $infoDtls
                 );
                 error_log("Domestic EWB: IRN generated with E-way bill details - VehNo: {$ewbData['veh_no']}, VehType: {$ewbData['veh_type']}, IRN: $irn");
             } else {
@@ -235,7 +291,9 @@ class DomesticEwbIrnService {
         
         // Determine buyer and shipping details
         $isBusiness = (trim($customer['country'] ?? '') === 'IN');
-        $buyerGstin = $isBusiness ? ($customer['gstin'] ?? '') : 'URP';
+        //$buyerGstin = $isBusiness ? ($customer['gstin'] ?? '') : 'URP';
+        $buyerGstin = '07AAACE1288P2Z8'; // Hardcoded GSTIN for testing; replace with actual logic as needed
+
         $buyerStateCode = $isBusiness ? trim($customer['state_code']) : '';
         $buyerPincode = $isBusiness ? (trim($customer['zipcode'] ?? '') ?: '000000') : '999999';
         $shippingState = $isBusiness ? trim($customer['shipping_state'] ?? '') : trim($customer['state'] ?? '');
@@ -248,7 +306,7 @@ class DomesticEwbIrnService {
                 'SupTyp' => $isBusiness ? 'B2B' : 'B2C',
                 'RegRev' => 'N',
                 //'EcmGstin' => $firm['gst'] ?? '',
-                'EcmGstin' => $alankitConfig['gstin'] ?? '07AGAPA5363L002',
+                //'EcmGstin' => $alankitConfig['gstin'] ?? '07AGAPA5363L002',
                 'IgstOnIntra' => 'N'
             ],
             'DocDtls' => [
@@ -309,8 +367,10 @@ class DomesticEwbIrnService {
                 'Distance' => (int)($ewbData['distance'] ?? 100),
                 'TransDocNo' => (string)$invoiceNumber,
                 'TransDocDt' => (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')),
-                'VehNo' => (string)($ewbData['veh_no'] ?? ''),
-                'VehType' => (string)($ewbData['veh_type'] ?? 'R'),
+                //'VehNo' => (string)($ewbData['veh_no'] ?? ''),
+                //'VehType' => (string)($ewbData['veh_type'] ?? 'R'),
+                'VehNo' => 'ka123456', // Hardcoded for testing; replace with actual logic as needed
+                'VehType' => 'R', // Hardcoded for testing; replace with actual logic as needed
                 'TransMode' => (string)($ewbData['trans_mode'] ?? '1')
             ] : null
         ];
@@ -393,8 +453,22 @@ class DomesticEwbIrnService {
     /**
      * Update E-way bill status and data
      */
-    private function updateEwbStatus($invoiceId, $status, $error = null, $payload = null, $response = null, $ewb = null, $vehNo = null, $vehType = null) {
-        $query = "UPDATE vp_domestic_ewb_irn SET ewb_status = ?, ewb_error = ?, ewb_payload = ?, ewb_response = ?, ewb = ?, veh_no = ?, veh_type = ?, ewb_generated_at = NOW() WHERE vp_invoices_id = ?";
+    private function updateEwbStatus($invoiceId, $status, $error = null, $payload = null, $response = null, $ewb = null, $vehNo = null, $vehType = null, $ewbNo = null, $ewbDate = null, $ewbValidTill = null, $genGstin = null, $infoDtls = null) {
+        $query = "UPDATE vp_domestic_ewb_irn
+                  SET ewb_status = ?,
+                      ewb_error = ?,
+                      ewb_payload = ?,
+                      ewb_response = ?,
+                      ewb = ?,
+                      veh_no = ?,
+                      veh_type = ?,
+                      ewb_no = ?,
+                      ewb_date = ?,
+                      ewb_valid_till = ?,
+                      gen_gstin = ?,
+                      info_dtls = ?,
+                      ewb_generated_at = NOW()
+                  WHERE vp_invoices_id = ?";
         $stmt = $this->db->prepare($query);
         if (!$stmt) {
             error_log("Failed to prepare statement: " . $this->db->error);
@@ -402,8 +476,48 @@ class DomesticEwbIrnService {
         }
         $payloadJson = $payload ? json_encode($payload) : null;
         $responseJson = $response ? json_encode($response) : null;
-        $stmt->bind_param("sssssssi", $status, $error, $payloadJson, $responseJson, $ewb, $vehNo, $vehType, $invoiceId);
+        $stmt->bind_param("ssssssssssssi", $status, $error, $payloadJson, $responseJson, $ewb, $vehNo, $vehType, $ewbNo, $ewbDate, $ewbValidTill, $genGstin, $infoDtls, $invoiceId);
         return $stmt->execute();
+    }
+
+    /**
+     * Add info_dtls column on older databases if missing.
+     */
+    private function ensureInfoDtlsColumn() {
+        if ($this->infoDtlsColumnChecked) {
+            return;
+        }
+
+        $this->infoDtlsColumnChecked = true;
+        $check = $this->db->query("SHOW COLUMNS FROM vp_domestic_ewb_irn LIKE 'info_dtls'");
+        if ($check && $check->num_rows > 0) {
+            return;
+        }
+
+        $alter = "ALTER TABLE vp_domestic_ewb_irn ADD COLUMN info_dtls LONGTEXT NULL COMMENT 'InfoDtls from Alankit IRN/EWB response' AFTER gen_gstin";
+        if (!$this->db->query($alter)) {
+            error_log("Domestic EWB: Failed to add info_dtls column: " . $this->db->error);
+        }
+    }
+
+    /**
+     * Normalize various EWB datetime formats into MySQL DATETIME (Y-m-d H:i:s).
+     */
+    private function normalizeDbDateTime($raw): ?string {
+        if ($raw === null) {
+            return null;
+        }
+        $value = trim((string)$raw);
+        if ($value === '') {
+            return null;
+        }
+
+        $ts = strtotime($value);
+        if ($ts === false) {
+            return null;
+        }
+
+        return date('Y-m-d H:i:s', $ts);
     }
 }
 ?>
