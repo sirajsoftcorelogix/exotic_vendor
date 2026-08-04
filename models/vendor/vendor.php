@@ -713,6 +713,23 @@ class vendor
 
         $sql = "INSERT INTO vp_vendors (vendor_code, vendor_name, website, contact_name, vendor_email, vendor_email_is_primary, country_code, vendor_phone, vendor_phone_is_whatsapp, alt_phone, gst_number, pan_number, address, city, state, country, postal_code, webpage, rating, notes, user_id, team_id, agent_id, is_active, groupname, stock_replenishment_months, discount, broker_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->conn->prepare($sql);
+        $addTeamId = 0;
+        if (isset($data['addTeam'])) {
+            if (is_array($data['addTeam'])) {
+                $addTeamId = (int)($data['addTeam'][0] ?? 0);
+            } else {
+                $addTeamId = (int)$data['addTeam'];
+            }
+        }
+        $addAgentId = 0;
+        if (isset($data['addTeamMember'])) {
+            if (is_array($data['addTeamMember'])) {
+                $addAgentId = (int)($data['addTeamMember'][0] ?? 0);
+            } else {
+                $addAgentId = (int)$data['addTeamMember'];
+            }
+        }
+
         $stmt->bind_param(
             'sssssisssisssssssissiiissidi',
             $vendorCode,
@@ -736,8 +753,8 @@ class vendor
             $data['addRating'],
             $data['addNotes'],
             $_SESSION["user"]["id"],
-            $data['addTeam'],
-            $data['addTeamMember'],
+            $addTeamId,
+            $addAgentId,
             $data['addStatus'],
             $groupnameValue,
             $stockReplenishmentMonths,
@@ -846,12 +863,29 @@ class vendor
         $vendorPhoneIsWhatsapp = (int)$contactFields['vendor_phone_is_whatsapp'];
         $website = $contactFields['website'];
 
+        $editTeamId = 0;
+        if (isset($data['editTeam'])) {
+            if (is_array($data['editTeam'])) {
+                $editTeamId = (int)($data['editTeam'][0] ?? 0);
+            } else {
+                $editTeamId = (int)$data['editTeam'];
+            }
+        }
+        $editAgentId = 0;
+        if (isset($data['editTeamMember'])) {
+            if (is_array($data['editTeamMember'])) {
+                $editAgentId = (int)($data['editTeamMember'][0] ?? 0);
+            } else {
+                $editAgentId = (int)$data['editTeamMember'];
+            }
+        }
+
         $this->conn->begin_transaction();
 
         $sql = "UPDATE vp_vendors SET vendor_name = ?, website = ?, contact_name = ?, vendor_email = ?, vendor_email_is_primary = ?, country_code = ?, vendor_phone = ?, vendor_phone_is_whatsapp = ?, alt_phone = ?, gst_number = ?, pan_number = ?, address = ?, city = ?, state = ?, country = ?, postal_code = ?, webpage = ?, rating = ?, notes = ?, user_id = ?, team_id = ?, agent_id = ?, is_active = ?, groupname = ?, stock_replenishment_months = ?, discount = ?, broker_id = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
         $stmt->bind_param(
-            'ssssississsssssissiiissiidi',
+            'ssssississssssssissiiissidii',
             $data['editVendorName'],
             $website,
             $data['editContactPerson'],
@@ -872,8 +906,8 @@ class vendor
             $data['editRating'],
             $data['editNotes'],
             $_SESSION["user"]["id"],
-            $data['editTeam'],
-            $data['editTeamMember'],
+            $editTeamId,
+            $editAgentId,
             $data['editStatus'],
             $groupnameValue,
             $stockReplenishmentMonths,
@@ -886,7 +920,7 @@ class vendor
 
             return [
                 'success' => false,
-                'message' => 'Insert failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
+                'message' => 'Update failed: ' . $stmt->error . '. Please check your input and fill all required fields correctly.'
             ];
         }
         $stmt->close();
