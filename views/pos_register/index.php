@@ -2721,7 +2721,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   }
 
   function isHighValueTransaction() {
-    return getCurrentCheckoutTotal() >= getHighValueLimit();
+    return getCurrentCheckoutTotal() >= getHighValueLimit() && isFullFinalPaymentSelected();
   }
 
   function formatInrAmount(amount) {
