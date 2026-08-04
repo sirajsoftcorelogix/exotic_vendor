@@ -5039,9 +5039,9 @@ class POSRegisterController
         );
         
         // Generate IRN and E-way bill if requested
-        if (!empty($payload['generate_ewb']) && $payload['generate_ewb'] === '1' && !empty($invoiceMeta['invoice_id'])) {
-            $this->handlePosEwbGeneration($conn, (int)$invoiceMeta['invoice_id'], $payload, $orderNumber);
-        }
+        // if (!empty($payload['generate_ewb']) && $payload['generate_ewb'] === '1' && !empty($invoiceMeta['invoice_id'])) {
+        //     $this->handlePosEwbGeneration($conn, (int)$invoiceMeta['invoice_id'], $payload, $orderNumber);
+        // }
         
         $fulfillmentStatusMeta = $this->syncPosCheckoutOrderFulfillmentStatus(
             $conn,
