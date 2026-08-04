@@ -848,7 +848,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
               <option value="2">(2) Rail</option>
               <option value="3">(3) Air</option>
               <option value="4">(4) Ship</option>
-              <!-- <option value="5">(5) Road cum Ship</option> -->
+              <option value="5">(5) Road cum Ship</option>
             </select>
           </div>
           

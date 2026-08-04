@@ -828,12 +828,13 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                     <div class="flex flex-col sm:flex-row gap-2">
                                         <select class="<?= $vfInput ?> sm:max-w-[210px]" name="editCountryCode" id="editCountryCode" required>
                                             <option value="" disabled>Select code</option>
-                                            <?php foreach ($countryList as $cl): ?>
+                                            <?php foreach ($countryList as $cl): ?> 
                                                 <option value="<?php echo $cl['phone_code']; ?>" <?php if ($cl['name'] === 'India' || $cl['phone_code'] === '91') { echo 'selected'; } ?>>
-                                                    <?php echo $cl['name'] . ' (+' . $cl['phone_code'] . ')'; ?>
+                                                    <?php echo $cl['name'] . ' (+' . $cl['phone_code'] . ')'; ?> 
                                                 </option>
                                             <?php endforeach; ?>
                                         </select>
+										
                                         <input type="text" class="<?= $vfInput ?> flex-1" required name="editPhone" id="editPhone" oninput="limitToTenDigits(this)" placeholder="10-digit mobile" />
                                     </div>
                                     <span id="editPhoneMsg" class="text-sm text-red-500"></span>
