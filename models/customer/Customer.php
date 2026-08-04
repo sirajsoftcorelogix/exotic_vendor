@@ -870,6 +870,150 @@ class Customer
     }
 
     /**
+     * Create or update POS customer from modal POST data.
+     *
+     * @param array<string, mixed> $post
+     * @return array{success:bool, is_update?:bool, message?:string, customer?:array{id:int, name:string, email:string, phone:string}}
+     */
+    public function savePosCustomerFromPost(array $post): array
+    {
+        $customerId = (int)($post['customer_id'] ?? 0);
+        $first = trim((string)($post['first_name'] ?? ''));
+        $last  = trim((string)($post['last_name'] ?? ''));
+        $phone = trim((string)($post['mobile'] ?? ''));
+        $email = trim((string)($post['cus_email'] ?? ''));
+
+        if ($first === '' || $last === '') {
+            return [
+                'success' => false,
+                'message' => 'First name and last name are required.'
+            ];
+        }
+
+        if ($phone === '' && $email === '') {
+            return [
+                'success' => false,
+                'message' => 'Either mobile phone or email is required.'
+            ];
+        }
+
+        $name = trim($first . ' ' . $last);
+
+        if ($customerId > 0) {
+            $stmt = $this->conn->prepare('UPDATE vp_customers SET name = ?, email = ?, phone = ? WHERE id = ?');
+            if (!$stmt) {
+                return [
+                    'success' => false,
+                    'message' => 'Database error (prepare): ' . $this->conn->error
+                ];
+            }
+            $stmt->bind_param('sssi', $name, $email, $phone, $customerId);
+            try {
+                $stmt->execute();
+                $stmt->close();
+            } catch (\mysqli_sql_exception $e) {
+                $stmt->close();
+                if (str_contains($e->getMessage(), 'Duplicate entry') || $e->getSqlState() === '23000') {
+                    return [
+                        'success' => false,
+                        'message' => 'Another customer with this email and phone already exists.'
+                    ];
+                }
+                return [
+                    'success' => false,
+                    'message' => 'Could not update customer: ' . $e->getMessage()
+                ];
+            }
+
+            $this->upsertPosCustomerDetailsFromPost($customerId, $post);
+
+            return [
+                'success' => true,
+                'is_update' => true,
+                'message' => 'Customer updated successfully.',
+                'customer' => [
+                    'id' => $customerId,
+                    'name' => $name,
+                    'phone' => $phone,
+                    'email' => $email,
+                ]
+            ];
+        }
+
+        // Insert new customer
+        $stmt = $this->conn->prepare('INSERT INTO vp_customers (name, email, phone) VALUES (?, ?, ?)');
+        if (!$stmt) {
+            return [
+                'success' => false,
+                'message' => 'Database error (prepare): ' . $this->conn->error
+            ];
+        }
+        $stmt->bind_param('sss', $name, $email, $phone);
+        try {
+            $stmt->execute();
+            $newId = (int)$stmt->insert_id;
+            $stmt->close();
+        } catch (\mysqli_sql_exception $e) {
+            $stmt->close();
+            if (str_contains($e->getMessage(), 'Duplicate entry') || $e->getSqlState() === '23000') {
+                $lookup = $this->conn->prepare(
+                    'SELECT id, name, email, phone FROM vp_customers WHERE email = ? AND phone = ? LIMIT 1'
+                );
+                if ($lookup) {
+                    $lookup->bind_param('ss', $email, $phone);
+                    $lookup->execute();
+                    $existing = $lookup->get_result()->fetch_assoc();
+                    $lookup->close();
+                    if (!empty($existing['id'])) {
+                        $exId = (int)$existing['id'];
+                        $this->upsertPosCustomerDetailsFromPost($exId, $post);
+                        return [
+                            'success' => true,
+                            'is_update' => false,
+                            'message' => 'This email and phone are already registered; using existing customer.',
+                            'customer' => [
+                                'id' => $exId,
+                                'name' => $existing['name'] ?? $name,
+                                'phone' => $existing['phone'] ?? $phone,
+                                'email' => $existing['email'] ?? $email,
+                            ]
+                        ];
+                    }
+                }
+                return [
+                    'success' => false,
+                    'message' => 'A customer with this email and phone already exists.'
+                ];
+            }
+            return [
+                'success' => false,
+                'message' => 'Could not save customer: ' . $e->getMessage()
+            ];
+        }
+
+        if ($newId <= 0) {
+            return [
+                'success' => false,
+                'message' => 'Customer was not created (no insert id).'
+            ];
+        }
+
+        $this->upsertPosCustomerDetailsFromPost($newId, $post);
+
+        return [
+            'success' => true,
+            'is_update' => false,
+            'message' => 'Customer saved successfully.',
+            'customer' => [
+                'id' => $newId,
+                'name' => $name,
+                'phone' => $phone,
+                'email' => $email,
+            ]
+        ];
+    }
+
+    /**
      * Persist Add Customer modal billing/shipping + GSTIN to pos_customer_details (UPSERT by customer_id).
      *
      * @param array<string, mixed> $post Typically $_POST from POS add-customer form.

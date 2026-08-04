@@ -1,9 +1,11 @@
 <?php
 $customerLabel = 'Walk-in Customer';
-$customerPhone = '-';
+$customerSubtext = '-';
 if (!empty($selected_customer) && is_array($selected_customer)) {
     $customerLabel = trim((string)($selected_customer['name'] ?? '')) ?: 'Walk-in Customer';
-    $customerPhone = trim((string)($selected_customer['phone'] ?? '')) ?: '-';
+    $phone = trim((string)($selected_customer['phone'] ?? ''));
+    $email = trim((string)($selected_customer['email'] ?? ''));
+    $customerSubtext = $phone !== '' ? $phone : ($email !== '' ? $email : '-');
 }
 ?>
 <div id="posCartTablePage" class="min-h-screen bg-slate-50" data-pos-cart-table-page="1">
@@ -156,8 +158,8 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
             aria-label="Add customer">+</button>
         </div>
         <div class="shrink-0 text-sm lg:text-right">
-          <div id="posCartTableCustomerName" class="font-semibold text-slate-800"><?= htmlspecialchars($customerLabel) ?></div>
-          <div id="posCartTableCustomerPhone" class="text-slate-500"><?= htmlspecialchars($customerPhone) ?></div>
+          <div id="posCartTableCustomerName" onclick="editSelectedCustomer()" class="font-semibold text-slate-800 cursor-pointer hover:text-orange-600 hover:underline" title="Click to edit customer details"><?= htmlspecialchars($customerLabel) ?></div>
+          <div id="posCartTableCustomerPhone" class="text-slate-500"><?= htmlspecialchars($customerSubtext) ?></div>
         </div>
       </div>
     </div>
