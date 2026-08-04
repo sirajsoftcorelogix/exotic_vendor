@@ -5289,102 +5289,90 @@ class product
             $locationLabel = 'Warehouse #' . $warehouseId;
         }
 
-        $this->db->begin_transaction();
-        try {
-            $processedCount = 0;
-            $warnings = [];
+        $processedCount = 0;
+        $errors = [];
+        $warnings = [];
 
-            foreach ($items as $index => $item) {
-                $productId = (int)($item['product_id'] ?? 0);
-                $sku = trim((string)($item['sku'] ?? ''));
-                $quantity = (int)($item['quantity'] ?? 0);
-                $type = strtoupper(trim((string)($item['type'] ?? 'IN')));
-                $reason = trim((string)($item['reason'] ?? ''));
+        foreach ($items as $index => $item) {
+            $productId = (int)($item['product_id'] ?? 0);
+            $sku = trim((string)($item['sku'] ?? ''));
+            $quantity = (int)($item['quantity'] ?? 0);
+            $type = strtoupper(trim((string)($item['type'] ?? 'IN')));
+            $reason = trim((string)($item['reason'] ?? ''));
 
-                if ($productId <= 0 && $sku !== '') {
-                    $prodBySku = $this->getProductByskuExact($sku);
-                    if ($prodBySku && !empty($prodBySku['id'])) {
-                        $productId = (int)$prodBySku['id'];
-                    }
+            if ($productId <= 0 && $sku !== '') {
+                $prodBySku = $this->getProductByskuExact($sku);
+                if ($prodBySku && !empty($prodBySku['id'])) {
+                    $productId = (int)$prodBySku['id'];
                 }
+            }
 
-                if ($productId <= 0 || $sku === '') {
-                    throw new Exception("Row #" . ($index + 1) . ": Invalid product or SKU.");
-                }
-                if ($quantity <= 0) {
-                    throw new Exception("Row #" . ($index + 1) . " (SKU {$sku}): Quantity must be greater than 0.");
-                }
-                if (!in_array($type, ['IN', 'OUT'], true)) {
-                    throw new Exception("Row #" . ($index + 1) . " (SKU {$sku}): Invalid adjustment type.");
-                }
+            if ($productId <= 0 || $sku === '') {
+                $errors[] = "Row #" . ($index + 1) . ": Invalid product or SKU.";
+                continue;
+            }
+            if ($quantity <= 0) {
+                $errors[] = "Row #" . ($index + 1) . " (SKU {$sku}): Quantity must be greater than 0.";
+                continue;
+            }
+            if (!in_array($type, ['IN', 'OUT'], true)) {
+                $errors[] = "Row #" . ($index + 1) . " (SKU {$sku}): Invalid adjustment type.";
+                continue;
+            }
 
-                // Verify product exists and fetch details
-                $prodStmt = $this->db->prepare('SELECT id, sku, item_code, size, color FROM vp_products WHERE id = ? LIMIT 1');
-                $prodStmt->bind_param('i', $productId);
-                $prodStmt->execute();
-                $prod = $prodStmt->get_result()->fetch_assoc();
-                $prodStmt->close();
+            // Verify product exists and fetch details
+            $prodStmt = $this->db->prepare('SELECT id, sku, item_code, size, color FROM vp_products WHERE id = ? LIMIT 1');
+            $prodStmt->bind_param('i', $productId);
+            $prodStmt->execute();
+            $prod = $prodStmt->get_result()->fetch_assoc();
+            $prodStmt->close();
 
-                if (!$prod) {
-                    throw new Exception("Row #" . ($index + 1) . " (SKU {$sku}): Product not found in database.");
-                }
+            if (!$prod) {
+                $errors[] = "Row #" . ($index + 1) . " (SKU {$sku}): Product not found in database.";
+                continue;
+            }
 
-                // Fetch running stock prior to adjustment to calculate exact storefront delta
-                $lastRunning = StockMovement::getLastRunningStockByProductId($this->db, (int)$prod['id'], $warehouseId);
+            $insertData = [
+                'product_id'    => (int)$prod['id'],
+                'sku'           => $prod['sku'],
+                'item_code'     => $prod['item_code'],
+                'size'          => $prod['size'],
+                'color'         => $prod['color'],
+                'quantity'      => $quantity,
+                'reason'        => $reason !== '' ? $reason : 'Bulk stock adjustment',
+                'update_by_user' => $userId,
+                'movement_type' => $type,
+                'warehouse_id'  => $warehouseId,
+                'location'      => $locationLabel,
+                'ref_type'      => 'MANUAL',
+                'strict_stock_check' => false, // Clamps new stock level to 0 if decrease exceeds current qty
+            ];
 
-                $insertData = [
-                    'product_id' => (int)$prod['id'],
-                    'sku' => $prod['sku'],
-                    'item_code' => $prod['item_code'],
-                    'size' => $prod['size'],
-                    'color' => $prod['color'],
-                    'quantity' => $quantity,
-                    'reason' => $reason !== '' ? $reason : 'Bulk stock adjustment',
-                    'update_by_user' => $userId,
-                    'movement_type' => $type,
-                    'warehouse_id' => $warehouseId,
-                    'location' => $locationLabel,
-                    'ref_type' => 'MANUAL',
-                    'strict_stock_check' => false, // If new stock drops below 0, it is clamped to 0
-                ];
-
-                $movement = StockMovement::insert($this->db, $insertData);
+            // Re-use standard insertStockMovement method (same method used by single-product Stock Adjustment)
+            $res = $this->insertStockMovement($insertData);
+            if (!empty($res['success'])) {
                 $processedCount++;
-
-                $updateLocalStock = !empty($item['update_local_stock']);
-
-                // Sync local stock delta to storefront API if update_local_stock flag is true
-                if ($updateLocalStock && $this->shouldSyncLocalStockDeltaForMovement($insertData)) {
-                    $newRunning = (float)($movement['running_stock'] ?? 0.0);
-                    $delta = (int)round($newRunning - $lastRunning);
-
-                    $itemCode = trim((string)$prod['item_code']);
-                    if ($delta !== 0 && $itemCode !== '') {
-                        $apiSync = $this->applyLocalStockDeltaAndRefreshFromVendorApi(
-                            $itemCode,
-                            $delta,
-                            (string)$prod['size'],
-                            (string)$prod['color']
-                        );
-                        if (empty($apiSync['success'])) {
-                            $warnings[] = "SKU {$sku}: " . trim((string)($apiSync['message'] ?? 'Storefront stock sync failed.'));
-                        }
-                    }
+                if (!empty($res['message']) && strpos($res['message'], 'Warning:') !== false) {
+                    $warnings[] = "SKU {$sku}: " . $res['message'];
                 }
+            } else {
+                $errors[] = "SKU {$sku}: " . ($res['message'] ?? 'Failed to update stock.');
             }
-
-            $this->db->commit();
-
-            $msg = "Successfully processed {$processedCount} stock adjustment(s).";
-            if (!empty($warnings)) {
-                $msg .= " Warnings: " . implode('; ', array_unique($warnings));
-            }
-
-            return ['success' => true, 'message' => $msg, 'processed_count' => $processedCount];
-        } catch (Exception $e) {
-            $this->db->rollback();
-            return ['success' => false, 'message' => $e->getMessage()];
         }
+
+        if ($processedCount === 0 && !empty($errors)) {
+            return ['success' => false, 'message' => implode('; ', $errors)];
+        }
+
+        $msg = "Successfully processed {$processedCount} stock adjustment(s).";
+        if (!empty($errors)) {
+            $msg .= " Errors: " . implode('; ', $errors);
+        }
+        if (!empty($warnings)) {
+            $msg .= " Warnings: " . implode('; ', array_unique($warnings));
+        }
+
+        return ['success' => true, 'message' => $msg, 'processed_count' => $processedCount];
     }
 
     /**
