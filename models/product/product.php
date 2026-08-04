@@ -5209,6 +5209,178 @@ class product
     }
 
     /**
+     * Get running stock map for multiple product IDs at a warehouse.
+     *
+     * @param list<int> $productIds
+     * @param int $warehouseId
+     * @return array<int, float>
+     */
+    public function getWarehouseStockMap(array $productIds, int $warehouseId): array
+    {
+        require_once __DIR__ . '/StockMovement.php';
+
+        return StockMovement::getLastRunningStockMapByProductIds($this->db, $productIds, $warehouseId);
+    }
+
+    /**
+     * Get running stock for a single product ID at a warehouse.
+     */
+    public function getWarehouseStockByProductId(int $productId, int $warehouseId): float
+    {
+        require_once __DIR__ . '/StockMovement.php';
+
+        return StockMovement::getLastRunningStockByProductId($this->db, $productId, $warehouseId);
+    }
+
+    /**
+     * Attach 'current_qty' property to a list of product associative arrays for a given warehouse.
+     *
+     * @param list<array<string, mixed>> $products
+     * @param int $warehouseId
+     * @return list<array<string, mixed>>
+     */
+    public function hydrateProductsWarehouseStock(array $products, int $warehouseId): array
+    {
+        if ($warehouseId <= 0 || empty($products)) {
+            return $products;
+        }
+
+        $pIds = array_column($products, 'id');
+        $stockMap = $this->getWarehouseStockMap($pIds, $warehouseId);
+
+        foreach ($products as &$pRow) {
+            $pRow['current_qty'] = (float)($stockMap[(int)($pRow['id'] ?? 0)] ?? 0);
+        }
+        unset($pRow);
+
+        return $products;
+    }
+
+    /**
+     * Process bulk stock adjustments for multiple products in a single warehouse.
+     *
+     * @param int $warehouseId
+     * @param array<int, array<string, mixed>> $items
+     * @param int $userId
+     * @return array{success: bool, message: string, processed_count?: int}
+     */
+    public function processBulkStockAdjustment(int $warehouseId, array $items, int $userId): array
+    {
+        require_once __DIR__ . '/StockMovement.php';
+
+        if ($warehouseId <= 0) {
+            return ['success' => false, 'message' => 'Please select a valid warehouse.'];
+        }
+        if (empty($items)) {
+            return ['success' => false, 'message' => 'No valid adjustment items provided.'];
+        }
+
+        // Fetch warehouse location label
+        $locationLabel = '';
+        $whStmt = $this->db->prepare('SELECT address_title FROM exotic_address WHERE id = ? LIMIT 1');
+        if ($whStmt) {
+            $whStmt->bind_param('i', $warehouseId);
+            $whStmt->execute();
+            $whRes = $whStmt->get_result()->fetch_assoc();
+            $locationLabel = trim((string)($whRes['address_title'] ?? ''));
+            $whStmt->close();
+        }
+        if ($locationLabel === '') {
+            $locationLabel = 'Warehouse #' . $warehouseId;
+        }
+
+        $this->db->begin_transaction();
+        try {
+            $processedCount = 0;
+            $warnings = [];
+
+            foreach ($items as $index => $item) {
+                $productId = (int)($item['product_id'] ?? 0);
+                $sku = trim((string)($item['sku'] ?? ''));
+                $quantity = (int)($item['quantity'] ?? 0);
+                $type = strtoupper(trim((string)($item['type'] ?? 'IN')));
+                $reason = trim((string)($item['reason'] ?? ''));
+
+                if ($productId <= 0 && $sku !== '') {
+                    $prodBySku = $this->getProductByskuExact($sku);
+                    if ($prodBySku && !empty($prodBySku['id'])) {
+                        $productId = (int)$prodBySku['id'];
+                    }
+                }
+
+                if ($productId <= 0 || $sku === '') {
+                    throw new Exception("Row #" . ($index + 1) . ": Invalid product or SKU.");
+                }
+                if ($quantity <= 0) {
+                    throw new Exception("Row #" . ($index + 1) . " (SKU {$sku}): Quantity must be greater than 0.");
+                }
+                if (!in_array($type, ['IN', 'OUT'], true)) {
+                    throw new Exception("Row #" . ($index + 1) . " (SKU {$sku}): Invalid adjustment type.");
+                }
+
+                // Verify product exists and fetch details
+                $prodStmt = $this->db->prepare('SELECT id, sku, item_code, size, color FROM vp_products WHERE id = ? LIMIT 1');
+                $prodStmt->bind_param('i', $productId);
+                $prodStmt->execute();
+                $prod = $prodStmt->get_result()->fetch_assoc();
+                $prodStmt->close();
+
+                if (!$prod) {
+                    throw new Exception("Row #" . ($index + 1) . " (SKU {$sku}): Product not found in database.");
+                }
+
+                $insertData = [
+                    'product_id' => (int)$prod['id'],
+                    'sku' => $prod['sku'],
+                    'item_code' => $prod['item_code'],
+                    'size' => $prod['size'],
+                    'color' => $prod['color'],
+                    'quantity' => $quantity,
+                    'reason' => $reason !== '' ? $reason : 'Bulk stock adjustment',
+                    'update_by_user' => $userId,
+                    'movement_type' => $type,
+                    'warehouse_id' => $warehouseId,
+                    'location' => $locationLabel,
+                    'ref_type' => 'MANUAL',
+                    'strict_stock_check' => ($type === 'OUT'),
+                ];
+
+                $movement = StockMovement::insert($this->db, $insertData);
+                $processedCount++;
+
+                // Sync local stock delta to storefront API if MANUAL movement
+                if ($this->shouldSyncLocalStockDeltaForMovement($insertData)) {
+                    $delta = ($type === 'IN') ? $quantity : -$quantity;
+                    $itemCode = trim((string)$prod['item_code']);
+                    if ($delta !== 0 && $itemCode !== '') {
+                        $apiSync = $this->applyLocalStockDeltaAndRefreshFromVendorApi(
+                            $itemCode,
+                            $delta,
+                            (string)$prod['size'],
+                            (string)$prod['color']
+                        );
+                        if (empty($apiSync['success'])) {
+                            $warnings[] = "SKU {$sku}: " . trim((string)($apiSync['message'] ?? 'Storefront stock sync failed.'));
+                        }
+                    }
+                }
+            }
+
+            $this->db->commit();
+
+            $msg = "Successfully processed {$processedCount} stock adjustment(s).";
+            if (!empty($warnings)) {
+                $msg .= " Warnings: " . implode('; ', array_unique($warnings));
+            }
+
+            return ['success' => true, 'message' => $msg, 'processed_count' => $processedCount];
+        } catch (Exception $e) {
+            $this->db->rollback();
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
      * Sales returns sync Exotic via order/modify (returned status), not product/modify local_stock_delta.
      *
      * @param array<string, mixed> $data

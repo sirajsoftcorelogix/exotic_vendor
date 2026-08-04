@@ -4303,12 +4303,17 @@ class ProductsController
             exit;
         }
 
+        $warehouseId = isset($_GET['warehouse_id']) ? (int)$_GET['warehouse_id'] : 0;
+
         $by = isset($_GET['by']) ? trim((string)$_GET['by']) : '';
         if ($by === 'sku' && !$exact) {
             $products = $productModel->searchProductsBySkuLike($q);
             if (!$products || count($products) === 0) {
                 echo json_encode(['success' => false, 'message' => 'No products found for this SKU search']);
                 exit;
+            }
+            if ($warehouseId > 0) {
+                $products = $productModel->hydrateProductsWarehouseStock($products, $warehouseId);
             }
             echo json_encode(['success' => true, 'products' => $products]);
             exit;
@@ -4317,6 +4322,9 @@ class ProductsController
         if ($exact) {
             $p = $productModel->getProductByskuExact($q, true);
             if ($p && !empty($p['id'])) {
+                if ($warehouseId > 0) {
+                    $p['current_qty'] = $productModel->getWarehouseStockByProductId((int)$p['id'], $warehouseId);
+                }
                 echo json_encode(['success' => true, 'product' => $p]);
                 exit;
             }
@@ -4338,6 +4346,10 @@ class ProductsController
         if (!$products || count($products) === 0) {
             echo json_encode(['success' => false, 'message' => 'Product not found']);
             exit;
+        }
+
+        if ($warehouseId > 0) {
+            $products = $productModel->hydrateProductsWarehouseStock($products, $warehouseId);
         }
 
         echo json_encode(['success' => true, 'products' => $products]);
@@ -5069,6 +5081,121 @@ class ProductsController
             echo TextileLabel::renderPrintDocument($row);
         } else {
             echo TextileLabel::renderPrintDocumentBatch(array_fill(0, $copies, $row));
+        }
+        exit;
+    }
+
+    public function bulkStockAdjustment(): void
+    {
+        is_login();
+        if (!canSrEmpAccess()) {
+            renderTemplate('views/errors/error.php', [
+                'message' => ['type' => 'error', 'text' => 'Access denied. You need Sr Emp or Administrator privileges to access Bulk Stock Adjustment.']
+            ], 'Access Denied');
+            return;
+        }
+
+        global $productModel, $usersModel;
+        $warehouses = $usersModel->getAllWarehouses();
+
+        // Determine user assigned warehouse
+        $sessionUserId = (int)($_SESSION['user']['id'] ?? 0);
+        $userWarehouseId = (int)($_SESSION['warehouse_id'] ?? ($_SESSION['user']['warehouse_id'] ?? 0));
+
+        if ($userWarehouseId <= 0 && !empty($warehouses)) {
+            $userWarehouseId = (int)$warehouses[0]['id'];
+        }
+
+        $isAdmin = isAdministratorUser();
+
+        renderTemplate('views/products/bulk_stock_adjustment_page.php', [
+            'warehouses' => $warehouses,
+            'userWarehouseId' => $userWarehouseId,
+            'isAdmin' => $isAdmin,
+        ], 'Bulk Stock Adjustment');
+    }
+
+    public function processBulkStockAdjustment(): void
+    {
+        is_login();
+        if (ob_get_level() > 0) ob_clean();
+        header('Content-Type: application/json');
+
+        if (!canSrEmpAccess()) {
+            echo json_encode(['success' => false, 'message' => 'Access denied. You need Sr Emp or Administrator privileges.']);
+            exit;
+        }
+
+        global $productModel;
+        try {
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true);
+
+            if (!is_array($data)) {
+                throw new Exception('Invalid JSON payload.');
+            }
+
+            $sessionUserId = (int)($_SESSION['user']['id'] ?? 0);
+            if ($sessionUserId <= 0) {
+                throw new Exception('Invalid session user.');
+            }
+
+            $warehouseId = (int)($data['warehouse_id'] ?? 0);
+            $items = $data['items'] ?? [];
+
+            if ($warehouseId <= 0) {
+                throw new Exception('Please select a valid warehouse.');
+            }
+
+            // If user is not admin, lock warehouse to their assigned warehouse
+            if (!isAdministratorUser()) {
+                $userWarehouseId = (int)($_SESSION['warehouse_id'] ?? ($_SESSION['user']['warehouse_id'] ?? 0));
+                if ($userWarehouseId > 0 && $warehouseId !== $userWarehouseId) {
+                    throw new Exception('You can only perform adjustments for your assigned warehouse.');
+                }
+            }
+
+            if (!is_array($items) || empty($items)) {
+                throw new Exception('No adjustment items provided.');
+            }
+
+            $result = $productModel->processBulkStockAdjustment($warehouseId, $items, $sessionUserId);
+
+            echo json_encode($result);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    public function getProductsWarehouseStock(): void
+    {
+        is_login();
+        if (ob_get_level() > 0) ob_clean();
+        header('Content-Type: application/json');
+
+        if (!canSrEmpAccess()) {
+            echo json_encode(['success' => false, 'message' => 'Access denied.']);
+            exit;
+        }
+
+        try {
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true) ?? [];
+            $warehouseId = (int)($data['warehouse_id'] ?? 0);
+            $productIds = array_filter(array_map('intval', $data['product_ids'] ?? []));
+
+            if ($warehouseId <= 0 || empty($productIds)) {
+                echo json_encode(['success' => true, 'stock_map' => []]);
+                exit;
+            }
+
+            global $productModel;
+            $stockMap = $productModel->getWarehouseStockMap($productIds, $warehouseId);
+
+            echo json_encode(['success' => true, 'stock_map' => $stockMap]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
         }
         exit;
     }
