@@ -370,7 +370,8 @@
         }
     }
 
-    function validatePaymentSplits() {
+    function validatePaymentSplits(options) {
+        options = options || {};
         hideSplitValidationError();
         var grandTotal = getTargetTotal();
         var splits = collectAllPaymentSplitRowsFromUi();
@@ -475,10 +476,23 @@
         var cashLegNeeds269 = splits.some(function (s) {
             return s.mode === 'cash' && s.amount + 0.02 >= highValueLimit;
         });
-        if (cashLegNeeds269) {
-            var okCash = window.confirm('Cash receipts of ₹2,00,000 or more are restricted under Income Tax Act Section 269ST. Please switch to digital payment.\n\nDo you still want to continue after acknowledging this warning?');
-            if (!okCash) {
-                showSplitValidationError('Please switch to digital payment or acknowledge the cash warning.');
+        if (cashLegNeeds269 && !options.skip269stConfirm) {
+            if (typeof window.showPosConfirmModal === 'function') {
+                window.showPosConfirmModal({
+                    title: 'Section 269ST Cash Warning',
+                    message: 'Cash receipts of ₹2,00,000 or more are restricted under Income Tax Act Section 269ST. Please switch to digital payment.\n\nDo you still want to continue after acknowledging this warning?',
+                    confirmText: 'Acknowledge & Continue',
+                    cancelText: 'Switch Payment',
+                    tone: 'warning',
+                    onConfirm: function () {
+                        if (typeof options.on269stConfirmed === 'function') {
+                            options.on269stConfirmed();
+                        }
+                    },
+                    onCancel: function () {
+                        showSplitValidationError('Please switch to digital payment or acknowledge the cash warning.');
+                    }
+                });
                 return null;
             }
         }

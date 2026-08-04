@@ -4480,6 +4480,31 @@ class POSRegisterController
         exit;
     }
 
+    public function save_customer_compliance(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        global $conn;
+        $json = file_get_contents('php://input');
+        $data = json_decode($json, true);
+        if (!is_array($data)) {
+            $data = $_POST;
+        }
+
+        $customerId = (int)($data['customer_id'] ?? 0);
+        if ($customerId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Customer ID is required.']);
+            exit;
+        }
+
+        require_once __DIR__ . '/../helpers/compliance/HighValueComplianceValidator.php';
+        $res = HighValueComplianceValidator::saveCustomerCompliance($conn, $customerId, $data);
+        echo json_encode($res);
+        exit;
+    }
+
     /**
      * POST JSON: address confirm fields + payment_* + customer_id + order_total (from live cart).
      * Proxies Exotic POST /order/create, then inserts pos_payments with receipt number.
@@ -4774,15 +4799,7 @@ class POSRegisterController
         if ($orderTotal > 0.001) {
             $compliance = $this->evaluateHighValueCompliance($payload, $orderTotal, $advanceAmount, $paymentMode, $conn);
         }
-        if (!$compliance['ok']) {
-            echo json_encode([
-                'success' => false,
-                'requires_compliance' => true,
-                'message' => implode(' ', $compliance['errors']),
-                'errors' => $compliance['errors'],
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
-        }
+        // High-value compliance check shifted to Invoice Creation event - order creation is not blocked
 
         $cashDiscount = round((float)($payload['receipt_cash_discount'] ?? 0), 2);
         if ($cashDiscount > 0.001) {

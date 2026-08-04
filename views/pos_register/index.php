@@ -140,6 +140,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     window.POS_SESSION_CUSTOMER_ID = <?= json_encode(!empty($_SESSION['pos_customer_id']) ? (string)(int)$_SESSION['pos_customer_id'] : '') ?>;
     window.POS_INITIAL_CUSTOMER = <?= json_encode(isset($selected_customer) ? $selected_customer : null, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_HIGH_VALUE_TRANSACTION_LIMIT = <?= json_encode((float)($high_value_transaction_limit ?? 200000.00)) ?>;
+    window.POS_COUNTRY_LIST = <?= json_encode($posCountryList, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_COUNTRY_ISO_BY_NAME = <?= json_encode($posCountryIsoByName, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_INDIA_STATES = <?= json_encode($pos_india_states ?? [], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_COUNTRY_STATES = <?= json_encode($pos_country_states ?? ['IN' => ($pos_india_states ?? [])], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
@@ -746,7 +747,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           </div>
           <div id="countryResidenceWrap" class="mt-3 hidden">
             <label class="block font-medium">Country of Residence <span id="countryRequiredStar" class="field-req-star text-red-600">*</span>
-              <input id="country_of_residence" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm" placeholder="Country of residence">
+              <select id="country_of_residence" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm">
+                <option value="">Select Country of Residence</option>
+                <?php
+                  $selected_iso = '';
+                  include __DIR__ . '/partials/iso_country_options.php';
+                ?>
+              </select>
             </label>
           </div>
           <p id="complianceInlineError" class="mt-2 hidden text-[11px] font-medium text-red-700"></p>
@@ -1043,6 +1050,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 
 <!-- ===== END PAGE WRAPPER ===== -->
 <script src="<?php echo base_url(); ?>assets/js/pos_message_modal.js"></script>
+<script src="<?php echo base_url(); ?>assets/js/compliance_doc_modal.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos_cart_hooks.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/order_follow_up_pos.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos.js"></script>
@@ -1063,6 +1071,16 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       .then(data => {
 
         if (!data.success) {
+          if (data.require_compliance && window.ComplianceDocModal) {
+            window.ComplianceDocModal.open({
+              customerId: data.customer_id,
+              message: data.message,
+              onSuccess: function () {
+                autoCreateInvoiceThenPreview(orderid);
+              }
+            });
+            return;
+          }
           showToast(data.message || "Invoice create failed", "red");
           return;
         }
@@ -1523,7 +1541,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     syncCustomInvoiceNumberField();
   }
 
-  function validatePaymentSplitsForCheckout(grandTotal) {
+  function validatePaymentSplitsForCheckout(grandTotal, options) {
+    options = options || {};
     var box = document.getElementById("payment_split_validation");
     var boxText = document.getElementById("payment_split_validation_text");
     var hideErr = function() {
@@ -1646,10 +1665,23 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var cashLegNeeds269 = splits.some(function(s) {
       return s.mode === "cash" && s.amount + 0.02 >= highValueLimit;
     });
-    if (cashLegNeeds269) {
-      var okCash = window.confirm("Cash receipts of ₹2,00,000 or more are restricted under Income Tax Act Section 269ST. Please switch to digital payment.\n\nDo you still want to continue after acknowledging this warning?");
-      if (!okCash) {
-        showErr("Please switch to digital payment or acknowledge the cash warning.");
+    if (cashLegNeeds269 && !options.skip269stConfirm) {
+      if (typeof window.showPosConfirmModal === "function") {
+        window.showPosConfirmModal({
+          title: "Section 269ST Cash Warning",
+          message: "Cash receipts of ₹2,00,000 or more are restricted under Income Tax Act Section 269ST. Please switch to digital payment.\n\nDo you still want to continue after acknowledging this warning?",
+          confirmText: "Acknowledge & Continue",
+          cancelText: "Switch Payment",
+          tone: "warning",
+          onConfirm: function() {
+            if (typeof options.on269stConfirmed === "function") {
+              options.on269stConfirmed();
+            }
+          },
+          onCancel: function() {
+            showErr("Please switch to digital payment or acknowledge the cash warning.");
+          }
+        });
         return null;
       }
     }
@@ -2023,8 +2055,12 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (!el || el.tagName !== "SELECT") {
       return;
     }
+    if (!raw && id === "country_of_residence") {
+      el.value = "";
+      return;
+    }
     el.value = normalizePosCountryCode(raw, el);
-    if (!el.value) {
+    if (!el.value && id !== "country_of_residence") {
       el.value = "IN";
     }
   }
@@ -2037,6 +2073,21 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   function isPosIndiaCountry(code) {
     var c = String(code || "").trim().toUpperCase();
     return c === "IN" || c === "IND" || c === "INDIA";
+  }
+
+  function syncResidencyFromBillingCountry(countryCode, existingResidency) {
+    var residencyEl = document.getElementById("customer_residency_status");
+    if (!residencyEl) return;
+    var isIndia = isPosIndiaCountry(countryCode);
+    if (isIndia) {
+      residencyEl.value = "INDIAN_RESIDENT";
+    } else {
+      if (existingResidency && (existingResidency === "NRI" || existingResidency === "FOREIGN_NATIONAL")) {
+        residencyEl.value = existingResidency;
+      } else {
+        residencyEl.value = "FOREIGN_NATIONAL";
+      }
+    }
   }
 
   function resolvePosCountryFromPayloadValue(raw, selectId) {
@@ -2234,6 +2285,19 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     });
   }
 
+  function syncResidencyFromBillingCountry(countryCode) {
+    var residencyEl = document.getElementById("customer_residency_status");
+    if (!residencyEl) return;
+    var isIndia = isPosIndiaCountry(countryCode);
+    if (isIndia) {
+      residencyEl.value = "INDIAN_RESIDENT";
+    } else {
+      if (!residencyEl.value || residencyEl.value === "INDIAN_RESIDENT") {
+        residencyEl.value = "FOREIGN_NATIONAL";
+      }
+    }
+  }
+
   function syncAllPosStateFields(preferred) {
     preferred = preferred || {};
     return Promise.all([
@@ -2327,12 +2391,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       ["customer_residency_status", compliance.customer_residency_status || "INDIAN_RESIDENT"],
       ["customer_pan", compliance.customer_pan || ""],
       ["customer_aadhaar", compliance.customer_aadhaar || ""],
-      ["passport_number", compliance.passport_number || ""],
-      ["country_of_residence", compliance.country_of_residence || ""]
+      ["passport_number", compliance.passport_number || ""]
     ].forEach(function(row) {
       var el = document.getElementById(row[0]);
       if (el) el.value = row[1];
     });
+    setPosCountrySelect("country_of_residence", compliance.country_of_residence || billingCountry);
+    syncResidencyFromBillingCountry(billingCountry, compliance.customer_residency_status);
   }
 
   var POS_SHIPPING_ADDRESS_FIELD_IDS = [
@@ -2656,7 +2721,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   }
 
   function isHighValueTransaction() {
-    return getCurrentCheckoutTotal() >= getHighValueLimit();
+    return getCurrentCheckoutTotal() >= getHighValueLimit() && isFullFinalPaymentSelected();
   }
 
   function formatInrAmount(amount) {
@@ -3188,23 +3253,33 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           ? parseFloat(String(liveT.grandTotal))
           : parseFloat("<?= (float)($cartData['grand_total'] ?? 0) ?>");
 
-        var payInfo = validatePaymentSplitsForCheckout(grandTotal);
-        if (!payInfo) {
-          return;
-        }
-
-        var payDateEl = document.getElementById("payment_date");
-        if (payDateEl && payDateEl.value) {
-          var todayYmd = posPaymentDateLocalYmd();
-          if (payDateEl.value > todayYmd) {
-            showToast("⚠ Payment date cannot be in the future", "red");
-            payDateEl.value = todayYmd;
-            payDateEl.focus();
+        function proceedToCheckoutStep(opts) {
+          opts = opts || {};
+          var payInfo = validatePaymentSplitsForCheckout(grandTotal, {
+            skip269stConfirm: !!opts.skip269stConfirm,
+            on269stConfirmed: function() {
+              proceedToCheckoutStep({ skip269stConfirm: true });
+            }
+          });
+          if (!payInfo) {
             return;
           }
+
+          var payDateEl = document.getElementById("payment_date");
+          if (payDateEl && payDateEl.value) {
+            var todayYmd = posPaymentDateLocalYmd();
+            if (payDateEl.value > todayYmd) {
+              showToast("⚠ Payment date cannot be in the future", "red");
+              payDateEl.value = todayYmd;
+              payDateEl.focus();
+              return;
+            }
+          }
+
+          loadAndOpenAddressConfirm(customerId);
         }
 
-        loadAndOpenAddressConfirm(customerId);
+        proceedToCheckoutStep();
       });
     }
 
@@ -3488,6 +3563,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           setPosFieldInvalid(id, false);
           if (id === "confirm_country") {
             syncPosPhoneCodeFromCountry(el.value, "confirm_phone_code");
+            setPosCountrySelect("country_of_residence", el.value);
+            syncResidencyFromBillingCountry(el.value);
             syncPosStateField("billing", "").then(function() {
               if (isShippingSameAsBillingChecked()) {
                 copyBillingToShippingFields();

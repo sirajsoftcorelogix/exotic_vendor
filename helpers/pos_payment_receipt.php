@@ -758,11 +758,12 @@ function pos_payment_resolve_auto_invoice_status(mysqli $conn, string $orderNumb
         return 'final';
     }
 
-    return 'proforma';
+    // Proforma creation removed - invoice is created only upon full payment/allocation
+    return null;
 }
 
 /**
- * Create or return a proforma invoice for partial payment (receipt total below order amount).
+ * Proforma creation disabled; delegates to finalization if allocation is complete.
  *
  * @return array{success:bool,attempted:bool,fully_paid:bool,invoice_id:int,created:bool,message?:string}
  */
@@ -770,11 +771,12 @@ function pos_payment_ensure_proforma_invoice_for_order(mysqli $conn, string $ord
 {
     $orderNumber = trim($orderNumber);
     $empty = [
-        'success' => false,
-        'attempted' => true,
+        'success' => true,
+        'attempted' => false,
         'fully_paid' => false,
         'invoice_id' => 0,
         'created' => false,
+        'message' => 'Proforma creation disabled. Invoice will be created upon full payment.',
     ];
     if ($orderNumber === '') {
         $empty['message'] = 'Order number missing';
@@ -785,45 +787,6 @@ function pos_payment_ensure_proforma_invoice_for_order(mysqli $conn, string $ord
         return pos_payment_finalize_invoice_for_order($conn, $orderNumber);
     }
 
-    if (!pos_payment_has_recorded_payments($conn, $orderNumber)) {
-        $empty['message'] = 'No payments recorded for this order.';
-        return $empty;
-    }
-
-    require_once __DIR__ . '/../models/PosInvoice/invoice.php';
-    $invoiceModel = new POSInvoice($conn);
-    $existing = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
-    if ($existing) {
-        $invoiceId = (int)($existing['id'] ?? 0);
-        if ($invoiceId > 0) {
-            require_once __DIR__ . '/../controllers/PosInvoiceController.php';
-            $posInv = new PosInvoiceController();
-            $posInv->repairPosInvoiceMetadataForOrder($invoiceId, $orderNumber);
-        }
-
-        return [
-            'success' => true,
-            'attempted' => true,
-            'fully_paid' => false,
-            'invoice_id' => $invoiceId,
-            'created' => false,
-        ];
-    }
-
-    require_once __DIR__ . '/../controllers/PosInvoiceController.php';
-    $posInv = new PosInvoiceController();
-    $created = $posInv->createAutoInvoiceForOrder($orderNumber, '', false);
-    if (!empty($created['success']) && !empty($created['invoice_id'])) {
-        return [
-            'success' => true,
-            'attempted' => true,
-            'fully_paid' => false,
-            'invoice_id' => (int)$created['invoice_id'],
-            'created' => true,
-        ];
-    }
-
-    $empty['message'] = (string)($created['message'] ?? 'Proforma invoice could not be created.');
     return $empty;
 }
 
