@@ -325,6 +325,10 @@ final class StockMovement
             $running = $qty;
         }
 
+        if ($running < 0.0) {
+            $running = 0.0;
+        }
+
         return ['running_stock' => $running, 'last_running' => $lastRunning];
     }
 

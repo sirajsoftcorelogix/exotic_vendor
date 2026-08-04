@@ -5329,6 +5329,9 @@ class product
                     throw new Exception("Row #" . ($index + 1) . " (SKU {$sku}): Product not found in database.");
                 }
 
+                // Fetch running stock prior to adjustment to calculate exact storefront delta
+                $lastRunning = StockMovement::getLastRunningStockByProductId($this->db, (int)$prod['id'], $warehouseId);
+
                 $insertData = [
                     'product_id' => (int)$prod['id'],
                     'sku' => $prod['sku'],
@@ -5342,15 +5345,19 @@ class product
                     'warehouse_id' => $warehouseId,
                     'location' => $locationLabel,
                     'ref_type' => 'MANUAL',
-                    'strict_stock_check' => ($type === 'OUT'),
+                    'strict_stock_check' => false, // If new stock drops below 0, it is clamped to 0
                 ];
 
                 $movement = StockMovement::insert($this->db, $insertData);
                 $processedCount++;
 
-                // Sync local stock delta to storefront API if MANUAL movement
-                if ($this->shouldSyncLocalStockDeltaForMovement($insertData)) {
-                    $delta = ($type === 'IN') ? $quantity : -$quantity;
+                $updateLocalStock = !empty($item['update_local_stock']);
+
+                // Sync local stock delta to storefront API if update_local_stock flag is true
+                if ($updateLocalStock && $this->shouldSyncLocalStockDeltaForMovement($insertData)) {
+                    $newRunning = (float)($movement['running_stock'] ?? 0.0);
+                    $delta = (int)round($newRunning - $lastRunning);
+
                     $itemCode = trim((string)$prod['item_code']);
                     if ($delta !== 0 && $itemCode !== '') {
                         $apiSync = $this->applyLocalStockDeltaAndRefreshFromVendorApi(
