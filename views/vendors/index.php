@@ -829,7 +829,7 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
                                         <select class="<?= $vfInput ?> sm:max-w-[210px]" name="editCountryCode" id="editCountryCode" required>
                                             <option value="" disabled>Select code</option>
                                             <?php foreach ($countryList as $cl): ?>
-                                                <option value="<?php echo $cl['phone_code']; ?>">
+                                                <option value="<?php echo $cl['phone_code']; ?>" <?php if ($cl['name'] === 'India' || $cl['phone_code'] === '91') { echo 'selected'; } ?>>
                                                     <?php echo $cl['name'] . ' (+' . $cl['phone_code'] . ')'; ?>
                                                 </option>
                                             <?php endforeach; ?>
@@ -2265,7 +2265,17 @@ $vendorRatingOptions = ['5 Star', '4 Star', '3 Star', '2 Star', '1 Star'];
             document.getElementById("editWebsite").value = vendor.website || '';
             document.getElementById("editContactPerson").value = vendor.contact_name;
             document.getElementById("editEmail").value = vendor.vendor_email || '';
-            document.getElementById("editCountryCode").value = vendor.country_code;
+            const editCountryCodeElem = document.getElementById("editCountryCode");
+            if (editCountryCodeElem) {
+                let code = (vendor.country_code || '').toString().trim().replace(/^\+/, '');
+                if (!code) {
+                    code = '91';
+                }
+                editCountryCodeElem.value = code;
+                if (!editCountryCodeElem.value) {
+                    editCountryCodeElem.value = '91';
+                }
+            }
             document.getElementById("editPhone").value = vendor.vendor_phone;
             document.getElementById("edit_vendor_email_is_primary").checked =
                 vendor.vendor_email_is_primary === 1 || vendor.vendor_email_is_primary === '1';

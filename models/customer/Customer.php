@@ -643,6 +643,7 @@ class Customer
             'zip' => '',
             'country' => 'IN',
             'gstin' => '',
+            'trade_name' => '',
         ];
 
         // Optional extended columns on vp_customers (if present in DB)
@@ -655,6 +656,8 @@ class Customer
             'billing_zipcode' => 'zip',
             'billing_country' => 'country',
             'gstin' => 'gstin',
+            'trade_name' => 'trade_name',
+            'billing_trade_name' => 'trade_name',
         ];
         foreach ($vcExtras as $col => $key) {
             if (!empty($row[$col])) {
@@ -690,6 +693,9 @@ class Customer
                 }
                 if (trim((string)($det['gstin'] ?? '')) !== '') {
                     $billing['gstin'] = trim((string)$det['gstin']);
+                }
+                if (trim((string)($det['trade_name'] ?? '')) !== '') {
+                    $billing['trade_name'] = trim((string)$det['trade_name']);
                 }
 
                 $shipping = [
@@ -851,9 +857,15 @@ class Customer
                 ship_country VARCHAR(128) NOT NULL DEFAULT '',
                 ship_pin VARCHAR(32) NOT NULL DEFAULT '',
                 gstin VARCHAR(64) NOT NULL DEFAULT '',
+                trade_name VARCHAR(255) NOT NULL DEFAULT '',
                 updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
         );
+
+        $colRes = $this->conn->query("SHOW COLUMNS FROM pos_customer_details LIKE 'trade_name'");
+        if ($colRes && $colRes->num_rows === 0) {
+            $this->conn->query("ALTER TABLE pos_customer_details ADD COLUMN trade_name VARCHAR(255) NOT NULL DEFAULT '' AFTER gstin");
+        }
         $done = true;
     }
 
@@ -890,11 +902,12 @@ class Customer
         }
 
         $gstin = trim((string)($post['gstin'] ?? ''));
+        $tradeName = trim((string)($post['trade_name'] ?? ''));
 
         $sql = 'INSERT INTO pos_customer_details (
             customer_id, bill_line1, bill_line2, bill_city, bill_state, bill_country, bill_pin,
-            ship_line1, ship_line2, ship_city, ship_state, ship_country, ship_pin, gstin
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ship_line1, ship_line2, ship_city, ship_state, ship_country, ship_pin, gstin, trade_name
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON DUPLICATE KEY UPDATE
             bill_line1 = VALUES(bill_line1),
             bill_line2 = VALUES(bill_line2),
@@ -908,14 +921,15 @@ class Customer
             ship_state = VALUES(ship_state),
             ship_country = VALUES(ship_country),
             ship_pin = VALUES(ship_pin),
-            gstin = VALUES(gstin)';
+            gstin = VALUES(gstin),
+            trade_name = VALUES(trade_name)';
 
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
             return false;
         }
 
-        $types = 'i' . str_repeat('s', 13);
+        $types = 'i' . str_repeat('s', 14);
         $stmt->bind_param(
             $types,
             $customerId,
@@ -931,7 +945,8 @@ class Customer
             $shipState,
             $shipCountry,
             $shipPin,
-            $gstin
+            $gstin,
+            $tradeName
         );
 
         $ok = $stmt->execute();
@@ -955,6 +970,7 @@ class Customer
             'zipcode' => $p['confirm_zip'] ?? '',
             'country' => $p['confirm_country'] ?? 'IN',
             'gstin' => $p['confirm_gstin'] ?? '',
+            'trade_name' => $p['confirm_trade_name'] ?? '',
             'shipping_address_line1' => $p['confirm_saddress1'] ?? '',
             'shipping_address_line2' => $p['confirm_saddress2'] ?? '',
             'shipping_city' => $p['confirm_scity'] ?? '',

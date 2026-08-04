@@ -714,7 +714,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
             </select>
           </label>
         </div>
-        <label class="block text-xs font-medium text-slate-600">GSTIN<input id="confirm_gstin" class="w-full rounded border uppercase" placeholder="GSTIN (optional)" maxlength="15"></label>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block text-xs font-medium text-slate-600">GSTIN<input id="confirm_gstin" class="w-full rounded border uppercase" placeholder="GSTIN (optional)" maxlength="15"></label>
+          <label class="block text-xs font-medium text-slate-600">Trade Name<input id="confirm_trade_name" class="w-full rounded border" placeholder="Trade Name (optional)"></label>
+        </div>
         <div id="highValueCompliancePanel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <div class="mb-2 font-semibold text-amber-950">High Value Transaction – Compliance Required</div>
           <p class="mb-3 text-[11px] leading-snug text-amber-800">Additional details are required for final order completion. GSTIN B2B invoices derive PAN automatically.</p>
@@ -808,12 +811,12 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 <!-- DELIVERY STATUS MODAL (last step before order submit) -->
 <div id="deliveryStatusModal" class="fixed inset-0 z-[10001] hidden">
   <div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
-  <div class="relative mx-auto mt-[12vh] w-[95%] max-w-lg rounded-2xl bg-white shadow-2xl">
-    <div class="border-b px-5 py-4">
+  <div class="relative mx-auto mt-[12vh] w-[95%] max-w-lg rounded-2xl bg-white shadow-2xl max-h-[80vh] overflow-y-auto flex flex-col">
+    <div class="border-b px-5 py-4 flex-shrink-0">
       <h2 class="text-base font-semibold text-slate-800">Delivery status</h2>
       <p class="mt-1 text-xs text-slate-500">Confirm how this order will be fulfilled before submitting.</p>
     </div>
-    <div class="space-y-3 p-5">
+    <div class="space-y-3 p-5 flex-1 overflow-y-auto">
       <label class="delivery-status-option flex cursor-pointer items-start gap-3 rounded-xl border-2 border-orange-400 bg-orange-50/60 p-4 transition hover:bg-orange-50">
         <input type="radio" name="pos_delivery_status" value="collected_from_showroom" class="mt-1 h-4 w-4 border-slate-300 text-orange-600 focus:ring-orange-500" checked>
         <span>
@@ -828,9 +831,77 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           <span class="mt-0.5 block text-xs text-slate-500">Goods will be dispatched later · keeps order <strong>Pending</strong></span>
         </span>
       </label>
+      
+      <!-- E-way bill section (shown when collected_from_showroom is selected) -->
+      <div id="ewayBillSection" class="space-y-3 border-t pt-4">
+        <div class="flex items-center gap-2">
+          <input type="checkbox" id="generate_ewb_for_delivery" class="rounded border-slate-300">
+          <label for="generate_ewb_for_delivery" class="text-xs text-slate-600 cursor-pointer font-medium">Generate IRN and E-way bill for this shipment</label>
+        </div>
+        <div id="ewayBillFields" class="hidden space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <!-- Transport Mode Selection -->
+          <div>
+            <label for="delivery_veh_type" class="text-xs text-slate-600 font-medium">Transport Mode <span class="text-red-600">*</span></label>
+            <select id="delivery_veh_type" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+              <option value="">-- Select transport mode --</option>
+              <option value="1">(1) Road</option>
+              <option value="2">(2) Rail</option>
+              <option value="3">(3) Air</option>
+              <option value="4">(4) Ship</option>
+              <!-- <option value="5">(5) Road cum Ship</option> -->
+            </select>
+          </div>
+          
+          <!-- Road Transport Fields (Required) -->
+          <div id="roadTransportFields" class="hidden grid grid-cols-2 gap-3">
+            <div>
+              <label for="delivery_veh_no" class="text-xs text-slate-600">Vehicle Number <span class="text-red-600">*</span></label>
+              <input type="text" id="delivery_veh_no" placeholder="e.g., DL01AB1234" maxlength="20" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            </div>
+          </div>
+          
+          <!-- Rail/Air Transport Fields (Required) -->
+          <div id="railAirTransportFields" class="hidden grid grid-cols-2 gap-3">
+            <div>
+              <label for="delivery_trans_doc_no" class="text-xs text-slate-600">Transport Document No. <span class="text-red-600">*</span></label>
+              <input type="text" id="delivery_trans_doc_no" placeholder="e.g., TRN123456" maxlength="20" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            </div>
+            <div>
+              <label for="delivery_trans_doc_date" class="text-xs text-slate-600">Document Date <span class="text-red-600">*</span></label>
+              <input type="date" id="delivery_trans_doc_date" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            </div>
+          </div>
+          
+          <!-- Ship/Road cum Ship Transport Fields (Optional - either set can be used) -->
+          <div id="shipTransportFields" class="hidden space-y-3">
+            <p class="text-xs text-slate-500 italic">For Ship transport, you can provide Vehicle Number and/or Transport Document Number and Date.</p>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="delivery_ship_veh_no" class="text-xs text-slate-600">Vehicle Number (Optional)</label>
+                <input type="text" id="delivery_ship_veh_no" placeholder="e.g., Vessel name" maxlength="20" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+              </div>
+              <div class="col-span-1"></div>
+            </div>
+            <div class="border-t pt-3 mt-3">
+              <p class="text-xs text-slate-500 italic mb-2">OR provide transport document details:</p>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label for="delivery_ship_trans_doc_no" class="text-xs text-slate-600">Transport Document No. (Optional)</label>
+                  <input type="text" id="delivery_ship_trans_doc_no" placeholder="e.g., BL123456" maxlength="20" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                </div>
+                <div>
+                  <label for="delivery_ship_trans_doc_date" class="text-xs text-slate-600">Document Date (Optional)</label>
+                  <input type="date" id="delivery_ship_trans_doc_date" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
       <div id="deliveryStatusValidation" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"></div>
     </div>
-    <div class="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3 rounded-b-2xl">
+    <div class="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3 rounded-b-2xl flex-shrink-0">
       <button type="button" id="deliveryStatusBackBtn" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Back</button>
       <button type="button" id="deliveryStatusSubmitBtn" class="inline-flex items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-70">
         <span id="deliveryStatusSubmitBtnLabel">Submit order</span>
@@ -1683,6 +1754,50 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     });
   }
 
+  function syncEwayBillSectionVisibility() {
+    var status = getSelectedPosDeliveryStatus();
+    var ewayBillSection = document.getElementById("ewayBillSection");
+    if (ewayBillSection) {
+      if (status === "collected_from_showroom") {
+        ewayBillSection.classList.remove("hidden");
+      } else {
+        ewayBillSection.classList.add("hidden");
+        // Reset E-way bill fields when section is hidden
+        var generateEwbCheckbox = document.getElementById("generate_ewb_for_delivery");
+        if (generateEwbCheckbox) {
+          generateEwbCheckbox.checked = false;
+          document.getElementById("ewayBillFields").classList.add("hidden");
+          document.getElementById("delivery_veh_no").value = "";
+          document.getElementById("delivery_veh_type").value = "";
+          document.getElementById("delivery_trans_doc_no").value = "";
+          document.getElementById("delivery_trans_doc_date").value = "";
+          document.getElementById("delivery_ship_veh_no").value = "";
+          document.getElementById("delivery_ship_trans_doc_no").value = "";
+          document.getElementById("delivery_ship_trans_doc_date").value = "";
+        }
+      }
+    }
+  }
+
+  function syncTransportModeFields() {
+    var modeSelect = document.getElementById("delivery_veh_type");
+    var roadFields = document.getElementById("roadTransportFields");
+    var railAirFields = document.getElementById("railAirTransportFields");
+    var shipFields = document.getElementById("shipTransportFields");
+    
+    if (!modeSelect || !roadFields || !railAirFields || !shipFields) return;
+    
+    var mode = String(modeSelect.value || "").trim();
+    // Mode 1 = Road, Mode 2 = Rail, Mode 3 = Air, Mode 4 = Ship, Mode 5 = Road cum Ship
+    var isRoad = mode === "1";
+    var isRailOrAir = mode === "2" || mode === "3";
+    var isShip = mode === "4" || mode === "5";
+    
+    roadFields.classList.toggle("hidden", !isRoad);
+    railAirFields.classList.toggle("hidden", !isRailOrAir);
+    shipFields.classList.toggle("hidden", !isShip);
+  }
+
   function getSelectedPosDeliveryStatus() {
     var picked = document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"]:checked');
     return picked ? String(picked.value || "").trim() : "";
@@ -2164,6 +2279,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       confirm_state: firstNonEmpty(billing.state),
       confirm_zip: firstNonEmpty(billing.zip, billing.zipcode, window.POS_STORE_PINCODE || ""),
       confirm_gstin: firstNonEmpty(billing.gstin),
+      confirm_trade_name: firstNonEmpty(billing.trade_name),
 
       // Shipping: support normalized keys + DB/raw aliases.
       confirm_sfirst_name: shippingFirstName,
@@ -2368,6 +2484,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       confirm_zip: read("confirm_zip"),
       confirm_country: read("confirm_country"),
       confirm_gstin: read("confirm_gstin"),
+      confirm_trade_name: read("confirm_trade_name"),
       confirm_sfirst_name: shippingFirstName,
       confirm_slast_name: shippingLastName,
       // Keep combined name for backward compatibility on server side.
@@ -3094,7 +3211,10 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     initConfirmShippingSameAsBilling();
 
     document.querySelectorAll('#deliveryStatusModal input[name="pos_delivery_status"]').forEach(function(el) {
-      el.addEventListener("change", syncDeliveryStatusOptionStyles);
+      el.addEventListener("change", function() {
+        syncDeliveryStatusOptionStyles();
+        syncEwayBillSectionVisibility();
+      });
     });
 
     var deliveryStatusBackBtn = document.getElementById("deliveryStatusBackBtn");
@@ -3102,6 +3222,36 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       deliveryStatusBackBtn.addEventListener("click", function() {
         closeDeliveryStatusModal();
         setPosCheckoutLoading(false);
+      });
+    }
+
+    // E-way bill checkbox handler
+    var generateEwbCheckbox = document.getElementById("generate_ewb_for_delivery");
+    var ewayBillFields = document.getElementById("ewayBillFields");
+    if (generateEwbCheckbox && ewayBillFields) {
+      generateEwbCheckbox.addEventListener("change", function() {
+        if (this.checked) {
+          ewayBillFields.classList.remove("hidden");
+          syncTransportModeFields();
+        } else {
+          ewayBillFields.classList.add("hidden");
+          // Reset all fields when unchecked
+          document.getElementById("delivery_veh_no").value = "";
+          document.getElementById("delivery_veh_type").value = "";
+          document.getElementById("delivery_trans_doc_no").value = "";
+          document.getElementById("delivery_trans_doc_date").value = "";
+          document.getElementById("delivery_ship_veh_no").value = "";
+          document.getElementById("delivery_ship_trans_doc_no").value = "";
+          document.getElementById("delivery_ship_trans_doc_date").value = "";
+        }
+      });
+    }
+
+    // Transport mode field handler
+    var transportModeSelect = document.getElementById("delivery_veh_type");
+    if (transportModeSelect) {
+      transportModeSelect.addEventListener("change", function() {
+        syncTransportModeFields();
       });
     }
 
@@ -3117,6 +3267,84 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           }
           return;
         }
+
+        // Validate E-way bill fields if checkbox is checked
+        var generateEwb = document.getElementById("generate_ewb_for_delivery") && document.getElementById("generate_ewb_for_delivery").checked;
+        if (generateEwb) {
+          var transportMode = (document.getElementById("delivery_veh_type").value || "").trim();
+          
+          if (!transportMode) {
+            if (err) {
+              err.textContent = "⚠ Please select a transport mode.";
+              err.classList.remove("hidden");
+            }
+            document.getElementById("delivery_veh_type").focus();
+            return;
+          }
+
+          // Validate Road mode fields (required)
+          if (transportMode === "1") {
+            var vehNo = (document.getElementById("delivery_veh_no").value || "").trim();
+            if (!vehNo) {
+              if (err) {
+                err.textContent = "⚠ Vehicle Number is required for Road transport.";
+                err.classList.remove("hidden");
+              }
+              document.getElementById("delivery_veh_no").focus();
+              return;
+            }
+          }
+          // Validate Rail/Air mode fields (required)
+          else if (transportMode === "2" || transportMode === "3") {
+            var transModeLabel = transportMode === "2" ? "Rail" : "Air";
+            var transDocNo = (document.getElementById("delivery_trans_doc_no").value || "").trim();
+            var transDocDate = (document.getElementById("delivery_trans_doc_date").value || "").trim();
+            
+            if (!transDocNo) {
+              if (err) {
+                err.textContent = "⚠ Transport Document Number is required for " + transModeLabel + " transport.";
+                err.classList.remove("hidden");
+              }
+              document.getElementById("delivery_trans_doc_no").focus();
+              return;
+            }
+            
+            if (!transDocDate) {
+              if (err) {
+                err.textContent = "⚠ Document Date is required for " + transModeLabel + " transport.";
+                err.classList.remove("hidden");
+              }
+              document.getElementById("delivery_trans_doc_date").focus();
+              return;
+            }
+          }
+          // Validate Ship/Road cum Ship mode fields (flexible - at least one set required)
+          else if (transportMode === "4" || transportMode === "5") {
+            var shipVehNo = (document.getElementById("delivery_ship_veh_no").value || "").trim();
+            var shipTransDocNo = (document.getElementById("delivery_ship_trans_doc_no").value || "").trim();
+            var shipTransDocDate = (document.getElementById("delivery_ship_trans_doc_date").value || "").trim();
+            
+            // At least one field must be provided
+            if (!shipVehNo && !shipTransDocNo && !shipTransDocDate) {
+              if (err) {
+                err.textContent = "⚠ Provide either Vehicle Number or Transport Document Number and Date (or both).";
+                err.classList.remove("hidden");
+              }
+              document.getElementById("delivery_ship_veh_no").focus();
+              return;
+            }
+            
+            // If transport doc is partially filled, both fields are required
+            if ((shipTransDocNo !== "" && shipTransDocDate === "") || (shipTransDocNo === "" && shipTransDocDate !== "")) {
+              if (err) {
+                err.textContent = "⚠ Both Transport Document Number and Date must be provided together.";
+                err.classList.remove("hidden");
+              }
+              return;
+            }
+          }
+        }
+
         if (!pendingAddressPayloadForCheckout) {
           showToast("Address details missing — go back and confirm billing/shipping.", "red");
           return;
@@ -3127,6 +3355,29 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           return;
         }
         closeDeliveryStatusModal();
+        
+        // Add E-way bill data if checked
+        if (generateEwb) {
+          payload.generate_ewb = "1";
+          payload.ewb_veh_type = document.getElementById("delivery_veh_type").value;
+          
+          // Road mode: vehicle number
+          if (payload.ewb_veh_type === "1") {
+            payload.ewb_veh_no = document.getElementById("delivery_veh_no").value;
+          }
+          // Rail/Air mode: transport document details
+          else if (payload.ewb_veh_type === "2" || payload.ewb_veh_type === "3") {
+            payload.ewb_trans_doc_no = document.getElementById("delivery_trans_doc_no").value;
+            payload.ewb_trans_doc_date = document.getElementById("delivery_trans_doc_date").value;
+          }
+          // Ship/Road cum Ship mode: flexible fields
+          else if (payload.ewb_veh_type === "4" || payload.ewb_veh_type === "5") {
+            payload.ewb_ship_veh_no = document.getElementById("delivery_ship_veh_no").value;
+            payload.ewb_ship_trans_doc_no = document.getElementById("delivery_ship_trans_doc_no").value;
+            payload.ewb_ship_trans_doc_date = document.getElementById("delivery_ship_trans_doc_date").value;
+          }
+        }
+        
         createOrderNow(payload);
       });
     }

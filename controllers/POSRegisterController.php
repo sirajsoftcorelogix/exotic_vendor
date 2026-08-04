@@ -331,6 +331,47 @@ class POSRegisterController
         }
     }
 
+    private function ensureVpOrderInfoTradeNameSchema(mysqli $conn): void
+    {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+        if (!$this->columnExists($conn, 'vp_order_info', 'trade_name')) {
+            @$conn->query("ALTER TABLE vp_order_info ADD COLUMN trade_name VARCHAR(255) NOT NULL DEFAULT '' AFTER gstin");
+        }
+        $done = true;
+    }
+
+    private function persistVpOrderInfoTradeName(mysqli $conn, string $orderNumber, int $customerId, string $tradeName): void
+    {
+        $orderNumber = trim($orderNumber);
+        $tradeName = trim($tradeName);
+        if ($orderNumber === '' || $tradeName === '') {
+            return;
+        }
+
+        $this->ensureVpOrderInfoTradeNameSchema($conn);
+
+        $stmt = $conn->prepare('UPDATE vp_order_info SET trade_name = ? WHERE order_number = ? AND customer_id = ?');
+        if ($stmt) {
+            $stmt->bind_param('ssi', $tradeName, $orderNumber, $customerId);
+            $stmt->execute();
+            $affected = (int)$stmt->affected_rows;
+            $stmt->close();
+            if ($affected > 0) {
+                return;
+            }
+        }
+
+        $stmt = $conn->prepare('UPDATE vp_order_info SET trade_name = ? WHERE order_number = ?');
+        if ($stmt) {
+            $stmt->bind_param('ss', $tradeName, $orderNumber);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+
     private function findInvoiceIdForOrderNumber(mysqli $conn, string $orderNumber): ?int
     {
         $stmt = $conn->prepare(
@@ -641,6 +682,174 @@ class POSRegisterController
             'label' => (string)$chosen['label'],
             'error' => '',
         ];
+    }
+
+    /**
+     * Handle E-way bill and IRN generation for POS checkout
+     * Calls DomesticEwbIrnService after invoice is created
+     */
+    private function handlePosEwbGeneration(mysqli $conn, int $invoiceId, array $payload, int $orderNumber): void
+    {
+        try {
+            echo "POS EWB: Starting E-way bill generation for invoice $invoiceId\n";
+            // Get invoice details from database
+            $invStmt = $conn->prepare("SELECT * FROM vp_invoices WHERE id = ?");
+            if (!$invStmt) {
+                error_log("POS EWB: Failed to prepare invoice query: " . $conn->error);
+                return;
+            }
+            $invStmt->bind_param("i", $invoiceId);
+            $invStmt->execute();
+            $invResult = $invStmt->get_result();
+            $invoice = $invResult->fetch_assoc();
+            $invStmt->close();
+
+            if (!$invoice) {
+                error_log("POS EWB: Invoice not found for ID $invoiceId");
+                return;
+            }
+
+            // Get invoice items
+            $itemsStmt = $conn->prepare("
+                SELECT ii.id, ii.product_id, ii.hsn, ii.item_name, ii.quantity, ii.unit_price,
+                       ii.tax_rate, ii.tax_amount, vp.item_code, vp.sku
+                FROM vp_invoice_items ii
+                LEFT JOIN vp_products vp ON ii.product_id = vp.id
+                WHERE ii.invoice_id = ?
+            ");
+            if (!$itemsStmt) {
+                error_log("POS EWB: Failed to prepare items query: " . $conn->error);
+                return;
+            }
+            $itemsStmt->bind_param("i", $invoiceId);
+            $itemsStmt->execute();
+            $itemsResult = $itemsStmt->get_result();
+            $items = [];
+            while ($item = $itemsResult->fetch_assoc()) {
+                $items[] = $item;
+            }
+            $itemsStmt->close();
+
+            if (empty($items)) {
+                error_log("POS EWB: No items found for invoice $invoiceId");
+                return;
+            }
+
+            // Get customer details
+            $custId = (int)($invoice['customer_id'] ?? 0);
+            $custStmt = $conn->prepare("SELECT * FROM vp_order_info WHERE customer_id = ? AND order_number = ?");
+            if (!$custStmt) {
+                error_log("POS EWB: Failed to prepare customer query: " . $conn->error);
+                return;
+            }            
+            $custStmt->bind_param("ii", $custId, $orderNumber);
+            $custStmt->execute();
+            $customer = $custStmt->get_result()->fetch_assoc();
+            $custStmt->close();
+
+            if (!$customer) {
+                error_log("POS EWB: Customer not found for ID $custId");
+                return;
+            }
+
+            $payloadTradeName = trim((string)($payload['confirm_trade_name'] ?? ''));
+            if ($payloadTradeName !== '') {
+                $customer['trade_name'] = $payloadTradeName;
+            }
+
+            // Get firm details
+            require_once __DIR__ . '/../models/comman/tables.php';
+            $comman = new Tables($conn);
+            $firm = $comman->getRecordById('firm_details', 1);
+
+            if (!$firm) {
+                error_log("POS EWB: Firm details not found");
+                return;
+            }
+
+            // Build E-way bill data based on transport mode
+            $transportMode = trim((string)($payload['ewb_veh_type'] ?? '1'));
+            $ewbData = [
+                // 'trans_id' => '',
+                // 'trans_name' => '',
+                'distance' => 0,
+                'trans_mode' => $transportMode, // 1=Road, 2=Rail, 3=Air, 4=Ship, 5=Road cum Ship
+            ];
+
+            // For Road transport (mode 1), use vehicle number and type
+            if ($transportMode === '1') {
+                $ewbData['veh_no'] = trim((string)($payload['ewb_veh_no'] ?? ''));
+                $ewbData['veh_type'] = 'R'; // Vehicle type for Road
+                $ewbData['trans_doc_no'] = date('YmdHis');
+                $ewbData['trn_doc_dt'] = date('d/m/Y');
+            }
+            // For Rail (2) or Air (3) transport, use transport document number and date
+            elseif ($transportMode === '2' || $transportMode === '3') {
+                $ewbData['veh_no'] = null;
+                $ewbData['veh_type'] = null;
+                $ewbData['trans_doc_no'] = trim((string)($payload['ewb_trans_doc_no'] ?? date('YmdHis')));
+                $ewbData['trn_doc_dt'] = trim((string)($payload['ewb_trans_doc_date'] ?? date('d/m/Y')));
+            }
+            // For Ship (4) or Road cum Ship (5): vehicle number OR transport document OR both
+            // Vehicle type is ODC (Over Dimensional Cargo) for ship modes
+            elseif ($transportMode === '4' || $transportMode === '5') {
+                $shipVehNo = trim((string)($payload['ewb_ship_veh_no'] ?? ''));
+                $shipTransDocNo = trim((string)($payload['ewb_ship_trans_doc_no'] ?? ''));
+                $shipTransDocDate = trim((string)($payload['ewb_ship_trans_doc_date'] ?? ''));
+
+                $ewbData['veh_type'] = 'ODC'; // Over Dimensional Cargo for Ship modes
+
+                // If vehicle number is provided, use it
+                if ($shipVehNo !== '') {
+                    $ewbData['veh_no'] = $shipVehNo;
+                    $ewbData['trans_doc_no'] = $shipTransDocNo !== '' ? $shipTransDocNo : date('YmdHis');
+                    $ewbData['trn_doc_dt'] = $shipTransDocDate !== '' ? $shipTransDocDate : date('d/m/Y');
+                }
+                // Otherwise use transport document details
+                else {
+                    $ewbData['veh_no'] = null;
+                    $ewbData['trans_doc_no'] = $shipTransDocNo !== '' ? $shipTransDocNo : date('YmdHis');
+                    $ewbData['trn_doc_dt'] = $shipTransDocDate !== '' ? $shipTransDocDate : date('d/m/Y');
+                }
+            }
+            // Default fallback for unknown modes
+            else {
+                $ewbData['veh_no'] = trim((string)($payload['ewb_veh_no'] ?? ''));
+                $ewbData['veh_type'] = 'R';
+                $ewbData['trans_doc_no'] = date('YmdHis');
+                $ewbData['trn_doc_dt'] = date('d/m/Y');
+            }
+
+            // Load and call DomesticEwbIrnService
+            require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
+            
+            // Get Alankit configuration from config.php
+            $config = include __DIR__ . '/../config.php';
+            $alankitConfig = $config['alankit'] ?? [];
+
+            if (
+                empty($alankitConfig) ||
+                empty($alankitConfig['username']) ||
+                empty($alankitConfig['password']) ||
+                empty($alankitConfig['subscription_key']) ||
+                empty($alankitConfig['app_key']) ||
+                empty($alankitConfig['gstin'])
+            ) {
+                error_log("POS EWB: Missing Alankit API credentials in config.php");
+                return;
+            }
+            echo "POS EWB: Alankit API credentials loaded successfully.\n";
+            $ewbService = new DomesticEwbIrnService($conn, $alankitConfig);
+            $result = $ewbService->generateIrnAndEwb($invoiceId, $invoice, $items, $customer, $firm, $ewbData);
+
+            if ($result['status']) {
+                error_log("POS EWB: IRN generated successfully for invoice $invoiceId - IRN: {$result['irn']}");
+            } else {
+                error_log("POS EWB: Generation failed for invoice $invoiceId - " . ($result['message'] ?? 'Unknown error'));
+            }
+        } catch (\Throwable $e) {
+            error_log("POS EWB Exception for invoice $invoiceId: " . $e->getMessage());
+        }
     }
 
     private function appendPosDeliveryStatusToNote(string $note, string $label): string
@@ -1139,6 +1348,7 @@ class POSRegisterController
                         'zip' => trim((string)($info['zipcode'] ?? '')),
                         'country' => trim((string)($info['country'] ?? 'IN')),
                         'gstin' => trim((string)($info['gstin'] ?? '')),
+                        'trade_name' => trim((string)($info['trade_name'] ?? '')),
                     ];
                     $shippingOrder = [
                         'shipping_first_name' => trim((string)($info['shipping_first_name'] ?? '')),
@@ -1174,6 +1384,7 @@ class POSRegisterController
                 'zip' => trim((string)($form['zipcode'] ?? '')),
                 'country' => trim((string)($form['country'] ?? 'IN')),
                 'gstin' => trim((string)($form['gstin'] ?? '')),
+                'trade_name' => trim((string)($form['trade_name'] ?? '')),
             ];
             $shippingSession = [
                 'shipping_first_name' => trim((string)($form['shipping_first_name'] ?? '')),
@@ -1201,6 +1412,12 @@ class POSRegisterController
             'zip' => $pick($billingVc['zip'] ?? '', $billingOrder['zip'] ?? '', $billingSession['zip'] ?? ''),
             'country' => $pick($billingVc['country'] ?? '', $billingOrder['country'] ?? '', $billingSession['country'] ?? ''),
             'gstin' => $pick($billingVc['gstin'] ?? '', $billingOrder['gstin'] ?? '', $billingSession['gstin'] ?? ''),
+            'trade_name' => $pick(
+                $billingVc['trade_name'] ?? '',
+                $billingOrder['trade_name'] ?? '',
+                $billingSession['trade_name'] ?? '',
+                trim((string)($customerRow['trade_name'] ?? ''))
+            ),
         ];
 
         $shipping = [
@@ -4177,6 +4394,7 @@ class POSRegisterController
                     if (!empty($existing['id'])) {
                         $id = (int)$existing['id'];
                         $_SESSION['pos_customer_id'] = $id;
+                        $_POST['trade_name'] = trim((string)($_POST['trade_name'] ?? ''));
                         $_SESSION['pos_customer_form'] = $_POST;
                         $customerModel->upsertPosCustomerDetailsFromPost($id, $_POST);
                         echo json_encode([
@@ -4227,6 +4445,7 @@ class POSRegisterController
 
         /*  STORE FULL BILLING + SHIPPING IN SESSION */
         $_SESSION['pos_customer_id'] = $id;
+        $_POST['trade_name'] = trim((string)($_POST['trade_name'] ?? ''));
         $_SESSION['pos_customer_form'] = $_POST;
         $customerModel->upsertPosCustomerDetailsFromPost($id, $_POST);
 
@@ -4704,6 +4923,13 @@ class POSRegisterController
             }
         }
 
+        $this->persistVpOrderInfoTradeName(
+            $conn,
+            $orderNumber,
+            $customerId,
+            (string)($payload['confirm_trade_name'] ?? '')
+        );
+
         $invoiceLinePrices = $payload['pos_line_prices'] ?? [];
         if (!is_array($invoiceLinePrices)) {
             $invoiceLinePrices = [];
@@ -4804,6 +5030,19 @@ class POSRegisterController
             $customInvoiceNumber
         );
         $this->patchPosCheckoutOrderInfoFromConfirmPayload($conn, $orderNumber, $payload);
+
+        $this->persistVpOrderInfoTradeName(
+            $conn,
+            $orderNumber,
+            $customerId,
+            (string)($payload['confirm_trade_name'] ?? '')
+        );
+        
+        // Generate IRN and E-way bill if requested
+        if (!empty($payload['generate_ewb']) && $payload['generate_ewb'] === '1' && !empty($invoiceMeta['invoice_id'])) {
+            $this->handlePosEwbGeneration($conn, (int)$invoiceMeta['invoice_id'], $payload, $orderNumber);
+        }
+        
         $fulfillmentStatusMeta = $this->syncPosCheckoutOrderFulfillmentStatus(
             $conn,
             $orderNumber,
