@@ -49,7 +49,7 @@ class DomesticEwbIrnService {
             $existingRecord = $this->getEwbIrnRecord($invoiceId);
             if (!$existingRecord) {
                 $this->createEwbIrnRecord($invoiceId);
-                echo "Domestic EWB: Created new record for invoice #$invoiceId\n";
+                //echo "Domestic EWB: Created new record for invoice #$invoiceId\n";
             }
             
             // Initialize Alankit client with credentials

@@ -691,7 +691,7 @@ class POSRegisterController
     private function handlePosEwbGeneration(mysqli $conn, int $invoiceId, array $payload, int $orderNumber): void
     {
         try {
-            echo "POS EWB: Starting E-way bill generation for invoice $invoiceId\n";
+            //echo "POS EWB: Starting E-way bill generation for invoice $invoiceId\n";
             // Get invoice details from database
             $invStmt = $conn->prepare("SELECT * FROM vp_invoices WHERE id = ?");
             if (!$invStmt) {
@@ -838,7 +838,7 @@ class POSRegisterController
                 error_log("POS EWB: Missing Alankit API credentials in config.php");
                 return;
             }
-            echo "POS EWB: Alankit API credentials loaded successfully.\n";
+            //echo "POS EWB: Alankit API credentials loaded successfully.\n";
             $ewbService = new DomesticEwbIrnService($conn, $alankitConfig);
             $result = $ewbService->generateIrnAndEwb($invoiceId, $invoice, $items, $customer, $firm, $ewbData);
 
