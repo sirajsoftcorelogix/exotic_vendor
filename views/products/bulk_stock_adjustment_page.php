@@ -102,17 +102,27 @@ foreach ($warehouses as $wh) {
                         <p class="text-[11px] text-gray-400 mt-1">Default for new &amp; copied line items.</p>
                     </div>
 
+                    <!-- Default Update Local Stock -->
+                    <div class="lg:col-span-2 flex flex-col">
+                        <label class="block text-xs font-semibold text-gray-700 mb-1.5">Update Local Stock?</label>
+                        <select id="top_update_local_stock" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                            <option value="0" selected>No (Default)</option>
+                            <option value="1">Yes (Sync Storefront)</option>
+                        </select>
+                        <p class="text-[11px] text-gray-400 mt-1">Default is No.</p>
+                    </div>
+
                     <!-- Default Reason -->
-                    <div class="lg:col-span-5 flex flex-col">
+                    <div class="lg:col-span-3 flex flex-col">
                         <label class="block text-xs font-semibold text-gray-700 mb-1.5">Default Reason</label>
                         <div class="flex gap-2">
-                            <textarea id="top_reason" rows="1" placeholder="e.g. Physical inventory audit / Damaged count" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition resize-none"></textarea>
-                            <button type="button" id="btn_copy_defaults" class="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-800 hover:bg-amber-900 text-white text-xs font-semibold rounded-xl shadow-sm hover:shadow transition shrink-0 whitespace-nowrap">
+                            <textarea id="top_reason" rows="1" placeholder="e.g. Physical audit / Damaged count" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition resize-none"></textarea>
+                            <button type="button" id="btn_copy_defaults" class="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-amber-800 hover:bg-amber-900 text-white text-xs font-semibold rounded-xl shadow-sm hover:shadow transition shrink-0 whitespace-nowrap" title="Copy adjustment type, local stock flag, and reason to all rows">
                                 <i class="fas fa-copy text-[11px]"></i>
-                                Apply to All Rows
+                                Apply All
                             </button>
                         </div>
-                        <p class="text-[11px] text-gray-400 mt-1">Click button to copy adjustment type &amp; reason to all current line items.</p>
+                        <p class="text-[11px] text-gray-400 mt-1">Copy defaults to all rows.</p>
                     </div>
 
                 </div>
@@ -149,8 +159,9 @@ foreach ($warehouses as $wh) {
                             <th class="py-3 px-3 w-24">Size</th>
                             <th class="py-3 px-3 w-28">Color</th>
                             <th class="py-3 px-3 w-28 text-right">Current Qty</th>
-                            <th class="py-3 px-3 w-40">Adjustment Type</th>
-                            <th class="py-3 px-3 w-32 text-right">New Qty <span class="text-red-500">*</span></th>
+                            <th class="py-3 px-3 w-36">Adjustment Type</th>
+                            <th class="py-3 px-3 w-28 text-right">New Qty <span class="text-red-500">*</span></th>
+                            <th class="py-3 px-3 w-36 text-center">Update Local Stock?</th>
                             <th class="py-3 px-3 min-w-[10rem]">Reason</th>
                             <th class="py-3 px-3 w-12 text-center"></th>
                         </tr>
@@ -274,6 +285,7 @@ foreach ($warehouses as $wh) {
                                 <th class="py-2.5 px-3 text-center">Adjustment</th>
                                 <th class="py-2.5 px-3 text-right">Qty</th>
                                 <th class="py-2.5 px-3 text-right">New Est. Qty</th>
+                                <th class="py-2.5 px-3 text-center">Update Local Stock?</th>
                                 <th class="py-2.5 px-3">Reason</th>
                             </tr>
                         </thead>
@@ -333,6 +345,7 @@ foreach ($warehouses as $wh) {
     const topWhSel = document.getElementById('top_warehouse_id');
     const topWhHidden = document.getElementById('top_warehouse_id_hidden');
     const topAdjSel = document.getElementById('top_adjustment_type');
+    const topUpdateLocalSel = document.getElementById('top_update_local_stock');
     const topReasonInp = document.getElementById('top_reason');
     const btnCopyDefaults = document.getElementById('btn_copy_defaults');
     const btnAddRow = document.getElementById('btn_add_row');
@@ -407,6 +420,7 @@ foreach ($warehouses as $wh) {
         tr.dataset.rowIdx = rowCounter;
 
         const defaultAdjType = topAdjSel ? topAdjSel.value : 'IN';
+        const defaultUpdateLocal = topUpdateLocalSel ? topUpdateLocalSel.value : '0';
         const defaultReason = topReasonInp ? topReasonInp.value.trim() : '';
 
         tr.innerHTML = `
@@ -442,6 +456,12 @@ foreach ($warehouses as $wh) {
             </td>
             <td class="py-2.5 px-3 align-middle text-right">
                 <input type="number" min="1" step="1" class="bulk-inp-qty w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs text-right font-bold text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition" placeholder="Qty" />
+            </td>
+            <td class="py-2.5 px-3 align-middle text-center">
+                <select class="bulk-inp-update-local-stock w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
+                    <option value="0" ${defaultUpdateLocal === '1' ? '' : 'selected'}>No</option>
+                    <option value="1" ${defaultUpdateLocal === '1' ? 'selected' : ''}>Yes</option>
+                </select>
             </td>
             <td class="py-2.5 px-3 align-middle">
                 <input type="text" class="bulk-inp-reason w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition" value="${escapeHtml(defaultReason)}" placeholder="Reason" />
@@ -716,13 +736,16 @@ foreach ($warehouses as $wh) {
     // Apply Top-Level Defaults to All Rows
     function copyTopDefaultsToAllRows() {
         const adjType = topAdjSel ? topAdjSel.value : 'IN';
+        const updateLocal = topUpdateLocalSel ? topUpdateLocalSel.value : '0';
         const reason = topReasonInp ? topReasonInp.value.trim() : '';
 
         const rows = gridBody.querySelectorAll('.adj-grid-row');
         rows.forEach(tr => {
             const sel = tr.querySelector('.bulk-inp-adj-type');
+            const updateLocalSel = tr.querySelector('.bulk-inp-update-local-stock');
             const reasonInp = tr.querySelector('.bulk-inp-reason');
             if (sel) sel.value = adjType;
+            if (updateLocalSel) updateLocalSel.value = updateLocal;
             if (reasonInp) reasonInp.value = reason;
         });
     }
@@ -813,16 +836,11 @@ foreach ($warehouses as $wh) {
                 rowValid = false;
             }
 
-            // Check if Decrease exceeds current stock
-            if (type === 'OUT' && quantity > curQty) {
-                issues.push(`Row #${rowNum} (SKU "${sku}"): Cannot decrease stock by ${quantity} because current available stock is only ${curQty}.`);
-                rowValid = false;
-            }
-
             if (!rowValid) {
                 tr.classList.add('bg-red-50/40', 'border-red-300');
             } else {
                 tr.classList.remove('bg-red-50/40', 'border-red-300');
+                const updateLocalStock = tr.querySelector('.bulk-inp-update-local-stock').value === '1';
                 items.push({
                     product_id: pId,
                     sku,
@@ -832,6 +850,7 @@ foreach ($warehouses as $wh) {
                     current_qty: curQty,
                     type,
                     quantity,
+                    update_local_stock: updateLocalStock ? 1 : 0,
                     reason,
                     image: img
                 });
@@ -864,7 +883,13 @@ foreach ($warehouses as $wh) {
                 : 'bg-rose-100 text-rose-800 border-rose-200';
 
             const typeLabel = isInc ? '+ Increase' : '- Decrease';
-            const estQty = isInc ? (item.current_qty + item.quantity) : Math.max(0, item.current_qty - item.quantity);
+            const rawEstQty = isInc ? (item.current_qty + item.quantity) : (item.current_qty - item.quantity);
+            const estQty = Math.max(0, rawEstQty);
+            const isClamped = rawEstQty < 0;
+
+            const estQtyDisplay = isClamped
+                ? `<span class="font-bold text-rose-700">${estQty}</span><span class="text-[10px] font-semibold text-rose-600 block">(Clamped to 0)</span>`
+                : `<span class="font-bold text-amber-900">${estQty}</span>`;
 
             tbodyHtml += `
                 <tr class="border-b border-gray-100 hover:bg-slate-50">
@@ -878,7 +903,10 @@ foreach ($warehouses as $wh) {
                         </span>
                     </td>
                     <td class="py-2.5 px-3 text-right font-bold text-gray-900">${item.quantity}</td>
-                    <td class="py-2.5 px-3 text-right font-bold text-amber-900">${estQty}</td>
+                    <td class="py-2.5 px-3 text-right">${estQtyDisplay}</td>
+                    <td class="py-2.5 px-3 text-center">
+                        ${item.update_local_stock ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">Yes</span>' : '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">No</span>'}
+                    </td>
                     <td class="py-2.5 px-3 text-gray-600 truncate max-w-[150px]">${escapeHtml(item.reason || 'Bulk stock adjustment')}</td>
                 </tr>
             `;
