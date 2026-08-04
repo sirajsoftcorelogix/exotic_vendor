@@ -2741,16 +2741,11 @@ class PosInvoiceController
         }
 
         require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
-        $status = 'proforma';
-        if ($forceFinal) {
-            $status = 'final';
-        } elseif ($conn instanceof mysqli) {
+        $status = 'final';
+        if (!$forceFinal && $conn instanceof mysqli) {
             $resolvedStatus = pos_payment_resolve_auto_invoice_status($conn, $orderNumber);
-            if ($resolvedStatus !== null) {
-                $status = $resolvedStatus;
-            } else {
-                $paymentStage = $paymentModel->getLatestPaymentStage($orderNumber);
-                $status = (strtolower(trim($paymentStage)) === 'final') ? 'final' : 'proforma';
+            if ($resolvedStatus === null) {
+                return ['success' => false, 'message' => 'Payment is incomplete. Tax invoice is generated upon full payment.'];
             }
         }
 

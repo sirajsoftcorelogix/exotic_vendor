@@ -300,6 +300,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
     </div>
 
 </div>
+<script src="<?php echo base_url(); ?>assets/js/compliance_doc_modal.js"></script>
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         document.getElementById('payment_date').max = new Date().toISOString().split('T')[0];
@@ -833,6 +834,16 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
             .then(data => {
 
                 if (!data.success) {
+                    if (data.require_compliance && window.ComplianceDocModal) {
+                        window.ComplianceDocModal.open({
+                            customerId: data.customer_id,
+                            message: data.message,
+                            onSuccess: function () {
+                                createFinalInvoice(orderId);
+                            }
+                        });
+                        return;
+                    }
                     alert(data.message || 'Invoice failed');
                     return;
                 }

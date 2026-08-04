@@ -1589,6 +1589,9 @@ switch ($page) {
             case 'create-invoice-from-receipt':
                 $controller->create_invoice_from_receipt();
                 break;
+            case 'save-customer-compliance':
+                $controller->save_customer_compliance();
+                break;
             default:
                 $controller->index();
                 break;
