@@ -71,6 +71,11 @@ $formatStatusLabel = static function (string $status): string {
                 </p>
             </div>
             <div class="flex shrink-0 lg:pl-4 lg:self-center gap-2">
+                <a href="?page=products&action=bulk_stock_adjustment"
+                    class="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 text-sm font-semibold shadow-sm hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 transition whitespace-nowrap w-full sm:w-auto">
+                    <i class="fas fa-boxes-stacked text-xs text-amber-700" aria-hidden="true"></i>
+                    Bulk Stock Adjustment
+                </a>
                 <a href="?page=products&action=in_transit"
                     class="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl border border-sky-200 bg-white text-sky-800 text-sm font-semibold shadow-sm hover:bg-sky-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 transition whitespace-nowrap w-full sm:w-auto">
                     <i class="fas fa-truck-loading text-xs opacity-95" aria-hidden="true"></i>

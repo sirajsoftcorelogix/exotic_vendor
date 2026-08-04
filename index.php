@@ -980,6 +980,15 @@ switch ($page) {
             case 'inventory_ledger':
                 $controller->inventoryLedger();
                 break;
+            case 'bulk_stock_adjustment':
+                $controller->bulkStockAdjustment();
+                break;
+            case 'process_bulk_stock_adjustment':
+                $controller->processBulkStockAdjustment();
+                break;
+            case 'get_products_warehouse_stock':
+                $controller->getProductsWarehouseStock();
+                break;
             case 'transfer_stock':
                 $controller->getTransferStockForm();
                 break;
