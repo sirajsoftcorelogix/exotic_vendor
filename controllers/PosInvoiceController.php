@@ -107,6 +107,7 @@ class PosInvoiceController
             'bank_transfer' => 'Bank transfer',
             'pos_machine' => 'POS machine',
             'cheque' => 'Cheque',
+            'adminorder' => 'Admin Order',
             default => $key !== '' ? ucfirst(str_replace('_', ' ', $key)) : '',
         };
     }

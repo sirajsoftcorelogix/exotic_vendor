@@ -108,6 +108,7 @@ $initialFilters = is_array($initial_filters ?? null) ? $initial_filters : [];
                                 'pos_machine' => 'POS machine',
                                 'razorpay' => 'Razorpay',
                                 'cheque' => 'Cheque',
+                                'adminorder' => 'Admin Order',
                                 'offline' => 'Offline',
                             ];
                             foreach ($paymentTypeOptions as $value => $label):

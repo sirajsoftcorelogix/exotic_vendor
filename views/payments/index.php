@@ -68,6 +68,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                         <option value="pos_machine">POS</option>
                         <option value="razorpay">Razorpay</option>
                         <option value="cheque">Cheque</option>
+                        <option value="adminorder">Admin Order</option>
                     </select>
                 </div>
 
@@ -199,6 +200,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                         <option value="razorpay">Razorpay</option>
                         <option value="specialpay">SpecialPay</option>
                         <option value="cheque">Cheque</option>
+                        <option value="adminorder">Admin Order</option>
                         <option value="demand_draft">Demand Draft</option>
                     </select>
                 </div>
@@ -342,6 +344,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
             razorpay: 'Razorpay',
             specialpay: 'SpecialPay',
             cheque: 'Cheque',
+            adminorder: 'Admin Order',
             demand_draft: 'Demand draft'
         };
         return labels[key] || (key ? key.replace(/_/g, ' ') : '—');

@@ -42,6 +42,7 @@ function paymentTypeGroupRules(): array
             'offline', 'counter',
             'cod', 'cash_on_delivery', 'cash on delivery',
             'upi',
+            'adminorder', 'admin_order', 'admin order',
         ],
     ];
 

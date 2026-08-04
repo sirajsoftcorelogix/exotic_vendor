@@ -62,6 +62,35 @@ class HighValueComplianceValidator
     }
 
     /**
+     * Convert an amount in a given currency to INR using currency_master export rate.
+     */
+    public static function convertToInr(mysqli $conn, float $amount, string $currency, ?float $exchangeRate = null): float
+    {
+        $currency = strtoupper(trim($currency));
+        if ($currency === '' || $currency === 'INR') {
+            return $amount;
+        }
+
+        if ($exchangeRate !== null && $exchangeRate > 0) {
+            return $amount * $exchangeRate;
+        }
+
+        $stmt = $conn->prepare("SELECT rate_export FROM currency_master WHERE currency_code = ? AND is_active = 1 LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('s', $currency);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $row = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
+            if ($row && !empty($row['rate_export']) && (float)$row['rate_export'] > 0) {
+                return $amount * (float)$row['rate_export'];
+            }
+        }
+
+        return $amount;
+    }
+
+    /**
      * Validate customer compliance documents for invoice creation.
      *
      * @param mysqli $conn
@@ -87,7 +116,18 @@ class HighValueComplianceValidator
     public static function validateCustomerCompliance(mysqli $conn, int $customerId, float $invoiceTotal, array $payload = []): array
     {
         $limit = self::getLimit($conn);
-        $isHighValue = $invoiceTotal >= $limit;
+        $currency = strtoupper(trim((string)($payload['currency'] ?? $payload['header']['currency'] ?? 'INR')));
+
+        if (isset($payload['converted_amount']) && (float)$payload['converted_amount'] > 0) {
+            $inrTotal = (float)$payload['converted_amount'];
+        } elseif (isset($payload['inr_amount']) && (float)$payload['inr_amount'] > 0) {
+            $inrTotal = (float)$payload['inr_amount'];
+        } else {
+            $exchangeRate = isset($payload['exchange_rate']) ? (float)$payload['exchange_rate'] : (isset($payload['rate_export']) ? (float)$payload['rate_export'] : null);
+            $inrTotal = self::convertToInr($conn, $invoiceTotal, $currency, $exchangeRate);
+        }
+
+        $isHighValue = $inrTotal >= $limit;
 
         $customer = self::fetchCustomerRow($conn, $customerId);
         $customerName = trim(($customer['first_name'] ?? '') . ' ' . ($customer['last_name'] ?? ''));

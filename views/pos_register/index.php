@@ -1296,6 +1296,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         ["pos_machine", "POS machine"],
         ["razorpay", "Razorpay"],
         ["cheque", "Cheque"],
+        ["adminorder", "Admin Order"],
         ["waived", "Waived (no charge)"]
       ];
     }

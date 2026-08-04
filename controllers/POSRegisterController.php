@@ -226,7 +226,10 @@ class POSRegisterController
     private function evaluateHighValueCompliance(array $payload, float $invoiceAmount, float $cashAmount, string $paymentMode, mysqli $conn): array
     {
         $limit = $this->getHighValueTransactionLimit($conn);
-        $isHighValue = $invoiceAmount >= $limit;
+        require_once __DIR__ . '/../helpers/compliance/HighValueComplianceValidator.php';
+        $currency = (string)($payload['currency'] ?? 'INR');
+        $inrAmount = HighValueComplianceValidator::convertToInr($conn, $invoiceAmount, $currency);
+        $isHighValue = $inrAmount >= $limit;
         $residency = $this->normalizeResidencyStatus((string)($payload['customer_residency_status'] ?? 'INDIAN_RESIDENT'));
         $pan = $this->normalizePan((string)($payload['customer_pan'] ?? ''));
         $aadhaar = $this->normalizeAadhaar((string)($payload['customer_aadhaar'] ?? ''));
@@ -5648,6 +5651,7 @@ class POSRegisterController
             'pos_machine' => 'pos_machine',
             'cheque' => 'cheque',
             'razorpay' => 'razorpay',
+            'adminorder' => 'adminorder',
             'cod' => 'cod',
             'offline' => 'offline',
         ];
@@ -5712,6 +5716,7 @@ class POSRegisterController
             'pos_machine' => 'POS machine',
             'razorpay' => 'Razorpay',
             'cheque' => 'Cheque',
+            'adminorder' => 'Admin Order',
         ];
 
         return $map[$m] ?? strtoupper($m);
@@ -5730,6 +5735,7 @@ class POSRegisterController
             'pos_machine' => 'POS machine',
             'razorpay' => 'Razorpay',
             'cheque' => 'Cheque',
+            'adminorder' => 'Admin Order',
         ];
 
         $options = [];
