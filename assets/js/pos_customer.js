@@ -583,40 +583,49 @@
           var phoneOrEmail = (data.customer.phone || '').trim() || (data.customer.email || '').trim();
           var label = (data.customer.name || '') + (phoneOrEmail ? ' (' + phoneOrEmail + ')' : '');
           window.POS_SESSION_CUSTOMER_ID = idStr;
+          window.POS_INITIAL_CUSTOMER = {
+            id: idStr,
+            name: data.customer.name || '',
+            phone: data.customer.phone || '',
+            email: data.customer.email || '',
+            text: label
+          };
 
           if (window.jQuery && window.jQuery.fn.select2) {
             var $s = window.jQuery(select);
-            var existingOpt = $s.find('option[value="' + idStr + '"]');
-            if (existingOpt.length) {
-              existingOpt.text(label);
-              existingOpt.attr('data-name', data.customer.name || '');
-              existingOpt.attr('data-phone', data.customer.phone || '');
-              existingOpt.attr('data-email', data.customer.email || '');
-            } else {
-              var opt = new Option(label, idStr, true, true);
-              opt.setAttribute('data-name', data.customer.name || '');
-              opt.setAttribute('data-phone', data.customer.phone || '');
-              opt.setAttribute('data-email', data.customer.email || '');
-              $s.append(opt);
-            }
+            $s.find('option[value="' + idStr + '"]').remove();
+            var opt = new Option(label, idStr, true, true);
+            opt.setAttribute('data-name', data.customer.name || '');
+            opt.setAttribute('data-phone', data.customer.phone || '');
+            opt.setAttribute('data-email', data.customer.email || '');
+            $s.append(opt);
             $s.val(idStr).trigger('change');
+            $s.trigger({
+              type: 'select2:select',
+              params: {
+                data: {
+                  id: idStr,
+                  text: label,
+                  name: data.customer.name || '',
+                  phone: data.customer.phone || '',
+                  email: data.customer.email || ''
+                }
+              }
+            });
           } else {
             var existingOption = select.querySelector('option[value="' + idStr + '"]');
             if (existingOption) {
-              existingOption.textContent = label;
-              existingOption.setAttribute('data-name', data.customer.name || '');
-              existingOption.setAttribute('data-phone', data.customer.phone || '');
-              existingOption.setAttribute('data-email', data.customer.email || '');
-            } else {
-              var option = document.createElement('option');
-              option.value = idStr;
-              option.textContent = label;
-              option.setAttribute('data-name', data.customer.name || '');
-              option.setAttribute('data-phone', data.customer.phone || '');
-              option.setAttribute('data-email', data.customer.email || '');
-              select.appendChild(option);
+              existingOption.remove();
             }
+            var option = document.createElement('option');
+            option.value = idStr;
+            option.textContent = label;
+            option.setAttribute('data-name', data.customer.name || '');
+            option.setAttribute('data-phone', data.customer.phone || '');
+            option.setAttribute('data-email', data.customer.email || '');
+            select.appendChild(option);
             select.value = idStr;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
           }
 
           postSetCustomer(idStr);
