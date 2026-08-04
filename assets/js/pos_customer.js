@@ -59,10 +59,12 @@
     sel.focus();
   };
 
-  window.updatePosCustomerLabels = function (name, phone) {
+  window.updatePosCustomerLabels = function (name, phone, email) {
     var nameText =
       name != null && String(name).trim() !== '' ? String(name).trim() : 'Walk-in Customer';
-    var phoneText = phone != null && String(phone).trim() !== '' ? String(phone).trim() : '-';
+    var phoneText = phone != null ? String(phone).trim() : '';
+    var emailText = email != null ? String(email).trim() : '';
+    var subText = phoneText !== '' ? phoneText : (emailText !== '' ? emailText : '-');
     ['selectedCustomerNameCart', 'posCartTableCustomerName'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) {
@@ -72,7 +74,7 @@
     ['selectedCustomerPhoneCart', 'posCartTableCustomerPhone'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) {
-        el.textContent = phoneText;
+        el.textContent = subText;
       }
     });
   };
@@ -225,13 +227,111 @@
     ]);
   }
 
-  window.openCustomerModal = function () {
+  function fetchCustomerDetailsForModal(customerId) {
+    if (!customerId) return;
+    fetch('index.php?page=pos_register&action=customer-order-info&customer_id=' + encodeURIComponent(customerId), {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (!data || !data.success) return;
+
+        var b = data.billing || {};
+        var s = data.shipping || {};
+
+        var setVal = function (name, val) {
+          var input = document.querySelector('#customerForm [name="' + name + '"]');
+          if (input) {
+            input.value = val != null ? String(val) : '';
+          }
+        };
+
+        setVal('first_name', b.first_name || '');
+        setVal('last_name', b.last_name || '');
+        setVal('mobile', b.phone || '');
+        setVal('cus_email', b.email || '');
+        setVal('address_line1', b.address1 || '');
+        setVal('address_line2', b.address2 || '');
+        setVal('city', b.city || '');
+        setVal('zipcode', b.zip || '');
+        setVal('gstin', b.gstin || '');
+
+        var countrySel = document.getElementById('customer_country');
+        if (countrySel) {
+          countrySel.value = b.country || 'IN';
+        }
+
+        window.syncCustomerStateSelect('customer_country', 'customer_state', b.state || '');
+
+        setVal('shipping_first_name', s.shipping_first_name || b.first_name || '');
+        setVal('shipping_last_name', s.shipping_last_name || b.last_name || '');
+        setVal('shipping_mobile', s.sphone || b.phone || '');
+        setVal('shipping_email', s.shipping_email || s.email || b.email || '');
+        setVal('shipping_address_line1', s.saddress1 || '');
+        setVal('shipping_address_line2', s.saddress2 || '');
+        setVal('shipping_city', s.scity || '');
+        setVal('shipping_zipcode', s.szip || '');
+
+        var sCountrySel = document.getElementById('customer_shipping_country');
+        if (sCountrySel) {
+          sCountrySel.value = s.scountry || b.country || 'IN';
+        }
+
+        window.syncCustomerStateSelect('customer_shipping_country', 'customer_shipping_state', s.sstate || '');
+      })
+      .catch(function (err) {
+        if (typeof console !== 'undefined' && console.error) {
+          console.error('Error fetching customer details for edit modal:', err);
+        }
+      });
+  }
+
+  window.openCustomerModal = function (editCustomerId) {
     var modal = document.getElementById('customerModal');
     if (!modal) {
       return;
     }
+
+    var form = document.getElementById('customerForm');
+    if (form) {
+      form.reset();
+    }
+
+    var sameAddrCb = document.getElementById('sameAddress');
+    if (sameAddrCb) {
+      sameAddrCb.checked = false;
+    }
+
+    var titleEl = document.getElementById('customerModalTitle');
+    var submitBtn = document.getElementById('customerModalSubmitBtn');
+    var idInput = document.getElementById('customer_modal_id');
+
+    var cid = editCustomerId || (editCustomerId === undefined ? '' : editCustomerId);
+    if (idInput) {
+      idInput.value = cid ? String(cid) : '';
+    }
+
+    if (cid) {
+      if (titleEl) titleEl.textContent = 'Edit Customer';
+      if (submitBtn) submitBtn.textContent = 'Update Customer';
+      fetchCustomerDetailsForModal(cid);
+    } else {
+      if (titleEl) titleEl.textContent = 'Add Customer';
+      if (submitBtn) submitBtn.textContent = 'Save Customer';
+    }
+
     modal.classList.remove('hidden');
     syncCustomerCountryStateFields();
+  };
+
+  window.editSelectedCustomer = function () {
+    var customerId = window.getSelectedCustomerId();
+    if (customerId) {
+      window.openCustomerModal(customerId);
+    } else {
+      window.openCustomerModal();
+    }
   };
 
   window.closeCustomerModal = function () {
@@ -311,7 +411,7 @@
     var name = data.name || '';
     var phone = data.phone || '';
     var email = data.email || '';
-    if ((!name || !phone) && data.element && typeof window.jQuery !== 'undefined') {
+    if ((!name || (!phone && !email)) && data.element && typeof window.jQuery !== 'undefined') {
       var el = window.jQuery(data.element);
       name = name || String(el.data('name') || '');
       phone = phone || String(el.data('phone') || '');
@@ -322,12 +422,12 @@
         .split('|')[0]
         .trim();
     }
+    var subText = phone ? (phone + (email ? ' | ' + email : '')) : (email || '');
     return window.jQuery(
       '<div><div style="font-weight:600">' +
         name +
         '</div><div style="font-size:11px;color:#777">' +
-        phone +
-        (email ? ' | ' + email : '') +
+        subText +
         '</div></div>'
     );
   }
@@ -384,12 +484,8 @@
           }
           return {
             results: data.customers.map(function (c) {
-              var disp =
-                c.display ||
-                (c.name || '') +
-                  ' | ' +
-                  (c.phone || '') +
-                  (c.email ? ' | ' + c.email : '');
+              var sub = (c.phone || '').trim() || (c.email || '').trim();
+              var disp = c.display || ((c.name || '') + (sub ? ' | ' + sub : ''));
               return {
                 id: String(c.id),
                 text: disp,
@@ -410,13 +506,13 @@
       var d = e.params.data;
       window.POS_SESSION_CUSTOMER_ID = d.id ? String(d.id) : '';
       postSetCustomer(d.id || '');
-      window.updatePosCustomerLabels(d.name, d.phone);
+      window.updatePosCustomerLabels(d.name, d.phone, d.email);
     });
 
     $cust.on('select2:clear', function () {
       window.POS_SESSION_CUSTOMER_ID = '';
       postSetCustomer('');
-      window.updatePosCustomerLabels('', '');
+      window.updatePosCustomerLabels('', '', '');
     });
 
     if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.id) {
@@ -427,7 +523,7 @@
       opt.setAttribute('data-email', ic.email || '');
       $cust.append(opt);
       $cust.val(String(ic.id)).trigger('change');
-      window.updatePosCustomerLabels(ic.name, ic.phone);
+      window.updatePosCustomerLabels(ic.name, ic.phone, ic.email);
     }
   }
 
@@ -484,28 +580,48 @@
           }
 
           var idStr = String(data.customer.id);
-          var label = (data.customer.name || '') + ' (' + (data.customer.phone || '') + ')';
+          var phoneOrEmail = (data.customer.phone || '').trim() || (data.customer.email || '').trim();
+          var label = (data.customer.name || '') + (phoneOrEmail ? ' (' + phoneOrEmail + ')' : '');
           window.POS_SESSION_CUSTOMER_ID = idStr;
 
           if (window.jQuery && window.jQuery.fn.select2) {
             var $s = window.jQuery(select);
-            var opt = new Option(label, idStr, true, true);
-            opt.setAttribute('data-name', data.customer.name || '');
-            opt.setAttribute('data-phone', data.customer.phone || '');
-            opt.setAttribute('data-email', data.customer.email || '');
-            $s.append(opt);
+            var existingOpt = $s.find('option[value="' + idStr + '"]');
+            if (existingOpt.length) {
+              existingOpt.text(label);
+              existingOpt.attr('data-name', data.customer.name || '');
+              existingOpt.attr('data-phone', data.customer.phone || '');
+              existingOpt.attr('data-email', data.customer.email || '');
+            } else {
+              var opt = new Option(label, idStr, true, true);
+              opt.setAttribute('data-name', data.customer.name || '');
+              opt.setAttribute('data-phone', data.customer.phone || '');
+              opt.setAttribute('data-email', data.customer.email || '');
+              $s.append(opt);
+            }
             $s.val(idStr).trigger('change');
           } else {
-            var option = document.createElement('option');
-            option.value = idStr;
-            option.textContent = label;
-            select.appendChild(option);
+            var existingOption = select.querySelector('option[value="' + idStr + '"]');
+            if (existingOption) {
+              existingOption.textContent = label;
+              existingOption.setAttribute('data-name', data.customer.name || '');
+              existingOption.setAttribute('data-phone', data.customer.phone || '');
+              existingOption.setAttribute('data-email', data.customer.email || '');
+            } else {
+              var option = document.createElement('option');
+              option.value = idStr;
+              option.textContent = label;
+              option.setAttribute('data-name', data.customer.name || '');
+              option.setAttribute('data-phone', data.customer.phone || '');
+              option.setAttribute('data-email', data.customer.email || '');
+              select.appendChild(option);
+            }
             select.value = idStr;
           }
 
           postSetCustomer(idStr);
-          window.updatePosCustomerLabels(data.customer.name, data.customer.phone);
-          posCustomerToast('Customer saved', 'green');
+          window.updatePosCustomerLabels(data.customer.name, data.customer.phone, data.customer.email);
+          posCustomerToast(data.message || (data.is_update ? 'Customer updated' : 'Customer saved'), 'green');
           window.closeCustomerModal();
         })
         .catch(function (err) {

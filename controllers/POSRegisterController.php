@@ -1436,6 +1436,7 @@ class POSRegisterController
             'sphone' => $pick($shippingVc['sphone'] ?? '', $shippingOrder['sphone'] ?? '', $shippingSession['sphone'] ?? ''),
             'sgstin' => $pick($shippingVc['sgstin'] ?? '', $shippingOrder['sgstin'] ?? '', $shippingOrder['shipping_gstin'] ?? '', $shippingSession['sgstin'] ?? ''),
             'shipping_gstin' => $pick($shippingVc['shipping_gstin'] ?? '', $shippingOrder['shipping_gstin'] ?? '', $shippingOrder['sgstin'] ?? '', $shippingSession['shipping_gstin'] ?? ''),
+            'shipping_email' => $pick($shippingVc['shipping_email'] ?? '', $shippingOrder['shipping_email'] ?? '', $shippingSession['shipping_email'] ?? ''),
         ];
 
         echo json_encode([
@@ -4351,117 +4352,16 @@ class POSRegisterController
         require_once 'models/customer/Customer.php';
         $customerModel = new Customer($conn);
 
-        $first = $_POST['first_name'] ?? '';
-        $last  = $_POST['last_name'] ?? '';
-        $phone = $_POST['mobile'] ?? '';
-        $email = $_POST['cus_email'] ?? '';
+        $res = $customerModel->savePosCustomerFromPost($_POST);
 
-        if (!$first || !$last || !$phone) {
-            echo json_encode([
-                "success" => false,
-                "message" => "First name, last name and phone required"
-            ]);
-            exit;
+        if ($res['success'] && !empty($res['customer']['id'])) {
+            $id = (int)$res['customer']['id'];
+            $_SESSION['pos_customer_id'] = $id;
+            $_POST['trade_name'] = trim((string)($_POST['trade_name'] ?? ''));
+            $_SESSION['pos_customer_form'] = $_POST;
         }
 
-        $name = trim($first . ' ' . $last);
-
-        $stmt = $conn->prepare("
-        INSERT INTO vp_customers (name,email,phone)
-        VALUES (?,?,?)
-    ");
-        if (!$stmt) {
-            echo json_encode([
-                "success" => false,
-                "message" => "Database error (prepare): " . $conn->error
-            ]);
-            exit;
-        }
-        $stmt->bind_param("sss", $name, $email, $phone);
-        try {
-            $executed = $stmt->execute();
-        } catch (\mysqli_sql_exception $e) {
-            $stmt->close();
-            $dup = str_contains($e->getMessage(), 'Duplicate entry')
-                || str_contains($e->getMessage(), 'unique_email_phone')
-                || $e->getSqlState() === '23000';
-            if ($dup) {
-                $lookup = $conn->prepare(
-                    'SELECT id, name, email, phone FROM vp_customers WHERE email = ? AND phone = ? LIMIT 1'
-                );
-                if ($lookup) {
-                    $lookup->bind_param('ss', $email, $phone);
-                    $lookup->execute();
-                    $existing = $lookup->get_result()->fetch_assoc();
-                    $lookup->close();
-                    if (!empty($existing['id'])) {
-                        $id = (int)$existing['id'];
-                        $_SESSION['pos_customer_id'] = $id;
-                        $_POST['trade_name'] = trim((string)($_POST['trade_name'] ?? ''));
-                        $_SESSION['pos_customer_form'] = $_POST;
-                        $customerModel->upsertPosCustomerDetailsFromPost($id, $_POST);
-                        echo json_encode([
-                            'success' => true,
-                            'message' => 'This email and phone are already registered; using existing customer.',
-                            'customer' => [
-                                'id' => $id,
-                                'name' => $existing['name'] ?? $name,
-                                'phone' => $existing['phone'] ?? $phone,
-                                'email' => $existing['email'] ?? $email,
-                            ],
-                        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                        exit;
-                    }
-                }
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'A customer with this email and phone already exists.',
-                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                exit;
-            }
-            echo json_encode([
-                'success' => false,
-                'message' => 'Could not save customer: ' . $e->getMessage(),
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
-        }
-
-        if (!$executed) {
-            echo json_encode([
-                "success" => false,
-                "message" => "Could not save customer: " . $stmt->error
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            $stmt->close();
-            exit;
-        }
-
-        $id = (int)$stmt->insert_id;
-        $stmt->close();
-
-        if ($id <= 0) {
-            echo json_encode([
-                "success" => false,
-                "message" => "Customer was not created (no insert id)."
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
-        }
-
-        /*  STORE FULL BILLING + SHIPPING IN SESSION */
-        $_SESSION['pos_customer_id'] = $id;
-        $_POST['trade_name'] = trim((string)($_POST['trade_name'] ?? ''));
-        $_SESSION['pos_customer_form'] = $_POST;
-        $customerModel->upsertPosCustomerDetailsFromPost($id, $_POST);
-
-        echo json_encode([
-            "success" => true,
-            "customer" => [
-                "id" => $id,
-                "name" => $name,
-                "phone" => $phone,
-                "email" => $email
-            ]
-        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-
+        echo json_encode($res, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
     public function set_customer()
