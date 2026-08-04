@@ -25,6 +25,7 @@ $modeLabels = [
     'pos_machine' => 'POS machine',
     'razorpay' => 'Razorpay',
     'cheque' => 'Cheque',
+    'adminorder' => 'Admin Order',
     'offline' => 'Offline',
 ];
 $modeDisplay = $modeLabels[$modeRaw] ?? strtoupper($modeRaw ?: '—');

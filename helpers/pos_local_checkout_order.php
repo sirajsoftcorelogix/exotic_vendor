@@ -554,6 +554,7 @@ function pos_local_checkout_map_pos_payment_mode_to_exotic(string $posMode): str
         'pos_machine' => 'pos_machine',
         'cheque' => 'cheque',
         'razorpay' => 'razorpay',
+        'adminorder' => 'adminorder',
         'cod' => 'cod',
         'offline' => 'offline',
     ];

@@ -376,7 +376,7 @@ function pos_payment_split_cod_total(array $splits): float
  */
 function pos_payment_allowed_modes(): array
 {
-    return ['cash', 'cod', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque', 'waived'];
+    return ['cash', 'cod', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque', 'adminorder', 'waived'];
 }
 
 function pos_payment_is_waived_mode(string $mode): bool
@@ -397,6 +397,7 @@ function pos_payment_mode_options_for_view(): array
         'pos_machine' => 'POS machine',
         'razorpay' => 'Razorpay',
         'cheque' => 'Cheque',
+        'adminorder' => 'Admin Order',
         'waived' => 'Waived (no charge)',
     ];
     $options = [];

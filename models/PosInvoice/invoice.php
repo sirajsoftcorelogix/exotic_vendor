@@ -547,6 +547,7 @@ class POSInvoice
             'upi' => ['upi'],
             'pos_machine' => ['pos_machine'],
             'cheque' => ['cheque'],
+            'adminorder' => ['adminorder'],
             default => $key !== '' ? [$key] : [],
         };
     }
