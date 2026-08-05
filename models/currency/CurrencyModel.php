@@ -7,6 +7,52 @@ class CurrencyModel
     public function __construct($database)
     {
         $this->db = $database;
+        $this->ensureMappedCountriesColumn();
+    }
+
+    /**
+     * Ensure mapped_countries column exists in currency_master
+     */
+    private function ensureMappedCountriesColumn(): void
+    {
+        static $checked = false;
+        if ($checked) return;
+        $checked = true;
+
+        if ($this->db) {
+            $check = @$this->db->query("SHOW COLUMNS FROM currency_master LIKE 'mapped_countries'");
+            if ($check && $check->num_rows === 0) {
+                @$this->db->query("ALTER TABLE currency_master ADD COLUMN mapped_countries TEXT NULL DEFAULT NULL AFTER display_symbol");
+            }
+        }
+    }
+
+    /**
+     * Get default mapped countries for standard currency codes
+     */
+    public static function getDefaultMappedCountries(string $code): string
+    {
+        $code = strtoupper(trim($code));
+        $defaults = [
+            'EUR' => 'DE, FR, IT, ES, NL, BE, AT, FI, GR, IE, PT, SK, SI, EE, LV, LT, CY, MT, LU, HR',
+            'GBP' => 'GB, UK',
+            'DKK' => 'DK',
+            'NOK' => 'NO',
+            'USD' => 'US',
+            'CAD' => 'CA',
+            'AUD' => 'AU',
+            'NZD' => 'NZ',
+            'JPY' => 'JP',
+            'INR' => 'IN',
+            'CHF' => 'CH',
+            'SEK' => 'SE',
+            'SGD' => 'SG',
+            'HKD' => 'HK',
+            'AED' => 'AE',
+            'SAR' => 'SA',
+        ];
+
+        return $defaults[$code] ?? '';
     }
 
     /**
@@ -61,8 +107,8 @@ class CurrencyModel
         }
 
         $query = "INSERT INTO currency_master 
-                  (currency_code, currency_name, currency_unit, display_symbol, rate_import, rate_export, is_active) 
-                  VALUES (?, ?, ?, ?, ?, ?, 1)";
+                  (currency_code, currency_name, currency_unit, display_symbol, mapped_countries, rate_import, rate_export, is_active) 
+                  VALUES (?, ?, ?, ?, ?, ?, ?, 1)";
 
         $stmt = $this->db->prepare($query);
         if (!$stmt) return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
@@ -70,10 +116,11 @@ class CurrencyModel
         $name = trim($data['currency_name'] ?? '');
         $unit = trim($data['currency_unit'] ?? '');
         $symbol = trim($data['display_symbol'] ?? '');
+        $mapped_countries = trim($data['mapped_countries'] ?? self::getDefaultMappedCountries($code));
         $rate_import = floatval($data['rate_import'] ?? 0);
         $rate_export = floatval($data['rate_export'] ?? 0);
 
-        $stmt->bind_param('ssssdd', $code, $name, $unit, $symbol, $rate_import, $rate_export);
+        $stmt->bind_param('sssssdd', $code, $name, $unit, $symbol, $mapped_countries, $rate_import, $rate_export);
         $result = $stmt->execute();
 
         if ($result) {
@@ -98,6 +145,7 @@ class CurrencyModel
                   currency_name = ?, 
                   currency_unit = ?, 
                   display_symbol = ?,
+                  mapped_countries = ?,
                   rate_import = ?, 
                   rate_export = ? 
                   WHERE id = ?";
@@ -105,13 +153,15 @@ class CurrencyModel
         $stmt = $this->db->prepare($query);
         if (!$stmt) return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
 
+        $code = strtoupper(trim($oldCurrency['currency_code']));
         $name = trim($data['currency_name'] ?? $oldCurrency['currency_name']);
         $unit = trim($data['currency_unit'] ?? $oldCurrency['currency_unit']);
         $symbol = trim($data['display_symbol'] ?? ($oldCurrency['display_symbol'] ?? ''));
+        $mapped_countries = isset($data['mapped_countries']) ? trim($data['mapped_countries']) : ($oldCurrency['mapped_countries'] ?? self::getDefaultMappedCountries($code));
         $rate_import = floatval($data['rate_import']);
         $rate_export = floatval($data['rate_export']);
 
-        $stmt->bind_param('sssddi', $name, $unit, $symbol, $rate_import, $rate_export, $id);
+        $stmt->bind_param('ssssddi', $name, $unit, $symbol, $mapped_countries, $rate_import, $rate_export, $id);
         $result = $stmt->execute();
 
         if ($result) {
@@ -132,6 +182,7 @@ class CurrencyModel
                   currency_name = ?, 
                   currency_unit = ?, 
                   display_symbol = ?,
+                  mapped_countries = ?,
                   rate_import = ?, 
                   rate_export = ?,
                   is_active = 1
@@ -140,17 +191,18 @@ class CurrencyModel
         $stmt = $this->db->prepare($query);
         if (!$stmt) return ['success' => false, 'message' => 'Prepare failed'];
 
+        $code = strtoupper($data['currency_code'] ?? '');
         $name = trim($data['currency_name'] ?? '');
         $unit = trim($data['currency_unit'] ?? '');
         $symbol = trim($data['display_symbol'] ?? '');
+        $mapped_countries = trim($data['mapped_countries'] ?? self::getDefaultMappedCountries($code));
         $rate_import = floatval($data['rate_import'] ?? 0);
         $rate_export = floatval($data['rate_export'] ?? 0);
 
-        $stmt->bind_param('sssddi', $name, $unit, $symbol, $rate_import, $rate_export, $id);
+        $stmt->bind_param('ssssddi', $name, $unit, $symbol, $mapped_countries, $rate_import, $rate_export, $id);
         $result = $stmt->execute();
 
         if ($result) {
-            $code = strtoupper($data['currency_code']);
             $this->addRateHistory($code, $rate_import, $rate_export);
             return ['success' => true, 'id' => $id, 'message' => 'Currency reactivated successfully'];
         }
@@ -206,6 +258,43 @@ class CurrencyModel
         $stmt->execute();
         $res = $stmt->get_result();
         return $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
+    }
+
+    /**
+     * Find active currency mapped to a specific country code or country name
+     * (e.g. 'DE', 'FR', 'ES', 'GB', 'DK', 'NO')
+     */
+    public function getCurrencyByCountryCode(string $countryInput): ?array
+    {
+        $countryInput = trim($countryInput);
+        if (empty($countryInput)) return null;
+
+        $all = $this->getAllCurrencies();
+        
+        // 1. Check explicit mapped_countries in database or defaults
+        foreach ($all as $curr) {
+            $mapped = !empty($curr['mapped_countries']) 
+                ? $curr['mapped_countries'] 
+                : self::getDefaultMappedCountries($curr['currency_code']);
+
+            if (!empty($mapped)) {
+                $tags = array_map('trim', explode(',', $mapped));
+                foreach ($tags as $tag) {
+                    if (strcasecmp($tag, $countryInput) === 0) {
+                        return $curr;
+                    }
+                }
+            }
+        }
+
+        // 2. Direct currency code match (e.g. USD, EUR, GBP, DKK, NOK)
+        foreach ($all as $curr) {
+            if (strcasecmp($curr['currency_code'], $countryInput) === 0) {
+                return $curr;
+            }
+        }
+
+        return null;
     }
 
     /**

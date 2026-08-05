@@ -34,12 +34,13 @@ class CurrencyController {
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $data = [
-                'currency_code'  => trim($_POST['currency_code'] ?? ''),
-                'currency_name'  => trim($_POST['currency_name'] ?? ''),
-                'currency_unit'  => trim($_POST['currency_unit'] ?? ''),
-                'display_symbol' => trim($_POST['display_symbol'] ?? ''),
-                'rate_import'    => floatval($_POST['rate_import'] ?? 0),
-                'rate_export'    => floatval($_POST['rate_export'] ?? 0)
+                'currency_code'    => trim($_POST['currency_code'] ?? ''),
+                'currency_name'    => trim($_POST['currency_name'] ?? ''),
+                'currency_unit'    => trim($_POST['currency_unit'] ?? ''),
+                'display_symbol'   => trim($_POST['display_symbol'] ?? ''),
+                'mapped_countries' => trim($_POST['mapped_countries'] ?? ''),
+                'rate_import'      => floatval($_POST['rate_import'] ?? 0),
+                'rate_export'      => floatval($_POST['rate_export'] ?? 0)
             ];
             
             $errors = $this->validate($data, $isEdit);
@@ -207,6 +208,7 @@ class CurrencyController {
     public function getAllCurrencies() { return $this->model->getAllCurrencies(); }
     public function getCurrencyById($id) { return $this->model->getCurrencyById($id); }
     public function getCurrencyByCode($code) { return $this->model->getCurrencyByCode($code); }
+    public function getCurrencyByCountryCode($countryCode) { return $this->model->getCurrencyByCountryCode($countryCode); }
     public function addCurrency($data) { return $this->model->addCurrency($data); }
     public function updateCurrency($id, $data) { return $this->model->updateCurrency($id, $data); }
     public function deactivateCurrency($id) { return $this->model->deactivateCurrency($id); }
