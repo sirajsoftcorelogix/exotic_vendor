@@ -529,7 +529,7 @@ class Customer
         $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search);
         $term = '%' . $escaped . '%';
 
-        $sql = 'SELECT id, name, email, phone FROM vp_customers
+        $sql = 'SELECT id, name, email, phone, country_of_residence FROM vp_customers
                 WHERE name LIKE ? OR email LIKE ? OR phone LIKE ?
                 ORDER BY id DESC
                 LIMIT ?';
@@ -553,12 +553,16 @@ class Customer
             $name = (string)($row['name'] ?? '');
             $email = (string)($row['email'] ?? '');
             $phone = (string)($row['phone'] ?? '');
+            $countryRes = trim((string)($row['country_of_residence'] ?? ''));
+            $resInfo = $this->resolveCustomerResidenceAndCurrency($countryRes);
             $display = $name . ' | ' . $phone . ($email !== '' ? ' | ' . $email : '');
             $out[] = [
                 'id' => $id,
                 'name' => $name,
                 'email' => $email,
                 'phone' => $phone,
+                'country_of_residence' => $countryRes,
+                'residence_text' => $resInfo['display_text'],
                 'display' => $display,
             ];
         }
@@ -965,6 +969,73 @@ class Customer
     }
 
     /**
+     * Resolve country of residence and applicable currency details for customer cart display.
+     *
+     * @return array{country_code:string, country_name:string, currency_code:string, currency_name:string, currency_display:string, display_text:string}
+     */
+    public function resolveCustomerResidenceAndCurrency(?string $countryInput): array
+    {
+        $countryInput = trim((string)$countryInput);
+        if ($countryInput === '') {
+            return [
+                'country_code' => '',
+                'country_name' => '',
+                'currency_code' => '',
+                'currency_name' => '',
+                'currency_display' => '',
+                'display_text' => '-',
+            ];
+        }
+
+        require_once __DIR__ . '/../../helpers/courier/country_codes.php';
+        $iso2 = normalizeCountryIso2($countryInput, $this->conn);
+        $countryRow = getCountryByIso2($iso2, $this->conn);
+        $countryName = !empty($countryRow['name']) ? trim((string)$countryRow['name']) : $countryInput;
+
+        require_once __DIR__ . '/../currency/CurrencyModel.php';
+        $currencyModel = new CurrencyModel($this->conn);
+        $curr = $currencyModel->getCurrencyByCountryCode($iso2) ?: $currencyModel->getCurrencyByCountryCode($countryInput);
+
+        $currencyCode = !empty($curr['currency_code']) ? trim((string)$curr['currency_code']) : '';
+        $currencyName = !empty($curr['currency_name']) ? trim((string)$curr['currency_name']) : '';
+
+        if ($currencyCode === '') {
+            if ($iso2 === 'IN' || strcasecmp($countryName, 'India') === 0) {
+                $inrCurr = $currencyModel->getCurrencyByCode('INR');
+                $currencyCode = 'INR';
+                $currencyName = !empty($inrCurr['currency_name']) ? trim((string)$inrCurr['currency_name']) : 'Indian Rupee';
+            } else {
+                $usdCurr = $currencyModel->getCurrencyByCode('USD');
+                $currencyCode = 'USD';
+                $currencyName = !empty($usdCurr['currency_name']) ? trim((string)$usdCurr['currency_name']) : 'US Dollar';
+            }
+        }
+
+        $currencyDisplay = '';
+        if ($currencyName !== '' && $currencyCode !== '') {
+            $currencyDisplay = $currencyName . ' (' . $currencyCode . ')';
+        } elseif ($currencyName !== '') {
+            $currencyDisplay = $currencyName;
+        } elseif ($currencyCode !== '') {
+            $currencyDisplay = $currencyCode;
+        }
+
+        $displayText = $countryName;
+        if ($currencyDisplay !== '') {
+            $displayText .= ' | ' . $currencyDisplay;
+        }
+
+        return [
+            'country_code' => $iso2,
+            'country_name' => $countryName,
+            'currency_code' => $currencyCode,
+            'currency_name' => $currencyName,
+            'currency_display' => $currencyDisplay,
+            'display_text' => $displayText,
+        ];
+    }
+
+    /**
      * Create or update POS customer from modal POST data.
      *
      * @param array<string, mixed> $post
@@ -1022,6 +1093,9 @@ class Customer
 
             $this->upsertPosCustomerDetailsFromPost($customerId, $post);
             $this->updateCustomerCountryOfResidenceFromOrderInfo($customerId, (string)($post['country'] ?? $post['country_of_residence'] ?? ''));
+            $cRow = $this->getCustomerById($customerId);
+            $cRes = trim((string)($cRow['country_of_residence'] ?? ''));
+            $rInfo = $this->resolveCustomerResidenceAndCurrency($cRes);
 
             return [
                 'success' => true,
@@ -1032,6 +1106,8 @@ class Customer
                     'name' => $name,
                     'phone' => $phone,
                     'email' => $email,
+                    'country_of_residence' => $cRes,
+                    'residence_text' => $rInfo['display_text'],
                 ]
             ];
         }
@@ -1064,6 +1140,10 @@ class Customer
                         $exId = (int)$existing['id'];
                         $this->upsertPosCustomerDetailsFromPost($exId, $post);
                         $this->updateCustomerCountryOfResidenceFromOrderInfo($exId, (string)($post['country'] ?? $post['country_of_residence'] ?? ''));
+                        $exRow = $this->getCustomerById($exId);
+                        $exRes = trim((string)($exRow['country_of_residence'] ?? ''));
+                        $exInfo = $this->resolveCustomerResidenceAndCurrency($exRes);
+
                         return [
                             'success' => true,
                             'is_update' => false,
@@ -1073,6 +1153,8 @@ class Customer
                                 'name' => $existing['name'] ?? $name,
                                 'phone' => $existing['phone'] ?? $phone,
                                 'email' => $existing['email'] ?? $email,
+                                'country_of_residence' => $exRes,
+                                'residence_text' => $exInfo['display_text'],
                             ]
                         ];
                     }
@@ -1097,6 +1179,9 @@ class Customer
 
         $this->upsertPosCustomerDetailsFromPost($newId, $post);
         $this->updateCustomerCountryOfResidenceFromOrderInfo($newId, (string)($post['country'] ?? $post['country_of_residence'] ?? ''));
+        $newRow = $this->getCustomerById($newId);
+        $newRes = trim((string)($newRow['country_of_residence'] ?? ''));
+        $newInfo = $this->resolveCustomerResidenceAndCurrency($newRes);
 
         return [
             'success' => true,
@@ -1107,6 +1192,8 @@ class Customer
                 'name' => $name,
                 'phone' => $phone,
                 'email' => $email,
+                'country_of_residence' => $newRes,
+                'residence_text' => $newInfo['display_text'],
             ]
         ];
     }

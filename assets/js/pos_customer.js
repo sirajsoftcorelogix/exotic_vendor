@@ -59,12 +59,14 @@
     sel.focus();
   };
 
-  window.updatePosCustomerLabels = function (name, phone, email) {
+  window.updatePosCustomerLabels = function (name, phone, email, residenceText) {
     var nameText =
       name != null && String(name).trim() !== '' ? String(name).trim() : 'Walk-in Customer';
     var phoneText = phone != null ? String(phone).trim() : '';
     var emailText = email != null ? String(email).trim() : '';
     var subText = phoneText !== '' ? phoneText : (emailText !== '' ? emailText : '-');
+    var resText = residenceText != null && String(residenceText).trim() !== '' ? String(residenceText).trim() : '-';
+
     ['selectedCustomerNameCart', 'posCartTableCustomerName'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) {
@@ -75,6 +77,12 @@
       var el = document.getElementById(id);
       if (el) {
         el.textContent = subText;
+      }
+    });
+    ['selectedCustomerResidenceCart', 'posCartTableCustomerResidence'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) {
+        el.textContent = resText;
       }
     });
   };
@@ -491,7 +499,8 @@
                 text: disp,
                 name: c.name || '',
                 phone: c.phone || '',
-                email: c.email || ''
+                email: c.email || '',
+                residence_text: c.residence_text || '-'
               };
             })
           };
@@ -505,14 +514,25 @@
     $cust.on('select2:select', function (e) {
       var d = e.params.data;
       window.POS_SESSION_CUSTOMER_ID = d.id ? String(d.id) : '';
-      postSetCustomer(d.id || '');
-      window.updatePosCustomerLabels(d.name, d.phone, d.email);
+      window.updatePosCustomerLabels(d.name, d.phone, d.email, d.residence_text || '-');
+      postSetCustomer(d.id || '').then(function (res) {
+        return res.json();
+      }).then(function (data) {
+        if (data && data.customer && data.customer.residence_text) {
+          window.updatePosCustomerLabels(
+            data.customer.name || d.name,
+            data.customer.phone || d.phone,
+            data.customer.email || d.email,
+            data.customer.residence_text
+          );
+        }
+      }).catch(function () {});
     });
 
     $cust.on('select2:clear', function () {
       window.POS_SESSION_CUSTOMER_ID = '';
       postSetCustomer('');
-      window.updatePosCustomerLabels('', '', '');
+      window.updatePosCustomerLabels('', '', '', '-');
     });
 
     if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.id) {
@@ -521,9 +541,10 @@
       opt.setAttribute('data-name', ic.name || '');
       opt.setAttribute('data-phone', ic.phone || '');
       opt.setAttribute('data-email', ic.email || '');
+      opt.setAttribute('data-residence', ic.residence_text || '-');
       $cust.append(opt);
       $cust.val(String(ic.id)).trigger('change');
-      window.updatePosCustomerLabels(ic.name, ic.phone, ic.email);
+      window.updatePosCustomerLabels(ic.name, ic.phone, ic.email, ic.residence_text || '-');
     }
   }
 
@@ -588,6 +609,7 @@
             name: data.customer.name || '',
             phone: data.customer.phone || '',
             email: data.customer.email || '',
+            residence_text: data.customer.residence_text || '-',
             text: label
           };
 
@@ -598,6 +620,7 @@
             opt.setAttribute('data-name', data.customer.name || '');
             opt.setAttribute('data-phone', data.customer.phone || '');
             opt.setAttribute('data-email', data.customer.email || '');
+            opt.setAttribute('data-residence', data.customer.residence_text || '-');
             $s.append(opt);
             $s.val(idStr).trigger('change');
             $s.trigger({
@@ -608,7 +631,8 @@
                   text: label,
                   name: data.customer.name || '',
                   phone: data.customer.phone || '',
-                  email: data.customer.email || ''
+                  email: data.customer.email || '',
+                  residence_text: data.customer.residence_text || '-'
                 }
               }
             });
@@ -623,13 +647,19 @@
             option.setAttribute('data-name', data.customer.name || '');
             option.setAttribute('data-phone', data.customer.phone || '');
             option.setAttribute('data-email', data.customer.email || '');
+            option.setAttribute('data-residence', data.customer.residence_text || '-');
             select.appendChild(option);
             select.value = idStr;
             select.dispatchEvent(new Event('change', { bubbles: true }));
           }
 
           postSetCustomer(idStr);
-          window.updatePosCustomerLabels(data.customer.name, data.customer.phone, data.customer.email);
+          window.updatePosCustomerLabels(
+            data.customer.name,
+            data.customer.phone,
+            data.customer.email,
+            data.customer.residence_text || '-'
+          );
           posCustomerToast(data.message || (data.is_update ? 'Customer updated' : 'Customer saved'), 'green');
           window.closeCustomerModal();
         })

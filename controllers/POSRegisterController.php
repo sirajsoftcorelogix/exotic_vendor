@@ -1009,11 +1009,19 @@ class POSRegisterController
                     $nm = (string)($row['name'] ?? '');
                     $ph = (string)($row['phone'] ?? '');
                     $em = (string)($row['email'] ?? '');
+                    $cRes = (string)($row['country_of_residence'] ?? '');
+                    $resInfo = $customerModel->resolveCustomerResidenceAndCurrency($cRes);
                     $selected_customer = [
                         'id' => (int)$row['id'],
                         'name' => $nm,
                         'phone' => $ph,
                         'email' => $em,
+                        'country_of_residence' => $cRes,
+                        'country_name' => $resInfo['country_name'],
+                        'currency_code' => $resInfo['currency_code'],
+                        'currency_name' => $resInfo['currency_name'],
+                        'currency_display' => $resInfo['currency_display'],
+                        'residence_text' => $resInfo['display_text'],
                         'text' => trim($nm . ' | ' . $ph . ($em !== '' ? ' | ' . $em : '')),
                     ];
                 } else {
@@ -1443,6 +1451,9 @@ class POSRegisterController
             'shipping_email' => $pick($shippingVc['shipping_email'] ?? '', $shippingOrder['shipping_email'] ?? '', $shippingSession['shipping_email'] ?? ''),
         ];
 
+        $cRes = trim((string)($customerRow['country_of_residence'] ?? ''));
+        $resInfo = $customerModel->resolveCustomerResidenceAndCurrency($cRes);
+
         echo json_encode([
             'success' => true,
             'billing' => $billing,
@@ -1451,8 +1462,10 @@ class POSRegisterController
                 'customer_residency_status' => $this->normalizeResidencyStatus((string)($customerRow['customer_residency_status'] ?? 'INDIAN_RESIDENT')),
                 'customer_pan' => $this->normalizePan((string)($customerRow['customer_pan'] ?? '')),
                 'passport_number' => $this->normalizePassport((string)($customerRow['passport_number'] ?? '')),
-                'country_of_residence' => trim((string)($customerRow['country_of_residence'] ?? '')),
+                'country_of_residence' => $cRes,
+                'residence_text' => $resInfo['display_text'],
             ],
+            'residence_info' => $resInfo,
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
@@ -1490,11 +1503,19 @@ class POSRegisterController
                     $nm = (string)($row['name'] ?? '');
                     $ph = (string)($row['phone'] ?? '');
                     $em = (string)($row['email'] ?? '');
+                    $cRes = (string)($row['country_of_residence'] ?? '');
+                    $resInfo = $customerModel->resolveCustomerResidenceAndCurrency($cRes);
                     $selectedCustomer = [
                         'id' => (int)$row['id'],
                         'name' => $nm,
                         'phone' => $ph,
                         'email' => $em,
+                        'country_of_residence' => $cRes,
+                        'country_name' => $resInfo['country_name'],
+                        'currency_code' => $resInfo['currency_code'],
+                        'currency_name' => $resInfo['currency_name'],
+                        'currency_display' => $resInfo['currency_display'],
+                        'residence_text' => $resInfo['display_text'],
                         'text' => trim($nm . ' | ' . $ph . ($em !== '' ? ' | ' . $em : '')),
                     ];
                 }
@@ -4372,6 +4393,14 @@ class POSRegisterController
     public function set_customer()
     {
         $customerId = (int)($_POST['customer_id'] ?? 0);
+        $customerInfo = [
+            'id' => 0,
+            'name' => '',
+            'phone' => '',
+            'email' => '',
+            'country_of_residence' => '',
+            'residence_text' => '-',
+        ];
 
         if ($customerId > 0) {
             $_SESSION['pos_customer_id'] = $customerId;
@@ -4381,13 +4410,26 @@ class POSRegisterController
             require_once 'models/customer/Customer.php';
             $customerModel = new Customer($conn);
             $customerModel->ensureCountryOfResidenceForCustomer($customerId);
+            $custRow = $customerModel->getCustomerById($customerId);
+            if ($custRow) {
+                $cRes = trim((string)($custRow['country_of_residence'] ?? ''));
+                $rData = $customerModel->resolveCustomerResidenceAndCurrency($cRes);
+                $customerInfo = array_merge([
+                    'id' => $customerId,
+                    'name' => trim((string)($custRow['name'] ?? '')),
+                    'phone' => trim((string)($custRow['phone'] ?? '')),
+                    'email' => trim((string)($custRow['email'] ?? '')),
+                    'country_of_residence' => $cRes,
+                    'residence_text' => $rData['display_text'],
+                ], $rData);
+            }
         } else {
             unset($_SESSION['pos_customer_id']);
         }
 
         $this->clearBufferedHttpOutput();
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(["success" => true]);
+        echo json_encode(["success" => true, "customer" => $customerInfo]);
         exit;
     }
 

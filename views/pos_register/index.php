@@ -5,11 +5,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 
 $customerLabel = 'Walk-in Customer';
 $customerSubtext = '-';
+$customerResidenceSubtext = '-';
 if (!empty($selected_customer) && is_array($selected_customer)) {
     $customerLabel = trim((string)($selected_customer['name'] ?? '')) ?: 'Walk-in Customer';
     $phone = trim((string)($selected_customer['phone'] ?? ''));
     $email = trim((string)($selected_customer['email'] ?? ''));
     $customerSubtext = $phone !== '' ? $phone : ($email !== '' ? $email : '-');
+    $customerResidenceSubtext = trim((string)($selected_customer['residence_text'] ?? '-')) ?: '-';
 }
 ?>
   <script>
@@ -355,6 +357,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
         <div class="px-4 py-3 border-b shrink-0">
           <div id="selectedCustomerNameCart" onclick="editSelectedCustomer()" class="text-base font-semibold text-center text-slate-800 cursor-pointer hover:text-orange-600 hover:underline" title="Click to edit customer details"><?= htmlspecialchars($customerLabel) ?></div>
           <div id="selectedCustomerPhoneCart" class="text-sm text-slate-500 text-center"><?= htmlspecialchars($customerSubtext) ?></div>
+          <div id="selectedCustomerResidenceCart" class="text-xs text-slate-500 text-center mt-0.5"><?= htmlspecialchars($customerResidenceSubtext) ?></div>
         </div>
 
         <div class="pos-cart-panel-inner px-3 py-2">
