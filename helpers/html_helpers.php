@@ -345,9 +345,9 @@ function getParentCategoryList()
 	global $conn;
 	$sql = "SELECT id, category, name, display_name
 			FROM category 
-			WHERE is_active = 1 AND parent_id = 0
+			WHERE is_active = 1 AND (parent_id = 0 OR parent = '0' OR parent IS NULL OR parent = '')
 			ORDER BY display_name ASC, name ASC";
-	$result = $conn->query($sql);
+	$result = $conn ? $conn->query($sql) : false;
 	$categories = array();
 	if ($result) {
 		while ($row = $result->fetch_assoc()) {
@@ -364,7 +364,7 @@ function getProductCategoryList()
 			FROM category 
 			WHERE is_active = 1
 			ORDER BY display_name ASC, name ASC";
-	$result = $conn->query($sql);
+	$result = $conn ? $conn->query($sql) : false;
 	$categories = array();
 	if ($result) {
 		while ($row = $result->fetch_assoc()) {
@@ -1287,16 +1287,17 @@ function currencySymbol($code)
 }
 function getCategoryFromTable()
 {
-	// Fetch active roles
 	global $conn;
 	$sql = "SELECT id, name
-				FROM category 
-				WHERE is_active = 1 AND parent_id=0
-				ORDER BY name ASC";
-	$result = $conn->query($sql);
+			FROM category 
+			WHERE is_active = 1 AND (parent_id = 0 OR parent = '0' OR parent IS NULL OR parent = '')
+			ORDER BY name ASC";
+	$result = $conn ? $conn->query($sql) : false;
 	$categories = array();
-	while ($row = $result->fetch_assoc()) {
-		$categories[$row['id']] = $row['name'];
+	if ($result) {
+		while ($row = $result->fetch_assoc()) {
+			$categories[$row['id']] = $row['name'];
+		}
 	}
 	return $categories;
 }
