@@ -591,3 +591,62 @@ function vendor_external_api_fetch_creator_list(string $type = 'author'): array
         'creators' => $data['creators'],
     ];
 }
+
+/**
+ * Fetch category list from Exotic India API GET /product/categorylist
+ *
+ * @return array{success:bool,message:string,categories?:array,http_code:int,raw?:string}
+ */
+function vendor_external_api_fetch_category_list(): array
+{
+    $res = exotic_india_api_get('/product/categorylist', ['Accept: application/json']);
+    if (!$res['success']) {
+        return [
+            'success' => false,
+            'message' => 'Category API error: ' . ($res['message'] ?? 'Network or API failure'),
+            'http_code' => $res['http_code'] ?? 0,
+            'raw' => $res['raw'] ?? '',
+        ];
+    }
+
+    $data = $res['data'];
+    $categories = [];
+
+    if (is_array($data)) {
+        if (isset($data['categories']) && is_array($data['categories'])) {
+            $categories = $data['categories'];
+        } elseif (isset($data['data']) && is_array($data['data'])) {
+            $categories = $data['data'];
+        } elseif (isset($data['categorylist']) && is_array($data['categorylist'])) {
+            $categories = $data['categorylist'];
+        } elseif (isset($data[0]) && is_array($data[0])) {
+            $categories = $data;
+        }
+    }
+
+    if (empty($categories) && is_array($data) && empty($data)) {
+        return [
+            'success' => false,
+            'message' => 'Category API returned an empty response.',
+            'http_code' => $res['http_code'] ?? 200,
+            'raw' => $res['raw'] ?? '',
+        ];
+    }
+
+    if (!is_array($categories)) {
+        return [
+            'success' => false,
+            'message' => 'Category API returned invalid JSON structure.',
+            'http_code' => $res['http_code'] ?? 200,
+            'raw' => $res['raw'] ?? '',
+        ];
+    }
+
+    return [
+        'success' => true,
+        'message' => 'Category API fetched successfully.',
+        'http_code' => $res['http_code'] ?? 200,
+        'categories' => $categories,
+        'raw' => $res['raw'] ?? '',
+    ];
+}
