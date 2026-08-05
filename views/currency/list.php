@@ -12,8 +12,6 @@ $rateHistory = [];
     .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
     .btn-add { background: #10b981; color: white; padding: 9px 16px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; transition: background 0.2s; border: none; cursor: pointer; }
     .btn-add:hover { background: #059669; }
-    .btn-pdf { background: #3b82f6; color: white; padding: 9px 16px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; transition: background 0.2s; border: none; cursor: pointer; }
-    .btn-pdf:hover { background: #2563eb; }
     .btn-icegate { background: #8b5cf6; color: white; padding: 9px 16px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; transition: background 0.2s; border: none; cursor: pointer; }
     .btn-icegate:hover { background: #7c3aed; }
     
@@ -69,7 +67,6 @@ $rateHistory = [];
     <div class="header-row">
         <h1>Currency Management</h1>
         <div class="btn-group">
-            <button class="btn-pdf" onclick="openPdfModal()">📄 Upload CBIC PDF (Method 3)</button>
             <button class="btn-icegate" onclick="openIcegateModal()">⚡ Sync / Paste ICEGATE Table (Method 1)</button>
             <a href="index.php?page=currency&action=addRecord" class="btn-add">+ Add New Currency</a>
         </div>
@@ -113,60 +110,6 @@ $rateHistory = [];
             </tbody>
         </table>
     <?php endif; ?>
-</div>
-
-<!-- PDF Upload Modal (Method 3) -->
-<div id="pdfModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>📄 Upload CBIC Exchange Rate PDF (Method 3)</h2>
-            <button class="close-modal" onclick="closeModal('pdfModal')">&times;</button>
-        </div>
-        
-        <form id="pdfUploadForm" onsubmit="handlePdfParse(event)">
-            <label style="font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block;">Option A: Upload PDF File</label>
-            <div class="file-drop-area" onclick="document.getElementById('pdfFileInput').click()">
-                <div style="font-size: 28px; margin-bottom: 8px;">📂</div>
-                <div style="font-weight: 600; color: #334155;">Click to select CBIC Exchange Rate PDF</div>
-                <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Upload official notification PDF from CBIC / ICEGATE</div>
-                <input type="file" id="pdfFileInput" accept=".pdf" style="display: none;" onchange="updateFileName(this)">
-                <div id="pdfFileName" style="margin-top: 10px; font-weight: 600; color: #2563eb;"></div>
-            </div>
-
-            <label style="font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block;">Option B: Local File Path (or Sample Download)</label>
-            <input type="text" id="pdfFilePathInput" class="form-control" placeholder="e.g. c:\Users\Admin\Downloads\exchange_rate.pdf" value="c:\Users\Admin\Downloads\exchange_rate.pdf">
-
-            <div style="display: flex; justify-content: flex-end;">
-                <button type="submit" class="btn-submit" id="parsePdfBtn">🔍 Parse PDF & Preview Rates</button>
-            </div>
-        </form>
-
-        <div id="pdfPreviewSection" style="display: none; margin-top: 20px;">
-            <div id="pdfMetaBadge" class="meta-badge"></div>
-            <p style="font-size: 13px; color: #64748b; margin-bottom: 10px;">Review rates parsed from PDF. Uncheck any currency you do not wish to update.</p>
-            <div style="max-height: 350px; overflow-y: auto;">
-                <table class="preview-table">
-                    <thead>
-                        <tr>
-                            <th><input type="checkbox" id="selectAllPdf" checked onclick="toggleAllCheckboxes('pdfModal', this.checked)"></th>
-                            <th>Code</th>
-                            <th>Name</th>
-                            <th>Unit</th>
-                            <th>Import Rate</th>
-                            <th>Export Rate</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pdfPreviewBody"></tbody>
-                </table>
-            </div>
-
-            <div class="modal-footer">
-                <button class="btn-cancel" onclick="closeModal('pdfModal')">Cancel</button>
-                <button class="btn-submit" id="applyPdfRatesBtn" onclick="applyParsedRates('pdfModal', 'PDF')">✅ Apply Selected Rates to Database</button>
-            </div>
-        </div>
-    </div>
 </div>
 
 <!-- ICEGATE Table Sync / Paste Modal (Method 1) -->
@@ -257,7 +200,6 @@ JPY Japanese Yen 100.0 60.35 58.50"></textarea>
 
 <script>
     let currentParsedData = {
-        pdfModal: null,
         icegateModal: null
     };
 
@@ -282,68 +224,12 @@ JPY Japanese Yen 100.0 60.35 58.50"></textarea>
         document.getElementById('noticeModal').classList.add('active');
     }
 
-    function openPdfModal() {
-        document.getElementById('pdfModal').classList.add('active');
-    }
-
     function openIcegateModal() {
         document.getElementById('icegateModal').classList.add('active');
     }
 
     function closeModal(modalId) {
         document.getElementById(modalId).classList.remove('active');
-    }
-
-    function updateFileName(input) {
-        if (input.files && input.files[0]) {
-            document.getElementById('pdfFileName').textContent = 'Selected File: ' + input.files[0].name;
-            document.getElementById('pdfFilePathInput').value = '';
-        }
-    }
-
-    function handlePdfParse(event) {
-        event.preventDefault();
-        const fileInput = document.getElementById('pdfFileInput');
-        const pathInput = document.getElementById('pdfFilePathInput').value.trim();
-        
-        if (!fileInput.files.length && !pathInput) {
-            showNotice('Validation Error', 'Please select a PDF file to upload or specify a local file path.');
-            return;
-        }
-
-        const formData = new FormData();
-        if (fileInput.files.length > 0) {
-            formData.append('exchange_rate_pdf', fileInput.files[0]);
-        } else {
-            formData.append('file_path', pathInput);
-        }
-
-        const btn = document.getElementById('parsePdfBtn');
-        btn.disabled = true;
-        btn.textContent = '⏳ Parsing PDF...';
-
-        fetch('index.php?page=currency&action=uploadPdfPreview', {
-            method: 'POST',
-            body: formData
-        })
-        .then(res => res.json())
-        .then(data => {
-            btn.disabled = false;
-            btn.textContent = '🔍 Parse PDF & Preview Rates';
-
-            if (!data.success) {
-                showNotice('Parse Failed', data.message || 'Could not parse currency rates from PDF.');
-                return;
-            }
-
-            currentParsedData.pdfModal = data;
-            renderPreviewTable('pdfModal', data);
-        })
-        .catch(err => {
-            btn.disabled = false;
-            btn.textContent = '🔍 Parse PDF & Preview Rates';
-            showNotice('Error', 'Server error while parsing PDF: ' + err.message);
-        });
     }
 
     function handlePasteParse(event) {
@@ -387,10 +273,9 @@ JPY Japanese Yen 100.0 60.35 58.50"></textarea>
     }
 
     function renderPreviewTable(modalId, data) {
-        const isPdf = modalId === 'pdfModal';
-        const section = document.getElementById(isPdf ? 'pdfPreviewSection' : 'pastePreviewSection');
-        const metaBadge = document.getElementById(isPdf ? 'pdfMetaBadge' : 'pasteMetaBadge');
-        const tbody = document.getElementById(isPdf ? 'pdfPreviewBody' : 'pastePreviewBody');
+        const section = document.getElementById('pastePreviewSection');
+        const metaBadge = document.getElementById('pasteMetaBadge');
+        const tbody = document.getElementById('pastePreviewBody');
 
         metaBadge.innerHTML = `
             <span><strong>Notification:</strong> ${data.notification_no || 'N/A'}</span>

@@ -1,7 +1,6 @@
 <?php
 
 require_once __DIR__ . '/../models/currency/CurrencyModel.php';
-require_once __DIR__ . '/../helpers/IcegatePdfParser.php';
 require_once __DIR__ . '/../helpers/IcegateSyncService.php';
 
 class CurrencyController {
@@ -100,45 +99,6 @@ class CurrencyController {
         
         $currency = $this->model->getCurrencyById($_GET['id']);
         echo json_encode($currency ?: ['error' => 'Currency not found']);
-        exit;
-    }
-
-    /**
-     * Preview exchange rates from uploaded PDF (Method 3)
-     */
-    public function uploadPdfPreview() {
-        header('Content-Type: application/json');
-
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
-            exit;
-        }
-
-        $filePath = null;
-
-        // Check file upload or server file path parameter
-        if (isset($_FILES['exchange_rate_pdf']) && $_FILES['exchange_rate_pdf']['error'] === UPLOAD_ERR_OK) {
-            $filePath = $_FILES['exchange_rate_pdf']['tmp_name'];
-        } elseif (!empty($_POST['file_path'])) {
-            $filePath = trim($_POST['file_path']);
-        }
-
-        if (!$filePath) {
-            echo json_encode(['success' => false, 'message' => 'No PDF file provided or uploaded.']);
-            exit;
-        }
-
-        $parseResult = IcegatePdfParser::parsePdf($filePath);
-
-        if (!$parseResult['success']) {
-            echo json_encode($parseResult);
-            exit;
-        }
-
-        // Compare parsed rates with existing database records
-        $parseResult['rates'] = $this->enrichWithCurrentRates($parseResult['rates']);
-
-        echo json_encode($parseResult);
         exit;
     }
 
