@@ -1241,7 +1241,7 @@
 <!--popup for search settings-->
 <div id="searchSettingsPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50">
     <div class="bg-white p-4 rounded-md max-w-6xl w-5/12 max-h-3xl relative flex flex-col items-center">
-        <button onclick="closesearch();" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
+        <button onclick="closesearch();" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <div class="p-6 w-full overflow-y-auto">
             <h2 class="text-2xl font-bold mb-4">Search Settings</h2>
             <form id="searchSettingsForm" method="post" action="?page=posorders&action=save_search_settings">
@@ -1268,13 +1268,13 @@
 <!-- Image Popup -->
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
     <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
-        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
+        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
     </div>
 </div>
 <div id="importPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImportPopup(event)">
     <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center " onclick="event.stopPropagation();">
-        <button onclick="closeImportPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
+        <button onclick="closeImportPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <div class="p-6">
             <h2 class="text-2xl font-bold mb-4">Import Orders</h2>
             <?php //echo date('Y-m-d H:i:s',1761382018);          
@@ -1316,7 +1316,7 @@
 <!-- Bulk Update Status Modal -->
 <div id="bulkStatusPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeBulkStatusPopup(event)">
     <div class="bg-white p-4 rounded-md max-w-2xl w-full relative" onclick="event.stopPropagation();">
-        <button onclick="closeBulkStatusPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
+        <button onclick="closeBulkStatusPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <h2 class="text-xl font-bold mb-4">Bulk Update Status</h2>
         <form id="bulkStatusForm" method="post" action="?page=posorders&action=bulk_update_status">
             <div class="mb-4">
@@ -1388,7 +1388,7 @@
 <!-- Bulk Assign To Modal -->
 <div id="bulkAssignPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeBulkAssignPopup(event)">
     <div class="bg-white p-4 rounded-md max-w-2xl w-full relative" onclick="event.stopPropagation();">
-        <button onclick="closeBulkAssignPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
+        <button onclick="closeBulkAssignPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <h2 class="text-xl font-bold mb-4">Assign Orders To Agent</h2>
         <form id="bulkAssignForm" method="post" action="?page=posorders&action=bulk_assign_agent">
             <div class="mb-4">
@@ -1419,7 +1419,7 @@
 <!--bulk add to To Purchase-->
 <div id="bulkAddToPurchasePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeBulkAddToPurchasePopup(event)">
     <div class="bg-white p-4 rounded-md max-w-2xl w-full relative" onclick="event.stopPropagation();">
-        <button onclick="closeBulkAddToPurchasePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
+        <button onclick="closeBulkAddToPurchasePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <h2 class="text-xl font-bold mb-4">Create Purchase List</h2>
         <form id="bulkAddToPurchaseForm" method="post" action="">
             <div class="mb-4 flex gap-4 w-full items-end">
