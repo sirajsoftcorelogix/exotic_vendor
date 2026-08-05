@@ -1,11 +1,13 @@
 <?php
 $customerLabel = 'Walk-in Customer';
 $customerSubtext = '-';
+$customerResidenceSubtext = '-';
 if (!empty($selected_customer) && is_array($selected_customer)) {
     $customerLabel = trim((string)($selected_customer['name'] ?? '')) ?: 'Walk-in Customer';
     $phone = trim((string)($selected_customer['phone'] ?? ''));
     $email = trim((string)($selected_customer['email'] ?? ''));
     $customerSubtext = $phone !== '' ? $phone : ($email !== '' ? $email : '-');
+    $customerResidenceSubtext = trim((string)($selected_customer['residence_text'] ?? '-')) ?: '-';
 }
 ?>
 <div id="posCartTablePage" class="min-h-screen bg-slate-50" data-pos-cart-table-page="1">
@@ -160,6 +162,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
         <div class="shrink-0 text-sm lg:text-right">
           <div id="posCartTableCustomerName" onclick="editSelectedCustomer()" class="font-semibold text-slate-800 cursor-pointer hover:text-orange-600 hover:underline" title="Click to edit customer details"><?= htmlspecialchars($customerLabel) ?></div>
           <div id="posCartTableCustomerPhone" class="text-slate-500"><?= htmlspecialchars($customerSubtext) ?></div>
+          <div id="posCartTableCustomerResidence" class="text-xs text-slate-500 mt-0.5"><?= htmlspecialchars($customerResidenceSubtext) ?></div>
         </div>
       </div>
     </div>
