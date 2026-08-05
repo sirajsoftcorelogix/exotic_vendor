@@ -134,7 +134,7 @@ $rateHistory = [];
             </div>
 
             <label style="font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block;">Option B: Local File Path (or Sample Download)</label>
-            <input type="text" id="pdfFilePathInput" class="form-control" placeholder="e.g. /workspace/exchange_rate.pdf or c:\Users\Admin\Downloads\exchange_rate.pdf" value="">
+            <input type="text" id="pdfFilePathInput" class="form-control" placeholder="e.g. c:\Users\Admin\Downloads\exchange_rate.pdf" value="c:\Users\Admin\Downloads\exchange_rate.pdf">
 
             <div style="display: flex; justify-content: flex-end;">
                 <button type="submit" class="btn-submit" id="parsePdfBtn">🔍 Parse PDF & Preview Rates</button>
