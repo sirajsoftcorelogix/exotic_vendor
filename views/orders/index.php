@@ -952,7 +952,7 @@
                                                     if ($width > 0)  $dimParts[] = 'W: ' . $width .' Inch';
                                                     if ($height > 0) $dimParts[] = 'H: ' . $height .' Inch';
 
-                                                    $dimensions[] = ' ' . implode(' Ã— ', $dimParts);
+                                                    $dimensions[] = implode(' x ', $dimParts);
                                                 }
                                                 ?>
                                                 <?php if (!empty($dimensions)): ?>
