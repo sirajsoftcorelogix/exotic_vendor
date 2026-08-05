@@ -172,6 +172,146 @@ class Category
     }
 
     /**
+     * Check if a category is in use in vp_inbound or vp_products.
+     *
+     * @return array{in_use:bool,inbound_count:int,product_count:int}
+     */
+    public function getCategoryUsage(int $id): array
+    {
+        if ($id <= 0) {
+            return ['in_use' => false, 'inbound_count' => 0, 'product_count' => 0];
+        }
+
+        $cat = $this->getCategoryById($id);
+        if (!$cat) {
+            return ['in_use' => false, 'inbound_count' => 0, 'product_count' => 0];
+        }
+
+        $apiCatId = (int) ($cat['category'] ?? 0);
+        $catName = trim((string) ($cat['name'] ?? ''));
+        $displayName = trim((string) ($cat['display_name'] ?? ''));
+        $internalId = (int) ($cat['id'] ?? 0);
+
+        $matchValues = array_unique(array_filter([
+            (string) $apiCatId,
+            (string) $internalId,
+            $catName,
+            $displayName,
+        ], function ($val) {
+            return $val !== '' && $val !== '0';
+        }));
+
+        if (empty($matchValues)) {
+            return ['in_use' => false, 'inbound_count' => 0, 'product_count' => 0];
+        }
+
+        // 1. Check vp_inbound
+        $inboundCount = 0;
+        $candidateInboundCols = [
+            'group_name',
+            'category_code',
+            'sub_category_code',
+            'sub_sub_category_code',
+            'search_group',
+            'search_category',
+            'search_category_string',
+            'search_sub_category',
+            'search_sub_sub_category',
+            'search_cat',
+            'search_sub',
+            'search_sub_sub',
+        ];
+        $existingInboundCols = array_intersect($candidateInboundCols, $this->getExistingTableColumns('vp_inbound'));
+
+        if (!empty($existingInboundCols)) {
+            $inboundConditions = [];
+            $inboundParams = [];
+            $inboundTypes = '';
+
+            foreach ($matchValues as $val) {
+                foreach ($existingInboundCols as $col) {
+                    $inboundConditions[] = "{$col} = ?";
+                    $inboundParams[] = $val;
+                    $inboundTypes .= 's';
+
+                    $inboundConditions[] = "({$col} IS NOT NULL AND FIND_IN_SET(?, REPLACE(REPLACE({$col}, '|', ','), ' ', '')) > 0)";
+                    $inboundParams[] = $val;
+                    $inboundTypes .= 's';
+                }
+            }
+
+            if (!empty($inboundConditions)) {
+                $inboundSql = "SELECT COUNT(*) AS c FROM vp_inbound WHERE " . implode(' OR ', $inboundConditions);
+                $stmtInbound = $this->conn->prepare($inboundSql);
+                if ($stmtInbound) {
+                    $stmtInbound->bind_param($inboundTypes, ...$inboundParams);
+                    $stmtInbound->execute();
+                    $resInbound = $stmtInbound->get_result();
+                    if ($resInbound && $rowInbound = $resInbound->fetch_assoc()) {
+                        $inboundCount = (int) ($rowInbound['c'] ?? 0);
+                    }
+                    $stmtInbound->close();
+                }
+            }
+        }
+
+        // 2. Check vp_products
+        $productCount = 0;
+        $candidateProductCols = [
+            'groupname',
+            'category',
+            'sub_category',
+            'sub_sub_category',
+            'search_group',
+            'search_category',
+            'search_sub_category',
+            'search_sub_sub_category',
+            'search_cat',
+            'search_sub',
+            'search_sub_sub',
+        ];
+        $existingProductCols = array_intersect($candidateProductCols, $this->getExistingTableColumns('vp_products'));
+
+        if (!empty($existingProductCols)) {
+            $productConditions = [];
+            $productParams = [];
+            $productTypes = '';
+
+            foreach ($matchValues as $val) {
+                foreach ($existingProductCols as $col) {
+                    $productConditions[] = "{$col} = ?";
+                    $productParams[] = $val;
+                    $productTypes .= 's';
+
+                    $productConditions[] = "({$col} IS NOT NULL AND FIND_IN_SET(?, REPLACE(REPLACE({$col}, '|', ','), ' ', '')) > 0)";
+                    $productParams[] = $val;
+                    $productTypes .= 's';
+                }
+            }
+
+            if (!empty($productConditions)) {
+                $productSql = "SELECT COUNT(*) AS c FROM vp_products WHERE " . implode(' OR ', $productConditions);
+                $stmtProd = $this->conn->prepare($productSql);
+                if ($stmtProd) {
+                    $stmtProd->bind_param($productTypes, ...$productParams);
+                    $stmtProd->execute();
+                    $resProd = $stmtProd->get_result();
+                    if ($resProd && $rowProd = $resProd->fetch_assoc()) {
+                        $productCount = (int) ($rowProd['c'] ?? 0);
+                    }
+                    $stmtProd->close();
+                }
+            }
+        }
+
+        return [
+            'in_use' => ($inboundCount > 0 || $productCount > 0),
+            'inbound_count' => $inboundCount,
+            'product_count' => $productCount,
+        ];
+    }
+
+    /**
      * Delete a category record by primary key id.
      *
      * @return array{success:bool,message:string}
@@ -185,6 +325,21 @@ class Category
         $existing = $this->getCategoryById($id);
         if (!$existing) {
             return ['success' => false, 'message' => 'Category not found or already deleted.'];
+        }
+
+        $usage = $this->getCategoryUsage($id);
+        if ($usage['in_use']) {
+            $usedTables = [];
+            if ($usage['inbound_count'] > 0) {
+                $usedTables[] = sprintf('vp_inbound (%d record%s)', $usage['inbound_count'], $usage['inbound_count'] === 1 ? '' : 's');
+            }
+            if ($usage['product_count'] > 0) {
+                $usedTables[] = sprintf('vp_products (%d product%s)', $usage['product_count'], $usage['product_count'] === 1 ? '' : 's');
+            }
+            return [
+                'success' => false,
+                'message' => 'Cannot delete category: it is currently in use in ' . implode(' and ', $usedTables) . '. Please reassign or remove those references first.',
+            ];
         }
 
         $stmt = $this->conn->prepare("DELETE FROM category WHERE id = ?");
@@ -235,8 +390,13 @@ class Category
                     continue;
                 }
 
-                $apiCatId = isset($item['category']) ? (int) $item['category'] : 0;
-                if ($apiCatId <= 0) {
+                if (!isset($item['category']) || trim((string) $item['category']) === '') {
+                    $failedCount++;
+                    continue;
+                }
+
+                $apiCatId = (int) $item['category'];
+                if ($apiCatId === 0) {
                     $failedCount++;
                     continue;
                 }
@@ -257,13 +417,19 @@ class Category
                     $alreadyExistsCount++;
                 } else {
                     // Step 5: Record does not exist -> Insert new row
-                    $name = isset($item['name']) ? trim((string) $item['name']) : '';
+                    $name = isset($item['name']) && trim((string) $item['name']) !== ''
+                        ? trim((string) $item['name'])
+                        : (isset($item['title']) ? trim((string) $item['title']) : '');
                     $displayName = isset($item['display_name']) && trim((string) $item['display_name']) !== ''
                         ? trim((string) $item['display_name'])
                         : $name;
                     $parent = isset($item['parent']) ? trim((string) $item['parent']) : '';
-                    $parentId = isset($item['parent_id']) ? (int) $item['parent_id'] : 0;
-                    $initial = isset($item['initial']) ? trim((string) $item['initial']) : '';
+                    $parentId = isset($item['parent_id'])
+                        ? (int) $item['parent_id']
+                        : (is_numeric($parent) ? (int) $parent : 0);
+                    $initial = isset($item['initial']) && trim((string) $item['initial']) !== ''
+                        ? trim((string) $item['initial'])
+                        : (isset($item['linktitle']) ? trim((string) $item['linktitle']) : '');
                     $isActive = isset($item['is_active']) ? (int) $item['is_active'] : 1;
 
                     $insertStmt->bind_param('ississi', $parentId, $name, $displayName, $apiCatId, $parent, $initial, $isActive);
@@ -312,6 +478,26 @@ class Category
                 ],
             ];
         }
+    }
+
+    /**
+     * Get existing column names for a given table.
+     *
+     * @return array<string>
+     */
+    private function getExistingTableColumns(string $table): array
+    {
+        $columns = [];
+        $escaped = $this->conn->real_escape_string($table);
+        $res = $this->conn->query("SHOW COLUMNS FROM `{$escaped}`");
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                if (!empty($row['Field'])) {
+                    $columns[] = $row['Field'];
+                }
+            }
+        }
+        return $columns;
     }
 
     /**
