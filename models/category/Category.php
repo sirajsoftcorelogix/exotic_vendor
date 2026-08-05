@@ -531,7 +531,7 @@ class Category
             // Based on category.parent update category.parent_id = parent category.id
             $this->conn->query("
                 UPDATE category c
-                INNER JOIN category p ON c.parent = p.category
+                INNER JOIN category p ON CAST(p.category AS CHAR) = SUBSTRING_INDEX(c.parent, '|', 1)
                 SET c.parent_id = p.id
                 WHERE c.parent IS NOT NULL AND c.parent != '' AND c.parent != '0'
             ");
