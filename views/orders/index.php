@@ -1464,7 +1464,7 @@
 <!--popup for search settings-->
 <div id="searchSettingsPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50">
     <div class="bg-white p-4 rounded-md max-w-6xl w-5/12 max-h-3xl relative flex flex-col items-center">
-        <button onclick="closesearch();" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
+        <button onclick="closesearch();" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <div class="p-6 w-full overflow-y-auto">
             <h2 class="text-2xl font-bold mb-4">Search Settings</h2>
             <form id="searchSettingsForm" method="post" action="?page=orders&action=save_search_settings">
@@ -1491,13 +1491,13 @@
 <!-- Image Popup -->
 <div id="imagePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImagePopup(event)">
     <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
-        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
+        <button onclick="closeImagePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
     </div>
 </div>
 <div id="importPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImportPopup(event)">
     <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center " onclick="event.stopPropagation();">
-        <button onclick="closeImportPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
+        <button onclick="closeImportPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <div class="p-6">
             <h2 class="text-2xl font-bold mb-4">Import Orders</h2>
             <?php //echo date('Y-m-d H:i:s',1761382018);          
@@ -1533,7 +1533,7 @@
 <!-- Import Update Popup -->
 <div id="importUpdatePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImportUpdatePopup(event)">
     <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center" onclick="event.stopPropagation();">
-        <button onclick="closeImportUpdatePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
+        <button onclick="closeImportUpdatePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <div class="p-6 w-full">
             <h2 class="text-2xl font-bold mb-4">Update Orders Status</h2>
             <div class="w-full bg-gray-200 rounded-full dark:bg-gray-700 mb-4">
@@ -1559,11 +1559,11 @@
 <!-- Refresh single order from Exotic (preview + optional status update) -->
 <div id="refreshOrderModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeRefreshOrderModal(event)">
     <div class="bg-white p-4 rounded-md max-w-4xl w-full max-h-[90vh] relative flex flex-col mx-4" onclick="event.stopPropagation();">
-        <button type="button" onclick="closeRefreshOrderModal()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
+        <button type="button" onclick="closeRefreshOrderModal()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <div class="p-4 overflow-y-auto">
             <h2 class="text-xl font-bold mb-2">Refresh order from Exotic</h2>
-            <p class="text-sm text-gray-600 mb-4">Order <strong id="refreshOrderNumberLabel"></strong> â€” all cart lines with this order number will be imported or updated.</p>
-            <div id="refreshOrderLoading" class="hidden text-sm text-gray-600 mb-3">Loading preview from vendor APIâ€¦</div>
+            <p class="text-sm text-gray-600 mb-4">Order <strong id="refreshOrderNumberLabel"></strong> &mdash; all cart lines with this order number will be imported or updated.</p>
+            <div id="refreshOrderLoading" class="hidden text-sm text-gray-600 mb-3">Loading preview from vendor API...</div>
             <div id="refreshOrderError" class="hidden text-sm text-red-600 mb-3"></div>
             <div id="refreshOrderPreviewWrap" class="hidden">
                 <div class="overflow-x-auto border border-gray-200 rounded-lg mb-4">
@@ -1635,7 +1635,7 @@
 <!-- Bulk Update Status Modal -->
 <div id="bulkStatusPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeBulkStatusPopup(event)">
     <div class="bg-white p-4 rounded-md max-w-2xl w-full relative" onclick="event.stopPropagation();">
-        <button onclick="closeBulkStatusPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
+        <button onclick="closeBulkStatusPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <h2 class="text-xl font-bold mb-4">Bulk Update Status</h2>
         <form id="bulkStatusForm" method="post" action="?page=orders&action=bulk_update_status">
             <div class="mb-4">
@@ -1707,7 +1707,7 @@
 <!-- Bulk Assign To Modal -->
 <div id="bulkAssignPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeBulkAssignPopup(event)">
     <div class="bg-white p-4 rounded-md max-w-2xl w-full relative" onclick="event.stopPropagation();">
-        <button onclick="closeBulkAssignPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
+        <button onclick="closeBulkAssignPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <h2 class="text-xl font-bold mb-4">Assign Orders To Agent</h2>
         <form id="bulkAssignForm" method="post" action="?page=orders&action=bulk_assign_agent">
             <div class="mb-4">
@@ -1738,7 +1738,7 @@
 <!--bulk add to Picklist-->
 <div id="bulkAddToPicklistPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50 p-4 sm:p-6" onclick="closeBulkAddToPicklistPopup(event)">
     <div class="bg-white p-6 sm:p-8 rounded-xl max-w-5xl w-full max-h-[92vh] overflow-y-auto relative shadow-2xl" onclick="event.stopPropagation();">
-        <button onclick="closeBulkAddToPicklistPopup()" class="absolute top-3 right-3 bg-red-500 text-white px-3 py-1.5 rounded-full text-sm hover:bg-red-600">âœ•</button>
+        <button onclick="closeBulkAddToPicklistPopup()" class="absolute top-3 right-3 bg-red-500 text-white px-3 py-1.5 rounded-full text-sm hover:bg-red-600">✕</button>
         <h2 class="text-2xl font-bold mb-1 pr-10">Add to Picklist</h2>
         <p class="text-sm text-gray-500 mb-6">Create a new picklist or add items to an open (pending / in progress) picklist.</p>
         <form id="bulkAddToPicklistForm" method="post" action="">
@@ -1821,7 +1821,7 @@
 <!--bulk add to To Purchase-->
 <div id="bulkAddToPurchasePopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeBulkAddToPurchasePopup(event)">
     <div class="bg-white p-4 rounded-md max-w-2xl w-full relative" onclick="event.stopPropagation();">
-        <button onclick="closeBulkAddToPurchasePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">âœ•</button>
+        <button onclick="closeBulkAddToPurchasePopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
         <h2 class="text-xl font-bold mb-4">Create Purchase List</h2>
         <form id="bulkAddToPurchaseForm" method="post" action="">
             <div class="mb-4 flex gap-4 w-full items-end">
@@ -3009,7 +3009,7 @@
             qtyInput.type = 'number';
             qtyInput.min = '1';
             qtyInput.value = '';
-            qtyInput.name = `quantity[]`; // âœ… quantity per order id
+            qtyInput.name = `quantity[]`; // ✅ quantity per order id
             qtyInput.className = 'border rounded px-2 py-1 w-full text-sm';
             qtyWrap.appendChild(qtyInput);
 
