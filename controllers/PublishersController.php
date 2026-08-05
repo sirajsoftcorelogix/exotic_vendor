@@ -450,7 +450,7 @@ class PublishersController
             exit;
         }
 
-        $api = $this->fetchPublisherCreatorList();
+        $api = vendor_external_api_fetch_creator_list('publishers');
         if (!$api['success']) {
             echo json_encode($api, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
@@ -460,50 +460,5 @@ class PublishersController
         $import['api_count'] = count($api['creators']);
         echo json_encode($import, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
-    }
-
-    /**
-     * @return array{success:bool,message:string,creators?:array<int|string,string>,http_code?:int}
-     */
-    private function fetchPublisherCreatorList(): array
-    {
-        $ch = curl_init('https://www.exoticindia.com/vendor-api/product/creatorlist?type=publishers');
-        curl_setopt_array($ch, [
-            CURLOPT_HTTPGET => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-                'x-adminapitest: 1',
-                'Accept: application/json',
-            ],
-            CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_TIMEOUT => 60,
-            CURLOPT_ENCODING => '',
-            CURLOPT_SSL_VERIFYPEER => false,
-        ]);
-
-        $raw = curl_exec($ch);
-        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        if ($error !== '') {
-            return ['success' => false, 'message' => 'Publisher API error: ' . $error, 'http_code' => $httpCode];
-        }
-        if ($httpCode < 200 || $httpCode >= 300) {
-            return ['success' => false, 'message' => 'Publisher API returned HTTP ' . $httpCode, 'http_code' => $httpCode];
-        }
-
-        $decoded = json_decode((string)$raw, true);
-        if (!is_array($decoded) || !is_array($decoded['creators'] ?? null)) {
-            return ['success' => false, 'message' => 'Publisher API returned invalid JSON.', 'http_code' => $httpCode];
-        }
-
-        return [
-            'success' => true,
-            'message' => 'Publisher API fetched successfully.',
-            'http_code' => $httpCode,
-            'creators' => $decoded['creators'],
-        ];
     }
 }

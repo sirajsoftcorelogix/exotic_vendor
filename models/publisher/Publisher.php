@@ -778,6 +778,17 @@ class Publisher
             return ['success' => false, 'message' => 'Publisher name is required.'];
         }
 
+        $stmt = $this->conn->prepare('SELECT id FROM vp_publishers WHERE publishers_id = ? LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('i', $publishersId);
+            $stmt->execute();
+            $existing = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if ($existing && !empty($existing['id'])) {
+                return $this->savePublisher((int) $existing['id'], $name, $isActive, $extra);
+            }
+        }
+
         if ($this->publisherNameExists($name)) {
             return ['success' => false, 'message' => 'Publisher name already exists'];
         }
