@@ -417,19 +417,28 @@ class Category
                     $alreadyExistsCount++;
                 } else {
                     // Step 5: Record does not exist -> Insert new row
-                    $name = isset($item['name']) && trim((string) $item['name']) !== ''
+                    $rawName = isset($item['name']) && trim((string) $item['name']) !== ''
                         ? trim((string) $item['name'])
                         : (isset($item['title']) ? trim((string) $item['title']) : '');
-                    $displayName = isset($item['display_name']) && trim((string) $item['display_name']) !== ''
+                    $name = mb_substr($rawName, 0, 100);
+
+                    $rawDisplayName = isset($item['display_name']) && trim((string) $item['display_name']) !== ''
                         ? trim((string) $item['display_name'])
-                        : $name;
-                    $parent = isset($item['parent']) ? trim((string) $item['parent']) : '';
+                        : $rawName;
+                    $displayName = mb_substr($rawDisplayName, 0, 100);
+
+                    $parentStr = isset($item['parent']) ? trim((string) $item['parent']) : '';
+                    $parent = mb_substr($parentStr, 0, 255);
+
                     $parentId = isset($item['parent_id'])
                         ? (int) $item['parent_id']
-                        : (is_numeric($parent) ? (int) $parent : 0);
-                    $initial = isset($item['initial']) && trim((string) $item['initial']) !== ''
+                        : (is_numeric($parentStr) ? (int) $parentStr : 0);
+
+                    $rawInitial = isset($item['initial']) && trim((string) $item['initial']) !== ''
                         ? trim((string) $item['initial'])
                         : (isset($item['linktitle']) ? trim((string) $item['linktitle']) : '');
+                    $initial = mb_substr($rawInitial, 0, 5);
+
                     $isActive = isset($item['is_active']) ? (int) $item['is_active'] : 1;
 
                     $insertStmt->bind_param('ississi', $parentId, $name, $displayName, $apiCatId, $parent, $initial, $isActive);
