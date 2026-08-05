@@ -2,6 +2,15 @@
 <?php
 $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     && strtolower(trim((string) $_SESSION['user']['email'])) === 'siraj.php@gmail.com';
+
+$customerLabel = 'Walk-in Customer';
+$customerSubtext = '-';
+if (!empty($selected_customer) && is_array($selected_customer)) {
+    $customerLabel = trim((string)($selected_customer['name'] ?? '')) ?: 'Walk-in Customer';
+    $phone = trim((string)($selected_customer['phone'] ?? ''));
+    $email = trim((string)($selected_customer['email'] ?? ''));
+    $customerSubtext = $phone !== '' ? $phone : ($email !== '' ? $email : '-');
+}
 ?>
   <script>
     document.documentElement.classList.add('pos-page-hide-scrollbars');
@@ -140,6 +149,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     window.POS_SESSION_CUSTOMER_ID = <?= json_encode(!empty($_SESSION['pos_customer_id']) ? (string)(int)$_SESSION['pos_customer_id'] : '') ?>;
     window.POS_INITIAL_CUSTOMER = <?= json_encode(isset($selected_customer) ? $selected_customer : null, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_HIGH_VALUE_TRANSACTION_LIMIT = <?= json_encode((float)($high_value_transaction_limit ?? 200000.00)) ?>;
+    window.POS_COUNTRY_LIST = <?= json_encode($posCountryList, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_COUNTRY_ISO_BY_NAME = <?= json_encode($posCountryIsoByName, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_INDIA_STATES = <?= json_encode($pos_india_states ?? [], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
     window.POS_COUNTRY_STATES = <?= json_encode($pos_country_states ?? ['IN' => ($pos_india_states ?? [])], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
@@ -343,8 +353,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         class="flex flex-col rounded-2xl bg-white border shadow-sm overflow-hidden mt-2 lg:mt-0"
         data-pos-cart-scroll="1">
         <div class="px-4 py-3 border-b shrink-0">
-          <div id="selectedCustomerNameCart" class="text-base font-semibold text-center text-slate-800">Walk-in Customer</div>
-          <div id="selectedCustomerPhoneCart" class="text-sm text-slate-500 text-center">-</div>
+          <div id="selectedCustomerNameCart" onclick="editSelectedCustomer()" class="text-base font-semibold text-center text-slate-800 cursor-pointer hover:text-orange-600 hover:underline" title="Click to edit customer details"><?= htmlspecialchars($customerLabel) ?></div>
+          <div id="selectedCustomerPhoneCart" class="text-sm text-slate-500 text-center"><?= htmlspecialchars($customerSubtext) ?></div>
         </div>
 
         <div class="pos-cart-panel-inner px-3 py-2">
@@ -356,181 +366,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       </div>
     </aside>
 <?php require __DIR__ . '/partials/product_modal.php'; ?>
-
-<!-- CUSTOMER MODAL -->
-<div id="customerModal" class="fixed inset-0 z-[9999] hidden">
-
-  <div class="absolute inset-0 z-0 bg-black/40" onclick="closeCustomerModal()"></div>
-
-  <div class="relative z-10 mx-auto mt-10 w-[95%] max-w-2xl rounded-2xl bg-white shadow-xl max-h-[85vh] flex flex-col">
-
-    <!-- HEADER -->
-    <div class="flex items-center justify-between border-b px-5 py-3">
-      <h2 class="text-sm font-semibold">Add Customer</h2>
-      <button onclick="closeCustomerModal()" class="text-gray-500 text-lg">✕</button>
-    </div>
-
-    <!-- form -->
-    <form id="customerForm" class="p-5 space-y-4 text-xs overflow-y-auto" method="POST">
-
-      <!-- BILLING -->
-      <div class="font-semibold text-gray-700">Billing Details</div>
-
-      <div class="grid grid-cols-2 gap-3">
-
-        <div>
-          <label class="text-gray-500">First Name <span class="text-red-600">*</span></label>
-          <input name="first_name" required class="w-full border rounded px-2 py-1.5">
-        </div>
-
-        <div>
-          <label class="text-gray-500">Last Name <span class="text-red-600">*</span></label>
-          <input name="last_name" required class="w-full border rounded px-2 py-1.5">
-        </div>
-
-        <div>
-          <label class="text-gray-500">Mobile <span class="text-red-600">*</span></label>
-          <input name="mobile" required class="w-full border rounded px-2 py-1.5">
-        </div>
-
-        <div>
-          <label class="text-gray-500">Email</label>
-          <input name="cus_email" class="w-full border rounded px-2 py-1.5">
-        </div>
-
-        <div class="col-span-2">
-          <label class="text-gray-500">Address 1</label>
-          <input name="address_line1" class="w-full border rounded px-2 py-1.5">
-        </div>
-        <div class="col-span-2">
-          <label class="text-gray-500">Address 2</label>
-          <input name="address_line2" class="w-full border rounded px-2 py-1.5">
-        </div>
-
-        <div>
-          <label class="text-gray-500">City</label>
-          <input name="city" class="w-full border rounded px-2 py-1.5">
-        </div>
-
-        <div>
-          <label class="text-gray-500">Country</label>
-          <select name="country" id="customer_country" class="w-full border rounded px-2 py-1.5 bg-white">
-            <?php
-            $selected_iso = 'IN';
-            include __DIR__ . '/partials/iso_country_options.php';
-            ?>
-          </select>
-        </div>
-
-        <div>
-          <label class="text-gray-500">State</label>
-          <select name="state" id="customer_state" class="w-full border rounded px-2 py-1.5 bg-white">
-            <option value="">Select state</option>
-          </select>
-          <input id="customer_state_text" class="hidden w-full border rounded px-2 py-1.5" placeholder="State">
-        </div>
-
-        <div>
-          <label class="text-gray-500">Zipcode</label>
-          <input name="zipcode" class="w-full border rounded px-2 py-1.5">
-        </div>
-
-        <div>
-          <label class="text-gray-500">GSTIN</label>
-          <input name="gstin" class="w-full border rounded px-2 py-1.5">
-        </div>
-
-      </div>
-
-      <!-- SHIPPING -->
-      <div class="flex items-center gap-2 mt-2">
-        <input type="checkbox" id="sameAddress" onchange="copyBilling()">
-        <label class="text-xs text-gray-600">Shipping same as billing</label>
-      </div>
-
-      <div class="font-semibold text-gray-700">Shipping Details</div>
-
-      <div class="grid grid-cols-2 gap-3">
-
-        <div>
-          <label class="text-gray-500">First Name</label>
-          <input name="shipping_first_name" class="w-full border rounded px-2 py-1.5">
-        </div>
-
-        <div>
-          <label class="text-gray-500">Last Name</label>
-          <input name="shipping_last_name" class="w-full border rounded px-2 py-1.5">
-        </div>
-
-        <div>
-          <label class="text-gray-500">Mobile</label>
-          <input name="shipping_mobile" class="w-full border rounded px-2 py-1.5">
-        </div>
-
-        <div>
-          <label class="text-gray-500">Email</label>
-          <input name="shipping_email" class="w-full border rounded px-2 py-1.5">
-        </div>
-
-        <div class="col-span-2">
-          <label class="text-gray-500">Address 1</label>
-          <input name="shipping_address_line1" class="w-full border rounded px-2 py-1.5">
-        </div>
-        <div class="col-span-2">
-          <label class="text-gray-500">Address 2</label>
-          <input name="shipping_address_line2" class="w-full border rounded px-2 py-1.5">
-        </div>
-        <div>
-          <label class="text-gray-500">City</label>
-          <input name="shipping_city" class="w-full border rounded px-2 py-1.5">
-        </div>
-
-        <div>
-          <label class="text-gray-500">Country</label>
-          <select name="shipping_country" id="customer_shipping_country" class="w-full border rounded px-2 py-1.5 bg-white">
-            <?php
-            $selected_iso = 'IN';
-            include __DIR__ . '/partials/iso_country_options.php';
-            ?>
-          </select>
-        </div>
-
-        <div>
-          <label class="text-gray-500">State</label>
-          <select name="shipping_state" id="customer_shipping_state" class="w-full border rounded px-2 py-1.5 bg-white">
-            <option value="">Select state</option>
-          </select>
-          <input id="customer_shipping_state_text" class="hidden w-full border rounded px-2 py-1.5" placeholder="State">
-        </div>
-
-        <div>
-          <label class="text-gray-500">Zipcode</label>
-          <input name="shipping_zipcode" class="w-full border rounded px-2 py-1.5">
-        </div>
-
-      </div>
-
-      <!-- buttons -->
-      <div class="flex justify-end gap-3 border-t pt-4">
-
-        <button type="button"
-          onclick="closeCustomerModal()"
-          class="px-4 py-1.5 rounded bg-gray-300 text-gray-700">
-          Cancel
-        </button>
-
-        <button type="submit"
-          class="px-4 py-1.5 rounded bg-orange-600 text-white">
-          Save Customer
-        </button>
-
-      </div>
-
-    </form>
-
-  </div>
-
-</div>
+<?php require __DIR__ . '/partials/customer_modal.php'; ?>
 
 <!-- PAYMENT MODAL (POS checkout — wired to Exotic /order/create + pos_payments) -->
 <div id="paymentModal" class="fixed inset-0 z-[9999] hidden">
@@ -746,7 +582,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           </div>
           <div id="countryResidenceWrap" class="mt-3 hidden">
             <label class="block font-medium">Country of Residence <span id="countryRequiredStar" class="field-req-star text-red-600">*</span>
-              <input id="country_of_residence" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm" placeholder="Country of residence">
+              <select id="country_of_residence" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm">
+                <option value="">Select Country of Residence</option>
+                <?php
+                  $selected_iso = '';
+                  include __DIR__ . '/partials/iso_country_options.php';
+                ?>
+              </select>
             </label>
           </div>
           <p id="complianceInlineError" class="mt-2 hidden text-[11px] font-medium text-red-700"></p>
@@ -1043,6 +885,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
 
 <!-- ===== END PAGE WRAPPER ===== -->
 <script src="<?php echo base_url(); ?>assets/js/pos_message_modal.js"></script>
+<script src="<?php echo base_url(); ?>assets/js/pos_customer.js"></script>
+<script src="<?php echo base_url(); ?>assets/js/compliance_doc_modal.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos_cart_hooks.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/order_follow_up_pos.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/pos.js"></script>
@@ -1063,6 +907,16 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       .then(data => {
 
         if (!data.success) {
+          if (data.require_compliance && window.ComplianceDocModal) {
+            window.ComplianceDocModal.open({
+              customerId: data.customer_id,
+              message: data.message,
+              onSuccess: function () {
+                autoCreateInvoiceThenPreview(orderid);
+              }
+            });
+            return;
+          }
           showToast(data.message || "Invoice create failed", "red");
           return;
         }
@@ -1278,6 +1132,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
         ["pos_machine", "POS machine"],
         ["razorpay", "Razorpay"],
         ["cheque", "Cheque"],
+        ["adminorder", "Admin Order"],
         ["waived", "Waived (no charge)"]
       ];
     }
@@ -1523,7 +1378,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     syncCustomInvoiceNumberField();
   }
 
-  function validatePaymentSplitsForCheckout(grandTotal) {
+  function validatePaymentSplitsForCheckout(grandTotal, options) {
+    options = options || {};
     var box = document.getElementById("payment_split_validation");
     var boxText = document.getElementById("payment_split_validation_text");
     var hideErr = function() {
@@ -1646,10 +1502,23 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     var cashLegNeeds269 = splits.some(function(s) {
       return s.mode === "cash" && s.amount + 0.02 >= highValueLimit;
     });
-    if (cashLegNeeds269) {
-      var okCash = window.confirm("Cash receipts of ₹2,00,000 or more are restricted under Income Tax Act Section 269ST. Please switch to digital payment.\n\nDo you still want to continue after acknowledging this warning?");
-      if (!okCash) {
-        showErr("Please switch to digital payment or acknowledge the cash warning.");
+    if (cashLegNeeds269 && !options.skip269stConfirm) {
+      if (typeof window.showPosConfirmModal === "function") {
+        window.showPosConfirmModal({
+          title: "Section 269ST Cash Warning",
+          message: "Cash receipts of ₹2,00,000 or more are restricted under Income Tax Act Section 269ST. Please switch to digital payment.\n\nDo you still want to continue after acknowledging this warning?",
+          confirmText: "Acknowledge & Continue",
+          cancelText: "Switch Payment",
+          tone: "warning",
+          onConfirm: function() {
+            if (typeof options.on269stConfirmed === "function") {
+              options.on269stConfirmed();
+            }
+          },
+          onCancel: function() {
+            showErr("Please switch to digital payment or acknowledge the cash warning.");
+          }
+        });
         return null;
       }
     }
@@ -2023,8 +1892,12 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     if (!el || el.tagName !== "SELECT") {
       return;
     }
+    if (!raw && id === "country_of_residence") {
+      el.value = "";
+      return;
+    }
     el.value = normalizePosCountryCode(raw, el);
-    if (!el.value) {
+    if (!el.value && id !== "country_of_residence") {
       el.value = "IN";
     }
   }
@@ -2037,6 +1910,21 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   function isPosIndiaCountry(code) {
     var c = String(code || "").trim().toUpperCase();
     return c === "IN" || c === "IND" || c === "INDIA";
+  }
+
+  function syncResidencyFromBillingCountry(countryCode, existingResidency) {
+    var residencyEl = document.getElementById("customer_residency_status");
+    if (!residencyEl) return;
+    var isIndia = isPosIndiaCountry(countryCode);
+    if (isIndia) {
+      residencyEl.value = "INDIAN_RESIDENT";
+    } else {
+      if (existingResidency && (existingResidency === "NRI" || existingResidency === "FOREIGN_NATIONAL")) {
+        residencyEl.value = existingResidency;
+      } else {
+        residencyEl.value = "FOREIGN_NATIONAL";
+      }
+    }
   }
 
   function resolvePosCountryFromPayloadValue(raw, selectId) {
@@ -2234,6 +2122,19 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     });
   }
 
+  function syncResidencyFromBillingCountry(countryCode) {
+    var residencyEl = document.getElementById("customer_residency_status");
+    if (!residencyEl) return;
+    var isIndia = isPosIndiaCountry(countryCode);
+    if (isIndia) {
+      residencyEl.value = "INDIAN_RESIDENT";
+    } else {
+      if (!residencyEl.value || residencyEl.value === "INDIAN_RESIDENT") {
+        residencyEl.value = "FOREIGN_NATIONAL";
+      }
+    }
+  }
+
   function syncAllPosStateFields(preferred) {
     preferred = preferred || {};
     return Promise.all([
@@ -2327,12 +2228,13 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
       ["customer_residency_status", compliance.customer_residency_status || "INDIAN_RESIDENT"],
       ["customer_pan", compliance.customer_pan || ""],
       ["customer_aadhaar", compliance.customer_aadhaar || ""],
-      ["passport_number", compliance.passport_number || ""],
-      ["country_of_residence", compliance.country_of_residence || ""]
+      ["passport_number", compliance.passport_number || ""]
     ].forEach(function(row) {
       var el = document.getElementById(row[0]);
       if (el) el.value = row[1];
     });
+    setPosCountrySelect("country_of_residence", compliance.country_of_residence || billingCountry);
+    syncResidencyFromBillingCountry(billingCountry, compliance.customer_residency_status);
   }
 
   var POS_SHIPPING_ADDRESS_FIELD_IDS = [
@@ -2656,7 +2558,7 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
   }
 
   function isHighValueTransaction() {
-    return getCurrentCheckoutTotal() >= getHighValueLimit();
+    return getCurrentCheckoutTotal() >= getHighValueLimit() && isFullFinalPaymentSelected();
   }
 
   function formatInrAmount(amount) {
@@ -3188,23 +3090,33 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           ? parseFloat(String(liveT.grandTotal))
           : parseFloat("<?= (float)($cartData['grand_total'] ?? 0) ?>");
 
-        var payInfo = validatePaymentSplitsForCheckout(grandTotal);
-        if (!payInfo) {
-          return;
-        }
-
-        var payDateEl = document.getElementById("payment_date");
-        if (payDateEl && payDateEl.value) {
-          var todayYmd = posPaymentDateLocalYmd();
-          if (payDateEl.value > todayYmd) {
-            showToast("⚠ Payment date cannot be in the future", "red");
-            payDateEl.value = todayYmd;
-            payDateEl.focus();
+        function proceedToCheckoutStep(opts) {
+          opts = opts || {};
+          var payInfo = validatePaymentSplitsForCheckout(grandTotal, {
+            skip269stConfirm: !!opts.skip269stConfirm,
+            on269stConfirmed: function() {
+              proceedToCheckoutStep({ skip269stConfirm: true });
+            }
+          });
+          if (!payInfo) {
             return;
           }
+
+          var payDateEl = document.getElementById("payment_date");
+          if (payDateEl && payDateEl.value) {
+            var todayYmd = posPaymentDateLocalYmd();
+            if (payDateEl.value > todayYmd) {
+              showToast("⚠ Payment date cannot be in the future", "red");
+              payDateEl.value = todayYmd;
+              payDateEl.focus();
+              return;
+            }
+          }
+
+          loadAndOpenAddressConfirm(customerId);
         }
 
-        loadAndOpenAddressConfirm(customerId);
+        proceedToCheckoutStep();
       });
     }
 
@@ -3488,6 +3400,8 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
           setPosFieldInvalid(id, false);
           if (id === "confirm_country") {
             syncPosPhoneCodeFromCountry(el.value, "confirm_phone_code");
+            setPosCountrySelect("country_of_residence", el.value);
+            syncResidencyFromBillingCountry(el.value);
             syncPosStateField("billing", "").then(function() {
               if (isShippingSameAsBillingChecked()) {
                 copyBillingToShippingFields();
@@ -3762,376 +3676,6 @@ $posCheckoutApiDebug = isset($_SESSION['user']['email'])
     document.body.appendChild(div);
 
     setTimeout(() => div.remove(), 3000);
-  }
-</script>
-<script>
-  function openCustomerModal() {
-    document.getElementById("customerModal").classList.remove("hidden");
-    syncCustomerCountryStateFields();
-  }
-
-  function closeCustomerModal() {
-    document.getElementById("customerModal").classList.add("hidden")
-  }
-  let customerData = {};
-
-  function syncCustomerStateSelect(countryId, stateId, preferredValue) {
-    var countryEl = document.getElementById(countryId);
-    var stateEl = document.getElementById(stateId);
-    var textEl = document.getElementById(stateId + "_text");
-    if (!countryEl || !stateEl || !textEl) {
-      return Promise.resolve();
-    }
-
-    var fieldName = stateEl.getAttribute("data-field-name") || textEl.getAttribute("data-field-name") || stateEl.name || textEl.name;
-    if (fieldName) {
-      stateEl.setAttribute("data-field-name", fieldName);
-      textEl.setAttribute("data-field-name", fieldName);
-    }
-    var country = String(countryEl.value || "IN").trim().toUpperCase().substring(0, 2) || "IN";
-    var selected = preferredValue !== undefined ? preferredValue : (stateEl.classList.contains("hidden") ? textEl.value : stateEl.value);
-    if (country !== "IN" && country !== "US") {
-      textEl.value = selected || stateEl.value || textEl.value;
-      textEl.name = fieldName;
-      stateEl.name = "";
-      stateEl.classList.add("hidden");
-      textEl.classList.remove("hidden");
-      return Promise.resolve();
-    }
-
-    resetPosStateSelect(stateEl, "Loading states...");
-    textEl.classList.add("hidden");
-    stateEl.classList.remove("hidden");
-    return fetchPosCountryStates(country).then(function(states) {
-      populatePosStateSelect(stateEl, states, selected);
-      stateEl.name = fieldName;
-      textEl.name = "";
-      textEl.classList.add("hidden");
-      stateEl.classList.remove("hidden");
-    });
-  }
-
-  function syncCustomerCountryStateFields() {
-    return Promise.all([
-      syncCustomerStateSelect("customer_country", "customer_state"),
-      syncCustomerStateSelect("customer_shipping_country", "customer_shipping_state")
-    ]);
-  }
-
-  document.addEventListener("DOMContentLoaded", function () {
-    var customerForm = document.getElementById("customerForm");
-    if (!customerForm) return;
-
-    syncCustomerCountryStateFields();
-    [
-      ["customer_country", "customer_state"],
-      ["customer_shipping_country", "customer_shipping_state"]
-    ].forEach(function(pair) {
-      var countryEl = document.getElementById(pair[0]);
-      if (countryEl) {
-        countryEl.addEventListener("change", function() {
-          syncCustomerStateSelect(pair[0], pair[1], "");
-        });
-      }
-    });
-
-    customerForm.addEventListener("submit", function (e) {
-      e.preventDefault();
-
-      if (!customerForm.checkValidity()) {
-        customerForm.reportValidity();
-        return;
-      }
-
-      var formData = new FormData(customerForm);
-
-      customerData = {};
-      formData.forEach(function (value, key) {
-        customerData[key] = value;
-      });
-
-      fetch("index.php?page=pos_register&action=add-customer", {
-          method: "POST",
-          credentials: "same-origin",
-          body: formData
-        })
-        .then(function (res) {
-          return res.text().then(function (text) {
-            try {
-              var cleaned = text.replace(/^\uFEFF/, "").trim();
-              return JSON.parse(cleaned);
-            } catch (err) {
-              console.error("add-customer: not JSON (status " + res.status + ")", text.slice(0, 800));
-              throw new Error("Server did not return JSON. Check network tab / PHP errors.");
-            }
-          });
-        })
-        .then(function (data) {
-          if (!data.success) {
-            showToast(data.message || "Could not save customer", "red");
-            return;
-          }
-
-          var select = document.getElementById("customerSelect");
-          if (!select) return;
-
-          var idStr = String(data.customer.id);
-          var label = (data.customer.name || "") + " (" + (data.customer.phone || "") + ")";
-          window.POS_SESSION_CUSTOMER_ID = idStr;
-
-          if (window.jQuery && jQuery.fn.select2) {
-            var $s = jQuery(select);
-            var opt = new Option(label, idStr, true, true);
-            opt.setAttribute("data-name", data.customer.name || "");
-            opt.setAttribute("data-phone", data.customer.phone || "");
-            opt.setAttribute("data-email", data.customer.email || "");
-            $s.append(opt);
-            $s.val(idStr).trigger("change");
-            fetch("index.php?page=pos_register&action=set-customer", {
-              method: "POST",
-              credentials: "same-origin",
-              headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                "X-Requested-With": "XMLHttpRequest"
-              },
-              body: "customer_id=" + encodeURIComponent(idStr)
-            });
-            if (typeof updatePosCustomerLabels === "function") {
-              updatePosCustomerLabels(data.customer.name, data.customer.phone);
-            }
-          } else {
-            var option = document.createElement("option");
-            option.value = idStr;
-            option.textContent = label;
-            option.setAttribute("data-name", data.customer.name || "");
-            option.setAttribute("data-phone", data.customer.phone || "");
-            option.setAttribute("data-email", data.customer.email || "");
-            select.appendChild(option);
-            select.value = idStr;
-            select.dispatchEvent(new Event("change", { bubbles: true }));
-            fetch("index.php?page=pos_register&action=set-customer", {
-              method: "POST",
-              credentials: "same-origin",
-              headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                "X-Requested-With": "XMLHttpRequest"
-              },
-              body: "customer_id=" + encodeURIComponent(idStr)
-            });
-            if (typeof updatePosCustomerLabels === "function") {
-              updatePosCustomerLabels(data.customer.name, data.customer.phone);
-            }
-          }
-
-          showToast("✓ Customer saved", "green");
-          closeCustomerModal();
-        })
-        .catch(function (err) {
-          console.error(err);
-          showToast(err.message || "Save customer failed", "red");
-        });
-    });
-  });
-</script>
-
-<script>
-  function updatePosCustomerLabels(name, phone) {
-    var nameText = (name != null && String(name).trim() !== "") ? String(name).trim() : "Walk-in Customer";
-    var phoneText = (phone != null && String(phone).trim() !== "") ? String(phone).trim() : "-";
-    var nameCartEl = document.getElementById("selectedCustomerNameCart");
-    var phoneCartEl = document.getElementById("selectedCustomerPhoneCart");
-    if (nameCartEl) nameCartEl.textContent = nameText;
-    if (phoneCartEl) phoneCartEl.textContent = phoneText;
-  }
-</script>
-
-<script>
-  function copyBilling() {
-
-    const checkbox = document.getElementById("sameAddress");
-
-    const map = {
-      "first_name": "shipping_first_name",
-      "last_name": "shipping_last_name",
-      "mobile": "shipping_mobile",
-      "cus_email": "shipping_email",
-      "address_line1": "shipping_address_line1",
-      "address_line2": "shipping_address_line2",
-      "city": "shipping_city",
-      "country": "shipping_country",
-      "state": "shipping_state",
-      "zipcode": "shipping_zipcode"
-    };
-
-    Object.keys(map).forEach(billingField => {
-
-      const shippingField = map[billingField];
-
-      const billingInput = document.querySelector(`[name="${billingField}"]`);
-      const shippingInput = document.querySelector(`[name="${shippingField}"]`);
-
-      if (!billingInput || !shippingInput) return;
-
-      if (checkbox.checked) {
-
-        const syncShippingValue = function() {
-          shippingInput.value = billingInput.value;
-          if (billingField === "country") {
-            const billingState = document.querySelector('[name="state"]');
-            syncCustomerStateSelect("customer_shipping_country", "customer_shipping_state", billingState ? billingState.value : "");
-          }
-          if (billingField === "state") {
-            syncCustomerStateSelect("customer_shipping_country", "customer_shipping_state", billingInput.value);
-          }
-        };
-
-        syncShippingValue();
-        // shippingInput.readOnly = true;
-        shippingInput.classList.add("bg-gray-100");
-
-        /* LIVE SYNC */
-        billingInput.addEventListener("input", function() {
-          if (checkbox.checked) {
-            syncShippingValue();
-          }
-        });
-        billingInput.addEventListener("change", function() {
-          if (checkbox.checked) {
-            syncShippingValue();
-          }
-        });
-
-      } else {
-
-        // shippingInput.readOnly = false;
-        shippingInput.classList.remove("bg-gray-100");
-
-      }
-
-    });
-
-  }
-</script>
-
-<script>
-  $(document).ready(function() {
-
-    var $cust = $('#customerSelect');
-    $cust.select2({
-      placeholder: "Type at least 2 characters to search…",
-      allowClear: true,
-      width: '100%',
-      minimumInputLength: 2,
-      ajax: {
-        url: "index.php?page=pos_register&action=customer-search",
-        type: "GET",
-        dataType: "json",
-        delay: 320,
-        headers: { "X-Requested-With": "XMLHttpRequest" },
-        data: function (params) {
-          return { q: params.term || "" };
-        },
-        processResults: function (data) {
-          if (!data || !data.success || !Array.isArray(data.customers)) {
-            return { results: [] };
-          }
-          return {
-            results: data.customers.map(function (c) {
-              var disp = c.display || ((c.name || "") + " | " + (c.phone || "") + (c.email ? " | " + c.email : ""));
-              return {
-                id: String(c.id),
-                text: disp,
-                name: c.name || "",
-                phone: c.phone || "",
-                email: c.email || ""
-              };
-            })
-          };
-        },
-        cache: true
-      },
-      templateResult: formatCustomer,
-      templateSelection: formatCustomerSelection
-    });
-
-    $cust.on("select2:select", function (e) {
-      var d = e.params.data;
-      window.POS_SESSION_CUSTOMER_ID = d.id ? String(d.id) : "";
-      fetch("index.php?page=pos_register&action=set-customer", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "X-Requested-With": "XMLHttpRequest"
-        },
-        body: "customer_id=" + encodeURIComponent(d.id || "")
-      });
-      updatePosCustomerLabels(d.name, d.phone);
-    });
-
-    $cust.on("select2:clear", function () {
-      window.POS_SESSION_CUSTOMER_ID = "";
-      fetch("index.php?page=pos_register&action=set-customer", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "X-Requested-With": "XMLHttpRequest"
-        },
-        body: "customer_id="
-      });
-      updatePosCustomerLabels("", "");
-    });
-
-    if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.id) {
-      var ic = window.POS_INITIAL_CUSTOMER;
-      var opt = new Option(ic.text || ic.name || "", String(ic.id), true, true);
-      opt.setAttribute("data-name", ic.name || "");
-      opt.setAttribute("data-phone", ic.phone || "");
-      opt.setAttribute("data-email", ic.email || "");
-      $cust.append(opt);
-      $cust.val(String(ic.id)).trigger("change");
-      updatePosCustomerLabels(ic.name, ic.phone);
-    }
-
-  });
-
-  function formatCustomer(data) {
-
-    if (!data.id) return data.text;
-
-    var name = data.name || "";
-    var phone = data.phone || "";
-    var email = data.email || "";
-    if ((!name || !phone) && data.element) {
-      var el = $(data.element);
-      name = name || String(el.data("name") || "");
-      phone = phone || String(el.data("phone") || "");
-      email = email || String(el.data("email") || "");
-    }
-    if (!name) {
-      name = String(data.text || "").split("|")[0].trim();
-    }
-
-    return $(`
-        <div>
-            <div style="font-weight:600">${name}</div>
-            <div style="font-size:11px;color:#777">
-                ${phone}${email ? " | " + email : ""}
-            </div>
-        </div>
-    `);
-  }
-
-  function formatCustomerSelection(data) {
-
-    if (!data.id) return data.text;
-
-    var name = data.name || "";
-    if (!name && data.element) {
-      name = $(data.element).data("name") || "";
-    }
-    return name || data.text;
   }
 </script>
 

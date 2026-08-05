@@ -870,6 +870,248 @@ class Customer
     }
 
     /**
+     * Update vp_customers.country_of_residence from vp_order_info.country for a given customer.
+     * If vp_order_info has a country record, use it. Otherwise fallback to $fallbackCountry.
+     */
+    public function updateCustomerCountryOfResidenceFromOrderInfo(int $customerId, string $fallbackCountry = ''): void
+    {
+        if ($customerId <= 0) {
+            return;
+        }
+
+        $country = '';
+        $stmt = $this->conn->prepare('SELECT country FROM vp_order_info WHERE customer_id = ? AND country IS NOT NULL AND TRIM(country) <> \'\' ORDER BY id DESC LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('i', $customerId);
+            $stmt->execute();
+            $res = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if ($res && !empty($res['country'])) {
+                $country = trim((string)$res['country']);
+            }
+        }
+
+        if ($country === '' && trim($fallbackCountry) !== '') {
+            $country = trim($fallbackCountry);
+        }
+
+        if ($country !== '') {
+            $upStmt = $this->conn->prepare('UPDATE vp_customers SET country_of_residence = ? WHERE id = ?');
+            if ($upStmt) {
+                $upStmt->bind_param('si', $country, $customerId);
+                $upStmt->execute();
+                $upStmt->close();
+            }
+        }
+    }
+
+    /**
+     * Ensure vp_customers.country_of_residence is set when selecting a customer.
+     * If country_of_residence is not available (empty/null), update it from vp_order_info.country or pos_customer_details.
+     */
+    public function ensureCountryOfResidenceForCustomer(int $customerId): void
+    {
+        if ($customerId <= 0) {
+            return;
+        }
+
+        $row = $this->getCustomerById($customerId);
+        if (!$row) {
+            return;
+        }
+
+        $existing = trim((string)($row['country_of_residence'] ?? ''));
+        if ($existing !== '') {
+            return;
+        }
+
+        $country = '';
+        $stmt = $this->conn->prepare('SELECT country FROM vp_order_info WHERE customer_id = ? AND country IS NOT NULL AND TRIM(country) <> \'\' ORDER BY id DESC LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('i', $customerId);
+            $stmt->execute();
+            $res = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if ($res && !empty($res['country'])) {
+                $country = trim((string)$res['country']);
+            }
+        }
+
+        if ($country === '') {
+            $this->ensurePosCustomerDetailsTable();
+            $detStmt = $this->conn->prepare('SELECT bill_country, ship_country FROM pos_customer_details WHERE customer_id = ? LIMIT 1');
+            if ($detStmt) {
+                $detStmt->bind_param('i', $customerId);
+                $detStmt->execute();
+                $det = $detStmt->get_result()->fetch_assoc();
+                $detStmt->close();
+                if ($det) {
+                    $country = trim((string)($det['bill_country'] ?? ''));
+                    if ($country === '') {
+                        $country = trim((string)($det['ship_country'] ?? ''));
+                    }
+                }
+            }
+        }
+
+        if ($country !== '') {
+            $upStmt = $this->conn->prepare('UPDATE vp_customers SET country_of_residence = ? WHERE id = ?');
+            if ($upStmt) {
+                $upStmt->bind_param('si', $country, $customerId);
+                $upStmt->execute();
+                $upStmt->close();
+            }
+        }
+    }
+
+    /**
+     * Create or update POS customer from modal POST data.
+     *
+     * @param array<string, mixed> $post
+     * @return array{success:bool, is_update?:bool, message?:string, customer?:array{id:int, name:string, email:string, phone:string}}
+     */
+    public function savePosCustomerFromPost(array $post): array
+    {
+        $customerId = (int)($post['customer_id'] ?? 0);
+        $first = trim((string)($post['first_name'] ?? ''));
+        $last  = trim((string)($post['last_name'] ?? ''));
+        $phone = trim((string)($post['mobile'] ?? ''));
+        $email = trim((string)($post['cus_email'] ?? ''));
+
+        if ($first === '' || $last === '') {
+            return [
+                'success' => false,
+                'message' => 'First name and last name are required.'
+            ];
+        }
+
+        if ($phone === '' && $email === '') {
+            return [
+                'success' => false,
+                'message' => 'Either mobile phone or email is required.'
+            ];
+        }
+
+        $name = trim($first . ' ' . $last);
+
+        if ($customerId > 0) {
+            $stmt = $this->conn->prepare('UPDATE vp_customers SET name = ?, email = ?, phone = ? WHERE id = ?');
+            if (!$stmt) {
+                return [
+                    'success' => false,
+                    'message' => 'Database error (prepare): ' . $this->conn->error
+                ];
+            }
+            $stmt->bind_param('sssi', $name, $email, $phone, $customerId);
+            try {
+                $stmt->execute();
+                $stmt->close();
+            } catch (\mysqli_sql_exception $e) {
+                $stmt->close();
+                if (str_contains($e->getMessage(), 'Duplicate entry') || $e->getSqlState() === '23000') {
+                    return [
+                        'success' => false,
+                        'message' => 'Another customer with this email and phone already exists.'
+                    ];
+                }
+                return [
+                    'success' => false,
+                    'message' => 'Could not update customer: ' . $e->getMessage()
+                ];
+            }
+
+            $this->upsertPosCustomerDetailsFromPost($customerId, $post);
+            $this->updateCustomerCountryOfResidenceFromOrderInfo($customerId, (string)($post['country'] ?? $post['country_of_residence'] ?? ''));
+
+            return [
+                'success' => true,
+                'is_update' => true,
+                'message' => 'Customer updated successfully.',
+                'customer' => [
+                    'id' => $customerId,
+                    'name' => $name,
+                    'phone' => $phone,
+                    'email' => $email,
+                ]
+            ];
+        }
+
+        // Insert new customer
+        $stmt = $this->conn->prepare('INSERT INTO vp_customers (name, email, phone) VALUES (?, ?, ?)');
+        if (!$stmt) {
+            return [
+                'success' => false,
+                'message' => 'Database error (prepare): ' . $this->conn->error
+            ];
+        }
+        $stmt->bind_param('sss', $name, $email, $phone);
+        try {
+            $stmt->execute();
+            $newId = (int)$stmt->insert_id;
+            $stmt->close();
+        } catch (\mysqli_sql_exception $e) {
+            $stmt->close();
+            if (str_contains($e->getMessage(), 'Duplicate entry') || $e->getSqlState() === '23000') {
+                $lookup = $this->conn->prepare(
+                    'SELECT id, name, email, phone FROM vp_customers WHERE email = ? AND phone = ? LIMIT 1'
+                );
+                if ($lookup) {
+                    $lookup->bind_param('ss', $email, $phone);
+                    $lookup->execute();
+                    $existing = $lookup->get_result()->fetch_assoc();
+                    $lookup->close();
+                    if (!empty($existing['id'])) {
+                        $exId = (int)$existing['id'];
+                        $this->upsertPosCustomerDetailsFromPost($exId, $post);
+                        $this->updateCustomerCountryOfResidenceFromOrderInfo($exId, (string)($post['country'] ?? $post['country_of_residence'] ?? ''));
+                        return [
+                            'success' => true,
+                            'is_update' => false,
+                            'message' => 'This email and phone are already registered; using existing customer.',
+                            'customer' => [
+                                'id' => $exId,
+                                'name' => $existing['name'] ?? $name,
+                                'phone' => $existing['phone'] ?? $phone,
+                                'email' => $existing['email'] ?? $email,
+                            ]
+                        ];
+                    }
+                }
+                return [
+                    'success' => false,
+                    'message' => 'A customer with this email and phone already exists.'
+                ];
+            }
+            return [
+                'success' => false,
+                'message' => 'Could not save customer: ' . $e->getMessage()
+            ];
+        }
+
+        if ($newId <= 0) {
+            return [
+                'success' => false,
+                'message' => 'Customer was not created (no insert id).'
+            ];
+        }
+
+        $this->upsertPosCustomerDetailsFromPost($newId, $post);
+        $this->updateCustomerCountryOfResidenceFromOrderInfo($newId, (string)($post['country'] ?? $post['country_of_residence'] ?? ''));
+
+        return [
+            'success' => true,
+            'is_update' => false,
+            'message' => 'Customer saved successfully.',
+            'customer' => [
+                'id' => $newId,
+                'name' => $name,
+                'phone' => $phone,
+                'email' => $email,
+            ]
+        ];
+    }
+
+    /**
      * Persist Add Customer modal billing/shipping + GSTIN to pos_customer_details (UPSERT by customer_id).
      *
      * @param array<string, mixed> $post Typically $_POST from POS add-customer form.

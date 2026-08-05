@@ -226,7 +226,10 @@ class POSRegisterController
     private function evaluateHighValueCompliance(array $payload, float $invoiceAmount, float $cashAmount, string $paymentMode, mysqli $conn): array
     {
         $limit = $this->getHighValueTransactionLimit($conn);
-        $isHighValue = $invoiceAmount >= $limit;
+        require_once __DIR__ . '/../helpers/compliance/HighValueComplianceValidator.php';
+        $currency = (string)($payload['currency'] ?? 'INR');
+        $inrAmount = HighValueComplianceValidator::convertToInr($conn, $invoiceAmount, $currency);
+        $isHighValue = $inrAmount >= $limit;
         $residency = $this->normalizeResidencyStatus((string)($payload['customer_residency_status'] ?? 'INDIAN_RESIDENT'));
         $pan = $this->normalizePan((string)($payload['customer_pan'] ?? ''));
         $aadhaar = $this->normalizeAadhaar((string)($payload['customer_aadhaar'] ?? ''));
@@ -1000,6 +1003,7 @@ class POSRegisterController
         if (!empty($_SESSION['pos_customer_id'])) {
             $cid = (int)$_SESSION['pos_customer_id'];
             if ($cid > 0) {
+                $customerModel->ensureCountryOfResidenceForCustomer($cid);
                 $row = $customerModel->getCustomerById($cid);
                 if (!empty($row['id'])) {
                     $nm = (string)($row['name'] ?? '');
@@ -1320,6 +1324,9 @@ class POSRegisterController
         if ($conn instanceof mysqli) {
             $this->ensureHighValueComplianceSchema($conn);
         }
+        if ($customerId > 0) {
+            $customerModel->ensureCountryOfResidenceForCustomer($customerId);
+        }
         $fromVc = $customerId > 0 ? $customerModel->getCustomerBillingShippingForPos($customerId) : ['billing' => [], 'shipping' => []];
         $billingVc = $fromVc['billing'];
         $shippingVc = $fromVc['shipping'];
@@ -1433,6 +1440,7 @@ class POSRegisterController
             'sphone' => $pick($shippingVc['sphone'] ?? '', $shippingOrder['sphone'] ?? '', $shippingSession['sphone'] ?? ''),
             'sgstin' => $pick($shippingVc['sgstin'] ?? '', $shippingOrder['sgstin'] ?? '', $shippingOrder['shipping_gstin'] ?? '', $shippingSession['sgstin'] ?? ''),
             'shipping_gstin' => $pick($shippingVc['shipping_gstin'] ?? '', $shippingOrder['shipping_gstin'] ?? '', $shippingOrder['sgstin'] ?? '', $shippingSession['shipping_gstin'] ?? ''),
+            'shipping_email' => $pick($shippingVc['shipping_email'] ?? '', $shippingOrder['shipping_email'] ?? '', $shippingSession['shipping_email'] ?? ''),
         ];
 
         echo json_encode([
@@ -1476,6 +1484,7 @@ class POSRegisterController
             $cid = (int)$_SESSION['pos_customer_id'];
             if ($cid > 0) {
                 $customerModel = new Customer($conn);
+                $customerModel->ensureCountryOfResidenceForCustomer($cid);
                 $row = $customerModel->getCustomerById($cid);
                 if (!empty($row['id'])) {
                     $nm = (string)($row['name'] ?? '');
@@ -4348,128 +4357,30 @@ class POSRegisterController
         require_once 'models/customer/Customer.php';
         $customerModel = new Customer($conn);
 
-        $first = $_POST['first_name'] ?? '';
-        $last  = $_POST['last_name'] ?? '';
-        $phone = $_POST['mobile'] ?? '';
-        $email = $_POST['cus_email'] ?? '';
+        $res = $customerModel->savePosCustomerFromPost($_POST);
 
-        if (!$first || !$last || !$phone) {
-            echo json_encode([
-                "success" => false,
-                "message" => "First name, last name and phone required"
-            ]);
-            exit;
+        if ($res['success'] && !empty($res['customer']['id'])) {
+            $id = (int)$res['customer']['id'];
+            $_SESSION['pos_customer_id'] = $id;
+            $_POST['trade_name'] = trim((string)($_POST['trade_name'] ?? ''));
+            $_SESSION['pos_customer_form'] = $_POST;
         }
 
-        $name = trim($first . ' ' . $last);
-
-        $stmt = $conn->prepare("
-        INSERT INTO vp_customers (name,email,phone)
-        VALUES (?,?,?)
-    ");
-        if (!$stmt) {
-            echo json_encode([
-                "success" => false,
-                "message" => "Database error (prepare): " . $conn->error
-            ]);
-            exit;
-        }
-        $stmt->bind_param("sss", $name, $email, $phone);
-        try {
-            $executed = $stmt->execute();
-        } catch (\mysqli_sql_exception $e) {
-            $stmt->close();
-            $dup = str_contains($e->getMessage(), 'Duplicate entry')
-                || str_contains($e->getMessage(), 'unique_email_phone')
-                || $e->getSqlState() === '23000';
-            if ($dup) {
-                $lookup = $conn->prepare(
-                    'SELECT id, name, email, phone FROM vp_customers WHERE email = ? AND phone = ? LIMIT 1'
-                );
-                if ($lookup) {
-                    $lookup->bind_param('ss', $email, $phone);
-                    $lookup->execute();
-                    $existing = $lookup->get_result()->fetch_assoc();
-                    $lookup->close();
-                    if (!empty($existing['id'])) {
-                        $id = (int)$existing['id'];
-                        $_SESSION['pos_customer_id'] = $id;
-                        $_POST['trade_name'] = trim((string)($_POST['trade_name'] ?? ''));
-                        $_SESSION['pos_customer_form'] = $_POST;
-                        $customerModel->upsertPosCustomerDetailsFromPost($id, $_POST);
-                        echo json_encode([
-                            'success' => true,
-                            'message' => 'This email and phone are already registered; using existing customer.',
-                            'customer' => [
-                                'id' => $id,
-                                'name' => $existing['name'] ?? $name,
-                                'phone' => $existing['phone'] ?? $phone,
-                                'email' => $existing['email'] ?? $email,
-                            ],
-                        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                        exit;
-                    }
-                }
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'A customer with this email and phone already exists.',
-                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                exit;
-            }
-            echo json_encode([
-                'success' => false,
-                'message' => 'Could not save customer: ' . $e->getMessage(),
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
-        }
-
-        if (!$executed) {
-            echo json_encode([
-                "success" => false,
-                "message" => "Could not save customer: " . $stmt->error
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            $stmt->close();
-            exit;
-        }
-
-        $id = (int)$stmt->insert_id;
-        $stmt->close();
-
-        if ($id <= 0) {
-            echo json_encode([
-                "success" => false,
-                "message" => "Customer was not created (no insert id)."
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
-        }
-
-        /*  STORE FULL BILLING + SHIPPING IN SESSION */
-        $_SESSION['pos_customer_id'] = $id;
-        $_POST['trade_name'] = trim((string)($_POST['trade_name'] ?? ''));
-        $_SESSION['pos_customer_form'] = $_POST;
-        $customerModel->upsertPosCustomerDetailsFromPost($id, $_POST);
-
-        echo json_encode([
-            "success" => true,
-            "customer" => [
-                "id" => $id,
-                "name" => $name,
-                "phone" => $phone,
-                "email" => $email
-            ]
-        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-
+        echo json_encode($res, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
     public function set_customer()
     {
+        $customerId = (int)($_POST['customer_id'] ?? 0);
 
-        // $customerId = $_POST['customer_id'] ?? '';
-        $customerId = $_POST['customer_id'] ?? '';
-
-        if ($customerId) {
+        if ($customerId > 0) {
             $_SESSION['pos_customer_id'] = $customerId;
             unset($_SESSION['pos_customer_form']); // ⭐ VERY IMPORTANT
+
+            global $conn;
+            require_once 'models/customer/Customer.php';
+            $customerModel = new Customer($conn);
+            $customerModel->ensureCountryOfResidenceForCustomer($customerId);
         } else {
             unset($_SESSION['pos_customer_id']);
         }
@@ -4477,6 +4388,31 @@ class POSRegisterController
         $this->clearBufferedHttpOutput();
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode(["success" => true]);
+        exit;
+    }
+
+    public function save_customer_compliance(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        global $conn;
+        $json = file_get_contents('php://input');
+        $data = json_decode($json, true);
+        if (!is_array($data)) {
+            $data = $_POST;
+        }
+
+        $customerId = (int)($data['customer_id'] ?? 0);
+        if ($customerId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Customer ID is required.']);
+            exit;
+        }
+
+        require_once __DIR__ . '/../helpers/compliance/HighValueComplianceValidator.php';
+        $res = HighValueComplianceValidator::saveCustomerCompliance($conn, $customerId, $data);
+        echo json_encode($res);
         exit;
     }
 
@@ -4774,15 +4710,7 @@ class POSRegisterController
         if ($orderTotal > 0.001) {
             $compliance = $this->evaluateHighValueCompliance($payload, $orderTotal, $advanceAmount, $paymentMode, $conn);
         }
-        if (!$compliance['ok']) {
-            echo json_encode([
-                'success' => false,
-                'requires_compliance' => true,
-                'message' => implode(' ', $compliance['errors']),
-                'errors' => $compliance['errors'],
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
-        }
+        // High-value compliance check shifted to Invoice Creation event - order creation is not blocked
 
         $cashDiscount = round((float)($payload['receipt_cash_discount'] ?? 0), 2);
         if ($cashDiscount > 0.001) {
@@ -5631,6 +5559,7 @@ class POSRegisterController
             'pos_machine' => 'pos_machine',
             'cheque' => 'cheque',
             'razorpay' => 'razorpay',
+            'adminorder' => 'adminorder',
             'cod' => 'cod',
             'offline' => 'offline',
         ];
@@ -5695,6 +5624,7 @@ class POSRegisterController
             'pos_machine' => 'POS machine',
             'razorpay' => 'Razorpay',
             'cheque' => 'Cheque',
+            'adminorder' => 'Admin Order',
         ];
 
         return $map[$m] ?? strtoupper($m);
@@ -5713,6 +5643,7 @@ class POSRegisterController
             'pos_machine' => 'POS machine',
             'razorpay' => 'Razorpay',
             'cheque' => 'Cheque',
+            'adminorder' => 'Admin Order',
         ];
 
         $options = [];

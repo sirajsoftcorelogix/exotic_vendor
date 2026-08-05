@@ -107,6 +107,7 @@
                             <option value="pos_machine">POS machine</option>
                             <option value="razorpay">Razorpay</option>
                             <option value="cheque">Cheque</option>
+                            <option value="adminorder">Admin Order</option>
                             <option value="offline">Offline</option>
                         </select>
                     </div>

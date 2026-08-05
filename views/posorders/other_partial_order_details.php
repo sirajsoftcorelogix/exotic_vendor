@@ -1327,7 +1327,7 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
 <?php if ($canFetchOrderJson): ?>
 <div id="orderJsonModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[90] p-4" onclick="closeOrderJsonModal(event)">
     <div class="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col relative" onclick="event.stopPropagation();">
-        <button type="button" onclick="closeOrderJsonModal()" class="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-sm z-10">âœ•</button>
+        <button type="button" onclick="closeOrderJsonModal()" class="absolute top-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-sm z-10">✕</button>
         <div class="p-5 border-b border-gray-200 pr-14">
             <h2 class="text-lg font-bold text-gray-900">Exotic vendor API JSON</h2>
             <p class="text-sm text-gray-600 mt-1">Live response from <code class="text-xs bg-gray-100 px-1 rounded">vendor-api/order/fetch</code> for order <strong id="orderJsonOrderLabel"><?php echo htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8'); ?></strong>. Read-only â€” does not update local data.</p>

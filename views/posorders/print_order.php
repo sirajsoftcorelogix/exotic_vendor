@@ -70,6 +70,7 @@ $modeLabels = [
     'pos_machine' => 'Card / POS',
     'razorpay' => 'Online (Razorpay)',
     'cheque' => 'Cheque',
+    'adminorder' => 'Admin Order',
 ];
 
 $formatAddressBlock = static function (array $parts) use ($h): string {

@@ -49,6 +49,24 @@ class InvoiceCreationService
             return ['success' => false, 'message' => 'Invalid parameters'];
         }
 
+        // Validate High Value Transaction Compliance (PAN / Passport / GSTIN) at Invoice Creation
+        require_once __DIR__ . '/../compliance/HighValueComplianceValidator.php';
+        $invoiceTotal = (float)($header['total_amount'] ?? 0);
+        $complianceEval = HighValueComplianceValidator::validateCustomerCompliance($this->conn, $customerId, $invoiceTotal, $header);
+        if (empty($complianceEval['ok'])) {
+            return [
+                'success' => false,
+                'require_compliance' => true,
+                'compliance_code' => $complianceEval['code'] ?? 'COMPLIANCE_REQUIRED',
+                'customer_id' => $customerId,
+                'customer_name' => $complianceEval['customer_name'] ?? '',
+                'invoice_total' => $invoiceTotal,
+                'limit' => $complianceEval['limit'] ?? 200000.00,
+                'missing_fields' => $complianceEval['missing_fields'] ?? [],
+                'message' => $complianceEval['message'] ?? 'High value transaction compliance document (PAN/Passport/GSTIN) is required before creating the tax invoice.',
+            ];
+        }
+
         if (!empty($options['duplicate_order_check'])) {
             foreach ($orderNumbers as $orderNumber) {
                 $existing = $this->invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);

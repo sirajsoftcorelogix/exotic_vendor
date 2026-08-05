@@ -6,11 +6,12 @@
   <div class="relative z-10 mx-auto mt-10 w-[95%] max-w-2xl rounded-2xl bg-white shadow-xl max-h-[85vh] flex flex-col">
 
     <div class="flex items-center justify-between border-b px-5 py-3">
-      <h2 class="text-sm font-semibold">Add Customer</h2>
+      <h2 class="text-sm font-semibold" id="customerModalTitle">Add Customer</h2>
       <button type="button" onclick="closeCustomerModal()" class="text-gray-500 text-lg" aria-label="Close">✕</button>
     </div>
 
     <form id="customerForm" class="p-5 space-y-4 text-xs overflow-y-auto" method="POST">
+      <input type="hidden" name="customer_id" id="customer_modal_id" value="">
 
       <div class="font-semibold text-gray-700">Billing Details</div>
 
@@ -27,8 +28,8 @@
         </div>
 
         <div>
-          <label class="text-gray-500">Mobile <span class="text-red-600">*</span></label>
-          <input name="mobile" required class="w-full border rounded px-2 py-1.5">
+          <label class="text-gray-500">Mobile</label>
+          <input name="mobile" class="w-full border rounded px-2 py-1.5">
         </div>
 
         <div>
@@ -151,7 +152,7 @@
         <button type="button" onclick="closeCustomerModal()" class="px-4 py-1.5 rounded bg-gray-300 text-gray-700">
           Cancel
         </button>
-        <button type="submit" class="px-4 py-1.5 rounded bg-orange-600 text-white">
+        <button type="submit" id="customerModalSubmitBtn" class="px-4 py-1.5 rounded bg-orange-600 text-white">
           Save Customer
         </button>
       </div>
