@@ -1642,10 +1642,25 @@ switch ($page) {
         break;
     case 'category':
         require_once 'controllers/CategoryController.php';
-        $controller = new CategoryController();
+        $controller = new CategoryController($conn);
         switch ($action) {
             case 'list':
                 $controller->index();
+                break;
+            case 'pullCategories':
+                $controller->pullCategories();
+                break;
+            case 'getDetails':
+                $controller->getDetails();
+                break;
+            case 'edit':
+                $controller->edit();
+                break;
+            case 'delete':
+                $controller->delete();
+                break;
+            case 'updateMarkup':
+                $controller->updateMarkup();
                 break;
             default:
                 $controller->index();
