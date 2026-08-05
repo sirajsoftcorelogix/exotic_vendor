@@ -405,8 +405,8 @@ if ($end_page - $start_page < $slot_size - 1) {
                         class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-gray-700 mb-1">Initial</label>
-                    <input type="text" name="initial" id="edit_initial" maxlength="5"
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">Initial (Max 3 chars)</label>
+                    <input type="text" name="initial" id="edit_initial" maxlength="3"
                         class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                 </div>
             </div>

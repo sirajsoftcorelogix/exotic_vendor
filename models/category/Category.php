@@ -152,9 +152,9 @@ class Category
             $displayName = $name;
         }
 
-        $parent = trim((string) ($data['parent'] ?? ''));
+        $parent = mb_substr(trim((string) ($data['parent'] ?? '')), 0, 255);
         $parentId = (int) ($data['parent_id'] ?? 0);
-        $initial = trim((string) ($data['initial'] ?? ''));
+        $initial = mb_substr(trim((string) ($data['initial'] ?? '')), 0, 3);
         $isActive = isset($data['is_active']) ? (int) $data['is_active'] : 1;
         $isActive = in_array($isActive, [0, 1], true) ? $isActive : 1;
 
@@ -434,10 +434,8 @@ class Category
                         ? (int) $item['parent_id']
                         : (is_numeric($parentStr) ? (int) $parentStr : 0);
 
-                    $rawInitial = isset($item['initial']) && trim((string) $item['initial']) !== ''
-                        ? trim((string) $item['initial'])
-                        : (isset($item['linktitle']) ? trim((string) $item['linktitle']) : '');
-                    $initial = mb_substr($rawInitial, 0, 5);
+                    $rawInitial = isset($item['initial']) ? trim((string) $item['initial']) : '';
+                    $initial = mb_substr($rawInitial, 0, 3);
 
                     $isActive = isset($item['is_active']) ? (int) $item['is_active'] : 1;
 
