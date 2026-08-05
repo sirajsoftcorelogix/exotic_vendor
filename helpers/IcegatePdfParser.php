@@ -1,6 +1,8 @@
 <?php
 
-require_once __DIR__ . '/../vendor/autoload.php';
+if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
+    require_once __DIR__ . '/../vendor/autoload.php';
+}
 
 use Smalot\PdfParser\Parser as PdfParser;
 
@@ -18,6 +20,14 @@ class IcegatePdfParser
             return [
                 'success' => false,
                 'message' => 'PDF file not found at path: ' . $filePath,
+                'rates' => []
+            ];
+        }
+
+        if (!class_exists('Smalot\PdfParser\Parser')) {
+            return [
+                'success' => false,
+                'message' => 'Smalot\\PdfParser library is missing. Please run composer install.',
                 'rates' => []
             ];
         }
