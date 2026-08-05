@@ -12,8 +12,8 @@ $rateHistory = [];
     .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
     .btn-add { background: #10b981; color: white; padding: 9px 16px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; transition: background 0.2s; border: none; cursor: pointer; }
     .btn-add:hover { background: #059669; }
-    .btn-icegate { background: #8b5cf6; color: white; padding: 9px 16px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; transition: background 0.2s; border: none; cursor: pointer; }
-    .btn-icegate:hover { background: #7c3aed; }
+    .btn-pdf { background: #3b82f6; color: white; padding: 9px 16px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; transition: background 0.2s; border: none; cursor: pointer; }
+    .btn-pdf:hover { background: #2563eb; }
     
     .success-alert { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; font-weight: 500; }
     .error-alert { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; font-weight: 500; }
@@ -52,7 +52,6 @@ $rateHistory = [];
     
     .form-control { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; margin-bottom: 12px; }
     .form-control:focus { border-color: #3b82f6; outline: none; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
-    textarea.form-control { min-height: 120px; font-family: monospace; font-size: 13px; }
 
     .modal-footer { margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #e2e8f0; padding-top: 16px; }
     .btn-submit { background: #2563eb; color: white; padding: 9px 18px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer; }
@@ -67,7 +66,7 @@ $rateHistory = [];
     <div class="header-row">
         <h1>Currency Management</h1>
         <div class="btn-group">
-            <button class="btn-icegate" onclick="openIcegateModal()">⚡ Sync / Paste ICEGATE Table (Method 1)</button>
+            <button class="btn-pdf" onclick="openPdfModal()">📄 PDF Import</button>
             <a href="index.php?page=currency&action=addRecord" class="btn-add">+ Add New Currency</a>
         </div>
     </div>
@@ -112,38 +111,40 @@ $rateHistory = [];
     <?php endif; ?>
 </div>
 
-<!-- ICEGATE Table Sync / Paste Modal (Method 1) -->
-<div id="icegateModal" class="modal">
+<!-- PDF Import Modal -->
+<div id="pdfModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h2>⚡ Sync / Paste ICEGATE Table (Method 1)</h2>
-            <button class="close-modal" onclick="closeModal('icegateModal')">&times;</button>
+            <h2>📄 PDF Import</h2>
+            <button class="close-modal" onclick="closeModal('pdfModal')">&times;</button>
         </div>
+        
+        <form id="pdfUploadForm" onsubmit="handlePdfParse(event)">
+            <label style="font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block;">Option A: Upload PDF File</label>
+            <div class="file-drop-area" onclick="document.getElementById('pdfFileInput').click()">
+                <div style="font-size: 28px; margin-bottom: 8px;">📂</div>
+                <div style="font-weight: 600; color: #334155;">Click to select Exchange Rate PDF</div>
+                <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Upload official exchange rate notification PDF</div>
+                <input type="file" id="pdfFileInput" accept=".pdf" style="display: none;" onchange="updateFileName(this)">
+                <div id="pdfFileName" style="margin-top: 10px; font-weight: 600; color: #2563eb;"></div>
+            </div>
 
-        <p style="font-size: 13px; color: #475569; margin-bottom: 14px; line-height: 1.5;">
-            Visit official <a href="https://foservices.icegate.gov.in/#/services/viewExchangeRate" target="_blank" style="color: #2563eb; font-weight: 600;">ICEGATE View Exchange Rate Portal ↗</a>, complete the CAPTCHA, copy the table, and paste it below for instant parsing and 1-click database update.
-        </p>
-
-        <form id="pasteTableForm" onsubmit="handlePasteParse(event)">
-            <label style="font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block;">Paste Copied Table Text from ICEGATE / Excel:</label>
-            <textarea id="rawTableText" class="form-control" placeholder="Paste ICEGATE currency exchange rate table here...
-Example:
-USD US Dollar 1.0 97.20 95.45
-EUR EURO 1.0 112.35 108.60
-JPY Japanese Yen 100.0 60.35 58.50"></textarea>
+            <label style="font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block;">Option B: Local File Path</label>
+            <input type="text" id="pdfFilePathInput" class="form-control" placeholder="e.g. c:\Users\Admin\Downloads\exchange_rate.pdf">
 
             <div style="display: flex; justify-content: flex-end;">
-                <button type="submit" class="btn-submit" id="parsePasteBtn">⚡ Parse Pasted Table</button>
+                <button type="submit" class="btn-submit" id="parsePdfBtn">🔍 Parse PDF & Preview Rates</button>
             </div>
         </form>
 
-        <div id="pastePreviewSection" style="display: none; margin-top: 20px;">
-            <div id="pasteMetaBadge" class="meta-badge"></div>
+        <div id="pdfPreviewSection" style="display: none; margin-top: 20px;">
+            <div id="pdfMetaBadge" class="meta-badge"></div>
+            <p style="font-size: 13px; color: #64748b; margin-bottom: 10px;">Review rates parsed from PDF. Uncheck any currency you do not wish to update.</p>
             <div style="max-height: 350px; overflow-y: auto;">
                 <table class="preview-table">
                     <thead>
                         <tr>
-                            <th><input type="checkbox" id="selectAllPaste" checked onclick="toggleAllCheckboxes('icegateModal', this.checked)"></th>
+                            <th><input type="checkbox" id="selectAllPdf" checked onclick="toggleAllCheckboxes('pdfModal', this.checked)"></th>
                             <th>Code</th>
                             <th>Name</th>
                             <th>Unit</th>
@@ -152,13 +153,13 @@ JPY Japanese Yen 100.0 60.35 58.50"></textarea>
                             <th>Status</th>
                         </tr>
                     </thead>
-                    <tbody id="pastePreviewBody"></tbody>
+                    <tbody id="pdfPreviewBody"></tbody>
                 </table>
             </div>
 
             <div class="modal-footer">
-                <button class="btn-cancel" onclick="closeModal('icegateModal')">Cancel</button>
-                <button class="btn-submit" id="applyPasteRatesBtn" onclick="applyParsedRates('icegateModal', 'ICEGATE_PASTE')">✅ Apply Selected Rates to Database</button>
+                <button class="btn-cancel" onclick="closeModal('pdfModal')">Cancel</button>
+                <button class="btn-submit" id="applyPdfRatesBtn" onclick="applyParsedRates('pdfModal', 'PDF')">✅ Apply Selected Rates to Database</button>
             </div>
         </div>
     </div>
@@ -200,7 +201,7 @@ JPY Japanese Yen 100.0 60.35 58.50"></textarea>
 
 <script>
     let currentParsedData = {
-        icegateModal: null
+        pdfModal: null
     };
 
     function showNotice(title, message) {
@@ -224,58 +225,70 @@ JPY Japanese Yen 100.0 60.35 58.50"></textarea>
         document.getElementById('noticeModal').classList.add('active');
     }
 
-    function openIcegateModal() {
-        document.getElementById('icegateModal').classList.add('active');
+    function openPdfModal() {
+        document.getElementById('pdfModal').classList.add('active');
     }
 
     function closeModal(modalId) {
         document.getElementById(modalId).classList.remove('active');
     }
 
-    function handlePasteParse(event) {
+    function updateFileName(input) {
+        if (input.files && input.files[0]) {
+            document.getElementById('pdfFileName').textContent = 'Selected File: ' + input.files[0].name;
+            document.getElementById('pdfFilePathInput').value = '';
+        }
+    }
+
+    function handlePdfParse(event) {
         event.preventDefault();
-        const rawText = document.getElementById('rawTableText').value.trim();
+        const fileInput = document.getElementById('pdfFileInput');
+        const pathInput = document.getElementById('pdfFilePathInput').value.trim();
         
-        if (!rawText) {
-            showNotice('Validation Error', 'Please paste the ICEGATE table text first.');
+        if (!fileInput.files.length && !pathInput) {
+            showNotice('Validation Error', 'Please select a PDF file to upload or specify a local file path.');
             return;
         }
 
         const formData = new FormData();
-        formData.append('raw_text', rawText);
+        if (fileInput.files.length > 0) {
+            formData.append('exchange_rate_pdf', fileInput.files[0]);
+        } else {
+            formData.append('file_path', pathInput);
+        }
 
-        const btn = document.getElementById('parsePasteBtn');
+        const btn = document.getElementById('parsePdfBtn');
         btn.disabled = true;
-        btn.textContent = '⏳ Parsing Pasted Table...';
+        btn.textContent = '⏳ Parsing PDF...';
 
-        fetch('index.php?page=currency&action=pasteTablePreview', {
+        fetch('index.php?page=currency&action=uploadPdfPreview', {
             method: 'POST',
             body: formData
         })
         .then(res => res.json())
         .then(data => {
             btn.disabled = false;
-            btn.textContent = '⚡ Parse Pasted Table';
+            btn.textContent = '🔍 Parse PDF & Preview Rates';
 
             if (!data.success) {
-                showNotice('Parse Failed', data.message || 'Could not parse rates from pasted text.');
+                showNotice('Parse Failed', data.message || 'Could not parse currency rates from PDF.');
                 return;
             }
 
-            currentParsedData.icegateModal = data;
-            renderPreviewTable('icegateModal', data);
+            currentParsedData.pdfModal = data;
+            renderPreviewTable('pdfModal', data);
         })
         .catch(err => {
             btn.disabled = false;
-            btn.textContent = '⚡ Parse Pasted Table';
-            showNotice('Error', 'Server error while parsing table: ' + err.message);
+            btn.textContent = '🔍 Parse PDF & Preview Rates';
+            showNotice('Error', 'Server error while parsing PDF: ' + err.message);
         });
     }
 
     function renderPreviewTable(modalId, data) {
-        const section = document.getElementById('pastePreviewSection');
-        const metaBadge = document.getElementById('pasteMetaBadge');
-        const tbody = document.getElementById('pastePreviewBody');
+        const section = document.getElementById('pdfPreviewSection');
+        const metaBadge = document.getElementById('pdfMetaBadge');
+        const tbody = document.getElementById('pdfPreviewBody');
 
         metaBadge.innerHTML = `
             <span><strong>Notification:</strong> ${data.notification_no || 'N/A'}</span>

@@ -1623,8 +1623,8 @@ switch ($page) {
             case 'currencyDetails':
                 $controller->getCurrencyDetails();
                 break;
-            case 'pasteTablePreview':
-                $controller->pasteTablePreview();
+            case 'uploadPdfPreview':
+                $controller->uploadPdfPreview();
                 break;
             case 'applyBulkRates':
                 $controller->applyBulkRates();
