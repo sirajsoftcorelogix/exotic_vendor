@@ -207,59 +207,101 @@ class Category
 
         // 1. Check vp_inbound
         $inboundCount = 0;
-        $inboundPlaceholders = implode(',', array_fill(0, count($matchValues), '?'));
-        $inboundTypes = str_repeat('s', count($matchValues));
+        $candidateInboundCols = [
+            'group_name',
+            'category_code',
+            'sub_category_code',
+            'sub_sub_category_code',
+            'search_group',
+            'search_category',
+            'search_category_string',
+            'search_sub_category',
+            'search_sub_sub_category',
+            'search_cat',
+            'search_sub',
+            'search_sub_sub',
+        ];
+        $existingInboundCols = array_intersect($candidateInboundCols, $this->getExistingTableColumns('vp_inbound'));
 
-        $inboundSql = "SELECT COUNT(*) AS c FROM vp_inbound WHERE group_name IN ({$inboundPlaceholders})";
-        $stmtInbound = $this->conn->prepare($inboundSql);
-        if ($stmtInbound) {
-            $stmtInbound->bind_param($inboundTypes, ...$matchValues);
-            $stmtInbound->execute();
-            $resInbound = $stmtInbound->get_result();
-            if ($resInbound && $rowInbound = $resInbound->fetch_assoc()) {
-                $inboundCount = (int) ($rowInbound['c'] ?? 0);
+        if (!empty($existingInboundCols)) {
+            $inboundConditions = [];
+            $inboundParams = [];
+            $inboundTypes = '';
+
+            foreach ($matchValues as $val) {
+                foreach ($existingInboundCols as $col) {
+                    $inboundConditions[] = "{$col} = ?";
+                    $inboundParams[] = $val;
+                    $inboundTypes .= 's';
+
+                    $inboundConditions[] = "({$col} IS NOT NULL AND FIND_IN_SET(?, REPLACE(REPLACE({$col}, '|', ','), ' ', '')) > 0)";
+                    $inboundParams[] = $val;
+                    $inboundTypes .= 's';
+                }
             }
-            $stmtInbound->close();
+
+            if (!empty($inboundConditions)) {
+                $inboundSql = "SELECT COUNT(*) AS c FROM vp_inbound WHERE " . implode(' OR ', $inboundConditions);
+                $stmtInbound = $this->conn->prepare($inboundSql);
+                if ($stmtInbound) {
+                    $stmtInbound->bind_param($inboundTypes, ...$inboundParams);
+                    $stmtInbound->execute();
+                    $resInbound = $stmtInbound->get_result();
+                    if ($resInbound && $rowInbound = $resInbound->fetch_assoc()) {
+                        $inboundCount = (int) ($rowInbound['c'] ?? 0);
+                    }
+                    $stmtInbound->close();
+                }
+            }
         }
 
         // 2. Check vp_products
         $productCount = 0;
-        $productConditions = [];
-        $productParams = [];
-        $productTypes = '';
+        $candidateProductCols = [
+            'groupname',
+            'category',
+            'sub_category',
+            'sub_sub_category',
+            'search_group',
+            'search_category',
+            'search_sub_category',
+            'search_sub_sub_category',
+            'search_cat',
+            'search_sub',
+            'search_sub_sub',
+        ];
+        $existingProductCols = array_intersect($candidateProductCols, $this->getExistingTableColumns('vp_products'));
 
-        foreach ($matchValues as $val) {
-            $productConditions[] = "groupname = ?";
-            $productParams[] = $val;
-            $productTypes .= 's';
+        if (!empty($existingProductCols)) {
+            $productConditions = [];
+            $productParams = [];
+            $productTypes = '';
 
-            $productConditions[] = "category = ?";
-            $productParams[] = $val;
-            $productTypes .= 's';
+            foreach ($matchValues as $val) {
+                foreach ($existingProductCols as $col) {
+                    $productConditions[] = "{$col} = ?";
+                    $productParams[] = $val;
+                    $productTypes .= 's';
 
-            $productConditions[] = "(category IS NOT NULL AND FIND_IN_SET(?, REPLACE(REPLACE(category, '|', ','), ' ', '')) > 0)";
-            $productParams[] = $val;
-            $productTypes .= 's';
-
-            $productConditions[] = "search_category = ?";
-            $productParams[] = $val;
-            $productTypes .= 's';
-
-            $productConditions[] = "(search_category IS NOT NULL AND FIND_IN_SET(?, REPLACE(REPLACE(search_category, '|', ','), ' ', '')) > 0)";
-            $productParams[] = $val;
-            $productTypes .= 's';
-        }
-
-        $productSql = "SELECT COUNT(*) AS c FROM vp_products WHERE " . implode(' OR ', $productConditions);
-        $stmtProd = $this->conn->prepare($productSql);
-        if ($stmtProd) {
-            $stmtProd->bind_param($productTypes, ...$productParams);
-            $stmtProd->execute();
-            $resProd = $stmtProd->get_result();
-            if ($resProd && $rowProd = $resProd->fetch_assoc()) {
-                $productCount = (int) ($rowProd['c'] ?? 0);
+                    $productConditions[] = "({$col} IS NOT NULL AND FIND_IN_SET(?, REPLACE(REPLACE({$col}, '|', ','), ' ', '')) > 0)";
+                    $productParams[] = $val;
+                    $productTypes .= 's';
+                }
             }
-            $stmtProd->close();
+
+            if (!empty($productConditions)) {
+                $productSql = "SELECT COUNT(*) AS c FROM vp_products WHERE " . implode(' OR ', $productConditions);
+                $stmtProd = $this->conn->prepare($productSql);
+                if ($stmtProd) {
+                    $stmtProd->bind_param($productTypes, ...$productParams);
+                    $stmtProd->execute();
+                    $resProd = $stmtProd->get_result();
+                    if ($resProd && $rowProd = $resProd->fetch_assoc()) {
+                        $productCount = (int) ($rowProd['c'] ?? 0);
+                    }
+                    $stmtProd->close();
+                }
+            }
         }
 
         return [
@@ -348,8 +390,13 @@ class Category
                     continue;
                 }
 
-                $apiCatId = isset($item['category']) ? (int) $item['category'] : 0;
-                if ($apiCatId <= 0) {
+                if (!isset($item['category']) || trim((string) $item['category']) === '') {
+                    $failedCount++;
+                    continue;
+                }
+
+                $apiCatId = (int) $item['category'];
+                if ($apiCatId === 0) {
                     $failedCount++;
                     continue;
                 }
@@ -370,13 +417,19 @@ class Category
                     $alreadyExistsCount++;
                 } else {
                     // Step 5: Record does not exist -> Insert new row
-                    $name = isset($item['name']) ? trim((string) $item['name']) : '';
+                    $name = isset($item['name']) && trim((string) $item['name']) !== ''
+                        ? trim((string) $item['name'])
+                        : (isset($item['title']) ? trim((string) $item['title']) : '');
                     $displayName = isset($item['display_name']) && trim((string) $item['display_name']) !== ''
                         ? trim((string) $item['display_name'])
                         : $name;
                     $parent = isset($item['parent']) ? trim((string) $item['parent']) : '';
-                    $parentId = isset($item['parent_id']) ? (int) $item['parent_id'] : 0;
-                    $initial = isset($item['initial']) ? trim((string) $item['initial']) : '';
+                    $parentId = isset($item['parent_id'])
+                        ? (int) $item['parent_id']
+                        : (is_numeric($parent) ? (int) $parent : 0);
+                    $initial = isset($item['initial']) && trim((string) $item['initial']) !== ''
+                        ? trim((string) $item['initial'])
+                        : (isset($item['linktitle']) ? trim((string) $item['linktitle']) : '');
                     $isActive = isset($item['is_active']) ? (int) $item['is_active'] : 1;
 
                     $insertStmt->bind_param('ississi', $parentId, $name, $displayName, $apiCatId, $parent, $initial, $isActive);
@@ -425,6 +478,26 @@ class Category
                 ],
             ];
         }
+    }
+
+    /**
+     * Get existing column names for a given table.
+     *
+     * @return array<string>
+     */
+    private function getExistingTableColumns(string $table): array
+    {
+        $columns = [];
+        $escaped = $this->conn->real_escape_string($table);
+        $res = $this->conn->query("SHOW COLUMNS FROM `{$escaped}`");
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                if (!empty($row['Field'])) {
+                    $columns[] = $row['Field'];
+                }
+            }
+        }
+        return $columns;
     }
 
     /**

@@ -610,17 +610,32 @@ function vendor_external_api_fetch_category_list(): array
     }
 
     $data = $res['data'];
-    $categories = [];
+    $rawList = [];
 
     if (is_array($data)) {
         if (isset($data['categories']) && is_array($data['categories'])) {
-            $categories = $data['categories'];
+            $rawList = $data['categories'];
         } elseif (isset($data['data']) && is_array($data['data'])) {
-            $categories = $data['data'];
+            $rawList = $data['data'];
         } elseif (isset($data['categorylist']) && is_array($data['categorylist'])) {
-            $categories = $data['categorylist'];
-        } elseif (isset($data[0]) && is_array($data[0])) {
-            $categories = $data;
+            $rawList = $data['categorylist'];
+        } else {
+            $rawList = $data;
+        }
+    }
+
+    $categories = [];
+    foreach ($rawList as $k => $v) {
+        if (is_array($v)) {
+            if (isset($v['category']) || isset($v['name']) || isset($v['title'])) {
+                $categories[] = $v;
+            } else {
+                foreach ($v as $subKey => $subVal) {
+                    if (is_array($subVal) && (isset($subVal['category']) || isset($subVal['name']) || isset($subVal['title']))) {
+                        $categories[] = $subVal;
+                    }
+                }
+            }
         }
     }
 
