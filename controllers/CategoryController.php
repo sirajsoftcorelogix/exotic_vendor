@@ -122,6 +122,44 @@ class CategoryController
     }
 
     /**
+     * AJAX endpoint to check if a category is in use in vp_inbound or vp_products.
+     */
+    public function checkUsage(): void
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $id = (int) ($_GET['id'] ?? 0);
+        if ($id <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid category ID.']);
+            exit;
+        }
+
+        $usage = $this->categoryModel->getCategoryUsage($id);
+        $details = [];
+        if ($usage['inbound_count'] > 0) {
+            $details[] = sprintf('vp_inbound (%d record%s)', $usage['inbound_count'], $usage['inbound_count'] === 1 ? '' : 's');
+        }
+        if ($usage['product_count'] > 0) {
+            $details[] = sprintf('vp_products (%d product%s)', $usage['product_count'], $usage['product_count'] === 1 ? '' : 's');
+        }
+
+        $message = $usage['in_use']
+            ? 'Cannot delete category: it is currently in use in ' . implode(' and ', $details) . '. Please reassign or remove those references first.'
+            : 'Category is not in use and can be safely deleted.';
+
+        echo json_encode([
+            'success' => true,
+            'in_use' => $usage['in_use'],
+            'inbound_count' => $usage['inbound_count'],
+            'product_count' => $usage['product_count'],
+            'can_delete' => !$usage['in_use'],
+            'message' => $message,
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    /**
      * AJAX endpoint to delete a category.
      */
     public function delete(): void

@@ -616,9 +616,26 @@ function submitCategoryEdit(e) {
 
 // Delete Confirmation
 function confirmDeleteCategory(id, name) {
-    deleteCategoryId = id;
-    document.getElementById('delete-cat-name').innerText = name;
-    document.getElementById('deleteCategoryModal').classList.remove('hidden');
+    fetch('index.php?page=category&action=checkUsage&id=' + id, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success && data.in_use) {
+            showCategoryAlert('Cannot Delete Category', data.message, true);
+        } else {
+            deleteCategoryId = id;
+            document.getElementById('delete-cat-name').innerText = name;
+            document.getElementById('deleteCategoryModal').classList.remove('hidden');
+        }
+    })
+    .catch(err => {
+        // Fallback: open delete modal and let backend handle validation
+        deleteCategoryId = id;
+        document.getElementById('delete-cat-name').innerText = name;
+        document.getElementById('deleteCategoryModal').classList.remove('hidden');
+    });
 }
 
 function closeDeleteModal() {

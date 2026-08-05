@@ -1659,6 +1659,9 @@ switch ($page) {
             case 'delete':
                 $controller->delete();
                 break;
+            case 'checkUsage':
+                $controller->checkUsage();
+                break;
             case 'updateMarkup':
                 $controller->updateMarkup();
                 break;

@@ -172,6 +172,104 @@ class Category
     }
 
     /**
+     * Check if a category is in use in vp_inbound or vp_products.
+     *
+     * @return array{in_use:bool,inbound_count:int,product_count:int}
+     */
+    public function getCategoryUsage(int $id): array
+    {
+        if ($id <= 0) {
+            return ['in_use' => false, 'inbound_count' => 0, 'product_count' => 0];
+        }
+
+        $cat = $this->getCategoryById($id);
+        if (!$cat) {
+            return ['in_use' => false, 'inbound_count' => 0, 'product_count' => 0];
+        }
+
+        $apiCatId = (int) ($cat['category'] ?? 0);
+        $catName = trim((string) ($cat['name'] ?? ''));
+        $displayName = trim((string) ($cat['display_name'] ?? ''));
+        $internalId = (int) ($cat['id'] ?? 0);
+
+        $matchValues = array_unique(array_filter([
+            (string) $apiCatId,
+            (string) $internalId,
+            $catName,
+            $displayName,
+        ], function ($val) {
+            return $val !== '' && $val !== '0';
+        }));
+
+        if (empty($matchValues)) {
+            return ['in_use' => false, 'inbound_count' => 0, 'product_count' => 0];
+        }
+
+        // 1. Check vp_inbound
+        $inboundCount = 0;
+        $inboundPlaceholders = implode(',', array_fill(0, count($matchValues), '?'));
+        $inboundTypes = str_repeat('s', count($matchValues));
+
+        $inboundSql = "SELECT COUNT(*) AS c FROM vp_inbound WHERE group_name IN ({$inboundPlaceholders})";
+        $stmtInbound = $this->conn->prepare($inboundSql);
+        if ($stmtInbound) {
+            $stmtInbound->bind_param($inboundTypes, ...$matchValues);
+            $stmtInbound->execute();
+            $resInbound = $stmtInbound->get_result();
+            if ($resInbound && $rowInbound = $resInbound->fetch_assoc()) {
+                $inboundCount = (int) ($rowInbound['c'] ?? 0);
+            }
+            $stmtInbound->close();
+        }
+
+        // 2. Check vp_products
+        $productCount = 0;
+        $productConditions = [];
+        $productParams = [];
+        $productTypes = '';
+
+        foreach ($matchValues as $val) {
+            $productConditions[] = "groupname = ?";
+            $productParams[] = $val;
+            $productTypes .= 's';
+
+            $productConditions[] = "category = ?";
+            $productParams[] = $val;
+            $productTypes .= 's';
+
+            $productConditions[] = "(category IS NOT NULL AND FIND_IN_SET(?, REPLACE(REPLACE(category, '|', ','), ' ', '')) > 0)";
+            $productParams[] = $val;
+            $productTypes .= 's';
+
+            $productConditions[] = "search_category = ?";
+            $productParams[] = $val;
+            $productTypes .= 's';
+
+            $productConditions[] = "(search_category IS NOT NULL AND FIND_IN_SET(?, REPLACE(REPLACE(search_category, '|', ','), ' ', '')) > 0)";
+            $productParams[] = $val;
+            $productTypes .= 's';
+        }
+
+        $productSql = "SELECT COUNT(*) AS c FROM vp_products WHERE " . implode(' OR ', $productConditions);
+        $stmtProd = $this->conn->prepare($productSql);
+        if ($stmtProd) {
+            $stmtProd->bind_param($productTypes, ...$productParams);
+            $stmtProd->execute();
+            $resProd = $stmtProd->get_result();
+            if ($resProd && $rowProd = $resProd->fetch_assoc()) {
+                $productCount = (int) ($rowProd['c'] ?? 0);
+            }
+            $stmtProd->close();
+        }
+
+        return [
+            'in_use' => ($inboundCount > 0 || $productCount > 0),
+            'inbound_count' => $inboundCount,
+            'product_count' => $productCount,
+        ];
+    }
+
+    /**
      * Delete a category record by primary key id.
      *
      * @return array{success:bool,message:string}
@@ -185,6 +283,21 @@ class Category
         $existing = $this->getCategoryById($id);
         if (!$existing) {
             return ['success' => false, 'message' => 'Category not found or already deleted.'];
+        }
+
+        $usage = $this->getCategoryUsage($id);
+        if ($usage['in_use']) {
+            $usedTables = [];
+            if ($usage['inbound_count'] > 0) {
+                $usedTables[] = sprintf('vp_inbound (%d record%s)', $usage['inbound_count'], $usage['inbound_count'] === 1 ? '' : 's');
+            }
+            if ($usage['product_count'] > 0) {
+                $usedTables[] = sprintf('vp_products (%d product%s)', $usage['product_count'], $usage['product_count'] === 1 ? '' : 's');
+            }
+            return [
+                'success' => false,
+                'message' => 'Cannot delete category: it is currently in use in ' . implode(' and ', $usedTables) . '. Please reassign or remove those references first.',
+            ];
         }
 
         $stmt = $this->conn->prepare("DELETE FROM category WHERE id = ?");
