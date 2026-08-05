@@ -1623,9 +1623,6 @@ switch ($page) {
             case 'currencyDetails':
                 $controller->getCurrencyDetails();
                 break;
-            case 'uploadPdfPreview':
-                $controller->uploadPdfPreview();
-                break;
             case 'pasteTablePreview':
                 $controller->pasteTablePreview();
                 break;
