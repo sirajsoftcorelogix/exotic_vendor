@@ -342,32 +342,34 @@ function getWeekDays()
 
 function getParentCategoryList()
 {
-	// Fetch active roles
 	global $conn;
-	$sql = "SELECT id, category_name
-				FROM product_categories 
-				WHERE active = 1 AND parent_id=0
-				ORDER BY category_name ASC";
+	$sql = "SELECT id, category, name, display_name
+			FROM category 
+			WHERE is_active = 1 AND parent_id = 0
+			ORDER BY display_name ASC, name ASC";
 	$result = $conn->query($sql);
 	$categories = array();
-	while ($row = $result->fetch_assoc()) {
-		$categories[$row['id']] = $row['category_name'];
+	if ($result) {
+		while ($row = $result->fetch_assoc()) {
+			$categories[$row['id']] = !empty($row['display_name']) ? $row['display_name'] : $row['name'];
+		}
 	}
 	return $categories;
 }
 
 function getProductCategoryList()
 {
-	// Fetch active roles
 	global $conn;
-	$sql = "SELECT id, category_name
-				FROM product_categories 
-				WHERE active = 1
-				ORDER BY category_name ASC";
+	$sql = "SELECT id, category, name, display_name
+			FROM category 
+			WHERE is_active = 1
+			ORDER BY display_name ASC, name ASC";
 	$result = $conn->query($sql);
 	$categories = array();
-	while ($row = $result->fetch_assoc()) {
-		$categories[$row['id']] = $row['category_name'];
+	if ($result) {
+		while ($row = $result->fetch_assoc()) {
+			$categories[$row['id']] = !empty($row['display_name']) ? $row['display_name'] : $row['name'];
+		}
 	}
 	return $categories;
 }
