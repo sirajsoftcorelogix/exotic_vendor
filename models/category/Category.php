@@ -7,63 +7,6 @@ class Category
     public function __construct(mysqli $conn)
     {
         $this->conn = $conn;
-        $this->ensureSchema();
-    }
-
-    /**
-     * Ensure required tables and menu setup exist in the database.
-     */
-    public function ensureSchema(): void
-    {
-        // 1. Ensure category table exists
-        $this->conn->query("CREATE TABLE IF NOT EXISTS `category` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `parent_id` INT NOT NULL DEFAULT 0,
-            `name` VARCHAR(100) NULL,
-            `display_name` VARCHAR(100) NULL,
-            `category` INT NULL,
-            `parent` VARCHAR(255) NULL,
-            `initial` VARCHAR(5) NULL,
-            `is_active` TINYINT(1) DEFAULT 1,
-            UNIQUE KEY `uk_category_api` (`category`),
-            INDEX `idx_category_name` (`name`),
-            INDEX `idx_category_display_name` (`display_name`),
-            INDEX `idx_category_parent_id` (`parent_id`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
-
-        // 2. Ensure category_sync_logs table exists
-        $this->conn->query("CREATE TABLE IF NOT EXISTS `category_sync_logs` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `user_id` INT NOT NULL,
-            `categories_received` INT NOT NULL DEFAULT 0,
-            `categories_added` INT NOT NULL DEFAULT 0,
-            `categories_existing` INT NOT NULL DEFAULT 0,
-            `categories_failed` INT NOT NULL DEFAULT 0,
-            `execution_time` FLOAT NOT NULL DEFAULT 0.0,
-            `ip_address` VARCHAR(45) NULL,
-            `status` VARCHAR(20) NOT NULL DEFAULT 'success',
-            `message` TEXT NULL,
-            `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-            INDEX `idx_sync_user` (`user_id`),
-            INDEX `idx_sync_created` (`created_at`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
-
-        // 3. Ensure Masters parent module and Categories child module exist
-        $checkParent = $this->conn->query("SELECT id FROM modules WHERE parent_id = 0 AND (module_name = 'Masters' OR slug = 'masters') LIMIT 1");
-        $parentId = 0;
-        if ($checkParent && $row = $checkParent->fetch_assoc()) {
-            $parentId = (int) $row['id'];
-        } else {
-            $this->conn->query("INSERT INTO modules (parent_id, module_name, slug, action, font_awesome_icon, active, user_id, sort_order) VALUES (0, 'Masters', 'masters', 'list', '<i class=\"fas fa-layer-group mr-2\"></i>', 1, 1, 200)");
-            $parentId = (int) $this->conn->insert_id;
-        }
-
-        if ($parentId > 0) {
-            $checkChild = $this->conn->query("SELECT id FROM modules WHERE slug = 'category' AND action = 'list' LIMIT 1");
-            if (!$checkChild || $checkChild->num_rows === 0) {
-                $this->conn->query("INSERT INTO modules (parent_id, module_name, slug, action, font_awesome_icon, active, user_id, sort_order) VALUES ({$parentId}, 'Categories', 'category', 'list', '<i class=\"fas fa-sitemap mr-2\"></i>', 1, 1, 10)");
-            }
-        }
     }
 
     /**
@@ -340,8 +283,6 @@ class Category
             $executionTime = round(microtime(true) - $startTime, 2);
             $executionTimeStr = sprintf("%.2f Seconds", $executionTime);
 
-            $this->logSync($userId, $receivedCount, $newAddedCount, $alreadyExistsCount, $failedCount, $executionTime, $ipAddress, 'success', 'Synchronization completed successfully.');
-
             return [
                 'success' => true,
                 'message' => 'Synchronization Completed',
@@ -359,8 +300,6 @@ class Category
             $executionTime = round(microtime(true) - $startTime, 2);
             $executionTimeStr = sprintf("%.2f Seconds", $executionTime);
 
-            $this->logSync($userId, $receivedCount, $newAddedCount, $alreadyExistsCount, $failedCount, $executionTime, $ipAddress, 'failed', $e->getMessage());
-
             return [
                 'success' => false,
                 'message' => 'Database error during synchronization: ' . $e->getMessage(),
@@ -372,28 +311,6 @@ class Category
                     'execution_time' => $executionTimeStr,
                 ],
             ];
-        }
-    }
-
-    /**
-     * Log synchronization details into category_sync_logs table.
-     */
-    public function logSync(
-        int $userId,
-        int $categoriesReceived,
-        int $categoriesAdded,
-        int $categoriesExisting,
-        int $categoriesFailed,
-        float $executionTime,
-        string $ipAddress,
-        string $status = 'success',
-        string $message = ''
-    ): void {
-        $stmt = $this->conn->prepare("INSERT INTO category_sync_logs (user_id, categories_received, categories_added, categories_existing, categories_failed, execution_time, ip_address, status, message) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        if ($stmt) {
-            $stmt->bind_param('iiiiidsss', $userId, $categoriesReceived, $categoriesAdded, $categoriesExisting, $categoriesFailed, $executionTime, $ipAddress, $status, $message);
-            $stmt->execute();
-            $stmt->close();
         }
     }
 
