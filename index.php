@@ -1622,6 +1622,16 @@ switch ($page) {
                 break;
             case 'currencyDetails':
                 $controller->getCurrencyDetails();
+                break;
+            case 'uploadPdfPreview':
+                $controller->uploadPdfPreview();
+                break;
+            case 'pasteTablePreview':
+                $controller->pasteTablePreview();
+                break;
+            case 'applyBulkRates':
+                $controller->applyBulkRates();
+                break;
             case 'getRateHistory':
                 require_once 'controllers/get_rate_history.php';
                 break;
@@ -1629,6 +1639,7 @@ switch ($page) {
                 $controller->index();
                 break;
         }
+        break;
     case 'category':
         require_once 'controllers/CategoryController.php';
         $controller = new CategoryController();
