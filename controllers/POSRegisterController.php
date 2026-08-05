@@ -1003,6 +1003,7 @@ class POSRegisterController
         if (!empty($_SESSION['pos_customer_id'])) {
             $cid = (int)$_SESSION['pos_customer_id'];
             if ($cid > 0) {
+                $customerModel->ensureCountryOfResidenceForCustomer($cid);
                 $row = $customerModel->getCustomerById($cid);
                 if (!empty($row['id'])) {
                     $nm = (string)($row['name'] ?? '');
@@ -1323,6 +1324,9 @@ class POSRegisterController
         if ($conn instanceof mysqli) {
             $this->ensureHighValueComplianceSchema($conn);
         }
+        if ($customerId > 0) {
+            $customerModel->ensureCountryOfResidenceForCustomer($customerId);
+        }
         $fromVc = $customerId > 0 ? $customerModel->getCustomerBillingShippingForPos($customerId) : ['billing' => [], 'shipping' => []];
         $billingVc = $fromVc['billing'];
         $shippingVc = $fromVc['shipping'];
@@ -1480,6 +1484,7 @@ class POSRegisterController
             $cid = (int)$_SESSION['pos_customer_id'];
             if ($cid > 0) {
                 $customerModel = new Customer($conn);
+                $customerModel->ensureCountryOfResidenceForCustomer($cid);
                 $row = $customerModel->getCustomerById($cid);
                 if (!empty($row['id'])) {
                     $nm = (string)($row['name'] ?? '');
@@ -4366,13 +4371,16 @@ class POSRegisterController
     }
     public function set_customer()
     {
+        $customerId = (int)($_POST['customer_id'] ?? 0);
 
-        // $customerId = $_POST['customer_id'] ?? '';
-        $customerId = $_POST['customer_id'] ?? '';
-
-        if ($customerId) {
+        if ($customerId > 0) {
             $_SESSION['pos_customer_id'] = $customerId;
             unset($_SESSION['pos_customer_form']); // ⭐ VERY IMPORTANT
+
+            global $conn;
+            require_once 'models/customer/Customer.php';
+            $customerModel = new Customer($conn);
+            $customerModel->ensureCountryOfResidenceForCustomer($customerId);
         } else {
             unset($_SESSION['pos_customer_id']);
         }
