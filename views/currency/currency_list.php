@@ -72,17 +72,39 @@ if (isset($_GET['delete']) && !empty($_GET['delete'])) {
                         <th>Code</th>
                         <th>Name</th>
                         <th>Unit</th>
+                        <th>Mapped Countries</th>
                         <th>Import Rate</th>
                         <th>Export Rate</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($currencies as $curr): ?>
+                    <?php foreach ($currencies as $curr): 
+                        $mappedRaw = !empty($curr['mapped_countries']) ? $curr['mapped_countries'] : CurrencyModel::getDefaultMappedCountries($curr['currency_code']);
+                        $mappedList = array_filter(array_map('trim', explode(',', $mappedRaw)));
+                    ?>
                         <tr>
                             <td><strong><?php echo strtoupper($curr['currency_code']); ?></strong></td>
                             <td><?php echo htmlspecialchars($curr['currency_name']); ?></td>
                             <td><?php echo htmlspecialchars($curr['currency_unit']); ?></td>
+                            <td>
+                                <?php if (!empty($mappedList)): ?>
+                                    <div style="display: flex; flex-wrap: wrap; gap: 4px; max-width: 250px;" title="<?php echo htmlspecialchars(implode(', ', $mappedList)); ?>">
+                                        <?php foreach (array_slice($mappedList, 0, 8) as $tag): ?>
+                                            <span style="background: #e2e8f0; color: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; font-family: monospace;">
+                                                <?php echo htmlspecialchars($tag); ?>
+                                            </span>
+                                        <?php endforeach; ?>
+                                        <?php if (count($mappedList) > 8): ?>
+                                            <span style="background: #cbd5e1; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+                                                +<?php echo count($mappedList) - 8; ?> more
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php else: ?>
+                                    <span style="color: #94a3b8; font-size: 12px; font-style: italic;">None mapped</span>
+                                <?php endif; ?>
+                            </td>
                             <td><?php echo number_format($curr['rate_import'], 6); ?></td>
                             <td><?php echo number_format($curr['rate_export'], 6); ?></td>
                             <td>
