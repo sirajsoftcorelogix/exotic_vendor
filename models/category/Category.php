@@ -7,6 +7,35 @@ class Category
     public function __construct(mysqli $conn)
     {
         $this->conn = $conn;
+        $this->ensureSchema();
+    }
+
+    /**
+     * Ensure all required columns exist in the category table.
+     */
+    public function ensureSchema(): void
+    {
+        $existingCols = array_flip($this->getExistingTableColumns('category'));
+
+        $schemaCols = [
+            'seo_title' => 'VARCHAR(255) NULL DEFAULT NULL',
+            'h1_title' => 'VARCHAR(255) NULL DEFAULT NULL',
+            'url' => 'VARCHAR(255) NULL DEFAULT NULL',
+            'unbox_url' => 'VARCHAR(255) NULL DEFAULT NULL',
+            'googlecategory' => 'VARCHAR(500) NULL DEFAULT NULL',
+            'numproducts' => 'INT NOT NULL DEFAULT 0',
+            'nonmenu' => 'TINYINT(1) NOT NULL DEFAULT 0',
+            'iscolor' => 'TINYINT(1) NOT NULL DEFAULT 0',
+            'indiablock' => 'TINYINT(1) NOT NULL DEFAULT 0',
+            'usblock' => 'TINYINT(1) NOT NULL DEFAULT 0',
+            'sizechart_name' => 'VARCHAR(255) NULL DEFAULT NULL',
+        ];
+
+        foreach ($schemaCols as $col => $definition) {
+            if (!isset($existingCols[$col])) {
+                @$this->conn->query("ALTER TABLE `category` ADD COLUMN `{$col}` {$definition}");
+            }
+        }
     }
 
     /**
@@ -61,7 +90,7 @@ class Category
         $totalPages = $limit > 0 ? (int) ceil($totalRecords / $limit) : 1;
 
         // Fetch data query
-        $sql = "SELECT id, parent_id, name, display_name, category, parent, initial, is_active FROM category" . $whereClause . " ORDER BY {$sortByCol} {$sortDirection} LIMIT ? OFFSET ?";
+        $sql = "SELECT * FROM category" . $whereClause . " ORDER BY {$sortByCol} {$sortDirection} LIMIT ? OFFSET ?";
         $fetchStmt = $this->conn->prepare($sql);
 
         if ($whereClause !== '') {
@@ -100,7 +129,7 @@ class Category
         if ($id <= 0) {
             return null;
         }
-        $stmt = $this->conn->prepare("SELECT id, parent_id, name, display_name, category, parent, initial, is_active FROM category WHERE id = ? LIMIT 1");
+        $stmt = $this->conn->prepare("SELECT * FROM category WHERE id = ? LIMIT 1");
         $stmt->bind_param('i', $id);
         $stmt->execute();
         $res = $stmt->get_result();
@@ -152,9 +181,9 @@ class Category
             $displayName = $name;
         }
 
-        $parent = trim((string) ($data['parent'] ?? ''));
+        $parent = mb_substr(trim((string) ($data['parent'] ?? '')), 0, 255);
         $parentId = (int) ($data['parent_id'] ?? 0);
-        $initial = trim((string) ($data['initial'] ?? ''));
+        $initial = mb_substr(trim((string) ($data['initial'] ?? '')), 0, 3);
         $isActive = isset($data['is_active']) ? (int) $data['is_active'] : 1;
         $isActive = in_array($isActive, [0, 1], true) ? $isActive : 1;
 
@@ -382,7 +411,17 @@ class Category
 
         try {
             $checkStmt = $this->conn->prepare("SELECT id FROM category WHERE category = ? LIMIT 1");
-            $insertStmt = $this->conn->prepare("INSERT INTO category (parent_id, name, display_name, category, parent, initial, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $insertStmt = $this->conn->prepare("
+                INSERT INTO category (
+                    parent_id, name, display_name, category, parent, initial, is_active,
+                    seo_title, h1_title, url, unbox_url, googlecategory,
+                    numproducts, nonmenu, iscolor, indiablock, usblock, sizechart_name
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?
+                )
+            ");
 
             foreach ($apiCategories as $item) {
                 if (!is_array($item)) {
@@ -417,22 +456,67 @@ class Category
                     $alreadyExistsCount++;
                 } else {
                     // Step 5: Record does not exist -> Insert new row
-                    $name = isset($item['name']) && trim((string) $item['name']) !== ''
-                        ? trim((string) $item['name'])
-                        : (isset($item['title']) ? trim((string) $item['title']) : '');
-                    $displayName = isset($item['display_name']) && trim((string) $item['display_name']) !== ''
-                        ? trim((string) $item['display_name'])
-                        : $name;
-                    $parent = isset($item['parent']) ? trim((string) $item['parent']) : '';
-                    $parentId = isset($item['parent_id'])
-                        ? (int) $item['parent_id']
-                        : (is_numeric($parent) ? (int) $parent : 0);
-                    $initial = isset($item['initial']) && trim((string) $item['initial']) !== ''
-                        ? trim((string) $item['initial'])
-                        : (isset($item['linktitle']) ? trim((string) $item['linktitle']) : '');
+                    // api.linktitle = category.name
+                    $rawName = isset($item['linktitle']) && trim((string) $item['linktitle']) !== ''
+                        ? trim((string) $item['linktitle'])
+                        : (isset($item['name']) ? trim((string) $item['name']) : (isset($item['title']) ? trim((string) $item['title']) : ''));
+                    $name = mb_substr($rawName, 0, 100);
+
+                    // api.title = category.display_name
+                    $rawDisplayName = isset($item['title']) && trim((string) $item['title']) !== ''
+                        ? trim((string) $item['title'])
+                        : (isset($item['display_name']) ? trim((string) $item['display_name']) : $rawName);
+                    $displayName = mb_substr($rawDisplayName, 0, 100);
+
+                    // api.parent = category.parent
+                    $parentStr = isset($item['parent']) ? trim((string) $item['parent']) : '';
+                    $parent = mb_substr($parentStr, 0, 255);
+
+                    // parent_id will be resolved dynamically post-sync based on parent -> category mapping
+                    $parentId = 0;
+
+                    // category.initial = leave blank if no value found during API pull
+                    $rawInitial = isset($item['initial']) ? trim((string) $item['initial']) : '';
+                    $initial = mb_substr($rawInitial, 0, 3);
+
+                    // category.is_active = 1 (default)
                     $isActive = isset($item['is_active']) ? (int) $item['is_active'] : 1;
 
-                    $insertStmt->bind_param('ississi', $parentId, $name, $displayName, $apiCatId, $parent, $initial, $isActive);
+                    // Extended Readonly API Metadata Fields
+                    $seoTitle = mb_substr(trim((string) ($item['google_title'] ?? '')), 0, 255);
+                    $h1Title = mb_substr(trim((string) ($item['h1title'] ?? '')), 0, 255);
+                    $url = mb_substr(trim((string) ($item['url'] ?? '')), 0, 255);
+                    $unboxUrl = mb_substr(trim((string) ($item['unbxd_url'] ?? '')), 0, 255);
+                    $googleCategory = mb_substr(trim((string) ($item['googlecategory'] ?? '')), 0, 500);
+                    $numProducts = (int) ($item['numproducts'] ?? 0);
+                    $nonMenu = (int) ($item['nonmenu'] ?? 0);
+                    $isColor = (int) ($item['iscolor'] ?? 0);
+                    $indiaBlock = (int) ($item['indiablock'] ?? 0);
+                    $usBlock = (int) ($item['usblock'] ?? 0);
+                    $sizechartName = mb_substr(trim((string) ($item['sizechart_name'] ?? '')), 0, 255);
+
+                    $insertStmt->bind_param(
+                        'issississsssiiiiis',
+                        $parentId,
+                        $name,
+                        $displayName,
+                        $apiCatId,
+                        $parent,
+                        $initial,
+                        $isActive,
+                        $seoTitle,
+                        $h1Title,
+                        $url,
+                        $unboxUrl,
+                        $googleCategory,
+                        $numProducts,
+                        $nonMenu,
+                        $isColor,
+                        $indiaBlock,
+                        $usBlock,
+                        $sizechartName
+                    );
+
                     if ($insertStmt->execute()) {
                         $newAddedCount++;
                     } else {
@@ -443,6 +527,20 @@ class Category
 
             $checkStmt->close();
             $insertStmt->close();
+
+            // Based on category.parent update category.parent_id = parent category.id
+            $this->conn->query("
+                UPDATE category c
+                INNER JOIN category p ON c.parent = p.category
+                SET c.parent_id = p.id
+                WHERE c.parent IS NOT NULL AND c.parent != '' AND c.parent != '0'
+            ");
+
+            $this->conn->query("
+                UPDATE category
+                SET parent_id = 0
+                WHERE parent IS NULL OR parent = '' OR parent = '0'
+            ");
 
             $this->conn->commit();
 

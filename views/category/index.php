@@ -405,8 +405,8 @@ if ($end_page - $start_page < $slot_size - 1) {
                         class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-gray-700 mb-1">Initial</label>
-                    <input type="text" name="initial" id="edit_initial" maxlength="5"
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">Initial (Max 3 chars)</label>
+                    <input type="text" name="initial" id="edit_initial" maxlength="3"
                         class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition">
                 </div>
             </div>
@@ -418,6 +418,47 @@ if ($end_page - $start_page < $slot_size - 1) {
                     <option value="1">Active (Yes)</option>
                     <option value="0">Inactive (No)</option>
                 </select>
+            </div>
+
+            <!-- Readonly API Metadata -->
+            <div class="pt-4 border-t border-gray-200">
+                <h4 class="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">API Metadata (Readonly)</h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                        <label class="block font-medium text-gray-500 mb-1">SEO Title (google_title)</label>
+                        <input type="text" id="edit_seo_title" readonly class="w-full px-2.5 py-1.5 bg-gray-100 border border-gray-300 rounded text-gray-600 cursor-not-allowed">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-gray-500 mb-1">H1 Title (h1title)</label>
+                        <input type="text" id="edit_h1_title" readonly class="w-full px-2.5 py-1.5 bg-gray-100 border border-gray-300 rounded text-gray-600 cursor-not-allowed">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-gray-500 mb-1">URL (url)</label>
+                        <input type="text" id="edit_url" readonly class="w-full px-2.5 py-1.5 bg-gray-100 border border-gray-300 rounded text-gray-600 cursor-not-allowed">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-gray-500 mb-1">Unbox URL (unbxd_url)</label>
+                        <input type="text" id="edit_unbox_url" readonly class="w-full px-2.5 py-1.5 bg-gray-100 border border-gray-300 rounded text-gray-600 cursor-not-allowed">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block font-medium text-gray-500 mb-1">Google Category (googlecategory)</label>
+                        <input type="text" id="edit_googlecategory" readonly class="w-full px-2.5 py-1.5 bg-gray-100 border border-gray-300 rounded text-gray-600 cursor-not-allowed">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-gray-500 mb-1">Num Products</label>
+                        <input type="text" id="edit_numproducts" readonly class="w-full px-2.5 py-1.5 bg-gray-100 border border-gray-300 rounded text-gray-600 cursor-not-allowed">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-gray-500 mb-1">Size Chart Name</label>
+                        <input type="text" id="edit_sizechart_name" readonly class="w-full px-2.5 py-1.5 bg-gray-100 border border-gray-300 rounded text-gray-600 cursor-not-allowed">
+                    </div>
+                    <div class="sm:col-span-2 flex flex-wrap gap-4 pt-1 text-gray-600">
+                        <span><strong class="text-gray-700">Non-Menu:</strong> <span id="edit_nonmenu" class="font-mono">No</span></span>
+                        <span><strong class="text-gray-700">Is Color:</strong> <span id="edit_iscolor" class="font-mono">No</span></span>
+                        <span><strong class="text-gray-700">India Block:</strong> <span id="edit_indiablock" class="font-mono">No</span></span>
+                        <span><strong class="text-gray-700">US Block:</strong> <span id="edit_usblock" class="font-mono">No</span></span>
+                    </div>
+                </div>
             </div>
 
             <div class="pt-4 border-t border-gray-200 flex justify-end gap-3">
@@ -567,6 +608,18 @@ function openEditModal(id) {
             document.getElementById('edit_parent').value = cat.parent || '';
             document.getElementById('edit_initial').value = cat.initial || '';
             document.getElementById('edit_is_active').value = (cat.is_active !== undefined) ? cat.is_active : 1;
+
+            document.getElementById('edit_seo_title').value = cat.seo_title || '';
+            document.getElementById('edit_h1_title').value = cat.h1_title || '';
+            document.getElementById('edit_url').value = cat.url || '';
+            document.getElementById('edit_unbox_url').value = cat.unbox_url || '';
+            document.getElementById('edit_googlecategory').value = cat.googlecategory || '';
+            document.getElementById('edit_numproducts').value = cat.numproducts || 0;
+            document.getElementById('edit_sizechart_name').value = cat.sizechart_name || '';
+            document.getElementById('edit_nonmenu').innerText = (cat.nonmenu == 1) ? 'Yes' : 'No';
+            document.getElementById('edit_iscolor').innerText = (cat.iscolor == 1) ? 'Yes' : 'No';
+            document.getElementById('edit_indiablock').innerText = (cat.indiablock == 1) ? 'Yes' : 'No';
+            document.getElementById('edit_usblock').innerText = (cat.usblock == 1) ? 'Yes' : 'No';
 
             document.getElementById('editCategoryModal').classList.remove('hidden');
         } else {
