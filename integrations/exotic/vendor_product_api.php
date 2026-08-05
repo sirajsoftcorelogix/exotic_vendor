@@ -178,6 +178,13 @@ function vendor_external_api_allows_local_save(array $api): bool
     if (!empty($api['success'])) {
         return true;
     }
+    if (!empty($api['vendor_id']) && (int) $api['vendor_id'] > 0) {
+        return true;
+    }
+    $data = is_array($api['data'] ?? null) ? $api['data'] : (is_array($api['response'] ?? null) ? $api['response'] : []);
+    if ($data !== [] && vendor_external_api_extract_vendor_id($data) > 0) {
+        return true;
+    }
     if (vendor_external_api_is_no_changes_response($api)) {
         return true;
     }
@@ -201,6 +208,14 @@ function vendor_external_api_normalize_for_local_save(array $api): array
     }
 
     $api['success'] = true;
+    if (empty($api['vendor_id'])) {
+        $data = is_array($api['data'] ?? null) ? $api['data'] : (is_array($api['response'] ?? null) ? $api['response'] : []);
+        $vId = vendor_external_api_extract_vendor_id($data);
+        if ($vId > 0) {
+            $api['vendor_id'] = $vId;
+        }
+    }
+
     $message = (string) ($api['message'] ?? '');
     if ($message === '' || vendor_external_api_message_indicates_no_changes($message)) {
         $api['message'] = 'Remote vendor already up to date.';
@@ -280,6 +295,25 @@ function vendor_external_api_post(string $action, array $postData): array
 
     $vendorId = vendor_external_api_extract_vendor_id($data);
 
+    // Per API spec: vendorcreate with vendor_id means created or linked to existing vendor.
+    // Even if remote API returns success=false (e.g. "Vendor with this name already exists"),
+    // if a valid vendor_id > 0 is returned, treat it as success and use that vendor_id.
+    if ($action === 'vendorcreate' && $vendorId > 0 && $httpCode < 400) {
+        $msg = trim((string) ($data['reason'] ?? $data['message'] ?? ''));
+        if ($msg === '') {
+            $msg = 'Vendor synced to Exotic India.';
+        }
+
+        return vendor_external_api_attach_debug($action, $postData, [
+            'success' => true,
+            'message' => $msg,
+            'http_code' => $httpCode,
+            'vendor_id' => $vendorId,
+            'data' => $data,
+            'raw' => $raw,
+        ]);
+    }
+
     if ($httpCode >= 400 || empty($transport['success'])) {
         $msg = trim((string) ($transport['message'] ?? ''));
         if ($msg === '') {
@@ -293,23 +327,6 @@ function vendor_external_api_post(string $action, array $postData): array
             'success' => false,
             'message' => $msg,
             'http_code' => $httpCode,
-            'data' => $data,
-            'raw' => $raw,
-        ]);
-    }
-
-    // Per API spec: vendorcreate with vendor_id means created or linked to existing vendor.
-    if ($action === 'vendorcreate' && $vendorId > 0) {
-        $msg = trim((string) ($data['reason'] ?? $data['message'] ?? ''));
-        if ($msg === '') {
-            $msg = 'Vendor synced to Exotic India.';
-        }
-
-        return vendor_external_api_attach_debug($action, $postData, [
-            'success' => true,
-            'message' => $msg,
-            'http_code' => $httpCode,
-            'vendor_id' => $vendorId,
             'data' => $data,
             'raw' => $raw,
         ]);
@@ -535,4 +552,42 @@ function vendor_external_api_sync_creator(string $vendorType, string $name, stri
     }
 
     return vendor_external_api_normalize_for_local_save(vendor_external_api_create($payload));
+}
+
+/**
+ * Fetch creator list (author, publishers, etc.) from Exotic India vendor-api.
+ *
+ * @return array{success:bool,message:string,creators?:array<int|string,string>,http_code:int}
+ */
+function vendor_external_api_fetch_creator_list(string $type = 'author'): array
+{
+    $type = trim($type);
+    if ($type === '') {
+        $type = 'author';
+    }
+
+    $res = exotic_india_api_get('/product/creatorlist?type=' . urlencode($type), ['Accept: application/json']);
+    if (!$res['success']) {
+        return [
+            'success' => false,
+            'message' => ucfirst($type) . ' API error: ' . $res['message'],
+            'http_code' => $res['http_code'],
+        ];
+    }
+
+    $data = $res['data'];
+    if (!is_array($data) || !is_array($data['creators'] ?? null)) {
+        return [
+            'success' => false,
+            'message' => ucfirst($type) . ' API returned invalid JSON.',
+            'http_code' => $res['http_code'],
+        ];
+    }
+
+    return [
+        'success' => true,
+        'message' => ucfirst($type) . ' API fetched successfully.',
+        'http_code' => $res['http_code'],
+        'creators' => $data['creators'],
+    ];
 }
