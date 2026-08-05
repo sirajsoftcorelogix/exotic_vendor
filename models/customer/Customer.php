@@ -870,6 +870,101 @@ class Customer
     }
 
     /**
+     * Update vp_customers.country_of_residence from vp_order_info.country for a given customer.
+     * If vp_order_info has a country record, use it. Otherwise fallback to $fallbackCountry.
+     */
+    public function updateCustomerCountryOfResidenceFromOrderInfo(int $customerId, string $fallbackCountry = ''): void
+    {
+        if ($customerId <= 0) {
+            return;
+        }
+
+        $country = '';
+        $stmt = $this->conn->prepare('SELECT country FROM vp_order_info WHERE customer_id = ? AND country IS NOT NULL AND TRIM(country) <> \'\' ORDER BY id DESC LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('i', $customerId);
+            $stmt->execute();
+            $res = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if ($res && !empty($res['country'])) {
+                $country = trim((string)$res['country']);
+            }
+        }
+
+        if ($country === '' && trim($fallbackCountry) !== '') {
+            $country = trim($fallbackCountry);
+        }
+
+        if ($country !== '') {
+            $upStmt = $this->conn->prepare('UPDATE vp_customers SET country_of_residence = ? WHERE id = ?');
+            if ($upStmt) {
+                $upStmt->bind_param('si', $country, $customerId);
+                $upStmt->execute();
+                $upStmt->close();
+            }
+        }
+    }
+
+    /**
+     * Ensure vp_customers.country_of_residence is set when selecting a customer.
+     * If country_of_residence is not available (empty/null), update it from vp_order_info.country or pos_customer_details.
+     */
+    public function ensureCountryOfResidenceForCustomer(int $customerId): void
+    {
+        if ($customerId <= 0) {
+            return;
+        }
+
+        $row = $this->getCustomerById($customerId);
+        if (!$row) {
+            return;
+        }
+
+        $existing = trim((string)($row['country_of_residence'] ?? ''));
+        if ($existing !== '') {
+            return;
+        }
+
+        $country = '';
+        $stmt = $this->conn->prepare('SELECT country FROM vp_order_info WHERE customer_id = ? AND country IS NOT NULL AND TRIM(country) <> \'\' ORDER BY id DESC LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('i', $customerId);
+            $stmt->execute();
+            $res = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if ($res && !empty($res['country'])) {
+                $country = trim((string)$res['country']);
+            }
+        }
+
+        if ($country === '') {
+            $this->ensurePosCustomerDetailsTable();
+            $detStmt = $this->conn->prepare('SELECT bill_country, ship_country FROM pos_customer_details WHERE customer_id = ? LIMIT 1');
+            if ($detStmt) {
+                $detStmt->bind_param('i', $customerId);
+                $detStmt->execute();
+                $det = $detStmt->get_result()->fetch_assoc();
+                $detStmt->close();
+                if ($det) {
+                    $country = trim((string)($det['bill_country'] ?? ''));
+                    if ($country === '') {
+                        $country = trim((string)($det['ship_country'] ?? ''));
+                    }
+                }
+            }
+        }
+
+        if ($country !== '') {
+            $upStmt = $this->conn->prepare('UPDATE vp_customers SET country_of_residence = ? WHERE id = ?');
+            if ($upStmt) {
+                $upStmt->bind_param('si', $country, $customerId);
+                $upStmt->execute();
+                $upStmt->close();
+            }
+        }
+    }
+
+    /**
      * Create or update POS customer from modal POST data.
      *
      * @param array<string, mixed> $post
@@ -926,6 +1021,7 @@ class Customer
             }
 
             $this->upsertPosCustomerDetailsFromPost($customerId, $post);
+            $this->updateCustomerCountryOfResidenceFromOrderInfo($customerId, (string)($post['country'] ?? $post['country_of_residence'] ?? ''));
 
             return [
                 'success' => true,
@@ -967,6 +1063,7 @@ class Customer
                     if (!empty($existing['id'])) {
                         $exId = (int)$existing['id'];
                         $this->upsertPosCustomerDetailsFromPost($exId, $post);
+                        $this->updateCustomerCountryOfResidenceFromOrderInfo($exId, (string)($post['country'] ?? $post['country_of_residence'] ?? ''));
                         return [
                             'success' => true,
                             'is_update' => false,
@@ -999,6 +1096,7 @@ class Customer
         }
 
         $this->upsertPosCustomerDetailsFromPost($newId, $post);
+        $this->updateCustomerCountryOfResidenceFromOrderInfo($newId, (string)($post['country'] ?? $post['country_of_residence'] ?? ''));
 
         return [
             'success' => true,

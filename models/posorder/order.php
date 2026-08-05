@@ -2086,7 +2086,11 @@ class POSOrder
         $result = $stmt->get_result();
         if ($result && $result->num_rows > 0) {
             $row = $result->fetch_assoc();
-            return ['success' => true, 'customer_id' => $row['id'], 'message' => 'Customer already exists.'];
+            $cid = (int)$row['id'];
+            require_once __DIR__ . '/../customer/Customer.php';
+            $customerModel = new Customer($this->db);
+            $customerModel->updateCustomerCountryOfResidenceFromOrderInfo($cid, (string)($data['address_info']['country'] ?? ''));
+            return ['success' => true, 'customer_id' => $cid, 'message' => 'Customer already exists.'];
         }
 
         // Insert new customer
@@ -2094,7 +2098,11 @@ class POSOrder
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('sss', $customer_name, $customer_email, $customer_phone);
         if ($stmt->execute()) {
-            return ['success' => true, 'customer_id' => $stmt->insert_id, 'message' => 'Customer added successfully.'];
+            $cid = (int)$stmt->insert_id;
+            require_once __DIR__ . '/../customer/Customer.php';
+            $customerModel = new Customer($this->db);
+            $customerModel->updateCustomerCountryOfResidenceFromOrderInfo($cid, (string)($data['address_info']['country'] ?? ''));
+            return ['success' => true, 'customer_id' => $cid, 'message' => 'Customer added successfully.'];
         } else {
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }
