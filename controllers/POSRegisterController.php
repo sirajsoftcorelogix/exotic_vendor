@@ -4764,6 +4764,11 @@ class POSRegisterController
             $this->clearPosExoticCartCustomDiscount();
         }
 
+        $checkoutCountry = trim((string)($payload['country_of_residence'] ?? $payload['confirm_country'] ?? $payload['confirm_scountry'] ?? ''));
+        if ($checkoutCountry !== '') {
+            $this->retailApiClient->setCustomerCountryCode($checkoutCountry);
+        }
+
         $ctx = $this->exoticCartDiscountContext();
         $retrieve = $this->retailApiClient->call(
             '/cart/retrieve',
