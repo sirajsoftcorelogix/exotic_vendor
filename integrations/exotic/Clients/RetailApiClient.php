@@ -170,7 +170,7 @@ class RetailApiClient
         $conn = $this->conn ?: ($GLOBALS['conn'] instanceof mysqli ? $GLOBALS['conn'] : null);
 
         if (!empty($this->customCountryCode)) {
-            require_once dirname(__DIR__, 2) . '/helpers/courier/country_codes.php';
+            require_once dirname(__DIR__, 3) . '/helpers/courier/country_codes.php';
             $iso2 = normalizeCountryIso2($this->customCountryCode, $conn);
             if (!empty($iso2) && strlen($iso2) === 2 && ctype_alpha($iso2)) {
                 return strtoupper($iso2);
@@ -220,7 +220,7 @@ class RetailApiClient
         }
 
         if ($countryStr !== '') {
-            require_once dirname(__DIR__, 2) . '/helpers/courier/country_codes.php';
+            require_once dirname(__DIR__, 3) . '/helpers/courier/country_codes.php';
             $iso2 = normalizeCountryIso2($countryStr, $conn);
             if (!empty($iso2) && strlen($iso2) === 2 && ctype_alpha($iso2)) {
                 return strtoupper($iso2);
