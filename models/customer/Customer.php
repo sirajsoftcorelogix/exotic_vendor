@@ -883,20 +883,36 @@ class Customer
             return;
         }
 
-        $country = '';
-        $stmt = $this->conn->prepare('SELECT country FROM vp_order_info WHERE customer_id = ? AND country IS NOT NULL AND TRIM(country) <> \'\' ORDER BY id DESC LIMIT 1');
-        if ($stmt) {
-            $stmt->bind_param('i', $customerId);
-            $stmt->execute();
-            $res = $stmt->get_result()->fetch_assoc();
-            $stmt->close();
-            if ($res && !empty($res['country'])) {
-                $country = trim((string)$res['country']);
+        $country = trim($fallbackCountry);
+
+        if ($country === '') {
+            $stmt = $this->conn->prepare('SELECT country FROM vp_order_info WHERE customer_id = ? AND country IS NOT NULL AND TRIM(country) <> \'\' ORDER BY id DESC LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('i', $customerId);
+                $stmt->execute();
+                $res = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if ($res && !empty($res['country'])) {
+                    $country = trim((string)$res['country']);
+                }
             }
         }
 
-        if ($country === '' && trim($fallbackCountry) !== '') {
-            $country = trim($fallbackCountry);
+        if ($country === '') {
+            $this->ensurePosCustomerDetailsTable();
+            $detStmt = $this->conn->prepare('SELECT bill_country, ship_country FROM pos_customer_details WHERE customer_id = ? LIMIT 1');
+            if ($detStmt) {
+                $detStmt->bind_param('i', $customerId);
+                $detStmt->execute();
+                $det = $detStmt->get_result()->fetch_assoc();
+                $detStmt->close();
+                if ($det) {
+                    $country = trim((string)($det['bill_country'] ?? ''));
+                    if ($country === '') {
+                        $country = trim((string)($det['ship_country'] ?? ''));
+                    }
+                }
+            }
         }
 
         if ($country !== '') {
@@ -929,43 +945,7 @@ class Customer
             return;
         }
 
-        $country = '';
-        $stmt = $this->conn->prepare('SELECT country FROM vp_order_info WHERE customer_id = ? AND country IS NOT NULL AND TRIM(country) <> \'\' ORDER BY id DESC LIMIT 1');
-        if ($stmt) {
-            $stmt->bind_param('i', $customerId);
-            $stmt->execute();
-            $res = $stmt->get_result()->fetch_assoc();
-            $stmt->close();
-            if ($res && !empty($res['country'])) {
-                $country = trim((string)$res['country']);
-            }
-        }
-
-        if ($country === '') {
-            $this->ensurePosCustomerDetailsTable();
-            $detStmt = $this->conn->prepare('SELECT bill_country, ship_country FROM pos_customer_details WHERE customer_id = ? LIMIT 1');
-            if ($detStmt) {
-                $detStmt->bind_param('i', $customerId);
-                $detStmt->execute();
-                $det = $detStmt->get_result()->fetch_assoc();
-                $detStmt->close();
-                if ($det) {
-                    $country = trim((string)($det['bill_country'] ?? ''));
-                    if ($country === '') {
-                        $country = trim((string)($det['ship_country'] ?? ''));
-                    }
-                }
-            }
-        }
-
-        if ($country !== '') {
-            $upStmt = $this->conn->prepare('UPDATE vp_customers SET country_of_residence = ? WHERE id = ?');
-            if ($upStmt) {
-                $upStmt->bind_param('si', $country, $customerId);
-                $upStmt->execute();
-                $upStmt->close();
-            }
-        }
+        $this->updateCustomerCountryOfResidenceFromOrderInfo($customerId);
     }
 
     /**
@@ -1307,6 +1287,11 @@ class Customer
             'shipping_zipcode' => $p['confirm_szip'] ?? '',
             'shipping_country' => $p['confirm_scountry'] ?? 'IN',
         ];
+
+        $residenceCountry = trim((string)($p['country_of_residence'] ?? $p['confirm_country'] ?? ''));
+        if ($residenceCountry !== '') {
+            $this->updateCustomerCountryOfResidenceFromOrderInfo($customerId, $residenceCountry);
+        }
 
         return $this->upsertPosCustomerDetailsFromPost($customerId, $post);
     }
