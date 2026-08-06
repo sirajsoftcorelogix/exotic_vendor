@@ -2893,55 +2893,89 @@
     return String(val);
   }
 
-  function getCartCurrencyCode(cartData) {
+  function getCartCurrencyInfo(cartData) {
+    var code = 'INR';
+    var symbol = '\u20b9';
+    var unit = '1 INR';
+    var unitValue = 1.0;
+    var rateExport = 1.0;
+
     if (cartData && typeof cartData === 'object') {
-      var c = cartData.currency_code || cartData.currencycode || cartData.currency || cartData.Currency;
-      if (c && typeof c === 'string' && c.trim() !== '') return c.trim().toUpperCase();
+      if (cartData.currency_code) code = String(cartData.currency_code).trim().toUpperCase();
+      if (cartData.currency_symbol) symbol = String(cartData.currency_symbol).trim();
+      if (cartData.currency_unit) unit = String(cartData.currency_unit).trim();
+      if (cartData.currency_unit_value != null) unitValue = parseFloat(cartData.currency_unit_value) || 1.0;
+      if (cartData.rate_export != null) rateExport = parseFloat(cartData.rate_export) || 1.0;
     }
-    if (window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
-      return String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
+
+    if (code === 'INR' && window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
+      code = String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
+      if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) symbol = String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
+      if (window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT) unit = String(window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT).trim();
+      if (window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT_VALUE != null) unitValue = parseFloat(window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT_VALUE) || 1.0;
+      if (window.POS_CURRENT_CUSTOMER_RATE_EXPORT != null) rateExport = parseFloat(window.POS_CURRENT_CUSTOMER_RATE_EXPORT) || 1.0;
+    } else if (code === 'INR' && window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
+      var ic = window.POS_INITIAL_CUSTOMER;
+      if (ic.currency_code) code = String(ic.currency_code).trim().toUpperCase();
+      if (ic.currency_symbol) symbol = String(ic.currency_symbol).trim();
+      if (ic.currency_unit) unit = String(ic.currency_unit).trim();
+      if (ic.currency_unit_value != null) unitValue = parseFloat(ic.currency_unit_value) || 1.0;
+      if (ic.rate_export != null) rateExport = parseFloat(ic.rate_export) || 1.0;
     }
-    if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
-      return String(window.POS_INITIAL_CUSTOMER.currency_code).trim().toUpperCase();
+
+    if (!symbol) {
+      if (code === 'INR') symbol = '\u20b9';
+      else if (code === 'USD') symbol = '$';
+      else if (code === 'EUR') symbol = '\u20ac';
+      else if (code === 'GBP') symbol = '\u00a3';
+      else symbol = code;
     }
-    return 'INR';
+
+    return {
+      code: code,
+      symbol: symbol,
+      unit: unit,
+      unitValue: unitValue > 0 ? unitValue : 1.0,
+      rateExport: rateExport > 0 ? rateExport : 1.0
+    };
+  }
+
+  function getCartCurrencyCode(cartData) {
+    return getCartCurrencyInfo(cartData).code;
   }
 
   function getCartCurrencySymbol(cartData) {
-    if (cartData && typeof cartData === 'object') {
-      var s = cartData.currency_symbol || cartData.currencysymbol || cartData.symbol;
-      if (s && typeof s === 'string' && s.trim() !== '') return s.trim();
-    }
-    if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) {
-      return String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
-    }
-    if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_symbol) {
-      return String(window.POS_INITIAL_CUSTOMER.currency_symbol).trim();
-    }
-    var code = getCartCurrencyCode(cartData);
-    if (code === 'INR') return '\u20b9';
-    if (code === 'USD') return '$';
-    if (code === 'EUR') return '\u20ac';
-    if (code === 'GBP') return '\u00a3';
-    return code;
+    return getCartCurrencyInfo(cartData).symbol;
   }
 
-  /** Display formatted amount with currency symbol. */
+  function convertInrToCustomerCurrency(val, cartData) {
+    if (val == null || (typeof val === 'number' && isNaN(val))) {
+      return null;
+    }
+    var n = typeof val === 'number' ? val : parseFloat(String(val).replace(/,/g, ''));
+    if (isNaN(n)) {
+      return null;
+    }
+    var cData = cartData || window.__posCartLastRetrieveData;
+    var info = getCartCurrencyInfo(cData);
+    return (n / info.rateExport) * info.unitValue;
+  }
+
+  /** Display formatted amount with currency symbol in customer currency. */
   function formatRupeeInrDisplay(val, cartData) {
     if (val == null || (typeof val === 'number' && isNaN(val))) {
       return '\u2014';
     }
-    var n = typeof val === 'number' ? val : parseFloat(String(val).replace(/,/g, ''));
-    if (isNaN(n)) {
+    var cData = cartData || window.__posCartLastRetrieveData;
+    var converted = convertInrToCustomerCurrency(val, cData);
+    if (converted == null) {
       return String(val);
     }
-    var cData = cartData || window.__posCartLastRetrieveData;
-    var symbol = getCartCurrencySymbol(cData);
-    var code = getCartCurrencyCode(cData);
-    var locale = code === 'INR' ? 'en-IN' : 'en-US';
+    var info = getCartCurrencyInfo(cData);
+    var locale = info.code === 'INR' ? 'en-IN' : 'en-US';
     return (
-      symbol + ' ' +
-      n.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      info.symbol + ' ' +
+      converted.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     );
   }
 
@@ -2950,17 +2984,16 @@
     if (disp == null) {
       return '\u2014';
     }
-    var n = parseFloat(String(disp).replace(/,/g, ''));
-    if (isNaN(n)) {
+    var cData = cartData || window.__posCartLastRetrieveData;
+    var converted = convertInrToCustomerCurrency(val, cData);
+    if (converted == null) {
       return escapeHtml(disp);
     }
-    var cData = cartData || window.__posCartLastRetrieveData;
-    var symbol = getCartCurrencySymbol(cData);
-    var code = getCartCurrencyCode(cData);
-    var locale = code === 'INR' ? 'en-IN' : 'en-US';
+    var info = getCartCurrencyInfo(cData);
+    var locale = info.code === 'INR' ? 'en-IN' : 'en-US';
     return (
-      symbol + ' ' +
-      n.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      info.symbol + ' ' +
+      converted.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     );
   }
 

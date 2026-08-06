@@ -566,6 +566,9 @@ class Customer
                 'country_name' => $resInfo['country_name'] ?? '',
                 'currency_code' => $resInfo['currency_code'] ?? '',
                 'currency_symbol' => $resInfo['currency_symbol'] ?? '₹',
+                'currency_unit' => $resInfo['currency_unit'] ?? '1 INR',
+                'currency_unit_value' => $resInfo['currency_unit_value'] ?? 1.0,
+                'rate_export' => $resInfo['rate_export'] ?? 1.0,
                 'currency_name' => $resInfo['currency_name'] ?? '',
                 'currency_display' => $resInfo['currency_display'] ?? '',
                 'residence_text' => $resInfo['display_text'],
@@ -957,7 +960,7 @@ class Customer
     /**
      * Resolve country of residence and applicable currency details for customer cart display.
      *
-     * @return array{country_code:string, country_name:string, currency_code:string, currency_symbol:string, currency_name:string, currency_display:string, display_text:string}
+     * @return array{country_code:string, country_name:string, currency_code:string, currency_symbol:string, currency_name:string, currency_unit:string, currency_unit_value:float, rate_export:float, currency_display:string, display_text:string}
      */
     public function resolveCustomerResidenceAndCurrency(?string $countryInput): array
     {
@@ -969,6 +972,9 @@ class Customer
                 'currency_code' => '',
                 'currency_symbol' => '',
                 'currency_name' => '',
+                'currency_unit' => '',
+                'currency_unit_value' => 1.0,
+                'rate_export' => 1.0,
                 'currency_display' => '',
                 'display_text' => '-',
             ];
@@ -988,13 +994,27 @@ class Customer
 
         if ($currencyCode === '') {
             if ($iso2 === 'IN' || strcasecmp($countryName, 'India') === 0) {
-                $inrCurr = $currencyModel->getCurrencyByCode('INR');
+                $curr = $currencyModel->getCurrencyByCode('INR');
                 $currencyCode = 'INR';
-                $currencyName = !empty($inrCurr['currency_name']) ? trim((string)$inrCurr['currency_name']) : 'Indian Rupee';
+                $currencyName = !empty($curr['currency_name']) ? trim((string)$curr['currency_name']) : 'Indian Rupee';
             } else {
-                $usdCurr = $currencyModel->getCurrencyByCode('USD');
+                $curr = $currencyModel->getCurrencyByCode('USD');
                 $currencyCode = 'USD';
-                $currencyName = !empty($usdCurr['currency_name']) ? trim((string)$usdCurr['currency_name']) : 'US Dollar';
+                $currencyName = !empty($curr['currency_name']) ? trim((string)$curr['currency_name']) : 'US Dollar';
+            }
+        }
+
+        $currencyUnit = !empty($curr['currency_unit']) ? trim((string)$curr['currency_unit']) : '1 ' . $currencyCode;
+        $rateExport = !empty($curr['rate_export']) ? (float)$curr['rate_export'] : 1.0;
+        if ($rateExport <= 0) {
+            $rateExport = 1.0;
+        }
+
+        $unitValue = 1.0;
+        if (preg_match('/^([0-9]+(?:\.[0-9]+)?)/', $currencyUnit, $m)) {
+            $v = (float)$m[1];
+            if ($v > 0) {
+                $unitValue = $v;
             }
         }
 
@@ -1021,6 +1041,9 @@ class Customer
             'currency_code' => $currencyCode,
             'currency_symbol' => $currencySymbol,
             'currency_name' => $currencyName,
+            'currency_unit' => $currencyUnit,
+            'currency_unit_value' => $unitValue,
+            'rate_export' => $rateExport,
             'currency_display' => $currencyDisplay,
             'display_text' => $displayText,
         ];
