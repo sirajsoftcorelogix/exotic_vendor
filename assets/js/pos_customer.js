@@ -451,6 +451,23 @@
     return name || data.text;
   }
 
+  function setPosCustomerCurrencyGlobals(c) {
+    if (!c || typeof c !== 'object') return;
+    if (c.currency_code) window.POS_CURRENT_CUSTOMER_CURRENCY_CODE = c.currency_code;
+    if (c.currency_symbol) window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL = c.currency_symbol;
+    if (c.currency_unit) window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT = c.currency_unit;
+    if (c.currency_unit_value != null) window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT_VALUE = parseFloat(c.currency_unit_value) || 1.0;
+    if (c.rate_export != null) window.POS_CURRENT_CUSTOMER_RATE_EXPORT = parseFloat(c.rate_export) || 1.0;
+  }
+
+  function clearPosCustomerCurrencyGlobals() {
+    window.POS_CURRENT_CUSTOMER_CURRENCY_CODE = 'INR';
+    window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL = '₹';
+    window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT = '1 INR';
+    window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT_VALUE = 1.0;
+    window.POS_CURRENT_CUSTOMER_RATE_EXPORT = 1.0;
+  }
+
   function postSetCustomer(customerId) {
     return fetch('index.php?page=pos_register&action=set-customer', {
       method: 'POST',
@@ -500,6 +517,14 @@
                 name: c.name || '',
                 phone: c.phone || '',
                 email: c.email || '',
+                country_of_residence: c.country_of_residence || '',
+                country_code: c.country_code || '',
+                country_name: c.country_name || '',
+                currency_code: c.currency_code || '',
+                currency_symbol: c.currency_symbol || '',
+                currency_unit: c.currency_unit || '',
+                currency_unit_value: c.currency_unit_value != null ? c.currency_unit_value : 1.0,
+                rate_export: c.rate_export != null ? c.rate_export : 1.0,
                 residence_text: c.residence_text || '-'
               };
             })
@@ -514,12 +539,7 @@
     $cust.on('select2:select', function (e) {
       var d = e.params.data;
       window.POS_SESSION_CUSTOMER_ID = d.id ? String(d.id) : '';
-      if (d.currency_code) {
-        window.POS_CURRENT_CUSTOMER_CURRENCY_CODE = d.currency_code;
-      }
-      if (d.currency_symbol) {
-        window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL = d.currency_symbol;
-      }
+      setPosCustomerCurrencyGlobals(d);
       window.updatePosCustomerLabels(d.name, d.phone, d.email, d.residence_text || '-');
       postSetCustomer(d.id || '').then(function (res) {
         return res.json();
@@ -533,12 +553,7 @@
               data.customer.residence_text
             );
           }
-          if (data.customer.currency_code) {
-            window.POS_CURRENT_CUSTOMER_CURRENCY_CODE = data.customer.currency_code;
-          }
-          if (data.customer.currency_symbol) {
-            window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL = data.customer.currency_symbol;
-          }
+          setPosCustomerCurrencyGlobals(data.customer);
         }
         if (typeof window.refreshCart === 'function') {
           window.refreshCart();
@@ -548,8 +563,7 @@
 
     $cust.on('select2:clear', function () {
       window.POS_SESSION_CUSTOMER_ID = '';
-      window.POS_CURRENT_CUSTOMER_CURRENCY_CODE = 'INR';
-      window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL = '₹';
+      clearPosCustomerCurrencyGlobals();
       postSetCustomer('').then(function () {
         if (typeof window.refreshCart === 'function') {
           window.refreshCart();
@@ -560,12 +574,7 @@
 
     if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.id) {
       var ic = window.POS_INITIAL_CUSTOMER;
-      if (ic.currency_code) {
-        window.POS_CURRENT_CUSTOMER_CURRENCY_CODE = ic.currency_code;
-      }
-      if (ic.currency_symbol) {
-        window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL = ic.currency_symbol;
-      }
+      setPosCustomerCurrencyGlobals(ic);
       var opt = new Option(ic.text || ic.name || '', String(ic.id), true, true);
       opt.setAttribute('data-name', ic.name || '');
       opt.setAttribute('data-phone', ic.phone || '');
