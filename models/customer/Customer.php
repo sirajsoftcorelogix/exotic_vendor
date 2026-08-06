@@ -562,6 +562,12 @@ class Customer
                 'email' => $email,
                 'phone' => $phone,
                 'country_of_residence' => $countryRes,
+                'country_code' => $resInfo['country_code'] ?? '',
+                'country_name' => $resInfo['country_name'] ?? '',
+                'currency_code' => $resInfo['currency_code'] ?? '',
+                'currency_symbol' => $resInfo['currency_symbol'] ?? '₹',
+                'currency_name' => $resInfo['currency_name'] ?? '',
+                'currency_display' => $resInfo['currency_display'] ?? '',
                 'residence_text' => $resInfo['display_text'],
                 'display' => $display,
             ];
@@ -951,7 +957,7 @@ class Customer
     /**
      * Resolve country of residence and applicable currency details for customer cart display.
      *
-     * @return array{country_code:string, country_name:string, currency_code:string, currency_name:string, currency_display:string, display_text:string}
+     * @return array{country_code:string, country_name:string, currency_code:string, currency_symbol:string, currency_name:string, currency_display:string, display_text:string}
      */
     public function resolveCustomerResidenceAndCurrency(?string $countryInput): array
     {
@@ -961,6 +967,7 @@ class Customer
                 'country_code' => '',
                 'country_name' => '',
                 'currency_code' => '',
+                'currency_symbol' => '',
                 'currency_name' => '',
                 'currency_display' => '',
                 'display_text' => '-',
@@ -991,6 +998,9 @@ class Customer
             }
         }
 
+        require_once __DIR__ . '/../../helpers/currency_display.php';
+        $currencySymbol = vendor_currency_symbol($currencyCode);
+
         $currencyDisplay = '';
         if ($currencyName !== '' && $currencyCode !== '') {
             $currencyDisplay = $currencyName . ' (' . $currencyCode . ')';
@@ -1009,6 +1019,7 @@ class Customer
             'country_code' => $iso2,
             'country_name' => $countryName,
             'currency_code' => $currencyCode,
+            'currency_symbol' => $currencySymbol,
             'currency_name' => $currencyName,
             'currency_display' => $currencyDisplay,
             'display_text' => $displayText,

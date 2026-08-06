@@ -19,20 +19,47 @@
         return y + '-' + m + '-' + day;
     }
 
+    function getPaymentCurrencyCode() {
+        if (window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
+            return String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
+        }
+        if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
+            return String(window.POS_INITIAL_CUSTOMER.currency_code).trim().toUpperCase();
+        }
+        return 'INR';
+    }
+
+    function getPaymentCurrencySymbol() {
+        if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) {
+            return String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
+        }
+        if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_symbol) {
+            return String(window.POS_INITIAL_CUSTOMER.currency_symbol).trim();
+        }
+        var code = getPaymentCurrencyCode();
+        if (code === 'INR') return '₹';
+        if (code === 'USD') return '$';
+        if (code === 'EUR') return '€';
+        if (code === 'GBP') return '£';
+        return code;
+    }
+
     function formatPaymentInr(amount) {
         var n = parseFloat(String(amount));
         if (!isFinite(n)) {
             n = 0;
         }
+        var code = getPaymentCurrencyCode();
+        var symbol = getPaymentCurrencySymbol();
         try {
-            return new Intl.NumberFormat('en-IN', {
+            return new Intl.NumberFormat(code === 'INR' ? 'en-IN' : 'en-US', {
                 style: 'currency',
-                currency: 'INR',
+                currency: code,
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
             }).format(n);
         } catch (e) {
-            return '₹ ' + n.toFixed(2);
+            return symbol + ' ' + n.toFixed(2);
         }
     }
 
