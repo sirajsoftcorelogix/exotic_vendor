@@ -44,9 +44,37 @@ $(function () {
   window.notifyParentItemCartBlocked = notifyParentItemCartBlocked;
   window.POS_PARENT_ITEM_CART_MSG = POS_PARENT_ITEM_CART_MSG;
 
+  function getPosCurrencyCode() {
+    if (window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
+      return String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
+    }
+    if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
+      return String(window.POS_INITIAL_CUSTOMER.currency_code).trim().toUpperCase();
+    }
+    return 'INR';
+  }
+
+  function getPosCurrencySymbol() {
+    if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) {
+      return String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
+    }
+    if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_symbol) {
+      return String(window.POS_INITIAL_CUSTOMER.currency_symbol).trim();
+    }
+    const code = getPosCurrencyCode();
+    if (code === 'INR') return '₹';
+    if (code === 'USD') return '$';
+    if (code === 'EUR') return '€';
+    if (code === 'GBP') return '£';
+    return code;
+  }
+
   function formatPrice(price) {
     const p = parseFloat(price || 0);
-    return '₹ ' + p.toLocaleString('en-IN', {
+    const symbol = getPosCurrencySymbol();
+    const code = getPosCurrencyCode();
+    const locale = code === 'INR' ? 'en-IN' : 'en-US';
+    return symbol + ' ' + p.toLocaleString(locale, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
@@ -569,7 +597,7 @@ $(function () {
         '<div class="flex items-center justify-between gap-2 rounded-lg bg-[#f5f5f5] px-3 py-2">' +
         '<div class="text-[10px] text-gray-800">' + siblingHtmlEscape(item.name) + '</div>' +
         '<div class="flex items-center gap-2">' +
-        '<span class="text-[11px] font-semibold text-gray-700">₹ ' + formatAddonPriceRupee(item.price) + '</span>' +
+        '<span class="text-[11px] font-semibold text-gray-700">' + getPosCurrencySymbol() + ' ' + formatAddonPriceRupee(item.price) + '</span>' +
         '<button type="button" class="pm-custom-addon-remove text-[10px] text-red-600 hover:underline" data-idx="' + idx + '">Remove</button>' +
         '</div></div>';
     });
@@ -799,7 +827,7 @@ $(function () {
       </div>
 
       <div class="text-[11px] font-semibold ${priceColor} whitespace-nowrap">
-        ₹ ${addonPriceLabel}
+        ${getPosCurrencySymbol()} ${addonPriceLabel}
       </div>
 
     </label>
@@ -911,7 +939,7 @@ $(function () {
         $pmPrice
           .removeClass('hidden')
           .text(
-            `₹ ${Number(p.price).toLocaleString('en-IN', {
+            `${getPosCurrencySymbol()} ${Number(p.price).toLocaleString(getPosCurrencyCode() === 'INR' ? 'en-IN' : 'en-US', {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2
             })}`
@@ -1229,7 +1257,7 @@ data-code="${lookupCode}">
     $('#pmImage').attr('src', fixModalImageSrc(p.image) || '');
 
     $('#pmDetails').html(`
-        <div>Price</div><div>:</div><div>₹ ${p.price || 0}</div>
+        <div>Price</div><div>:</div><div>${getPosCurrencySymbol()} ${p.price || 0}</div>
         <div>Material</div><div>:</div><div>${p.material || '-'}</div>
         <div>Size</div><div>:</div><div>${p.size || '-'}</div>
         <div>Color</div><div>:</div><div>${p.color || '-'}</div>
@@ -1252,7 +1280,7 @@ data-code="${lookupCode}">
                                data-entry="${siblingHtmlEscape(cartEntry)}">
                         ${opt.title}
                     </div>
-                    <div>₹ ${addonPriceLabel}</div>
+                    <div>${getPosCurrencySymbol()} ${addonPriceLabel}</div>
                 </label>
             `;
       });

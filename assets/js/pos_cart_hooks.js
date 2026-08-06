@@ -2893,8 +2893,41 @@
     return String(val);
   }
 
-  /** Display ₹ 1,234.56 (en-IN grouping). */
-  function formatRupeeInrDisplay(val) {
+  function getCartCurrencyCode(cartData) {
+    if (cartData && typeof cartData === 'object') {
+      var c = cartData.currency_code || cartData.currencycode || cartData.currency || cartData.Currency;
+      if (c && typeof c === 'string' && c.trim() !== '') return c.trim().toUpperCase();
+    }
+    if (window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
+      return String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
+    }
+    if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
+      return String(window.POS_INITIAL_CUSTOMER.currency_code).trim().toUpperCase();
+    }
+    return 'INR';
+  }
+
+  function getCartCurrencySymbol(cartData) {
+    if (cartData && typeof cartData === 'object') {
+      var s = cartData.currency_symbol || cartData.currencysymbol || cartData.symbol;
+      if (s && typeof s === 'string' && s.trim() !== '') return s.trim();
+    }
+    if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) {
+      return String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
+    }
+    if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_symbol) {
+      return String(window.POS_INITIAL_CUSTOMER.currency_symbol).trim();
+    }
+    var code = getCartCurrencyCode(cartData);
+    if (code === 'INR') return '\u20b9';
+    if (code === 'USD') return '$';
+    if (code === 'EUR') return '\u20ac';
+    if (code === 'GBP') return '\u00a3';
+    return code;
+  }
+
+  /** Display formatted amount with currency symbol. */
+  function formatRupeeInrDisplay(val, cartData) {
     if (val == null || (typeof val === 'number' && isNaN(val))) {
       return '\u2014';
     }
@@ -2902,13 +2935,17 @@
     if (isNaN(n)) {
       return String(val);
     }
+    var cData = cartData || window.__posCartLastRetrieveData;
+    var symbol = getCartCurrencySymbol(cData);
+    var code = getCartCurrencyCode(cData);
+    var locale = code === 'INR' ? 'en-IN' : 'en-US';
     return (
-      '\u20b9 ' +
-      n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      symbol + ' ' +
+      n.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     );
   }
 
-  function summaryAmountCell(val) {
+  function summaryAmountCell(val, cartData) {
     var disp = formatMoneyDisplay(val);
     if (disp == null) {
       return '\u2014';
@@ -2917,9 +2954,13 @@
     if (isNaN(n)) {
       return escapeHtml(disp);
     }
+    var cData = cartData || window.__posCartLastRetrieveData;
+    var symbol = getCartCurrencySymbol(cData);
+    var code = getCartCurrencyCode(cData);
+    var locale = code === 'INR' ? 'en-IN' : 'en-US';
     return (
-      '\u20b9 ' +
-      n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      symbol + ' ' +
+      n.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     );
   }
 
@@ -3482,7 +3523,7 @@
         effUnitNum != null && !isNaN(effUnitNum)
           ? formatRupeeInrDisplay(effUnitNum)
           : unitPrice
-            ? '\u20b9 ' + escapeHtml(String(unitPrice))
+            ? getCartCurrencySymbol() + ' ' + escapeHtml(String(unitPrice))
             : '\u2014',
       gstDisp:
         gstNum != null && !isNaN(gstNum) ? formatRupeeInrDisplay(gstNum) : '\u2014',
@@ -3701,13 +3742,13 @@
           effUnitNum != null && !isNaN(effUnitNum)
             ? formatRupeeInrDisplay(effUnitNum)
             : unitPrice
-              ? '\u20b9 ' + escapeHtml(String(unitPrice))
+              ? getCartCurrencySymbol() + ' ' + escapeHtml(String(unitPrice))
               : '\u2014';
         var lineDisp =
           effLineNum != null && !isNaN(effLineNum)
             ? formatRupeeInrDisplay(effLineNum)
             : lineTotal
-              ? '\u20b9 ' + escapeHtml(String(lineTotal))
+              ? getCartCurrencySymbol() + ' ' + escapeHtml(String(lineTotal))
               : '\u2014';
         var betweenClass =
           idx < items.length - 1 ? 'border-b border-dashed border-slate-300 pb-4 mb-4' : '';

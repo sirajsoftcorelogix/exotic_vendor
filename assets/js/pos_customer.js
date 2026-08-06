@@ -514,29 +514,58 @@
     $cust.on('select2:select', function (e) {
       var d = e.params.data;
       window.POS_SESSION_CUSTOMER_ID = d.id ? String(d.id) : '';
+      if (d.currency_code) {
+        window.POS_CURRENT_CUSTOMER_CURRENCY_CODE = d.currency_code;
+      }
+      if (d.currency_symbol) {
+        window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL = d.currency_symbol;
+      }
       window.updatePosCustomerLabels(d.name, d.phone, d.email, d.residence_text || '-');
       postSetCustomer(d.id || '').then(function (res) {
         return res.json();
       }).then(function (data) {
-        if (data && data.customer && data.customer.residence_text) {
-          window.updatePosCustomerLabels(
-            data.customer.name || d.name,
-            data.customer.phone || d.phone,
-            data.customer.email || d.email,
-            data.customer.residence_text
-          );
+        if (data && data.customer) {
+          if (data.customer.residence_text) {
+            window.updatePosCustomerLabels(
+              data.customer.name || d.name,
+              data.customer.phone || d.phone,
+              data.customer.email || d.email,
+              data.customer.residence_text
+            );
+          }
+          if (data.customer.currency_code) {
+            window.POS_CURRENT_CUSTOMER_CURRENCY_CODE = data.customer.currency_code;
+          }
+          if (data.customer.currency_symbol) {
+            window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL = data.customer.currency_symbol;
+          }
+        }
+        if (typeof window.refreshCart === 'function') {
+          window.refreshCart();
         }
       }).catch(function () {});
     });
 
     $cust.on('select2:clear', function () {
       window.POS_SESSION_CUSTOMER_ID = '';
-      postSetCustomer('');
+      window.POS_CURRENT_CUSTOMER_CURRENCY_CODE = 'INR';
+      window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL = '₹';
+      postSetCustomer('').then(function () {
+        if (typeof window.refreshCart === 'function') {
+          window.refreshCart();
+        }
+      });
       window.updatePosCustomerLabels('', '', '', '-');
     });
 
     if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.id) {
       var ic = window.POS_INITIAL_CUSTOMER;
+      if (ic.currency_code) {
+        window.POS_CURRENT_CUSTOMER_CURRENCY_CODE = ic.currency_code;
+      }
+      if (ic.currency_symbol) {
+        window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL = ic.currency_symbol;
+      }
       var opt = new Option(ic.text || ic.name || '', String(ic.id), true, true);
       opt.setAttribute('data-name', ic.name || '');
       opt.setAttribute('data-phone', ic.phone || '');
@@ -653,7 +682,19 @@
             select.dispatchEvent(new Event('change', { bubbles: true }));
           }
 
-          postSetCustomer(idStr);
+          if (data.customer) {
+            if (data.customer.currency_code) {
+              window.POS_CURRENT_CUSTOMER_CURRENCY_CODE = data.customer.currency_code;
+            }
+            if (data.customer.currency_symbol) {
+              window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL = data.customer.currency_symbol;
+            }
+          }
+          postSetCustomer(idStr).then(function () {
+            if (typeof window.refreshCart === 'function') {
+              window.refreshCart();
+            }
+          });
           window.updatePosCustomerLabels(
             data.customer.name,
             data.customer.phone,
