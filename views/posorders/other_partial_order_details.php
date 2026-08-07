@@ -2279,6 +2279,7 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
         }
     });
 });
+</script>
 <script>
 let pendingDispatchCancelId = null;
 
