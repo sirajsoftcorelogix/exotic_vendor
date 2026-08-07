@@ -1369,7 +1369,7 @@ class POSRegisterController
                         'city' => trim((string)($info['city'] ?? '')),
                         'state' => trim((string)($info['state'] ?? '')),
                         'zip' => trim((string)($info['zipcode'] ?? '')),
-                        'country' => trim((string)($info['country'] ?? 'IN')),
+                        'country' => trim((string)($info['country'] ?? '')),
                         'gstin' => trim((string)($info['gstin'] ?? '')),
                         'trade_name' => trim((string)($info['trade_name'] ?? '')),
                     ];
@@ -1382,7 +1382,7 @@ class POSRegisterController
                         'scity' => trim((string)($info['shipping_city'] ?? '')),
                         'sstate' => trim((string)($info['shipping_state'] ?? '')),
                         'szip' => trim((string)($info['shipping_zipcode'] ?? '')),
-                        'scountry' => trim((string)($info['shipping_country'] ?? 'IN')),
+                        'scountry' => trim((string)($info['shipping_country'] ?? '')),
                         'sphone' => trim((string)($info['shipping_mobile'] ?? '')),
                         'sgstin' => trim((string)($info['shipping_gstin'] ?? '')),
                         'shipping_gstin' => trim((string)($info['shipping_gstin'] ?? '')),
@@ -1405,7 +1405,7 @@ class POSRegisterController
                 'city' => trim((string)($form['city'] ?? '')),
                 'state' => trim((string)($form['state'] ?? '')),
                 'zip' => trim((string)($form['zipcode'] ?? '')),
-                'country' => trim((string)($form['country'] ?? 'IN')),
+                'country' => trim((string)($form['country'] ?? '')),
                 'gstin' => trim((string)($form['gstin'] ?? '')),
                 'trade_name' => trim((string)($form['trade_name'] ?? '')),
             ];
@@ -1418,10 +1418,31 @@ class POSRegisterController
                 'scity' => trim((string)($form['shipping_city'] ?? '')),
                 'sstate' => trim((string)($form['shipping_state'] ?? '')),
                 'szip' => trim((string)($form['shipping_zipcode'] ?? '')),
-                'scountry' => trim((string)($form['shipping_country'] ?? 'IN')),
+                'scountry' => trim((string)($form['shipping_country'] ?? '')),
                 'sphone' => trim((string)($form['shipping_mobile'] ?? '')),
             ];
         }
+
+        require_once 'helpers/courier/country_codes.php';
+
+        $cRes = trim((string)($customerRow['country_of_residence'] ?? ''));
+
+        $rawBillingCountry = $pick(
+            $billingVc['country'] ?? '',
+            $billingOrder['country'] ?? '',
+            $billingSession['country'] ?? '',
+            $cRes,
+            'IN'
+        );
+
+        $rawShippingCountry = $pick(
+            $shippingVc['scountry'] ?? '',
+            $shippingOrder['scountry'] ?? '',
+            $shippingSession['scountry'] ?? '',
+            $rawBillingCountry,
+            $cRes,
+            'IN'
+        );
 
         $billing = [
             'first_name' => $pick($billingVc['first_name'] ?? '', $billingOrder['first_name'] ?? '', $billingSession['first_name'] ?? ''),
@@ -1433,7 +1454,7 @@ class POSRegisterController
             'city' => $pick($billingVc['city'] ?? '', $billingOrder['city'] ?? '', $billingSession['city'] ?? ''),
             'state' => $pick($billingVc['state'] ?? '', $billingOrder['state'] ?? '', $billingSession['state'] ?? ''),
             'zip' => $pick($billingVc['zip'] ?? '', $billingOrder['zip'] ?? '', $billingSession['zip'] ?? ''),
-            'country' => $pick($billingVc['country'] ?? '', $billingOrder['country'] ?? '', $billingSession['country'] ?? ''),
+            'country' => normalizeCountryIso2($rawBillingCountry, $conn),
             'gstin' => $pick($billingVc['gstin'] ?? '', $billingOrder['gstin'] ?? '', $billingSession['gstin'] ?? ''),
             'trade_name' => $pick(
                 $billingVc['trade_name'] ?? '',
@@ -1452,7 +1473,7 @@ class POSRegisterController
             'scity' => $pick($shippingVc['scity'] ?? '', $shippingOrder['scity'] ?? '', $shippingSession['scity'] ?? ''),
             'sstate' => $pick($shippingVc['sstate'] ?? '', $shippingOrder['sstate'] ?? '', $shippingSession['sstate'] ?? ''),
             'szip' => $pick($shippingVc['szip'] ?? '', $shippingOrder['szip'] ?? '', $shippingSession['szip'] ?? ''),
-            'scountry' => $pick($shippingVc['scountry'] ?? '', $shippingOrder['scountry'] ?? '', $shippingSession['scountry'] ?? ''),
+            'scountry' => normalizeCountryIso2($rawShippingCountry, $conn),
             'sphone' => $pick($shippingVc['sphone'] ?? '', $shippingOrder['sphone'] ?? '', $shippingSession['sphone'] ?? ''),
             'sgstin' => $pick($shippingVc['sgstin'] ?? '', $shippingOrder['sgstin'] ?? '', $shippingOrder['shipping_gstin'] ?? '', $shippingSession['sgstin'] ?? ''),
             'shipping_gstin' => $pick($shippingVc['shipping_gstin'] ?? '', $shippingOrder['shipping_gstin'] ?? '', $shippingOrder['sgstin'] ?? '', $shippingSession['shipping_gstin'] ?? ''),
