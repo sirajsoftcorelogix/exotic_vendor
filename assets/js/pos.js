@@ -360,6 +360,11 @@ $(function () {
 
   let activeModalProduct = null;
 
+  function openModal() {
+    $modal.removeClass('hidden');
+    $('body').addClass('overflow-hidden');
+  }
+
   window.setPosModalPriceMode = function (mode) {
     if (typeof window.setPosCurrencyMode === 'function') {
       window.setPosCurrencyMode(mode);
