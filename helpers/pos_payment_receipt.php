@@ -180,7 +180,9 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
     }
 
     $stmt = $conn->prepare(
-        'SELECT total_amount FROM vp_invoices WHERE order_number = ? ORDER BY id DESC LIMIT 1'
+        'SELECT i.total_amount FROM vp_invoices i
+         INNER JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
+         WHERE oi.order_number = ? ORDER BY i.id DESC LIMIT 1'
     );
     if ($stmt) {
         $stmt->bind_param('s', $orderNumber);
