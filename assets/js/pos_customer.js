@@ -535,9 +535,6 @@
     if (!c || typeof c !== 'object') return;
     if (c.currency_code) window.POS_CURRENT_CUSTOMER_CURRENCY_CODE = c.currency_code;
     if (c.currency_symbol) window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL = c.currency_symbol;
-    if (c.currency_unit) window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT = c.currency_unit;
-    if (c.currency_unit_value != null) window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT_VALUE = parseFloat(c.currency_unit_value) || 1.0;
-    if (c.rate_export != null) window.POS_CURRENT_CUSTOMER_RATE_EXPORT = parseFloat(c.rate_export) || 1.0;
     if (c.country_code) window.POS_CURRENT_CUSTOMER_COUNTRY_CODE = String(c.country_code).trim().toUpperCase();
 
     updatePosCurrencyToggleUI();
@@ -546,9 +543,6 @@
   function clearPosCustomerCurrencyGlobals() {
     window.POS_CURRENT_CUSTOMER_CURRENCY_CODE = 'INR';
     window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL = '₹';
-    window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT = '1 INR';
-    window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT_VALUE = 1.0;
-    window.POS_CURRENT_CUSTOMER_RATE_EXPORT = 1.0;
     window.POS_CURRENT_CUSTOMER_COUNTRY_CODE = 'IN';
     window.POS_CURRENCY_MODE = 'CUSTOMER';
 
@@ -609,9 +603,6 @@
                 country_name: c.country_name || '',
                 currency_code: c.currency_code || '',
                 currency_symbol: c.currency_symbol || '',
-                currency_unit: c.currency_unit || '',
-                currency_unit_value: c.currency_unit_value != null ? c.currency_unit_value : 1.0,
-                rate_export: c.rate_export != null ? c.rate_export : 1.0,
                 residence_text: c.residence_text || '-'
               };
             })

@@ -22,33 +22,21 @@
     function getPaymentCurrencyInfo() {
         var code = 'INR';
         var symbol = '₹';
-        var unit = '1 INR';
-        var unitValue = 1.0;
-        var rateExport = 1.0;
 
         if (window.POS_CURRENCY_MODE === 'INR') {
             return {
                 code: 'INR',
-                symbol: '₹',
-                unit: '1 INR',
-                unitValue: 1.0,
-                rateExport: 1.0
+                symbol: '₹'
             };
         }
 
         if (window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
             code = String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
             if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) symbol = String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
-            if (window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT) unit = String(window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT).trim();
-            if (window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT_VALUE != null) unitValue = parseFloat(window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT_VALUE) || 1.0;
-            if (window.POS_CURRENT_CUSTOMER_RATE_EXPORT != null) rateExport = parseFloat(window.POS_CURRENT_CUSTOMER_RATE_EXPORT) || 1.0;
         } else if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
             var ic = window.POS_INITIAL_CUSTOMER;
             if (ic.currency_code) code = String(ic.currency_code).trim().toUpperCase();
             if (ic.currency_symbol) symbol = String(ic.currency_symbol).trim();
-            if (ic.currency_unit) unit = String(ic.currency_unit).trim();
-            if (ic.currency_unit_value != null) unitValue = parseFloat(ic.currency_unit_value) || 1.0;
-            if (ic.rate_export != null) rateExport = parseFloat(ic.rate_export) || 1.0;
         }
 
         if (!symbol) {
@@ -61,10 +49,7 @@
 
         return {
             code: code,
-            symbol: symbol,
-            unit: unit,
-            unitValue: unitValue > 0 ? unitValue : 1.0,
-            rateExport: rateExport > 0 ? rateExport : 1.0
+            symbol: symbol
         };
     }
 
@@ -82,16 +67,15 @@
             n = 0;
         }
         var info = getPaymentCurrencyInfo();
-        var converted = (n / info.rateExport) * info.unitValue;
         try {
             return new Intl.NumberFormat(info.code === 'INR' ? 'en-IN' : 'en-US', {
                 style: 'currency',
                 currency: info.code,
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
-            }).format(converted);
+            }).format(n);
         } catch (e) {
-            return info.symbol + ' ' + converted.toFixed(2);
+            return info.symbol + ' ' + n.toFixed(2);
         }
     }
 

@@ -47,33 +47,21 @@ $(function () {
   function getPosCurrencyInfo() {
     let code = 'INR';
     let symbol = '₹';
-    let unit = '1 INR';
-    let unitValue = 1.0;
-    let rateExport = 1.0;
 
     if (window.POS_CURRENCY_MODE === 'INR') {
       return {
         code: 'INR',
-        symbol: '₹',
-        unit: '1 INR',
-        unitValue: 1.0,
-        rateExport: 1.0
+        symbol: '₹'
       };
     }
 
     if (window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
       code = String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
       if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) symbol = String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
-      if (window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT) unit = String(window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT).trim();
-      if (window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT_VALUE != null) unitValue = parseFloat(window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT_VALUE) || 1.0;
-      if (window.POS_CURRENT_CUSTOMER_RATE_EXPORT != null) rateExport = parseFloat(window.POS_CURRENT_CUSTOMER_RATE_EXPORT) || 1.0;
     } else if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
       const ic = window.POS_INITIAL_CUSTOMER;
       if (ic.currency_code) code = String(ic.currency_code).trim().toUpperCase();
       if (ic.currency_symbol) symbol = String(ic.currency_symbol).trim();
-      if (ic.currency_unit) unit = String(ic.currency_unit).trim();
-      if (ic.currency_unit_value != null) unitValue = parseFloat(ic.currency_unit_value) || 1.0;
-      if (ic.rate_export != null) rateExport = parseFloat(ic.rate_export) || 1.0;
     }
 
     if (!symbol) {
@@ -86,10 +74,7 @@ $(function () {
 
     return {
       code: code,
-      symbol: symbol,
-      unit: unit,
-      unitValue: unitValue > 0 ? unitValue : 1.0,
-      rateExport: rateExport > 0 ? rateExport : 1.0
+      symbol: symbol
     };
   }
 
@@ -101,20 +86,11 @@ $(function () {
     return getPosCurrencyInfo().symbol;
   }
 
-  function convertInrToCustomerCurrencyPos(val) {
-    if (val == null || (typeof val === 'number' && isNaN(val))) return null;
-    const n = typeof val === 'number' ? val : parseFloat(String(val).replace(/,/g, ''));
-    if (isNaN(n)) return null;
-    const info = getPosCurrencyInfo();
-    return (n / info.rateExport) * info.unitValue;
-  }
-
   function formatPrice(price) {
     const p = parseFloat(price || 0);
-    const converted = convertInrToCustomerCurrencyPos(p) || 0;
     const info = getPosCurrencyInfo();
     const locale = info.code === 'INR' ? 'en-IN' : 'en-US';
-    return info.symbol + ' ' + converted.toLocaleString(locale, {
+    return info.symbol + ' ' + p.toLocaleString(locale, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
@@ -569,16 +545,15 @@ $(function () {
   function formatAddonPriceRupee(val) {
     const n = parseAddonPriceRupee(val);
     if (n == null) return '—';
-    const converted = convertInrToCustomerCurrencyPos(n) || 0;
     const info = getPosCurrencyInfo();
     const locale = info.code === 'INR' ? 'en-IN' : 'en-US';
     try {
-      return converted.toLocaleString(locale, {
+      return n.toLocaleString(locale, {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
       });
     } catch (e) {
-      return converted.toFixed(2);
+      return n.toFixed(2);
     }
   }
 
