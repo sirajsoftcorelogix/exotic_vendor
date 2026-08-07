@@ -2940,11 +2940,7 @@
     return getCartCurrencyInfo(cartData).symbol;
   }
 
-<<<<<<< HEAD
   /** Display formatted amount with currency symbol. */
-=======
-  /** Display formatted amount with currency symbol in customer currency. */
->>>>>>> 8b53a28e (Remove currency conversion calculation logic from POS while keeping currency selection mechanism)
   function formatRupeeInrDisplay(val, cartData) {
     if (val == null || (typeof val === 'number' && isNaN(val))) {
       return '\u2014';
