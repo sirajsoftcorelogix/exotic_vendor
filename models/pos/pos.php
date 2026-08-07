@@ -91,9 +91,15 @@ class pos
 
         // CATEGORY
         if (!empty($category) && $category != 'allProducts') {
-            $where .= " AND p.groupname = ? ";
-            $params[] = $category;
-            $types .= "s";
+            if (in_array(strtolower($category), ['virtual_codes', 'virtualcodes', 'virtual_code', 'virtual codes'], true)) {
+                $where .= " AND p.title LIKE ? ";
+                $params[] = "%Virtual Code%";
+                $types .= "s";
+            } else {
+                $where .= " AND p.groupname = ? ";
+                $params[] = $category;
+                $types .= "s";
+            }
         }
 
         // PRODUCT NAME / SKU search — multiple items when comma/semicolon/newline/tab present.
@@ -298,9 +304,15 @@ class pos
 
         // ✅ Category filter (match groupname)
         if (!empty($category) && $category != 'allProducts') {
-            $where .= " AND groupname = ? ";
-            $params[] = $category;
-            $types   .= "s";
+            if (in_array(strtolower($category), ['virtual_codes', 'virtualcodes', 'virtual_code', 'virtual codes'], true)) {
+                $where .= " AND title LIKE ? ";
+                $params[] = "%Virtual Code%";
+                $types   .= "s";
+            } else {
+                $where .= " AND groupname = ? ";
+                $params[] = $category;
+                $types   .= "s";
+            }
         }
 
         if ($productName !== '') {
@@ -447,9 +459,15 @@ class pos
         $types = 'ii';
 
         if ($category !== '' && $category !== 'allProducts') {
-            $where .= ' AND p.groupname = ? ';
-            $params[] = $category;
-            $types .= 's';
+            if (in_array(strtolower($category), ['virtual_codes', 'virtualcodes', 'virtual_code', 'virtual codes'], true)) {
+                $where .= " AND p.title LIKE ? ";
+                $params[] = "%Virtual Code%";
+                $types .= "s";
+            } else {
+                $where .= ' AND p.groupname = ? ';
+                $params[] = $category;
+                $types .= 's';
+            }
         }
 
         if ($hasSearch) {
