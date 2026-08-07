@@ -2180,12 +2180,16 @@ if ($canFollowUpOrder) {
                     $existingCustomReduce = max(0.0, round((float)($orderremarks['custom_reduce'] ?? ($order[0]['custom_reduce'] ?? 0)), 2));
 
                     $existingCredit = max(0.0, round((float)($orderremarks['credit'] ?? ($order[0]['credit'] ?? 0)), 2));
+
+                    $hasAppliedReductions = ($existingCouponReduce > 0 || $existingGiftVoucherReduce > 0 || $existingCredit > 0);
                 ?>
 
                 <div class="mt-5 space-y-3">
-                    <h3 class="text-xs font-bold uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-1">Applied Discounts & Reductions</h3>
+                    <?php if ($hasAppliedReductions): ?>
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-1">Applied Discounts & Reductions</h3>
+                    <?php endif; ?>
 
-                    <?php if ($existingCouponReduce > 0 || $existingCouponCode !== ''): ?>
+                    <?php if ($existingCouponReduce > 0): ?>
                         <div class="rounded-xl border border-green-200 bg-green-50/50 p-3.5 flex items-center justify-between gap-4">
                             <div>
                                 <div class="flex items-center gap-2">
@@ -2205,7 +2209,7 @@ if ($canFollowUpOrder) {
                         <input type="hidden" id="edit-coupon-reduce-val" value="0.00">
                     <?php endif; ?>
 
-                    <?php if ($existingGiftVoucherReduce > 0 || $existingGiftVoucherCode !== ''): ?>
+                    <?php if ($existingGiftVoucherReduce > 0): ?>
                         <div class="rounded-xl border border-purple-200 bg-purple-50/50 p-3.5 flex items-center justify-between gap-4">
                             <div>
                                 <div class="flex items-center gap-2">
@@ -2266,14 +2270,14 @@ if ($canFollowUpOrder) {
                             <strong class="font-semibold text-gray-900"><?php echo htmlspecialchars($orderCurrencySymbol); ?><span id="edit-prices-calc-gross">0.00</span></strong>
                         </div>
 
-                        <?php if ($existingCouponReduce > 0 || $existingCouponCode !== ''): ?>
+                        <?php if ($existingCouponReduce > 0): ?>
                             <div class="flex items-center justify-between pt-1.5 text-green-700">
                                 <span>Coupon Discount <?php echo $existingCouponCode !== '' ? '(' . htmlspecialchars($existingCouponCode) . ')' : ''; ?>:</span>
                                 <strong class="font-semibold">-<?php echo htmlspecialchars($orderCurrencySymbol); ?><span id="edit-prices-calc-coupon"><?php echo number_format($existingCouponReduce, 2); ?></span></strong>
                             </div>
                         <?php endif; ?>
 
-                        <?php if ($existingGiftVoucherReduce > 0 || $existingGiftVoucherCode !== ''): ?>
+                        <?php if ($existingGiftVoucherReduce > 0): ?>
                             <div class="flex items-center justify-between pt-1.5 text-purple-700">
                                 <span>Gift Voucher <?php echo $existingGiftVoucherCode !== '' ? '(' . htmlspecialchars($existingGiftVoucherCode) . ')' : ''; ?>:</span>
                                 <strong class="font-semibold">-<?php echo htmlspecialchars($orderCurrencySymbol); ?><span id="edit-prices-calc-giftvoucher"><?php echo number_format($existingGiftVoucherReduce, 2); ?></span></strong>
