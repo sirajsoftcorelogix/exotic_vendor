@@ -1905,6 +1905,10 @@ class OrdersController
             exit;
         }
 
+        $existingOrderInfo = $ordersModel->getRemarksByOrderNumber($orderNumber);
+        $currentCustomReduce = (float)($existingOrderInfo['custom_reduce'] ?? 0);
+        $customReduce = isset($_POST['custom_reduce']) ? max(0.0, round((float)$_POST['custom_reduce'], 2)) : $currentCustomReduce;
+
         if (is_string($itemsInput)) {
             $itemsInput = json_decode($itemsInput, true) ?? [];
         }
@@ -1922,7 +1926,7 @@ class OrdersController
 
         $resolvedOrderNumber = (string)($existingOrder[0]['order_number'] ?? $orderNumber);
 
-        $inputPricesByLineId = [];
+        $inputItemsByLineId = [];
         foreach ($itemsInput as $key => $item) {
             if (!is_array($item)) {
                 continue;
@@ -1930,8 +1934,13 @@ class OrdersController
             $lineId = (int)($item['id'] ?? $key);
             $rawPrice = $item['price'] ?? $item['finalprice'] ?? 0;
             $price = max(0.0, round((float)$rawPrice, 2));
+            $rawQty = $item['qty'] ?? $item['quantity'] ?? 1;
+            $qty = max(1, (int)$rawQty);
             if ($lineId > 0) {
-                $inputPricesByLineId[$lineId] = $price;
+                $inputItemsByLineId[$lineId] = [
+                    'price' => $price,
+                    'qty'   => $qty,
+                ];
             }
         }
 
@@ -1944,27 +1953,31 @@ class OrdersController
             $size = (string)($existingLine['size'] ?? '');
             $color = (string)($existingLine['color'] ?? '');
             $currentPrice = max(0.0, round((float)($existingLine['finalprice'] ?? 0), 2));
+            $currentQty = max(1, (int)($existingLine['quantity'] ?? 1));
 
-            $newPrice = array_key_exists($lineId, $inputPricesByLineId) ? $inputPricesByLineId[$lineId] : $currentPrice;
+            $newPrice = array_key_exists($lineId, $inputItemsByLineId) ? $inputItemsByLineId[$lineId]['price'] : $currentPrice;
+            $newQty   = array_key_exists($lineId, $inputItemsByLineId) ? $inputItemsByLineId[$lineId]['qty']   : $currentQty;
 
             $dbItemsToUpdate[] = [
-                'id' => $lineId,
+                'id'        => $lineId,
                 'item_code' => $itemCode,
-                'size' => $size,
-                'color' => $color,
-                'price' => $newPrice,
+                'size'      => $size,
+                'color'     => $color,
+                'price'     => $newPrice,
+                'qty'       => $newQty,
             ];
 
             $allApiItems[] = [
-                'itemcode' => $itemCode,
-                'size' => $size,
-                'color' => $color,
-                'price' => $newPrice,
+                'itemcode'  => $itemCode,
+                'size'      => $size,
+                'color'     => $color,
+                'price'     => $newPrice,
+                'qty'       => $newQty,
             ];
         }
 
         require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
-        $dbResult = $ordersModel->updateOrderItemPrices($resolvedOrderNumber, $dbItemsToUpdate);
+        $dbResult = $ordersModel->updateOrderItemPrices($resolvedOrderNumber, $dbItemsToUpdate, $customReduce);
 
         if (empty($dbResult['success'])) {
             echo json_encode($dbResult);
@@ -1974,16 +1987,18 @@ class OrdersController
         // Call external POS API (https://www.exoticindia.com/api/order/pos_editorderprices)
         require_once __DIR__ . '/../integrations/exotic/Clients/RetailApiClient.php';
         $retailClient = RetailApiClient::create($conn);
-        $apiResult = $retailClient->editOrderPrices($resolvedOrderNumber, $allApiItems);
+        $apiResult = $retailClient->editOrderPrices($resolvedOrderNumber, $allApiItems, $customReduce);
 
         $apiData = is_array($apiResult['data'] ?? null) ? $apiResult['data'] : [];
         $apiMessage = (string)($apiData['message'] ?? $apiData['msg'] ?? '');
 
         echo json_encode([
-            'success' => true,
-            'message' => 'Order item prices updated successfully.' . ($apiMessage !== '' ? ' API: ' . $apiMessage : ''),
-            'new_total' => $dbResult['new_total'] ?? 0,
-            'api_response' => $apiData,
+            'success'       => true,
+            'message'       => 'Order details updated successfully.' . ($apiMessage !== '' ? ' API: ' . $apiMessage : ''),
+            'new_total'     => $dbResult['new_total'] ?? 0,
+            'gross_total'   => $dbResult['gross_total'] ?? 0,
+            'custom_reduce' => $dbResult['custom_reduce'] ?? 0,
+            'api_response'  => $apiData,
         ]);
         exit;
     }

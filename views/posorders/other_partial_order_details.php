@@ -2084,7 +2084,7 @@ if ($canFollowUpOrder) {
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl mx-auto flex flex-col max-h-[90vh] relative overflow-hidden">
         <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
             <div>
-                <h2 class="text-base font-bold text-gray-900">Edit Order Item Prices</h2>
+                <h2 class="text-base font-bold text-gray-900">Edit Order Details & Prices</h2>
                 <p class="text-xs text-gray-500">Order #<?php echo htmlspecialchars($displayOrderNumber); ?></p>
             </div>
             <button type="button" onclick="closeEditPricesModal()" class="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-200">
@@ -2129,41 +2129,81 @@ if ($canFollowUpOrder) {
                                     <?php if ($size !== ''): ?>
                                         <span><strong class="text-gray-800">Size:</strong> <?php echo htmlspecialchars($size); ?></span>
                                     <?php endif; ?>
-                                    <span><strong class="text-gray-800">Qty:</strong> <?php echo $qty; ?></span>
                                 </div>
                             </div>
 
-                            <div class="flex flex-col items-end gap-1">
-                                <label class="text-xs font-semibold text-gray-700">Unit Final Price (<?php echo htmlspecialchars($orderCurrencySymbol); ?>)</label>
-                                <div class="relative rounded-md shadow-xs">
+                            <div class="flex items-center gap-3">
+                                <div class="flex flex-col items-start gap-1">
+                                    <label class="text-xs font-semibold text-gray-700">Qty</label>
                                     <input type="number"
-                                           step="0.01"
-                                           min="0"
+                                           step="1"
+                                           min="1"
                                            required
-                                           class="edit-price-input w-32 rounded-md border border-gray-300 px-3 py-1.5 text-right font-semibold text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                           class="edit-qty-input w-20 rounded-md border border-gray-300 px-2.5 py-1.5 text-center font-semibold text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                                            data-line-id="<?php echo $lineId; ?>"
-                                           data-qty="<?php echo $qty; ?>"
-                                           name="items[<?php echo $lineId; ?>][price]"
-                                           value="<?php echo htmlspecialchars(number_format($price, 2, '.', '')); ?>">
-                                    <input type="hidden" name="items[<?php echo $lineId; ?>][id]" value="<?php echo $lineId; ?>">
-                                    <input type="hidden" name="items[<?php echo $lineId; ?>][item_code]" value="<?php echo htmlspecialchars($itemCode); ?>">
-                                    <input type="hidden" name="items[<?php echo $lineId; ?>][size]" value="<?php echo htmlspecialchars($size); ?>">
-                                    <input type="hidden" name="items[<?php echo $lineId; ?>][color]" value="<?php echo htmlspecialchars($color); ?>">
+                                           name="items[<?php echo $lineId; ?>][qty]"
+                                           value="<?php echo $qty; ?>">
                                 </div>
-                                <span class="text-[11px] text-gray-500">
-                                    Line Total: <?php echo htmlspecialchars($orderCurrencySymbol); ?><span class="line-calc-total font-medium"><?php echo number_format($price * $qty, 2); ?></span>
-                                </span>
+
+                                <div class="flex flex-col items-end gap-1">
+                                    <label class="text-xs font-semibold text-gray-700">Unit Final Price (<?php echo htmlspecialchars($orderCurrencySymbol); ?>)</label>
+                                    <div class="relative rounded-md shadow-xs">
+                                        <input type="number"
+                                               step="0.01"
+                                               min="0"
+                                               required
+                                               class="edit-price-input w-28 sm:w-32 rounded-md border border-gray-300 px-3 py-1.5 text-right font-semibold text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                               data-line-id="<?php echo $lineId; ?>"
+                                               name="items[<?php echo $lineId; ?>][price]"
+                                               value="<?php echo htmlspecialchars(number_format($price, 2, '.', '')); ?>">
+                                        <input type="hidden" name="items[<?php echo $lineId; ?>][id]" value="<?php echo $lineId; ?>">
+                                        <input type="hidden" name="items[<?php echo $lineId; ?>][item_code]" value="<?php echo htmlspecialchars($itemCode); ?>">
+                                        <input type="hidden" name="items[<?php echo $lineId; ?>][size]" value="<?php echo htmlspecialchars($size); ?>">
+                                        <input type="hidden" name="items[<?php echo $lineId; ?>][color]" value="<?php echo htmlspecialchars($color); ?>">
+                                    </div>
+                                    <span class="text-[11px] text-gray-500">
+                                        Line Total: <?php echo htmlspecialchars($orderCurrencySymbol); ?><span class="line-calc-total font-medium"><?php echo number_format($price * $qty, 2); ?></span>
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
 
-                <div class="mt-6 flex items-center justify-between border-t border-gray-200 pt-4">
-                    <div class="text-sm text-gray-700">
-                        Total Order Price: <strong class="text-base text-gray-900 font-bold"><?php echo htmlspecialchars($orderCurrencySymbol); ?><span id="edit-prices-calc-total"><?php echo number_format($total_price, 2); ?></span></strong>
+                <?php $existingCustomReduce = (float)($orderremarks['custom_reduce'] ?? 0); ?>
+                <div class="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide">Custom Reduce / Discount (<?php echo htmlspecialchars($orderCurrencySymbol); ?>)</label>
+                        <p class="text-[11px] text-gray-500">Order-level discount / price reduction</p>
+                    </div>
+                    <div class="relative">
+                        <input type="number"
+                               step="0.01"
+                               min="0"
+                               id="edit-custom-reduce-input"
+                               name="custom_reduce"
+                               class="w-36 rounded-md border border-gray-300 px-3 py-1.5 text-right font-semibold text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                               value="<?php echo htmlspecialchars(number_format($existingCustomReduce, 2, '.', '')); ?>">
+                    </div>
+                </div>
+
+                <div class="mt-6 border-t border-gray-200 pt-4">
+                    <div class="flex flex-col gap-1.5 text-sm text-gray-700 mb-4">
+                        <div class="flex items-center justify-between">
+                            <span>Items Gross Total:</span>
+                            <strong class="font-semibold text-gray-900"><?php echo htmlspecialchars($orderCurrencySymbol); ?><span id="edit-prices-calc-gross">0.00</span></strong>
+                        </div>
+                        <div class="flex items-center justify-between text-orange-700">
+                            <span>Custom Discount:</span>
+                            <strong class="font-semibold">-<?php echo htmlspecialchars($orderCurrencySymbol); ?><span id="edit-prices-calc-discount">0.00</span></strong>
+                        </div>
+                        <div class="flex items-center justify-between border-t border-gray-100 pt-2 text-base font-bold text-gray-900">
+                            <span>Net Order Total:</span>
+                            <strong class="text-base text-gray-900 font-bold"><?php echo htmlspecialchars($orderCurrencySymbol); ?><span id="edit-prices-calc-total">0.00</span></strong>
+                        </div>
                     </div>
 
-                    <div class="flex gap-3">
+                    <div class="flex justify-end gap-3 pt-2">
                         <button type="button" onclick="closeEditPricesModal()" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                             Cancel
                         </button>
@@ -2195,28 +2235,50 @@ function closeEditPricesModal() {
 }
 
 function updateEditPricesCalculatedTotal() {
-    let total = 0;
-    document.querySelectorAll('.edit-price-input').forEach(input => {
-        const qty = parseFloat(input.getAttribute('data-qty')) || 1;
-        const price = parseFloat(input.value) || 0;
+    let grossTotal = 0;
+    document.querySelectorAll('.edit-price-input').forEach(priceInput => {
+        const lineId = priceInput.getAttribute('data-line-id');
+        const qtyInput = document.querySelector(`.edit-qty-input[data-line-id="${lineId}"]`);
+        const qty = qtyInput ? (parseFloat(qtyInput.value) || 1) : 1;
+        const price = parseFloat(priceInput.value) || 0;
         const lineTotal = price * qty;
-        total += lineTotal;
-        const container = input.closest('div.flex-col');
-        if (container) {
-            const lineTotalSpan = container.querySelector('.line-calc-total');
+        grossTotal += lineTotal;
+
+        const rowContainer = priceInput.closest('.flex.items-center');
+        if (rowContainer) {
+            const lineTotalSpan = rowContainer.querySelector('.line-calc-total');
             if (lineTotalSpan) {
                 lineTotalSpan.textContent = lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             }
         }
     });
+
+    const customReduceInput = document.getElementById('edit-custom-reduce-input');
+    const customReduce = customReduceInput ? (parseFloat(customReduceInput.value) || 0) : 0;
+    const netTotal = Math.max(0, grossTotal - customReduce);
+
+    const grossSpan = document.getElementById('edit-prices-calc-gross');
+    if (grossSpan) {
+        grossSpan.textContent = grossTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    const discountSpan = document.getElementById('edit-prices-calc-discount');
+    if (discountSpan) {
+        discountSpan.textContent = customReduce.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
     const totalSpan = document.getElementById('edit-prices-calc-total');
     if (totalSpan) {
-        totalSpan.textContent = total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        totalSpan.textContent = netTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 }
 
 document.getElementById('editOrderPricesForm')?.addEventListener('input', function(e) {
-    if (e.target && e.target.classList.contains('edit-price-input')) {
+    if (e.target && (e.target.classList.contains('edit-price-input') || e.target.classList.contains('edit-qty-input') || e.target.id === 'edit-custom-reduce-input')) {
+        updateEditPricesCalculatedTotal();
+    }
+});
+
+document.getElementById('editOrderPricesForm')?.addEventListener('change', function(e) {
+    if (e.target && (e.target.classList.contains('edit-price-input') || e.target.classList.contains('edit-qty-input') || e.target.id === 'edit-custom-reduce-input')) {
         updateEditPricesCalculatedTotal();
     }
 });
