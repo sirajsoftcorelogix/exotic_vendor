@@ -2900,6 +2900,16 @@
     var unitValue = 1.0;
     var rateExport = 1.0;
 
+    if (window.POS_CURRENCY_MODE === 'INR') {
+      return {
+        code: 'INR',
+        symbol: '\u20b9',
+        unit: '1 INR',
+        unitValue: 1.0,
+        rateExport: 1.0
+      };
+    }
+
     if (cartData && typeof cartData === 'object') {
       if (cartData.currency_code) code = String(cartData.currency_code).trim().toUpperCase();
       if (cartData.currency_symbol) symbol = String(cartData.currency_symbol).trim();

@@ -51,6 +51,16 @@ $(function () {
     let unitValue = 1.0;
     let rateExport = 1.0;
 
+    if (window.POS_CURRENCY_MODE === 'INR') {
+      return {
+        code: 'INR',
+        symbol: '₹',
+        unit: '1 INR',
+        unitValue: 1.0,
+        rateExport: 1.0
+      };
+    }
+
     if (window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
       code = String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
       if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) symbol = String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
@@ -109,6 +119,17 @@ $(function () {
       maximumFractionDigits: 2
     });
   }
+
+  window.reformatPosProductPrices = function () {
+    if (typeof jQuery !== 'undefined') {
+      jQuery('.pos-product-price').each(function () {
+        const raw = jQuery(this).attr('data-raw-price');
+        if (raw != null && raw !== '') {
+          jQuery(this).text(formatPrice(raw));
+        }
+      });
+    }
+  };
 
   /** Match POSRegisterController::fixImageUrl — relative paths must hit CDN, not the portal origin. */
   function fixModalImageSrc(path) {
@@ -1093,7 +1114,7 @@ data-code="${lookupCode}">
               <span class="rounded-md bg-orange-100 px-1.5 py-0.5 text-[9px] text-orange-700">
                 ${lookupCode || ''}
               </span>
-              <span class="text-base font-semibold tracking-tight text-gray-900">
+              <span class="text-base font-semibold tracking-tight text-gray-900 pos-product-price" data-raw-price="${p.price}">
                 ${formatPrice(p.price)}
               </span>
             </div>
@@ -1290,7 +1311,7 @@ data-code="${lookupCode}">
     $('#pmImage').attr('src', fixModalImageSrc(p.image) || '');
 
     $('#pmDetails').html(`
-        <div>Price</div><div>:</div><div>${getPosCurrencySymbol()} ${p.price || 0}</div>
+        <div>Price</div><div>:</div><div>${formatPrice(p.price)}</div>
         <div>Material</div><div>:</div><div>${p.material || '-'}</div>
         <div>Size</div><div>:</div><div>${p.size || '-'}</div>
         <div>Color</div><div>:</div><div>${p.color || '-'}</div>

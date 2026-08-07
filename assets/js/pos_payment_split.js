@@ -26,6 +26,16 @@
         var unitValue = 1.0;
         var rateExport = 1.0;
 
+        if (window.POS_CURRENCY_MODE === 'INR') {
+            return {
+                code: 'INR',
+                symbol: '₹',
+                unit: '1 INR',
+                unitValue: 1.0,
+                rateExport: 1.0
+            };
+        }
+
         if (window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
             code = String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
             if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) symbol = String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
