@@ -211,10 +211,6 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       <!-- Right -->
       <div class="ml-auto flex items-center gap-3">
 
-        <!-- Sold Order Button -->
-        <button class="rounded-xl bg-orange-600 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-700">
-          Sold Order
-        </button>
         <a href="?page=pos_register&action=stock-report" class="rounded-xl border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-100">
           Stock Report
         </a>
