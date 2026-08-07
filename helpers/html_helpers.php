@@ -438,6 +438,7 @@ function getCategories()
 		'jewelry' => 'Jewelry',
 		'homeandliving' => 'Home and Living',
 		'book' => 'Book',
+		'virtual_codes' => 'Virtual codes',
 	];
 }
 function getVendorCategory()
