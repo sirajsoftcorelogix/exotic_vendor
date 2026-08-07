@@ -2567,22 +2567,37 @@ class Order
                 $stmt->close();
             }
 
-            // Calculate new items gross total from vp_orders
+            // Fetch gross total from vp_orders and existing discounts/reductions from vp_order_info in 1 query
             $grossTotal = 0.0;
-            $totalStmt = $this->db->prepare(
-                'SELECT SUM(finalprice * quantity) AS gross_total FROM vp_orders WHERE order_number = ?'
+            $couponReduce = 0.0;
+            $giftReduce = 0.0;
+            $credit = 0.0;
+
+            $calcStmt = $this->db->prepare(
+                'SELECT
+                    IFNULL(SUM(o.finalprice * o.quantity), 0) AS gross_total,
+                    IFNULL(MAX(oi.coupon_reduce), 0) AS coupon_reduce,
+                    IFNULL(MAX(oi.giftvoucher_reduce), 0) AS giftvoucher_reduce,
+                    IFNULL(MAX(oi.credit), 0) AS credit
+                 FROM vp_orders o
+                 LEFT JOIN vp_order_info oi ON oi.order_number = o.order_number
+                 WHERE o.order_number = ?'
             );
-            if ($totalStmt) {
-                $totalStmt->bind_param('s', $orderNumber);
-                $totalStmt->execute();
-                $res = $totalStmt->get_result();
-                if ($row = $res->fetch_assoc()) {
-                    $grossTotal = round((float)($row['gross_total'] ?? 0), 2);
+            if ($calcStmt) {
+                $calcStmt->bind_param('s', $orderNumber);
+                $calcStmt->execute();
+                $calcRes = $calcStmt->get_result();
+                if ($calcRow = $calcRes->fetch_assoc()) {
+                    $grossTotal   = round((float)($calcRow['gross_total'] ?? 0), 2);
+                    $couponReduce = max(0.0, round((float)($calcRow['coupon_reduce'] ?? 0), 2));
+                    $giftReduce   = max(0.0, round((float)($calcRow['giftvoucher_reduce'] ?? 0), 2));
+                    $credit       = max(0.0, round((float)($calcRow['credit'] ?? 0), 2));
                 }
-                $totalStmt->close();
+                $calcStmt->close();
             }
 
-            $netTotal = max(0.0, round($grossTotal - $customReduce, 2));
+            $totalReductions = $customReduce + $couponReduce + $giftReduce + $credit;
+            $netTotal = max(0.0, round($grossTotal - $totalReductions, 2));
 
             // Update vp_order_info.total & vp_order_info.custom_reduce
             $infoStmt = $this->db->prepare(
@@ -2630,10 +2645,10 @@ class Order
                             if ($invSumRow = $invSumRes->fetch_assoc()) {
                                 $invSubtotal = round((float)($invSumRow['inv_subtotal'] ?? 0), 2);
                                 $invTax = round((float)($invSumRow['inv_tax'] ?? 0), 2);
-                                $invTotal = max(0.0, round($invSubtotal + $invTax - $customReduce, 2));
+                                $invTotal = max(0.0, round($invSubtotal + $invTax - $totalReductions, 2));
                                 $invUpd = $this->db->prepare('UPDATE vp_invoices SET subtotal = ?, discount_amount = ?, total_amount = ? WHERE id = ?');
                                 if ($invUpd) {
-                                    $invUpd->bind_param('dddi', $invSubtotal, $customReduce, $invTotal, $invoiceId);
+                                    $invUpd->bind_param('dddi', $invSubtotal, $totalReductions, $invTotal, $invoiceId);
                                     $invUpd->execute();
                                     $invUpd->close();
                                 }
@@ -2655,6 +2670,9 @@ class Order
                 'new_total' => $netTotal,
                 'gross_total' => $grossTotal,
                 'custom_reduce' => $customReduce,
+                'coupon_reduce' => $couponReduce,
+                'giftvoucher_reduce' => $giftReduce,
+                'credit' => $credit,
                 'updated_lines' => $updated,
             ];
         } catch (\Throwable $e) {

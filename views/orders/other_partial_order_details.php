@@ -821,34 +821,129 @@ if ($invoiceIdForReturn > 0) {
                     <?php endforeach; ?>
                 </div>
 
-                <?php $existingCustomReduce = (float)($orderremarks['custom_reduce'] ?? 0); ?>
-                <div class="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide">Custom Reduce / Discount (<?php echo htmlspecialchars($orderCurrencySymbol ?? '₹'); ?>)</label>
-                        <p class="text-[11px] text-gray-500">Order-level discount / price reduction</p>
-                    </div>
-                    <div class="relative">
-                        <input type="number"
-                               step="0.01"
-                               min="0"
-                               id="edit-custom-reduce-input"
-                               name="custom_reduce"
-                               class="w-36 rounded-md border border-gray-300 px-3 py-1.5 text-right font-semibold text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                               value="<?php echo htmlspecialchars(number_format($existingCustomReduce, 2, '.', '')); ?>">
+                <?php
+                    $existingCouponCode = trim((string)($orderremarks['coupon'] ?? ($order[0]['coupon'] ?? '')));
+                    $existingCouponReduce = max(0.0, round((float)($orderremarks['coupon_reduce'] ?? ($order[0]['coupon_reduce'] ?? 0)), 2));
+
+                    $existingGiftVoucherCode = trim((string)($orderremarks['giftvoucher'] ?? ($order[0]['giftvoucher'] ?? '')));
+                    $existingGiftVoucherReduce = max(0.0, round((float)($orderremarks['giftvoucher_reduce'] ?? ($order[0]['giftvoucher_reduce'] ?? 0)), 2));
+
+                    $existingCustomReduce = max(0.0, round((float)($orderremarks['custom_reduce'] ?? ($order[0]['custom_reduce'] ?? 0)), 2));
+
+                    $existingCredit = max(0.0, round((float)($orderremarks['credit'] ?? ($order[0]['credit'] ?? 0)), 2));
+                ?>
+
+                <div class="mt-5 space-y-3">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-1">Applied Discounts & Reductions</h3>
+
+                    <?php if ($existingCouponReduce > 0 || $existingCouponCode !== ''): ?>
+                        <div class="rounded-xl border border-green-200 bg-green-50/50 p-3.5 flex items-center justify-between gap-4">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-green-100 text-green-800 uppercase tracking-wide">Coupon</span>
+                                    <?php if ($existingCouponCode !== ''): ?>
+                                        <strong class="text-xs font-bold text-green-900"><?php echo htmlspecialchars($existingCouponCode); ?></strong>
+                                    <?php endif; ?>
+                                </div>
+                                <p class="text-[11px] text-green-700 mt-0.5">Applied coupon discount</p>
+                            </div>
+                            <div class="text-right font-bold text-sm text-green-800">
+                                -<?php echo htmlspecialchars($orderCurrencySymbol ?? '₹'); ?><?php echo number_format($existingCouponReduce, 2); ?>
+                                <input type="hidden" id="edit-coupon-reduce-val" value="<?php echo htmlspecialchars(number_format($existingCouponReduce, 2, '.', '')); ?>">
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <input type="hidden" id="edit-coupon-reduce-val" value="0.00">
+                    <?php endif; ?>
+
+                    <?php if ($existingGiftVoucherReduce > 0 || $existingGiftVoucherCode !== ''): ?>
+                        <div class="rounded-xl border border-purple-200 bg-purple-50/50 p-3.5 flex items-center justify-between gap-4">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-purple-100 text-purple-800 uppercase tracking-wide">Gift Voucher</span>
+                                    <?php if ($existingGiftVoucherCode !== ''): ?>
+                                        <strong class="text-xs font-bold text-purple-900"><?php echo htmlspecialchars($existingGiftVoucherCode); ?></strong>
+                                    <?php endif; ?>
+                                </div>
+                                <p class="text-[11px] text-purple-700 mt-0.5">Applied gift voucher discount</p>
+                            </div>
+                            <div class="text-right font-bold text-sm text-purple-800">
+                                -<?php echo htmlspecialchars($orderCurrencySymbol ?? '₹'); ?><?php echo number_format($existingGiftVoucherReduce, 2); ?>
+                                <input type="hidden" id="edit-giftvoucher-reduce-val" value="<?php echo htmlspecialchars(number_format($existingGiftVoucherReduce, 2, '.', '')); ?>">
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <input type="hidden" id="edit-giftvoucher-reduce-val" value="0.00">
+                    <?php endif; ?>
+
+                    <?php if ($existingCredit > 0): ?>
+                        <div class="rounded-xl border border-blue-200 bg-blue-50/50 p-3.5 flex items-center justify-between gap-4">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-blue-100 text-blue-800 uppercase tracking-wide">Store Credit</span>
+                                </div>
+                                <p class="text-[11px] text-blue-700 mt-0.5">Store credit applied to order</p>
+                            </div>
+                            <div class="text-right font-bold text-sm text-blue-800">
+                                -<?php echo htmlspecialchars($orderCurrencySymbol ?? '₹'); ?><?php echo number_format($existingCredit, 2); ?>
+                                <input type="hidden" id="edit-credit-reduce-val" value="<?php echo htmlspecialchars(number_format($existingCredit, 2, '.', '')); ?>">
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <input type="hidden" id="edit-credit-reduce-val" value="0.00">
+                    <?php endif; ?>
+
+                    <div class="rounded-xl border border-gray-200 bg-gray-50 p-3.5 flex flex-wrap items-center justify-between gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide">Custom Reduce / Discount (<?php echo htmlspecialchars($orderCurrencySymbol ?? '₹'); ?>)</label>
+                            <p class="text-[11px] text-gray-500">Order-level custom price reduction</p>
+                        </div>
+                        <div class="relative">
+                            <input type="number"
+                                   step="0.01"
+                                   min="0"
+                                   id="edit-custom-reduce-input"
+                                   name="custom_reduce"
+                                   class="w-36 rounded-md border border-gray-300 px-3 py-1.5 text-right font-semibold text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                   value="<?php echo htmlspecialchars(number_format($existingCustomReduce, 2, '.', '')); ?>">
+                        </div>
                     </div>
                 </div>
 
                 <div class="mt-6 border-t border-gray-200 pt-4">
-                    <div class="flex flex-col gap-1.5 text-sm text-gray-700 mb-4">
-                        <div class="flex items-center justify-between">
+                    <div class="flex flex-col gap-1.5 text-sm text-gray-700 mb-4 divide-y divide-gray-100">
+                        <div class="flex items-center justify-between pb-1">
                             <span>Items Gross Total:</span>
                             <strong class="font-semibold text-gray-900"><?php echo htmlspecialchars($orderCurrencySymbol ?? '₹'); ?><span id="edit-prices-calc-gross">0.00</span></strong>
                         </div>
-                        <div class="flex items-center justify-between text-orange-700">
+
+                        <?php if ($existingCouponReduce > 0 || $existingCouponCode !== ''): ?>
+                            <div class="flex items-center justify-between pt-1.5 text-green-700">
+                                <span>Coupon Discount <?php echo $existingCouponCode !== '' ? '(' . htmlspecialchars($existingCouponCode) . ')' : ''; ?>:</span>
+                                <strong class="font-semibold">-<?php echo htmlspecialchars($orderCurrencySymbol ?? '₹'); ?><span id="edit-prices-calc-coupon"><?php echo number_format($existingCouponReduce, 2); ?></span></strong>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($existingGiftVoucherReduce > 0 || $existingGiftVoucherCode !== ''): ?>
+                            <div class="flex items-center justify-between pt-1.5 text-purple-700">
+                                <span>Gift Voucher <?php echo $existingGiftVoucherCode !== '' ? '(' . htmlspecialchars($existingGiftVoucherCode) . ')' : ''; ?>:</span>
+                                <strong class="font-semibold">-<?php echo htmlspecialchars($orderCurrencySymbol ?? '₹'); ?><span id="edit-prices-calc-giftvoucher"><?php echo number_format($existingGiftVoucherReduce, 2); ?></span></strong>
+                            </div>
+                        <?php endif; ?>
+
+                        <div class="flex items-center justify-between pt-1.5 text-orange-700">
                             <span>Custom Discount:</span>
                             <strong class="font-semibold">-<?php echo htmlspecialchars($orderCurrencySymbol ?? '₹'); ?><span id="edit-prices-calc-discount">0.00</span></strong>
                         </div>
-                        <div class="flex items-center justify-between border-t border-gray-100 pt-2 text-base font-bold text-gray-900">
+
+                        <?php if ($existingCredit > 0): ?>
+                            <div class="flex items-center justify-between pt-1.5 text-blue-700">
+                                <span>Store Credit:</span>
+                                <strong class="font-semibold">-<?php echo htmlspecialchars($orderCurrencySymbol ?? '₹'); ?><span id="edit-prices-calc-credit"><?php echo number_format($existingCredit, 2); ?></span></strong>
+                            </div>
+                        <?php endif; ?>
+
+                        <div class="flex items-center justify-between pt-2 text-base font-bold text-gray-900 border-t border-gray-200">
                             <span>Net Order Total:</span>
                             <strong class="text-base text-gray-900 font-bold"><?php echo htmlspecialchars($orderCurrencySymbol ?? '₹'); ?><span id="edit-prices-calc-total">0.00</span></strong>
                         </div>
@@ -885,40 +980,55 @@ function closeEditPricesModal() {
 }
 
 function updateEditPricesCalculatedTotal() {
+    const form = document.getElementById('editOrderPricesForm');
+    if (!form) return;
+
     let grossTotal = 0;
-    document.querySelectorAll('.edit-price-input').forEach(priceInput => {
-        const lineId = priceInput.getAttribute('data-line-id');
-        const qtyInput = document.querySelector(`.edit-qty-input[data-line-id="${lineId}"]`);
+    const priceInputs = form.querySelectorAll('.edit-price-input');
+
+    for (let i = 0; i < priceInputs.length; i++) {
+        const priceInput = priceInputs[i];
+        const rowContainer = priceInput.closest('.flex.items-center');
+        const qtyInput = rowContainer ? rowContainer.querySelector('.edit-qty-input') : null;
         const qty = qtyInput ? (parseFloat(qtyInput.value) || 1) : 1;
         const price = parseFloat(priceInput.value) || 0;
         const lineTotal = price * qty;
         grossTotal += lineTotal;
 
-        const rowContainer = priceInput.closest('.flex.items-center');
         if (rowContainer) {
             const lineTotalSpan = rowContainer.querySelector('.line-calc-total');
             if (lineTotalSpan) {
                 lineTotalSpan.textContent = lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             }
         }
-    });
+    }
 
-    const customReduceInput = document.getElementById('edit-custom-reduce-input');
+    const customReduceInput = form.querySelector('#edit-custom-reduce-input');
     const customReduce = customReduceInput ? (parseFloat(customReduceInput.value) || 0) : 0;
-    const netTotal = Math.max(0, grossTotal - customReduce);
 
-    const grossSpan = document.getElementById('edit-prices-calc-gross');
-    if (grossSpan) {
-        grossSpan.textContent = grossTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-    const discountSpan = document.getElementById('edit-prices-calc-discount');
-    if (discountSpan) {
-        discountSpan.textContent = customReduce.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-    const totalSpan = document.getElementById('edit-prices-calc-total');
-    if (totalSpan) {
-        totalSpan.textContent = netTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
+    const couponReduce = parseFloat(form.querySelector('#edit-coupon-reduce-val')?.value) || 0;
+    const giftVoucherReduce = parseFloat(form.querySelector('#edit-giftvoucher-reduce-val')?.value) || 0;
+    const creditReduce = parseFloat(form.querySelector('#edit-credit-reduce-val')?.value) || 0;
+
+    const netTotal = Math.max(0, grossTotal - customReduce - couponReduce - giftVoucherReduce - creditReduce);
+
+    const grossSpan = form.querySelector('#edit-prices-calc-gross');
+    if (grossSpan) grossSpan.textContent = grossTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const discountSpan = form.querySelector('#edit-prices-calc-discount');
+    if (discountSpan) discountSpan.textContent = customReduce.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const couponSpan = form.querySelector('#edit-prices-calc-coupon');
+    if (couponSpan) couponSpan.textContent = couponReduce.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const giftSpan = form.querySelector('#edit-prices-calc-giftvoucher');
+    if (giftSpan) giftSpan.textContent = giftVoucherReduce.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const creditSpan = form.querySelector('#edit-prices-calc-credit');
+    if (creditSpan) creditSpan.textContent = creditReduce.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const totalSpan = form.querySelector('#edit-prices-calc-total');
+    if (totalSpan) totalSpan.textContent = netTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 document.getElementById('editOrderPricesForm')?.addEventListener('input', function(e) {
