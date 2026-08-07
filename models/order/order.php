@@ -2533,12 +2533,14 @@ class Order
      * @param list<array{id: int, price: float, item_code?: string, size?: string, color?: string}> $itemPrices
      * @return array{success: bool, message?: string, new_total?: float, updated_lines?: int}
      */
-    public function updateOrderItemPrices(string $orderNumber, array $itemPrices): array
+    public function updateOrderItemPrices(string $orderNumber, array $itemPrices, float $customReduce = 0.0): array
     {
         $orderNumber = trim($orderNumber);
         if ($orderNumber === '' || empty($itemPrices)) {
             return ['success' => false, 'message' => 'Order number or line item prices are missing.'];
         }
+
+        $customReduce = max(0.0, round($customReduce, 2));
 
         $useTransaction = ($this->db instanceof mysqli);
         if ($useTransaction) {
@@ -2548,43 +2550,46 @@ class Order
         try {
             $updated = 0;
             $stmt = $this->db->prepare(
-                'UPDATE vp_orders SET finalprice = ?, itemprice = ? WHERE id = ? AND order_number = ?'
+                'UPDATE vp_orders SET finalprice = ?, itemprice = ?, quantity = ? WHERE id = ? AND order_number = ?'
             );
             if ($stmt) {
                 foreach ($itemPrices as $item) {
                     $lineId = (int)($item['id'] ?? 0);
-                    $price = max(0.0, round((float)($item['price'] ?? 0), 2));
+                    $price = max(0.0, round((float)($item['price'] ?? $item['finalprice'] ?? 0), 2));
+                    $qty = max(1, (int)($item['qty'] ?? $item['quantity'] ?? 1));
                     if ($lineId <= 0) {
                         continue;
                     }
-                    $stmt->bind_param('ddis', $price, $price, $lineId, $orderNumber);
+                    $stmt->bind_param('ddiis', $price, $price, $qty, $lineId, $orderNumber);
                     $stmt->execute();
                     $updated += $stmt->affected_rows;
                 }
                 $stmt->close();
             }
 
-            // Calculate new total order price from vp_orders
-            $newTotal = 0.0;
+            // Calculate new items gross total from vp_orders
+            $grossTotal = 0.0;
             $totalStmt = $this->db->prepare(
-                'SELECT SUM(finalprice * quantity) AS new_total FROM vp_orders WHERE order_number = ?'
+                'SELECT SUM(finalprice * quantity) AS gross_total FROM vp_orders WHERE order_number = ?'
             );
             if ($totalStmt) {
                 $totalStmt->bind_param('s', $orderNumber);
                 $totalStmt->execute();
                 $res = $totalStmt->get_result();
                 if ($row = $res->fetch_assoc()) {
-                    $newTotal = round((float)($row['new_total'] ?? 0), 2);
+                    $grossTotal = round((float)($row['gross_total'] ?? 0), 2);
                 }
                 $totalStmt->close();
             }
 
-            // Update vp_order_info.total
+            $netTotal = max(0.0, round($grossTotal - $customReduce, 2));
+
+            // Update vp_order_info.total & vp_order_info.custom_reduce
             $infoStmt = $this->db->prepare(
-                'UPDATE vp_order_info SET total = ? WHERE order_number = ?'
+                'UPDATE vp_order_info SET total = ?, custom_reduce = ? WHERE order_number = ?'
             );
             if ($infoStmt) {
-                $infoStmt->bind_param('ds', $newTotal, $orderNumber);
+                $infoStmt->bind_param('dds', $netTotal, $customReduce, $orderNumber);
                 $infoStmt->execute();
                 $infoStmt->close();
             }
@@ -2603,13 +2608,14 @@ class Order
                 if ($invRow = $invRes->fetch_assoc()) {
                     $invoiceId = (int)($invRow['id'] ?? 0);
                     if ($invoiceId > 0) {
-                        $itemUpd = $this->db->prepare('UPDATE vp_invoice_items SET unit_price = ?, line_total = unit_price * quantity WHERE invoice_id = ? AND item_code = ?');
+                        $itemUpd = $this->db->prepare('UPDATE vp_invoice_items SET unit_price = ?, quantity = ?, line_total = unit_price * quantity WHERE invoice_id = ? AND item_code = ?');
                         if ($itemUpd) {
                             foreach ($itemPrices as $item) {
-                                $price = max(0.0, round((float)($item['price'] ?? 0), 2));
+                                $price = max(0.0, round((float)($item['price'] ?? $item['finalprice'] ?? 0), 2));
+                                $qty = max(1, (int)($item['qty'] ?? $item['quantity'] ?? 1));
                                 $itemCode = trim((string)($item['item_code'] ?? ''));
                                 if ($itemCode !== '') {
-                                    $itemUpd->bind_param('dis', $price, $invoiceId, $itemCode);
+                                    $itemUpd->bind_param('diis', $price, $qty, $invoiceId, $itemCode);
                                     $itemUpd->execute();
                                 }
                             }
@@ -2624,10 +2630,10 @@ class Order
                             if ($invSumRow = $invSumRes->fetch_assoc()) {
                                 $invSubtotal = round((float)($invSumRow['inv_subtotal'] ?? 0), 2);
                                 $invTax = round((float)($invSumRow['inv_tax'] ?? 0), 2);
-                                $invTotal = round($invSubtotal + $invTax, 2);
-                                $invUpd = $this->db->prepare('UPDATE vp_invoices SET subtotal = ?, total_amount = ? WHERE id = ?');
+                                $invTotal = max(0.0, round($invSubtotal + $invTax - $customReduce, 2));
+                                $invUpd = $this->db->prepare('UPDATE vp_invoices SET subtotal = ?, discount_amount = ?, total_amount = ? WHERE id = ?');
                                 if ($invUpd) {
-                                    $invUpd->bind_param('ddi', $invSubtotal, $invTotal, $invoiceId);
+                                    $invUpd->bind_param('dddi', $invSubtotal, $customReduce, $invTotal, $invoiceId);
                                     $invUpd->execute();
                                     $invUpd->close();
                                 }
@@ -2645,8 +2651,10 @@ class Order
 
             return [
                 'success' => true,
-                'message' => 'Order item prices updated successfully.',
-                'new_total' => $newTotal,
+                'message' => 'Order items and discount updated successfully.',
+                'new_total' => $netTotal,
+                'gross_total' => $grossTotal,
+                'custom_reduce' => $customReduce,
                 'updated_lines' => $updated,
             ];
         } catch (\Throwable $e) {

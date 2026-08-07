@@ -283,17 +283,19 @@ class RetailApiClient
     }
 
     /**
-     * Modify POS order item-level price in order and order total.
+     * Modify POS order item-level price, item quantity, and custom discount in order and order total.
      * POST https://www.exoticindia.com/api/order/pos_editorderprices
      *
      * @param string $orderId Order ID / order_number of the order
-     * @param list<array{itemcode?:string,item_code?:string,size?:string,color?:string,price?:float|int|string}> $items All items in the order
+     * @param list<array{itemcode?:string,item_code?:string,size?:string,color?:string,price?:float|int|string,qty?:int,quantity?:int}> $items All items in the order
+     * @param float $customReduce Order-level custom reduce / discount
      * @return array{data: array, code: int, raw: string}
      */
-    public function editOrderPrices(string $orderId, array $items): array
+    public function editOrderPrices(string $orderId, array $items, float $customReduce = 0.0): array
     {
         $postData = [
             'orderid' => $orderId,
+            'custom_reduce' => (float)$customReduce,
         ];
 
         foreach (array_values($items) as $i => $item) {
@@ -301,6 +303,7 @@ class RetailApiClient
             $postData["size[{$i}]"] = (string)($item['size'] ?? '');
             $postData["color[{$i}]"] = (string)($item['color'] ?? '');
             $postData["price[{$i}]"] = (float)($item['price'] ?? $item['finalprice'] ?? 0);
+            $postData["qty[{$i}]"] = (int)($item['qty'] ?? $item['quantity'] ?? 1);
         }
 
         return $this->call('/order/pos_editorderprices', 'POST', [], $postData);
