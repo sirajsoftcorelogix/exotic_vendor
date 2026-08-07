@@ -4185,6 +4185,11 @@ class POSRegisterController
 
         switch ($op) {
             case 'retrieve':
+                // Respect currency mode selection: when mode is 'INR', force 'IN' header so Exotic API returns INR cart prices
+                $currencyMode = trim((string)($_REQUEST['currency_mode'] ?? $_GET['currency_mode'] ?? ''));
+                if ($currencyMode === 'INR') {
+                    $this->retailApiClient->setCustomerCountryCode('IN');
+                }
                 // Same discount / gift query + header as add/modifyqty so cart totals reflect applied coupon.
                 $ctx = $this->exoticCartDiscountContext();
                 $this->emitCartApiResponse($this->retailApiClient->call(
