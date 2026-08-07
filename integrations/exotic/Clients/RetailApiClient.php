@@ -281,4 +281,28 @@ class RetailApiClient
             $_SESSION['x_api_etd_pincode'] = $capturedHeaders['x-api-etd-pincode'];
         }
     }
+
+    /**
+     * Modify POS order item-level price in order and order total.
+     * POST https://www.exoticindia.com/api/order/pos_editorderprices
+     *
+     * @param string $orderId Order ID / order_number of the order
+     * @param list<array{itemcode?:string,item_code?:string,size?:string,color?:string,price?:float|int|string}> $items All items in the order
+     * @return array{data: array, code: int, raw: string}
+     */
+    public function editOrderPrices(string $orderId, array $items): array
+    {
+        $postData = [
+            'orderid' => $orderId,
+        ];
+
+        foreach (array_values($items) as $i => $item) {
+            $postData["itemcode[{$i}]"] = (string)($item['itemcode'] ?? $item['item_code'] ?? '');
+            $postData["size[{$i}]"] = (string)($item['size'] ?? '');
+            $postData["color[{$i}]"] = (string)($item['color'] ?? '');
+            $postData["price[{$i}]"] = (float)($item['price'] ?? $item['finalprice'] ?? 0);
+        }
+
+        return $this->call('/order/pos_editorderprices', 'POST', [], $postData);
+    }
 }
