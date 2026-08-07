@@ -451,6 +451,86 @@
     return name || data.text;
   }
 
+  function updatePosCurrencyToggleUI() {
+    var custCode = window.POS_CURRENT_CUSTOMER_CURRENCY_CODE || (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) || 'INR';
+    var custSymbol = window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL || (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_symbol) || '';
+    var countryCode = window.POS_CURRENT_CUSTOMER_COUNTRY_CODE || (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.country_code) || '';
+
+    custCode = String(custCode).trim().toUpperCase();
+    custSymbol = String(custSymbol).trim();
+    countryCode = String(countryCode).trim().toUpperCase();
+
+    var isNonIndia = custCode !== 'INR' && countryCode !== 'IN';
+
+    var mode = window.POS_CURRENCY_MODE || 'CUSTOMER';
+    if (mode !== 'INR' && mode !== 'CUSTOMER') {
+      mode = 'CUSTOMER';
+    }
+    window.POS_CURRENCY_MODE = mode;
+
+    if (!custSymbol) {
+      if (custCode === 'USD') custSymbol = '$';
+      else if (custCode === 'EUR') custSymbol = '€';
+      else if (custCode === 'GBP') custSymbol = '£';
+      else custSymbol = custCode;
+    }
+
+    var labelText = custCode + (custSymbol ? ' (' + custSymbol + ')' : '');
+
+    var targets = [
+      {
+        container: document.getElementById('posCurrencyToggleContainer'),
+        btnCustomer: document.getElementById('posCurrencyBtnCustomer'),
+        labelCustomer: document.getElementById('posCurrencyCustomerLabel'),
+        btnINR: document.getElementById('posCurrencyBtnINR')
+      },
+      {
+        container: document.getElementById('posCartTableCurrencyToggleContainer'),
+        btnCustomer: document.getElementById('posCartTableCurrencyBtnCustomer'),
+        labelCustomer: document.getElementById('posCartTableCurrencyCustomerLabel'),
+        btnINR: document.getElementById('posCartTableCurrencyBtnINR')
+      }
+    ];
+
+    targets.forEach(function (t) {
+      if (!t.container) return;
+      if (!isNonIndia) {
+        t.container.classList.add('hidden');
+        return;
+      }
+      t.container.classList.remove('hidden');
+      if (t.labelCustomer) {
+        t.labelCustomer.textContent = labelText;
+      }
+      if (t.btnCustomer && t.btnINR) {
+        if (mode === 'CUSTOMER') {
+          t.btnCustomer.className = 'px-3 py-1 rounded-md font-semibold transition bg-white text-orange-600 shadow-sm';
+          t.btnINR.className = 'px-3 py-1 rounded-md font-medium transition text-slate-600 hover:text-slate-900 bg-transparent';
+        } else {
+          t.btnCustomer.className = 'px-3 py-1 rounded-md font-medium transition text-slate-600 hover:text-slate-900 bg-transparent';
+          t.btnINR.className = 'px-3 py-1 rounded-md font-semibold transition bg-white text-orange-600 shadow-sm';
+        }
+      }
+    });
+  }
+
+  window.updatePosCurrencyToggleUI = updatePosCurrencyToggleUI;
+
+  window.setPosCurrencyMode = function (mode) {
+    if (mode !== 'INR' && mode !== 'CUSTOMER') {
+      mode = 'CUSTOMER';
+    }
+    window.POS_CURRENCY_MODE = mode;
+    updatePosCurrencyToggleUI();
+
+    if (typeof window.refreshCart === 'function') {
+      window.refreshCart();
+    }
+    if (typeof window.reformatPosProductPrices === 'function') {
+      window.reformatPosProductPrices();
+    }
+  };
+
   function setPosCustomerCurrencyGlobals(c) {
     if (!c || typeof c !== 'object') return;
     if (c.currency_code) window.POS_CURRENT_CUSTOMER_CURRENCY_CODE = c.currency_code;
@@ -458,6 +538,9 @@
     if (c.currency_unit) window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT = c.currency_unit;
     if (c.currency_unit_value != null) window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT_VALUE = parseFloat(c.currency_unit_value) || 1.0;
     if (c.rate_export != null) window.POS_CURRENT_CUSTOMER_RATE_EXPORT = parseFloat(c.rate_export) || 1.0;
+    if (c.country_code) window.POS_CURRENT_CUSTOMER_COUNTRY_CODE = String(c.country_code).trim().toUpperCase();
+
+    updatePosCurrencyToggleUI();
   }
 
   function clearPosCustomerCurrencyGlobals() {
@@ -466,6 +549,10 @@
     window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT = '1 INR';
     window.POS_CURRENT_CUSTOMER_CURRENCY_UNIT_VALUE = 1.0;
     window.POS_CURRENT_CUSTOMER_RATE_EXPORT = 1.0;
+    window.POS_CURRENT_CUSTOMER_COUNTRY_CODE = 'IN';
+    window.POS_CURRENCY_MODE = 'CUSTOMER';
+
+    updatePosCurrencyToggleUI();
   }
 
   function postSetCustomer(customerId) {
@@ -692,12 +779,7 @@
           }
 
           if (data.customer) {
-            if (data.customer.currency_code) {
-              window.POS_CURRENT_CUSTOMER_CURRENCY_CODE = data.customer.currency_code;
-            }
-            if (data.customer.currency_symbol) {
-              window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL = data.customer.currency_symbol;
-            }
+            setPosCustomerCurrencyGlobals(data.customer);
           }
           postSetCustomer(idStr).then(function () {
             if (typeof window.refreshCart === 'function') {
@@ -722,6 +804,7 @@
   function bootPosCustomerUi() {
     initPosCustomerSelect();
     initPosCustomerModalForm();
+    updatePosCurrencyToggleUI();
   }
 
   if (document.readyState === 'loading') {

@@ -358,6 +358,16 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
           <div id="selectedCustomerNameCart" onclick="editSelectedCustomer()" class="text-base font-semibold text-center text-slate-800 cursor-pointer hover:text-orange-600 hover:underline" title="Click to edit customer details"><?= htmlspecialchars($customerLabel) ?></div>
           <div id="selectedCustomerPhoneCart" class="text-sm text-slate-500 text-center"><?= htmlspecialchars($customerSubtext) ?></div>
           <div id="selectedCustomerResidenceCart" class="text-xs text-slate-500 text-center mt-0.5"><?= htmlspecialchars($customerResidenceSubtext) ?></div>
+          <div id="posCurrencyToggleContainer" class="mt-2.5 flex justify-center hidden">
+            <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
+              <button type="button" id="posCurrencyBtnCustomer" onclick="window.setPosCurrencyMode('CUSTOMER')" class="px-3 py-1 rounded-md font-medium transition bg-white text-orange-600 shadow-sm">
+                <span id="posCurrencyCustomerLabel">USD ($)</span>
+              </button>
+              <button type="button" id="posCurrencyBtnINR" onclick="window.setPosCurrencyMode('INR')" class="px-3 py-1 rounded-md font-medium transition text-slate-600 hover:text-slate-900">
+                INR (₹)
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="pos-cart-panel-inner px-3 py-2">
