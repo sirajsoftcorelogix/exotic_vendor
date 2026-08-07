@@ -2259,7 +2259,7 @@ class POSOrder
                     IFNULL(MAX(oi.giftvoucher_reduce), 0) AS giftvoucher_reduce,
                     IFNULL(MAX(oi.credit), 0) AS credit
                  FROM vp_orders o
-                 LEFT JOIN vp_order_info oi ON oi.order_number = o.order_number
+                 LEFT JOIN vp_order_info oi ON oi.order_number COLLATE utf8mb4_unicode_ci = o.order_number COLLATE utf8mb4_unicode_ci
                  WHERE o.order_number = ?'
             );
             if ($calcStmt) {
