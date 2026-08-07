@@ -651,7 +651,7 @@ class Customer
             'city' => '',
             'state' => '',
             'zip' => '',
-            'country' => 'IN',
+            'country' => '',
             'gstin' => '',
             'trade_name' => '',
         ];
@@ -708,6 +708,11 @@ class Customer
                     $billing['trade_name'] = trim((string)$det['trade_name']);
                 }
 
+                $shipCountry = trim((string)($det['ship_country'] ?? ''));
+                if ($shipCountry === '') {
+                    $shipCountry = $billing['country'];
+                }
+
                 $shipping = [
                     'shipping_first_name' => $first,
                     'shipping_last_name' => $last,
@@ -717,10 +722,14 @@ class Customer
                     'scity' => trim((string)($det['ship_city'] ?? '')),
                     'sstate' => trim((string)($det['ship_state'] ?? '')),
                     'szip' => trim((string)($det['ship_pin'] ?? '')),
-                    'scountry' => trim((string)($det['ship_country'] ?? '')) !== '' ? trim((string)$det['ship_country']) : 'IN',
+                    'scountry' => $shipCountry,
                     'sphone' => $billing['phone'],
                 ];
             }
+        }
+
+        if (empty($billing['country']) && !empty($row['country_of_residence'])) {
+            $billing['country'] = trim((string)$row['country_of_residence']);
         }
 
         if ($shipping === []) {
@@ -733,9 +742,11 @@ class Customer
                 'scity' => '',
                 'sstate' => '',
                 'szip' => '',
-                'scountry' => 'IN',
+                'scountry' => $billing['country'],
                 'sphone' => $billing['phone'],
             ];
+        } elseif (empty($shipping['scountry'])) {
+            $shipping['scountry'] = $billing['country'];
         }
 
         return ['billing' => $billing, 'shipping' => $shipping];
