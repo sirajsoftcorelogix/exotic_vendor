@@ -45,52 +45,23 @@ $(function () {
   window.POS_PARENT_ITEM_CART_MSG = POS_PARENT_ITEM_CART_MSG;
 
   function getPosCurrencyInfo() {
-    let code = 'INR';
-    let symbol = '₹';
-
-    if (window.POS_CURRENCY_MODE === 'INR') {
-      return {
-        code: 'INR',
-        symbol: '₹'
-      };
-    }
-
-    if (window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
-      code = String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
-      if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) symbol = String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
-    } else if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
-      const ic = window.POS_INITIAL_CUSTOMER;
-      if (ic.currency_code) code = String(ic.currency_code).trim().toUpperCase();
-      if (ic.currency_symbol) symbol = String(ic.currency_symbol).trim();
-    }
-
-    if (!symbol) {
-      if (code === 'INR') symbol = '₹';
-      else if (code === 'USD') symbol = '$';
-      else if (code === 'EUR') symbol = '€';
-      else if (code === 'GBP') symbol = '£';
-      else symbol = code;
-    }
-
     return {
-      code: code,
-      symbol: symbol
+      code: 'INR',
+      symbol: '₹'
     };
   }
 
   function getPosCurrencyCode() {
-    return getPosCurrencyInfo().code;
+    return 'INR';
   }
 
   function getPosCurrencySymbol() {
-    return getPosCurrencyInfo().symbol;
+    return '₹';
   }
 
   function formatPrice(price) {
     const p = parseFloat(price || 0);
-    const info = getPosCurrencyInfo();
-    const locale = info.code === 'INR' ? 'en-IN' : 'en-US';
-    return info.symbol + ' ' + p.toLocaleString(locale, {
+    return '₹ ' + p.toLocaleString('en-IN', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
