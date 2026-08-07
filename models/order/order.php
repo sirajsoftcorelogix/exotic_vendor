@@ -2595,7 +2595,7 @@ class Order
             }
 
             // Also update invoice items & header if invoice exists
-            $invStmt = $this->db->prepare('SELECT id FROM vp_invoices WHERE order_number = ? OR vp_order_info_id = (SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1) LIMIT 1');
+            $invStmt = $this->db->prepare('SELECT id FROM vp_invoices WHERE vp_order_info_id = (SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1) OR id IN (SELECT invoice_id FROM vp_invoice_items WHERE order_number = ?) LIMIT 1');
             if ($invStmt) {
                 $invStmt->bind_param('ss', $orderNumber, $orderNumber);
                 $invStmt->execute();
