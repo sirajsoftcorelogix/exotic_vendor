@@ -209,6 +209,7 @@ class pos
         p.id,
         p.item_code,
         p.sku,
+        p.published,
         p.material,
         p.title,
         p.groupname,

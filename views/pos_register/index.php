@@ -889,8 +889,83 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
 </div>
 </div>
 </div>
+  </div>
 </div>
+
+<!-- UNPUBLISHED PRODUCT TIMER MODAL -->
+<div id="unpublishedProductTimerModal" class="fixed inset-0 z-[10010] hidden flex items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity">
+  <div class="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl text-center mx-4">
+    <!-- Spinner -->
+    <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-orange-50 ring-8 ring-orange-100/60">
+      <svg class="h-10 w-10 animate-spin text-orange-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+    </div>
+
+    <h3 class="text-base font-bold text-gray-900 mb-1" id="unpublishedTimerTitle">Virtual Code Product</h3>
+    <p class="text-xs text-gray-600 mb-4 leading-relaxed" id="unpublishedTimerMsg">Activating product status in background before adding to cart...</p>
+
+    <!-- Timer Countdown Badge -->
+    <div class="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-800">
+      <svg class="h-4 w-4 text-orange-600 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+      </svg>
+      <span>Waiting period: <span id="unpublishedTimerCountdown" class="font-bold text-base text-orange-600">5</span>s</span>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="mt-5 h-2 w-full overflow-hidden rounded-full bg-gray-100">
+      <div id="unpublishedTimerProgressBar" class="h-full bg-orange-500 transition-all duration-1000 ease-linear" style="width: 100%;"></div>
+    </div>
+  </div>
 </div>
+
+<script>
+  window.showUnpublishedProductTimerModal = function(seconds, titleMsg, textMsg) {
+    seconds = seconds || 5;
+    if (document.getElementById('unpublishedTimerTitle')) {
+      document.getElementById('unpublishedTimerTitle').textContent = titleMsg || 'Virtual Code Product';
+    }
+    if (document.getElementById('unpublishedTimerMsg')) {
+      document.getElementById('unpublishedTimerMsg').textContent = textMsg || 'Activating product status in background before adding to cart...';
+    }
+    if (document.getElementById('unpublishedTimerCountdown')) {
+      document.getElementById('unpublishedTimerCountdown').textContent = seconds;
+    }
+    if (document.getElementById('unpublishedTimerProgressBar')) {
+      document.getElementById('unpublishedTimerProgressBar').style.width = '100%';
+    }
+    var modal = document.getElementById('unpublishedProductTimerModal');
+    if (modal) {
+      modal.classList.remove('hidden');
+    }
+  };
+
+  window.updateUnpublishedProductTimer = function(remainingSeconds, totalSeconds) {
+    totalSeconds = totalSeconds || 5;
+    if (document.getElementById('unpublishedTimerCountdown')) {
+      document.getElementById('unpublishedTimerCountdown').textContent = remainingSeconds;
+    }
+    var pct = Math.max(0, Math.min(100, (remainingSeconds / totalSeconds) * 100));
+    if (document.getElementById('unpublishedTimerProgressBar')) {
+      document.getElementById('unpublishedTimerProgressBar').style.width = pct + '%';
+    }
+  };
+
+  window.updateUnpublishedProductTimerStatus = function(msg) {
+    if (msg && document.getElementById('unpublishedTimerMsg')) {
+      document.getElementById('unpublishedTimerMsg').textContent = msg;
+    }
+  };
+
+  window.hideUnpublishedProductTimerModal = function() {
+    var modal = document.getElementById('unpublishedProductTimerModal');
+    if (modal) {
+      modal.classList.add('hidden');
+    }
+  };
+</script>
 
 <!-- ===== END PAGE WRAPPER ===== -->
 <script src="<?php echo base_url(); ?>assets/js/pos_message_modal.js"></script>
