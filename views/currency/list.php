@@ -16,7 +16,7 @@ function getCurrencyMeta($code) {
         'AED' => ['flag' => '🇦🇪', 'symbol' => 'AED', 'bg' => 'bg-emerald-50 text-emerald-700 border-emerald-200'],
         'SAR' => ['flag' => '🇸🇦', 'symbol' => 'SAR', 'bg' => 'bg-emerald-50 text-emerald-700 border-emerald-200'],
         'SGD' => ['flag' => '🇸🇬', 'symbol' => 'S$', 'bg' => 'bg-rose-50 text-rose-700 border-rose-200'],
-        'HKD' => ['flag' => '🇭🇰', 'symbol' => 'HK$', 'color' => 'bg-red-50 text-red-700 border-red-200'],
+        'HKD' => ['flag' => '🇭🇰', 'symbol' => 'HK$', 'bg' => 'bg-red-50 text-red-700 border-red-200'],
         'DKK' => ['flag' => '🇩🇰', 'symbol' => 'kr', 'bg' => 'bg-red-50 text-red-700 border-red-200'],
         'NOK' => ['flag' => '🇳🇴', 'symbol' => 'kr', 'bg' => 'bg-blue-50 text-blue-700 border-blue-200'],
         'SEK' => ['flag' => '🇸🇪', 'symbol' => 'kr', 'bg' => 'bg-blue-50 text-blue-700 border-blue-200'],
@@ -205,7 +205,7 @@ if (!empty($currencies)) {
                                     <div class="flex items-center gap-3">
                                         <span class="text-xl shrink-0" title="<?= htmlspecialchars($curr['currency_code']) ?>"><?= $meta['flag'] ?></span>
                                         <div>
-                                            <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg border text-xs font-bold tracking-wide <?= $meta['bg'] ?>">
+                                            <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg border text-xs font-bold tracking-wide <?= $meta['bg'] ?? 'bg-slate-50 text-slate-700 border-slate-200' ?>">
                                                 <span><?= strtoupper(htmlspecialchars($curr['currency_code'])) ?></span>
                                                 <span class="text-slate-400 font-normal">|</span>
                                                 <span class="font-bold"><?= htmlspecialchars($displaySym) ?></span>
