@@ -355,6 +355,9 @@
   function cartUrl(op, query) {
     var qs = 'page=pos_register&action=cart-api&op=' + encodeURIComponent(op);
     query = query || {};
+    if (op === 'retrieve' && !query.currency_mode && window.POS_CURRENCY_MODE) {
+      query.currency_mode = window.POS_CURRENCY_MODE;
+    }
     Object.keys(query).forEach(function (k) {
       if (query[k] == null || query[k] === '') {
         return;
