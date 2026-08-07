@@ -358,15 +358,121 @@ $(function () {
   let modalCustomAddons = [];
   const CUSTOM_ADDON_MIDDLE = '_blank_';
 
-  function openModal() {
-    $modal.removeClass('hidden');
-    $('body').addClass('overflow-hidden');
+  let activeModalProduct = null;
+
+  window.setPosModalPriceMode = function (mode) {
+    if (typeof window.setPosCurrencyMode === 'function') {
+      window.setPosCurrencyMode(mode);
+    } else {
+      window.POS_CURRENCY_MODE = mode;
+    }
+    if (activeModalProduct) {
+      updateModalPriceDisplay(activeModalProduct);
+    }
+  };
+
+  function getClientModalCurrencyInfo() {
+    let code = 'INR';
+    let symbol = '₹';
+
+    if (window.POS_CURRENCY_MODE === 'INR') {
+      return { code: 'INR', symbol: '₹' };
+    }
+
+    if (window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
+      code = String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
+      if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) symbol = String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
+    } else if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
+      const ic = window.POS_INITIAL_CUSTOMER;
+      if (ic.currency_code) code = String(ic.currency_code).trim().toUpperCase();
+      if (ic.currency_symbol) symbol = String(ic.currency_symbol).trim();
+    }
+
+    if (!symbol) {
+      if (code === 'INR') symbol = '₹';
+      else if (code === 'USD') symbol = '$';
+      else if (code === 'EUR') symbol = '€';
+      else if (code === 'GBP') symbol = '£';
+      else symbol = code;
+    }
+
+    return { code: code, symbol: symbol };
+  }
+
+  function updateModalPriceDisplay(p) {
+    if (!p) return;
+    const $pmPrice = $('#pmModalPrice');
+    if (!$pmPrice.length) return;
+
+    if (!hasDisplayablePrice(p.price)) {
+      $pmPrice.addClass('hidden').text('');
+      return;
+    }
+
+    const mode = window.POS_CURRENCY_MODE || 'CUSTOMER';
+    const clientCurr = getClientModalCurrencyInfo();
+    const custCountry = window.POS_CURRENT_CUSTOMER_COUNTRY_CODE || (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.country_code) || '';
+
+    if (mode === 'CUSTOMER' && clientCurr.code !== 'INR' && custCountry && custCountry !== 'IN') {
+      const itemCode = p.item_code || p.sku || p.requested_code || '';
+      const color = p.color || '';
+      const size = p.size || '';
+
+      if (!p._nonInrPrices) p._nonInrPrices = {};
+
+      if (p._nonInrPrices[clientCurr.code] != null) {
+        const altPrice = p._nonInrPrices[clientCurr.code];
+        const locale = clientCurr.code === 'INR' ? 'en-IN' : 'en-US';
+        $pmPrice
+          .removeClass('hidden')
+          .text(`${clientCurr.symbol} ${Number(altPrice).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+        return;
+      }
+
+      $pmPrice.removeClass('hidden').text('Loading price…');
+
+      $.ajax({
+        url: '?page=pos_register&action=get-product-price',
+        type: 'GET',
+        data: {
+          code: itemCode,
+          country_code: custCountry,
+          color: color,
+          size: size
+        },
+        dataType: 'json'
+      }).done(function (res) {
+        if (res && res.status && res.price != null) {
+          p._nonInrPrices[clientCurr.code] = res.price;
+          if (activeModalProduct === p && (window.POS_CURRENCY_MODE || 'CUSTOMER') === 'CUSTOMER') {
+            const locale = clientCurr.code === 'INR' ? 'en-IN' : 'en-US';
+            $pmPrice
+              .removeClass('hidden')
+              .text(`${clientCurr.symbol} ${Number(res.price).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+          }
+        } else {
+          // Fallback to INR price display if endpoint returns no price
+          $pmPrice
+            .removeClass('hidden')
+            .text(`₹ ${Number(p.price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+        }
+      }).fail(function () {
+        $pmPrice
+          .removeClass('hidden')
+          .text(`₹ ${Number(p.price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+      });
+    } else {
+      $pmPrice
+        .removeClass('hidden')
+        .text(`₹ ${Number(p.price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+    }
   }
 
   function closeModal() {
     $modal.addClass('hidden');
     $('body').removeClass('overflow-hidden');
     activeModalKey = null;
+    activeModalProduct = null;
     modalWarehouseMaxQty = null;
     modalStockWarningMessage = '';
     $('#pmQtyMaxHint').text('');
@@ -755,6 +861,7 @@ $(function () {
 
   function renderProductModal(p, key) {
     activeModalKey = key;
+    activeModalProduct = p;
     resetCustomAddonsUi();
     $('#pmAddons').html('');
     $('#pmAddonsWrapper').addClass('hidden');
@@ -957,21 +1064,10 @@ $(function () {
 
     $('#pmDetails').html(html);
 
-    const $pmPrice = $('#pmModalPrice');
-    if ($pmPrice.length) {
-      if (hasDisplayablePrice(p.price)) {
-        $pmPrice
-          .removeClass('hidden')
-          .text(
-            `${getPosCurrencySymbol()} ${Number(p.price).toLocaleString(getPosCurrencyCode() === 'INR' ? 'en-IN' : 'en-US', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2
-            })}`
-          );
-      } else {
-        $pmPrice.addClass('hidden').text('');
-      }
+    if (typeof window.updatePosCurrencyToggleUI === 'function') {
+      window.updatePosCurrencyToggleUI();
     }
+    updateModalPriceDisplay(p);
 
     renderQtySummaryUnderInput(p);
 
@@ -1276,7 +1372,7 @@ data-code="${lookupCode}">
     openProductModalByCode(codeForPopup, [], product);
   }
   function renderModalData(p) {
-
+    activeModalProduct = p;
     const isUnpublished =
       p.published === 0 ||
       p.published === '0' ||
@@ -1301,6 +1397,11 @@ data-code="${lookupCode}">
         <div>Size</div><div>:</div><div>${p.size || '-'}</div>
         <div>Color</div><div>:</div><div>${p.color || '-'}</div>
     `);
+
+    if (typeof window.updatePosCurrencyToggleUI === 'function') {
+      window.updatePosCurrencyToggleUI();
+    }
+    updateModalPriceDisplay(p);
 
     const cpMd = resolveCartPayload(p);
     setModalCartFields(p, cpMd);

@@ -489,6 +489,12 @@
         btnCustomer: document.getElementById('posCartTableCurrencyBtnCustomer'),
         labelCustomer: document.getElementById('posCartTableCurrencyCustomerLabel'),
         btnINR: document.getElementById('posCartTableCurrencyBtnINR')
+      },
+      {
+        container: document.getElementById('pmPriceToggleContainer'),
+        btnCustomer: document.getElementById('pmPriceBtnCustomer'),
+        labelCustomer: document.getElementById('pmPriceCustomerLabel'),
+        btnINR: document.getElementById('pmPriceBtnINR')
       }
     ];
 
