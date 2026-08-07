@@ -4825,10 +4825,10 @@
   /**
    * Handle adding an unpublished product (vp_products.published = 0) to cart:
    * 1. Show spinner & 5-second timer modal in UI.
-   * 2. In background, set product status to 1 (local DB + Exotic vendor-api).
+   * 2. In background, acquire lock & set product status to 1 (local DB + Exotic vendor-api).
    * 3. Wait for 5 seconds AND for status update request to complete.
    * 4. Add product to cart via cart-api POST add.
-   * 5. Once added (or on error), set product status back to 0 in background.
+   * 5. Once added (or on error), release lock and set product status back to 0 when no other locks remain.
    * 6. Hide spinner/timer modal and refresh cart.
    *
    * @param {Record<string, unknown>} p
@@ -4841,6 +4841,7 @@
     var sku = p.sku || body.code || '';
     var size = p.size || body.size || '';
     var color = p.color || body.color || '';
+    var lockToken = null;
 
     var statusParams = {
       product_id: productId,
@@ -4855,7 +4856,7 @@
       window.showUnpublishedProductTimerModal(totalSeconds);
     }
 
-    // Step 1: In background set product status = 1
+    // Step 1: In background acquire lock & set product status = 1
     var publishPromise = $.ajax({
       url: '?page=pos_register&action=update-product-published',
       type: 'POST',
@@ -4869,6 +4870,11 @@
         published: 1
       }),
       dataType: 'json'
+    }).then(function (res) {
+      if (res && res.token) {
+        lockToken = res.token;
+      }
+      return res;
     });
 
     // Step 2: 5 second countdown timer
@@ -4955,7 +4961,7 @@
         toast('Failed to add unpublished product to cart.', 'red');
       })
       .finally(function () {
-        // Step 5: Once added to cart (or on failure/error), set status = 0 in background
+        // Step 5: Once added to cart (or on failure/error), release lock and set status = 0 if no active locks remain
         if (typeof window.updateUnpublishedProductTimerStatus === 'function') {
           window.updateUnpublishedProductTimerStatus('Resetting product status...');
         }
@@ -4969,7 +4975,8 @@
             sku: statusParams.sku,
             size: statusParams.size,
             color: statusParams.color,
-            published: 0
+            published: 0,
+            token: lockToken
           }),
           dataType: 'json'
         }).always(function () {

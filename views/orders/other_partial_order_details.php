@@ -54,6 +54,7 @@ if ($orderCurrencyCode === '') {
     $orderCurrencyCode = 'INR';
 }
 $orderCurrencySymbol = vendor_currency_symbol($orderCurrencyCode);
+$canEditOrderPrices = !empty($canEditOrderPrices) || (function_exists('canSrEmpAccess') && canSrEmpAccess());
 $resolveCountryLabel = static function (?string $code) use ($countries): string {
     $code = trim((string)$code);
     if ($code === '') {
@@ -89,7 +90,11 @@ if ($invoiceIdForReturn > 0) {
                 class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">
                 Return
             </button>
-            <button class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50">Edit</button>
+            <?php if ($canEditOrderPrices): ?>
+                <button type="button" onclick="openEditPricesModal()" class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50 transition-colors">Edit</button>
+            <?php else: ?>
+                <button type="button" disabled title="Sr Emp or higher access required to edit prices" class="rounded border bg-gray-100 text-gray-400 px-4 py-1.5 text-sm font-medium cursor-not-allowed">Edit</button>
+            <?php endif; ?>
             <div class="relative inline-block text-left">
                 <input type="checkbox" id="dropdown-toggle" class="peer hidden">
                 <label for="dropdown-toggle" class="flex cursor-pointer items-center gap-2 rounded bg-black px-4 py-1.5 text-sm font-medium text-white hover:bg-gray-800 transition-colors select-none">
@@ -724,6 +729,181 @@ if ($invoiceIdForReturn > 0) {
     'showOrderVendorName' => !empty($showOrderVendorName),
     'orderPage' => 'orders',
 ]); ?>
+
+<!-- Edit Order Item Prices Modal -->
+<div id="editOrderPricesPopup" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl mx-auto flex flex-col max-h-[90vh] relative overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+            <div>
+                <h2 class="text-base font-bold text-gray-900">Edit Order Item Prices</h2>
+                <p class="text-xs text-gray-500">Order #<?php echo htmlspecialchars($displayOrderNumber); ?></p>
+            </div>
+            <button type="button" onclick="closeEditPricesModal()" class="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="overflow-y-auto p-6 custom-scrollbar flex-1">
+            <form id="editOrderPricesForm">
+                <input type="hidden" name="order_number" value="<?php echo htmlspecialchars($displayOrderNumber); ?>">
+
+                <div class="space-y-4">
+                    <?php foreach ($order as $item): ?>
+                        <?php
+                            $lineId = (int)($item['id'] ?? 0);
+                            $imageUrl = (string)($item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=No+Image');
+                            $itemCode = (string)($item['item_code'] ?? '');
+                            $sku = (string)($item['sku'] ?? $itemCode);
+                            $title = (string)($item['title'] ?? '');
+                            $qty = (int)($item['quantity'] ?? 1);
+                            $price = (float)($item['finalprice'] ?? 0);
+                            $size = (string)($item['size'] ?? '');
+                            $color = (string)($item['color'] ?? '');
+                        ?>
+                        <div class="flex items-center gap-4 rounded-xl border border-gray-200 p-4 bg-gray-50/50 hover:bg-white transition-colors">
+                            <div class="h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white">
+                                <img src="<?php echo htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'); ?>" class="h-full w-full object-cover" alt="Product">
+                            </div>
+
+                            <div class="flex-1 min-w-0">
+                                <h4 class="text-sm font-semibold text-gray-900 truncate" title="<?php echo htmlspecialchars($title); ?>">
+                                    <?php echo htmlspecialchars($title); ?>
+                                </h4>
+                                <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
+                                    <span><strong class="text-gray-800">SKU:</strong> <?php echo htmlspecialchars($sku !== '' ? $sku : '—'); ?></span>
+                                    <span><strong class="text-gray-800">Item Code:</strong> <?php echo htmlspecialchars($itemCode); ?></span>
+                                    <?php if ($color !== ''): ?>
+                                        <span><strong class="text-gray-800">Color:</strong> <?php echo htmlspecialchars($color); ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($size !== ''): ?>
+                                        <span><strong class="text-gray-800">Size:</strong> <?php echo htmlspecialchars($size); ?></span>
+                                    <?php endif; ?>
+                                    <span><strong class="text-gray-800">Qty:</strong> <?php echo $qty; ?></span>
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col items-end gap-1">
+                                <label class="text-xs font-semibold text-gray-700">Unit Final Price (<?php echo htmlspecialchars($orderCurrencySymbol ?? '₹'); ?>)</label>
+                                <div class="relative rounded-md shadow-xs">
+                                    <input type="number"
+                                           step="0.01"
+                                           min="0"
+                                           required
+                                           class="edit-price-input w-32 rounded-md border border-gray-300 px-3 py-1.5 text-right font-semibold text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                           data-line-id="<?php echo $lineId; ?>"
+                                           data-qty="<?php echo $qty; ?>"
+                                           name="items[<?php echo $lineId; ?>][price]"
+                                           value="<?php echo htmlspecialchars(number_format($price, 2, '.', '')); ?>">
+                                    <input type="hidden" name="items[<?php echo $lineId; ?>][id]" value="<?php echo $lineId; ?>">
+                                    <input type="hidden" name="items[<?php echo $lineId; ?>][item_code]" value="<?php echo htmlspecialchars($itemCode); ?>">
+                                    <input type="hidden" name="items[<?php echo $lineId; ?>][size]" value="<?php echo htmlspecialchars($size); ?>">
+                                    <input type="hidden" name="items[<?php echo $lineId; ?>][color]" value="<?php echo htmlspecialchars($color); ?>">
+                                </div>
+                                <span class="text-[11px] text-gray-500">
+                                    Line Total: <?php echo htmlspecialchars($orderCurrencySymbol ?? '₹'); ?><span class="line-calc-total font-medium"><?php echo number_format($price * $qty, 2); ?></span>
+                                </span>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+
+                <div class="mt-6 flex items-center justify-between border-t border-gray-200 pt-4">
+                    <div class="text-sm text-gray-700">
+                        Total Order Price: <strong class="text-base text-gray-900 font-bold"><?php echo htmlspecialchars($orderCurrencySymbol ?? '₹'); ?><span id="edit-prices-calc-total"><?php echo number_format($total_price, 2); ?></span></strong>
+                    </div>
+
+                    <div class="flex gap-3">
+                        <button type="button" onclick="closeEditPricesModal()" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                            Cancel
+                        </button>
+                        <button type="submit" id="btn-save-item-prices" class="rounded-lg bg-[#D46B08] px-6 py-2 text-sm font-bold text-white shadow-xs hover:bg-orange-700 transition-colors">
+                            Update Order
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function openEditPricesModal() {
+    const popup = document.getElementById('editOrderPricesPopup');
+    if (popup) {
+        popup.classList.remove('hidden');
+        updateEditPricesCalculatedTotal();
+    }
+}
+
+function closeEditPricesModal() {
+    const popup = document.getElementById('editOrderPricesPopup');
+    if (popup) {
+        popup.classList.add('hidden');
+    }
+}
+
+function updateEditPricesCalculatedTotal() {
+    let total = 0;
+    document.querySelectorAll('.edit-price-input').forEach(input => {
+        const qty = parseFloat(input.getAttribute('data-qty')) || 1;
+        const price = parseFloat(input.value) || 0;
+        const lineTotal = price * qty;
+        total += lineTotal;
+        const container = input.closest('div.flex-col');
+        if (container) {
+            const lineTotalSpan = container.querySelector('.line-calc-total');
+            if (lineTotalSpan) {
+                lineTotalSpan.textContent = lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+        }
+    });
+    const totalSpan = document.getElementById('edit-prices-calc-total');
+    if (totalSpan) {
+        totalSpan.textContent = total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+}
+
+document.getElementById('editOrderPricesForm')?.addEventListener('input', function(e) {
+    if (e.target && e.target.classList.contains('edit-price-input')) {
+        updateEditPricesCalculatedTotal();
+    }
+});
+
+document.getElementById('editOrderPricesForm')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-save-item-prices');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Updating...';
+    }
+
+    const formData = new FormData(this);
+
+    fetch('index.php?page=orders&action=update_item_prices', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            closeEditPricesModal();
+            window.location.reload();
+        } else {
+            alert("Failed to update: " + (data.message || "Unknown error"));
+        }
+    })
+    .catch(err => {
+        alert("An error occurred: " + err.message);
+    })
+    .finally(() => {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Update Order';
+        }
+    });
+});
 
 <script>
     function openNoteEditPopup(orderNumber, currentRemarks) {

@@ -1241,6 +1241,7 @@ class PosOrdersController
                 'proformaPrintUrl' => (string)($proformaPrintAction['url'] ?? ''),
                 'canPrintProforma' => !empty($proformaPrintAction['can_print']),
                 'canEditInvoiceNumber' => canSrEmpAccess(),
+                'canEditOrderPrices' => canSrEmpAccess(),
                 'paymentSummary' => $paymentSummary,
                 'canCreateFinalInvoice' => $canCreateFinalInvoice,
                 'canPublishExoticSync' => $canPublishExoticSync,
@@ -2252,6 +2253,109 @@ class PosOrdersController
         $newOrderNumber = trim((string)($_POST['new_order_number'] ?? ''));
 
         vendorJsonResponse($ordersModel->renameOrderNumber($oldOrderNumber, $newOrderNumber));
+    }
+
+    public function updateItemPricesAjax()
+    {
+        is_login();
+        global $ordersModel, $conn;
+
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (!canSrEmpAccess()) {
+            echo json_encode(['success' => false, 'message' => 'Access denied. Sr Emp, Top Management, or Admin access required.']);
+            exit;
+        }
+
+        $orderNumber = trim((string)($_POST['order_number'] ?? ''));
+        $itemsInput = $_POST['items'] ?? [];
+
+        if ($orderNumber === '') {
+            echo json_encode(['success' => false, 'message' => 'Order number is required.']);
+            exit;
+        }
+
+        if (is_string($itemsInput)) {
+            $itemsInput = json_decode($itemsInput, true) ?? [];
+        }
+
+        if (!is_array($itemsInput) || empty($itemsInput)) {
+            echo json_encode(['success' => false, 'message' => 'Line items data is missing.']);
+            exit;
+        }
+
+        $existingOrder = $ordersModel->getOrderLineItemsByRef($orderNumber);
+        if (!$existingOrder) {
+            echo json_encode(['success' => false, 'message' => 'Order not found.']);
+            exit;
+        }
+
+        $resolvedOrderNumber = (string)($existingOrder[0]['order_number'] ?? $orderNumber);
+
+        $inputPricesByLineId = [];
+        foreach ($itemsInput as $key => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $lineId = (int)($item['id'] ?? $key);
+            $rawPrice = $item['price'] ?? $item['finalprice'] ?? 0;
+            $price = max(0.0, round((float)$rawPrice, 2));
+            if ($lineId > 0) {
+                $inputPricesByLineId[$lineId] = $price;
+            }
+        }
+
+        $dbItemsToUpdate = [];
+        $allApiItems = [];
+
+        foreach ($existingOrder as $existingLine) {
+            $lineId = (int)($existingLine['id'] ?? 0);
+            $itemCode = (string)($existingLine['item_code'] ?? '');
+            $size = (string)($existingLine['size'] ?? '');
+            $color = (string)($existingLine['color'] ?? '');
+            $currentPrice = max(0.0, round((float)($existingLine['finalprice'] ?? 0), 2));
+
+            $newPrice = array_key_exists($lineId, $inputPricesByLineId) ? $inputPricesByLineId[$lineId] : $currentPrice;
+
+            $dbItemsToUpdate[] = [
+                'id' => $lineId,
+                'item_code' => $itemCode,
+                'size' => $size,
+                'color' => $color,
+                'price' => $newPrice,
+            ];
+
+            $allApiItems[] = [
+                'itemcode' => $itemCode,
+                'size' => $size,
+                'color' => $color,
+                'price' => $newPrice,
+            ];
+        }
+
+        require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+        $dbResult = $ordersModel->updateOrderItemPrices($resolvedOrderNumber, $dbItemsToUpdate);
+
+        if (empty($dbResult['success'])) {
+            echo json_encode($dbResult);
+            exit;
+        }
+
+        // Call external POS API (https://www.exoticindia.com/api/order/pos_editorderprices)
+        require_once __DIR__ . '/../integrations/exotic/Clients/RetailApiClient.php';
+        $retailClient = RetailApiClient::create($conn);
+        $apiResult = $retailClient->editOrderPrices($resolvedOrderNumber, $allApiItems);
+
+        $apiData = is_array($apiResult['data'] ?? null) ? $apiResult['data'] : [];
+        $apiMessage = (string)($apiData['message'] ?? $apiData['msg'] ?? '');
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Order item prices updated successfully.' . ($apiMessage !== '' ? ' API: ' . $apiMessage : ''),
+            'new_total' => $dbResult['new_total'] ?? 0,
+            'api_response' => $apiData,
+        ]);
+        exit;
     }
 
     public function getOrderDetailsForDispatch()

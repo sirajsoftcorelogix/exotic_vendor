@@ -2204,4 +2204,138 @@ class POSOrder
         $result = $stmt->get_result();
         return ($result && $result->num_rows > 0);
     }
+
+    /**
+     * Update unit prices (finalprice & itemprice) for order line items and update order total.
+     *
+     * @param string $orderNumber
+     * @param list<array{id: int, price: float, item_code?: string, size?: string, color?: string}> $itemPrices
+     * @return array{success: bool, message?: string, new_total?: float, updated_lines?: int}
+     */
+    public function updateOrderItemPrices(string $orderNumber, array $itemPrices): array
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '' || empty($itemPrices)) {
+            return ['success' => false, 'message' => 'Order number or line item prices are missing.'];
+        }
+
+        $useTransaction = ($this->db instanceof mysqli);
+        if ($useTransaction) {
+            $this->db->begin_transaction();
+        }
+
+        try {
+            $updated = 0;
+            $stmt = $this->db->prepare(
+                'UPDATE vp_orders SET finalprice = ?, itemprice = ? WHERE id = ? AND order_number = ?'
+            );
+            if ($stmt) {
+                foreach ($itemPrices as $item) {
+                    $lineId = (int)($item['id'] ?? 0);
+                    $price = max(0.0, round((float)($item['price'] ?? 0), 2));
+                    if ($lineId <= 0) {
+                        continue;
+                    }
+                    $stmt->bind_param('ddis', $price, $price, $lineId, $orderNumber);
+                    $stmt->execute();
+                    $updated += $stmt->affected_rows;
+                }
+                $stmt->close();
+            }
+
+            // Calculate new total order price from vp_orders
+            $newTotal = 0.0;
+            $totalStmt = $this->db->prepare(
+                'SELECT SUM(finalprice * quantity) AS new_total FROM vp_orders WHERE order_number = ?'
+            );
+            if ($totalStmt) {
+                $totalStmt->bind_param('s', $orderNumber);
+                $totalStmt->execute();
+                $res = $totalStmt->get_result();
+                if ($row = $res->fetch_assoc()) {
+                    $newTotal = round((float)($row['new_total'] ?? 0), 2);
+                }
+                $totalStmt->close();
+            }
+
+            // Update vp_order_info.total
+            $infoStmt = $this->db->prepare(
+                'UPDATE vp_order_info SET total = ? WHERE order_number = ?'
+            );
+            if ($infoStmt) {
+                $infoStmt->bind_param('ds', $newTotal, $orderNumber);
+                $infoStmt->execute();
+                $infoStmt->close();
+            }
+
+            // Refresh pos_payments snapshots if helper exists
+            if (function_exists('pos_payment_refresh_order_snapshots') && $this->db instanceof mysqli) {
+                pos_payment_refresh_order_snapshots($this->db, $orderNumber);
+            }
+
+            // Also update invoice items & header if invoice exists
+            $invStmt = $this->db->prepare('SELECT id FROM vp_invoices WHERE order_number = ? OR vp_order_info_id = (SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1) LIMIT 1');
+            if ($invStmt) {
+                $invStmt->bind_param('ss', $orderNumber, $orderNumber);
+                $invStmt->execute();
+                $invRes = $invStmt->get_result();
+                if ($invRow = $invRes->fetch_assoc()) {
+                    $invoiceId = (int)($invRow['id'] ?? 0);
+                    if ($invoiceId > 0) {
+                        $itemUpd = $this->db->prepare('UPDATE vp_invoice_items SET unit_price = ?, line_total = unit_price * quantity WHERE invoice_id = ? AND item_code = ?');
+                        if ($itemUpd) {
+                            foreach ($itemPrices as $item) {
+                                $price = max(0.0, round((float)($item['price'] ?? 0), 2));
+                                $itemCode = trim((string)($item['item_code'] ?? ''));
+                                if ($itemCode !== '') {
+                                    $itemUpd->bind_param('dis', $price, $invoiceId, $itemCode);
+                                    $itemUpd->execute();
+                                }
+                            }
+                            $itemUpd->close();
+                        }
+
+                        $invSumStmt = $this->db->prepare('SELECT SUM(line_total) AS inv_subtotal, SUM(tax_amount) AS inv_tax FROM vp_invoice_items WHERE invoice_id = ?');
+                        if ($invSumStmt) {
+                            $invSumStmt->bind_param('i', $invoiceId);
+                            $invSumStmt->execute();
+                            $invSumRes = $invSumStmt->get_result();
+                            if ($invSumRow = $invSumRes->fetch_assoc()) {
+                                $invSubtotal = round((float)($invSumRow['inv_subtotal'] ?? 0), 2);
+                                $invTax = round((float)($invSumRow['inv_tax'] ?? 0), 2);
+                                $invTotal = round($invSubtotal + $invTax, 2);
+                                $invUpd = $this->db->prepare('UPDATE vp_invoices SET subtotal = ?, total_amount = ? WHERE id = ?');
+                                if ($invUpd) {
+                                    $invUpd->bind_param('ddi', $invSubtotal, $invTotal, $invoiceId);
+                                    $invUpd->execute();
+                                    $invUpd->close();
+                                }
+                            }
+                            $invSumStmt->close();
+                        }
+                    }
+                }
+                $invStmt->close();
+            }
+
+            if ($useTransaction) {
+                $this->db->commit();
+            }
+
+            return [
+                'success' => true,
+                'message' => 'Order item prices updated successfully.',
+                'new_total' => $newTotal,
+                'updated_lines' => $updated,
+            ];
+        } catch (\Throwable $e) {
+            if ($useTransaction) {
+                $this->db->rollback();
+            }
+            return [
+                'success' => false,
+                'message' => 'Database update failed: ' . $e->getMessage(),
+            ];
+        }
+    }
 }
