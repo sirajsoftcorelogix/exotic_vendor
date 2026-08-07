@@ -2275,9 +2275,12 @@ class PosOrdersController
             exit;
         }
 
-        $existingOrderInfo = $ordersModel->getRemarksByOrderNumber($orderNumber);
-        $currentCustomReduce = (float)($existingOrderInfo['custom_reduce'] ?? 0);
-        $customReduce = isset($_POST['custom_reduce']) ? max(0.0, round((float)$_POST['custom_reduce'], 2)) : $currentCustomReduce;
+        if (isset($_POST['custom_reduce'])) {
+            $customReduce = max(0.0, round((float)$_POST['custom_reduce'], 2));
+        } else {
+            $existingOrderInfo = $ordersModel->getRemarksByOrderNumber($orderNumber);
+            $customReduce = (float)($existingOrderInfo['custom_reduce'] ?? 0);
+        }
 
         if (is_string($itemsInput)) {
             $itemsInput = json_decode($itemsInput, true) ?? [];
