@@ -944,9 +944,27 @@ $(function () {
       badges.push(`<span class="rounded-md bg-green-100 px-2 py-1 text-[10px] text-green-700">Stock: ${p.stock_qty}</span>`);
     }
 
+    const isUnpublished =
+      p.published === 0 ||
+      p.published === '0' ||
+      p.published === false ||
+      p.is_published === false ||
+      p.status === 0 ||
+      p.status === '0' ||
+      String(p.status_label || '').toLowerCase() === 'unpublished' ||
+      String(p.status || '').toLowerCase() === 'unpublished';
+
+    if (isUnpublished) {
+      badges.push(`<span class="rounded-md bg-red-100 px-2 py-1 text-[10px] font-semibold text-red-700">Status: Unpublished</span>`);
+    }
+
     $('#pmBadges').html(badges.join(''));
 
     let html = '';
+
+    if (isUnpublished) {
+      html += addRow('Status', '<span class="font-semibold text-red-600">Unpublished</span>');
+    }
 
     const measurementLine = formatMeasurementLine(p);
     if (measurementLine) {
@@ -1307,10 +1325,25 @@ data-code="${lookupCode}">
   }
   function renderModalData(p) {
 
+    const isUnpublished =
+      p.published === 0 ||
+      p.published === '0' ||
+      p.published === false ||
+      p.is_published === false ||
+      p.status === 0 ||
+      p.status === '0' ||
+      String(p.status_label || '').toLowerCase() === 'unpublished' ||
+      String(p.status || '').toLowerCase() === 'unpublished';
+
+    const statusRow = isUnpublished
+      ? `<div>Status</div><div>:</div><div class="font-semibold text-red-600">Unpublished</div>`
+      : '';
+
     $('#pmTitle').text(p.title || 'Product');
     $('#pmImage').attr('src', fixModalImageSrc(p.image) || '');
 
     $('#pmDetails').html(`
+        ${statusRow}
         <div>Price</div><div>:</div><div>${formatPrice(p.price)}</div>
         <div>Material</div><div>:</div><div>${p.material || '-'}</div>
         <div>Size</div><div>:</div><div>${p.size || '-'}</div>
