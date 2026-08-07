@@ -3781,7 +3781,7 @@ class POSRegisterController
                         price_india, itemprice, finalprice, mrp_india,
                         groupname, itemtype, sourcingfee, shippingfee,
                         product_weight, product_weight_unit,
-                        prod_height, prod_width, prod_length, length_unit, item_level
+                        prod_height, prod_width, prod_length, length_unit, item_level, published
                  FROM vp_products WHERE is_active = 1
                    AND (sku = ? OR item_code = ?)'
                 . self::VP_PRODUCT_BY_CODE_ORDER_SQL . ' LIMIT 1'
@@ -3919,7 +3919,17 @@ class POSRegisterController
             }
         }
 
-        // echo '<pre>'; print_r($data['addon_options']); exit;
+        $publishedVal = 1;
+        if (array_key_exists('published', $dbRow) && $dbRow['published'] !== null && $dbRow['published'] !== '') {
+            $publishedVal = (int)$dbRow['published'];
+        } elseif (isset($data['published'])) {
+            $s = strtolower(trim((string)$data['published']));
+            $publishedVal = ($s === '0' || $s === 'false' || $s === 'unpublished') ? 0 : 1;
+        } elseif (isset($data['status']) && (is_numeric($data['status']) || strtolower((string)$data['status']) === 'unpublished')) {
+            $s = strtolower(trim((string)$data['status']));
+            $publishedVal = ($s === '0' || $s === 'unpublished') ? 0 : 1;
+        }
+
         $product = [
             'requested_code' => $code,
             'item_code' => $dbItemCode,
@@ -3927,6 +3937,9 @@ class POSRegisterController
             'title' => $this->mergeProductTextField($data['name'] ?? '', $dbRow['title'] ?? ''),
             'image' => $imageResolved,
             'price' => $sellingPrice,
+            'published' => $publishedVal,
+            'is_published' => ($publishedVal === 1),
+            'status_label' => ($publishedVal === 1 ? 'Published' : 'Unpublished'),
 
             'material' => $this->mergeProductTextField($data['material'] ?? '', $dbRow['material'] ?? ''),
             'size' => $this->posProductFacetFromDbFirst($dbRow, $data, 'size'),
