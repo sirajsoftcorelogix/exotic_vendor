@@ -4011,6 +4011,70 @@ class POSRegisterController
     }
 
     /**
+     * Fetch country-based price using Exotic /product/code?onlyprice API with x-api-countrycode header.
+     */
+    public function getProductPrice()
+    {
+        $code = isset($_GET['code']) ? trim((string)$_GET['code']) : '';
+        $countryCode = isset($_GET['country_code']) ? trim((string)$_GET['country_code']) : '';
+        $color = isset($_GET['color']) ? trim((string)$_GET['color']) : '';
+        $size = isset($_GET['size']) ? trim((string)$_GET['size']) : '';
+
+        if ($code === '' || $countryCode === '') {
+            $this->clearBufferedHttpOutput();
+            header('Content-Type: application/json');
+            echo json_encode(['status' => false, 'message' => 'Missing code or country_code parameter']);
+            exit;
+        }
+
+        $params = [
+            'onlyprice' => '',
+            'code' => $code,
+        ];
+        if ($color !== '') {
+            $params['color'] = $color;
+        }
+        if ($size !== '') {
+            $params['size'] = $size;
+        }
+
+        $this->retailApiClient->setCustomerCountryCode($countryCode);
+        $res = $this->retailApiClient->call('/product/code', 'GET', $params);
+
+        $priceData = $res['data'] ?? [];
+        $rawPrice = $priceData['price'] ?? null;
+
+        if ($rawPrice === null && ($color !== '' || $size !== '')) {
+            // Fallback without color/size if combination error returned
+            unset($params['color'], $params['size']);
+            $resFallback = $this->retailApiClient->call('/product/code', 'GET', $params);
+            $priceData = $resFallback['data'] ?? [];
+            $rawPrice = $priceData['price'] ?? null;
+        }
+
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json');
+
+        if ($rawPrice !== null) {
+            echo json_encode([
+                'status' => true,
+                'price' => (float)$rawPrice,
+                'raw_price' => $rawPrice,
+                'country_code' => $countryCode,
+                'code' => $code
+            ]);
+        } else {
+            echo json_encode([
+                'status' => false,
+                'message' => $priceData['error'] ?? 'Price not found',
+                'country_code' => $countryCode,
+                'code' => $code
+            ]);
+        }
+        exit;
+    }
+
+    /**
      * Check product stock in current warehouse and alternatives.
      * Accepts product_id (preferred) or item_code/sku via `q`.
      */

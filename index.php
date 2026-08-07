@@ -1572,6 +1572,9 @@ switch ($page) {
             case 'get-product-api':
                 $controller->getProductApi();
                 break;
+            case 'get-product-price':
+                $controller->getProductPrice();
+                break;
             case 'sibling-skus':
                 $controller->siblingSkusAjax();
                 break;
