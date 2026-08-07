@@ -126,6 +126,8 @@
 
 
             <input type="hidden" id="modal_product_code" value="">
+            <input type="hidden" id="modal_product_id" value="">
+            <input type="hidden" id="modal_published" value="1">
             <input type="hidden" id="modal_item_code" value="">
             <input type="hidden" id="modal_size" value="">
             <input type="hidden" id="modal_color" value="">

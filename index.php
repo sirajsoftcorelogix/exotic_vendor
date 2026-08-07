@@ -1592,6 +1592,9 @@ switch ($page) {
             case 'save-customer-compliance':
                 $controller->save_customer_compliance();
                 break;
+            case 'update-product-published':
+                $controller->updateProductPublished();
+                break;
             default:
                 $controller->index();
                 break;

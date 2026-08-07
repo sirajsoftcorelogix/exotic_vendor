@@ -3931,6 +3931,8 @@ class POSRegisterController
         }
 
         $product = [
+            'id' => $vpId,
+            'product_id' => $vpId,
             'requested_code' => $code,
             'item_code' => $dbItemCode,
             'sku' => $dbSku,
@@ -6133,6 +6135,120 @@ class POSRegisterController
             'receipt_signature_date' => $dt->format('d M Y'),
             'payment_history_url' => 'index.php?page=payments&order_number=' . rawurlencode($orderNumber) . '&order_exact=1',
             'invoice_poitem_ids' => $this->resolveInvoicePoitemIdsForOrderNumber($conn, $orderNumber),
+        ];
+    }
+
+    /**
+     * Update product published status in local DB and sync to Exotic India Vendor API.
+     * Used when adding unpublished products to cart in POS register.
+     */
+    public function updateProductPublished(): void
+    {
+        is_login();
+
+        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? '')) !== 'POST') {
+            vendorJsonResponse(['success' => false, 'message' => 'POST request required.']);
+            return;
+        }
+
+        $rawInput = (string)file_get_contents('php://input');
+        $data = json_decode($rawInput, true);
+        if (!is_array($data)) {
+            $data = $_POST;
+        }
+
+        $productId = isset($data['product_id']) ? (int)$data['product_id'] : 0;
+        $itemCode  = trim((string)($data['item_code'] ?? ''));
+        $sku       = trim((string)($data['sku'] ?? ''));
+        $size      = trim((string)($data['size'] ?? ''));
+        $color     = trim((string)($data['color'] ?? ''));
+        $newVal    = isset($data['published']) ? (int)$data['published'] : -1;
+
+        if ($newVal !== 0 && $newVal !== 1) {
+            vendorJsonResponse(['success' => false, 'message' => 'published must be 0 or 1.']);
+            return;
+        }
+
+        global $conn;
+        require_once 'models/product/product.php';
+        $productModel = new \Product($conn);
+
+        $product = null;
+        if ($productId > 0) {
+            $product = $productModel->getProduct($productId);
+        }
+        if (!$product && $itemCode !== '') {
+            $itemCodeRes = $productModel->getProductByItemCode($itemCode);
+            if (is_array($itemCodeRes)) {
+                $product = isset($itemCodeRes['id']) ? $itemCodeRes : ($itemCodeRes[0] ?? null);
+            }
+        }
+        if (!$product && $sku !== '') {
+            $product = $productModel->getProductByskuExact($sku);
+        }
+
+        if (!$product) {
+            vendorJsonResponse(['success' => false, 'message' => 'Product not found.']);
+            return;
+        }
+
+        $resolvedProductId = (int)($product['id'] ?? 0);
+        if ($resolvedProductId <= 0) {
+            vendorJsonResponse(['success' => false, 'message' => 'Invalid product ID.']);
+            return;
+        }
+
+        // 1. Update local database (vp_products.published = 0 or 1)
+        $updated = $productModel->setProductPublished($resolvedProductId, $newVal);
+        if (!$updated) {
+            vendorJsonResponse(['success' => false, 'message' => 'Failed to update product published status in database.']);
+            return;
+        }
+
+        // 2. Sync to Exotic India Vendor API (vendor-api/product/modify status = 0 or 1)
+        $syncItemCode = trim((string)($product['item_code'] ?? $itemCode));
+        $syncSize     = trim((string)($product['size'] ?? $size));
+        $syncColor    = trim((string)($product['color'] ?? $color));
+
+        $vendorSyncResult = $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, $newVal);
+
+        vendorJsonResponse([
+            'success' => true,
+            'message' => 'Product published status set to ' . $newVal,
+            'product_id' => $resolvedProductId,
+            'published' => $newVal,
+            'vendor_sync' => $vendorSyncResult,
+        ]);
+    }
+
+    private function syncProductPublishedToVendorApi(string $itemCode, string $size, string $color, int $status): array
+    {
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Missing item_code for vendor sync.'];
+        }
+
+        require_once 'helpers/exotic_india_api.php';
+        $endpoint = 'product/modify'
+            . '?itemcode=' . rawurlencode($itemCode)
+            . '&size=' . rawurlencode($size)
+            . '&color=' . rawurlencode($color);
+
+        $postBody = http_build_query(['status' => $status ? 1 : 0]);
+
+        $api = exotic_india_api_post($endpoint, $postBody, ['Content-Type: application/x-www-form-urlencoded']);
+
+        if (!$api['success']) {
+            return [
+                'success' => false,
+                'message' => $api['message'] ?? 'Vendor API call failed.',
+                'http_code' => $api['http_code'] ?? 0,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Vendor published status updated to ' . ($status ? 1 : 0),
+            'response' => $api['data'] ?? [],
         ];
     }
 }
