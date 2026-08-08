@@ -96,6 +96,17 @@
                   id="pmModalPrice"
                   class="hidden shrink-0 text-lg font-bold text-gray-900 tabular-nums tracking-tight"
                   aria-live="polite"></span>
+
+                <!-- Modal Price Currency Toggle -->
+                <div id="pmPriceToggleContainer" class="hidden inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
+                  <button type="button" id="pmPriceBtnINR" onclick="window.setPosModalPriceMode('INR')" class="px-2.5 py-0.5 rounded-md font-medium transition bg-white text-orange-600 shadow-sm">
+                    <span>INR (₹)</span>
+                  </button>
+                  <button type="button" id="pmPriceBtnCustomer" onclick="window.setPosModalPriceMode('CUSTOMER')" class="px-2.5 py-0.5 rounded-md font-medium transition text-slate-600 hover:text-slate-900">
+                    <span id="pmPriceCustomerLabel">USD ($)</span>
+                  </button>
+                </div>
+
                 <label class="text-xs text-gray-600">Qty</label>
                 <span id="pmQtyMaxHint" class="text-[10px] text-gray-500"></span>
 
@@ -126,6 +137,8 @@
 
 
             <input type="hidden" id="modal_product_code" value="">
+            <input type="hidden" id="modal_product_id" value="">
+            <input type="hidden" id="modal_published" value="1">
             <input type="hidden" id="modal_item_code" value="">
             <input type="hidden" id="modal_size" value="">
             <input type="hidden" id="modal_color" value="">

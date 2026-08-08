@@ -1009,11 +1009,21 @@ class POSRegisterController
                     $nm = (string)($row['name'] ?? '');
                     $ph = (string)($row['phone'] ?? '');
                     $em = (string)($row['email'] ?? '');
+                    $cRes = (string)($row['country_of_residence'] ?? '');
+                    $resInfo = $customerModel->resolveCustomerResidenceAndCurrency($cRes);
                     $selected_customer = [
                         'id' => (int)$row['id'],
                         'name' => $nm,
                         'phone' => $ph,
                         'email' => $em,
+                        'country_of_residence' => $cRes,
+                        'country_code' => $resInfo['country_code'] ?? '',
+                        'country_name' => $resInfo['country_name'],
+                        'currency_code' => $resInfo['currency_code'],
+                        'currency_symbol' => $resInfo['currency_symbol'] ?? '₹',
+                        'currency_name' => $resInfo['currency_name'],
+                        'currency_display' => $resInfo['currency_display'],
+                        'residence_text' => $resInfo['display_text'],
                         'text' => trim($nm . ' | ' . $ph . ($em !== '' ? ' | ' . $em : '')),
                     ];
                 } else {
@@ -1057,6 +1067,12 @@ class POSRegisterController
             'book' => '
                 <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M4 19.5A2.5 2.5 0 016.5 17H20M6.5 2H20v15H6.5A2.5 2.5 0 014 14.5v-10A2.5 2.5 0 016.5 2z" />
+                </svg>
+            ',
+            'virtual_codes' => '
+                <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
                 </svg>
             ',
         ];
@@ -1353,7 +1369,7 @@ class POSRegisterController
                         'city' => trim((string)($info['city'] ?? '')),
                         'state' => trim((string)($info['state'] ?? '')),
                         'zip' => trim((string)($info['zipcode'] ?? '')),
-                        'country' => trim((string)($info['country'] ?? 'IN')),
+                        'country' => trim((string)($info['country'] ?? '')),
                         'gstin' => trim((string)($info['gstin'] ?? '')),
                         'trade_name' => trim((string)($info['trade_name'] ?? '')),
                     ];
@@ -1366,7 +1382,7 @@ class POSRegisterController
                         'scity' => trim((string)($info['shipping_city'] ?? '')),
                         'sstate' => trim((string)($info['shipping_state'] ?? '')),
                         'szip' => trim((string)($info['shipping_zipcode'] ?? '')),
-                        'scountry' => trim((string)($info['shipping_country'] ?? 'IN')),
+                        'scountry' => trim((string)($info['shipping_country'] ?? '')),
                         'sphone' => trim((string)($info['shipping_mobile'] ?? '')),
                         'sgstin' => trim((string)($info['shipping_gstin'] ?? '')),
                         'shipping_gstin' => trim((string)($info['shipping_gstin'] ?? '')),
@@ -1389,7 +1405,7 @@ class POSRegisterController
                 'city' => trim((string)($form['city'] ?? '')),
                 'state' => trim((string)($form['state'] ?? '')),
                 'zip' => trim((string)($form['zipcode'] ?? '')),
-                'country' => trim((string)($form['country'] ?? 'IN')),
+                'country' => trim((string)($form['country'] ?? '')),
                 'gstin' => trim((string)($form['gstin'] ?? '')),
                 'trade_name' => trim((string)($form['trade_name'] ?? '')),
             ];
@@ -1402,10 +1418,31 @@ class POSRegisterController
                 'scity' => trim((string)($form['shipping_city'] ?? '')),
                 'sstate' => trim((string)($form['shipping_state'] ?? '')),
                 'szip' => trim((string)($form['shipping_zipcode'] ?? '')),
-                'scountry' => trim((string)($form['shipping_country'] ?? 'IN')),
+                'scountry' => trim((string)($form['shipping_country'] ?? '')),
                 'sphone' => trim((string)($form['shipping_mobile'] ?? '')),
             ];
         }
+
+        require_once 'helpers/courier/country_codes.php';
+
+        $cRes = trim((string)($customerRow['country_of_residence'] ?? ''));
+
+        $rawBillingCountry = $pick(
+            $billingVc['country'] ?? '',
+            $billingOrder['country'] ?? '',
+            $billingSession['country'] ?? '',
+            $cRes,
+            'IN'
+        );
+
+        $rawShippingCountry = $pick(
+            $shippingVc['scountry'] ?? '',
+            $shippingOrder['scountry'] ?? '',
+            $shippingSession['scountry'] ?? '',
+            $rawBillingCountry,
+            $cRes,
+            'IN'
+        );
 
         $billing = [
             'first_name' => $pick($billingVc['first_name'] ?? '', $billingOrder['first_name'] ?? '', $billingSession['first_name'] ?? ''),
@@ -1417,7 +1454,7 @@ class POSRegisterController
             'city' => $pick($billingVc['city'] ?? '', $billingOrder['city'] ?? '', $billingSession['city'] ?? ''),
             'state' => $pick($billingVc['state'] ?? '', $billingOrder['state'] ?? '', $billingSession['state'] ?? ''),
             'zip' => $pick($billingVc['zip'] ?? '', $billingOrder['zip'] ?? '', $billingSession['zip'] ?? ''),
-            'country' => $pick($billingVc['country'] ?? '', $billingOrder['country'] ?? '', $billingSession['country'] ?? ''),
+            'country' => normalizeCountryIso2($rawBillingCountry, $conn),
             'gstin' => $pick($billingVc['gstin'] ?? '', $billingOrder['gstin'] ?? '', $billingSession['gstin'] ?? ''),
             'trade_name' => $pick(
                 $billingVc['trade_name'] ?? '',
@@ -1436,12 +1473,15 @@ class POSRegisterController
             'scity' => $pick($shippingVc['scity'] ?? '', $shippingOrder['scity'] ?? '', $shippingSession['scity'] ?? ''),
             'sstate' => $pick($shippingVc['sstate'] ?? '', $shippingOrder['sstate'] ?? '', $shippingSession['sstate'] ?? ''),
             'szip' => $pick($shippingVc['szip'] ?? '', $shippingOrder['szip'] ?? '', $shippingSession['szip'] ?? ''),
-            'scountry' => $pick($shippingVc['scountry'] ?? '', $shippingOrder['scountry'] ?? '', $shippingSession['scountry'] ?? ''),
+            'scountry' => normalizeCountryIso2($rawShippingCountry, $conn),
             'sphone' => $pick($shippingVc['sphone'] ?? '', $shippingOrder['sphone'] ?? '', $shippingSession['sphone'] ?? ''),
             'sgstin' => $pick($shippingVc['sgstin'] ?? '', $shippingOrder['sgstin'] ?? '', $shippingOrder['shipping_gstin'] ?? '', $shippingSession['sgstin'] ?? ''),
             'shipping_gstin' => $pick($shippingVc['shipping_gstin'] ?? '', $shippingOrder['shipping_gstin'] ?? '', $shippingOrder['sgstin'] ?? '', $shippingSession['shipping_gstin'] ?? ''),
             'shipping_email' => $pick($shippingVc['shipping_email'] ?? '', $shippingOrder['shipping_email'] ?? '', $shippingSession['shipping_email'] ?? ''),
         ];
+
+        $cRes = trim((string)($customerRow['country_of_residence'] ?? ''));
+        $resInfo = $customerModel->resolveCustomerResidenceAndCurrency($cRes);
 
         echo json_encode([
             'success' => true,
@@ -1451,8 +1491,10 @@ class POSRegisterController
                 'customer_residency_status' => $this->normalizeResidencyStatus((string)($customerRow['customer_residency_status'] ?? 'INDIAN_RESIDENT')),
                 'customer_pan' => $this->normalizePan((string)($customerRow['customer_pan'] ?? '')),
                 'passport_number' => $this->normalizePassport((string)($customerRow['passport_number'] ?? '')),
-                'country_of_residence' => trim((string)($customerRow['country_of_residence'] ?? '')),
+                'country_of_residence' => $cRes,
+                'residence_text' => $resInfo['display_text'],
             ],
+            'residence_info' => $resInfo,
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
@@ -1490,11 +1532,21 @@ class POSRegisterController
                     $nm = (string)($row['name'] ?? '');
                     $ph = (string)($row['phone'] ?? '');
                     $em = (string)($row['email'] ?? '');
+                    $cRes = (string)($row['country_of_residence'] ?? '');
+                    $resInfo = $customerModel->resolveCustomerResidenceAndCurrency($cRes);
                     $selectedCustomer = [
                         'id' => (int)$row['id'],
                         'name' => $nm,
                         'phone' => $ph,
                         'email' => $em,
+                        'country_of_residence' => $cRes,
+                        'country_code' => $resInfo['country_code'] ?? '',
+                        'country_name' => $resInfo['country_name'],
+                        'currency_code' => $resInfo['currency_code'],
+                        'currency_symbol' => $resInfo['currency_symbol'] ?? '₹',
+                        'currency_name' => $resInfo['currency_name'],
+                        'currency_display' => $resInfo['currency_display'],
+                        'residence_text' => $resInfo['display_text'],
                         'text' => trim($nm . ' | ' . $ph . ($em !== '' ? ' | ' . $em : '')),
                     ];
                 }
@@ -3750,7 +3802,7 @@ class POSRegisterController
                         price_india, itemprice, finalprice, mrp_india,
                         groupname, itemtype, sourcingfee, shippingfee,
                         product_weight, product_weight_unit,
-                        prod_height, prod_width, prod_length, length_unit, item_level
+                        prod_height, prod_width, prod_length, length_unit, item_level, published
                  FROM vp_products WHERE is_active = 1
                    AND (sku = ? OR item_code = ?)'
                 . self::VP_PRODUCT_BY_CODE_ORDER_SQL . ' LIMIT 1'
@@ -3888,14 +3940,29 @@ class POSRegisterController
             }
         }
 
-        // echo '<pre>'; print_r($data['addon_options']); exit;
+        $publishedVal = 1;
+        if (array_key_exists('published', $dbRow) && $dbRow['published'] !== null && $dbRow['published'] !== '') {
+            $publishedVal = (int)$dbRow['published'];
+        } elseif (isset($data['published'])) {
+            $s = strtolower(trim((string)$data['published']));
+            $publishedVal = ($s === '0' || $s === 'false' || $s === 'unpublished') ? 0 : 1;
+        } elseif (isset($data['status']) && (is_numeric($data['status']) || strtolower((string)$data['status']) === 'unpublished')) {
+            $s = strtolower(trim((string)$data['status']));
+            $publishedVal = ($s === '0' || $s === 'unpublished') ? 0 : 1;
+        }
+
         $product = [
+            'id' => $vpId,
+            'product_id' => $vpId,
             'requested_code' => $code,
             'item_code' => $dbItemCode,
             'sku' => $dbSku,
             'title' => $this->mergeProductTextField($data['name'] ?? '', $dbRow['title'] ?? ''),
             'image' => $imageResolved,
             'price' => $sellingPrice,
+            'published' => $publishedVal,
+            'is_published' => ($publishedVal === 1),
+            'status_label' => ($publishedVal === 1 ? 'Published' : 'Unpublished'),
 
             'material' => $this->mergeProductTextField($data['material'] ?? '', $dbRow['material'] ?? ''),
             'size' => $this->posProductFacetFromDbFirst($dbRow, $data, 'size'),
@@ -3940,6 +4007,70 @@ class POSRegisterController
         header('Content-Type: application/json');
 
         echo json_encode(['data' => $product]);
+        exit;
+    }
+
+    /**
+     * Fetch country-based price using Exotic /product/code?onlyprice API with x-api-countrycode header.
+     */
+    public function getProductPrice()
+    {
+        $code = isset($_GET['code']) ? trim((string)$_GET['code']) : '';
+        $countryCode = isset($_GET['country_code']) ? trim((string)$_GET['country_code']) : '';
+        $color = isset($_GET['color']) ? trim((string)$_GET['color']) : '';
+        $size = isset($_GET['size']) ? trim((string)$_GET['size']) : '';
+
+        if ($code === '' || $countryCode === '') {
+            $this->clearBufferedHttpOutput();
+            header('Content-Type: application/json');
+            echo json_encode(['status' => false, 'message' => 'Missing code or country_code parameter']);
+            exit;
+        }
+
+        $params = [
+            'onlyprice' => '',
+            'code' => $code,
+        ];
+        if ($color !== '') {
+            $params['color'] = $color;
+        }
+        if ($size !== '') {
+            $params['size'] = $size;
+        }
+
+        $this->retailApiClient->setCustomerCountryCode($countryCode);
+        $res = $this->retailApiClient->call('/product/code', 'GET', $params);
+
+        $priceData = $res['data'] ?? [];
+        $rawPrice = $priceData['price'] ?? null;
+
+        if ($rawPrice === null && ($color !== '' || $size !== '')) {
+            // Fallback without color/size if combination error returned
+            unset($params['color'], $params['size']);
+            $resFallback = $this->retailApiClient->call('/product/code', 'GET', $params);
+            $priceData = $resFallback['data'] ?? [];
+            $rawPrice = $priceData['price'] ?? null;
+        }
+
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json');
+
+        if ($rawPrice !== null) {
+            echo json_encode([
+                'status' => true,
+                'price' => (float)$rawPrice,
+                'raw_price' => $rawPrice,
+                'country_code' => $countryCode,
+                'code' => $code
+            ]);
+        } else {
+            echo json_encode([
+                'status' => false,
+                'message' => $priceData['error'] ?? 'Price not found',
+                'country_code' => $countryCode,
+                'code' => $code
+            ]);
+        }
         exit;
     }
 
@@ -4054,6 +4185,11 @@ class POSRegisterController
 
         switch ($op) {
             case 'retrieve':
+                // Respect currency mode selection: when mode is 'INR', force 'IN' header so Exotic API returns INR cart prices
+                $currencyMode = trim((string)($_REQUEST['currency_mode'] ?? $_GET['currency_mode'] ?? ''));
+                if ($currencyMode === 'INR') {
+                    $this->retailApiClient->setCustomerCountryCode('IN');
+                }
                 // Same discount / gift query + header as add/modifyqty so cart totals reflect applied coupon.
                 $ctx = $this->exoticCartDiscountContext();
                 $this->emitCartApiResponse($this->retailApiClient->call(
@@ -4372,6 +4508,14 @@ class POSRegisterController
     public function set_customer()
     {
         $customerId = (int)($_POST['customer_id'] ?? 0);
+        $customerInfo = [
+            'id' => 0,
+            'name' => '',
+            'phone' => '',
+            'email' => '',
+            'country_of_residence' => '',
+            'residence_text' => '-',
+        ];
 
         if ($customerId > 0) {
             $_SESSION['pos_customer_id'] = $customerId;
@@ -4381,13 +4525,26 @@ class POSRegisterController
             require_once 'models/customer/Customer.php';
             $customerModel = new Customer($conn);
             $customerModel->ensureCountryOfResidenceForCustomer($customerId);
+            $custRow = $customerModel->getCustomerById($customerId);
+            if ($custRow) {
+                $cRes = trim((string)($custRow['country_of_residence'] ?? ''));
+                $rData = $customerModel->resolveCustomerResidenceAndCurrency($cRes);
+                $customerInfo = array_merge([
+                    'id' => $customerId,
+                    'name' => trim((string)($custRow['name'] ?? '')),
+                    'phone' => trim((string)($custRow['phone'] ?? '')),
+                    'email' => trim((string)($custRow['email'] ?? '')),
+                    'country_of_residence' => $cRes,
+                    'residence_text' => $rData['display_text'],
+                ], $rData);
+            }
         } else {
             unset($_SESSION['pos_customer_id']);
         }
 
         $this->clearBufferedHttpOutput();
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(["success" => true]);
+        echo json_encode(["success" => true, "customer" => $customerInfo]);
         exit;
     }
 
@@ -4720,6 +4877,11 @@ class POSRegisterController
             $_SESSION['pos_exotic_cart_custom_reduce'] = number_format($cashDiscount, 2, '.', '');
         } else {
             $this->clearPosExoticCartCustomDiscount();
+        }
+
+        $checkoutCountry = trim((string)($payload['country_of_residence'] ?? $payload['confirm_country'] ?? $payload['confirm_scountry'] ?? ''));
+        if ($checkoutCountry !== '') {
+            $this->retailApiClient->setCustomerCountryCode($checkoutCountry);
         }
 
         $ctx = $this->exoticCartDiscountContext();
@@ -6063,6 +6225,282 @@ class POSRegisterController
             'receipt_signature_date' => $dt->format('d M Y'),
             'payment_history_url' => 'index.php?page=payments&order_number=' . rawurlencode($orderNumber) . '&order_exact=1',
             'invoice_poitem_ids' => $this->resolveInvoicePoitemIdsForOrderNumber($conn, $orderNumber),
+        ];
+    }
+
+    /**
+     * Update product published status in local DB and sync to Exotic India Vendor API.
+     * Used when adding unpublished products to cart in POS register.
+     * Supports multi-store concurrent cart additions via lease locks & reference counting.
+     */
+    public function updateProductPublished(): void
+    {
+        is_login();
+
+        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? '')) !== 'POST') {
+            vendorJsonResponse(['success' => false, 'message' => 'POST request required.']);
+            return;
+        }
+
+        $rawInput = (string)file_get_contents('php://input');
+        $data = json_decode($rawInput, true);
+        if (!is_array($data)) {
+            $data = $_POST;
+        }
+
+        $productId = isset($data['product_id']) ? (int)$data['product_id'] : 0;
+        $itemCode  = trim((string)($data['item_code'] ?? ''));
+        $sku       = trim((string)($data['sku'] ?? ''));
+        $size      = trim((string)($data['size'] ?? ''));
+        $color     = trim((string)($data['color'] ?? ''));
+        $newVal    = isset($data['published']) ? (int)$data['published'] : -1;
+        $token     = trim((string)($data['token'] ?? ''));
+
+        if ($newVal !== 0 && $newVal !== 1) {
+            vendorJsonResponse(['success' => false, 'message' => 'published must be 0 or 1.']);
+            return;
+        }
+
+        global $conn;
+        require_once 'models/product/product.php';
+        $productModel = new \Product($conn);
+
+        $product = null;
+        if ($productId > 0) {
+            $product = $productModel->getProduct($productId);
+        }
+        if (!$product && $itemCode !== '') {
+            $itemCodeRes = $productModel->getProductByItemCode($itemCode);
+            if (is_array($itemCodeRes)) {
+                $product = isset($itemCodeRes['id']) ? $itemCodeRes : ($itemCodeRes[0] ?? null);
+            }
+        }
+        if (!$product && $sku !== '') {
+            $product = $productModel->getProductByskuExact($sku);
+        }
+
+        if (!$product) {
+            vendorJsonResponse(['success' => false, 'message' => 'Product not found.']);
+            return;
+        }
+
+        $resolvedProductId = (int)($product['id'] ?? 0);
+        if ($resolvedProductId <= 0) {
+            vendorJsonResponse(['success' => false, 'message' => 'Invalid product ID.']);
+            return;
+        }
+
+        $syncItemCode = trim((string)($product['item_code'] ?? $itemCode));
+        $syncSize     = trim((string)($product['size'] ?? $size));
+        $syncColor    = trim((string)($product['color'] ?? $color));
+
+        $this->ensureUnpublishedLockTableExists($conn);
+
+        if ($newVal === 1) {
+            // ACQUIRE ROW LOCK (Row-level lease lock with InnoDB FOR UPDATE)
+            $this->cleanupExpiredUnpublishedLocks($conn, $productModel);
+
+            $lockToken = ($token !== '') ? $token : bin2hex(random_bytes(16));
+            $userId = (int)($_SESSION['user']['id'] ?? 0);
+            $storeId = (int)($_SESSION['warehouse_id'] ?? 0);
+
+            $activeCountBefore = 0;
+            $conn->begin_transaction();
+            try {
+                // Row lock on this specific product's lease records
+                $stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM `vp_pos_unpublished_locks` WHERE product_id = ? AND expires_at >= NOW() FOR UPDATE");
+                $stmt->bind_param('i', $resolvedProductId);
+                $stmt->execute();
+                $resCnt = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+
+                $activeCountBefore = (int)($resCnt['cnt'] ?? 0);
+
+                if ($activeCountBefore === 0) {
+                    $productModel->setProductPublished($resolvedProductId, 1);
+                }
+
+                $stmtIns = $conn->prepare("INSERT INTO `vp_pos_unpublished_locks` (product_id, token, user_id, store_id, expires_at) VALUES (?, ?, ?, ?, NOW() + INTERVAL 45 SECOND)");
+                $stmtIns->bind_param('isii', $resolvedProductId, $lockToken, $userId, $storeId);
+                $stmtIns->execute();
+                $stmtIns->close();
+
+                $conn->commit();
+            } catch (\Throwable $e) {
+                $conn->rollback();
+                vendorJsonResponse(['success' => false, 'message' => 'Failed to acquire row lock: ' . $e->getMessage()]);
+                return;
+            }
+
+            $vendorSyncResult = null;
+            if ($activeCountBefore === 0) {
+                $vendorSyncResult = $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 1);
+            } else {
+                $vendorSyncResult = [
+                    'success' => true,
+                    'message' => 'Product is already active (published = 1) due to another active store row lock.',
+                ];
+            }
+
+            vendorJsonResponse([
+                'success' => true,
+                'message' => 'Product row lock acquired and published status set to 1.',
+                'product_id' => $resolvedProductId,
+                'published' => 1,
+                'token' => $lockToken,
+                'active_locks' => $activeCountBefore + 1,
+                'vendor_sync' => $vendorSyncResult,
+            ]);
+            return;
+        } else {
+            // RELEASE ROW LOCK (newVal === 0)
+            $remainingLocks = 0;
+            $conn->begin_transaction();
+            try {
+                if ($token !== '') {
+                    $stmtDel = $conn->prepare("DELETE FROM `vp_pos_unpublished_locks` WHERE token = ?");
+                    $stmtDel->bind_param('s', $token);
+                    $stmtDel->execute();
+                    $stmtDel->close();
+                } else {
+                    $stmtDel = $conn->prepare("DELETE FROM `vp_pos_unpublished_locks` WHERE product_id = ? ORDER BY id ASC LIMIT 1");
+                    $stmtDel->bind_param('i', $resolvedProductId);
+                    $stmtDel->execute();
+                    $stmtDel->close();
+                }
+
+                $stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM `vp_pos_unpublished_locks` WHERE product_id = ? AND expires_at >= NOW() FOR UPDATE");
+                $stmt->bind_param('i', $resolvedProductId);
+                $stmt->execute();
+                $resCnt = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+
+                $remainingLocks = (int)($resCnt['cnt'] ?? 0);
+
+                if ($remainingLocks === 0) {
+                    $productModel->setProductPublished($resolvedProductId, 0);
+                }
+
+                $conn->commit();
+            } catch (\Throwable $e) {
+                $conn->rollback();
+                vendorJsonResponse(['success' => false, 'message' => 'Failed to release row lock: ' . $e->getMessage()]);
+                return;
+            }
+
+            $this->cleanupExpiredUnpublishedLocks($conn, $productModel);
+
+            $vendorSyncResult = null;
+            if ($remainingLocks === 0) {
+                $vendorSyncResult = $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 0);
+                $msg = 'Product row lock released and published status set back to 0.';
+            } else {
+                $msg = 'Row lock released. Product remains published = 1 because ' . $remainingLocks . ' other store row lock(s) are active.';
+            }
+
+            vendorJsonResponse([
+                'success' => true,
+                'message' => $msg,
+                'product_id' => $resolvedProductId,
+                'published' => ($remainingLocks === 0 ? 0 : 1),
+                'remaining_locks' => $remainingLocks,
+                'vendor_sync' => $vendorSyncResult,
+            ]);
+            return;
+        }
+    }
+
+    private function ensureUnpublishedLockTableExists(\mysqli $conn): void
+    {
+        static $checked = false;
+        if ($checked) {
+            return;
+        }
+        $sql = "CREATE TABLE IF NOT EXISTS `vp_pos_unpublished_locks` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `product_id` INT NOT NULL,
+            `token` VARCHAR(64) NOT NULL,
+            `user_id` INT DEFAULT 0,
+            `store_id` INT DEFAULT 0,
+            `expires_at` DATETIME NOT NULL,
+            `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX `idx_product_expires` (`product_id`, `expires_at`),
+            INDEX `idx_token` (`token`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        $conn->query($sql);
+        $checked = true;
+    }
+
+    private function cleanupExpiredUnpublishedLocks(\mysqli $conn, \Product $productModel): void
+    {
+        $this->ensureUnpublishedLockTableExists($conn);
+
+        $resExpired = $conn->query("SELECT DISTINCT product_id FROM `vp_pos_unpublished_locks` WHERE expires_at < NOW()");
+        $candidateProductIds = [];
+        if ($resExpired && $resExpired->num_rows > 0) {
+            while ($row = $resExpired->fetch_assoc()) {
+                $pid = (int)($row['product_id'] ?? 0);
+                if ($pid > 0) {
+                    $candidateProductIds[] = $pid;
+                }
+            }
+        }
+
+        $conn->query("DELETE FROM `vp_pos_unpublished_locks` WHERE expires_at < NOW()");
+
+        foreach ($candidateProductIds as $pid) {
+            $stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM `vp_pos_unpublished_locks` WHERE product_id = ? AND expires_at >= NOW()");
+            if ($stmt) {
+                $stmt->bind_param('i', $pid);
+                $stmt->execute();
+                $resCnt = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+
+                $activeCount = (int)($resCnt['cnt'] ?? 0);
+                if ($activeCount === 0) {
+                    $pRow = $productModel->getProduct($pid);
+                    if ($pRow && (int)($pRow['published'] ?? 0) === 1) {
+                        $productModel->setProductPublished($pid, 0);
+                        $this->syncProductPublishedToVendorApi(
+                            trim((string)($pRow['item_code'] ?? '')),
+                            trim((string)($pRow['size'] ?? '')),
+                            trim((string)($pRow['color'] ?? '')),
+                            0
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    private function syncProductPublishedToVendorApi(string $itemCode, string $size, string $color, int $status): array
+    {
+        if ($itemCode === '') {
+            return ['success' => false, 'message' => 'Missing item_code for vendor sync.'];
+        }
+
+        require_once 'helpers/exotic_india_api.php';
+        $endpoint = 'product/modify'
+            . '?itemcode=' . rawurlencode($itemCode)
+            . '&size=' . rawurlencode($size)
+            . '&color=' . rawurlencode($color);
+
+        $postBody = http_build_query(['status' => $status ? 1 : 0]);
+
+        $api = exotic_india_api_post($endpoint, $postBody, ['Content-Type: application/x-www-form-urlencoded']);
+
+        if (!$api['success']) {
+            return [
+                'success' => false,
+                'message' => $api['message'] ?? 'Vendor API call failed.',
+                'http_code' => $api['http_code'] ?? 0,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Vendor published status updated to ' . ($status ? 1 : 0),
+            'response' => $api['data'] ?? [],
         ];
     }
 }

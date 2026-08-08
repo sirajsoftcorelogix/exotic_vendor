@@ -1,222 +1,425 @@
 <?php
 $selectedCurrency = null;
 $rateHistory = [];
+
+// Helper to get currency flag, symbol, and accent styling
+function getCurrencyMeta($code) {
+    $code = strtoupper(trim($code));
+    $map = [
+        'USD' => ['flag' => '🇺🇸', 'symbol' => '$', 'bg' => 'bg-emerald-50 text-emerald-700 border-emerald-200'],
+        'EUR' => ['flag' => '🇪🇺', 'symbol' => '€', 'bg' => 'bg-blue-50 text-blue-700 border-blue-200'],
+        'GBP' => ['flag' => '🇬🇧', 'symbol' => '£', 'bg' => 'bg-purple-50 text-purple-700 border-purple-200'],
+        'JPY' => ['flag' => '🇯🇵', 'symbol' => '¥', 'bg' => 'bg-rose-50 text-rose-700 border-rose-200'],
+        'CAD' => ['flag' => '🇨🇦', 'symbol' => 'CA$', 'bg' => 'bg-red-50 text-red-700 border-red-200'],
+        'AUD' => ['flag' => '🇦🇺', 'symbol' => 'A$', 'bg' => 'bg-amber-50 text-amber-700 border-amber-200'],
+        'CHF' => ['flag' => '🇨🇭', 'symbol' => 'CHF', 'bg' => 'bg-red-50 text-red-700 border-red-200'],
+        'AED' => ['flag' => '🇦🇪', 'symbol' => 'AED', 'bg' => 'bg-emerald-50 text-emerald-700 border-emerald-200'],
+        'SAR' => ['flag' => '🇸🇦', 'symbol' => 'SAR', 'bg' => 'bg-emerald-50 text-emerald-700 border-emerald-200'],
+        'SGD' => ['flag' => '🇸🇬', 'symbol' => 'S$', 'bg' => 'bg-rose-50 text-rose-700 border-rose-200'],
+        'HKD' => ['flag' => '🇭🇰', 'symbol' => 'HK$', 'bg' => 'bg-red-50 text-red-700 border-red-200'],
+        'DKK' => ['flag' => '🇩🇰', 'symbol' => 'kr', 'bg' => 'bg-red-50 text-red-700 border-red-200'],
+        'NOK' => ['flag' => '🇳🇴', 'symbol' => 'kr', 'bg' => 'bg-blue-50 text-blue-700 border-blue-200'],
+        'SEK' => ['flag' => '🇸🇪', 'symbol' => 'kr', 'bg' => 'bg-blue-50 text-blue-700 border-blue-200'],
+        'INR' => ['flag' => '🇮🇳', 'symbol' => '₹', 'bg' => 'bg-orange-50 text-orange-700 border-orange-200'],
+        'CNY' => ['flag' => '🇨🇳', 'symbol' => '¥', 'bg' => 'bg-red-50 text-red-700 border-red-200'],
+    ];
+    return $map[$code] ?? ['flag' => '🌐', 'symbol' => $code, 'bg' => 'bg-slate-50 text-slate-700 border-slate-200'];
+}
+
+$totalCurrencies = count($currencies ?? []);
+$multiCountryCount = 0;
+
+if (!empty($currencies)) {
+    foreach ($currencies as $c) {
+        $mappedRaw = !empty($c['mapped_countries']) ? $c['mapped_countries'] : CurrencyModel::getDefaultMappedCountries($c['currency_code']);
+        $mappedList = array_filter(array_map('trim', explode(',', $mappedRaw)));
+        if (count($mappedList) > 1) {
+            $multiCountryCount++;
+        }
+    }
+}
 ?>
 
-<style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background: #f8fafc; padding: 20px; color: #1e293b; }
-    .container { max-width: 1100px; margin: 0 auto; }
-    .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; margin-top: 10px; flex-wrap: wrap; gap: 10px; }
-    h1 { color: #0f172a; font-size: 24px; font-weight: 700; }
-    .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
-    .btn-add { background: #10b981; color: white; padding: 9px 16px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; transition: background 0.2s; border: none; cursor: pointer; }
-    .btn-add:hover { background: #059669; }
-    .btn-pdf { background: #3b82f6; color: white; padding: 9px 16px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; transition: background 0.2s; border: none; cursor: pointer; }
-    .btn-pdf:hover { background: #2563eb; }
-    
-    .success-alert { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; font-weight: 500; }
-    .error-alert { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; font-weight: 500; }
-    
-    table.data-table { width: 100%; background: white; border-collapse: collapse; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; }
-    table.data-table th { background: #f8fafc; padding: 14px 16px; text-align: left; font-weight: 600; color: #475569; border-bottom: 1px solid #e2e8f0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; }
-    table.data-table td { padding: 14px 16px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
-    table.data-table tr:hover { background: #f8fafc; }
-    
-    .btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; text-decoration: none; display: inline-block; }
-    .btn-edit { background: #e0f2fe; color: #0369a1; }
-    .btn-edit:hover { background: #bae6fd; }
-    .btn-delete { background: #fee2e2; color: #991b1b; }
-    .btn-delete:hover { background: #fca5a5; }
-    .btn-history { background: #fef3c7; color: #92400e; }
-    .btn-history:hover { background: #fde68a; }
-    
-    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(2px); }
-    .modal.active { display: flex; align-items: center; justify-content: center; }
-    .modal-content { background: white; padding: 24px; border-radius: 12px; max-width: 800px; width: 92%; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
-    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; }
-    .modal-header h2 { font-size: 18px; color: #0f172a; font-weight: 700; }
-    .close-modal { background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b; padding: 0 4px; }
-    .close-modal:hover { color: #0f172a; }
-    
-    .file-drop-area { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 24px; text-align: center; background: #f8fafc; cursor: pointer; transition: border-color 0.2s; margin-bottom: 16px; }
-    .file-drop-area:hover { border-color: #3b82f6; background: #eff6ff; }
-    
-    .meta-badge { display: inline-flex; gap: 12px; background: #f1f5f9; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 16px; border: 1px solid #cbd5e1; }
-    
-    .preview-table { width: 100%; border-collapse: collapse; margin-top: 12px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; font-size: 13px; }
-    .preview-table th, .preview-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #f1f5f9; }
-    .preview-table th { background: #f8fafc; font-weight: 600; color: #475569; }
-    .rate-changed { font-weight: 700; color: #2563eb; background: #eff6ff; padding: 2px 6px; border-radius: 4px; }
-    .rate-new { font-weight: 700; color: #059669; background: #ecfdf5; padding: 2px 6px; border-radius: 4px; }
-    
-    .form-control { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; margin-bottom: 12px; }
-    .form-control:focus { border-color: #3b82f6; outline: none; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
-    .modal-footer { margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #e2e8f0; padding-top: 16px; }
-    .btn-submit { background: #2563eb; color: white; padding: 9px 18px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer; }
-    .btn-submit:hover { background: #1d4ed8; }
-    .btn-cancel { background: #f1f5f9; color: #475569; padding: 9px 18px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer; }
-    .btn-cancel:hover { background: #e2e8f0; }
-    
-    .empty { text-align: center; color: #64748b; padding: 40px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; }
-</style>
+    <!-- Page Header & Title -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        <div class="space-y-1">
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl border border-indigo-100">
+                    <i class="fa-solid fa-coins text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Currency Management</h1>
+                    <p class="text-sm text-slate-500 font-normal">Manage foreign currencies, exchange rates, mapped regions, and CBIC/ICEGATE updates.</p>
+                </div>
+            </div>
+        </div>
 
-<div class="container">
-    <div class="header-row">
-        <h1>Currency Management</h1>
-        <div class="btn-group">
-            <button class="btn-pdf" onclick="openPdfModal()">📄 PDF Import</button>
-            <a href="index.php?page=currency&action=addRecord" class="btn-add">+ Add New Currency</a>
+        <div class="flex items-center gap-3">
+            <button onclick="openPdfModal()" class="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <i class="fa-solid fa-file-pdf text-rose-500 text-base"></i>
+                <span>PDF Import</span>
+            </button>
+            <a href="index.php?page=currency&action=addRecord" class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <i class="fa-solid fa-plus text-sm"></i>
+                <span>Add Currency</span>
+            </a>
         </div>
     </div>
 
+    <!-- Alert / Notice Messages -->
     <div id="noticeBox"></div>
     
     <?php if (isset($_GET['success'])): ?>
-        <div class="success-alert">Operation completed successfully!</div>
+        <div class="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-sm font-medium shadow-sm transition-all">
+            <i class="fa-solid fa-circle-check text-emerald-500 text-lg"></i>
+            <span>Operation completed successfully!</span>
+        </div>
     <?php endif; ?>
-    
-    <?php if (empty($currencies)): ?>
-        <div class="empty">No currencies found. <a href="index.php?page=currency&action=addRecord">Add one now</a></div>
-    <?php else: ?>
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Code</th>
-                    <th>Name</th>
-                    <th>Unit</th>
-                    <th>Mapped Countries</th>
-                    <th>Import Rate (₹)</th>
-                    <th>Export Rate (₹)</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($currencies as $curr): 
-                    $mappedRaw = !empty($curr['mapped_countries']) ? $curr['mapped_countries'] : CurrencyModel::getDefaultMappedCountries($curr['currency_code']);
-                    $mappedList = array_filter(array_map('trim', explode(',', $mappedRaw)));
-                ?>
-                    <tr>
-                        <td><strong><?php echo strtoupper($curr['currency_code']); ?></strong></td>
-                        <td><?php echo htmlspecialchars($curr['currency_name']); ?></td>
-                        <td><?php echo htmlspecialchars($curr['currency_unit']); ?></td>
-                        <td>
-                            <?php if (!empty($mappedList)): ?>
-                                <div style="display: flex; flex-wrap: wrap; gap: 4px; max-width: 280px;" title="<?php echo htmlspecialchars(implode(', ', $mappedList)); ?>">
-                                    <?php foreach (array_slice($mappedList, 0, 8) as $tag): ?>
-                                        <span style="background: #f1f5f9; color: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; border: 1px solid #cbd5e1; font-family: monospace;">
-                                            <?php echo htmlspecialchars($tag); ?>
-                                        </span>
-                                    <?php endforeach; ?>
-                                    <?php if (count($mappedList) > 8): ?>
-                                        <span style="background: #e2e8f0; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">
-                                            +<?php echo count($mappedList) - 8; ?> more
-                                        </span>
+
+    <?php if (isset($_GET['error'])): ?>
+        <div class="flex items-center gap-3 p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-sm font-medium shadow-sm transition-all">
+            <i class="fa-solid fa-circle-exclamation text-rose-500 text-lg"></i>
+            <span>An error occurred while performing the operation.</span>
+        </div>
+    <?php endif; ?>
+
+    <!-- KPI Summary Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Card 1 -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl shrink-0">
+                <i class="fa-solid fa-globe"></i>
+            </div>
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Active Currencies</p>
+                <h3 class="text-2xl font-extrabold text-slate-900 mt-0.5"><?= $totalCurrencies ?></h3>
+            </div>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl shrink-0">
+                <i class="fa-solid fa-indian-rupee-sign"></i>
+            </div>
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Base Currency</p>
+                <h3 class="text-2xl font-extrabold text-slate-900 mt-0.5">INR <span class="text-sm font-medium text-slate-500">(₹)</span></h3>
+            </div>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shrink-0">
+                <i class="fa-solid fa-network-wired"></i>
+            </div>
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Multi-Country Mapped</p>
+                <h3 class="text-2xl font-extrabold text-slate-900 mt-0.5"><?= $multiCountryCount ?></h3>
+            </div>
+        </div>
+
+        <!-- Card 4 -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
+                <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Rate Source</p>
+                <h3 class="text-lg font-bold text-slate-900 mt-0.5">CBIC / ICEGATE</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter & Search Toolbar -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="relative w-full md:w-96">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <i class="fa-solid fa-magnifying-glass text-sm"></i>
+            </div>
+            <input type="text" id="currencySearchInput" onkeyup="filterCurrenciesTable()" placeholder="Search code, name, unit or country code..." 
+                   class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
+        </div>
+
+        <div class="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+            <button onclick="setQuickFilter('all')" id="filterBtnAll" class="quick-filter-btn px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-xs transition-all">
+                All Currencies
+            </button>
+            <button onclick="setQuickFilter('major')" id="filterBtnMajor" class="quick-filter-btn px-3 py-1.5 text-xs font-semibold rounded-lg bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-all">
+                Major (USD/EUR/GBP/JPY)
+            </button>
+            <button onclick="setQuickFilter('multi')" id="filterBtnMulti" class="quick-filter-btn px-3 py-1.5 text-xs font-semibold rounded-lg bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-all">
+                Multi-Region Mapped
+            </button>
+            <span id="currencyCountDisplay" class="text-xs font-medium text-slate-500 ml-2 shrink-0">Showing <?= $totalCurrencies ?> of <?= $totalCurrencies ?></span>
+        </div>
+    </div>
+
+    <!-- Data Table Container -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <?php if (empty($currencies)): ?>
+            <div class="p-12 text-center space-y-4">
+                <div class="w-16 h-12 mx-auto rounded-full bg-slate-100 flex items-center justify-center text-slate-400 text-2xl">
+                    <i class="fa-solid fa-coins"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-bold text-slate-800">No Currencies Found</h3>
+                    <p class="text-sm text-slate-500 mt-1">Get started by adding your first currency or importing exchange rates from PDF.</p>
+                </div>
+                <a href="index.php?page=currency&action=addRecord" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition-all shadow-sm">
+                    <i class="fa-solid fa-plus text-xs"></i>
+                    <span>Add New Currency</span>
+                </a>
+            </div>
+        <?php else: ?>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse" id="currencyTable">
+                    <thead>
+                        <tr class="bg-slate-50/80 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                            <th class="py-3.5 px-5">Code & Flag</th>
+                            <th class="py-3.5 px-5">Name & Unit</th>
+                            <th class="py-3.5 px-5">Mapped Countries</th>
+                            <th class="py-3.5 px-5 text-right">Import Rate (₹)</th>
+                            <th class="py-3.5 px-5 text-right">Export Rate (₹)</th>
+                            <th class="py-3.5 px-5 text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-sm font-medium text-slate-700">
+                        <?php foreach ($currencies as $curr): 
+                            $meta = getCurrencyMeta($curr['currency_code']);
+                            $mappedRaw = !empty($curr['mapped_countries']) ? $curr['mapped_countries'] : CurrencyModel::getDefaultMappedCountries($curr['currency_code']);
+                            $mappedList = array_filter(array_map('trim', explode(',', $mappedRaw)));
+                            $displaySym = !empty($curr['display_symbol']) ? $curr['display_symbol'] : $meta['symbol'];
+                        ?>
+                            <tr class="currency-row hover:bg-slate-50/80 transition-colors" 
+                                data-code="<?= strtolower(htmlspecialchars($curr['currency_code'])) ?>"
+                                data-name="<?= strtolower(htmlspecialchars($curr['currency_name'])) ?>"
+                                data-unit="<?= strtolower(htmlspecialchars($curr['currency_unit'])) ?>"
+                                data-mapped="<?= strtolower(htmlspecialchars($mappedRaw)) ?>"
+                                data-is-multi="<?= count($mappedList) > 1 ? '1' : '0' ?>"
+                                data-is-major="<?= in_array(strtoupper($curr['currency_code']), ['USD','EUR','GBP','JPY','AUD','CAD']) ? '1' : '0' ?>">
+                                
+                                <!-- Code & Flag -->
+                                <td class="py-4 px-5 whitespace-nowrap">
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-xl shrink-0" title="<?= htmlspecialchars($curr['currency_code']) ?>"><?= $meta['flag'] ?></span>
+                                        <div>
+                                            <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg border text-xs font-bold tracking-wide <?= $meta['bg'] ?? 'bg-slate-50 text-slate-700 border-slate-200' ?>">
+                                                <span><?= strtoupper(htmlspecialchars($curr['currency_code'])) ?></span>
+                                                <span class="text-slate-400 font-normal">|</span>
+                                                <span class="font-bold"><?= htmlspecialchars($displaySym) ?></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <!-- Name & Unit -->
+                                <td class="py-4 px-5">
+                                    <div class="font-semibold text-slate-900"><?= htmlspecialchars($curr['currency_name']) ?></div>
+                                    <div class="text-xs text-slate-500 font-normal mt-0.5">
+                                        Unit: <span class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono font-medium"><?= htmlspecialchars($curr['currency_unit']) ?></span>
+                                    </div>
+                                </td>
+
+                                <!-- Mapped Countries -->
+                                <td class="py-4 px-5">
+                                    <?php if (!empty($mappedList)): ?>
+                                        <div class="flex flex-wrap items-center gap-1 max-w-xs" title="<?= htmlspecialchars(implode(', ', $mappedList)) ?>">
+                                            <?php foreach (array_slice($mappedList, 0, 6) as $tag): ?>
+                                                <span class="inline-block bg-slate-100 text-slate-800 border border-slate-200 px-2 py-0.5 rounded text-[11px] font-mono font-semibold">
+                                                    <?= htmlspecialchars($tag) ?>
+                                                </span>
+                                            <?php endforeach; ?>
+                                            <?php if (count($mappedList) > 6): ?>
+                                                <span class="inline-block bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded text-[11px] font-semibold cursor-help" title="<?= htmlspecialchars(implode(', ', array_slice($mappedList, 6))) ?>">
+                                                    +<?= count($mappedList) - 6 ?> more
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php else: ?>
+                                        <span class="text-xs text-slate-400 italic">None mapped</span>
                                     <?php endif; ?>
-                                </div>
-                            <?php else: ?>
-                                <span style="color: #94a3b8; font-size: 12px; font-style: italic;">None mapped</span>
-                            <?php endif; ?>
-                        </td>
-                        <td><strong><?php echo number_format($curr['rate_import'], 6); ?></strong></td>
-                        <td><strong><?php echo number_format($curr['rate_export'], 6); ?></strong></td>
-                        <td>
-                            <a href="index.php?page=currency&action=addRecord&id=<?php echo $curr['id']; ?>" class="btn btn-edit">Edit</a>
-                            <button class="btn btn-history" onclick="openHistory(<?php echo htmlspecialchars(json_encode($curr)); ?>)">History</button>
-                            <a href="index.php?page=currency&action=deleteRecord&id=<?php echo $curr['id']; ?>" class="btn btn-delete" onclick="confirmDeactivate(event, '<?php echo $curr['id']; ?>')">Delete</a>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    <?php endif; ?>
+                                </td>
+
+                                <!-- Import Rate -->
+                                <td class="py-4 px-5 text-right whitespace-nowrap">
+                                    <div class="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200/60 font-mono font-bold text-sm">
+                                        <span class="text-xs text-emerald-500">₹</span>
+                                        <span><?= number_format($curr['rate_import'], 6) ?></span>
+                                    </div>
+                                </td>
+
+                                <!-- Export Rate -->
+                                <td class="py-4 px-5 text-right whitespace-nowrap">
+                                    <div class="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200/60 font-mono font-bold text-sm">
+                                        <span class="text-xs text-blue-500">₹</span>
+                                        <span><?= number_format($curr['rate_export'], 6) ?></span>
+                                    </div>
+                                </td>
+
+                                <!-- Actions -->
+                                <td class="py-4 px-5 text-center whitespace-nowrap">
+                                    <div class="inline-flex items-center justify-center gap-1">
+                                        <a href="index.php?page=currency&action=addRecord&id=<?= $curr['id'] ?>" 
+                                           class="p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Edit Currency">
+                                            <i class="fa-solid fa-pen-to-square text-base"></i>
+                                        </a>
+                                        <button onclick="openHistory(<?= htmlspecialchars(json_encode($curr)) ?>)" 
+                                                class="p-2 text-slate-600 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all" title="Rate History">
+                                            <i class="fa-solid fa-clock-rotate-left text-base"></i>
+                                        </button>
+                                        <button onclick="confirmDeactivate(event, '<?= $curr['id'] ?>', '<?= htmlspecialchars($curr['currency_code']) ?>')" 
+                                                class="p-2 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Deactivate Currency">
+                                            <i class="fa-solid fa-trash-can text-base"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
 </div>
 
 <!-- PDF Import Modal -->
-<div id="pdfModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>📄 PDF Import</h2>
-            <button class="close-modal" onclick="closeModal('pdfModal')">&times;</button>
-        </div>
+<div id="pdfModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 transition-all">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
         
-        <form id="pdfUploadForm" onsubmit="handlePdfParse(event)">
-            <label style="font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block;">Option A: Upload PDF File</label>
-            <div class="file-drop-area" onclick="document.getElementById('pdfFileInput').click()">
-                <div style="font-size: 28px; margin-bottom: 8px;">📂</div>
-                <div style="font-weight: 600; color: #334155;">Click to select Exchange Rate PDF</div>
-                <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Upload official exchange rate notification PDF</div>
-                <input type="file" id="pdfFileInput" accept=".pdf" style="display: none;" onchange="updateFileName(this)">
-                <div id="pdfFileName" style="margin-top: 10px; font-weight: 600; color: #2563eb;"></div>
+        <!-- Modal Header -->
+        <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-rose-50 text-rose-600 rounded-xl border border-rose-100">
+                    <i class="fa-solid fa-file-pdf text-lg"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900">PDF Rate Import</h3>
+                    <p class="text-xs text-slate-500">Upload official CBIC/ICEGATE exchange rate notification PDF.</p>
+                </div>
             </div>
+            <button onclick="closeModal('pdfModal')" class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
 
-            <label style="font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block;">Option B: Local File Path</label>
-            <input type="text" id="pdfFilePathInput" class="form-control" placeholder="e.g. c:\Users\Admin\Downloads\exchange_rate.pdf">
+        <!-- Modal Body -->
+        <div class="p-6 overflow-y-auto space-y-6">
+            <form id="pdfUploadForm" onsubmit="handlePdfParse(event)" class="space-y-4">
+                
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">Option A: Upload PDF File</label>
+                    <div class="border-2 border-dashed border-slate-300 hover:border-indigo-500 bg-slate-50 hover:bg-indigo-50/30 rounded-2xl p-6 text-center cursor-pointer transition-all"
+                         onclick="document.getElementById('pdfFileInput').click()">
+                        <div class="w-12 h-12 mx-auto rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl mb-3">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                        </div>
+                        <div class="text-sm font-semibold text-slate-800">Click to select Exchange Rate PDF</div>
+                        <div class="text-xs text-slate-500 mt-1">Supports official exchange rate notification documents</div>
+                        <input type="file" id="pdfFileInput" accept=".pdf" class="hidden" onchange="updateFileName(this)">
+                        <div id="pdfFileName" class="mt-3 text-xs font-bold text-indigo-600"></div>
+                    </div>
+                </div>
 
-            <div style="display: flex; justify-content: flex-end;">
-                <button type="submit" class="btn-submit" id="parsePdfBtn">🔍 Parse PDF & Preview Rates</button>
-            </div>
-        </form>
+                <div class="pt-2">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Option B: Local File Path</label>
+                    <input type="text" id="pdfFilePathInput" placeholder="e.g. C:\Users\Admin\Downloads\exchange_rate.pdf" 
+                           class="w-full px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
+                </div>
 
-        <div id="pdfPreviewSection" style="display: none; margin-top: 20px;">
-            <div id="pdfMetaBadge" class="meta-badge"></div>
-            <p style="font-size: 13px; color: #64748b; margin-bottom: 10px;">Review rates parsed from PDF. Uncheck any currency you do not wish to update.</p>
-            <div style="max-height: 350px; overflow-y: auto;">
-                <table class="preview-table">
-                    <thead>
-                        <tr>
-                            <th><input type="checkbox" id="selectAllPdf" checked onclick="toggleAllCheckboxes('pdfModal', this.checked)"></th>
-                            <th>Code</th>
-                            <th>Name</th>
-                            <th>Unit</th>
-                            <th>Import Rate</th>
-                            <th>Export Rate</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pdfPreviewBody"></tbody>
-                </table>
-            </div>
+                <div class="flex justify-end pt-2">
+                    <button type="submit" id="parsePdfBtn" class="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-sm transition-all">
+                        <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                        <span>Parse PDF & Preview Rates</span>
+                    </button>
+                </div>
+            </form>
 
-            <div class="modal-footer">
-                <button class="btn-cancel" onclick="closeModal('pdfModal')">Cancel</button>
-                <button class="btn-submit" id="applyPdfRatesBtn" onclick="applyParsedRates('pdfModal', 'PDF')">✅ Apply Selected Rates to Database</button>
+            <!-- Preview Section -->
+            <div id="pdfPreviewSection" class="hidden pt-4 border-t border-slate-200 space-y-4">
+                <div id="pdfMetaBadge" class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs font-semibold text-slate-700"></div>
+                
+                <p class="text-xs text-slate-500">Review rates parsed from PDF. Uncheck any currency you do not wish to update.</p>
+                
+                <div class="border border-slate-200 rounded-xl overflow-hidden max-h-80 overflow-y-auto">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead class="bg-slate-50 border-b border-slate-200 font-bold text-slate-600 uppercase sticky top-0">
+                            <tr>
+                                <th class="py-2.5 px-3 w-10 text-center">
+                                    <input type="checkbox" id="selectAllPdf" checked onclick="toggleAllCheckboxes('pdfModal', this.checked)" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                                </th>
+                                <th class="py-2.5 px-3">Code</th>
+                                <th class="py-2.5 px-3">Name</th>
+                                <th class="py-2.5 px-3">Unit</th>
+                                <th class="py-2.5 px-3">Import Rate</th>
+                                <th class="py-2.5 px-3">Export Rate</th>
+                                <th class="py-2.5 px-3 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pdfPreviewBody" class="divide-y divide-slate-100 font-medium"></tbody>
+                    </table>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-2">
+                    <button onclick="closeModal('pdfModal')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all">Cancel</button>
+                    <button id="applyPdfRatesBtn" onclick="applyParsedRates('pdfModal', 'PDF')" class="inline-flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-sm transition-all">
+                        <i class="fa-solid fa-check text-xs"></i>
+                        <span>Apply Selected Rates to Database</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <!-- History Modal -->
-<div id="historyModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2 id="historyTitle">Rate History</h2>
-            <button class="close-modal" onclick="closeModal('historyModal')">&times;</button>
+<div id="historyModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 transition-all">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+        <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-amber-50 text-amber-600 rounded-xl border border-amber-100">
+                    <i class="fa-solid fa-clock-rotate-left text-lg"></i>
+                </div>
+                <div>
+                    <h3 id="historyTitle" class="text-lg font-bold text-slate-900">Rate History</h3>
+                    <p class="text-xs text-slate-500">Historical exchange rate logs for this currency.</p>
+                </div>
+            </div>
+            <button onclick="closeModal('historyModal')" class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
         </div>
-        <table class="preview-table">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Import Rate (₹)</th>
-                    <th>Export Rate (₹)</th>
-                </tr>
-            </thead>
-            <tbody id="historyBody"></tbody>
-        </table>
+        <div class="p-6 overflow-y-auto">
+            <div class="border border-slate-200 rounded-xl overflow-hidden">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead class="bg-slate-50 border-b border-slate-200 font-bold text-slate-600 uppercase">
+                        <tr>
+                            <th class="py-3 px-4">Date</th>
+                            <th class="py-3 px-4 text-right">Import Rate (₹)</th>
+                            <th class="py-3 px-4 text-right">Export Rate (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody" class="divide-y divide-slate-100 font-medium"></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
 
-<!-- Message / Notice Modal (Adhering to No JS alert rule) -->
-<div id="noticeModal" class="modal">
-    <div class="modal-content" style="max-width: 450px;">
-        <div class="modal-header">
-            <h2 id="noticeTitle">Notice</h2>
-            <button class="close-modal" onclick="closeModal('noticeModal')">&times;</button>
+<!-- Notice / Confirmation Modal (Adheres to no-js-alert-use-modal.mdc) -->
+<div id="noticeModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 transition-all">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150 p-6 space-y-4">
+        <div class="flex items-center gap-3">
+            <div id="noticeIcon" class="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg shrink-0">
+                <i class="fa-solid fa-circle-info"></i>
+            </div>
+            <h3 id="noticeTitle" class="text-lg font-bold text-slate-900">Notice</h3>
         </div>
-        <div id="noticeMessage" style="font-size: 14px; color: #334155; line-height: 1.5; margin-bottom: 20px;"></div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px;">
-            <button class="btn-submit" id="noticeConfirmBtn" onclick="closeModal('noticeModal')">OK</button>
+        <div id="noticeMessage" class="text-sm text-slate-600 leading-relaxed"></div>
+        <div class="flex items-center justify-end gap-3 pt-2">
+            <button id="noticeCancelBtn" onclick="closeModal('noticeModal')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all hidden">Cancel</button>
+            <button id="noticeConfirmBtn" onclick="closeModal('noticeModal')" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-sm transition-all">OK</button>
         </div>
     </div>
 </div>
@@ -226,38 +429,60 @@ $rateHistory = [];
         pdfModal: null
     };
 
-    function showNotice(title, message) {
+    function showNotice(title, message, isError = false) {
         document.getElementById('noticeTitle').textContent = title;
         document.getElementById('noticeMessage').innerHTML = message;
-        document.getElementById('noticeConfirmBtn').style.display = 'inline-block';
-        document.getElementById('noticeModal').classList.add('active');
+        
+        const iconContainer = document.getElementById('noticeIcon');
+        if (isError) {
+            iconContainer.className = 'w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center text-lg shrink-0';
+            iconContainer.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+        } else {
+            iconContainer.className = 'w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg shrink-0';
+            iconContainer.innerHTML = '<i class="fa-solid fa-circle-info"></i>';
+        }
+
+        document.getElementById('noticeCancelBtn').classList.add('hidden');
+        const confirmBtn = document.getElementById('noticeConfirmBtn');
+        confirmBtn.textContent = 'OK';
+        confirmBtn.onclick = function() { closeModal('noticeModal'); };
+
+        document.getElementById('noticeModal').classList.remove('hidden');
     }
 
-    function confirmDeactivate(event, id) {
+    function confirmDeactivate(event, id, code) {
         event.preventDefault();
         document.getElementById('noticeTitle').textContent = 'Confirm Deactivation';
-        document.getElementById('noticeMessage').textContent = 'Are you sure you want to deactivate this currency?';
+        document.getElementById('noticeMessage').textContent = 'Are you sure you want to deactivate currency "' + code + '"?';
         
+        const iconContainer = document.getElementById('noticeIcon');
+        iconContainer.className = 'w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-lg shrink-0';
+        iconContainer.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+
+        const cancelBtn = document.getElementById('noticeCancelBtn');
+        cancelBtn.classList.remove('hidden');
+
         const btn = document.getElementById('noticeConfirmBtn');
         btn.textContent = 'Yes, Deactivate';
+        btn.className = 'px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-sm transition-all';
         btn.onclick = function() {
             window.location.href = 'index.php?page=currency&action=deleteRecord&id=' + id;
         };
         
-        document.getElementById('noticeModal').classList.add('active');
+        document.getElementById('noticeModal').classList.remove('hidden');
     }
 
     function openPdfModal() {
-        document.getElementById('pdfModal').classList.add('active');
+        document.getElementById('pdfModal').classList.remove('hidden');
     }
 
     function closeModal(modalId) {
-        document.getElementById(modalId).classList.remove('active');
+        document.getElementById(modalId).classList.add('hidden');
     }
 
     function updateFileName(input) {
         if (input.files && input.files[0]) {
-            document.getElementById('pdfFileName').textContent = 'Selected File: ' + input.files[0].name;
+            document.getElementById('pdfFileName').textContent = 'Selected: ' + input.files[0].name;
             document.getElementById('pdfFilePathInput').value = '';
         }
     }
@@ -268,7 +493,7 @@ $rateHistory = [];
         const pathInput = document.getElementById('pdfFilePathInput').value.trim();
         
         if (!fileInput.files.length && !pathInput) {
-            showNotice('Validation Error', 'Please select a PDF file to upload or specify a local file path.');
+            showNotice('Validation Error', 'Please select a PDF file to upload or specify a local file path.', true);
             return;
         }
 
@@ -281,7 +506,7 @@ $rateHistory = [];
 
         const btn = document.getElementById('parsePdfBtn');
         btn.disabled = true;
-        btn.textContent = '⏳ Parsing PDF...';
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i> <span>Parsing PDF...</span>';
 
         fetch('index.php?page=currency&action=uploadPdfPreview', {
             method: 'POST',
@@ -290,10 +515,10 @@ $rateHistory = [];
         .then(res => res.json())
         .then(data => {
             btn.disabled = false;
-            btn.textContent = '🔍 Parse PDF & Preview Rates';
+            btn.innerHTML = '<i class="fa-solid fa-magnifying-glass text-xs"></i> <span>Parse PDF & Preview Rates</span>';
 
             if (!data.success) {
-                showNotice('Parse Failed', data.message || 'Could not parse currency rates from PDF.');
+                showNotice('Parse Failed', data.message || 'Could not parse currency rates from PDF.', true);
                 return;
             }
 
@@ -302,8 +527,8 @@ $rateHistory = [];
         })
         .catch(err => {
             btn.disabled = false;
-            btn.textContent = '🔍 Parse PDF & Preview Rates';
-            showNotice('Error', 'Server error while parsing PDF: ' + err.message);
+            btn.innerHTML = '<i class="fa-solid fa-magnifying-glass text-xs"></i> <span>Parse PDF & Preview Rates</span>';
+            showNotice('Error', 'Server error while parsing PDF: ' + err.message, true);
         });
     }
 
@@ -313,31 +538,31 @@ $rateHistory = [];
         const tbody = document.getElementById('pdfPreviewBody');
 
         metaBadge.innerHTML = `
-            <span><strong>Notification:</strong> ${data.notification_no || 'N/A'}</span>
-            <span><strong>Effective Date:</strong> ${data.effective_date || 'Today'}</span>
-            <span><strong>Found:</strong> ${data.rates.length} currencies</span>
+            <div><span class="text-slate-400">Notification:</span> <strong class="text-slate-900">${data.notification_no || 'N/A'}</strong></div>
+            <div><span class="text-slate-400">Effective Date:</span> <strong class="text-slate-900">${data.effective_date || 'Today'}</strong></div>
+            <div><span class="text-slate-400">Parsed Currencies:</span> <strong class="text-indigo-600">${data.rates.length}</strong></div>
         `;
 
         tbody.innerHTML = '';
         data.rates.forEach((item, idx) => {
-            const importChange = item.import_changed ? `<span class="rate-changed">₹${item.rate_import}</span> <small>(was ₹${item.current_import_rate})</small>` : `₹${item.rate_import}`;
-            const exportChange = item.export_changed ? `<span class="rate-changed">₹${item.rate_export}</span> <small>(was ₹${item.current_export_rate})</small>` : `₹${item.rate_export}`;
-            const statusBadge = !item.exists_in_db ? `<span class="rate-new">NEW</span>` : (item.import_changed || item.export_changed ? `<span style="color:#2563eb; font-weight:600;">UPDATED</span>` : `<span style="color:#64748b;">SAME</span>`);
+            const importChange = item.import_changed ? `<span class="bg-indigo-50 text-indigo-700 font-bold px-1.5 py-0.5 rounded">₹${item.rate_import}</span> <span class="text-slate-400 text-[10px]">(was ₹${item.current_import_rate})</span>` : `₹${item.rate_import}`;
+            const exportChange = item.export_changed ? `<span class="bg-indigo-50 text-indigo-700 font-bold px-1.5 py-0.5 rounded">₹${item.rate_export}</span> <span class="text-slate-400 text-[10px]">(was ₹${item.current_export_rate})</span>` : `₹${item.rate_export}`;
+            const statusBadge = !item.exists_in_db ? `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-bold">NEW</span>` : (item.import_changed || item.export_changed ? `<span class="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[10px] font-bold">UPDATED</span>` : `<span class="bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded text-[10px] font-bold">UNCHANGED</span>`);
 
             tbody.innerHTML += `
-                <tr>
-                    <td><input type="checkbox" class="rate-checkbox-${modalId}" data-index="${idx}" checked></td>
-                    <td><strong>${item.currency_code}</strong></td>
-                    <td>${item.currency_name}</td>
-                    <td>${item.currency_unit}</td>
-                    <td>${importChange}</td>
-                    <td>${exportChange}</td>
-                    <td>${statusBadge}</td>
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="py-2.5 px-3 text-center"><input type="checkbox" class="rate-checkbox-${modalId} rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" data-index="${idx}" checked></td>
+                    <td class="py-2.5 px-3 font-bold text-slate-900">${item.currency_code}</td>
+                    <td class="py-2.5 px-3 text-slate-700">${item.currency_name}</td>
+                    <td class="py-2.5 px-3 text-slate-500 font-mono">${item.currency_unit}</td>
+                    <td class="py-2.5 px-3 font-mono">${importChange}</td>
+                    <td class="py-2.5 px-3 font-mono">${exportChange}</td>
+                    <td class="py-2.5 px-3 text-center">${statusBadge}</td>
                 </tr>
             `;
         });
 
-        section.style.display = 'block';
+        section.classList.remove('hidden');
     }
 
     function toggleAllCheckboxes(modalId, isChecked) {
@@ -357,7 +582,7 @@ $rateHistory = [];
         });
 
         if (selectedRates.length === 0) {
-            showNotice('Selection Required', 'Please select at least one currency rate to apply.');
+            showNotice('Selection Required', 'Please select at least one currency rate to apply.', true);
             return;
         }
 
@@ -368,6 +593,10 @@ $rateHistory = [];
             source: defaultSource
         };
 
+        const btn = document.getElementById('applyPdfRatesBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i> <span>Applying...</span>';
+
         fetch('index.php?page=currency&action=applyBulkRates', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -375,15 +604,20 @@ $rateHistory = [];
         })
         .then(res => res.json())
         .then(res => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-check text-xs"></i> <span>Apply Selected Rates to Database</span>';
+
             if (res.success) {
                 closeModal(modalId);
                 window.location.href = 'index.php?page=currency&action=list&success=1';
             } else {
-                showNotice('Update Failed', res.message || 'Failed to update database.');
+                showNotice('Update Failed', res.message || 'Failed to update database.', true);
             }
         })
         .catch(err => {
-            showNotice('Error', 'Error applying rates: ' + err.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-check text-xs"></i> <span>Apply Selected Rates to Database</span>';
+            showNotice('Error', 'Error applying rates: ' + err.message, true);
         });
     }
 
@@ -396,26 +630,88 @@ $rateHistory = [];
                 const tbody = document.getElementById('historyBody');
                 tbody.innerHTML = '';
                 
-                if (data.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">No history found</td></tr>';
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="py-6 text-center text-slate-400">No history records found</td></tr>';
                 } else {
                     data.forEach(record => {
-                        const row = `<tr>
-                            <td>${record.rate_date}</td>
-                            <td>₹${parseFloat(record.rate_import).toFixed(6)}</td>
-                            <td>₹${parseFloat(record.rate_export).toFixed(6)}</td>
+                        const row = `<tr class="hover:bg-slate-50 transition-colors">
+                            <td class="py-2.5 px-4 font-mono text-slate-700">${record.rate_date}</td>
+                            <td class="py-2.5 px-4 text-right font-mono font-semibold text-emerald-700">₹${parseFloat(record.rate_import).toFixed(6)}</td>
+                            <td class="py-2.5 px-4 text-right font-mono font-semibold text-blue-700">₹${parseFloat(record.rate_export).toFixed(6)}</td>
                         </tr>`;
                         tbody.innerHTML += row;
                     });
                 }
                 
-                document.getElementById('historyModal').classList.add('active');
+                document.getElementById('historyModal').classList.remove('hidden');
+            })
+            .catch(err => {
+                showNotice('Error', 'Failed to fetch rate history: ' + err.message, true);
             });
     }
 
-    window.onclick = function(event) {
-        if (event.target.classList.contains('modal')) {
-            event.target.classList.remove('active');
+    // Filter functionality
+    function filterCurrenciesTable() {
+        const input = document.getElementById('currencySearchInput').value.toLowerCase().trim();
+        const rows = document.querySelectorAll('.currency-row');
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const code = row.getAttribute('data-code') || '';
+            const name = row.getAttribute('data-name') || '';
+            const unit = row.getAttribute('data-unit') || '';
+            const mapped = row.getAttribute('data-mapped') || '';
+
+            const isMatch = code.includes(input) || name.includes(input) || unit.includes(input) || mapped.includes(input);
+            
+            if (isMatch) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        document.getElementById('currencyCountDisplay').textContent = `Showing ${visibleCount} of ${rows.length}`;
+    }
+
+    function setQuickFilter(type) {
+        document.querySelectorAll('.quick-filter-btn').forEach(btn => {
+            btn.className = 'quick-filter-btn px-3 py-1.5 text-xs font-semibold rounded-lg bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-all';
+        });
+
+        const activeBtn = type === 'all' ? document.getElementById('filterBtnAll') :
+                         type === 'major' ? document.getElementById('filterBtnMajor') :
+                         document.getElementById('filterBtnMulti');
+        
+        if (activeBtn) {
+            activeBtn.className = 'quick-filter-btn px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-xs transition-all';
         }
+
+        const rows = document.querySelectorAll('.currency-row');
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            if (type === 'all') {
+                row.style.display = '';
+                visibleCount++;
+            } else if (type === 'major') {
+                if (row.getAttribute('data-is-major') === '1') {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            } else if (type === 'multi') {
+                if (row.getAttribute('data-is-multi') === '1') {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            }
+        });
+
+        document.getElementById('currencyCountDisplay').textContent = `Showing ${visibleCount} of ${rows.length}`;
     }
 </script>

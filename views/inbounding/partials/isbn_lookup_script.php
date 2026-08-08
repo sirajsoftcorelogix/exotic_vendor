@@ -336,9 +336,12 @@
 
             if (publisherSelect && catalog.publisher && catalog.publisher.id) {
                 const publisherId = String(catalog.publisher.id);
-                const publisherName = String(catalog.publisher.name || '');
-                publisherSelect.addOption({ id: publisherId, name: publisherName });
-                publisherSelect.setValue(publisherId);
+                publisherSelect.addOption({ id: publisherId, name: String(catalog.publisher.name || '') });
+                let vals = publisherSelect.getValue();
+                if (!Array.isArray(vals)) vals = vals ? [String(vals)] : [];
+                if (vals.indexOf(publisherId) === -1) vals.push(publisherId);
+                publisherSelect.setValue(vals);
+                deps.syncPublisherPipeValue && deps.syncPublisherPipeValue(publisherSelect);
             }
 
             if (typeof deps.onApply === 'function') {

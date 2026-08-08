@@ -180,7 +180,9 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
     }
 
     $stmt = $conn->prepare(
-        'SELECT total_amount FROM vp_invoices WHERE order_number = ? ORDER BY id DESC LIMIT 1'
+        'SELECT i.total_amount FROM vp_invoices i
+         INNER JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
+         WHERE oi.order_number = ? ORDER BY i.id DESC LIMIT 1'
     );
     if ($stmt) {
         $stmt->bind_param('s', $orderNumber);
@@ -201,7 +203,7 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
             IFNULL(MAX(oi.giftvoucher_reduce), 0) AS gift_reduce,
             IFNULL(MAX(oi.credit), 0) AS credit
          FROM vp_orders o
-         LEFT JOIN vp_order_info oi ON oi.order_number = o.order_number
+         LEFT JOIN vp_order_info oi ON oi.order_number COLLATE utf8mb4_unicode_ci = o.order_number COLLATE utf8mb4_unicode_ci
          WHERE o.order_number = ?'
     );
     if ($stmt) {

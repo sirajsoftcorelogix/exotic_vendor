@@ -59,12 +59,14 @@
     sel.focus();
   };
 
-  window.updatePosCustomerLabels = function (name, phone, email) {
+  window.updatePosCustomerLabels = function (name, phone, email, residenceText) {
     var nameText =
       name != null && String(name).trim() !== '' ? String(name).trim() : 'Walk-in Customer';
     var phoneText = phone != null ? String(phone).trim() : '';
     var emailText = email != null ? String(email).trim() : '';
     var subText = phoneText !== '' ? phoneText : (emailText !== '' ? emailText : '-');
+    var resText = residenceText != null && String(residenceText).trim() !== '' ? String(residenceText).trim() : '-';
+
     ['selectedCustomerNameCart', 'posCartTableCustomerName'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) {
@@ -75,6 +77,12 @@
       var el = document.getElementById(id);
       if (el) {
         el.textContent = subText;
+      }
+    });
+    ['selectedCustomerResidenceCart', 'posCartTableCustomerResidence'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) {
+        el.textContent = resText;
       }
     });
   };
@@ -443,6 +451,110 @@
     return name || data.text;
   }
 
+  function updatePosCurrencyToggleUI() {
+    var custCode = window.POS_CURRENT_CUSTOMER_CURRENCY_CODE || (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) || 'INR';
+    var custSymbol = window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL || (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_symbol) || '';
+    var countryCode = window.POS_CURRENT_CUSTOMER_COUNTRY_CODE || (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.country_code) || '';
+
+    custCode = String(custCode).trim().toUpperCase();
+    custSymbol = String(custSymbol).trim();
+    countryCode = String(countryCode).trim().toUpperCase();
+
+    var isNonIndia = custCode !== 'INR' && countryCode !== 'IN';
+
+    var mode = window.POS_CURRENCY_MODE || 'CUSTOMER';
+    if (mode !== 'INR' && mode !== 'CUSTOMER') {
+      mode = 'CUSTOMER';
+    }
+    window.POS_CURRENCY_MODE = mode;
+
+    if (!custSymbol) {
+      if (custCode === 'USD') custSymbol = '$';
+      else if (custCode === 'EUR') custSymbol = '€';
+      else if (custCode === 'GBP') custSymbol = '£';
+      else custSymbol = custCode;
+    }
+
+    var labelText = custCode + (custSymbol ? ' (' + custSymbol + ')' : '');
+
+    var targets = [
+      {
+        container: document.getElementById('posCurrencyToggleContainer'),
+        btnCustomer: document.getElementById('posCurrencyBtnCustomer'),
+        labelCustomer: document.getElementById('posCurrencyCustomerLabel'),
+        btnINR: document.getElementById('posCurrencyBtnINR')
+      },
+      {
+        container: document.getElementById('posCartTableCurrencyToggleContainer'),
+        btnCustomer: document.getElementById('posCartTableCurrencyBtnCustomer'),
+        labelCustomer: document.getElementById('posCartTableCurrencyCustomerLabel'),
+        btnINR: document.getElementById('posCartTableCurrencyBtnINR')
+      },
+      {
+        container: document.getElementById('pmPriceToggleContainer'),
+        btnCustomer: document.getElementById('pmPriceBtnCustomer'),
+        labelCustomer: document.getElementById('pmPriceCustomerLabel'),
+        btnINR: document.getElementById('pmPriceBtnINR')
+      }
+    ];
+
+    targets.forEach(function (t) {
+      if (!t.container) return;
+      if (!isNonIndia) {
+        t.container.classList.add('hidden');
+        return;
+      }
+      t.container.classList.remove('hidden');
+      if (t.labelCustomer) {
+        t.labelCustomer.textContent = labelText;
+      }
+      if (t.btnCustomer && t.btnINR) {
+        if (mode === 'CUSTOMER') {
+          t.btnCustomer.className = 'px-3 py-1 rounded-md font-semibold transition bg-white text-orange-600 shadow-sm';
+          t.btnINR.className = 'px-3 py-1 rounded-md font-medium transition text-slate-600 hover:text-slate-900 bg-transparent';
+        } else {
+          t.btnCustomer.className = 'px-3 py-1 rounded-md font-medium transition text-slate-600 hover:text-slate-900 bg-transparent';
+          t.btnINR.className = 'px-3 py-1 rounded-md font-semibold transition bg-white text-orange-600 shadow-sm';
+        }
+      }
+    });
+  }
+
+  window.updatePosCurrencyToggleUI = updatePosCurrencyToggleUI;
+
+  window.setPosCurrencyMode = function (mode) {
+    if (mode !== 'INR' && mode !== 'CUSTOMER') {
+      mode = 'CUSTOMER';
+    }
+    window.POS_CURRENCY_MODE = mode;
+    updatePosCurrencyToggleUI();
+
+    if (typeof window.refreshCart === 'function') {
+      window.refreshCart();
+    }
+    if (typeof window.reformatPosProductPrices === 'function') {
+      window.reformatPosProductPrices();
+    }
+  };
+
+  function setPosCustomerCurrencyGlobals(c) {
+    if (!c || typeof c !== 'object') return;
+    if (c.currency_code) window.POS_CURRENT_CUSTOMER_CURRENCY_CODE = c.currency_code;
+    if (c.currency_symbol) window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL = c.currency_symbol;
+    if (c.country_code) window.POS_CURRENT_CUSTOMER_COUNTRY_CODE = String(c.country_code).trim().toUpperCase();
+
+    updatePosCurrencyToggleUI();
+  }
+
+  function clearPosCustomerCurrencyGlobals() {
+    window.POS_CURRENT_CUSTOMER_CURRENCY_CODE = 'INR';
+    window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL = '₹';
+    window.POS_CURRENT_CUSTOMER_COUNTRY_CODE = 'IN';
+    window.POS_CURRENCY_MODE = 'CUSTOMER';
+
+    updatePosCurrencyToggleUI();
+  }
+
   function postSetCustomer(customerId) {
     return fetch('index.php?page=pos_register&action=set-customer', {
       method: 'POST',
@@ -491,7 +603,13 @@
                 text: disp,
                 name: c.name || '',
                 phone: c.phone || '',
-                email: c.email || ''
+                email: c.email || '',
+                country_of_residence: c.country_of_residence || '',
+                country_code: c.country_code || '',
+                country_name: c.country_name || '',
+                currency_code: c.currency_code || '',
+                currency_symbol: c.currency_symbol || '',
+                residence_text: c.residence_text || '-'
               };
             })
           };
@@ -505,25 +623,50 @@
     $cust.on('select2:select', function (e) {
       var d = e.params.data;
       window.POS_SESSION_CUSTOMER_ID = d.id ? String(d.id) : '';
-      postSetCustomer(d.id || '');
-      window.updatePosCustomerLabels(d.name, d.phone, d.email);
+      setPosCustomerCurrencyGlobals(d);
+      window.updatePosCustomerLabels(d.name, d.phone, d.email, d.residence_text || '-');
+      postSetCustomer(d.id || '').then(function (res) {
+        return res.json();
+      }).then(function (data) {
+        if (data && data.customer) {
+          if (data.customer.residence_text) {
+            window.updatePosCustomerLabels(
+              data.customer.name || d.name,
+              data.customer.phone || d.phone,
+              data.customer.email || d.email,
+              data.customer.residence_text
+            );
+          }
+          setPosCustomerCurrencyGlobals(data.customer);
+        }
+        if (typeof window.refreshCart === 'function') {
+          window.refreshCart();
+        }
+      }).catch(function () {});
     });
 
     $cust.on('select2:clear', function () {
       window.POS_SESSION_CUSTOMER_ID = '';
-      postSetCustomer('');
-      window.updatePosCustomerLabels('', '', '');
+      clearPosCustomerCurrencyGlobals();
+      postSetCustomer('').then(function () {
+        if (typeof window.refreshCart === 'function') {
+          window.refreshCart();
+        }
+      });
+      window.updatePosCustomerLabels('', '', '', '-');
     });
 
     if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.id) {
       var ic = window.POS_INITIAL_CUSTOMER;
+      setPosCustomerCurrencyGlobals(ic);
       var opt = new Option(ic.text || ic.name || '', String(ic.id), true, true);
       opt.setAttribute('data-name', ic.name || '');
       opt.setAttribute('data-phone', ic.phone || '');
       opt.setAttribute('data-email', ic.email || '');
+      opt.setAttribute('data-residence', ic.residence_text || '-');
       $cust.append(opt);
       $cust.val(String(ic.id)).trigger('change');
-      window.updatePosCustomerLabels(ic.name, ic.phone, ic.email);
+      window.updatePosCustomerLabels(ic.name, ic.phone, ic.email, ic.residence_text || '-');
     }
   }
 
@@ -588,6 +731,7 @@
             name: data.customer.name || '',
             phone: data.customer.phone || '',
             email: data.customer.email || '',
+            residence_text: data.customer.residence_text || '-',
             text: label
           };
 
@@ -598,6 +742,7 @@
             opt.setAttribute('data-name', data.customer.name || '');
             opt.setAttribute('data-phone', data.customer.phone || '');
             opt.setAttribute('data-email', data.customer.email || '');
+            opt.setAttribute('data-residence', data.customer.residence_text || '-');
             $s.append(opt);
             $s.val(idStr).trigger('change');
             $s.trigger({
@@ -608,7 +753,8 @@
                   text: label,
                   name: data.customer.name || '',
                   phone: data.customer.phone || '',
-                  email: data.customer.email || ''
+                  email: data.customer.email || '',
+                  residence_text: data.customer.residence_text || '-'
                 }
               }
             });
@@ -623,13 +769,26 @@
             option.setAttribute('data-name', data.customer.name || '');
             option.setAttribute('data-phone', data.customer.phone || '');
             option.setAttribute('data-email', data.customer.email || '');
+            option.setAttribute('data-residence', data.customer.residence_text || '-');
             select.appendChild(option);
             select.value = idStr;
             select.dispatchEvent(new Event('change', { bubbles: true }));
           }
 
-          postSetCustomer(idStr);
-          window.updatePosCustomerLabels(data.customer.name, data.customer.phone, data.customer.email);
+          if (data.customer) {
+            setPosCustomerCurrencyGlobals(data.customer);
+          }
+          postSetCustomer(idStr).then(function () {
+            if (typeof window.refreshCart === 'function') {
+              window.refreshCart();
+            }
+          });
+          window.updatePosCustomerLabels(
+            data.customer.name,
+            data.customer.phone,
+            data.customer.email,
+            data.customer.residence_text || '-'
+          );
           posCustomerToast(data.message || (data.is_update ? 'Customer updated' : 'Customer saved'), 'green');
           window.closeCustomerModal();
         })
@@ -642,6 +801,7 @@
   function bootPosCustomerUi() {
     initPosCustomerSelect();
     initPosCustomerModalForm();
+    updatePosCurrencyToggleUI();
   }
 
   if (document.readyState === 'loading') {
