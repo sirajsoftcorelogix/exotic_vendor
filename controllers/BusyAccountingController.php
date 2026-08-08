@@ -103,7 +103,7 @@ class BusyAccountingController
             }
 
             // Generate exact XML exported to BUSY
-            $xmlPreview = $generator->generateSalesReturn($details, $details['items'] ?? []);
+            $xmlPreview = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" . $generator->generateSalesReturn($details, $details['items'] ?? []);
 
             // Generate JSON preview structure matching api_fetch_vouchers
             $jsonPreview = [
@@ -139,7 +139,7 @@ class BusyAccountingController
             }
 
             // Generate exact XML exported to BUSY
-            $xmlPreview = $generator->generate($details, $details['items'] ?? []);
+            $xmlPreview = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" . $generator->generate($details, $details['items'] ?? []);
 
             $customerName = trim(($details['first_name'] ?? '') . ' ' . ($details['last_name'] ?? ''));
             if ($customerName === '') $customerName = 'Walk-in Customer';
@@ -277,8 +277,8 @@ class BusyAccountingController
                 if ($v['voucher_type'] === 'sales_return') {
                     $details = $this->busyModel->getSalesReturnDetails($v['id']);
                     if ($details) {
-                        $xml = $generator->generateSalesReturn($details, $details['items'] ?? []);
-                        $filename = 'SR_' . preg_replace('/[\/\\:*?"<>|]/', '_', $v['voucher_no']) . '.txt';
+                        $xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" . $generator->generateSalesReturn($details, $details['items'] ?? []);
+                        $filename = 'SR_' . preg_replace('/[\/\\:*?"<>|]/', '_', $v['voucher_no']) . '.xml';
                         $filepath = $tempDir . '/' . $filename;
                         if (file_put_contents($filepath, $xml) !== false) {
                             $xmlFiles[] = ['path' => $filepath, 'name' => $filename];
@@ -287,8 +287,8 @@ class BusyAccountingController
                 } else {
                     $details = $this->busyModel->getInvoiceDetails($v['id']);
                     if ($details) {
-                        $xml = $generator->generate($details, $details['items'] ?? []);
-                        $filename = 'INV_' . preg_replace('/[\/\\:*?"<>|]/', '_', $v['voucher_no']) . '.txt';
+                        $xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" . $generator->generate($details, $details['items'] ?? []);
+                        $filename = 'INV_' . preg_replace('/[\/\\:*?"<>|]/', '_', $v['voucher_no']) . '.xml';
                         $filepath = $tempDir . '/' . $filename;
                         if (file_put_contents($filepath, $xml) !== false) {
                             $xmlFiles[] = ['path' => $filepath, 'name' => $filename];
