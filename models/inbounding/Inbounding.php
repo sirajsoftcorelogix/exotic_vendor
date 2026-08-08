@@ -1555,11 +1555,7 @@ class Inbounding {
             return [];
         }
 
-        $pubName = '';
-        if (!empty($row['publisher'])) {
-            $pub = $this->getPublisherById((int) $row['publisher']);
-            $pubName = trim((string) ($pub['name'] ?? $pub['publishers'] ?? ''));
-        }
+        $pubName = $this->resolveInboundPublisherNames($row['publisher'] ?? '');
 
         $pubDate = trim((string) ($row['publication_date'] ?? ''));
         if ($pubDate !== '' && $pubDate !== '0000-00-00') {
@@ -1671,6 +1667,23 @@ class Inbounding {
         }
 
         return implode(',', $this->parseInboundAuthorIds($input));
+    }
+
+    /**
+     * Resolve stored publisher ids to comma-separated display names.
+     */
+    public function resolveInboundPublisherNames($stored): string
+    {
+        $names = [];
+        foreach ($this->parseInboundAuthorIds($stored) as $publisherId) {
+            $row = $this->getPublisherById($publisherId);
+            $name = trim((string) ($row['name'] ?? $row['publishers'] ?? ''));
+            if ($name !== '') {
+                $names[] = $name;
+            }
+        }
+
+        return implode(', ', $names);
     }
 
     /**
@@ -1849,6 +1862,7 @@ class Inbounding {
 
         if (!empty($labeldata)) {
             $labeldata['author_name'] = $this->resolveInboundAuthorFirstName($labeldata['author'] ?? '');
+            $labeldata['publishers_name'] = $this->resolveInboundPublisherNames($labeldata['publisher'] ?? '');
         }
 
         return [
@@ -1906,7 +1920,10 @@ class Inbounding {
         $compiled_by = $this->normalizeInboundAuthorValue($data['compiled_by'] ?? '');
         $translated_by = $this->normalizeInboundAuthorValue($data['translated_by'] ?? '');
         $commentary_by = $this->normalizeInboundAuthorValue($data['commentary_by'] ?? '');
-        $publisher = (int) ($data['publisher'] ?? 0);
+        $publisher = $this->normalizeInboundAuthorValue($data['publisher'] ?? '');
+        if ($publisher === '') {
+            $publisher = null;
+        }
         $isbn = trim($data['isbn'] ?? '');
         $language = trim($data['language'] ?? '');
         $pages = trim((string) ($data['pages'] ?? ''));
@@ -1935,7 +1952,7 @@ class Inbounding {
           return ['success' => false, 'message' => $this->conn->error];
         }
 
-        $types = "sisssssisddddssdiissddssssssissssssi";
+        $types = "sisssssisddddssdiissddsssssssssssssi";
 
         $stmt->bind_param(
             $types,

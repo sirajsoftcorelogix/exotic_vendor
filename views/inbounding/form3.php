@@ -191,12 +191,19 @@ $edited_by_prefill_ids = array_map(static function ($opt) {
 }, $selected_edited_by_options);
 $edited_by_stored_value = (string) ($form2['edited_by'] ?? '');
 
-$selected_publisher_id = $form2['publisher'] ?? '';
-$selected_publisher_name = '';
-if (!empty($selected_publisher_id) && method_exists($inboundingModel, 'getPublisherById')) {
-    $publisherRow = $inboundingModel->getPublisherById($selected_publisher_id);
-    $selected_publisher_name = $publisherRow['publisher_name'] ?? $publisherRow['name'] ?? '';
+$selected_publisher_options = [];
+if (!empty($form2['publisher']) && isset($inboundingModel)) {
+    foreach ($inboundingModel->parseInboundAuthorIds($form2['publisher']) as $publisherId) {
+        $publisherRow = $inboundingModel->getPublisherById($publisherId);
+        if (!empty($publisherRow['id'])) {
+            $selected_publisher_options[] = $publisherRow;
+        }
+    }
 }
+$publisher_prefill_ids = array_map(static function ($opt) {
+    return (string) ($opt['id'] ?? '');
+}, $selected_publisher_options);
+$publisher_stored_value = (string) ($form2['publisher'] ?? '');
 
 require_once __DIR__ . '/partials/book_cover_types.php';
 $saved_cover_type = trim((string) ($form2['cover_type'] ?? ''));
@@ -422,11 +429,11 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
                             require __DIR__ . '/partials/catalog_refresh_btn.php';
                             ?>
                         </div>
-                        <select id="publisher_select" name="publisher" placeholder="Type publisher name..." class="w-full border border-gray-400 rounded px-2 py-2 text-sm focus:border-black outline-none bg-white">
-                            <option value=""></option>
-                            <?php if (!empty($selected_publisher_id) && !empty($selected_publisher_name)): ?>
-                                <option value="<?php echo htmlspecialchars($selected_publisher_id); ?>" selected><?php echo htmlspecialchars($selected_publisher_name); ?></option>
-                            <?php endif; ?>
+                        <input type="hidden" name="publisher" id="publisher_pipe_value" value="<?php echo htmlspecialchars($publisher_stored_value, ENT_QUOTES, 'UTF-8'); ?>">
+                        <select id="publisher_select" multiple class="w-full border border-gray-400 rounded px-2 py-2 text-sm focus:border-black outline-none bg-white">
+                            <?php foreach ($selected_publisher_options as $publisherOpt): ?>
+                                <option value="<?php echo htmlspecialchars((string) $publisherOpt['id']); ?>" selected><?php echo htmlspecialchars($publisherOpt['name'] ?? ''); ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div>
@@ -777,30 +784,83 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
             syncEditedByPipeValue(editedByTomSelect);
         }
 
-        const publisherSelect = new TomSelect('#publisher_select', {
-            valueField: 'id',
-            labelField: 'name',
-            searchField: ['name'],
-            placeholder: 'Search publisher...',
-            create: false,
-            preload: false,
-            allowEmptyOption: true,
-            load: function(query, callback) {
-                if (!query || query.length < 2) {
-                    callback();
+        function initForm3MultiSelect(config) {
+            const hiddenInput = document.getElementById(config.hiddenId);
+            const selectEl = document.getElementById(config.selectId);
+            if (!selectEl) {
+                return null;
+            }
+
+            function sync(ts) {
+                if (!hiddenInput || !ts) {
                     return;
                 }
-                fetch(searchPublishersUrl + encodeURIComponent(query))
-                    .then(response => {
-                        if (!response.ok) {
-                            return response.text().then(text => { throw new Error('Publisher request failed: ' + response.status + ' ' + text); });
-                        }
-                        return response.json();
-                    })
-                    .then(json => callback(json))
-                    .catch(err => { console.error('Publisher load error:', err); callback(); });
+                let vals = ts.getValue();
+                if (!Array.isArray(vals)) {
+                    vals = vals ? [String(vals)] : [];
+                }
+                hiddenInput.value = vals.filter(Boolean).join(',');
             }
+
+            selectEl.setAttribute('multiple', 'multiple');
+            const ts = new TomSelect(selectEl, {
+                plugins: ['remove_button'],
+                valueField: 'id',
+                labelField: 'name',
+                searchField: ['name'],
+                placeholder: config.placeholder || 'Search and select...',
+                maxItems: 100,
+                hideSelected: true,
+                closeAfterSelect: false,
+                create: false,
+                persist: true,
+                onChange: function () { sync(this); },
+                onItemAdd: function () {
+                    this.setTextboxValue('');
+                    sync(this);
+                },
+                onItemRemove: function () { sync(this); },
+                load: function (query, callback) {
+                    if (!query || query.length < 2) {
+                        callback();
+                        return;
+                    }
+                    fetch(config.searchUrl + encodeURIComponent(query))
+                        .then(function (response) { return response.ok ? response.json() : []; })
+                        .then(function (json) { callback(mapAuthorOptions(json)); })
+                        .catch(function () { callback(); });
+                }
+            });
+
+            mapAuthorOptions(config.initialOptions || []).forEach(function (opt) {
+                ts.addOption(opt);
+            });
+            if ((config.initialIds || []).length) {
+                ts.setValue(config.initialIds);
+            }
+            sync(ts);
+            return ts;
+        }
+
+        const publisherPipeInput = document.getElementById('publisher_pipe_value');
+        const publisherSelect = initForm3MultiSelect({
+            hiddenId: 'publisher_pipe_value',
+            selectId: 'publisher_select',
+            initialOptions: <?php echo json_encode($selected_publisher_options, JSON_UNESCAPED_UNICODE); ?>,
+            initialIds: <?php echo json_encode($publisher_prefill_ids, JSON_UNESCAPED_UNICODE); ?>,
+            searchUrl: searchPublishersUrl,
+            placeholder: 'Search and select publishers...'
         });
+        function syncPublisherPipeValue(ts) {
+            if (!publisherPipeInput || !ts) {
+                return;
+            }
+            let vals = ts.getValue();
+            if (!Array.isArray(vals)) {
+                vals = vals ? [String(vals)] : [];
+            }
+            publisherPipeInput.value = vals.filter(Boolean).join(',');
+        }
 
         const form3VendorSelectEl = document.getElementById('form3_vendor_code');
         let form3VendorTomSelect = null;
@@ -872,7 +932,15 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
                 return;
             }
             publisherSelect.addOption({ id: publisherId, name: publisherName });
-            publisherSelect.setValue(publisherId, true);
+            let vals = publisherSelect.getValue();
+            if (!Array.isArray(vals)) {
+                vals = vals ? [String(vals)] : [];
+            }
+            if (vals.indexOf(publisherId) === -1) {
+                vals.push(publisherId);
+            }
+            publisherSelect.setValue(vals);
+            syncPublisherPipeValue(publisherSelect);
         }
 
         function syncPublisherFromForm3Vendor() {
@@ -1552,14 +1620,15 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
 
         // Initial Run
         updateAllFields();
-        if (getCategoryType().isBook && getForm3VendorValue() && publisherSelect && !String(publisherSelect.getValue() || '').trim()) {
+        if (getCategoryType().isBook && getForm3VendorValue() && publisherSelect && !String(publisherPipeInput?.value || '').trim()) {
             syncPublisherFromForm3Vendor();
         }
 
         initIsbnLookup({
             authorTomSelect: authorTomSelect,
             publisherSelect: publisherSelect,
-            syncAuthorPipeValue: syncAuthorPipeValue
+            syncAuthorPipeValue: syncAuthorPipeValue,
+            syncPublisherPipeValue: syncPublisherPipeValue
         });
     });
 

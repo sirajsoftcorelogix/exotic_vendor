@@ -269,9 +269,20 @@ $desktopform_req_star = '<span class="text-red-500" aria-hidden="true">*</span>'
 
 // --- Book fields prefill (Author/Publisher names for TomSelect) ---
 $selected_author_options = [];
-$selected_publisher_id = $data['form2']['publisher'] ?? '';
-$selected_publisher_name = '';
+$selected_publisher_options = [];
 global $inboundingModel;
+if (!empty($data['form2']['publisher']) && isset($inboundingModel)) {
+    foreach ($inboundingModel->parseInboundAuthorIds($data['form2']['publisher']) as $publisherId) {
+        $publisherRow = $inboundingModel->getPublisherById($publisherId);
+        if (!empty($publisherRow['id'])) {
+            $selected_publisher_options[] = $publisherRow;
+        }
+    }
+}
+$publisher_prefill_ids = array_map(static function ($opt) {
+    return (string) ($opt['id'] ?? '');
+}, $selected_publisher_options);
+$publisher_stored_value = (string) ($data['form2']['publisher'] ?? '');
 if (!empty($data['form2']['author']) && isset($inboundingModel) && method_exists($inboundingModel, 'parseInboundAuthorIds')) {
     foreach ($inboundingModel->parseInboundAuthorIds($data['form2']['author']) as $authorId) {
         $authorRow = $inboundingModel->getAuthorById($authorId);
@@ -325,12 +336,6 @@ if (isset($inboundingModel) && method_exists($inboundingModel, 'inboundBookCreat
         ];
     }
 }
-
-if (!empty($selected_publisher_id) && isset($inboundingModel) && method_exists($inboundingModel, 'getPublisherById')) {
-    $publisherRow = $inboundingModel->getPublisherById((int)$selected_publisher_id);
-    $selected_publisher_name = $publisherRow['publishers'] ?? $publisherRow['publisher_name'] ?? $publisherRow['name'] ?? '';
-}
-
 $desktopPublishersForVendor = [];
 foreach ($data['publishers'] ?? [] as $publisherRow) {
     $publisherExoticId = (int) ($publisherRow['publishers_id'] ?? 0);
@@ -1019,11 +1024,11 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                     require __DIR__ . '/partials/catalog_refresh_btn.php';
                                     ?>
                                 </div>
-                                <select id="publisher_select" name="publisher" placeholder="Type publisher name..." autocomplete="off">
-                                    <option value=""></option>
-                                    <?php if (!empty($selected_publisher_id) && !empty($selected_publisher_name)): ?>
-                                        <option value="<?php echo htmlspecialchars($selected_publisher_id); ?>" selected><?php echo htmlspecialchars($selected_publisher_name); ?></option>
-                                    <?php endif; ?>
+                                <input type="hidden" name="publisher" id="publisher_pipe_value" value="<?php echo htmlspecialchars($publisher_stored_value, ENT_QUOTES, 'UTF-8'); ?>">
+                                <select id="publisher_select" multiple autocomplete="off">
+                                    <?php foreach ($selected_publisher_options as $publisherOpt): ?>
+                                        <option value="<?php echo htmlspecialchars((string) $publisherOpt['id']); ?>" selected><?php echo htmlspecialchars($publisherOpt['name'] ?? ''); ?></option>
+                                    <?php endforeach; ?>
                                 </select>
                             </div>
                             <div>
@@ -2719,7 +2724,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 onItemRemove: function () { config.sync(this); },
                 load: function (query, callback) {
                     if (!query || query.length < 2) return callback();
-                    fetch(searchAuthorsUrl + encodeURIComponent(query), { credentials: 'include' })
+                    fetch((config.searchUrl || searchAuthorsUrl) + encodeURIComponent(query), { credentials: 'include' })
                         .then(function (r) { return r.ok ? r.json() : []; })
                         .then(function (json) { callback(mapAuthorOptions(json)); })
                         .catch(function () { callback(); });
@@ -2940,26 +2945,24 @@ document.addEventListener('DOMContentLoaded', function() {
             CKEDITOR?.instances?.long_description_india_input?.setData(html);
         });
 
-        let publisherSelect = null;
-        const publisherEl = document.getElementById('publisher_select');
-        if (publisherEl && typeof window.safeTomSelect === 'function') {
-            publisherSelect = window.safeTomSelect(publisherEl, {
-                valueField: 'id',
-                labelField: 'name',
-                searchField: ['name'],
-                placeholder: 'Search publisher...',
-                create: false,
-                preload: false,
-                allowEmptyOption: true,
-                load: function(query, callback) {
-                    if (!query || query.length < 2) return callback();
-                    fetch(searchPublishersUrl + encodeURIComponent(query), { credentials: 'include' })
-                        .then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t); }))
-                        .then(json => callback(json))
-                        .catch(() => callback());
-                }
-            });
+        function syncPublisherPipeValue(ts) {
+            const publisherPipeInput = document.getElementById('publisher_pipe_value');
+            if (!publisherPipeInput || !ts) return;
+            let vals = ts.getValue();
+            if (!Array.isArray(vals)) vals = vals ? [String(vals)] : [];
+            publisherPipeInput.value = vals.filter(Boolean).join(',');
         }
+        window.syncPublisherPipeValue = syncPublisherPipeValue;
+
+        const publisherTomSelect = initInboundCreatorTomSelect({
+            hiddenId: 'publisher_pipe_value',
+            selectId: 'publisher_select',
+            initialOptions: <?php echo json_encode($selected_publisher_options, JSON_UNESCAPED_UNICODE); ?>,
+            initialIds: <?php echo json_encode($publisher_prefill_ids, JSON_UNESCAPED_UNICODE); ?>,
+            searchUrl: searchPublishersUrl,
+            placeholder: 'Search and select publishers...',
+            sync: syncPublisherPipeValue
+        });
 
         function resolveOriginalLanguageIdsFromLookup(languageText) {
             const selectEl = document.getElementById('original_languages_select');
@@ -3032,8 +3035,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         initIsbnLookup({
             authorTomSelect: authorTomSelect,
-            publisherSelect: publisherSelect,
+            publisherSelect: publisherTomSelect,
             syncAuthorPipeValue: syncAuthorPipeValue,
+            syncPublisherPipeValue: syncPublisherPipeValue,
             onApply: function (payload) {
                 applyIsbnLookupDesktopBookFields((payload && payload.data) || {});
             }
@@ -6195,7 +6199,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const publisherName = String(publisher.name || '').trim();
         if (!publisherId || !publisherName) return;
         ts.addOption({ id: publisherId, name: publisherName });
-        ts.setValue(publisherId, true);
+        let vals = ts.getValue();
+        if (!Array.isArray(vals)) vals = vals ? [String(vals)] : [];
+        if (vals.indexOf(publisherId) === -1) {
+            vals.push(publisherId);
+        }
+        ts.setValue(vals);
+        if (typeof window.syncPublisherPipeValue === 'function') {
+            window.syncPublisherPipeValue(ts);
+        }
     }
 
     function removeDesktopPublisherVendorOptions(vendorSelect) {
@@ -6438,7 +6450,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const publisherTs = document.getElementById('publisher_select') && document.getElementById('publisher_select').tomselect
         ? document.getElementById('publisher_select').tomselect
         : null;
-    if (desktopIsBookGroup() && getDesktopVendorValue() && publisherTs && !String(publisherTs.getValue() || '').trim()) {
+    if (desktopIsBookGroup() && getDesktopVendorValue() && publisherTs && !String(document.getElementById('publisher_pipe_value')?.value || '').trim()) {
         syncPublisherFromDesktopVendor();
     }
 });

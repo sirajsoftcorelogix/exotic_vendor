@@ -175,9 +175,8 @@ class BookIsbnCatalog
      */
     private function resolvePublisherName(?array $inboundRow, ?array $productRow): string
     {
-        if ($inboundRow !== null && !empty($inboundRow['publisher'])) {
-            $pub = $this->inbounding->getPublisherById((int) $inboundRow['publisher']);
-            $name = trim((string) ($pub['name'] ?? $pub['publishers'] ?? ''));
+        if ($inboundRow !== null && trim((string) ($inboundRow['publisher'] ?? '')) !== '') {
+            $name = $this->inbounding->resolveInboundPublisherNames($inboundRow['publisher']);
             if ($name !== '') {
                 return $name;
             }
