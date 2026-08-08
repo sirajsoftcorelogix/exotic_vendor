@@ -141,20 +141,22 @@ class BusyAccounting
 
         if ($search !== '') {
             $s = "%" . $search . "%";
-            $where[] = "(i.invoice_number LIKE ? OR CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,'')) LIKE ? OR c.gstin LIKE ?)";
+            $where[] = "(i.invoice_number LIKE ? OR CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,'')) LIKE ? OR c.gstin LIKE ? OR c.payment_type LIKE ? OR i.payment_mode LIKE ?)";
             $params[] = $s;
             $params[] = $s;
             $params[] = $s;
-            $types .= "sss";
+            $params[] = $s;
+            $params[] = $s;
+            $types .= "sssss";
         }
 
         $whereSql = implode(" AND ", $where);
 
         $sql = "SELECT i.id, i.invoice_number, i.invoice_date, i.subtotal, i.tax_amount, i.discount_amount, 
-                       i.total_amount, i.currency, i.status,
-                       c.first_name, c.last_name, c.gstin
+                       i.total_amount, i.currency, i.status, i.payment_mode,
+                       c.first_name, c.last_name, c.gstin, c.payment_type AS order_payment_type
                 FROM vp_invoices i
-                LEFT JOIN vp_order_info c ON i.customer_id = c.customer_id AND c.id = (SELECT MAX(id) FROM vp_order_info WHERE customer_id = i.customer_id)
+                LEFT JOIN vp_order_info c ON (c.id = i.vp_order_info_id OR (i.customer_id = c.customer_id AND c.id = (SELECT MAX(id) FROM vp_order_info WHERE customer_id = i.customer_id)))
                 WHERE {$whereSql}
                 ORDER BY i.invoice_date DESC, i.id DESC";
 
@@ -177,6 +179,13 @@ class BusyAccounting
                 $customerName = 'Walk-in Customer';
             }
 
+            $payType = trim($r['order_payment_type'] ?? $r['payment_type'] ?? $r['payment_mode'] ?? '');
+            $payTypeFormatted = '';
+            if ($payType !== '') {
+                $payTypeFormatted = (strtolower($payType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $payType));
+            }
+            $partyName = $payTypeFormatted !== '' ? $payTypeFormatted : $customerName;
+
             $rows[] = [
                 'id'                 => (int)$r['id'],
                 'voucher_type'       => 'sales',
@@ -184,6 +193,8 @@ class BusyAccounting
                 'voucher_no'         => (string)$r['invoice_number'],
                 'ref_order_no'       => '—',
                 'voucher_date'       => (string)$r['invoice_date'],
+                'payment_type'       => $payTypeFormatted,
+                'party_name'         => $partyName,
                 'customer_name'     => $customerName,
                 'gstin'              => (string)($r['gstin'] ?? '—'),
                 'taxable_amount'     => (float)($r['subtotal'] ?? 0),
@@ -225,23 +236,25 @@ class BusyAccounting
 
         if ($search !== '') {
             $s = "%" . $search . "%";
-            $where[] = "(sr.return_number LIKE ? OR sr.order_number LIKE ? OR i.invoice_number LIKE ? OR CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,'')) LIKE ? OR c.gstin LIKE ?)";
+            $where[] = "(sr.return_number LIKE ? OR sr.order_number LIKE ? OR i.invoice_number LIKE ? OR CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,'')) LIKE ? OR c.gstin LIKE ? OR c.payment_type LIKE ? OR i.payment_mode LIKE ?)";
             $params[] = $s;
             $params[] = $s;
             $params[] = $s;
             $params[] = $s;
             $params[] = $s;
-            $types .= "sssss";
+            $params[] = $s;
+            $params[] = $s;
+            $types .= "sssssss";
         }
 
         $whereSql = implode(" AND ", $where);
 
         $sql = "SELECT sr.id, sr.return_number, sr.order_number, sr.invoice_id, sr.return_date, sr.status,
-                       i.invoice_number, i.currency,
-                       c.first_name, c.last_name, c.gstin
+                       i.invoice_number, i.currency, i.payment_mode,
+                       c.first_name, c.last_name, c.gstin, c.payment_type AS order_payment_type
                 FROM vp_sales_returns sr
                 LEFT JOIN vp_invoices i ON sr.invoice_id = i.id
-                LEFT JOIN vp_order_info c ON i.customer_id = c.customer_id AND c.id = (SELECT MAX(id) FROM vp_order_info WHERE customer_id = i.customer_id)
+                LEFT JOIN vp_order_info c ON (c.id = i.vp_order_info_id OR (i.customer_id = c.customer_id AND c.id = (SELECT MAX(id) FROM vp_order_info WHERE customer_id = i.customer_id)))
                 WHERE {$whereSql}
                 ORDER BY sr.return_date DESC, sr.id DESC";
 
@@ -293,6 +306,13 @@ class BusyAccounting
                 $customerName = 'Customer (' . ($r['order_number'] ?? '—') . ')';
             }
 
+            $payType = trim($r['order_payment_type'] ?? $r['payment_type'] ?? $r['payment_mode'] ?? '');
+            $payTypeFormatted = '';
+            if ($payType !== '') {
+                $payTypeFormatted = (strtolower($payType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $payType));
+            }
+            $partyName = $payTypeFormatted !== '' ? $payTypeFormatted : $customerName;
+
             $rows[] = [
                 'id'                 => $returnId,
                 'voucher_type'       => 'sales_return',
@@ -300,6 +320,8 @@ class BusyAccounting
                 'voucher_no'         => (string)$r['return_number'],
                 'ref_order_no'       => (string)($r['invoice_number'] ?? $r['order_number'] ?? '—'),
                 'voucher_date'       => (string)$r['return_date'],
+                'payment_type'       => $payTypeFormatted,
+                'party_name'         => $partyName,
                 'customer_name'     => $customerName,
                 'gstin'              => (string)($r['gstin'] ?? '—'),
                 'taxable_amount'     => round($taxable, 2),
