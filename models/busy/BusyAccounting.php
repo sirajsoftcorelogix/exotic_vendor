@@ -5,6 +5,7 @@
  * Responsible for retrieving sales invoices, sales returns, KPI metrics,
  * and voucher line-item breakdowns for accounting/bookkeeping review and BUSY integration.
  * BUSY integration operates organization-wide across all sales and returns (sharing company GSTIN).
+ * Optimized with indexed joins, SQL aggregations, and fast pagination.
  */
 class BusyAccounting
 {
@@ -25,37 +26,46 @@ class BusyAccounting
         $voucherType = !empty($filters['voucher_type']) ? trim($filters['voucher_type']) : 'all'; // all, sales, sales_return
         $search      = !empty($filters['search']) ? trim($filters['search']) : '';
         $page        = max(1, (int)($filters['page'] ?? 1));
-        $limit       = min(500, max(10, (int)($filters['limit'] ?? 25)));
+        $limit       = min(5000, max(1, (int)($filters['limit'] ?? 25)));
         $offset      = ($page - 1) * $limit;
 
-        // 1. Fetch Invoices if requested
         $invoices = [];
-        if ($voucherType === 'all' || $voucherType === 'sales') {
-            $invoices = $this->fetchInvoices($startDate, $endDate, $search);
+        $returns  = [];
+        $totalRecords = 0;
+
+        if ($voucherType === 'sales') {
+            $totalRecords = $this->countInvoices($startDate, $endDate, $search);
+            $invoices     = $this->fetchInvoices($startDate, $endDate, $search, $limit, $offset);
+            $all          = $invoices;
+        } elseif ($voucherType === 'sales_return') {
+            $totalRecords = $this->countSalesReturns($startDate, $endDate, $search);
+            $returns      = $this->fetchSalesReturns($startDate, $endDate, $search, $limit, $offset);
+            $all          = $returns;
+        } else { // 'all'
+            $invCount     = $this->countInvoices($startDate, $endDate, $search);
+            $retCount     = $this->countSalesReturns($startDate, $endDate, $search);
+            $totalRecords = $invCount + $retCount;
+
+            $fetchLimit   = $offset + $limit;
+            $invoices     = $this->fetchInvoices($startDate, $endDate, $search, $fetchLimit, 0);
+            $returns      = $this->fetchSalesReturns($startDate, $endDate, $search, $fetchLimit, 0);
+
+            $all = array_merge($invoices, $returns);
+            usort($all, function ($a, $b) {
+                $dateCmp = strcmp($b['voucher_date'], $a['voucher_date']);
+                if ($dateCmp !== 0) {
+                    return $dateCmp;
+                }
+                return $b['id'] <=> $a['id'];
+            });
+
+            $all = array_slice($all, $offset, $limit);
         }
 
-        // 2. Fetch Sales Returns if requested
-        $returns = [];
-        if ($voucherType === 'all' || $voucherType === 'sales_return') {
-            $returns = $this->fetchSalesReturns($startDate, $endDate, $search);
-        }
-
-        // 3. Merge & Sort chronologically
-        $all = array_merge($invoices, $returns);
-        usort($all, function ($a, $b) {
-            $dateCmp = strcmp($b['voucher_date'], $a['voucher_date']);
-            if ($dateCmp !== 0) {
-                return $dateCmp;
-            }
-            return $b['id'] <=> $a['id'];
-        });
-
-        $totalRecords = count($all);
-        $totalPages   = ceil($totalRecords / $limit);
-        $pagedResults = array_slice($all, $offset, $limit);
+        $totalPages = $limit > 0 ? (int)ceil($totalRecords / $limit) : 1;
 
         return [
-            'vouchers'      => $pagedResults,
+            'vouchers'      => $all,
             'total_records' => $totalRecords,
             'total_pages'   => $totalPages,
             'current_page'  => $page,
@@ -64,7 +74,7 @@ class BusyAccounting
     }
 
     /**
-     * Compute financial KPI summary metrics for given filters (Organization-wide)
+     * Compute financial KPI summary metrics via fast SQL aggregation (Organization-wide)
      */
     public function getKPIs(array $filters): array
     {
@@ -72,53 +82,206 @@ class BusyAccounting
         $endDate   = !empty($filters['end_date']) ? trim($filters['end_date']) : '';
         $search    = !empty($filters['search']) ? trim($filters['search']) : '';
 
-        $invoices = $this->fetchInvoices($startDate, $endDate, $search);
-        $returns  = $this->fetchSalesReturns($startDate, $endDate, $search);
+        // 1. Sales Invoices KPI Aggregate
+        $invWhere = ["1=1"];
+        $invParams = [];
+        $invTypes = "";
 
-        $grossSales = 0.0;
-        $salesTaxable = 0.0;
-        $salesTax = 0.0;
-        $salesCount = count($invoices);
-
-        foreach ($invoices as $inv) {
-            if (strtolower($inv['status']) !== 'cancelled') {
-                $grossSales   += (float)$inv['total_amount'];
-                $salesTaxable += (float)$inv['taxable_amount'];
-                $salesTax     += (float)$inv['tax_amount'];
-            }
+        if ($startDate !== '' && $endDate !== '') {
+            $invWhere[] = "DATE(i.invoice_date) BETWEEN ? AND ?";
+            $invParams[] = $startDate;
+            $invParams[] = $endDate;
+            $invTypes .= "ss";
+        } elseif ($startDate !== '') {
+            $invWhere[] = "DATE(i.invoice_date) >= ?";
+            $invParams[] = $startDate;
+            $invTypes .= "s";
+        } elseif ($endDate !== '') {
+            $invWhere[] = "DATE(i.invoice_date) <= ?";
+            $invParams[] = $endDate;
+            $invTypes .= "s";
         }
 
-        $returnTotal = 0.0;
-        $returnTaxable = 0.0;
-        $returnTax = 0.0;
-        $returnCount = count($returns);
+        if ($search !== '') {
+            $s = "%" . $search . "%";
+            $invWhere[] = "(i.invoice_number LIKE ? OR CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,'')) LIKE ? OR c.gstin LIKE ? OR c.payment_type LIKE ?)";
+            $invParams[] = $s;
+            $invParams[] = $s;
+            $invParams[] = $s;
+            $invParams[] = $s;
+            $invTypes .= "ssss";
+        }
 
-        foreach ($returns as $ret) {
-            if (strtolower($ret['status']) !== 'cancelled') {
-                $returnTotal   += (float)$ret['total_amount'];
-                $returnTaxable += (float)$ret['taxable_amount'];
-                $returnTax     += (float)$ret['tax_amount'];
+        $invWhereSql = implode(" AND ", $invWhere);
+
+        $salesSql = "SELECT COUNT(i.id) AS sales_count,
+                            COALESCE(SUM(i.total_amount), 0) AS gross_sales,
+                            COALESCE(SUM(i.subtotal), 0) AS sales_taxable,
+                            COALESCE(SUM(i.tax_amount), 0) AS sales_tax
+                     FROM vp_invoices i
+                     LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id
+                     WHERE {$invWhereSql} AND LOWER(TRIM(COALESCE(i.status, ''))) <> 'cancelled'";
+
+        $salesRes = ['sales_count' => 0, 'gross_sales' => 0.0, 'sales_taxable' => 0.0, 'sales_tax' => 0.0];
+        $stmt1 = $this->conn->prepare($salesSql);
+        if ($stmt1) {
+            if ($invTypes !== "") {
+                $stmt1->bind_param($invTypes, ...$invParams);
             }
+            $stmt1->execute();
+            $row = $stmt1->get_result()->fetch_assoc();
+            if ($row) {
+                $salesRes = [
+                    'sales_count'   => (int)($row['sales_count'] ?? 0),
+                    'gross_sales'   => (float)($row['gross_sales'] ?? 0),
+                    'sales_taxable' => (float)($row['sales_taxable'] ?? 0),
+                    'sales_tax'     => (float)($row['sales_tax'] ?? 0)
+                ];
+            }
+            $stmt1->close();
+        }
+
+        // 2. Sales Returns KPI Aggregate
+        $retWhere = ["1=1"];
+        $retParams = [];
+        $retTypes = "";
+
+        if ($startDate !== '' && $endDate !== '') {
+            $retWhere[] = "DATE(sr.return_date) BETWEEN ? AND ?";
+            $retParams[] = $startDate;
+            $retParams[] = $endDate;
+            $retTypes .= "ss";
+        } elseif ($startDate !== '') {
+            $retWhere[] = "DATE(sr.return_date) >= ?";
+            $retParams[] = $startDate;
+            $retTypes .= "s";
+        } elseif ($endDate !== '') {
+            $retWhere[] = "DATE(sr.return_date) <= ?";
+            $retParams[] = $endDate;
+            $retTypes .= "s";
+        }
+
+        if ($search !== '') {
+            $s = "%" . $search . "%";
+            $retWhere[] = "(sr.return_number LIKE ? OR sr.order_number LIKE ? OR i.invoice_number LIKE ? OR CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,'')) LIKE ? OR c.gstin LIKE ? OR c.payment_type LIKE ?)";
+            $retParams[] = $s;
+            $retParams[] = $s;
+            $retParams[] = $s;
+            $retParams[] = $s;
+            $retParams[] = $s;
+            $retParams[] = $s;
+            $retTypes .= "ssssss";
+        }
+
+        $retWhereSql = implode(" AND ", $retWhere);
+
+        $returnsSql = "SELECT COUNT(sr.id) AS return_count,
+                              COALESCE(SUM(sri_tot.taxable), 0) AS return_taxable,
+                              COALESCE(SUM(sri_tot.tax), 0) AS return_tax,
+                              COALESCE(SUM(sri_tot.taxable + sri_tot.tax), 0) AS sales_returns
+                       FROM vp_sales_returns sr
+                       LEFT JOIN vp_invoices i ON sr.invoice_id = i.id
+                       LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id
+                       LEFT JOIN (
+                           SELECT sri.sales_return_id,
+                                  SUM(sri.return_qty * ii.unit_price) AS taxable,
+                                  SUM(sri.return_qty * ii.unit_price * (ii.tax_rate / 100)) AS tax
+                           FROM vp_sales_return_items sri
+                           LEFT JOIN vp_invoice_items ii ON sri.invoice_item_id = ii.id
+                           GROUP BY sri.sales_return_id
+                       ) sri_tot ON sri_tot.sales_return_id = sr.id
+                       WHERE {$retWhereSql} AND LOWER(TRIM(COALESCE(sr.status, ''))) <> 'cancelled'";
+
+        $retRes = ['return_count' => 0, 'sales_returns' => 0.0, 'return_taxable' => 0.0, 'return_tax' => 0.0];
+        $stmt2 = $this->conn->prepare($returnsSql);
+        if ($stmt2) {
+            if ($retTypes !== "") {
+                $stmt2->bind_param($retTypes, ...$retParams);
+            }
+            $stmt2->execute();
+            $row = $stmt2->get_result()->fetch_assoc();
+            if ($row) {
+                $retRes = [
+                    'return_count'   => (int)($row['return_count'] ?? 0),
+                    'sales_returns'  => (float)($row['sales_returns'] ?? 0),
+                    'return_taxable' => (float)($row['return_taxable'] ?? 0),
+                    'return_tax'     => (float)($row['return_tax'] ?? 0)
+                ];
+            }
+            $stmt2->close();
         }
 
         return [
-            'gross_sales'     => $grossSales,
-            'sales_taxable'   => $salesTaxable,
-            'sales_tax'       => $salesTax,
-            'sales_count'     => $salesCount,
-            'sales_returns'   => $returnTotal,
-            'return_taxable'  => $returnTaxable,
-            'return_tax'      => $returnTax,
-            'return_count'    => $returnCount,
-            'net_revenue'     => $grossSales - $returnTotal,
-            'net_tax'         => $salesTax - $returnTax
+            'gross_sales'    => $salesRes['gross_sales'],
+            'sales_taxable'  => $salesRes['sales_taxable'],
+            'sales_tax'      => $salesRes['sales_tax'],
+            'sales_count'    => $salesRes['sales_count'],
+            'sales_returns'  => $retRes['sales_returns'],
+            'return_taxable' => $retRes['return_taxable'],
+            'return_tax'     => $retRes['return_tax'],
+            'return_count'   => $retRes['return_count'],
+            'net_revenue'    => $salesRes['gross_sales'] - $retRes['sales_returns'],
+            'net_tax'        => $salesRes['sales_tax'] - $retRes['return_tax']
         ];
     }
 
     /**
-     * Helper to fetch invoice vouchers (Organization-wide)
+     * Count total invoice vouchers matching filters
      */
-    private function fetchInvoices(string $startDate, string $endDate, string $search): array
+    private function countInvoices(string $startDate, string $endDate, string $search): int
+    {
+        $where = ["1=1"];
+        $params = [];
+        $types = "";
+
+        if ($startDate !== '' && $endDate !== '') {
+            $where[] = "DATE(i.invoice_date) BETWEEN ? AND ?";
+            $params[] = $startDate;
+            $params[] = $endDate;
+            $types .= "ss";
+        } elseif ($startDate !== '') {
+            $where[] = "DATE(i.invoice_date) >= ?";
+            $params[] = $startDate;
+            $types .= "s";
+        } elseif ($endDate !== '') {
+            $where[] = "DATE(i.invoice_date) <= ?";
+            $params[] = $endDate;
+            $types .= "s";
+        }
+
+        if ($search !== '') {
+            $s = "%" . $search . "%";
+            $where[] = "(i.invoice_number LIKE ? OR CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,'')) LIKE ? OR c.gstin LIKE ? OR c.payment_type LIKE ?)";
+            $params[] = $s;
+            $params[] = $s;
+            $params[] = $s;
+            $params[] = $s;
+            $types .= "ssss";
+        }
+
+        $whereSql = implode(" AND ", $where);
+        $sql = "SELECT COUNT(i.id) AS cnt FROM vp_invoices i LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id WHERE {$whereSql}";
+
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+
+        if ($types !== "") {
+            $stmt->bind_param($types, ...$params);
+        }
+
+        $stmt->execute();
+        $res = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return (int)($res['cnt'] ?? 0);
+    }
+
+    /**
+     * Helper to fetch invoice vouchers (Organization-wide, Indexed Join)
+     */
+    private function fetchInvoices(string $startDate, string $endDate, string $search, int $limit = 0, int $offset = 0): array
     {
         $where = ["1=1"];
         $params = [];
@@ -151,13 +314,18 @@ class BusyAccounting
 
         $whereSql = implode(" AND ", $where);
 
+        $limitSql = "";
+        if ($limit > 0) {
+            $limitSql = " LIMIT {$offset}, {$limit}";
+        }
+
         $sql = "SELECT i.id, i.invoice_number, i.invoice_date, i.subtotal, i.tax_amount, i.discount_amount, 
                        i.total_amount, i.currency, i.status,
                        c.first_name, c.last_name, c.gstin, c.payment_type AS order_payment_type
                 FROM vp_invoices i
-                LEFT JOIN vp_order_info c ON (c.id = i.vp_order_info_id OR (i.customer_id = c.customer_id AND c.id = (SELECT MAX(id) FROM vp_order_info WHERE customer_id = i.customer_id)))
+                LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id
                 WHERE {$whereSql}
-                ORDER BY i.invoice_date DESC, i.id DESC";
+                ORDER BY i.invoice_date DESC, i.id DESC{$limitSql}";
 
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
@@ -178,7 +346,7 @@ class BusyAccounting
                 $customerName = 'Walk-in Customer';
             }
 
-            $payType = trim($r['order_payment_type'] ?? $r['payment_type'] ?? $r['payment_mode'] ?? '');
+            $payType = trim($r['order_payment_type'] ?? '');
             $payTypeFormatted = '';
             if ($payType !== '') {
                 $payTypeFormatted = (strtolower($payType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $payType));
@@ -210,9 +378,64 @@ class BusyAccounting
     }
 
     /**
-     * Helper to fetch sales return vouchers (Organization-wide)
+     * Count total sales return vouchers matching filters
      */
-    private function fetchSalesReturns(string $startDate, string $endDate, string $search): array
+    private function countSalesReturns(string $startDate, string $endDate, string $search): int
+    {
+        $where = ["1=1"];
+        $params = [];
+        $types = "";
+
+        if ($startDate !== '' && $endDate !== '') {
+            $where[] = "DATE(sr.return_date) BETWEEN ? AND ?";
+            $params[] = $startDate;
+            $params[] = $endDate;
+            $types .= "ss";
+        } elseif ($startDate !== '') {
+            $where[] = "DATE(sr.return_date) >= ?";
+            $params[] = $startDate;
+            $types .= "s";
+        } elseif ($endDate !== '') {
+            $where[] = "DATE(sr.return_date) <= ?";
+            $params[] = $endDate;
+            $types .= "s";
+        }
+
+        if ($search !== '') {
+            $s = "%" . $search . "%";
+            $where[] = "(sr.return_number LIKE ? OR sr.order_number LIKE ? OR i.invoice_number LIKE ? OR CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,'')) LIKE ? OR c.gstin LIKE ? OR c.payment_type LIKE ?)";
+            $params[] = $s;
+            $params[] = $s;
+            $params[] = $s;
+            $params[] = $s;
+            $params[] = $s;
+            $params[] = $s;
+            $types .= "ssssss";
+        }
+
+        $whereSql = implode(" AND ", $where);
+        $sql = "SELECT COUNT(sr.id) AS cnt FROM vp_sales_returns sr LEFT JOIN vp_invoices i ON sr.invoice_id = i.id LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id WHERE {$whereSql}";
+
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+
+        if ($types !== "") {
+            $stmt->bind_param($types, ...$params);
+        }
+
+        $stmt->execute();
+        $res = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return (int)($res['cnt'] ?? 0);
+    }
+
+    /**
+     * Helper to fetch sales return vouchers (Organization-wide, Indexed Join)
+     */
+    private function fetchSalesReturns(string $startDate, string $endDate, string $search, int $limit = 0, int $offset = 0): array
     {
         $where = ["1=1"];
         $params = [];
@@ -247,14 +470,29 @@ class BusyAccounting
 
         $whereSql = implode(" AND ", $where);
 
+        $limitSql = "";
+        if ($limit > 0) {
+            $limitSql = " LIMIT {$offset}, {$limit}";
+        }
+
         $sql = "SELECT sr.id, sr.return_number, sr.order_number, sr.invoice_id, sr.return_date, sr.status,
                        i.invoice_number, i.currency,
-                       c.first_name, c.last_name, c.gstin, c.payment_type AS order_payment_type
+                       c.first_name, c.last_name, c.gstin, c.payment_type AS order_payment_type,
+                       COALESCE(sri_sum.taxable, 0) AS taxable_amount,
+                       COALESCE(sri_sum.tax, 0) AS tax_amount
                 FROM vp_sales_returns sr
                 LEFT JOIN vp_invoices i ON sr.invoice_id = i.id
-                LEFT JOIN vp_order_info c ON (c.id = i.vp_order_info_id OR (i.customer_id = c.customer_id AND c.id = (SELECT MAX(id) FROM vp_order_info WHERE customer_id = i.customer_id)))
+                LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id
+                LEFT JOIN (
+                    SELECT sri.sales_return_id,
+                           SUM(sri.return_qty * ii.unit_price) AS taxable,
+                           SUM(sri.return_qty * ii.unit_price * (ii.tax_rate / 100)) AS tax
+                    FROM vp_sales_return_items sri
+                    LEFT JOIN vp_invoice_items ii ON sri.invoice_item_id = ii.id
+                    GROUP BY sri.sales_return_id
+                ) sri_sum ON sri_sum.sales_return_id = sr.id
                 WHERE {$whereSql}
-                ORDER BY sr.return_date DESC, sr.id DESC";
+                ORDER BY sr.return_date DESC, sr.id DESC{$limitSql}";
 
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
@@ -271,40 +509,15 @@ class BusyAccounting
         $rows = [];
         while ($r = $res->fetch_assoc()) {
             $returnId = (int)$r['id'];
-
-            // Calculate return line totals and tax
-            $itemSql = "SELECT sri.return_qty, ii.unit_price, ii.tax_rate 
-                        FROM vp_sales_return_items sri 
-                        LEFT JOIN vp_invoice_items ii ON sri.invoice_item_id = ii.id 
-                        WHERE sri.sales_return_id = ?";
-            $itemStmt = $this->conn->prepare($itemSql);
-            $taxable = 0.0;
-            $taxAmount = 0.0;
-
-            if ($itemStmt) {
-                $itemStmt->bind_param('i', $returnId);
-                $itemStmt->execute();
-                $itemRes = $itemStmt->get_result();
-                while ($it = $itemRes->fetch_assoc()) {
-                    $qty = (float)($it['return_qty'] ?? 0);
-                    $price = (float)($it['unit_price'] ?? 0);
-                    $taxRate = (float)($it['tax_rate'] ?? 0);
-
-                    $lineTaxable = $qty * $price;
-                    $lineTax = $lineTaxable * ($taxRate / 100);
-
-                    $taxable += $lineTaxable;
-                    $taxAmount += $lineTax;
-                }
-                $itemStmt->close();
-            }
+            $taxable  = (float)($r['taxable_amount'] ?? 0);
+            $taxAmount = (float)($r['tax_amount'] ?? 0);
 
             $customerName = trim(($r['first_name'] ?? '') . ' ' . ($r['last_name'] ?? ''));
             if ($customerName === '') {
                 $customerName = 'Customer (' . ($r['order_number'] ?? '—') . ')';
             }
 
-            $payType = trim($r['order_payment_type'] ?? $r['payment_type'] ?? $r['payment_mode'] ?? '');
+            $payType = trim($r['order_payment_type'] ?? '');
             $payTypeFormatted = '';
             if ($payType !== '') {
                 $payTypeFormatted = (strtolower($payType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $payType));
@@ -344,7 +557,7 @@ class BusyAccounting
                        c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, 
                        c.city, c.state, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type
                 FROM vp_invoices i
-                LEFT JOIN vp_order_info c ON (c.id = i.vp_order_info_id OR (i.customer_id = c.customer_id AND c.id = (SELECT MAX(id) FROM vp_order_info WHERE customer_id = i.customer_id)))
+                LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id
                 WHERE i.id = ? LIMIT 1";
 
         $stmt = $this->conn->prepare($sql);
@@ -361,60 +574,21 @@ class BusyAccounting
             return null;
         }
 
-        // Fetch line items
+        // Fetch line items with fast indexed subqueries
         $itemsSql = "SELECT it.*, 
                             COALESCE(
-                                (
-                                    SELECT CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                    FROM vp_products p
-                                    LEFT JOIN account_group ag_p ON (
-                                        p.accounts_group IS NOT NULL 
-                                        AND (
-                                            ag_p.id = p.accounts_group 
-                                            OR CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                        )
-                                    )
-                                    WHERE (
-                                        p.id = it.product_id 
-                                        OR (
-                                            it.product_id IS NULL AND it.item_code IS NOT NULL AND it.item_code <> '' 
-                                            AND (
-                                                CONVERT(p.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(it.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci 
-                                                OR CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(it.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                            )
-                                        )
-                                    )
-                                    AND ag_p.account_group_name IS NOT NULL AND ag_p.account_group_name <> ''
-                                    LIMIT 1
-                                ),
-                                (
-                                    SELECT CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                    FROM vp_products p
-                                    WHERE (
-                                        p.id = it.product_id 
-                                        OR (
-                                            it.product_id IS NULL AND it.item_code IS NOT NULL AND it.item_code <> '' 
-                                            AND (
-                                                CONVERT(p.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(it.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci 
-                                                OR CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(it.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                            )
-                                        )
-                                    )
-                                    AND p.accounts_group IS NOT NULL AND p.accounts_group <> ''
-                                    LIMIT 1
-                                ),
-                                (
-                                    SELECT CONVERT(ag.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                    FROM account_group ag
-                                    WHERE it.groupname IS NOT NULL AND it.groupname <> ''
-                                      AND CONVERT(ag.item_group USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(it.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                    LIMIT 1
-                                ),
-                                NULLIF(CONVERT(it.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
-                                CONVERT(it.item_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                                (SELECT ag_p.account_group_name 
+                                 FROM vp_products p 
+                                 INNER JOIN account_group ag_p ON (ag_p.id = p.accounts_group OR ag_p.account_group_name = p.accounts_group) 
+                                 WHERE p.id = it.product_id AND ag_p.account_group_name IS NOT NULL AND ag_p.account_group_name <> '' LIMIT 1),
+                                (SELECT p.accounts_group FROM vp_products p WHERE p.id = it.product_id AND p.accounts_group IS NOT NULL AND p.accounts_group <> '' LIMIT 1),
+                                (SELECT ag.account_group_name FROM account_group ag WHERE ag.item_group = it.groupname AND ag.account_group_name IS NOT NULL AND ag.account_group_name <> '' LIMIT 1),
+                                NULLIF(it.groupname, ''),
+                                it.item_name
                             ) AS account_group_name 
                      FROM vp_invoice_items it 
                      WHERE it.invoice_id = ?";
+
         $itemsStmt = $this->conn->prepare($itemsSql);
         $items = [];
         if ($itemsStmt) {
@@ -432,7 +606,7 @@ class BusyAccounting
             $custName = 'Walk-in Customer';
         }
 
-        $payType = trim($invoice['order_payment_type'] ?? $invoice['payment_type'] ?? $invoice['payment_mode'] ?? '');
+        $payType = trim($invoice['order_payment_type'] ?? '');
         if ($payType !== '') {
             $payTypeFormatted = (strtolower($payType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $payType));
             $invoice['payment_type'] = $payTypeFormatted;
@@ -471,7 +645,7 @@ class BusyAccounting
                        c.city, c.state, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type
                 FROM vp_sales_returns sr
                 LEFT JOIN vp_invoices i ON sr.invoice_id = i.id
-                LEFT JOIN vp_order_info c ON (c.id = i.vp_order_info_id OR (i.customer_id = c.customer_id AND c.id = (SELECT MAX(id) FROM vp_order_info WHERE customer_id = i.customer_id)))
+                LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id
                 WHERE sr.id = ? LIMIT 1";
 
         $stmt = $this->conn->prepare($sql);
@@ -488,62 +662,23 @@ class BusyAccounting
             return null;
         }
 
-        // Fetch return line items
+        // Fetch return line items with fast indexed subqueries
         $itemsSql = "SELECT sri.*, ii.item_name, ii.hsn, ii.unit_price, ii.tax_rate, ii.groupname,
                             COALESCE(
-                                (
-                                    SELECT CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                    FROM vp_products p
-                                    LEFT JOIN account_group ag_p ON (
-                                        p.accounts_group IS NOT NULL 
-                                        AND (
-                                            ag_p.id = p.accounts_group 
-                                            OR CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                        )
-                                    )
-                                    WHERE (
-                                        p.id = COALESCE(sri.product_id, ii.product_id) 
-                                        OR (
-                                            sri.product_id IS NULL AND ii.product_id IS NULL AND sri.item_code IS NOT NULL AND sri.item_code <> '' 
-                                            AND (
-                                                CONVERT(p.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(sri.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci 
-                                                OR CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(sri.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                            )
-                                        )
-                                    )
-                                    AND ag_p.account_group_name IS NOT NULL AND ag_p.account_group_name <> ''
-                                    LIMIT 1
-                                ),
-                                (
-                                    SELECT CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                    FROM vp_products p
-                                    WHERE (
-                                        p.id = COALESCE(sri.product_id, ii.product_id) 
-                                        OR (
-                                            sri.product_id IS NULL AND ii.product_id IS NULL AND sri.item_code IS NOT NULL AND sri.item_code <> '' 
-                                            AND (
-                                                CONVERT(p.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(sri.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci 
-                                                OR CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(sri.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                            )
-                                        )
-                                    )
-                                    AND p.accounts_group IS NOT NULL AND p.accounts_group <> ''
-                                    LIMIT 1
-                                ),
-                                (
-                                    SELECT CONVERT(ag.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                    FROM account_group ag
-                                    WHERE ii.groupname IS NOT NULL AND ii.groupname <> ''
-                                      AND CONVERT(ag.item_group USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(ii.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                    LIMIT 1
-                                ),
-                                NULLIF(CONVERT(ii.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
-                                NULLIF(CONVERT(sri.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
-                                CONVERT(ii.item_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                                (SELECT ag_p.account_group_name 
+                                 FROM vp_products p 
+                                 INNER JOIN account_group ag_p ON (ag_p.id = p.accounts_group OR ag_p.account_group_name = p.accounts_group) 
+                                 WHERE p.id = COALESCE(sri.product_id, ii.product_id) AND ag_p.account_group_name IS NOT NULL AND ag_p.account_group_name <> '' LIMIT 1),
+                                (SELECT p.accounts_group FROM vp_products p WHERE p.id = COALESCE(sri.product_id, ii.product_id) AND p.accounts_group IS NOT NULL AND p.accounts_group <> '' LIMIT 1),
+                                (SELECT ag.account_group_name FROM account_group ag WHERE ag.item_group = ii.groupname AND ag.account_group_name IS NOT NULL AND ag.account_group_name <> '' LIMIT 1),
+                                NULLIF(ii.groupname, ''),
+                                NULLIF(sri.item_code, ''),
+                                ii.item_name
                             ) AS account_group_name 
                      FROM vp_sales_return_items sri 
                      LEFT JOIN vp_invoice_items ii ON sri.invoice_item_id = ii.id 
                      WHERE sri.sales_return_id = ?";
+
         $itemsStmt = $this->conn->prepare($itemsSql);
         $items = [];
         if ($itemsStmt) {
@@ -561,7 +696,7 @@ class BusyAccounting
             $custName = 'Customer (' . ($return['order_number'] ?? '—') . ')';
         }
 
-        $payType = trim($return['order_payment_type'] ?? $return['payment_type'] ?? $return['payment_mode'] ?? '');
+        $payType = trim($return['order_payment_type'] ?? '');
         if ($payType !== '') {
             $payTypeFormatted = (strtolower($payType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $payType));
             $return['payment_type'] = $payTypeFormatted;
@@ -579,7 +714,7 @@ class BusyAccounting
         $return['customer_mobile']   = trim($return['mobile'] ?? '');
         $return['customer_email']    = trim($return['email'] ?? '');
         $return['customer_gstin']    = trim($return['gstin'] ?? '');
-        $return['narration']         = trim(($return['remarks'] ?? '') ?: ('Sales Return against ' . ($return['invoice_number'] ?? '')));
+        $return['narration']         = trim('Sales Return for Invoice #' . ($return['invoice_number'] ?? ''));
         $return['total_qty']         = array_sum(array_column($items, 'return_qty'));
         $return['exotic_address']    = 'Main Store';
 
