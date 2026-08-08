@@ -141,19 +141,18 @@ class BusyAccounting
 
         if ($search !== '') {
             $s = "%" . $search . "%";
-            $where[] = "(i.invoice_number LIKE ? OR CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,'')) LIKE ? OR c.gstin LIKE ? OR c.payment_type LIKE ? OR i.payment_mode LIKE ?)";
+            $where[] = "(i.invoice_number LIKE ? OR CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,'')) LIKE ? OR c.gstin LIKE ? OR c.payment_type LIKE ?)";
             $params[] = $s;
             $params[] = $s;
             $params[] = $s;
             $params[] = $s;
-            $params[] = $s;
-            $types .= "sssss";
+            $types .= "ssss";
         }
 
         $whereSql = implode(" AND ", $where);
 
         $sql = "SELECT i.id, i.invoice_number, i.invoice_date, i.subtotal, i.tax_amount, i.discount_amount, 
-                       i.total_amount, i.currency, i.status, i.payment_mode,
+                       i.total_amount, i.currency, i.status,
                        c.first_name, c.last_name, c.gstin, c.payment_type AS order_payment_type
                 FROM vp_invoices i
                 LEFT JOIN vp_order_info c ON (c.id = i.vp_order_info_id OR (i.customer_id = c.customer_id AND c.id = (SELECT MAX(id) FROM vp_order_info WHERE customer_id = i.customer_id)))
@@ -236,21 +235,20 @@ class BusyAccounting
 
         if ($search !== '') {
             $s = "%" . $search . "%";
-            $where[] = "(sr.return_number LIKE ? OR sr.order_number LIKE ? OR i.invoice_number LIKE ? OR CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,'')) LIKE ? OR c.gstin LIKE ? OR c.payment_type LIKE ? OR i.payment_mode LIKE ?)";
+            $where[] = "(sr.return_number LIKE ? OR sr.order_number LIKE ? OR i.invoice_number LIKE ? OR CONCAT(COALESCE(c.first_name,''), ' ', COALESCE(c.last_name,'')) LIKE ? OR c.gstin LIKE ? OR c.payment_type LIKE ?)";
             $params[] = $s;
             $params[] = $s;
             $params[] = $s;
             $params[] = $s;
             $params[] = $s;
             $params[] = $s;
-            $params[] = $s;
-            $types .= "sssssss";
+            $types .= "ssssss";
         }
 
         $whereSql = implode(" AND ", $where);
 
         $sql = "SELECT sr.id, sr.return_number, sr.order_number, sr.invoice_id, sr.return_date, sr.status,
-                       i.invoice_number, i.currency, i.payment_mode,
+                       i.invoice_number, i.currency,
                        c.first_name, c.last_name, c.gstin, c.payment_type AS order_payment_type
                 FROM vp_sales_returns sr
                 LEFT JOIN vp_invoices i ON sr.invoice_id = i.id
@@ -429,7 +427,7 @@ class BusyAccounting
      */
     public function getSalesReturnDetails(int $id): ?array
     {
-        $sql = "SELECT sr.*, i.invoice_number, i.invoice_date, i.currency, i.payment_mode,
+        $sql = "SELECT sr.*, i.invoice_number, i.invoice_date, i.currency,
                        c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, 
                        c.city, c.state, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type
                 FROM vp_sales_returns sr
