@@ -313,6 +313,8 @@ $proformaPrintDisabledReason = $canPrintProforma
             <?php endif; ?>
             <?php if ($canEditOrderPrices): ?>
                 <button type="button" onclick="openEditPricesModal()" class="rounded border bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-50 transition-colors">Edit</button>
+            <?php else: ?>
+                <button type="button" disabled title="Order price editing is currently disabled" class="rounded border bg-gray-100 text-gray-400 px-4 py-1.5 text-sm font-medium cursor-not-allowed">Edit</button>
             <?php endif; ?>
             <div class="relative inline-block text-left">
                 <input type="checkbox" id="dropdown-toggle" class="peer hidden">
