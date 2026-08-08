@@ -364,16 +364,31 @@ class BusyAccounting
         // Fetch line items
         $itemsSql = "SELECT it.*, 
                             COALESCE(
-                                NULLIF(ag_p.account_group_name, ''),
-                                NULLIF(p.accounts_group, ''),
-                                NULLIF(ag.account_group_name, ''),
-                                NULLIF(it.groupname, ''),
-                                it.item_name
+                                NULLIF(CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
+                                NULLIF(CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
+                                NULLIF(CONVERT(ag.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
+                                NULLIF(CONVERT(it.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
+                                CONVERT(it.item_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
                             ) AS account_group_name 
                      FROM vp_invoice_items it 
-                     LEFT JOIN vp_products p ON (p.id = it.product_id OR (it.product_id IS NULL AND it.item_code IS NOT NULL AND it.item_code <> '' AND (p.item_code = it.item_code OR p.sku = it.item_code)))
-                     LEFT JOIN account_group ag ON it.groupname = ag.item_group 
-                     LEFT JOIN account_group ag_p ON (p.accounts_group IS NOT NULL AND (ag_p.id = p.accounts_group OR ag_p.account_group_name = p.accounts_group))
+                     LEFT JOIN vp_products p ON (
+                         p.id = it.product_id 
+                         OR (
+                             it.product_id IS NULL AND it.item_code IS NOT NULL AND it.item_code <> '' 
+                             AND (
+                                 CONVERT(p.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(it.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci 
+                                 OR CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(it.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                             )
+                         )
+                     )
+                     LEFT JOIN account_group ag ON CONVERT(it.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(ag.item_group USING utf8mb4) COLLATE utf8mb4_unicode_ci 
+                     LEFT JOIN account_group ag_p ON (
+                         p.accounts_group IS NOT NULL 
+                         AND (
+                             ag_p.id = p.accounts_group 
+                             OR CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                         )
+                     )
                      WHERE it.invoice_id = ?
                      GROUP BY it.id";
         $itemsStmt = $this->conn->prepare($itemsSql);
@@ -452,21 +467,33 @@ class BusyAccounting
         // Fetch return line items
         $itemsSql = "SELECT sri.*, ii.item_name, ii.hsn, ii.unit_price, ii.tax_rate, ii.groupname,
                             COALESCE(
-                                NULLIF(ag_p.account_group_name, ''),
-                                NULLIF(p.accounts_group, ''),
-                                NULLIF(ag.account_group_name, ''),
-                                NULLIF(ii.groupname, ''),
-                                sri.item_code,
-                                ii.item_name
+                                NULLIF(CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
+                                NULLIF(CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
+                                NULLIF(CONVERT(ag.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
+                                NULLIF(CONVERT(ii.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
+                                CONVERT(sri.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci,
+                                CONVERT(ii.item_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
                             ) AS account_group_name 
                      FROM vp_sales_return_items sri 
                      LEFT JOIN vp_invoice_items ii ON sri.invoice_item_id = ii.id 
                      LEFT JOIN vp_products p ON (
                          p.id = COALESCE(sri.product_id, ii.product_id) 
-                         OR (sri.product_id IS NULL AND ii.product_id IS NULL AND sri.item_code IS NOT NULL AND sri.item_code <> '' AND (p.item_code = sri.item_code OR p.sku = sri.item_code))
+                         OR (
+                             sri.product_id IS NULL AND ii.product_id IS NULL AND sri.item_code IS NOT NULL AND sri.item_code <> '' 
+                             AND (
+                                 CONVERT(p.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(sri.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci 
+                                 OR CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(sri.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                             )
+                         )
                      )
-                     LEFT JOIN account_group ag ON ii.groupname = ag.item_group 
-                     LEFT JOIN account_group ag_p ON (p.accounts_group IS NOT NULL AND (ag_p.id = p.accounts_group OR ag_p.account_group_name = p.accounts_group))
+                     LEFT JOIN account_group ag ON CONVERT(ii.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(ag.item_group USING utf8mb4) COLLATE utf8mb4_unicode_ci 
+                     LEFT JOIN account_group ag_p ON (
+                         p.accounts_group IS NOT NULL 
+                         AND (
+                             ag_p.id = p.accounts_group 
+                             OR CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                         )
+                     )
                      WHERE sri.sales_return_id = ?
                      GROUP BY sri.id";
         $itemsStmt = $this->conn->prepare($itemsSql);
