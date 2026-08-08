@@ -577,14 +577,17 @@ class BusyAccounting
         // Fetch line items with fast indexed subqueries
         $itemsSql = "SELECT it.*, 
                             COALESCE(
-                                (SELECT ag_p.account_group_name 
+                                (SELECT CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
                                  FROM vp_products p 
-                                 INNER JOIN account_group ag_p ON (ag_p.id = p.accounts_group OR ag_p.account_group_name = p.accounts_group) 
+                                 INNER JOIN account_group ag_p ON (
+                                     ag_p.id = p.accounts_group 
+                                     OR CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                                 ) 
                                  WHERE p.id = it.product_id AND ag_p.account_group_name IS NOT NULL AND ag_p.account_group_name <> '' LIMIT 1),
-                                (SELECT p.accounts_group FROM vp_products p WHERE p.id = it.product_id AND p.accounts_group IS NOT NULL AND p.accounts_group <> '' LIMIT 1),
-                                (SELECT ag.account_group_name FROM account_group ag WHERE ag.item_group = it.groupname AND ag.account_group_name IS NOT NULL AND ag.account_group_name <> '' LIMIT 1),
-                                NULLIF(it.groupname, ''),
-                                it.item_name
+                                (SELECT CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM vp_products p WHERE p.id = it.product_id AND p.accounts_group IS NOT NULL AND p.accounts_group <> '' LIMIT 1),
+                                (SELECT CONVERT(ag.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM account_group ag WHERE CONVERT(ag.item_group USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(it.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci AND ag.account_group_name IS NOT NULL AND ag.account_group_name <> '' LIMIT 1),
+                                NULLIF(CONVERT(it.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
+                                CONVERT(it.item_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
                             ) AS account_group_name 
                      FROM vp_invoice_items it 
                      WHERE it.invoice_id = ?";
@@ -665,15 +668,18 @@ class BusyAccounting
         // Fetch return line items with fast indexed subqueries
         $itemsSql = "SELECT sri.*, ii.item_name, ii.hsn, ii.unit_price, ii.tax_rate, ii.groupname,
                             COALESCE(
-                                (SELECT ag_p.account_group_name 
+                                (SELECT CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci 
                                  FROM vp_products p 
-                                 INNER JOIN account_group ag_p ON (ag_p.id = p.accounts_group OR ag_p.account_group_name = p.accounts_group) 
+                                 INNER JOIN account_group ag_p ON (
+                                     ag_p.id = p.accounts_group 
+                                     OR CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                                 ) 
                                  WHERE p.id = COALESCE(sri.product_id, ii.product_id) AND ag_p.account_group_name IS NOT NULL AND ag_p.account_group_name <> '' LIMIT 1),
-                                (SELECT p.accounts_group FROM vp_products p WHERE p.id = COALESCE(sri.product_id, ii.product_id) AND p.accounts_group IS NOT NULL AND p.accounts_group <> '' LIMIT 1),
-                                (SELECT ag.account_group_name FROM account_group ag WHERE ag.item_group = ii.groupname AND ag.account_group_name IS NOT NULL AND ag.account_group_name <> '' LIMIT 1),
-                                NULLIF(ii.groupname, ''),
-                                NULLIF(sri.item_code, ''),
-                                ii.item_name
+                                (SELECT CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM vp_products p WHERE p.id = COALESCE(sri.product_id, ii.product_id) AND p.accounts_group IS NOT NULL AND p.accounts_group <> '' LIMIT 1),
+                                (SELECT CONVERT(ag.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM account_group ag WHERE CONVERT(ag.item_group USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(ii.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci AND ag.account_group_name IS NOT NULL AND ag.account_group_name <> '' LIMIT 1),
+                                NULLIF(CONVERT(ii.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
+                                NULLIF(CONVERT(sri.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
+                                CONVERT(ii.item_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
                             ) AS account_group_name 
                      FROM vp_sales_return_items sri 
                      LEFT JOIN vp_invoice_items ii ON sri.invoice_item_id = ii.id 
