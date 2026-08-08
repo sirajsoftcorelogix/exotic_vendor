@@ -4969,12 +4969,16 @@ class ProductsController
                 }, $order['book_detail_selected_edited_by_options']);
 
                 if (is_array($latestInboundBookRow)) {
-                    $publisherId = (int) ($latestInboundBookRow['publisher'] ?? 0);
-                    if ($publisherId > 0) {
-                        $publisherRow = $inboundingModel->getPublisherById($publisherId);
-                        $order['book_detail_selected_publisher_id'] = (string) $publisherId;
-                        $order['book_detail_selected_publisher_name'] = (string) ($publisherRow['publishers'] ?? $publisherRow['publisher_name'] ?? $publisherRow['name'] ?? '');
+                    $publisherOptions = [];
+                    foreach ($inboundingModel->parseInboundAuthorIds($latestInboundBookRow['publisher'] ?? '') as $publisherId) {
+                        $row = $inboundingModel->getPublisherById($publisherId);
+                        if (!empty($row['id'])) {
+                            $publisherOptions[] = $row;
+                        }
                     }
+                    $order['book_detail_selected_publisher_options'] = $publisherOptions;
+                    $order['book_detail_selected_publisher_id'] = (string) ($publisherOptions[0]['id'] ?? '');
+                    $order['book_detail_selected_publisher_name'] = $inboundingModel->resolveInboundPublisherNames($latestInboundBookRow['publisher'] ?? '');
                 }
 
                 require_once dirname(__DIR__) . '/helpers/BookPurchaseReplenishment.php';

@@ -57,7 +57,8 @@ function creatorMasterCountPublisherUsage(mysqli $conn, int $publishersId, strin
     }
 
     $inbound = 0;
-    $stmt = $conn->prepare('SELECT COUNT(*) AS total FROM vp_inbound WHERE publisher = ?');
+    $inboundSql = 'SELECT COUNT(*) AS total FROM vp_inbound t WHERE ' . creatorMasterAuthorMatchSql('t', '?', ['publisher']);
+    $stmt = $conn->prepare($inboundSql);
     if ($stmt) {
         $stmt->bind_param('i', $publishersId);
         $stmt->execute();
@@ -67,13 +68,12 @@ function creatorMasterCountPublisherUsage(mysqli $conn, int $publishersId, strin
 
     $products = 0;
     $publisherName = trim($publisherName);
-    $publishersIdStr = (string) $publishersId;
-    $productSql = 'SELECT COUNT(*) AS total FROM vp_products
-                   WHERE CAST(IFNULL(publisher, \'\') AS CHAR) = ?
-                      OR LOWER(TRIM(IFNULL(publisher, \'\'))) = LOWER(TRIM(?))';
+    $productSql = 'SELECT COUNT(*) AS total FROM vp_products t WHERE '
+        . creatorMasterAuthorMatchSql('t', '?', ['publisher'])
+        . ' OR LOWER(TRIM(IFNULL(t.publisher, \'\'))) = LOWER(TRIM(?))';
     $stmt = $conn->prepare($productSql);
     if ($stmt) {
-        $stmt->bind_param('ss', $publishersIdStr, $publisherName);
+        $stmt->bind_param('is', $publishersId, $publisherName);
         $stmt->execute();
         $products = (int) (($stmt->get_result()->fetch_assoc()['total'] ?? 0));
         $stmt->close();
@@ -138,7 +138,7 @@ function creatorMasterAuthorUsageSelectSql(string $authorIdColumnExpr, string $i
 
 function creatorMasterPublisherUsageSelectSql(string $publishersIdColumnExpr, string $publisherNameColumnExpr): string
 {
-    return '(SELECT COUNT(*) FROM vp_inbound vi WHERE vi.publisher = ' . $publishersIdColumnExpr . ') AS inbound_usage_count, '
-        . '(SELECT COUNT(*) FROM vp_products pr WHERE CAST(IFNULL(pr.publisher, \'\') AS CHAR) = CAST(' . $publishersIdColumnExpr . ' AS CHAR)'
+    return '(SELECT COUNT(*) FROM vp_inbound vi WHERE ' . creatorMasterAuthorMatchSql('vi', $publishersIdColumnExpr, ['publisher']) . ') AS inbound_usage_count, '
+        . '(SELECT COUNT(*) FROM vp_products pr WHERE ' . creatorMasterAuthorMatchSql('pr', $publishersIdColumnExpr, ['publisher'])
         . ' OR LOWER(TRIM(IFNULL(pr.publisher, \'\'))) = LOWER(TRIM(' . $publisherNameColumnExpr . '))) AS product_usage_count';
 }
