@@ -295,7 +295,7 @@ class BusyXmlGenerator
      * Generate consolidated XML with multiple invoices or returns
      * 
      * @param array $voucherArray Array of ['type' => 'invoice'|'sales_return', 'data' => header, 'items' => items]
-     * @return string XML string with multiple voucher entries
+     * @return string XML string with multiple voucher entries wrapped in <Vouchers>
      */
     public function generateConsolidated(array $voucherArray): string
     {
@@ -313,6 +313,6 @@ class BusyXmlGenerator
             }
         }
         
-        return $xmlString;
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Vouchers>\n" . $xmlString . "</Vouchers>";
     }
 }
