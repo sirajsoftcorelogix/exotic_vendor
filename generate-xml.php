@@ -193,19 +193,124 @@ class BusyXmlGenerator
     }
 
     /**
-     * Generate consolidated XML with multiple invoices
+     * Generate Busy XML for a Sales Return (Credit Note)
      * 
-     * @param array $invoiceArray Array of ['invoice' => invoice_data, 'items' => items_array]
-     * @return string XML string with multiple sales entries
+     * @param array $salesReturn Sales return header data
+     * @param array $items       Sales return line items
+     * @return string            XML string
      */
-    public function generateConsolidated(array $invoiceArray): string
+    public function generateSalesReturn(array $salesReturn, array $items = []): string
+    {
+        $xml = new SimpleXMLElement('<SaleReturn/>');
+        
+        // Voucher Series & Metadata
+        $xml->addChild('VchSeriesName', htmlspecialchars($salesReturn['vch_series_name'] ?? 'Main'));
+        
+        // Date formatting (d-m-Y as per Busy format)
+        $returnDate = $salesReturn['return_date'] ?? date('Y-m-d');
+        $formattedDate = date('d-m-Y', strtotime($returnDate));
+        $xml->addChild('Date', $formattedDate);
+        
+        $xml->addChild('VchType', $salesReturn['vch_type'] ?? '3'); // 3 = Sales Return in BUSY
+        $xml->addChild('StockUpdationDate', $formattedDate);
+        $xml->addChild('VchNo', htmlspecialchars($salesReturn['vch_no'] ?? $salesReturn['return_number'] ?? ''));
+        $xml->addChild('STPTName', htmlspecialchars($salesReturn['stpt_name'] ?? 'I/GST-Export'));
+        
+        // Master details
+        $xml->addChild('MasterName1', htmlspecialchars($salesReturn['master_name1'] ?? $salesReturn['customer_name'] ?? 'Main'));
+        $xml->addChild('MasterName2', htmlspecialchars($salesReturn['master_name2'] ?? 'Main Store'));
+        $xml->addChild('TranCurName', htmlspecialchars($salesReturn['currency'] ?? 'Rs.'));
+        $xml->addChild('InputType', $salesReturn['input_type'] ?? '1');
+        
+        // Billing Details
+        $billingDetails = $xml->addChild('BillingDetails');
+        $billingDetails->addChild('PartyName', htmlspecialchars($salesReturn['customer_name'] ?? $salesReturn['master_name1'] ?? 'Walk-in Customer'));
+        $billingDetails->addChild('Address1', htmlspecialchars($salesReturn['customer_address1'] ?? ''));
+        $billingDetails->addChild('Address2', htmlspecialchars($salesReturn['customer_address2'] ?? ''));
+        $billingDetails->addChild('Address3', htmlspecialchars($salesReturn['customer_address3'] ?? ''));
+        $billingDetails->addChild('Address4', htmlspecialchars($salesReturn['customer_address4'] ?? ''));
+        $billingDetails->addChild('MobileNo', htmlspecialchars($salesReturn['customer_mobile'] ?? ''));
+        $billingDetails->addChild('Email', htmlspecialchars($salesReturn['customer_email'] ?? ''));
+        $billingDetails->addChild('tmpVchCode', '0');
+        $billingDetails->addChild('ITPAN', htmlspecialchars($salesReturn['customer_pan'] ?? ''));
+        $billingDetails->addChild('StateCode', htmlspecialchars($salesReturn['customer_state'] ?? ''));
+        $billingDetails->addChild('GSTNo', htmlspecialchars($salesReturn['customer_gstin'] ?? ''));
+        
+        // Voucher Other Info Details
+        $vchOtherInfo = $xml->addChild('VchOtherInfoDetails');
+        $vchOtherInfo->addChild('OFInfo');
+        $vchOtherInfo->addChild('Transport', htmlspecialchars($salesReturn['transport'] ?? 'others'));
+        $vchOtherInfo->addChild('GRNo', htmlspecialchars($salesReturn['gr_no'] ?? ''));
+        $vchOtherInfo->addChild('Station', htmlspecialchars($salesReturn['station'] ?? ''));
+        $vchOtherInfo->addChild('TotalQty', htmlspecialchars($salesReturn['total_qty'] ?? '0.00'));
+        $vchOtherInfo->addChild('Narration1', htmlspecialchars($salesReturn['remarks'] ?? $salesReturn['narration'] ?? 'Sales Return against ' . ($salesReturn['invoice_number'] ?? '')));
+        $vchOtherInfo->addChild('GrDate', $formattedDate);
+        $vchOtherInfo->addChild('Purpose', $salesReturn['purpose'] ?? '1');
+        
+        // Item Entries
+        $itemEntries = $xml->addChild('ItemEntries');
+        
+        if (!empty($items)) {
+            $srNo = 1;
+            foreach ($items as $item) {
+                // Adapt item structure for return line
+                $itemData = [
+                    'item_name' => $item['item_code'] ?? $item['item_name'] ?? '',
+                    'unit' => $item['unit'] ?? 'PCS.',
+                    'quantity' => $item['return_qty'] ?? $item['quantity'] ?? 0,
+                    'unit_price' => $item['unit_price'] ?? 0,
+                    'line_total' => ($item['return_qty'] ?? $item['quantity'] ?? 0) * ($item['unit_price'] ?? 0),
+                    'net_amount' => ($item['return_qty'] ?? $item['quantity'] ?? 0) * ($item['unit_price'] ?? 0),
+                    'tax_amount' => $item['tax_amount'] ?? 0,
+                    'tax_percent' => $item['tax_rate'] ?? $item['tax_percent'] ?? 0,
+                    'groupname' => $item['groupname'] ?? ''
+                ];
+                
+                $salesReturnCtx = $salesReturn;
+                $salesReturnCtx['invoice_date'] = $salesReturn['return_date'] ?? date('Y-m-d');
+                $salesReturnCtx['vch_type'] = '3';
+                $salesReturnCtx['vch_no'] = $salesReturn['return_number'] ?? '';
+                
+                $this->addItemDetail($itemEntries, $itemData, $salesReturnCtx, $srNo++);
+            }
+        }
+        
+        // Original Sale Details (link to original invoice)
+        $orgSalePurc = $xml->addChild('OrgSalePurcDet');
+        $orgSalePurc->addChild('VchNo', htmlspecialchars($salesReturn['invoice_number'] ?? $salesReturn['SalesReturnVchNo'] ?? ''));
+        $orgSalePurc->addChild('VchDate', date('d-m-Y', strtotime($salesReturn['invoice_date'] ?? date('Y-m-d'))));
+        $orgSalePurc->addChild('TaxableAmt', $salesReturn['subtotal'] ?? '0.00');
+        $orgSalePurc->addChild('TaxAmt', $salesReturn['tax_amount'] ?? '0.00');
+        $orgSalePurc->addChild('tmpVchCode', '0');
+        $orgSalePurc->addChild('tmpFound', 'True');
+        
+        // Format and return XML
+        $dom = dom_import_simplexml($xml)->ownerDocument;
+        $dom->formatOutput = true;
+        $xmlOutput = $dom->saveXML();
+        return preg_replace('/<\?xml[^?]*\?>\n?/', '', $xmlOutput, 1);
+    }
+
+    /**
+     * Generate consolidated XML with multiple invoices or returns
+     * 
+     * @param array $voucherArray Array of ['type' => 'invoice'|'sales_return', 'data' => header, 'items' => items]
+     * @return string XML string with multiple voucher entries
+     */
+    public function generateConsolidated(array $voucherArray): string
     {
         $xmlString = '';
         
-        foreach ($invoiceArray as $invoiceData) {
-            $invoice = $invoiceData['invoice'];
-            $items = $invoiceData['items'] ?? [];
-            $xmlString .= $this->generate($invoice, $items);
+        foreach ($voucherArray as $voucherData) {
+            $type = $voucherData['type'] ?? 'invoice';
+            $data = $voucherData['data'] ?? $voucherData['invoice'] ?? $voucherData['sales_return'] ?? [];
+            $items = $voucherData['items'] ?? [];
+            
+            if ($type === 'sales_return') {
+                $xmlString .= $this->generateSalesReturn($data, $items);
+            } else {
+                $xmlString .= $this->generate($data, $items);
+            }
         }
         
         return $xmlString;
