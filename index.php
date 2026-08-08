@@ -627,6 +627,23 @@ switch ($page) {
         }
         break;
 
+    case 'busy_accounting':
+        require_once 'controllers/BusyAccountingController.php';
+        $controller = new BusyAccountingController();
+        switch ($action) {
+            case 'get_details_ajax':
+                $controller->get_details_ajax();
+                break;
+            case 'download_xml_batch':
+                $controller->download_xml_batch();
+                break;
+            case 'index':
+            default:
+                $controller->index();
+                break;
+        }
+        break;
+
     case 'invoices':
         require_once 'controllers/InvoicesController.php';
         $controller = new InvoicesController();
