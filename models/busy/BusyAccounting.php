@@ -322,9 +322,9 @@ class BusyAccounting
     {
         $sql = "SELECT i.*, 
                        c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, 
-                       c.city, c.state, c.zipcode, c.country, c.gstin
+                       c.city, c.state, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type
                 FROM vp_invoices i
-                LEFT JOIN vp_order_info c ON i.customer_id = c.customer_id AND c.id = (SELECT MAX(id) FROM vp_order_info WHERE customer_id = i.customer_id)
+                LEFT JOIN vp_order_info c ON (c.id = i.vp_order_info_id OR (i.customer_id = c.customer_id AND c.id = (SELECT MAX(id) FROM vp_order_info WHERE customer_id = i.customer_id)))
                 WHERE i.id = ? LIMIT 1";
 
         $stmt = $this->conn->prepare($sql);
@@ -342,10 +342,20 @@ class BusyAccounting
         }
 
         // Fetch line items
-        $itemsSql = "SELECT it.*, ag.account_group_name 
+        $itemsSql = "SELECT it.*, 
+                            COALESCE(
+                                NULLIF(ag_p.account_group_name, ''),
+                                NULLIF(p.accounts_group, ''),
+                                NULLIF(ag.account_group_name, ''),
+                                NULLIF(it.groupname, ''),
+                                it.item_name
+                            ) AS account_group_name 
                      FROM vp_invoice_items it 
+                     LEFT JOIN vp_products p ON (p.id = it.product_id OR (it.product_id IS NULL AND it.item_code IS NOT NULL AND it.item_code <> '' AND (p.item_code = it.item_code OR p.sku = it.item_code)))
                      LEFT JOIN account_group ag ON it.groupname = ag.item_group 
-                     WHERE it.invoice_id = ?";
+                     LEFT JOIN account_group ag_p ON (p.accounts_group IS NOT NULL AND (ag_p.id = p.accounts_group OR ag_p.account_group_name = p.accounts_group))
+                     WHERE it.invoice_id = ?
+                     GROUP BY it.id";
         $itemsStmt = $this->conn->prepare($itemsSql);
         $items = [];
         if ($itemsStmt) {
@@ -361,6 +371,14 @@ class BusyAccounting
         $custName = trim(($invoice['first_name'] ?? '') . ' ' . ($invoice['last_name'] ?? ''));
         if ($custName === '') {
             $custName = 'Walk-in Customer';
+        }
+
+        $payType = trim($invoice['order_payment_type'] ?? $invoice['payment_type'] ?? $invoice['payment_mode'] ?? '');
+        if ($payType !== '') {
+            $payTypeFormatted = (strtolower($payType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $payType));
+            $invoice['payment_type'] = $payTypeFormatted;
+            $invoice['party_name']   = $payTypeFormatted;
+            $invoice['master_name1'] = $payTypeFormatted;
         }
 
         $invoice['customer_name']     = $custName;
@@ -389,12 +407,12 @@ class BusyAccounting
      */
     public function getSalesReturnDetails(int $id): ?array
     {
-        $sql = "SELECT sr.*, i.invoice_number, i.invoice_date, i.currency,
+        $sql = "SELECT sr.*, i.invoice_number, i.invoice_date, i.currency, i.payment_mode,
                        c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, 
-                       c.city, c.state, c.zipcode, c.country, c.gstin
+                       c.city, c.state, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type
                 FROM vp_sales_returns sr
                 LEFT JOIN vp_invoices i ON sr.invoice_id = i.id
-                LEFT JOIN vp_order_info c ON i.customer_id = c.customer_id AND c.id = (SELECT MAX(id) FROM vp_order_info WHERE customer_id = i.customer_id)
+                LEFT JOIN vp_order_info c ON (c.id = i.vp_order_info_id OR (i.customer_id = c.customer_id AND c.id = (SELECT MAX(id) FROM vp_order_info WHERE customer_id = i.customer_id)))
                 WHERE sr.id = ? LIMIT 1";
 
         $stmt = $this->conn->prepare($sql);
@@ -412,10 +430,25 @@ class BusyAccounting
         }
 
         // Fetch return line items
-        $itemsSql = "SELECT sri.*, ii.item_name, ii.hsn, ii.unit_price, ii.tax_rate, ii.groupname 
+        $itemsSql = "SELECT sri.*, ii.item_name, ii.hsn, ii.unit_price, ii.tax_rate, ii.groupname,
+                            COALESCE(
+                                NULLIF(ag_p.account_group_name, ''),
+                                NULLIF(p.accounts_group, ''),
+                                NULLIF(ag.account_group_name, ''),
+                                NULLIF(ii.groupname, ''),
+                                sri.item_code,
+                                ii.item_name
+                            ) AS account_group_name 
                      FROM vp_sales_return_items sri 
                      LEFT JOIN vp_invoice_items ii ON sri.invoice_item_id = ii.id 
-                     WHERE sri.sales_return_id = ?";
+                     LEFT JOIN vp_products p ON (
+                         p.id = COALESCE(sri.product_id, ii.product_id) 
+                         OR (sri.product_id IS NULL AND ii.product_id IS NULL AND sri.item_code IS NOT NULL AND sri.item_code <> '' AND (p.item_code = sri.item_code OR p.sku = sri.item_code))
+                     )
+                     LEFT JOIN account_group ag ON ii.groupname = ag.item_group 
+                     LEFT JOIN account_group ag_p ON (p.accounts_group IS NOT NULL AND (ag_p.id = p.accounts_group OR ag_p.account_group_name = p.accounts_group))
+                     WHERE sri.sales_return_id = ?
+                     GROUP BY sri.id";
         $itemsStmt = $this->conn->prepare($itemsSql);
         $items = [];
         if ($itemsStmt) {
@@ -431,6 +464,14 @@ class BusyAccounting
         $custName = trim(($return['first_name'] ?? '') . ' ' . ($return['last_name'] ?? ''));
         if ($custName === '') {
             $custName = 'Customer (' . ($return['order_number'] ?? '—') . ')';
+        }
+
+        $payType = trim($return['order_payment_type'] ?? $return['payment_type'] ?? $return['payment_mode'] ?? '');
+        if ($payType !== '') {
+            $payTypeFormatted = (strtolower($payType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $payType));
+            $return['payment_type'] = $payTypeFormatted;
+            $return['party_name']   = $payTypeFormatted;
+            $return['master_name1'] = $payTypeFormatted;
         }
 
         $return['customer_name']     = $custName;

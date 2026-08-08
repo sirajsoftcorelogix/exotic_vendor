@@ -144,13 +144,15 @@ class BusyAccountingController
             $customerName = trim(($details['first_name'] ?? '') . ' ' . ($details['last_name'] ?? ''));
             if ($customerName === '') $customerName = 'Walk-in Customer';
 
+            $partyName = $details['party_name'] ?? $details['payment_type'] ?? $customerName;
+
             // Generate JSON preview structure matching api_fetch_vouchers
             $jsonPreview = [
                 'Series Name' => 'Main Company',
                 'VchDate' => date('d-M-Y', strtotime($details['invoice_date'])),
                 'VchNo.' => $details['invoice_number'],
                 'Sales Type' => 'Sales',
-                'Party Name' => $customerName,
+                'Party Name' => $partyName,
                 'GSTIN' => $details['gstin'] ?? '',
                 'Material Centre' => 'Main Location',
                 'Currency' => $details['currency'] ?? 'INR',
