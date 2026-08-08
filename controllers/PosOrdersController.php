@@ -1241,7 +1241,7 @@ class PosOrdersController
                 'proformaPrintUrl' => (string)($proformaPrintAction['url'] ?? ''),
                 'canPrintProforma' => !empty($proformaPrintAction['can_print']),
                 'canEditInvoiceNumber' => canSrEmpAccess(),
-                'canEditOrderPrices' => canSrEmpAccess(),
+                'canEditOrderPrices' => false,
                 'paymentSummary' => $paymentSummary,
                 'canCreateFinalInvoice' => $canCreateFinalInvoice,
                 'canPublishExoticSync' => $canPublishExoticSync,
