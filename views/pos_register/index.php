@@ -678,15 +678,16 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       <p class="mt-1 text-xs text-slate-500">Confirm how this order will be fulfilled before submitting.</p>
     </div>
     <div class="space-y-3 p-5 flex-1 overflow-y-auto">
-      <label class="delivery-status-option flex cursor-pointer items-start gap-3 rounded-xl border-2 border-orange-400 bg-orange-50/60 p-4 transition hover:bg-orange-50">
-        <input type="radio" name="pos_delivery_status" value="collected_from_showroom" class="mt-1 h-4 w-4 border-slate-300 text-orange-600 focus:ring-orange-500" checked>
+      <label id="delivery_status_label_collected" class="delivery-status-option flex cursor-pointer items-start gap-3 rounded-xl border-2 border-orange-400 bg-orange-50/60 p-4 transition hover:bg-orange-50">
+        <input type="radio" id="delivery_status_collected" name="pos_delivery_status" value="collected_from_showroom" class="mt-1 h-4 w-4 border-slate-300 text-orange-600 focus:ring-orange-500" checked>
         <span>
           <span class="block text-sm font-semibold text-slate-800">Collected from showroom by Customer</span>
           <span class="mt-0.5 block text-xs text-slate-500">Customer took goods from the store now · marks order <strong>Shipped</strong></span>
+          <span id="zero_advance_delivery_lock_msg" class="hidden mt-1.5 text-[11px] font-medium text-amber-700">Not available for Zero Advance Payment orders (must remain Pending until store pickup payment).</span>
         </span>
       </label>
-      <label class="delivery-status-option flex cursor-pointer items-start gap-3 rounded-xl border-2 border-transparent bg-slate-50 p-4 transition hover:border-slate-200 hover:bg-white">
-        <input type="radio" name="pos_delivery_status" value="deliver_later" class="mt-1 h-4 w-4 border-slate-300 text-orange-600 focus:ring-orange-500">
+      <label id="delivery_status_label_deliver_later" class="delivery-status-option flex cursor-pointer items-start gap-3 rounded-xl border-2 border-transparent bg-slate-50 p-4 transition hover:border-slate-200 hover:bg-white">
+        <input type="radio" id="delivery_status_deliver_later" name="pos_delivery_status" value="deliver_later" class="mt-1 h-4 w-4 border-slate-300 text-orange-600 focus:ring-orange-500">
         <span>
           <span class="block text-sm font-semibold text-slate-800">Deliver to customer Later</span>
           <span class="mt-0.5 block text-xs text-slate-500">Goods will be dispatched later · keeps order <strong>Pending</strong></span>
@@ -1770,10 +1771,18 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     document.querySelectorAll("#deliveryStatusModal .delivery-status-option").forEach(function(label) {
       var radio = label.querySelector('input[name="pos_delivery_status"]');
       var on = radio && radio.checked;
-      label.classList.toggle("border-orange-400", !!on);
-      label.classList.toggle("bg-orange-50/60", !!on);
-      label.classList.toggle("border-transparent", !on);
-      label.classList.toggle("bg-slate-50", !on);
+      var isDisabled = radio && radio.disabled;
+      if (isDisabled) {
+        label.classList.remove("border-orange-400", "bg-orange-50/60", "border-transparent", "bg-slate-50", "hover:bg-orange-50", "hover:border-slate-200", "hover:bg-white");
+        label.classList.add("border-slate-200", "bg-slate-100", "opacity-50", "cursor-not-allowed", "pointer-events-none");
+      } else {
+        label.classList.remove("border-slate-200", "bg-slate-100", "opacity-50", "cursor-not-allowed", "pointer-events-none");
+        label.classList.add("cursor-pointer");
+        label.classList.toggle("border-orange-400", !!on);
+        label.classList.toggle("bg-orange-50/60", !!on);
+        label.classList.toggle("border-transparent", !on);
+        label.classList.toggle("bg-slate-50", !on);
+      }
     });
   }
 
@@ -1834,17 +1843,54 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       err.classList.add("hidden");
       err.textContent = "";
     }
-    var status = addressPayload && addressPayload.pos_delivery_status ? String(addressPayload.pos_delivery_status) : "";
-    var selectedRadio = status
-      ? document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"][value="' + status + '"]')
-      : null;
-    var defaultRadio = document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"][value="collected_from_showroom"]');
-    if (selectedRadio) {
-      selectedRadio.checked = true;
-    } else if (defaultRadio) {
-      defaultRadio.checked = true;
+
+    var stageVal = String(document.getElementById("payment_stage")?.value || "").toLowerCase();
+    if (!stageVal && addressPayload && addressPayload.payment_stage) {
+      stageVal = String(addressPayload.payment_stage).toLowerCase();
     }
+    var isZeroAdvance = stageVal === "zero_advance";
+
+    var collectedRadio = document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"][value="collected_from_showroom"]');
+    var deliverLaterRadio = document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"][value="deliver_later"]');
+    var lockMsg = document.getElementById("zero_advance_delivery_lock_msg");
+
+    if (isZeroAdvance) {
+      if (collectedRadio) {
+        collectedRadio.disabled = true;
+        collectedRadio.checked = false;
+      }
+      if (lockMsg) {
+        lockMsg.classList.remove("hidden");
+      }
+      if (deliverLaterRadio) {
+        deliverLaterRadio.disabled = false;
+        deliverLaterRadio.checked = true;
+      }
+    } else {
+      if (collectedRadio) {
+        collectedRadio.disabled = false;
+      }
+      if (lockMsg) {
+        lockMsg.classList.add("hidden");
+      }
+      if (deliverLaterRadio) {
+        deliverLaterRadio.disabled = false;
+      }
+
+      var status = addressPayload && addressPayload.pos_delivery_status ? String(addressPayload.pos_delivery_status) : "";
+      var selectedRadio = status
+        ? document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"][value="' + status + '"]')
+        : null;
+      var defaultRadio = document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"][value="collected_from_showroom"]');
+      if (selectedRadio) {
+        selectedRadio.checked = true;
+      } else if (defaultRadio) {
+        defaultRadio.checked = true;
+      }
+    }
+
     syncDeliveryStatusOptionStyles();
+    syncEwayBillSectionVisibility();
     if (modal) {
       modal.classList.remove("hidden");
     }
