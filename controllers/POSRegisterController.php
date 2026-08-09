@@ -5037,15 +5037,18 @@ class POSRegisterController
             $invoiceLinePrices = [];
         }
 
-        $short = pos_payment_resolve_short_code_for_warehouse($conn, (int)($_SESSION['warehouse_id'] ?? 0));
-        try {
-            $receiptNo = pos_payment_generate_next_receipt_number($conn, $short);
-        } catch (\Throwable $e) {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Receipt number error: ' . $e->getMessage(),
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
+        $receiptNo = '';
+        if ($paymentStage !== 'zero_advance') {
+            $short = pos_payment_resolve_short_code_for_warehouse($conn, (int)($_SESSION['warehouse_id'] ?? 0));
+            try {
+                $receiptNo = pos_payment_generate_next_receipt_number($conn, $short);
+            } catch (\Throwable $e) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Receipt number error: ' . $e->getMessage(),
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
         }
 
         $note = $this->appendHighValueComplianceToNote(trim((string)($payload['payment_note'] ?? '')), $orderTotal, $paymentMode, $compliance);
@@ -5063,39 +5066,41 @@ class POSRegisterController
 
         $pay = null;
         $paymentIds = [];
-        $sortedSplits = $splitBundle['splits'];
-        usort($sortedSplits, static function (array $a, array $b): int {
-            $aCod = (in_array(($a['mode'] ?? ''), ['cod', 'pay_on_pickup'], true)) ? 1 : 0;
-            $bCod = (in_array(($b['mode'] ?? ''), ['cod', 'pay_on_pickup'], true)) ? 1 : 0;
+        if ($paymentStage !== 'zero_advance') {
+            $sortedSplits = $splitBundle['splits'];
+            usort($sortedSplits, static function (array $a, array $b): int {
+                $aCod = (in_array(($a['mode'] ?? ''), ['cod', 'pay_on_pickup'], true)) ? 1 : 0;
+                $bCod = (in_array(($b['mode'] ?? ''), ['cod', 'pay_on_pickup'], true)) ? 1 : 0;
 
-            return $aCod <=> $bCod;
-        });
+                return $aCod <=> $bCod;
+            });
 
-        foreach ($sortedSplits as $split) {
-            $pay = pos_payment_insert_row(
-                $conn,
-                $orderNumber,
-                $receiptNo,
-                $customerId,
-                $paymentStage,
-                (string)$split['mode'],
-                (float)$split['amount'],
-                (string)$split['transaction_id'],
-                $note,
-                $userId,
-                $whId,
-                true,
-                $orderTotal
-            );
-            if (empty($pay['success'])) {
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'Exotic order ' . $orderNumber . ' was created but local payment row failed: ' . (string)($pay['error'] ?? 'unknown'),
-                    'order_number' => $orderNumber,
-                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                exit;
+            foreach ($sortedSplits as $split) {
+                $pay = pos_payment_insert_row(
+                    $conn,
+                    $orderNumber,
+                    $receiptNo,
+                    $customerId,
+                    $paymentStage,
+                    (string)$split['mode'],
+                    (float)$split['amount'],
+                    (string)$split['transaction_id'],
+                    $note,
+                    $userId,
+                    $whId,
+                    true,
+                    $orderTotal
+                );
+                if (empty($pay['success'])) {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Exotic order ' . $orderNumber . ' was created but local payment row failed: ' . (string)($pay['error'] ?? 'unknown'),
+                        'order_number' => $orderNumber,
+                    ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                    exit;
+                }
+                $paymentIds[] = (int)($pay['payment_id'] ?? 0);
             }
-            $paymentIds[] = (int)($pay['payment_id'] ?? 0);
         }
 
         require_once 'models/customer/Customer.php';
@@ -5152,7 +5157,9 @@ class POSRegisterController
             (int)$deliveryStatus['exotic_status']
         );
 
-        $modeLabel = $this->formatPosPaymentSplitsLabel($splitBundle['splits']);
+        $modeLabel = ($paymentStage === 'zero_advance')
+            ? 'Pay on Pickup (Zero Advance)'
+            : $this->formatPosPaymentSplitsLabel($splitBundle['splits']);
         $receiptPaymentSplits = [];
         foreach ($splitBundle['splits'] as $splitRow) {
             $receiptPaymentSplits[] = [
@@ -5219,7 +5226,9 @@ class POSRegisterController
             'receipt_amount_in_words' => '',
             'receipt_amount_received' => $advanceAmount,
             'receipt_cod_pending_amount' => $codAmount,
-            'receipt_pending_amount' => $hasCodPending ? $codAmount : (float)($pay['pending_amount'] ?? 0),
+            'receipt_pending_amount' => ($paymentStage === 'zero_advance')
+                ? $orderTotal
+                : ($hasCodPending ? $codAmount : (float)($pay['pending_amount'] ?? 0)),
             'has_cod_pending' => $hasCodPending,
             'import_status' => $invoiceMeta['import_status'],
             'show_invoice_pdf_button' => $invoiceMeta['show_invoice_pdf_button'],

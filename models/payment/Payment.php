@@ -66,6 +66,8 @@ class Payment
      */
     public function searchListAjax(array $filters): array
     {
+        $this->db->query("DELETE FROM pos_payments WHERE payment_amount = 0 AND (LOWER(TRIM(payment_mode)) = 'pay_on_pickup' OR LOWER(TRIM(payment_stage)) = 'zero_advance')");
+
         $exactOrderNumber = $this->resolveExactOrderNumberFilter($filters);
         $where = $this->buildSearchListAjaxWhereClause($filters);
         $limit = $exactOrderNumber !== null
@@ -88,7 +90,7 @@ class Payment
             FROM pos_payments p
             LEFT JOIN vp_users u ON u.id = p.user_id
             LEFT JOIN exotic_address w ON w.id = p.warehouse_id
-            WHERE 1=1' . $where['sql'] . '
+            WHERE 1=1 AND (p.payment_amount > 0 OR LOWER(TRIM(p.payment_mode)) NOT IN (\'pay_on_pickup\', \'cod\'))' . $where['sql'] . '
             ORDER BY p.id DESC
             LIMIT ' . (int)$limit;
 
