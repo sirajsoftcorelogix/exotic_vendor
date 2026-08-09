@@ -425,6 +425,16 @@ function pos_payment_mode_options_for_view(): array
 function pos_payment_resolve_splits_from_payload(array $payload): array
 {
     $allowed = pos_payment_allowed_modes();
+    $paymentStage = strtolower(trim((string)($payload['payment_stage'] ?? '')));
+    if ($paymentStage === 'zero_advance') {
+        return [
+            'splits' => [],
+            'total' => 0.0,
+            'primary_mode' => 'pay_on_pickup',
+            'primary_txn' => '',
+        ];
+    }
+
     $splits = [];
     $raw = $payload['payment_splits'] ?? null;
     if (is_array($raw)) {
