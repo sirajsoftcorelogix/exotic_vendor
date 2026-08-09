@@ -647,6 +647,18 @@ class POSRegisterController
     private function resolvePosDeliveryStatusFromPayload(array $payload, mysqli $conn): array
     {
         $raw = strtolower(trim((string)($payload['pos_delivery_status'] ?? '')));
+        $paymentStage = strtolower(trim((string)($payload['payment_stage'] ?? '')));
+
+        if ($paymentStage === 'zero_advance' && $raw === 'collected_from_showroom') {
+            return [
+                'ok' => false,
+                'local_status' => '',
+                'exotic_status' => 0,
+                'label' => '',
+                'error' => 'Zero Advance Payment orders cannot be collected from showroom immediately. Please select Deliver to customer Later (Pending).',
+            ];
+        }
+
         $map = [
             'collected_from_showroom' => [
                 'local_status' => 'shipped',
