@@ -57,6 +57,11 @@ if (!$invoice) {
     exit('Invoice not found');
 }
 
+if (strtolower(trim((string)($invoice['status'] ?? ''))) === 'cancelled') {
+    http_response_code(400);
+    exit('Cancelled invoices cannot be exported to BUSY XML');
+}
+
 // Fetch invoice items
 $items = $invoiceModel->getInvoiceItems($invoiceId);
 

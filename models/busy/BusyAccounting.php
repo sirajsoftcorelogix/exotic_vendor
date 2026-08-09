@@ -230,7 +230,7 @@ class BusyAccounting
      */
     private function countInvoices(string $startDate, string $endDate, string $search): int
     {
-        $where = ["1=1"];
+        $where = ["1=1", "LOWER(TRIM(COALESCE(i.status, ''))) <> 'cancelled'"];
         $params = [];
         $types = "";
 
@@ -283,7 +283,7 @@ class BusyAccounting
      */
     private function fetchInvoices(string $startDate, string $endDate, string $search, int $limit = 0, int $offset = 0): array
     {
-        $where = ["1=1"];
+        $where = ["1=1", "LOWER(TRIM(COALESCE(i.status, ''))) <> 'cancelled'"];
         $params = [];
         $types = "";
 
@@ -558,7 +558,7 @@ class BusyAccounting
                        c.city, c.state, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type
                 FROM vp_invoices i
                 LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id
-                WHERE i.id = ? LIMIT 1";
+                WHERE i.id = ? AND LOWER(TRIM(COALESCE(i.status, ''))) <> 'cancelled' LIMIT 1";
 
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {

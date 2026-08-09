@@ -1548,6 +1548,11 @@ class InvoicesController
             exit('Invoice not found');
         }
 
+        if (strtolower(trim((string)($invoice['status'] ?? ''))) === 'cancelled') {
+            http_response_code(400);
+            exit('Cancelled invoices cannot be exported to BUSY XML');
+        }
+
         $items = $invoiceModel->getInvoiceItems($invoiceId);
 
         // Add calculated tax totals
@@ -1585,8 +1590,8 @@ class InvoicesController
             exit('Bad request: Invalid date format. Use YYYY-MM-DD');
         }
 
-        // Fetch all invoices for the given date
-        $sql = "SELECT id FROM vp_invoices WHERE DATE(invoice_date) = ? ORDER BY invoice_date ASC";
+        // Fetch all non-cancelled invoices for the given date
+        $sql = "SELECT id FROM vp_invoices WHERE DATE(invoice_date) = ? AND LOWER(TRIM(COALESCE(status, ''))) <> 'cancelled' ORDER BY invoice_date ASC";
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
             http_response_code(500);
