@@ -4817,7 +4817,7 @@ class POSRegisterController
         $codAmount = pos_payment_split_cod_total($splitBundle['splits']);
         $hasCodPending = $codAmount > 0.001;
 
-        if ($hasCodPending) {
+        if ($hasCodPending && $paymentStage !== 'zero_advance') {
             $paymentStage = 'advance';
         }
 
@@ -5053,8 +5053,8 @@ class POSRegisterController
         $paymentIds = [];
         $sortedSplits = $splitBundle['splits'];
         usort($sortedSplits, static function (array $a, array $b): int {
-            $aCod = (($a['mode'] ?? '') === 'cod') ? 1 : 0;
-            $bCod = (($b['mode'] ?? '') === 'cod') ? 1 : 0;
+            $aCod = (in_array(($a['mode'] ?? ''), ['cod', 'pay_on_pickup'], true)) ? 1 : 0;
+            $bCod = (in_array(($b['mode'] ?? ''), ['cod', 'pay_on_pickup'], true)) ? 1 : 0;
 
             return $aCod <=> $bCod;
         });
@@ -5617,7 +5617,8 @@ class POSRegisterController
                 if (!is_array($splitRow)) {
                     continue;
                 }
-                if (strtolower(trim((string)($splitRow['mode'] ?? ''))) === 'cod') {
+                $m = strtolower(trim((string)($splitRow['mode'] ?? '')));
+                if ($m === 'cod' || $m === 'pay_on_pickup') {
                     $codAmount += round((float)($splitRow['amount'] ?? 0), 2);
                 }
             }
@@ -5723,6 +5724,7 @@ class POSRegisterController
             'razorpay' => 'razorpay',
             'adminorder' => 'adminorder',
             'cod' => 'cod',
+            'pay_on_pickup' => 'cod',
             'offline' => 'offline',
         ];
 
@@ -5780,6 +5782,7 @@ class POSRegisterController
         $m = strtolower(trim($mode));
         $map = [
             'cash' => 'Cash',
+            'pay_on_pickup' => 'Pay on Pickup',
             'cod' => 'Cash on Delivery',
             'upi' => 'UPI',
             'bank_transfer' => 'Bank transfer',
@@ -5799,6 +5802,7 @@ class POSRegisterController
     {
         $labels = [
             'cash' => 'Cash',
+            'pay_on_pickup' => 'Pay on Pickup (Store Pay Later)',
             'cod' => 'Cash on Delivery (COD)',
             'upi' => 'UPI',
             'bank_transfer' => 'Bank transfer',

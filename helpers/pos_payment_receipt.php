@@ -338,7 +338,8 @@ function pos_payment_sync_checkout_order_payable(
 
 function pos_payment_is_cod_mode(string $mode): bool
 {
-    return strtolower(trim($mode)) === 'cod';
+    $m = strtolower(trim($mode));
+    return $m === 'cod' || $m === 'pay_on_pickup';
 }
 
 /**
@@ -378,7 +379,7 @@ function pos_payment_split_cod_total(array $splits): float
  */
 function pos_payment_allowed_modes(): array
 {
-    return ['cash', 'cod', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque', 'adminorder', 'waived'];
+    return ['cash', 'pay_on_pickup', 'cod', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque', 'adminorder', 'waived'];
 }
 
 function pos_payment_is_waived_mode(string $mode): bool
@@ -393,6 +394,7 @@ function pos_payment_mode_options_for_view(): array
 {
     $labels = [
         'cash' => 'Cash',
+        'pay_on_pickup' => 'Pay on Pickup (Store Pay Later)',
         'cod' => 'Cash on Delivery (COD)',
         'upi' => 'UPI',
         'bank_transfer' => 'Bank transfer',
@@ -447,14 +449,23 @@ function pos_payment_resolve_splits_from_payload(array $payload): array
     }
 
     if ($splits === []) {
-        $mode = strtolower(trim((string)($payload['payment_type'] ?? $payload['payment_mode'] ?? 'cash')));
-        $amount = round((float)($payload['amount'] ?? $payload['payment_amount'] ?? 0), 2);
-        if ($amount > 0 || pos_payment_is_waived_mode($mode)) {
+        if (strtolower(trim((string)($payload['payment_stage'] ?? ''))) === 'zero_advance') {
+            $amount = round((float)($payload['order_total'] ?? $payload['receipt_order_total'] ?? $payload['amount'] ?? 0), 2);
             $splits[] = [
-                'mode' => in_array($mode, $allowed, true) ? $mode : 'cash',
-                'amount' => pos_payment_is_waived_mode($mode) ? 0.0 : $amount,
-                'transaction_id' => trim((string)($payload['transaction_id'] ?? '')),
+                'mode' => 'pay_on_pickup',
+                'amount' => $amount,
+                'transaction_id' => '',
             ];
+        } else {
+            $mode = strtolower(trim((string)($payload['payment_type'] ?? $payload['payment_mode'] ?? 'cash')));
+            $amount = round((float)($payload['amount'] ?? $payload['payment_amount'] ?? 0), 2);
+            if ($amount > 0 || pos_payment_is_waived_mode($mode)) {
+                $splits[] = [
+                    'mode' => in_array($mode, $allowed, true) ? $mode : 'cash',
+                    'amount' => pos_payment_is_waived_mode($mode) ? 0.0 : $amount,
+                    'transaction_id' => trim((string)($payload['transaction_id'] ?? '')),
+                ];
+            }
         }
     }
 
@@ -490,6 +501,11 @@ function pos_payment_validate_splits(
     string $paymentStage,
     ?array $followUpSession = null
 ): array {
+    $paymentStage = strtolower(trim($paymentStage));
+    if ($paymentStage === 'zero_advance') {
+        return [];
+    }
+
     $errors = [];
     $splits = $splitBundle['splits'] ?? [];
     if ($splits === []) {
@@ -558,10 +574,18 @@ function pos_payment_validate_splits(
     }
 
     if ($hasCod) {
+        $hasPickup = false;
+        foreach ($splits as $split) {
+            if (strtolower(trim((string)($split['mode'] ?? ''))) === 'pay_on_pickup') {
+                $hasPickup = true;
+                break;
+            }
+        }
+        $pendingLabel = $hasPickup ? 'Advance plus Pay on Pickup' : 'Advance plus COD';
         if ($splitTotal + 0.02 < $targetTotal) {
-            $errors[] = 'Advance plus COD must equal order total ₹ ' . $targetTotal . '.';
+            $errors[] = $pendingLabel . ' must equal order total ₹ ' . $targetTotal . '.';
         } elseif ($splitTotal - 0.02 > $targetTotal) {
-            $errors[] = 'Advance plus COD exceeds order total.';
+            $errors[] = $pendingLabel . ' exceeds order total.';
         }
     } else {
         $paymentAmount = round((float)($splitBundle['total'] ?? 0), 2);
@@ -684,7 +708,7 @@ function pos_payment_mark_cod_collected_if_fully_paid(mysqli $conn, string $orde
         'UPDATE pos_payments
          SET payment_status = \'success\'
          WHERE order_number = ?
-           AND LOWER(TRIM(payment_mode)) = \'cod\'
+           AND LOWER(TRIM(payment_mode)) IN (\'cod\', \'pay_on_pickup\')
            AND LOWER(TRIM(COALESCE(payment_status, \'pending\'))) = \'pending\''
     );
     if (!$stmt) {
