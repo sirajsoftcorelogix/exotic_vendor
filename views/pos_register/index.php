@@ -396,6 +396,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
             <option value="final">Final</option>
             <option value="partial">Partial</option>
             <option value="advance">Advance</option>
+            <option value="zero_advance">Zero Advance Payment</option>
           </select>
         </div>
         <div>
@@ -422,7 +423,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
         <p id="payment_summary_hint" class="mt-2 hidden text-[11px] text-slate-600"></p>
       </div>
 
-      <div class="rounded-xl border border-slate-200 overflow-hidden">
+      <div id="payment_split_section" class="rounded-xl border border-slate-200 overflow-hidden">
         <div class="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2.5">
           <div>
             <h3 class="text-sm font-semibold text-slate-800">Payment split</h3>
@@ -442,6 +443,15 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
         <div class="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-xs">
           <span class="text-slate-600"><span id="payment_split_count">0</span> payment line(s)</span>
           <span class="font-semibold text-slate-800">Split total: <span id="payment_split_total" class="text-orange-700 tabular-nums">₹ 0.00</span></span>
+        </div>
+      </div>
+      <div id="zero_advance_notice" class="hidden rounded-xl border border-blue-200 bg-blue-50/80 p-3.5 text-xs text-blue-900 flex items-start gap-2.5">
+        <svg class="w-5 h-5 text-blue-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div>
+          <span class="font-semibold text-sm text-blue-900 block">Zero Advance Payment</span>
+          No payment is required at checkout. The full order amount will be collected when the item is picked up in store.
         </div>
       </div>
       <div id="payment_split_validation" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 pr-8 text-xs text-red-700 relative">
@@ -1210,6 +1220,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     if (!options.length) {
       options = [
         ["cash", "Cash"],
+        ["pay_on_pickup", "Pay on Pickup (Store Pay Later)"],
         ["cod", "Cash on Delivery (COD)"],
         ["upi", "UPI"],
         ["bank_transfer", "Bank transfer"],
@@ -1350,10 +1361,15 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     return out;
   }
 
+  function isPendingPaymentMode(mode) {
+    var m = String(mode || "").toLowerCase();
+    return m === "cod" || m === "pay_on_pickup";
+  }
+
   function getPaymentSplitAdvanceTotalFromUi() {
     var total = 0;
     collectAllPaymentSplitRowsFromUi().forEach(function(s) {
-      if (s.mode !== "cod") total += s.amount;
+      if (!isPendingPaymentMode(s.mode)) total += s.amount;
     });
     return Math.round(total * 100) / 100;
   }
@@ -1361,7 +1377,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
   function getPaymentSplitCodTotalFromUi() {
     var total = 0;
     collectAllPaymentSplitRowsFromUi().forEach(function(s) {
-      if (s.mode === "cod") total += s.amount;
+      if (isPendingPaymentMode(s.mode)) total += s.amount;
     });
     return Math.round(total * 100) / 100;
   }
@@ -1396,17 +1412,20 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
   }
 
   function recalcPaymentSplitUi() {
-    var splits = collectAllPaymentSplitRowsFromUi();
-    var splitTotal = getPaymentSplitTotalFromUi();
-    var advanceTotal = getPaymentSplitAdvanceTotalFromUi();
-    var codTotal = getPaymentSplitCodTotalFromUi();
-    var hasCod = paymentSplitHasCodFromUi();
     var orderTotal = getCurrentCheckoutTotal();
     var stage = String(document.getElementById("payment_stage")?.value || "final").toLowerCase();
     var target = orderTotal;
-    var balance = Math.round((target - splitTotal) * 100) / 100;
 
-    syncLegacyPaymentHiddenFields(splits, hasCod ? advanceTotal : splitTotal);
+    var isZeroAdvance = stage === "zero_advance";
+    var splitSection = document.getElementById("payment_split_section");
+    var zeroNotice = document.getElementById("zero_advance_notice");
+
+    if (splitSection) {
+      splitSection.classList.toggle("hidden", isZeroAdvance);
+    }
+    if (zeroNotice) {
+      zeroNotice.classList.toggle("hidden", !isZeroAdvance);
+    }
 
     var orderEl = document.getElementById("payment_summary_order");
     var paidEl = document.getElementById("payment_summary_paid");
@@ -1416,9 +1435,39 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     var countEl = document.getElementById("payment_split_count");
     var totalEl = document.getElementById("payment_split_total");
 
+    if (isZeroAdvance) {
+      syncLegacyPaymentHiddenFields([{ mode: "pay_on_pickup", amount: target, transaction_id: "" }], 0);
+      if (orderEl) orderEl.textContent = formatPaymentInr(target);
+      if (paidEl) paidEl.textContent = formatPaymentInr(0);
+      if (balLabelEl) balLabelEl.textContent = "Pending on pickup";
+      if (balEl) {
+        balEl.textContent = formatPaymentInr(target);
+        balEl.className = "mt-0.5 text-lg font-bold text-amber-700 tabular-nums";
+      }
+      if (countEl) countEl.textContent = "0";
+      if (totalEl) totalEl.textContent = formatPaymentInr(0);
+      if (hintEl) {
+        hintEl.textContent = "Zero advance payment — full amount " + formatPaymentInr(target) + " will be collected on store pickup.";
+        hintEl.classList.remove("hidden");
+      }
+      syncCustomInvoiceNumberField();
+      return;
+    }
+
+    var splits = collectAllPaymentSplitRowsFromUi();
+    var splitTotal = getPaymentSplitTotalFromUi();
+    var advanceTotal = getPaymentSplitAdvanceTotalFromUi();
+    var codTotal = getPaymentSplitCodTotalFromUi();
+    var hasCod = paymentSplitHasCodFromUi();
+    var balance = Math.round((target - splitTotal) * 100) / 100;
+
+    syncLegacyPaymentHiddenFields(splits, hasCod ? advanceTotal : splitTotal);
+
+    var isPayOnPickup = splits.some(function(s) { return s.mode === "pay_on_pickup"; });
+
     if (orderEl) orderEl.textContent = formatPaymentInr(target);
     if (paidEl) paidEl.textContent = formatPaymentInr(hasCod ? advanceTotal : splitTotal);
-    if (balLabelEl) balLabelEl.textContent = hasCod ? "COD pending" : "Balance";
+    if (balLabelEl) balLabelEl.textContent = hasCod ? (isPayOnPickup ? "Pending on pickup" : "COD pending") : "Balance";
     if (balEl) {
       balEl.textContent = formatPaymentInr(hasCod ? codTotal : balance);
       if (hasCod) {
@@ -1441,7 +1490,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
           hintEl.textContent = "Advance plus COD must equal order total (" + formatPaymentInr(orderTotal) + ").";
           hintEl.classList.remove("hidden");
         } else if (codTotal > 0.001) {
-          hintEl.textContent = formatPaymentInr(codTotal) + " will be collected on delivery.";
+          hintEl.textContent = formatPaymentInr(codTotal) + (isPayOnPickup ? " will be collected on store pickup." : " will be collected on delivery.");
           hintEl.classList.remove("hidden");
         } else {
           hintEl.classList.add("hidden");
@@ -1485,13 +1534,32 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       }
     };
 
+    hideErr();
+    var paymentStage = String(document.getElementById("payment_stage")?.value || "final").toLowerCase();
+
+    if (paymentStage === "zero_advance") {
+      return {
+        payment_stage: "zero_advance",
+        payment_amount: 0,
+        advanceTotal: 0,
+        codTotal: grandTotal,
+        hasCod: true,
+        primaryMode: "pay_on_pickup",
+        primaryTxn: "",
+        splits: [{
+          mode: "pay_on_pickup",
+          amount: grandTotal,
+          transaction_id: ""
+        }]
+      };
+    }
+
     var splits = collectAllPaymentSplitRowsFromUi();
     if (!splits.length) {
       showErr("Add at least one payment line.");
       return null;
     }
 
-    var paymentStage = String(document.getElementById("payment_stage")?.value || "final").toLowerCase();
     var advanceTotal = getPaymentSplitAdvanceTotalFromUi();
     var codTotal = getPaymentSplitCodTotalFromUi();
     var paymentAmount = getPaymentSplitTotalFromUi();
@@ -1537,12 +1605,14 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     }
 
     if (hasCod) {
+      var isPayOnPickup = splits.some(function(s) { return s.mode === "pay_on_pickup"; });
+      var pendingLabel = isPayOnPickup ? "Advance plus Pay on Pickup" : "Advance plus COD";
       if (paymentAmount + 0.02 < grandTotal) {
-        showErr("Advance plus COD must equal order total ₹ " + grandTotal);
+        showErr(pendingLabel + " must equal order total ₹ " + grandTotal);
         return null;
       }
       if (paymentAmount - 0.02 > grandTotal) {
-        showErr("Advance plus COD exceeds order total.");
+        showErr(pendingLabel + " exceeds order total.");
         return null;
       }
       paymentStage = "advance";
@@ -3544,6 +3614,10 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     var payStage = document.getElementById("payment_stage").value;
     var paySplits = collectPaymentSplitsFromUi();
     var payAmt = getPaymentSplitTotalFromUi();
+    if (payStage === "zero_advance") {
+      paySplits = [{ mode: "pay_on_pickup", amount: orderTotal, transaction_id: "" }];
+      payAmt = 0;
+    }
     if (waivedFollowUp) {
       orderTotal = 0;
       payStage = "final";
