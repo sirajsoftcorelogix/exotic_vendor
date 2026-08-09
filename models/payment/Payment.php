@@ -863,6 +863,9 @@ class Payment
         string $date,
         int $editorUserId
     ): bool {
+        $stageClean = strtolower(trim($stage));
+        $dbStage = ($stageClean === 'zero_advance') ? 'advance' : $stageClean;
+
         $stmt = $this->db->prepare('
             UPDATE pos_payments
             SET payment_amount = ?, payment_mode = ?, payment_stage = ?, transaction_id = ?, note = ?, payment_date = ?, user_id = ?
@@ -875,7 +878,7 @@ class Payment
             'dsssssii',
             $amount,
             $mode,
-            $stage,
+            $dbStage,
             $transaction,
             $note,
             $date,

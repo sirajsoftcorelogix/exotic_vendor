@@ -1094,6 +1094,9 @@ function pos_payment_insert_row(
     $pendingAmtSnap = $snap['pending_amount'];
     $paymentStatus = pos_payment_is_cod_mode($paymentMode) ? 'pending' : 'success';
 
+    $stageClean = strtolower(trim($paymentStage));
+    $dbPaymentStage = ($stageClean === 'zero_advance') ? 'advance' : $stageClean;
+
     if ($customerId > 0) {
         $stmt = $conn->prepare(
             'INSERT INTO pos_payments (order_number, receipt_number, customer_id, payment_stage, payment_mode, payment_amount, order_amount, pending_amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
@@ -1115,7 +1118,7 @@ function pos_payment_insert_row(
             $orderNumber,
             $receiptNumber,
             $cid,
-            $paymentStage,
+            $dbPaymentStage,
             $paymentMode,
             $amount,
             $orderAmtSnap,
@@ -1191,7 +1194,7 @@ function pos_payment_insert_row(
         'ssssdddssiis',
         $orderNumber,
         $receiptNumber,
-        $paymentStage,
+        $dbPaymentStage,
         $paymentMode,
         $amount,
         $orderAmtSnap,

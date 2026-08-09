@@ -5194,12 +5194,14 @@ class POSRegisterController
             'payment_splits' => $receiptPaymentSplits,
             'receipt_payment_splits' => $receiptPaymentSplits,
             'transaction_id' => $txn,
-            'receipt_banner_text' => $hasCodPending
-                ? ($advanceAmount > 0.001
-                    ? 'Order ' . $orderNumber . ' placed. Advance ₹ ' . number_format($advanceAmount, 2, '.', ',')
-                        . ' received. COD ₹ ' . number_format($codAmount, 2, '.', ',') . ' pending on delivery.'
-                    : 'Order ' . $orderNumber . ' placed on COD. ₹ ' . number_format($codAmount, 2, '.', ',') . ' to collect on delivery.')
-                : 'Thank you. Payment of ₹ ' . number_format($paymentAmount, 2, '.', ',') . ' recorded for order ' . $orderNumber . '.',
+            'receipt_banner_text' => ($paymentStage === 'zero_advance')
+                ? 'Order ' . $orderNumber . ' placed with Zero Advance Payment. Full amount of ₹ ' . number_format($codAmount > 0 ? $codAmount : $orderTotal, 2, '.', ',') . ' to be collected on store pickup.'
+                : ($hasCodPending
+                    ? ($advanceAmount > 0.001
+                        ? 'Order ' . $orderNumber . ' placed. Advance ₹ ' . number_format($advanceAmount, 2, '.', ',')
+                            . ' received. COD ₹ ' . number_format($codAmount, 2, '.', ',') . ' pending on delivery.'
+                        : 'Order ' . $orderNumber . ' placed on COD. ₹ ' . number_format($codAmount, 2, '.', ',') . ' to collect on delivery.')
+                    : 'Thank you. Payment of ₹ ' . number_format($paymentAmount, 2, '.', ',') . ' recorded for order ' . $orderNumber . '.'),
             'receipt_billing_block' => $this->formatAddressLinesFromPayload($payload, 'billing'),
             'receipt_shipping_block' => $this->formatAddressLinesFromPayload($payload, 'shipping'),
             'receipt_lines' => [],
@@ -6193,12 +6195,14 @@ class POSRegisterController
             'payment_splits' => $receiptPaymentSplits,
             'receipt_payment_splits' => $receiptPaymentSplits,
             'transaction_id' => $txn,
-            'receipt_banner_text' => $hasCodPending
-                ? ($advanceAmount > 0.001
-                    ? 'Order ' . $orderNumber . ' placed. Advance ₹ ' . number_format($advanceAmount, 2, '.', ',')
-                        . ' received. COD ₹ ' . number_format($codAmount, 2, '.', ',') . ' pending on delivery.'
-                    : 'Order ' . $orderNumber . ' placed on COD. ₹ ' . number_format($codAmount, 2, '.', ',') . ' to collect on delivery.')
-                : 'Thank you. Payment of ₹ ' . number_format($paymentAmount, 2, '.', ',') . ' recorded for order ' . $orderNumber . '.',
+            'receipt_banner_text' => ($paymentStage === 'zero_advance')
+                ? 'Order ' . $orderNumber . ' placed with Zero Advance Payment. Full amount of ₹ ' . number_format($codAmount > 0 ? $codAmount : $orderTotal, 2, '.', ',') . ' to be collected on store pickup.'
+                : ($hasCodPending
+                    ? ($advanceAmount > 0.001
+                        ? 'Order ' . $orderNumber . ' placed. Advance ₹ ' . number_format($advanceAmount, 2, '.', ',')
+                            . ' received. COD ₹ ' . number_format($codAmount, 2, '.', ',') . ' pending on delivery.'
+                        : 'Order ' . $orderNumber . ' placed on COD. ₹ ' . number_format($codAmount, 2, '.', ',') . ' to collect on delivery.')
+                    : 'Thank you. Payment of ₹ ' . number_format($paymentAmount, 2, '.', ',') . ' recorded for order ' . $orderNumber . '.'),
             'receipt_billing_block' => $this->formatAddressLinesFromOrderInfo($orderInfo, 'billing'),
             'receipt_shipping_block' => $this->formatAddressLinesFromOrderInfo($orderInfo, 'shipping'),
             'receipt_lines' => [],
