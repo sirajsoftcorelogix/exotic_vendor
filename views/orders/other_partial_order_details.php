@@ -472,10 +472,12 @@ if ($invoiceIdForReturn > 0) {
                     $customerNameParts = preg_split('/\s+/', trim((string)($customerdetails['customer_name'] ?? '')), 2);
                     $fallbackFirstName = trim((string)($customerNameParts[0] ?? ''));
                     $fallbackLastName = trim((string)($customerNameParts[1] ?? ''));
+
                     $billingFirstName = trim((string)($orderremarks['first_name'] ?? ''));
                     $billingLastName = trim((string)($orderremarks['last_name'] ?? ''));
                     $shippingFirstName = trim((string)($orderremarks['shipping_first_name'] ?? ''));
                     $shippingLastName = trim((string)($orderremarks['shipping_last_name'] ?? ''));
+
                     if ($billingFirstName === '' && $billingLastName === '') {
                         $billingFirstName = $fallbackFirstName;
                         $billingLastName = $fallbackLastName;
@@ -486,9 +488,48 @@ if ($invoiceIdForReturn > 0) {
                     }
                     $billingDisplayName = trim($billingFirstName . ' ' . $billingLastName);
                     $shippingDisplayName = trim($shippingFirstName . ' ' . $shippingLastName);
+
+                    $customerPhone = trim((string)($orderremarks['mobile'] ?? ($orderremarks['shipping_mobile'] ?? ($customerdetails['customer_phone'] ?? ''))));
+                    $customerName = $billingDisplayName !== '' ? $billingDisplayName : ($shippingDisplayName !== '' ? $shippingDisplayName : trim((string)($customerdetails['customer_name'] ?? '')));
+
+                    $billingAddress1 = trim((string)($orderremarks['address_line1'] ?? ''));
+                    $billingAddress2 = trim((string)($orderremarks['address_line2'] ?? ''));
+                    $billingCity = trim((string)($orderremarks['city'] ?? ''));
+                    $billingState = trim((string)($orderremarks['state'] ?? ''));
+                    $billingZipcode = trim((string)($orderremarks['zipcode'] ?? ''));
+                    $billingCountry = trim((string)($orderremarks['country'] ?? 'IN'));
+                    $billingMobile = trim((string)($orderremarks['mobile'] ?? ''));
+                    $billingGstin = trim((string)($orderremarks['gstin'] ?? ''));
+
+                    $shippingAddress1 = trim((string)($orderremarks['shipping_address_line1'] ?? ''));
+                    $shippingAddress2 = trim((string)($orderremarks['shipping_address_line2'] ?? ''));
+                    $shippingCity = trim((string)($orderremarks['shipping_city'] ?? ''));
+                    $shippingState = trim((string)($orderremarks['shipping_state'] ?? ''));
+                    $shippingZipcode = trim((string)($orderremarks['shipping_zipcode'] ?? ''));
+                    $shippingCountry = trim((string)($orderremarks['shipping_country'] ?? ''));
+                    $shippingMobile = trim((string)($orderremarks['shipping_mobile'] ?? ''));
+                    $shippingGstin = trim((string)($orderremarks['shipping_gstin'] ?? ''));
+
+                    if ($shippingAddress1 === '' && $shippingCity === '') {
+                        $shippingAddress1 = $billingAddress1;
+                        $shippingAddress2 = $billingAddress2;
+                        $shippingCity = $billingCity;
+                        $shippingState = $billingState;
+                        $shippingZipcode = $billingZipcode;
+                        $shippingCountry = $billingCountry !== '' ? $billingCountry : 'IN';
+                        if ($shippingMobile === '') {
+                            $shippingMobile = $billingMobile;
+                        }
+                        if ($shippingGstin === '') {
+                            $shippingGstin = $billingGstin;
+                        }
+                    }
+                    if ($shippingCountry === '') {
+                        $shippingCountry = $billingCountry !== '' ? $billingCountry : 'IN';
+                    }
                     ?>
-                    <span id="display-customer-name" class="hidden"><?php echo htmlspecialchars($customerdetails['customer_name'] ?? ''); ?></span>
-                    <span id="display-customer-phone" class="hidden"><?php echo htmlspecialchars($customerdetails['customer_phone'] ?? ''); ?></span>
+                    <span id="display-customer-name" class="hidden"><?php echo htmlspecialchars($customerName); ?></span>
+                    <span id="display-customer-phone" class="hidden"><?php echo htmlspecialchars($customerPhone); ?></span>
                     <span id="billing_first_name" class="hidden"><?php echo htmlspecialchars($billingFirstName); ?></span>
                     <span id="billing_last_name" class="hidden"><?php echo htmlspecialchars($billingLastName); ?></span>
                     <span id="shipping_first_name" class="hidden"><?php echo htmlspecialchars($shippingFirstName); ?></span>
@@ -502,32 +543,32 @@ if ($invoiceIdForReturn > 0) {
                                 <?php else: ?>
                                     <span class="block font-medium hidden" id="shipping_display_name"></span>
                                 <?php endif; ?>
-                                <span id="shipping_address1"><?php echo htmlspecialchars($orderremarks['shipping_address_line1'] ?? ''); ?></span>
-                                <?php if (!empty($orderremarks['shipping_address_line2'])): ?>
-                                    <br><span id="shipping_address2"><?php echo htmlspecialchars($orderremarks['shipping_address_line2']); ?></span>
+                                <span id="shipping_address1"><?php echo htmlspecialchars($shippingAddress1); ?></span>
+                                <?php if ($shippingAddress2 !== ''): ?>
+                                    <br><span id="shipping_address2"><?php echo htmlspecialchars($shippingAddress2); ?></span>
                                 <?php else: ?>
                                     <span id="shipping_address2" class="hidden"></span>
                                 <?php endif; ?>
                                 <br>
-                                <span id="shipping_city"><?php echo htmlspecialchars($orderremarks['shipping_city'] ?? ''); ?></span><?php if (!empty($orderremarks['shipping_state'])): ?>,
-                                    <span id="shipping_state"><?php echo htmlspecialchars($orderremarks['shipping_state']); ?></span><?php else: ?><span id="shipping_state" class="hidden"></span><?php endif; ?>
-                                <?php if (!empty($orderremarks['shipping_zipcode'])): ?>
-                                    - <span id="shipping_zipcode"><?php echo htmlspecialchars($orderremarks['shipping_zipcode']); ?></span>
+                                <span id="shipping_city"><?php echo htmlspecialchars($shippingCity); ?></span><?php if ($shippingState !== ''): ?>,
+                                    <span id="shipping_state"><?php echo htmlspecialchars($shippingState); ?></span><?php else: ?><span id="shipping_state" class="hidden"></span><?php endif; ?>
+                                <?php if ($shippingZipcode !== ''): ?>
+                                    - <span id="shipping_zipcode"><?php echo htmlspecialchars($shippingZipcode); ?></span>
                                 <?php else: ?>
                                     <span id="shipping_zipcode" class="hidden"></span>
                                 <?php endif; ?>
-                                <?php if (!empty($orderremarks['shipping_country'])): ?>
-                                    <br><span id="shipping_country" data-code="<?php echo htmlspecialchars($orderremarks['shipping_country']); ?>"><?php echo htmlspecialchars($resolveCountryLabel($orderremarks['shipping_country'])); ?></span>
+                                <?php if ($shippingCountry !== ''): ?>
+                                    <br><span id="shipping_country" data-code="<?php echo htmlspecialchars($shippingCountry); ?>"><?php echo htmlspecialchars($resolveCountryLabel($shippingCountry)); ?></span>
                                 <?php else: ?>
                                     <span id="shipping_country" class="hidden"></span>
                                 <?php endif; ?>
-                                <?php if (!empty($orderremarks['shipping_mobile'])): ?>
-                                    <br><span id="shipping_mobile" class="mt-1 block"><?php echo htmlspecialchars($orderremarks['shipping_mobile']); ?></span>
+                                <?php if ($shippingMobile !== ''): ?>
+                                    <br><span id="shipping_mobile" class="mt-1 block"><?php echo htmlspecialchars($shippingMobile); ?></span>
                                 <?php else: ?>
                                     <span id="shipping_mobile" class="hidden"></span>
                                 <?php endif; ?>
-                                <?php if (!empty($orderremarks['shipping_gstin'])): ?>
-                                    <br><span class="text-xs text-gray-500">GSTIN:</span> <span id="shipping_gstin"><?php echo htmlspecialchars($orderremarks['shipping_gstin']); ?></span>
+                                <?php if ($shippingGstin !== ''): ?>
+                                    <br><span class="text-xs text-gray-500">GSTIN:</span> <span id="shipping_gstin"><?php echo htmlspecialchars($shippingGstin); ?></span>
                                 <?php else: ?>
                                     <span id="shipping_gstin" class="hidden"></span>
                                 <?php endif; ?>
@@ -541,27 +582,32 @@ if ($invoiceIdForReturn > 0) {
                                 <?php else: ?>
                                     <span class="block font-medium hidden" id="billing_display_name"></span>
                                 <?php endif; ?>
-                                <span id="billing_address1"><?php echo htmlspecialchars($orderremarks['address_line1'] ?? ''); ?></span>
-                                <?php if (!empty($orderremarks['address_line2'])): ?>
-                                    <br><span id="billing_address2"><?php echo htmlspecialchars($orderremarks['address_line2']); ?></span>
+                                <span id="billing_address1"><?php echo htmlspecialchars($billingAddress1); ?></span>
+                                <?php if ($billingAddress2 !== ''): ?>
+                                    <br><span id="billing_address2"><?php echo htmlspecialchars($billingAddress2); ?></span>
                                 <?php else: ?>
                                     <span id="billing_address2" class="hidden"></span>
                                 <?php endif; ?>
                                 <br>
-                                <span id="billing_city"><?php echo htmlspecialchars($orderremarks['city'] ?? ''); ?></span><?php if (!empty($orderremarks['state'])): ?>,
-                                    <span id="billing_state"><?php echo htmlspecialchars($orderremarks['state']); ?></span><?php else: ?><span id="billing_state" class="hidden"></span><?php endif; ?>
-                                <?php if (!empty($orderremarks['zipcode'])): ?>
-                                    - <span id="billing_zipcode"><?php echo htmlspecialchars($orderremarks['zipcode']); ?></span>
+                                <span id="billing_city"><?php echo htmlspecialchars($billingCity); ?></span><?php if ($billingState !== ''): ?>,
+                                    <span id="billing_state"><?php echo htmlspecialchars($billingState); ?></span><?php else: ?><span id="billing_state" class="hidden"></span><?php endif; ?>
+                                <?php if ($billingZipcode !== ''): ?>
+                                    - <span id="billing_zipcode"><?php echo htmlspecialchars($billingZipcode); ?></span>
                                 <?php else: ?>
                                     <span id="billing_zipcode" class="hidden"></span>
                                 <?php endif; ?>
-                                <?php if (!empty($orderremarks['country'])): ?>
-                                    <br><span id="billing_country" data-code="<?php echo htmlspecialchars($orderremarks['country']); ?>"><?php echo htmlspecialchars($resolveCountryLabel($orderremarks['country'])); ?></span>
+                                <?php if ($billingCountry !== ''): ?>
+                                    <br><span id="billing_country" data-code="<?php echo htmlspecialchars($billingCountry); ?>"><?php echo htmlspecialchars($resolveCountryLabel($billingCountry)); ?></span>
                                 <?php else: ?>
                                     <span id="billing_country" class="hidden"></span>
                                 <?php endif; ?>
-                                <?php if (!empty($orderremarks['gstin'])): ?>
-                                    <br><span class="text-xs text-gray-500">GSTIN:</span> <span id="billing_gstin"><?php echo htmlspecialchars($orderremarks['gstin']); ?></span>
+                                <?php if ($billingMobile !== ''): ?>
+                                    <br><span id="billing_mobile" class="mt-1 block"><?php echo htmlspecialchars($billingMobile); ?></span>
+                                <?php else: ?>
+                                    <span id="billing_mobile" class="hidden"></span>
+                                <?php endif; ?>
+                                <?php if ($billingGstin !== ''): ?>
+                                    <br><span class="text-xs text-gray-500">GSTIN:</span> <span id="billing_gstin"><?php echo htmlspecialchars($billingGstin); ?></span>
                                 <?php else: ?>
                                     <span id="billing_gstin" class="hidden"></span>
                                 <?php endif; ?>
