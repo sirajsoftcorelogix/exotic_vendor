@@ -56,15 +56,10 @@ function creatorMasterCountPublisherUsage(mysqli $conn, int $publishersId, strin
         return ['inbound' => 0, 'products' => 0, 'total' => 0];
     }
 
-    $inbound = 0;
-    $inboundSql = 'SELECT COUNT(*) AS total FROM vp_inbound t WHERE ' . creatorMasterAuthorMatchSql('t', '?', ['publisher']);
-    $stmt = $conn->prepare($inboundSql);
-    if ($stmt) {
-        $stmt->bind_param('i', $publishersId);
-        $stmt->execute();
-        $inbound = (int) (($stmt->get_result()->fetch_assoc()['total'] ?? 0));
-        $stmt->close();
-    }
+    $publishersIdStr = (string) $publishersId;
+    $inboundFields = ['publisher'];
+    $inboundSql = 'SELECT COUNT(*) AS total FROM vp_inbound t WHERE ' . creatorMasterAuthorMatchSql('t', '?', $inboundFields);
+    $inbound = creatorMasterRunAuthorUsageCount($conn, $inboundSql, $publishersIdStr, $inboundFields);
 
     $products = 0;
     $publisherName = trim($publisherName);
@@ -73,7 +68,7 @@ function creatorMasterCountPublisherUsage(mysqli $conn, int $publishersId, strin
         . ' OR LOWER(TRIM(IFNULL(t.publisher, \'\'))) = LOWER(TRIM(?))';
     $stmt = $conn->prepare($productSql);
     if ($stmt) {
-        $stmt->bind_param('is', $publishersId, $publisherName);
+        $stmt->bind_param('iss', $publishersId, $publishersIdStr, $publisherName);
         $stmt->execute();
         $products = (int) (($stmt->get_result()->fetch_assoc()['total'] ?? 0));
         $stmt->close();
