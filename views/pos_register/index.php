@@ -535,7 +535,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
         <h3 class="text-sm font-semibold text-slate-800">Billing Information</h3>
         <div class="grid grid-cols-2 gap-3">
           <label class="block text-xs font-medium text-slate-600">First Name <span class="field-req-star text-red-600">*</span><input id="confirm_first_name" class="w-full rounded border" placeholder="First Name"></label>
-          <label class="block text-xs font-medium text-slate-600">Last Name <span class="field-req-star text-red-600">*</span><input id="confirm_last_name" class="w-full rounded border" placeholder="Last Name"></label>
+          <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_last_name" class="w-full rounded border" placeholder="Last Name"></label>
         </div>
         <label class="block text-xs font-medium text-slate-600">Email<input id="confirm_email" type="email" class="w-full rounded border" placeholder="Email"></label>
         <label class="block text-xs font-medium text-slate-600">Phone <span class="field-req-star text-red-600">*</span>
@@ -3005,11 +3005,6 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       missing.push("First name");
       setPosFieldInvalid("confirm_first_name", true);
       firstInvalidId = "confirm_first_name";
-    }
-    if (!lastName) {
-      missing.push("Last name");
-      setPosFieldInvalid("confirm_last_name", true);
-      if (!firstInvalidId) firstInvalidId = "confirm_last_name";
     }
     if (!zip) {
       missing.push("ZIP / Pincode");

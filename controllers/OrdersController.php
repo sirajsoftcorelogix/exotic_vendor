@@ -2041,10 +2041,10 @@ class OrdersController
         $shipping_gstin = strtoupper(trim($_POST['shipping_gstin'] ?? ''));
         $state = trim($_POST['state'] ?? '');
         $shipping_state = trim($_POST['shipping_state'] ?? '');
-        if (empty($order_number) || empty($first_name) || empty($last_name) || empty($customer_phone)) {
+        if (empty($order_number) || empty($first_name) || empty($customer_phone) || empty($address_line1)) {
             echo json_encode([
                 'success' => false,
-                'message' => 'Order number, billing first name, last name and phone are required'
+                'message' => 'Order number, billing first name, phone and Address Line 1 are required'
             ]);
             exit;
         }

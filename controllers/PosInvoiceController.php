@@ -2541,6 +2541,12 @@ class PosInvoiceController
             !empty($invoice['pos_flag']) ? $paymentModel : null
         );
         $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
+        if ((!$customer || !is_array($customer)) && !empty($invoice['order_number'])) {
+            global $ordersModel;
+            if ($ordersModel) {
+                $customer = $ordersModel->getAddressInfoByOrderNumber($invoice['order_number']);
+            }
+        }
         $addressBlocks = invoice_resolve_bill_ship_html(is_array($customer) ? $customer : null, $conn ?? null);
         $billToInfo = $addressBlocks['bill'];
         $shipToInfo = $addressBlocks['ship'];
