@@ -694,7 +694,7 @@ class POSRegisterController
     private function handlePosEwbGeneration(mysqli $conn, int $invoiceId, array $payload, int $orderNumber): void
     {
         try {
-            echo "POS EWB: Starting E-way bill generation for invoice $invoiceId\n";
+            // echo "POS EWB: Starting E-way bill generation for invoice $invoiceId\n";
             // Get invoice details from database
             $invStmt = $conn->prepare("SELECT * FROM vp_invoices WHERE id = ?");
             if (!$invStmt) {
