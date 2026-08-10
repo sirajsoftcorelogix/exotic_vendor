@@ -1619,6 +1619,18 @@ switch ($page) {
             case 'update-product-published':
                 $controller->updateProductPublished();
                 break;
+            case 'einvoice-input':
+                $controller->einvoiceInput();
+                break;
+            case 'einvoice-submit':
+                $controller->einvoiceSubmit();
+                break;
+            case 'ewaybill-input':
+                $controller->ewaybillInput();
+                break;
+            case 'ewaybill-submit':
+                $controller->ewaybillSubmit();
+                break;
             default:
                 $controller->index();
                 break;
