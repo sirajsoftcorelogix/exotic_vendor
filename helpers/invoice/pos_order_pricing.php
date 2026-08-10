@@ -494,9 +494,7 @@ function pos_order_build_order_wide_pricing_components(array $pendingLines, bool
         $orderRow = $pendingLine['order_row'];
         $pricing = $pendingLine['pricing'] ?? [];
         $baseListIncl = pos_order_line_list_price_incl($orderRow);
-        $baseDiscIncl = isset($pricing['chargeable_value']) && (float)$pricing['chargeable_value'] > 0
-            ? (float)$pricing['chargeable_value']
-            : pos_order_inclusive_line_total($orderRow, 'disc');
+        $baseDiscIncl = pos_order_inclusive_line_total($orderRow, 'disc');
         $gstRate = $applyGst ? (float)($orderRow['gst'] ?? 0) : 0.0;
         foreach (pos_order_build_pricing_components($orderRow, $baseListIncl, $baseDiscIncl) as $component) {
             $component['line_id'] = (int)$lineId;
@@ -670,9 +668,7 @@ function pos_order_enrich_line_display_pricing(array $orderRow, array $pricing, 
         $customReduce = $orderCustomReduce > 0
             ? $orderCustomReduce
             : max(0.0, round((float)($orderRow['custom_reduce'] ?? 0), 2));
-        $baseDiscIncl = isset($pricing['chargeable_value']) && (float)$pricing['chargeable_value'] > 0
-            ? (float)$pricing['chargeable_value']
-            : pos_order_inclusive_line_total($orderRow, 'disc');
+        $baseDiscIncl = pos_order_inclusive_line_total($orderRow, 'disc');
         $components = pos_order_build_pricing_components($orderRow, $baseListIncl, $baseDiscIncl);
         $components = pos_order_apply_proportional_custom_reduce($components, $customReduce);
         $taxResult = pos_order_compute_component_tax_rows($components, $gstRate, $applyGst);
