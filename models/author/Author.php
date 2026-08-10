@@ -324,6 +324,11 @@ class Author
             return ['success' => false, 'message' => 'Author name is required.'];
         }
 
+        $existingById = $this->getAuthorById($authorId);
+        if ($existingById) {
+            return $this->saveAuthor($authorId, $name, $isActive, $extra);
+        }
+
         if ($this->authorNameExists($name)) {
             return ['success' => false, 'message' => 'Author name already exists'];
         }

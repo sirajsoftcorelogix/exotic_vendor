@@ -1710,7 +1710,7 @@ class InboundingController {
             'compiled_by' => $inboundingModel->normalizeInboundAuthorValue($_POST['compiled_by'] ?? ''),
             'translated_by' => $inboundingModel->normalizeInboundAuthorValue($_POST['translated_by'] ?? ''),
             'commentary_by' => $inboundingModel->normalizeInboundAuthorValue($_POST['commentary_by'] ?? ''),
-            'publisher'=> trim((string)($_POST['publisher'] ?? '')) === '' ? null : (int) $_POST['publisher'],
+            'publisher'=> ($pub = $inboundingModel->normalizeInboundAuthorValue($_POST['publisher'] ?? '')) === '' ? null : $pub,
             'isbn'     => $_POST['isbn'] ?? '',
             'pages'    => trim((string)($_POST['pages'] ?? '')) === '' ? null : trim((string)($_POST['pages'] ?? '')),
             'cover_type' => trim((string)($_POST['cover_type'] ?? '')),
@@ -2053,7 +2053,7 @@ class InboundingController {
           'compiled_by' => $inboundingModel->normalizeInboundAuthorValue($_POST['compiled_by'] ?? ''),
           'translated_by' => $inboundingModel->normalizeInboundAuthorValue($_POST['translated_by'] ?? ''),
           'commentary_by' => $inboundingModel->normalizeInboundAuthorValue($_POST['commentary_by'] ?? ''),
-          'publisher'   => $_POST['publisher'] ?? '',
+          'publisher'   => ($pub = $inboundingModel->normalizeInboundAuthorValue($_POST['publisher'] ?? '')) === '' ? null : $pub,
           'isbn'        => $_POST['isbn'] ?? '',
           'language'    => $_POST['language'] ?? '',
           'pages'       => $_POST['pages'] ?? '',
@@ -2527,9 +2527,9 @@ class InboundingController {
                 $API_data['creator'] = $creatorApiValue;
             }
 
-            $publisherVendorId = (int) ($d['publisher'] ?? 0);
-            if ($publisherVendorId > 0) {
-                $API_data['publisher_vendor_id'] = $publisherVendorId;
+            $publisherApiValue = implode(',', $inboundingModel->parseInboundAuthorIds($d['publisher'] ?? ''));
+            if ($publisherApiValue !== '') {
+                $API_data['publisher_vendor_id'] = $publisherApiValue;
             }
 
             $API_data['language'] = $d['language'] ?? '';

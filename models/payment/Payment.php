@@ -544,9 +544,7 @@ class Payment
         $allocationComplete = $resolvedOrderAmount > 0
             && ($receiptTotal + 0.02 >= $resolvedOrderAmount);
         $row['is_settled'] = $allocationComplete;
-        $row['can_create_proforma'] = $receiptTotal > 0.001
-            && !$allocationComplete
-            && (int)($row['invoice_id'] ?? 0) <= 0;
+        $row['can_create_proforma'] = false;
         $row['order_number'] = trim((string)($row['order_number'] ?? ''));
         $row['invoice_id'] = (int)($row['invoice_id'] ?? 0);
         unset($row['order_grand_total'], $row['order_line_subtotal'], $row['balance_snapshot'], $row['order_collected_paid'], $row['order_cod_pending'], $row['order_receipt_total']);

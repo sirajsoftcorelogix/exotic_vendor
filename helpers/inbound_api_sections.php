@@ -175,9 +175,9 @@ function inbound_api_build_book_details_modify_fields(array $d, Inbounding $mode
     ]);
     $append('creator', $creator);
 
-    $publisherId = (int) ($d['publisher'] ?? 0);
-    if ($publisherId > 0) {
-        $fields['publisher_vendor_id'] = $publisherId;
+    $publisherApiValue = implode(',', $model->parseInboundAuthorIds($d['publisher'] ?? ''));
+    if ($publisherApiValue !== '') {
+        $fields['publisher_vendor_id'] = $publisherApiValue;
     }
 
     $append('language', inbound_api_resolve_book_language_for_modify($d));

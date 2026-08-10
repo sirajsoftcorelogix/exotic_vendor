@@ -342,32 +342,34 @@ function getWeekDays()
 
 function getParentCategoryList()
 {
-	// Fetch active roles
 	global $conn;
-	$sql = "SELECT id, category_name
-				FROM product_categories 
-				WHERE active = 1 AND parent_id=0
-				ORDER BY category_name ASC";
-	$result = $conn->query($sql);
+	$sql = "SELECT id, category, name, display_name
+			FROM category 
+			WHERE is_active = 1 AND (parent_id = 0 OR parent = '0' OR parent IS NULL OR parent = '')
+			ORDER BY display_name ASC, name ASC";
+	$result = $conn ? $conn->query($sql) : false;
 	$categories = array();
-	while ($row = $result->fetch_assoc()) {
-		$categories[$row['id']] = $row['category_name'];
+	if ($result) {
+		while ($row = $result->fetch_assoc()) {
+			$categories[$row['id']] = !empty($row['display_name']) ? $row['display_name'] : $row['name'];
+		}
 	}
 	return $categories;
 }
 
 function getProductCategoryList()
 {
-	// Fetch active roles
 	global $conn;
-	$sql = "SELECT id, category_name
-				FROM product_categories 
-				WHERE active = 1
-				ORDER BY category_name ASC";
-	$result = $conn->query($sql);
+	$sql = "SELECT id, category, name, display_name
+			FROM category 
+			WHERE is_active = 1
+			ORDER BY display_name ASC, name ASC";
+	$result = $conn ? $conn->query($sql) : false;
 	$categories = array();
-	while ($row = $result->fetch_assoc()) {
-		$categories[$row['id']] = $row['category_name'];
+	if ($result) {
+		while ($row = $result->fetch_assoc()) {
+			$categories[$row['id']] = !empty($row['display_name']) ? $row['display_name'] : $row['name'];
+		}
 	}
 	return $categories;
 }
@@ -436,6 +438,7 @@ function getCategories()
 		'jewelry' => 'Jewelry',
 		'homeandliving' => 'Home and Living',
 		'book' => 'Book',
+		'virtual_codes' => 'Virtual codes',
 	];
 }
 function getVendorCategory()
@@ -1285,16 +1288,17 @@ function currencySymbol($code)
 }
 function getCategoryFromTable()
 {
-	// Fetch active roles
 	global $conn;
 	$sql = "SELECT id, name
-				FROM category 
-				WHERE is_active = 1 AND parent_id=0
-				ORDER BY name ASC";
-	$result = $conn->query($sql);
+			FROM category 
+			WHERE is_active = 1 AND (parent_id = 0 OR parent = '0' OR parent IS NULL OR parent = '')
+			ORDER BY name ASC";
+	$result = $conn ? $conn->query($sql) : false;
 	$categories = array();
-	while ($row = $result->fetch_assoc()) {
-		$categories[$row['id']] = $row['name'];
+	if ($result) {
+		while ($row = $result->fetch_assoc()) {
+			$categories[$row['id']] = $row['name'];
+		}
 	}
 	return $categories;
 }

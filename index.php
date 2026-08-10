@@ -335,6 +335,10 @@ switch ($page) {
             case 'update_name_email_ajax':
                 $controller->updateNameEmailAjax();
                 break;
+            case 'update_item_prices':
+            case 'update_item_prices_ajax':
+                $controller->updateItemPricesAjax();
+                break;
             case 'update_import':
                 $controller->skuUpdateImportedOrders();
                 break;
@@ -617,6 +621,23 @@ switch ($page) {
             case 'cancel':
                 $controller->cancel();
                 break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
+
+    case 'busy_accounting':
+        require_once 'controllers/BusyAccountingController.php';
+        $controller = new BusyAccountingController();
+        switch ($action) {
+            case 'get_details_ajax':
+                $controller->get_details_ajax();
+                break;
+            case 'download_xml_batch':
+                $controller->download_xml_batch();
+                break;
+            case 'index':
             default:
                 $controller->index();
                 break;
@@ -979,6 +1000,15 @@ switch ($page) {
                 break;
             case 'inventory_ledger':
                 $controller->inventoryLedger();
+                break;
+            case 'bulk_stock_adjustment':
+                $controller->bulkStockAdjustment();
+                break;
+            case 'process_bulk_stock_adjustment':
+                $controller->processBulkStockAdjustment();
+                break;
+            case 'get_products_warehouse_stock':
+                $controller->getProductsWarehouseStock();
                 break;
             case 'transfer_stock':
                 $controller->getTransferStockForm();
@@ -1559,6 +1589,9 @@ switch ($page) {
             case 'get-product-api':
                 $controller->getProductApi();
                 break;
+            case 'get-product-price':
+                $controller->getProductPrice();
+                break;
             case 'sibling-skus':
                 $controller->siblingSkusAjax();
                 break;
@@ -1579,6 +1612,12 @@ switch ($page) {
                 break;
             case 'create-invoice-from-receipt':
                 $controller->create_invoice_from_receipt();
+                break;
+            case 'save-customer-compliance':
+                $controller->save_customer_compliance();
+                break;
+            case 'update-product-published':
+                $controller->updateProductPublished();
                 break;
             default:
                 $controller->index();
@@ -1610,6 +1649,13 @@ switch ($page) {
                 break;
             case 'currencyDetails':
                 $controller->getCurrencyDetails();
+                break;
+            case 'uploadPdfPreview':
+                $controller->uploadPdfPreview();
+                break;
+            case 'applyBulkRates':
+                $controller->applyBulkRates();
+                break;
             case 'getRateHistory':
                 require_once 'controllers/get_rate_history.php';
                 break;
@@ -1617,12 +1663,31 @@ switch ($page) {
                 $controller->index();
                 break;
         }
+        break;
     case 'category':
         require_once 'controllers/CategoryController.php';
-        $controller = new CategoryController();
+        $controller = new CategoryController($conn);
         switch ($action) {
             case 'list':
                 $controller->index();
+                break;
+            case 'pullCategories':
+                $controller->pullCategories();
+                break;
+            case 'getDetails':
+                $controller->getDetails();
+                break;
+            case 'edit':
+                $controller->edit();
+                break;
+            case 'delete':
+                $controller->delete();
+                break;
+            case 'checkUsage':
+                $controller->checkUsage();
+                break;
+            case 'updateMarkup':
+                $controller->updateMarkup();
                 break;
             default:
                 $controller->index();
@@ -1960,6 +2025,10 @@ switch ($page) {
                 break;
             case 'update_order_number_ajax':
                 $controller->updateOrderNumberAjax();
+                break;
+            case 'update_item_prices':
+            case 'update_item_prices_ajax':
+                $controller->updateItemPricesAjax();
                 break;
             case 'update_import':
                 $controller->skuUpdateImportedOrders();

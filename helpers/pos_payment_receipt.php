@@ -180,7 +180,9 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
     }
 
     $stmt = $conn->prepare(
-        'SELECT total_amount FROM vp_invoices WHERE order_number = ? ORDER BY id DESC LIMIT 1'
+        'SELECT i.total_amount FROM vp_invoices i
+         INNER JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
+         WHERE oi.order_number = ? ORDER BY i.id DESC LIMIT 1'
     );
     if ($stmt) {
         $stmt->bind_param('s', $orderNumber);
@@ -201,7 +203,7 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
             IFNULL(MAX(oi.giftvoucher_reduce), 0) AS gift_reduce,
             IFNULL(MAX(oi.credit), 0) AS credit
          FROM vp_orders o
-         LEFT JOIN vp_order_info oi ON oi.order_number = o.order_number
+         LEFT JOIN vp_order_info oi ON oi.order_number COLLATE utf8mb4_unicode_ci = o.order_number COLLATE utf8mb4_unicode_ci
          WHERE o.order_number = ?'
     );
     if ($stmt) {
@@ -376,7 +378,7 @@ function pos_payment_split_cod_total(array $splits): float
  */
 function pos_payment_allowed_modes(): array
 {
-    return ['cash', 'cod', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque', 'waived'];
+    return ['cash', 'cod', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque', 'adminorder', 'waived'];
 }
 
 function pos_payment_is_waived_mode(string $mode): bool
@@ -397,6 +399,7 @@ function pos_payment_mode_options_for_view(): array
         'pos_machine' => 'POS machine',
         'razorpay' => 'Razorpay',
         'cheque' => 'Cheque',
+        'adminorder' => 'Admin Order',
         'waived' => 'Waived (no charge)',
     ];
     $options = [];
@@ -758,11 +761,12 @@ function pos_payment_resolve_auto_invoice_status(mysqli $conn, string $orderNumb
         return 'final';
     }
 
-    return 'proforma';
+    // Proforma creation removed - invoice is created only upon full payment/allocation
+    return null;
 }
 
 /**
- * Create or return a proforma invoice for partial payment (receipt total below order amount).
+ * Proforma creation disabled; delegates to finalization if allocation is complete.
  *
  * @return array{success:bool,attempted:bool,fully_paid:bool,invoice_id:int,created:bool,message?:string}
  */
@@ -770,11 +774,12 @@ function pos_payment_ensure_proforma_invoice_for_order(mysqli $conn, string $ord
 {
     $orderNumber = trim($orderNumber);
     $empty = [
-        'success' => false,
-        'attempted' => true,
+        'success' => true,
+        'attempted' => false,
         'fully_paid' => false,
         'invoice_id' => 0,
         'created' => false,
+        'message' => 'Proforma creation disabled. Invoice will be created upon full payment.',
     ];
     if ($orderNumber === '') {
         $empty['message'] = 'Order number missing';
@@ -785,45 +790,6 @@ function pos_payment_ensure_proforma_invoice_for_order(mysqli $conn, string $ord
         return pos_payment_finalize_invoice_for_order($conn, $orderNumber);
     }
 
-    if (!pos_payment_has_recorded_payments($conn, $orderNumber)) {
-        $empty['message'] = 'No payments recorded for this order.';
-        return $empty;
-    }
-
-    require_once __DIR__ . '/../models/PosInvoice/invoice.php';
-    $invoiceModel = new POSInvoice($conn);
-    $existing = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
-    if ($existing) {
-        $invoiceId = (int)($existing['id'] ?? 0);
-        if ($invoiceId > 0) {
-            require_once __DIR__ . '/../controllers/PosInvoiceController.php';
-            $posInv = new PosInvoiceController();
-            $posInv->repairPosInvoiceMetadataForOrder($invoiceId, $orderNumber);
-        }
-
-        return [
-            'success' => true,
-            'attempted' => true,
-            'fully_paid' => false,
-            'invoice_id' => $invoiceId,
-            'created' => false,
-        ];
-    }
-
-    require_once __DIR__ . '/../controllers/PosInvoiceController.php';
-    $posInv = new PosInvoiceController();
-    $created = $posInv->createAutoInvoiceForOrder($orderNumber, '', false);
-    if (!empty($created['success']) && !empty($created['invoice_id'])) {
-        return [
-            'success' => true,
-            'attempted' => true,
-            'fully_paid' => false,
-            'invoice_id' => (int)$created['invoice_id'],
-            'created' => true,
-        ];
-    }
-
-    $empty['message'] = (string)($created['message'] ?? 'Proforma invoice could not be created.');
     return $empty;
 }
 

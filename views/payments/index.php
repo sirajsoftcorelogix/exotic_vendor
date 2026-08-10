@@ -68,6 +68,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                         <option value="pos_machine">POS</option>
                         <option value="razorpay">Razorpay</option>
                         <option value="cheque">Cheque</option>
+                        <option value="adminorder">Admin Order</option>
                     </select>
                 </div>
 
@@ -199,6 +200,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                         <option value="razorpay">Razorpay</option>
                         <option value="specialpay">SpecialPay</option>
                         <option value="cheque">Cheque</option>
+                        <option value="adminorder">Admin Order</option>
                         <option value="demand_draft">Demand Draft</option>
                     </select>
                 </div>
@@ -300,6 +302,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
     </div>
 
 </div>
+<script src="<?php echo base_url(); ?>assets/js/compliance_doc_modal.js"></script>
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         document.getElementById('payment_date').max = new Date().toISOString().split('T')[0];
@@ -341,6 +344,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
             razorpay: 'Razorpay',
             specialpay: 'SpecialPay',
             cheque: 'Cheque',
+            adminorder: 'Admin Order',
             demand_draft: 'Demand draft'
         };
         return labels[key] || (key ? key.replace(/_/g, ' ') : '—');
@@ -833,6 +837,16 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
             .then(data => {
 
                 if (!data.success) {
+                    if (data.require_compliance && window.ComplianceDocModal) {
+                        window.ComplianceDocModal.open({
+                            customerId: data.customer_id,
+                            message: data.message,
+                            onSuccess: function () {
+                                createFinalInvoice(orderId);
+                            }
+                        });
+                        return;
+                    }
                     alert(data.message || 'Invoice failed');
                     return;
                 }

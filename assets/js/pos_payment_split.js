@@ -19,20 +19,63 @@
         return y + '-' + m + '-' + day;
     }
 
+    function getPaymentCurrencyInfo() {
+        var code = 'INR';
+        var symbol = '₹';
+
+        if (window.POS_CURRENCY_MODE === 'INR') {
+            return {
+                code: 'INR',
+                symbol: '₹'
+            };
+        }
+
+        if (window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
+            code = String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
+            if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) symbol = String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
+        } else if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
+            var ic = window.POS_INITIAL_CUSTOMER;
+            if (ic.currency_code) code = String(ic.currency_code).trim().toUpperCase();
+            if (ic.currency_symbol) symbol = String(ic.currency_symbol).trim();
+        }
+
+        if (!symbol) {
+            if (code === 'INR') symbol = '₹';
+            else if (code === 'USD') symbol = '$';
+            else if (code === 'EUR') symbol = '€';
+            else if (code === 'GBP') symbol = '£';
+            else symbol = code;
+        }
+
+        return {
+            code: code,
+            symbol: symbol
+        };
+    }
+
+    function getPaymentCurrencyCode() {
+        return getPaymentCurrencyInfo().code;
+    }
+
+    function getPaymentCurrencySymbol() {
+        return getPaymentCurrencyInfo().symbol;
+    }
+
     function formatPaymentInr(amount) {
         var n = parseFloat(String(amount));
         if (!isFinite(n)) {
             n = 0;
         }
+        var info = getPaymentCurrencyInfo();
         try {
-            return new Intl.NumberFormat('en-IN', {
+            return new Intl.NumberFormat(info.code === 'INR' ? 'en-IN' : 'en-US', {
                 style: 'currency',
-                currency: 'INR',
+                currency: info.code,
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
             }).format(n);
         } catch (e) {
-            return '₹ ' + n.toFixed(2);
+            return info.symbol + ' ' + n.toFixed(2);
         }
     }
 
@@ -370,7 +413,8 @@
         }
     }
 
-    function validatePaymentSplits() {
+    function validatePaymentSplits(options) {
+        options = options || {};
         hideSplitValidationError();
         var grandTotal = getTargetTotal();
         var splits = collectAllPaymentSplitRowsFromUi();
@@ -475,10 +519,23 @@
         var cashLegNeeds269 = splits.some(function (s) {
             return s.mode === 'cash' && s.amount + 0.02 >= highValueLimit;
         });
-        if (cashLegNeeds269) {
-            var okCash = window.confirm('Cash receipts of ₹2,00,000 or more are restricted under Income Tax Act Section 269ST. Please switch to digital payment.\n\nDo you still want to continue after acknowledging this warning?');
-            if (!okCash) {
-                showSplitValidationError('Please switch to digital payment or acknowledge the cash warning.');
+        if (cashLegNeeds269 && !options.skip269stConfirm) {
+            if (typeof window.showPosConfirmModal === 'function') {
+                window.showPosConfirmModal({
+                    title: 'Section 269ST Cash Warning',
+                    message: 'Cash receipts of ₹2,00,000 or more are restricted under Income Tax Act Section 269ST. Please switch to digital payment.\n\nDo you still want to continue after acknowledging this warning?',
+                    confirmText: 'Acknowledge & Continue',
+                    cancelText: 'Switch Payment',
+                    tone: 'warning',
+                    onConfirm: function () {
+                        if (typeof options.on269stConfirmed === 'function') {
+                            options.on269stConfirmed();
+                        }
+                    },
+                    onCancel: function () {
+                        showSplitValidationError('Please switch to digital payment or acknowledge the cash warning.');
+                    }
+                });
                 return null;
             }
         }

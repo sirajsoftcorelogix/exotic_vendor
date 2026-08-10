@@ -2086,7 +2086,11 @@ class POSOrder
         $result = $stmt->get_result();
         if ($result && $result->num_rows > 0) {
             $row = $result->fetch_assoc();
-            return ['success' => true, 'customer_id' => $row['id'], 'message' => 'Customer already exists.'];
+            $cid = (int)$row['id'];
+            require_once __DIR__ . '/../customer/Customer.php';
+            $customerModel = new Customer($this->db);
+            $customerModel->updateCustomerCountryOfResidenceFromOrderInfo($cid, (string)($data['address_info']['country'] ?? ''));
+            return ['success' => true, 'customer_id' => $cid, 'message' => 'Customer already exists.'];
         }
 
         // Insert new customer
@@ -2094,7 +2098,11 @@ class POSOrder
         $stmt = $this->db->prepare($sql);
         $stmt->bind_param('sss', $customer_name, $customer_email, $customer_phone);
         if ($stmt->execute()) {
-            return ['success' => true, 'customer_id' => $stmt->insert_id, 'message' => 'Customer added successfully.'];
+            $cid = (int)$stmt->insert_id;
+            require_once __DIR__ . '/../customer/Customer.php';
+            $customerModel = new Customer($this->db);
+            $customerModel->updateCustomerCountryOfResidenceFromOrderInfo($cid, (string)($data['address_info']['country'] ?? ''));
+            return ['success' => true, 'customer_id' => $cid, 'message' => 'Customer added successfully.'];
         } else {
             return ['success' => false, 'message' => 'Database error: ' . $stmt->error];
         }
@@ -2195,5 +2203,165 @@ class POSOrder
         $stmt->execute();
         $result = $stmt->get_result();
         return ($result && $result->num_rows > 0);
+    }
+
+    /**
+     * Update unit prices (finalprice & itemprice) for order line items and update order total.
+     *
+     * @param string $orderNumber
+     * @param list<array{id: int, price: float, item_code?: string, size?: string, color?: string}> $itemPrices
+     * @return array{success: bool, message?: string, new_total?: float, updated_lines?: int}
+     */
+    public function updateOrderItemPrices(string $orderNumber, array $itemPrices, float $customReduce = 0.0): array
+    {
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '' || empty($itemPrices)) {
+            return ['success' => false, 'message' => 'Order number or line item prices are missing.'];
+        }
+
+        $customReduce = max(0.0, round($customReduce, 2));
+
+        $useTransaction = ($this->db instanceof mysqli);
+        if ($useTransaction) {
+            $this->db->begin_transaction();
+        }
+
+        try {
+            $updated = 0;
+            $stmt = $this->db->prepare(
+                'UPDATE vp_orders SET finalprice = ?, itemprice = ?, quantity = ? WHERE id = ? AND order_number = ?'
+            );
+            if ($stmt) {
+                foreach ($itemPrices as $item) {
+                    $lineId = (int)($item['id'] ?? 0);
+                    $price = max(0.0, round((float)($item['price'] ?? $item['finalprice'] ?? 0), 2));
+                    $qty = max(1, (int)($item['qty'] ?? $item['quantity'] ?? 1));
+                    if ($lineId <= 0) {
+                        continue;
+                    }
+                    $stmt->bind_param('ddiis', $price, $price, $qty, $lineId, $orderNumber);
+                    $stmt->execute();
+                    $updated += $stmt->affected_rows;
+                }
+                $stmt->close();
+            }
+
+            // Fetch gross total from vp_orders and existing discounts/reductions from vp_order_info in 1 query
+            $grossTotal = 0.0;
+            $couponReduce = 0.0;
+            $giftReduce = 0.0;
+            $credit = 0.0;
+
+            $calcStmt = $this->db->prepare(
+                'SELECT
+                    IFNULL(SUM(o.finalprice * o.quantity), 0) AS gross_total,
+                    IFNULL(MAX(oi.coupon_reduce), 0) AS coupon_reduce,
+                    IFNULL(MAX(oi.giftvoucher_reduce), 0) AS giftvoucher_reduce,
+                    IFNULL(MAX(oi.credit), 0) AS credit
+                 FROM vp_orders o
+                 LEFT JOIN vp_order_info oi ON oi.order_number COLLATE utf8mb4_unicode_ci = o.order_number COLLATE utf8mb4_unicode_ci
+                 WHERE o.order_number = ?'
+            );
+            if ($calcStmt) {
+                $calcStmt->bind_param('s', $orderNumber);
+                $calcStmt->execute();
+                $calcRes = $calcStmt->get_result();
+                if ($calcRow = $calcRes->fetch_assoc()) {
+                    $grossTotal   = round((float)($calcRow['gross_total'] ?? 0), 2);
+                    $couponReduce = max(0.0, round((float)($calcRow['coupon_reduce'] ?? 0), 2));
+                    $giftReduce   = max(0.0, round((float)($calcRow['giftvoucher_reduce'] ?? 0), 2));
+                    $credit       = max(0.0, round((float)($calcRow['credit'] ?? 0), 2));
+                }
+                $calcStmt->close();
+            }
+
+            $totalReductions = $customReduce + $couponReduce + $giftReduce + $credit;
+            $netTotal = max(0.0, round($grossTotal - $totalReductions, 2));
+
+            // Update vp_order_info.total & vp_order_info.custom_reduce
+            $infoStmt = $this->db->prepare(
+                'UPDATE vp_order_info SET total = ?, custom_reduce = ? WHERE order_number = ?'
+            );
+            if ($infoStmt) {
+                $infoStmt->bind_param('dds', $netTotal, $customReduce, $orderNumber);
+                $infoStmt->execute();
+                $infoStmt->close();
+            }
+
+            // Refresh pos_payments snapshots if helper exists
+            if (function_exists('pos_payment_refresh_order_snapshots') && $this->db instanceof mysqli) {
+                pos_payment_refresh_order_snapshots($this->db, $orderNumber);
+            }
+
+            // Also update invoice items & header if invoice exists
+            $invStmt = $this->db->prepare('SELECT id FROM vp_invoices WHERE vp_order_info_id = (SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1) OR id IN (SELECT invoice_id FROM vp_invoice_items WHERE order_number = ?) LIMIT 1');
+            if ($invStmt) {
+                $invStmt->bind_param('ss', $orderNumber, $orderNumber);
+                $invStmt->execute();
+                $invRes = $invStmt->get_result();
+                if ($invRow = $invRes->fetch_assoc()) {
+                    $invoiceId = (int)($invRow['id'] ?? 0);
+                    if ($invoiceId > 0) {
+                        $itemUpd = $this->db->prepare('UPDATE vp_invoice_items SET unit_price = ?, quantity = ?, line_total = unit_price * quantity WHERE invoice_id = ? AND item_code = ?');
+                        if ($itemUpd) {
+                            foreach ($itemPrices as $item) {
+                                $price = max(0.0, round((float)($item['price'] ?? $item['finalprice'] ?? 0), 2));
+                                $qty = max(1, (int)($item['qty'] ?? $item['quantity'] ?? 1));
+                                $itemCode = trim((string)($item['item_code'] ?? ''));
+                                if ($itemCode !== '') {
+                                    $itemUpd->bind_param('diis', $price, $qty, $invoiceId, $itemCode);
+                                    $itemUpd->execute();
+                                }
+                            }
+                            $itemUpd->close();
+                        }
+
+                        $invSumStmt = $this->db->prepare('SELECT SUM(line_total) AS inv_subtotal, SUM(tax_amount) AS inv_tax FROM vp_invoice_items WHERE invoice_id = ?');
+                        if ($invSumStmt) {
+                            $invSumStmt->bind_param('i', $invoiceId);
+                            $invSumStmt->execute();
+                            $invSumRes = $invSumStmt->get_result();
+                            if ($invSumRow = $invSumRes->fetch_assoc()) {
+                                $invSubtotal = round((float)($invSumRow['inv_subtotal'] ?? 0), 2);
+                                $invTax = round((float)($invSumRow['inv_tax'] ?? 0), 2);
+                                $invTotal = max(0.0, round($invSubtotal + $invTax - $totalReductions, 2));
+                                $invUpd = $this->db->prepare('UPDATE vp_invoices SET subtotal = ?, discount_amount = ?, total_amount = ? WHERE id = ?');
+                                if ($invUpd) {
+                                    $invUpd->bind_param('dddi', $invSubtotal, $totalReductions, $invTotal, $invoiceId);
+                                    $invUpd->execute();
+                                    $invUpd->close();
+                                }
+                            }
+                            $invSumStmt->close();
+                        }
+                    }
+                }
+                $invStmt->close();
+            }
+
+            if ($useTransaction) {
+                $this->db->commit();
+            }
+
+            return [
+                'success' => true,
+                'message' => 'Order items and discount updated successfully.',
+                'new_total' => $netTotal,
+                'gross_total' => $grossTotal,
+                'custom_reduce' => $customReduce,
+                'coupon_reduce' => $couponReduce,
+                'giftvoucher_reduce' => $giftReduce,
+                'credit' => $credit,
+                'updated_lines' => $updated,
+            ];
+        } catch (\Throwable $e) {
+            if ($useTransaction) {
+                $this->db->rollback();
+            }
+            return [
+                'success' => false,
+                'message' => 'Database update failed: ' . $e->getMessage(),
+            ];
+        }
     }
 }

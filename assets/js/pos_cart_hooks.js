@@ -355,6 +355,9 @@
   function cartUrl(op, query) {
     var qs = 'page=pos_register&action=cart-api&op=' + encodeURIComponent(op);
     query = query || {};
+    if (op === 'retrieve' && !query.currency_mode && window.POS_CURRENCY_MODE) {
+      query.currency_mode = window.POS_CURRENCY_MODE;
+    }
     Object.keys(query).forEach(function (k) {
       if (query[k] == null || query[k] === '') {
         return;
@@ -2893,8 +2896,55 @@
     return String(val);
   }
 
-  /** Display ₹ 1,234.56 (en-IN grouping). */
-  function formatRupeeInrDisplay(val) {
+  function getCartCurrencyInfo(cartData) {
+    var code = 'INR';
+    var symbol = '\u20b9';
+
+    if (window.POS_CURRENCY_MODE === 'INR') {
+      return {
+        code: 'INR',
+        symbol: '\u20b9'
+      };
+    }
+
+    if (cartData && typeof cartData === 'object') {
+      if (cartData.currency_code) code = String(cartData.currency_code).trim().toUpperCase();
+      if (cartData.currency_symbol) symbol = String(cartData.currency_symbol).trim();
+    }
+
+    if (code === 'INR' && window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
+      code = String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
+      if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) symbol = String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
+    } else if (code === 'INR' && window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
+      var ic = window.POS_INITIAL_CUSTOMER;
+      if (ic.currency_code) code = String(ic.currency_code).trim().toUpperCase();
+      if (ic.currency_symbol) symbol = String(ic.currency_symbol).trim();
+    }
+
+    if (!symbol) {
+      if (code === 'INR') symbol = '\u20b9';
+      else if (code === 'USD') symbol = '$';
+      else if (code === 'EUR') symbol = '\u20ac';
+      else if (code === 'GBP') symbol = '\u00a3';
+      else symbol = code;
+    }
+
+    return {
+      code: code,
+      symbol: symbol
+    };
+  }
+
+  function getCartCurrencyCode(cartData) {
+    return getCartCurrencyInfo(cartData).code;
+  }
+
+  function getCartCurrencySymbol(cartData) {
+    return getCartCurrencyInfo(cartData).symbol;
+  }
+
+  /** Display formatted amount with currency symbol. */
+  function formatRupeeInrDisplay(val, cartData) {
     if (val == null || (typeof val === 'number' && isNaN(val))) {
       return '\u2014';
     }
@@ -2902,24 +2952,30 @@
     if (isNaN(n)) {
       return String(val);
     }
+    var cData = cartData || window.__posCartLastRetrieveData;
+    var info = getCartCurrencyInfo(cData);
+    var locale = info.code === 'INR' ? 'en-IN' : 'en-US';
     return (
-      '\u20b9 ' +
-      n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      info.symbol + ' ' +
+      n.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     );
   }
 
-  function summaryAmountCell(val) {
+  function summaryAmountCell(val, cartData) {
     var disp = formatMoneyDisplay(val);
     if (disp == null) {
       return '\u2014';
     }
-    var n = parseFloat(String(disp).replace(/,/g, ''));
+    var n = typeof val === 'number' ? val : parseFloat(String(val != null ? val : disp).replace(/,/g, ''));
     if (isNaN(n)) {
       return escapeHtml(disp);
     }
+    var cData = cartData || window.__posCartLastRetrieveData;
+    var info = getCartCurrencyInfo(cData);
+    var locale = info.code === 'INR' ? 'en-IN' : 'en-US';
     return (
-      '\u20b9 ' +
-      n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      info.symbol + ' ' +
+      n.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     );
   }
 
@@ -3482,7 +3538,7 @@
         effUnitNum != null && !isNaN(effUnitNum)
           ? formatRupeeInrDisplay(effUnitNum)
           : unitPrice
-            ? '\u20b9 ' + escapeHtml(String(unitPrice))
+            ? getCartCurrencySymbol() + ' ' + escapeHtml(String(unitPrice))
             : '\u2014',
       gstDisp:
         gstNum != null && !isNaN(gstNum) ? formatRupeeInrDisplay(gstNum) : '\u2014',
@@ -3701,13 +3757,13 @@
           effUnitNum != null && !isNaN(effUnitNum)
             ? formatRupeeInrDisplay(effUnitNum)
             : unitPrice
-              ? '\u20b9 ' + escapeHtml(String(unitPrice))
+              ? getCartCurrencySymbol() + ' ' + escapeHtml(String(unitPrice))
               : '\u2014';
         var lineDisp =
           effLineNum != null && !isNaN(effLineNum)
             ? formatRupeeInrDisplay(effLineNum)
             : lineTotal
-              ? '\u20b9 ' + escapeHtml(String(lineTotal))
+              ? getCartCurrencySymbol() + ' ' + escapeHtml(String(lineTotal))
               : '\u2014';
         var betweenClass =
           idx < items.length - 1 ? 'border-b border-dashed border-slate-300 pb-4 mb-4' : '';
@@ -4650,6 +4706,47 @@
         toast('Missing product code', 'red');
         return undefined;
       }
+
+      // Check if product is unpublished (vp_products.published = 0)
+      var isUnpublished =
+        p.published === 0 ||
+        p.published === '0' ||
+        p.published === false ||
+        p.is_published === false ||
+        p.status === 0 ||
+        p.status === '0' ||
+        String(p.status_label || '').toLowerCase() === 'unpublished' ||
+        String(p.status || '').toLowerCase() === 'unpublished';
+
+      if (!isUnpublished && window.productApiCache) {
+        var cached = window.productApiCache[body.code] || window.productApiCache[body.item_code];
+        if (
+          cached &&
+          (cached.published === 0 ||
+            cached.published === '0' ||
+            cached.published === false ||
+            cached.is_published === false ||
+            cached.status === 0 ||
+            cached.status === '0')
+        ) {
+          isUnpublished = true;
+          if (!p.product_id && cached.id) p.product_id = cached.id;
+        }
+      }
+
+      if (!isUnpublished) {
+        var modalPubVal = $('#modal_published').val();
+        var modalCode = String($('#modal_product_code').val() || '').trim();
+        if ((modalPubVal === '0' || modalPubVal === 0) && modalCode && (modalCode === body.code || modalCode === body.item_code)) {
+          isUnpublished = true;
+          if (!p.product_id) p.product_id = $('#modal_product_id').val();
+        }
+      }
+
+      if (isUnpublished) {
+        return handleUnpublishedAddToCart(p, body);
+      }
+
       setPanelBusy(true);
       var requestedQty = body.qty;
       return cartRequest('add', { method: 'POST', jsonBody: body })
@@ -4696,6 +4793,172 @@
         });
     });
   };
+
+  /**
+   * Handle adding an unpublished product (vp_products.published = 0) to cart:
+   * 1. Show spinner & 5-second timer modal in UI.
+   * 2. In background, acquire lock & set product status to 1 (local DB + Exotic vendor-api).
+   * 3. Wait for 5 seconds AND for status update request to complete.
+   * 4. Add product to cart via cart-api POST add.
+   * 5. Once added (or on error), release lock and set product status back to 0 when no other locks remain.
+   * 6. Hide spinner/timer modal and refresh cart.
+   *
+   * @param {Record<string, unknown>} p
+   * @param {Record<string, unknown>} body
+   */
+  function handleUnpublishedAddToCart(p, body) {
+    var totalSeconds = 5;
+    var productId = p.product_id || p.id || $('#modal_product_id').val() || 0;
+    var itemCode = p.item_code || body.item_code || body.code || '';
+    var sku = p.sku || body.code || '';
+    var size = p.size || body.size || '';
+    var color = p.color || body.color || '';
+    var lockToken = null;
+
+    var statusParams = {
+      product_id: productId,
+      item_code: itemCode,
+      sku: sku,
+      size: size,
+      color: color
+    };
+
+    setPanelBusy(true);
+    if (typeof window.showUnpublishedProductTimerModal === 'function') {
+      window.showUnpublishedProductTimerModal(totalSeconds);
+    }
+
+    // Step 1: In background acquire lock & set product status = 1
+    var publishPromise = $.ajax({
+      url: '?page=pos_register&action=update-product-published',
+      type: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({
+        product_id: statusParams.product_id,
+        item_code: statusParams.item_code,
+        sku: statusParams.sku,
+        size: statusParams.size,
+        color: statusParams.color,
+        published: 1
+      }),
+      dataType: 'json'
+    }).then(function (res) {
+      if (res && res.token) {
+        lockToken = res.token;
+      }
+      return res;
+    });
+
+    // Step 2: 5 second countdown timer
+    var timerPromise = new Promise(function (resolve) {
+      var remaining = totalSeconds;
+      if (typeof window.updateUnpublishedProductTimer === 'function') {
+        window.updateUnpublishedProductTimer(remaining, totalSeconds);
+      }
+      var interval = setInterval(function () {
+        remaining--;
+        if (remaining > 0) {
+          if (typeof window.updateUnpublishedProductTimer === 'function') {
+            window.updateUnpublishedProductTimer(remaining, totalSeconds);
+          }
+        } else {
+          if (typeof window.updateUnpublishedProductTimer === 'function') {
+            window.updateUnpublishedProductTimer(0, totalSeconds);
+          }
+          clearInterval(interval);
+          resolve();
+        }
+      }, 1000);
+    });
+
+    var requestedQty = body.qty;
+    var parentMsg =
+      typeof window.POS_PARENT_ITEM_CART_MSG === 'string'
+        ? window.POS_PARENT_ITEM_CART_MSG
+        : 'Parent Level Item can not be added to the cart';
+
+    // Step 3: Wait for 5 seconds AND status set to 1
+    return Promise.all([timerPromise, publishPromise])
+      .then(function (results) {
+        var publishRes = results[1];
+        if (publishRes && publishRes.success === false) {
+          console.warn('Background publish status response:', publishRes);
+        }
+        if (typeof window.updateUnpublishedProductTimerStatus === 'function') {
+          window.updateUnpublishedProductTimerStatus('Adding product to cart...');
+        }
+        // Step 4: Add to cart
+        return cartRequest('add', { method: 'POST', jsonBody: body });
+      })
+      .then(function (r) {
+        cartHandleApiMessages(r);
+        if (!r.success) {
+          var blockMsg = String(r.message || '');
+          if (
+            blockMsg === parentMsg ||
+            blockMsg.toLowerCase().indexOf('parent level item') !== -1
+          ) {
+            if (typeof window.notifyParentItemCartBlocked === 'function') {
+              window.notifyParentItemCartBlocked();
+            } else {
+              toast(parentMsg, 'red');
+            }
+            return r;
+          }
+          openPosCartApiDebugModal();
+          return r;
+        }
+        toast('Added to cart.', 'green');
+        if (typeof window.closePosProductModal === 'function') {
+          window.closePosProductModal();
+        }
+        var draftRow = window.__posCartDraftRowAfterAdd;
+        if (draftRow) {
+          window.__posCartDraftRowAfterAdd = null;
+          var draftSkuIn = draftRow.querySelector('.pos-cart-draft-sku');
+          if (draftSkuIn) {
+            draftSkuIn.value = '';
+            draftSkuIn.focus();
+          }
+        }
+        return refreshCartInternal().then(function (r2) {
+          if (r2 && r2.data && typeof r2.data === 'object') {
+            toastIfQtyCappedAfterSuccess(requestedQty, r2.data, { code: body.code });
+          }
+          return r2;
+        });
+      })
+      .catch(function (err) {
+        console.error('Error adding unpublished product to cart:', err);
+        toast('Failed to add unpublished product to cart.', 'red');
+      })
+      .finally(function () {
+        // Step 5: Once added to cart (or on failure/error), release lock and set status = 0 if no active locks remain
+        if (typeof window.updateUnpublishedProductTimerStatus === 'function') {
+          window.updateUnpublishedProductTimerStatus('Resetting product status...');
+        }
+        $.ajax({
+          url: '?page=pos_register&action=update-product-published',
+          type: 'POST',
+          contentType: 'application/json',
+          data: JSON.stringify({
+            product_id: statusParams.product_id,
+            item_code: statusParams.item_code,
+            sku: statusParams.sku,
+            size: statusParams.size,
+            color: statusParams.color,
+            published: 0,
+            token: lockToken
+          }),
+          dataType: 'json'
+        }).always(function () {
+          if (typeof window.hideUnpublishedProductTimerModal === 'function') {
+            window.hideUnpublishedProductTimerModal();
+          }
+          setPanelBusy(false);
+        });
+      });
+  }
 
   /** @param {Record<string, unknown>} [payload] */
   window.handleUpdateQty = function (payload) {

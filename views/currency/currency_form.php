@@ -14,11 +14,12 @@ if ($isEdit) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = [
-        'currency_code' => trim($_POST['currency_code'] ?? ''),
-        'currency_name' => trim($_POST['currency_name'] ?? ''),
-        'currency_unit' => trim($_POST['currency_unit'] ?? ''),
-        'rate_import' => floatval($_POST['rate_import'] ?? 0),
-        'rate_export' => floatval($_POST['rate_export'] ?? 0)
+        'currency_code'    => trim($_POST['currency_code'] ?? ''),
+        'currency_name'    => trim($_POST['currency_name'] ?? ''),
+        'currency_unit'    => trim($_POST['currency_unit'] ?? ''),
+        'mapped_countries' => trim($_POST['mapped_countries'] ?? ''),
+        'rate_import'      => floatval($_POST['rate_import'] ?? 0),
+        'rate_export'      => floatval($_POST['rate_export'] ?? 0)
     ];
     
     $errors = $currencyController->validate($data, $isEdit);
@@ -113,6 +114,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                        value="<?php echo $currency ? htmlspecialchars($currency['currency_unit']) : ''; ?>" required>
             </div>
             
+            <div class="form-group">
+                <label for="mapped_countries">Mapped Countries / Country Codes</label>
+                <?php
+                    $codeVal = $currency ? strtoupper($currency['currency_code']) : '';
+                    $defaultMapped = CurrencyModel::getDefaultMappedCountries($codeVal);
+                    $mappedVal = ($currency && array_key_exists('mapped_countries', $currency) && $currency['mapped_countries'] !== null) 
+                                 ? $currency['mapped_countries'] 
+                                 : $defaultMapped;
+                ?>
+                <input type="text" id="mapped_countries" name="mapped_countries" 
+                       value="<?php echo htmlspecialchars($mappedVal); ?>" 
+                       placeholder="e.g. DE, FR, IT, ES, NL, BE, AT, FI or GB, UK or DK or NO">
+                <div class="currency-code-note">
+                    Comma-separated list of country codes or country names mapped to this currency (e.g., Eurozone countries for EUR, UK for GBP, Denmark for DKK, Norway for NOK).
+                </div>
+                <div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                    <span style="font-size: 11px; font-weight: bold; color: #666;">Quick Presets:</span>
+                    <button type="button" onclick="setPreset('DE, FR, IT, ES, NL, BE, AT, FI, GR, IE, PT, SK, SI, EE, LV, LT, CY, MT, LU, HR')" style="padding: 3px 8px; font-size: 11px; background: #e2e8f0; color: #334155; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;">Eurozone (EUR)</button>
+                    <button type="button" onclick="setPreset('GB, UK')" style="padding: 3px 8px; font-size: 11px; background: #e2e8f0; color: #334155; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;">UK (GBP)</button>
+                    <button type="button" onclick="setPreset('DK')" style="padding: 3px 8px; font-size: 11px; background: #e2e8f0; color: #334155; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;">Denmark (DKK)</button>
+                    <button type="button" onclick="setPreset('NO')" style="padding: 3px 8px; font-size: 11px; background: #e2e8f0; color: #334155; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;">Norway (NOK)</button>
+                    <button type="button" onclick="setPreset('US')" style="padding: 3px 8px; font-size: 11px; background: #e2e8f0; color: #334155; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;">USA (USD)</button>
+                </div>
+            </div>
+            
             <div class="form-row">
                 <div class="form-group">
                     <label for="rate_import">Import Rate *</label>
@@ -133,5 +159,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         <a href="currency_list.php" class="btn-back">Back to List</a>
     </div>
+
+    <script>
+    function setPreset(val) {
+        var el = document.getElementById('mapped_countries');
+        if (el) {
+            el.value = val;
+        }
+    }
+    </script>
 </body>
 </html>

@@ -1884,6 +1884,127 @@ class OrdersController
         echo json_encode($result);
         exit;
     }
+
+    public function updateItemPricesAjax()
+    {
+        is_login();
+        global $ordersModel, $conn;
+
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (!canSrEmpAccess()) {
+            echo json_encode(['success' => false, 'message' => 'Access denied. Sr Emp, Top Management, or Admin access required.']);
+            exit;
+        }
+
+        $orderNumber = trim((string)($_POST['order_number'] ?? ''));
+        $itemsInput = $_POST['items'] ?? [];
+
+        if ($orderNumber === '') {
+            echo json_encode(['success' => false, 'message' => 'Order number is required.']);
+            exit;
+        }
+
+        if (isset($_POST['custom_reduce'])) {
+            $customReduce = max(0.0, round((float)$_POST['custom_reduce'], 2));
+        } else {
+            $existingOrderInfo = $ordersModel->getRemarksByOrderNumber($orderNumber);
+            $customReduce = (float)($existingOrderInfo['custom_reduce'] ?? 0);
+        }
+
+        if (is_string($itemsInput)) {
+            $itemsInput = json_decode($itemsInput, true) ?? [];
+        }
+
+        if (!is_array($itemsInput) || empty($itemsInput)) {
+            echo json_encode(['success' => false, 'message' => 'Line items data is missing.']);
+            exit;
+        }
+
+        $existingOrder = $ordersModel->getOrderLineItemsByRef($orderNumber);
+        if (!$existingOrder) {
+            echo json_encode(['success' => false, 'message' => 'Order not found.']);
+            exit;
+        }
+
+        $resolvedOrderNumber = (string)($existingOrder[0]['order_number'] ?? $orderNumber);
+
+        $inputItemsByLineId = [];
+        foreach ($itemsInput as $key => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $lineId = (int)($item['id'] ?? $key);
+            $rawPrice = $item['price'] ?? $item['finalprice'] ?? 0;
+            $price = max(0.0, round((float)$rawPrice, 2));
+            $rawQty = $item['qty'] ?? $item['quantity'] ?? 1;
+            $qty = max(1, (int)$rawQty);
+            if ($lineId > 0) {
+                $inputItemsByLineId[$lineId] = [
+                    'price' => $price,
+                    'qty'   => $qty,
+                ];
+            }
+        }
+
+        $dbItemsToUpdate = [];
+        $allApiItems = [];
+
+        foreach ($existingOrder as $existingLine) {
+            $lineId = (int)($existingLine['id'] ?? 0);
+            $itemCode = (string)($existingLine['item_code'] ?? '');
+            $size = (string)($existingLine['size'] ?? '');
+            $color = (string)($existingLine['color'] ?? '');
+            $currentPrice = max(0.0, round((float)($existingLine['finalprice'] ?? 0), 2));
+            $currentQty = max(1, (int)($existingLine['quantity'] ?? 1));
+
+            $newPrice = array_key_exists($lineId, $inputItemsByLineId) ? $inputItemsByLineId[$lineId]['price'] : $currentPrice;
+            $newQty   = array_key_exists($lineId, $inputItemsByLineId) ? $inputItemsByLineId[$lineId]['qty']   : $currentQty;
+
+            $dbItemsToUpdate[] = [
+                'id'        => $lineId,
+                'item_code' => $itemCode,
+                'size'      => $size,
+                'color'     => $color,
+                'price'     => $newPrice,
+                'qty'       => $newQty,
+            ];
+
+            $allApiItems[] = [
+                'itemcode'  => $itemCode,
+                'size'      => $size,
+                'color'     => $color,
+                'price'     => $newPrice,
+                'qty'       => $newQty,
+            ];
+        }
+
+        require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+        $dbResult = $ordersModel->updateOrderItemPrices($resolvedOrderNumber, $dbItemsToUpdate, $customReduce);
+
+        if (empty($dbResult['success'])) {
+            echo json_encode($dbResult);
+            exit;
+        }
+
+        // Call external POS API (https://www.exoticindia.com/api/order/pos_editorderprices)
+        require_once __DIR__ . '/../integrations/exotic/Clients/RetailApiClient.php';
+        $retailClient = RetailApiClient::create($conn);
+        $apiResult = $retailClient->editOrderPrices($resolvedOrderNumber, $allApiItems, $customReduce);
+
+        $apiData = is_array($apiResult['data'] ?? null) ? $apiResult['data'] : [];
+        $apiMessage = (string)($apiData['message'] ?? $apiData['msg'] ?? '');
+
+        echo json_encode([
+            'success'       => true,
+            'message'       => 'Order details updated successfully.' . ($apiMessage !== '' ? ' API: ' . $apiMessage : ''),
+            'new_total'     => $dbResult['new_total'] ?? 0,
+            'gross_total'   => $dbResult['gross_total'] ?? 0,
+            'custom_reduce' => $dbResult['custom_reduce'] ?? 0,
+            'api_response'  => $apiData,
+        ]);
+        exit;
+    }
     public function updateNameEmailAjax()
     {
         is_login();

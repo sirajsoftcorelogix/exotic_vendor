@@ -529,7 +529,7 @@ class Customer
         $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search);
         $term = '%' . $escaped . '%';
 
-        $sql = 'SELECT id, name, email, phone FROM vp_customers
+        $sql = 'SELECT id, name, email, phone, country_of_residence FROM vp_customers
                 WHERE name LIKE ? OR email LIKE ? OR phone LIKE ?
                 ORDER BY id DESC
                 LIMIT ?';
@@ -553,12 +553,22 @@ class Customer
             $name = (string)($row['name'] ?? '');
             $email = (string)($row['email'] ?? '');
             $phone = (string)($row['phone'] ?? '');
+            $countryRes = trim((string)($row['country_of_residence'] ?? ''));
+            $resInfo = $this->resolveCustomerResidenceAndCurrency($countryRes);
             $display = $name . ' | ' . $phone . ($email !== '' ? ' | ' . $email : '');
             $out[] = [
                 'id' => $id,
                 'name' => $name,
                 'email' => $email,
                 'phone' => $phone,
+                'country_of_residence' => $countryRes,
+                'country_code' => $resInfo['country_code'] ?? '',
+                'country_name' => $resInfo['country_name'] ?? '',
+                'currency_code' => $resInfo['currency_code'] ?? '',
+                'currency_symbol' => $resInfo['currency_symbol'] ?? '₹',
+                'currency_name' => $resInfo['currency_name'] ?? '',
+                'currency_display' => $resInfo['currency_display'] ?? '',
+                'residence_text' => $resInfo['display_text'],
                 'display' => $display,
             ];
         }
@@ -641,7 +651,7 @@ class Customer
             'city' => '',
             'state' => '',
             'zip' => '',
-            'country' => 'IN',
+            'country' => '',
             'gstin' => '',
             'trade_name' => '',
         ];
@@ -698,6 +708,11 @@ class Customer
                     $billing['trade_name'] = trim((string)$det['trade_name']);
                 }
 
+                $shipCountry = trim((string)($det['ship_country'] ?? ''));
+                if ($shipCountry === '') {
+                    $shipCountry = $billing['country'];
+                }
+
                 $shipping = [
                     'shipping_first_name' => $first,
                     'shipping_last_name' => $last,
@@ -707,10 +722,14 @@ class Customer
                     'scity' => trim((string)($det['ship_city'] ?? '')),
                     'sstate' => trim((string)($det['ship_state'] ?? '')),
                     'szip' => trim((string)($det['ship_pin'] ?? '')),
-                    'scountry' => trim((string)($det['ship_country'] ?? '')) !== '' ? trim((string)$det['ship_country']) : 'IN',
+                    'scountry' => $shipCountry,
                     'sphone' => $billing['phone'],
                 ];
             }
+        }
+
+        if (empty($billing['country']) && !empty($row['country_of_residence'])) {
+            $billing['country'] = trim((string)$row['country_of_residence']);
         }
 
         if ($shipping === []) {
@@ -723,9 +742,11 @@ class Customer
                 'scity' => '',
                 'sstate' => '',
                 'szip' => '',
-                'scountry' => 'IN',
+                'scountry' => $billing['country'],
                 'sphone' => $billing['phone'],
             ];
+        } elseif (empty($shipping['scountry'])) {
+            $shipping['scountry'] = $billing['country'];
         }
 
         return ['billing' => $billing, 'shipping' => $shipping];
@@ -870,6 +891,316 @@ class Customer
     }
 
     /**
+     * Update vp_customers.country_of_residence from vp_order_info.country for a given customer.
+     * If vp_order_info has a country record, use it. Otherwise fallback to $fallbackCountry.
+     */
+    public function updateCustomerCountryOfResidenceFromOrderInfo(int $customerId, string $fallbackCountry = ''): void
+    {
+        if ($customerId <= 0) {
+            return;
+        }
+
+        $country = trim($fallbackCountry);
+
+        if ($country === '') {
+            $stmt = $this->conn->prepare('SELECT country FROM vp_order_info WHERE customer_id = ? AND country IS NOT NULL AND TRIM(country) <> \'\' ORDER BY id DESC LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('i', $customerId);
+                $stmt->execute();
+                $res = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if ($res && !empty($res['country'])) {
+                    $country = trim((string)$res['country']);
+                }
+            }
+        }
+
+        if ($country === '') {
+            $this->ensurePosCustomerDetailsTable();
+            $detStmt = $this->conn->prepare('SELECT bill_country, ship_country FROM pos_customer_details WHERE customer_id = ? LIMIT 1');
+            if ($detStmt) {
+                $detStmt->bind_param('i', $customerId);
+                $detStmt->execute();
+                $det = $detStmt->get_result()->fetch_assoc();
+                $detStmt->close();
+                if ($det) {
+                    $country = trim((string)($det['bill_country'] ?? ''));
+                    if ($country === '') {
+                        $country = trim((string)($det['ship_country'] ?? ''));
+                    }
+                }
+            }
+        }
+
+        if ($country !== '') {
+            $upStmt = $this->conn->prepare('UPDATE vp_customers SET country_of_residence = ? WHERE id = ?');
+            if ($upStmt) {
+                $upStmt->bind_param('si', $country, $customerId);
+                $upStmt->execute();
+                $upStmt->close();
+            }
+        }
+    }
+
+    /**
+     * Ensure vp_customers.country_of_residence is set when selecting a customer.
+     * If country_of_residence is not available (empty/null), update it from vp_order_info.country or pos_customer_details.
+     */
+    public function ensureCountryOfResidenceForCustomer(int $customerId): void
+    {
+        if ($customerId <= 0) {
+            return;
+        }
+
+        $row = $this->getCustomerById($customerId);
+        if (!$row) {
+            return;
+        }
+
+        $existing = trim((string)($row['country_of_residence'] ?? ''));
+        if ($existing !== '') {
+            return;
+        }
+
+        $this->updateCustomerCountryOfResidenceFromOrderInfo($customerId);
+    }
+
+    /**
+     * Resolve country of residence and applicable currency details for customer cart display.
+     *
+     * @return array{country_code:string, country_name:string, currency_code:string, currency_symbol:string, currency_name:string, currency_display:string, display_text:string}
+     */
+    public function resolveCustomerResidenceAndCurrency(?string $countryInput): array
+    {
+        $countryInput = trim((string)$countryInput);
+        if ($countryInput === '') {
+            return [
+                'country_code' => '',
+                'country_name' => '',
+                'currency_code' => '',
+                'currency_symbol' => '',
+                'currency_name' => '',
+                'currency_display' => '',
+                'display_text' => '-',
+            ];
+        }
+
+        require_once __DIR__ . '/../../helpers/courier/country_codes.php';
+        $iso2 = normalizeCountryIso2($countryInput, $this->conn);
+        $countryRow = getCountryByIso2($iso2, $this->conn);
+        $countryName = !empty($countryRow['name']) ? trim((string)$countryRow['name']) : $countryInput;
+
+        require_once __DIR__ . '/../currency/CurrencyModel.php';
+        $currencyModel = new CurrencyModel($this->conn);
+        $curr = $currencyModel->getCurrencyByCountryCode($iso2) ?: $currencyModel->getCurrencyByCountryCode($countryInput);
+
+        $currencyCode = !empty($curr['currency_code']) ? trim((string)$curr['currency_code']) : '';
+        $currencyName = !empty($curr['currency_name']) ? trim((string)$curr['currency_name']) : '';
+
+        if ($currencyCode === '') {
+            if ($iso2 === 'IN' || strcasecmp($countryName, 'India') === 0) {
+                $curr = $currencyModel->getCurrencyByCode('INR');
+                $currencyCode = 'INR';
+                $currencyName = !empty($curr['currency_name']) ? trim((string)$curr['currency_name']) : 'Indian Rupee';
+            } else {
+                $curr = $currencyModel->getCurrencyByCode('USD');
+                $currencyCode = 'USD';
+                $currencyName = !empty($curr['currency_name']) ? trim((string)$curr['currency_name']) : 'US Dollar';
+            }
+        }
+
+        require_once __DIR__ . '/../../helpers/currency_display.php';
+        $currencySymbol = vendor_currency_symbol($currencyCode);
+
+        $currencyDisplay = '';
+        if ($currencyName !== '' && $currencyCode !== '') {
+            $currencyDisplay = $currencyName . ' (' . $currencyCode . ')';
+        } elseif ($currencyName !== '') {
+            $currencyDisplay = $currencyName;
+        } elseif ($currencyCode !== '') {
+            $currencyDisplay = $currencyCode;
+        }
+
+        $displayText = $countryName;
+        if ($currencyDisplay !== '') {
+            $displayText .= ' | ' . $currencyDisplay;
+        }
+
+        return [
+            'country_code' => $iso2,
+            'country_name' => $countryName,
+            'currency_code' => $currencyCode,
+            'currency_symbol' => $currencySymbol,
+            'currency_name' => $currencyName,
+            'currency_display' => $currencyDisplay,
+            'display_text' => $displayText,
+        ];
+    }
+
+    /**
+     * Create or update POS customer from modal POST data.
+     *
+     * @param array<string, mixed> $post
+     * @return array{success:bool, is_update?:bool, message?:string, customer?:array{id:int, name:string, email:string, phone:string}}
+     */
+    public function savePosCustomerFromPost(array $post): array
+    {
+        $customerId = (int)($post['customer_id'] ?? 0);
+        $first = trim((string)($post['first_name'] ?? ''));
+        $last  = trim((string)($post['last_name'] ?? ''));
+        $phone = trim((string)($post['mobile'] ?? ''));
+        $email = trim((string)($post['cus_email'] ?? ''));
+
+        if ($first === '' || $last === '') {
+            return [
+                'success' => false,
+                'message' => 'First name and last name are required.'
+            ];
+        }
+
+        if ($phone === '' && $email === '') {
+            return [
+                'success' => false,
+                'message' => 'Either mobile phone or email is required.'
+            ];
+        }
+
+        $name = trim($first . ' ' . $last);
+
+        if ($customerId > 0) {
+            $stmt = $this->conn->prepare('UPDATE vp_customers SET name = ?, email = ?, phone = ? WHERE id = ?');
+            if (!$stmt) {
+                return [
+                    'success' => false,
+                    'message' => 'Database error (prepare): ' . $this->conn->error
+                ];
+            }
+            $stmt->bind_param('sssi', $name, $email, $phone, $customerId);
+            try {
+                $stmt->execute();
+                $stmt->close();
+            } catch (\mysqli_sql_exception $e) {
+                $stmt->close();
+                if (str_contains($e->getMessage(), 'Duplicate entry') || $e->getSqlState() === '23000') {
+                    return [
+                        'success' => false,
+                        'message' => 'Another customer with this email and phone already exists.'
+                    ];
+                }
+                return [
+                    'success' => false,
+                    'message' => 'Could not update customer: ' . $e->getMessage()
+                ];
+            }
+
+            $this->upsertPosCustomerDetailsFromPost($customerId, $post);
+            $this->updateCustomerCountryOfResidenceFromOrderInfo($customerId, (string)($post['country'] ?? $post['country_of_residence'] ?? ''));
+            $cRow = $this->getCustomerById($customerId);
+            $cRes = trim((string)($cRow['country_of_residence'] ?? ''));
+            $rInfo = $this->resolveCustomerResidenceAndCurrency($cRes);
+
+            return [
+                'success' => true,
+                'is_update' => true,
+                'message' => 'Customer updated successfully.',
+                'customer' => [
+                    'id' => $customerId,
+                    'name' => $name,
+                    'phone' => $phone,
+                    'email' => $email,
+                    'country_of_residence' => $cRes,
+                    'residence_text' => $rInfo['display_text'],
+                ]
+            ];
+        }
+
+        // Insert new customer
+        $stmt = $this->conn->prepare('INSERT INTO vp_customers (name, email, phone) VALUES (?, ?, ?)');
+        if (!$stmt) {
+            return [
+                'success' => false,
+                'message' => 'Database error (prepare): ' . $this->conn->error
+            ];
+        }
+        $stmt->bind_param('sss', $name, $email, $phone);
+        try {
+            $stmt->execute();
+            $newId = (int)$stmt->insert_id;
+            $stmt->close();
+        } catch (\mysqli_sql_exception $e) {
+            $stmt->close();
+            if (str_contains($e->getMessage(), 'Duplicate entry') || $e->getSqlState() === '23000') {
+                $lookup = $this->conn->prepare(
+                    'SELECT id, name, email, phone FROM vp_customers WHERE email = ? AND phone = ? LIMIT 1'
+                );
+                if ($lookup) {
+                    $lookup->bind_param('ss', $email, $phone);
+                    $lookup->execute();
+                    $existing = $lookup->get_result()->fetch_assoc();
+                    $lookup->close();
+                    if (!empty($existing['id'])) {
+                        $exId = (int)$existing['id'];
+                        $this->upsertPosCustomerDetailsFromPost($exId, $post);
+                        $this->updateCustomerCountryOfResidenceFromOrderInfo($exId, (string)($post['country'] ?? $post['country_of_residence'] ?? ''));
+                        $exRow = $this->getCustomerById($exId);
+                        $exRes = trim((string)($exRow['country_of_residence'] ?? ''));
+                        $exInfo = $this->resolveCustomerResidenceAndCurrency($exRes);
+
+                        return [
+                            'success' => true,
+                            'is_update' => false,
+                            'message' => 'This email and phone are already registered; using existing customer.',
+                            'customer' => [
+                                'id' => $exId,
+                                'name' => $existing['name'] ?? $name,
+                                'phone' => $existing['phone'] ?? $phone,
+                                'email' => $existing['email'] ?? $email,
+                                'country_of_residence' => $exRes,
+                                'residence_text' => $exInfo['display_text'],
+                            ]
+                        ];
+                    }
+                }
+                return [
+                    'success' => false,
+                    'message' => 'A customer with this email and phone already exists.'
+                ];
+            }
+            return [
+                'success' => false,
+                'message' => 'Could not save customer: ' . $e->getMessage()
+            ];
+        }
+
+        if ($newId <= 0) {
+            return [
+                'success' => false,
+                'message' => 'Customer was not created (no insert id).'
+            ];
+        }
+
+        $this->upsertPosCustomerDetailsFromPost($newId, $post);
+        $this->updateCustomerCountryOfResidenceFromOrderInfo($newId, (string)($post['country'] ?? $post['country_of_residence'] ?? ''));
+        $newRow = $this->getCustomerById($newId);
+        $newRes = trim((string)($newRow['country_of_residence'] ?? ''));
+        $newInfo = $this->resolveCustomerResidenceAndCurrency($newRes);
+
+        return [
+            'success' => true,
+            'is_update' => false,
+            'message' => 'Customer saved successfully.',
+            'customer' => [
+                'id' => $newId,
+                'name' => $name,
+                'phone' => $phone,
+                'email' => $email,
+                'country_of_residence' => $newRes,
+                'residence_text' => $newInfo['display_text'],
+            ]
+        ];
+    }
+
+    /**
      * Persist Add Customer modal billing/shipping + GSTIN to pos_customer_details (UPSERT by customer_id).
      *
      * @param array<string, mixed> $post Typically $_POST from POS add-customer form.
@@ -978,6 +1309,11 @@ class Customer
             'shipping_zipcode' => $p['confirm_szip'] ?? '',
             'shipping_country' => $p['confirm_scountry'] ?? 'IN',
         ];
+
+        $residenceCountry = trim((string)($p['country_of_residence'] ?? $p['confirm_country'] ?? ''));
+        if ($residenceCountry !== '') {
+            $this->updateCustomerCountryOfResidenceFromOrderInfo($customerId, $residenceCountry);
+        }
 
         return $this->upsertPosCustomerDetailsFromPost($customerId, $post);
     }

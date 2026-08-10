@@ -44,6 +44,21 @@ $(function () {
   window.notifyParentItemCartBlocked = notifyParentItemCartBlocked;
   window.POS_PARENT_ITEM_CART_MSG = POS_PARENT_ITEM_CART_MSG;
 
+  function getPosCurrencyInfo() {
+    return {
+      code: 'INR',
+      symbol: '₹'
+    };
+  }
+
+  function getPosCurrencyCode() {
+    return 'INR';
+  }
+
+  function getPosCurrencySymbol() {
+    return '₹';
+  }
+
   function formatPrice(price) {
     const p = parseFloat(price || 0);
     return '₹ ' + p.toLocaleString('en-IN', {
@@ -51,6 +66,17 @@ $(function () {
       maximumFractionDigits: 2
     });
   }
+
+  window.reformatPosProductPrices = function () {
+    if (typeof jQuery !== 'undefined') {
+      jQuery('.pos-product-price').each(function () {
+        const raw = jQuery(this).attr('data-raw-price');
+        if (raw != null && raw !== '') {
+          jQuery(this).text(formatPrice(raw));
+        }
+      });
+    }
+  };
 
   /** Match POSRegisterController::fixImageUrl — relative paths must hit CDN, not the portal origin. */
   function fixModalImageSrc(path) {
@@ -176,6 +202,9 @@ $(function () {
     $('#modal_item_code').val(normalizeFacet(p.item_code));
     $('#modal_size').val(normalizeFacet(p.size));
     $('#modal_color').val(normalizeFacet(p.color));
+    $('#modal_product_id').val(p.id || p.product_id || '');
+    const isUnpub = (p.published === 0 || p.published === '0' || p.published === false || p.is_published === false || p.status === 0 || p.status === '0' || String(p.status_label || '').toLowerCase() === 'unpublished' || String(p.status || '').toLowerCase() === 'unpublished');
+    $('#modal_published').val(isUnpub ? '0' : '1');
   }
 
   function isMeaningful(val) {
@@ -329,15 +358,126 @@ $(function () {
   let modalCustomAddons = [];
   const CUSTOM_ADDON_MIDDLE = '_blank_';
 
+  let activeModalProduct = null;
+
   function openModal() {
     $modal.removeClass('hidden');
     $('body').addClass('overflow-hidden');
+  }
+
+  window.setPosModalPriceMode = function (mode) {
+    if (typeof window.setPosCurrencyMode === 'function') {
+      window.setPosCurrencyMode(mode);
+    } else {
+      window.POS_CURRENCY_MODE = mode;
+    }
+    if (activeModalProduct) {
+      updateModalPriceDisplay(activeModalProduct);
+    }
+  };
+
+  function getClientModalCurrencyInfo() {
+    let code = 'INR';
+    let symbol = '₹';
+
+    if (window.POS_CURRENCY_MODE === 'INR') {
+      return { code: 'INR', symbol: '₹' };
+    }
+
+    if (window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
+      code = String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
+      if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) symbol = String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
+    } else if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
+      const ic = window.POS_INITIAL_CUSTOMER;
+      if (ic.currency_code) code = String(ic.currency_code).trim().toUpperCase();
+      if (ic.currency_symbol) symbol = String(ic.currency_symbol).trim();
+    }
+
+    if (!symbol) {
+      if (code === 'INR') symbol = '₹';
+      else if (code === 'USD') symbol = '$';
+      else if (code === 'EUR') symbol = '€';
+      else if (code === 'GBP') symbol = '£';
+      else symbol = code;
+    }
+
+    return { code: code, symbol: symbol };
+  }
+
+  function updateModalPriceDisplay(p) {
+    if (!p) return;
+    const $pmPrice = $('#pmModalPrice');
+    if (!$pmPrice.length) return;
+
+    if (!hasDisplayablePrice(p.price)) {
+      $pmPrice.addClass('hidden').text('');
+      return;
+    }
+
+    const mode = window.POS_CURRENCY_MODE || 'CUSTOMER';
+    const clientCurr = getClientModalCurrencyInfo();
+    const custCountry = window.POS_CURRENT_CUSTOMER_COUNTRY_CODE || (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.country_code) || '';
+
+    if (mode === 'CUSTOMER' && clientCurr.code !== 'INR' && custCountry && custCountry !== 'IN') {
+      const itemCode = p.item_code || p.sku || p.requested_code || '';
+      const color = p.color || '';
+      const size = p.size || '';
+
+      if (!p._nonInrPrices) p._nonInrPrices = {};
+
+      if (p._nonInrPrices[clientCurr.code] != null) {
+        const altPrice = p._nonInrPrices[clientCurr.code];
+        const locale = clientCurr.code === 'INR' ? 'en-IN' : 'en-US';
+        $pmPrice
+          .removeClass('hidden')
+          .text(`${clientCurr.symbol} ${Number(altPrice).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+        return;
+      }
+
+      $pmPrice.removeClass('hidden').text('Loading price…');
+
+      $.ajax({
+        url: '?page=pos_register&action=get-product-price',
+        type: 'GET',
+        data: {
+          code: itemCode,
+          country_code: custCountry,
+          color: color,
+          size: size
+        },
+        dataType: 'json'
+      }).done(function (res) {
+        if (res && res.status && res.price != null) {
+          p._nonInrPrices[clientCurr.code] = res.price;
+          if (activeModalProduct === p && (window.POS_CURRENCY_MODE || 'CUSTOMER') === 'CUSTOMER') {
+            const locale = clientCurr.code === 'INR' ? 'en-IN' : 'en-US';
+            $pmPrice
+              .removeClass('hidden')
+              .text(`${clientCurr.symbol} ${Number(res.price).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+          }
+        } else {
+          // Fallback to INR price display if endpoint returns no price
+          $pmPrice
+            .removeClass('hidden')
+            .text(`₹ ${Number(p.price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+        }
+      }).fail(function () {
+        $pmPrice
+          .removeClass('hidden')
+          .text(`₹ ${Number(p.price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+      });
+    } else {
+      $pmPrice
+        .removeClass('hidden')
+        .text(`₹ ${Number(p.price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+    }
   }
 
   function closeModal() {
     $modal.addClass('hidden');
     $('body').removeClass('overflow-hidden');
     activeModalKey = null;
+    activeModalProduct = null;
     modalWarehouseMaxQty = null;
     modalStockWarningMessage = '';
     $('#pmQtyMaxHint').text('');
@@ -487,11 +627,13 @@ $(function () {
   function formatAddonPriceRupee(val) {
     const n = parseAddonPriceRupee(val);
     if (n == null) return '—';
+    const info = getPosCurrencyInfo();
+    const locale = info.code === 'INR' ? 'en-IN' : 'en-US';
     try {
-      return new Intl.NumberFormat('en-IN', {
+      return n.toLocaleString(locale, {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
-      }).format(n);
+      });
     } catch (e) {
       return n.toFixed(2);
     }
@@ -569,7 +711,7 @@ $(function () {
         '<div class="flex items-center justify-between gap-2 rounded-lg bg-[#f5f5f5] px-3 py-2">' +
         '<div class="text-[10px] text-gray-800">' + siblingHtmlEscape(item.name) + '</div>' +
         '<div class="flex items-center gap-2">' +
-        '<span class="text-[11px] font-semibold text-gray-700">₹ ' + formatAddonPriceRupee(item.price) + '</span>' +
+        '<span class="text-[11px] font-semibold text-gray-700">' + getPosCurrencySymbol() + ' ' + formatAddonPriceRupee(item.price) + '</span>' +
         '<button type="button" class="pm-custom-addon-remove text-[10px] text-red-600 hover:underline" data-idx="' + idx + '">Remove</button>' +
         '</div></div>';
     });
@@ -706,6 +848,7 @@ $(function () {
     }
 
     if (typeof window.handleAddToCart === 'function') {
+      const pubValRaw = $('#modal_published').val();
       window.handleAddToCart({
         code: String($('#modal_product_code').val() || '').trim(),
         qty: qtyNum || getModalQty(),
@@ -714,13 +857,16 @@ $(function () {
         item_level: String($('#modal_item_level').val() || '').trim(),
         item_code: String($('#modal_item_code').val() || '').trim(),
         size: String($('#modal_size').val() || '').trim(),
-        color: String($('#modal_color').val() || '').trim()
+        color: String($('#modal_color').val() || '').trim(),
+        product_id: $('#modal_product_id').val(),
+        published: (pubValRaw === '0' || pubValRaw === 0) ? 0 : 1
       });
     }
   });
 
   function renderProductModal(p, key) {
     activeModalKey = key;
+    activeModalProduct = p;
     resetCustomAddonsUi();
     $('#pmAddons').html('');
     $('#pmAddonsWrapper').addClass('hidden');
@@ -799,7 +945,7 @@ $(function () {
       </div>
 
       <div class="text-[11px] font-semibold ${priceColor} whitespace-nowrap">
-        ₹ ${addonPriceLabel}
+        ${getPosCurrencySymbol()} ${addonPriceLabel}
       </div>
 
     </label>
@@ -862,9 +1008,27 @@ $(function () {
       badges.push(`<span class="rounded-md bg-green-100 px-2 py-1 text-[10px] text-green-700">Stock: ${p.stock_qty}</span>`);
     }
 
+    const isUnpublished =
+      p.published === 0 ||
+      p.published === '0' ||
+      p.published === false ||
+      p.is_published === false ||
+      p.status === 0 ||
+      p.status === '0' ||
+      String(p.status_label || '').toLowerCase() === 'unpublished' ||
+      String(p.status || '').toLowerCase() === 'unpublished';
+
+    if (isUnpublished) {
+      badges.push(`<span class="rounded-md bg-red-100 px-2 py-1 text-[10px] font-semibold text-red-700">Status: Unpublished</span>`);
+    }
+
     $('#pmBadges').html(badges.join(''));
 
     let html = '';
+
+    if (isUnpublished) {
+      html += addRow('Status', '<span class="font-semibold text-red-600">Unpublished</span>');
+    }
 
     const measurementLine = formatMeasurementLine(p);
     if (measurementLine) {
@@ -905,21 +1069,10 @@ $(function () {
 
     $('#pmDetails').html(html);
 
-    const $pmPrice = $('#pmModalPrice');
-    if ($pmPrice.length) {
-      if (hasDisplayablePrice(p.price)) {
-        $pmPrice
-          .removeClass('hidden')
-          .text(
-            `₹ ${Number(p.price).toLocaleString('en-IN', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2
-            })}`
-          );
-      } else {
-        $pmPrice.addClass('hidden').text('');
-      }
+    if (typeof window.updatePosCurrencyToggleUI === 'function') {
+      window.updatePosCurrencyToggleUI();
     }
+    updateModalPriceDisplay(p);
 
     renderQtySummaryUnderInput(p);
 
@@ -1032,7 +1185,7 @@ data-code="${lookupCode}">
               <span class="rounded-md bg-orange-100 px-1.5 py-0.5 text-[9px] text-orange-700">
                 ${lookupCode || ''}
               </span>
-              <span class="text-base font-semibold tracking-tight text-gray-900">
+              <span class="text-base font-semibold tracking-tight text-gray-900 pos-product-price" data-raw-price="${p.price}">
                 ${formatPrice(p.price)}
               </span>
             </div>
@@ -1224,16 +1377,36 @@ data-code="${lookupCode}">
     openProductModalByCode(codeForPopup, [], product);
   }
   function renderModalData(p) {
+    activeModalProduct = p;
+    const isUnpublished =
+      p.published === 0 ||
+      p.published === '0' ||
+      p.published === false ||
+      p.is_published === false ||
+      p.status === 0 ||
+      p.status === '0' ||
+      String(p.status_label || '').toLowerCase() === 'unpublished' ||
+      String(p.status || '').toLowerCase() === 'unpublished';
+
+    const statusRow = isUnpublished
+      ? `<div>Status</div><div>:</div><div class="font-semibold text-red-600">Unpublished</div>`
+      : '';
 
     $('#pmTitle').text(p.title || 'Product');
     $('#pmImage').attr('src', fixModalImageSrc(p.image) || '');
 
     $('#pmDetails').html(`
-        <div>Price</div><div>:</div><div>₹ ${p.price || 0}</div>
+        ${statusRow}
+        <div>Price</div><div>:</div><div>${formatPrice(p.price)}</div>
         <div>Material</div><div>:</div><div>${p.material || '-'}</div>
         <div>Size</div><div>:</div><div>${p.size || '-'}</div>
         <div>Color</div><div>:</div><div>${p.color || '-'}</div>
     `);
+
+    if (typeof window.updatePosCurrencyToggleUI === 'function') {
+      window.updatePosCurrencyToggleUI();
+    }
+    updateModalPriceDisplay(p);
 
     const cpMd = resolveCartPayload(p);
     setModalCartFields(p, cpMd);
@@ -1252,7 +1425,7 @@ data-code="${lookupCode}">
                                data-entry="${siblingHtmlEscape(cartEntry)}">
                         ${opt.title}
                     </div>
-                    <div>₹ ${addonPriceLabel}</div>
+                    <div>${getPosCurrencySymbol()} ${addonPriceLabel}</div>
                 </label>
             `;
       });
