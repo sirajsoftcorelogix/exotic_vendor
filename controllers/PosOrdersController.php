@@ -822,11 +822,14 @@ class PosOrdersController
 
         $lines = [];
 
-        if ($line > 0.001) {
+        $orderLevelDisc = round($coupon + $cash + $gift, 2);
+        $standaloneLineDisc = max(0.0, round($line - $orderLevelDisc, 2));
+
+        if ($standaloneLineDisc > 0.001) {
             $lines[] = [
                 'type' => 'line',
                 'label' => 'Line Discount',
-                'amount' => $line,
+                'amount' => $standaloneLineDisc,
                 'note' => $absorbed ? 'Included in line item prices (list vs discounted price).' : '',
             ];
         }
