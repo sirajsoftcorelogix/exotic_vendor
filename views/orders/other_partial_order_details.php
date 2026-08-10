@@ -731,9 +731,9 @@ if ($invoiceIdForReturn > 0) {
                             <div class="space-y-2">
                                 <div class="grid grid-cols-2 gap-2">
                                     <input type="text" id="edit_billing_first_name" name="first_name" placeholder="First Name *" required class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
-                                    <input type="text" id="edit_billing_last_name" name="last_name" placeholder="Last Name *" required class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                    <input type="text" id="edit_billing_last_name" name="last_name" placeholder="Last Name" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 </div>
-                                <input type="text" id="edit_billing_address_line1" name="address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_billing_address_line1" name="address_line1" placeholder="Address Line 1 *" required class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 <input type="text" id="edit_billing_address_line2" name="address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 <div class="grid grid-cols-2 gap-2">
                                     <input type="text" id="edit_billing_city" name="city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
@@ -1420,8 +1420,13 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
         const gstin = document.getElementById('edit_billing_gstin').value.trim().toUpperCase();
         const shipping_gstin = document.getElementById('edit_shipping_gstin').value.trim().toUpperCase();
 
-        if (!first_name || !last_name || !phone) {
-            alert("Billing first name, last name and phone are required.");
+        if (!first_name || !phone || !address_line1) {
+            const valMsg = "Billing first name, phone and Address Line 1 are required.";
+            if (typeof window.showPosMessageModal === 'function') {
+                window.showPosMessageModal({ title: 'Validation Required', message: valMsg, tone: 'warning' });
+            } else {
+                alert(valMsg);
+            }
             return;
         }
 

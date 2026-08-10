@@ -1099,6 +1099,12 @@ class InvoicesController
         // Fetch customer and address information
         require_once __DIR__ . '/../helpers/invoice/invoice_address_html.php';
         $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
+        if ((!$customer || !is_array($customer)) && !empty($invoice['order_number'])) {
+            global $ordersModel;
+            if ($ordersModel) {
+                $customer = $ordersModel->getAddressInfoByOrderNumber($invoice['order_number']);
+            }
+        }
         global $conn;
         $addressBlocks = invoice_resolve_bill_ship_html(is_array($customer) ? $customer : null, $conn ?? null);
         $billToInfo = $addressBlocks['bill'];
