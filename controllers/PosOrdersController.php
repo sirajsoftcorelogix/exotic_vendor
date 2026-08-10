@@ -2280,6 +2280,14 @@ class PosOrdersController
         } else {
             $existingOrderInfo = $ordersModel->getRemarksByOrderNumber($orderNumber);
             $customReduce = (float)($existingOrderInfo['custom_reduce'] ?? 0);
+            if ($customReduce <= 0.001) {
+                $existingLines = $ordersModel->getOrderLineItemsByRef($orderNumber);
+                if (is_array($existingLines)) {
+                    foreach ($existingLines as $line) {
+                        $customReduce = max($customReduce, round((float)($line['custom_reduce'] ?? 0), 2));
+                    }
+                }
+            }
         }
 
         if (is_string($itemsInput)) {

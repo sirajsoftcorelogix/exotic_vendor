@@ -2076,7 +2076,8 @@ class Order
             'payment_type',
             'coupon',
             'coupon_reduce',
-            'credit'
+            'credit',
+            'custom_reduce'
         ];
 
         $insertCols   = [];
@@ -2087,7 +2088,7 @@ class Order
         $addressInfo = (isset($data['address_info']) && is_array($data['address_info'])) ? $data['address_info'] : [];
 
         foreach ($columns as $col) {
-            if (array_key_exists($col, $addressInfo)) {
+            if (array_key_exists($col, $addressInfo) && !in_array($col, $insertCols, true)) {
                 $insertCols[]   = $col;
                 $placeholders[] = '?';
                 $values[]       = $addressInfo[$col];
@@ -2095,7 +2096,7 @@ class Order
             }
         }
         //order_number add 
-        if ($data['orderid'] !== null) {
+        if ($data['orderid'] !== null && !in_array('order_number', $insertCols, true)) {
             $insertCols[]   = 'order_number';
             $placeholders[] = '?';
             $values[]       = $data['orderid'];
@@ -2103,7 +2104,7 @@ class Order
         }
 
         //customer_id add
-        if ($customer_id !== null) {
+        if ($customer_id !== null && !in_array('customer_id', $insertCols, true)) {
             $insertCols[]   = 'customer_id';
             $placeholders[] = '?';
             $values[]       = $customer_id;
@@ -2111,70 +2112,82 @@ class Order
         }
 
         //total add
-        if (isset($data['total'])) {
+        if (isset($data['total']) && !in_array('total', $insertCols, true)) {
             $insertCols[]   = 'total';
             $placeholders[] = '?';
             $values[]       = floatval($data['total']);
             $types         .= 'd'; // decimal
         }
         //giftvoucher add
-        if (isset($data['giftvoucher'])) {
+        if (isset($data['giftvoucher']) && !in_array('giftvoucher', $insertCols, true)) {
             $insertCols[]   = 'giftvoucher';
             $placeholders[] = '?';
             $values[]       = floatval($data['giftvoucher']);
             $types         .= 'd'; // decimal
         }
         //giftvoucher_reduce add
-        if (isset($data['giftvoucher_reduce'])) {
+        if (isset($data['giftvoucher_reduce']) && !in_array('giftvoucher_reduce', $insertCols, true)) {
             $insertCols[]   = 'giftvoucher_reduce';
             $placeholders[] = '?';
             $values[]       = floatval($data['giftvoucher_reduce']);
             $types         .= 'd'; // decimal
         }
         //transid add
-        if (isset($data['transid'])) {
+        if (isset($data['transid']) && !in_array('transid', $insertCols, true)) {
             $insertCols[]   = 'transid';
             $placeholders[] = '?';
             $values[]       = $data['transid'];
             $types         .= 's'; // string
         }
         //currency add
-        if (isset($data['currency'])) {
+        if (isset($data['currency']) && !in_array('currency', $insertCols, true)) {
             $insertCols[]   = 'currency';
             $placeholders[] = '?';
             $values[]       = $data['currency'];
             $types         .= 's'; // string
         }
         //payment_type add
-        if (isset($data['payment_type'])) {
+        if (isset($data['payment_type']) && !in_array('payment_type', $insertCols, true)) {
             $insertCols[]   = 'payment_type';
             $placeholders[] = '?';
             $values[]       = $data['payment_type'];
             $types         .= 's'; // string
         }
         //coupon add
-        if (isset($data['coupon'])) {
+        if (isset($data['coupon']) && !in_array('coupon', $insertCols, true)) {
             $insertCols[]   = 'coupon';
             $placeholders[] = '?';
             $values[]       = trim((string) $data['coupon']);
             $types         .= 's';
         }
         //coupon_reduce add
-        if (isset($data['coupon_reduce'])) {
+        if (isset($data['coupon_reduce']) && !in_array('coupon_reduce', $insertCols, true)) {
             $insertCols[]   = 'coupon_reduce';
             $placeholders[] = '?';
             $values[]       = floatval($data['coupon_reduce']);
             $types         .= 'd'; // decimal
         }
         //credit add
-        if (isset($data['credit'])) {
+        if (isset($data['credit']) && !in_array('credit', $insertCols, true)) {
             $insertCols[]   = 'credit';
             $placeholders[] = '?';
             $values[]       = floatval($data['credit']);
             $types         .= 'd'; // decimal
         }
+        //custom_reduce add
+        if (isset($data['custom_reduce']) && !in_array('custom_reduce', $insertCols, true)) {
+            $insertCols[]   = 'custom_reduce';
+            $placeholders[] = '?';
+            $values[]       = floatval($data['custom_reduce']);
+            $types         .= 'd'; // decimal
+        } elseif (isset($addressInfo['custom_reduce']) && !in_array('custom_reduce', $insertCols, true)) {
+            $insertCols[]   = 'custom_reduce';
+            $placeholders[] = '?';
+            $values[]       = floatval($addressInfo['custom_reduce']);
+            $types         .= 'd'; // decimal
+        }
         //store_name
-        if (isset($data['store_name'])) {
+        if (isset($data['store_name']) && !in_array('store_name', $insertCols, true)) {
             $insertCols[]   = 'store_name';
             $placeholders[] = '?';
             $values[]       = $data['store_name'];

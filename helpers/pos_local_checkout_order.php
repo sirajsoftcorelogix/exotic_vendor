@@ -400,7 +400,9 @@ function pos_local_checkout_build_address_order_payload(
         'payment_type' => $paymentMode,
         'coupon_reduce' => round((float)($payload['receipt_coupon_discount'] ?? 0), 2),
         'giftvoucher_reduce' => round((float)($payload['receipt_gift_discount'] ?? 0), 2),
+        'custom_reduce' => round((float)($payload['receipt_cash_discount'] ?? $payload['custom_reduce'] ?? 0), 2),
         'address_info' => [
+            'custom_reduce' => round((float)($payload['receipt_cash_discount'] ?? $payload['custom_reduce'] ?? 0), 2),
             'first_name' => trim((string)($payload['confirm_first_name'] ?? '')),
             'last_name' => trim((string)($payload['confirm_last_name'] ?? '')),
             'company' => trim((string)($payload['confirm_company'] ?? '')),
