@@ -1288,7 +1288,12 @@ class POSRegisterController
         foreach (($stateRows['states'] ?? []) as $row) {
             $name = trim((string)($row['name'] ?? ''));
             if ($name !== '') {
-                $out[] = ['id' => (int)($row['id'] ?? 0), 'name' => $name];
+                $out[] = [
+                    'id' => (int)($row['id'] ?? 0),
+                    'name' => $name,
+                    'code' => trim((string)($row['code'] ?? $row['state_code'] ?? '')),
+                    'iso' => trim((string)($row['iso2'] ?? $row['iso'] ?? ''))
+                ];
             }
         }
         echo json_encode($out, JSON_UNESCAPED_UNICODE);

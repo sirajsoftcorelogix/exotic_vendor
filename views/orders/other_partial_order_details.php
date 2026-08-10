@@ -1198,10 +1198,12 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
             });
     }
 
-    function populateOrderStateSelect(selectEl, states, selectedValue) {
+    function populateOrderStateSelect(selectEl, states, selectedValue, cityName) {
         if (!selectEl) return;
         const selected = String(selectedValue || '').trim();
         const selectedLower = selected.toLowerCase();
+        const cityLower = String(cityName || '').trim().toLowerCase();
+
         let html = '<option value="">Select state</option>';
         (states || []).forEach(state => {
             const name = String((state && state.name) || '').trim();
@@ -1210,20 +1212,46 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
             html += '<option value="' + esc + '">' + esc + '</option>';
         });
         selectEl.innerHTML = html;
+
         if (selected) {
             let matched = false;
             Array.from(selectEl.options).forEach(opt => {
-                if (opt.value.toLowerCase() === selectedLower) {
+                const optValLower = opt.value.toLowerCase();
+                if (optValLower === selectedLower) {
                     opt.selected = true;
                     matched = true;
                 }
             });
+
+            if (!matched && states && states.length) {
+                // Try matching by state code or iso (e.g. "WB" -> "West Bengal")
+                states.forEach(state => {
+                    if (matched) return;
+                    const codeLower = String(state.code || state.iso || '').trim().toLowerCase();
+                    if (codeLower && codeLower === selectedLower) {
+                        const name = String(state.name || '').trim();
+                        Array.from(selectEl.options).forEach(opt => {
+                            if (opt.value.toLowerCase() === name.toLowerCase()) {
+                                opt.selected = true;
+                                matched = true;
+                            }
+                        });
+                    }
+                });
+            }
+
             if (!matched) {
-                const opt = document.createElement('option');
-                opt.value = selected;
-                opt.textContent = selected;
-                opt.selected = true;
-                selectEl.appendChild(opt);
+                // Check if selected value matches the city name
+                if (cityLower && selectedLower === cityLower) {
+                    // Stored value was actually the city name, leave dropdown as "Select state"
+                    selectEl.value = '';
+                } else {
+                    const opt = document.createElement('option');
+                    opt.value = selected;
+                    opt.textContent = selected;
+                    opt.selected = true;
+                    selectEl.appendChild(opt);
+                }
             }
         }
     }
@@ -1247,7 +1275,7 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
         return inputEl ? String(inputEl.value || '').trim() : '';
     }
 
-    function syncOrderStateField(kind, preferredValue) {
+    function syncOrderStateField(kind, preferredValue, cityName) {
         const cfg = ORDER_STATE_FIELD_CONFIG[kind];
         if (!cfg) return Promise.resolve();
         const countryEl = document.getElementById(cfg.countryId);
@@ -1259,8 +1287,14 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
         const useDropdown = isOrderStateDropdownCountry(country);
         const value = preferredValue !== undefined ? String(preferredValue || '').trim() : getOrderStateValue(kind);
 
+        const currentCity = cityName !== undefined ? String(cityName || '').trim() : (
+            kind === 'shipping'
+                ? (document.getElementById('edit_shipping_city')?.value || '').trim()
+                : (document.getElementById('edit_billing_city')?.value || '').trim()
+        );
+
         if (!useDropdown) {
-            inputEl.value = value;
+            inputEl.value = (value && currentCity && value.toLowerCase() === currentCity.toLowerCase()) ? '' : value;
             selectEl.classList.add('hidden');
             inputEl.classList.remove('hidden');
             return Promise.resolve();
@@ -1272,7 +1306,8 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
         selectEl.classList.remove('hidden');
 
         return fetchOrderCountryStates(country).then(states => {
-            populateOrderStateSelect(selectEl, states, value);
+            populateOrderStateSelect(selectEl, states, value, currentCity);
+            if (inputEl) inputEl.value = getOrderStateValue(kind);
         });
     }
 
@@ -1296,12 +1331,15 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
         document.getElementById('edit_billing_country').value = document.getElementById('billing_country')?.dataset.code || 'IN';
         document.getElementById('edit_billing_gstin').value = document.getElementById('billing_gstin')?.textContent.trim() || '';
 
+        const shippingCity = document.getElementById('shipping_city')?.textContent.trim() || '';
         const shippingState = document.getElementById('shipping_state')?.textContent.trim() || '';
+
+        const billingCity = document.getElementById('billing_city')?.textContent.trim() || '';
         const billingState = document.getElementById('billing_state')?.textContent.trim() || '';
 
         Promise.all([
-            syncOrderStateField('shipping', shippingState),
-            syncOrderStateField('billing', billingState)
+            syncOrderStateField('shipping', shippingState, shippingCity),
+            syncOrderStateField('billing', billingState, billingCity)
         ]).then(() => {
             document.getElementById('nameEmailPopup').classList.remove('hidden');
         });
@@ -1398,6 +1436,14 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
         });
         document.getElementById('edit_billing_country')?.addEventListener('change', function() {
             syncOrderStateField('billing', '');
+        });
+        document.getElementById('edit_shipping_state_select')?.addEventListener('change', function() {
+            const inputEl = document.getElementById('edit_shipping_state');
+            if (inputEl) inputEl.value = this.value;
+        });
+        document.getElementById('edit_billing_state_select')?.addEventListener('change', function() {
+            const inputEl = document.getElementById('edit_billing_state');
+            if (inputEl) inputEl.value = this.value;
         });
     });
 </script>
