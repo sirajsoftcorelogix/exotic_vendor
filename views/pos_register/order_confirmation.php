@@ -279,6 +279,17 @@ if ($receipt_download_filename_base === '') {
           $canDownloadInvoice = ($isPaymentInFull || $hasCodPending) && $invoiceDownloadUrl !== '';
           $canCreateInvoice = !$canDownloadInvoice && $invoiceOrderNumber !== '' && ($isPaymentInFull || $hasCodPending);
           $actionBtnClass = 'inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold';
+          $einvoiceElig = $einvoice_eligibility ?? [
+            'show_irn' => false,
+            'show_ewb' => false,
+            'scenario' => '',
+            'existing_irn' => null,
+            'existing_ewb' => null,
+            'irn_status' => 'pending',
+            'ewb_status' => 'pending',
+            'einvoice_url' => '',
+            'ewaybill_url' => '',
+          ];
           ?>
           <div class="flex flex-wrap items-end gap-3">
             <div class="inline-flex flex-col gap-1">
@@ -300,6 +311,41 @@ if ($receipt_download_filename_base === '') {
                 <span class="<?= $actionBtnClass ?> cursor-not-allowed border border-slate-200 bg-slate-100 font-medium text-slate-500" title="<?= $h(trim((string)($invoice_pdf_disabled_hint ?? 'Tax invoice is available after payment is received in full.'))) ?>">Download Invoice</span>
               <?php endif; ?>
             </div>
+
+            <?php if (!empty($einvoiceElig['show_irn'])): ?>
+              <div class="inline-flex flex-col gap-1">
+                <span class="min-h-[14px] text-[11px] leading-none text-slate-500">GST E-Invoice</span>
+                <?php if (!empty($einvoiceElig['existing_irn'])): ?>
+                  <a href="<?= $h($einvoiceElig['einvoice_url']) ?>" class="<?= $actionBtnClass ?> gap-1.5 bg-blue-700 text-white hover:bg-blue-800" title="IRN: <?= $h($einvoiceElig['existing_irn']) ?>">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    <span>E-Invoice Generated</span>
+                  </a>
+                <?php else: ?>
+                  <a href="<?= $h($einvoiceElig['einvoice_url']) ?>" class="<?= $actionBtnClass ?> gap-1.5 bg-blue-600 text-white hover:bg-blue-700">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                    <span>Generate E-Invoice</span>
+                  </a>
+                <?php endif; ?>
+              </div>
+            <?php endif; ?>
+
+            <?php if (!empty($einvoiceElig['show_ewb'])): ?>
+              <div class="inline-flex flex-col gap-1">
+                <span class="min-h-[14px] text-[11px] leading-none text-slate-500">GST E-Way Bill</span>
+                <?php if (!empty($einvoiceElig['existing_ewb'])): ?>
+                  <a href="<?= $h($einvoiceElig['ewaybill_url']) ?>" class="<?= $actionBtnClass ?> gap-1.5 bg-emerald-700 text-white hover:bg-emerald-800" title="EWB: <?= $h($einvoiceElig['existing_ewb']) ?>">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    <span>E-Way Bill Generated</span>
+                  </a>
+                <?php else: ?>
+                  <a href="<?= $h($einvoiceElig['ewaybill_url']) ?>" class="<?= $actionBtnClass ?> gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+                    <span>Generate E-Way Bill</span>
+                  </a>
+                <?php endif; ?>
+              </div>
+            <?php endif; ?>
+
             <div class="inline-flex flex-col gap-1">
               <span class="min-h-[14px] text-[11px] leading-none text-slate-500 invisible select-none" aria-hidden="true">&nbsp;</span>
               <a href="<?= $h((string)($payment_history_url ?? 'index.php?page=orders&action=list')) ?>" target="_blank" rel="noopener noreferrer" class="<?= $actionBtnClass ?> border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">Payment History</a>
