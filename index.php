@@ -1385,6 +1385,9 @@ switch ($page) {
             case 'export_duplicate_sku_report':
                 $controller->exportDuplicateSkuReport();
                 break;
+            case 'deleteDuplicateProduct':
+                $controller->deleteDuplicateProductAjax();
+                break;
             // --- ADD THIS NEW CASE ---
             case 'download_photos':
                 $controller->download_photos();
