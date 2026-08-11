@@ -1315,25 +1315,46 @@ function getGroupnameByCategory($category)
 }
 
 /**
- * Build SKU from item_code, size, and color when no explicit SKU is stored.
- * Matches ProductsController::buildBulkImportAutoSku().
+ * Central Helper Function for SKU Generation across Inbound, Product Import, and the system.
+ * Builds SKU from item_code, size, and color when no explicit SKU is provided.
+ * Keeps only alphabets and numbers (a-z, A-Z, 0-9) from size and color values for SKU generation.
+ * Strips dimension separators ('x' / 'X' between numbers) as well as all punctuation/special characters,
+ * without altering original size/color field values in the database.
+ *
+ * @param string $itemCode
+ * @param string $size
+ * @param string $color
+ * @return string
  */
-function buildAutoSkuFromItemVariant(string $itemCode, string $size = '', string $color = ''): string
+function generateItemSku(string $itemCode, string $size = '', string $color = ''): string
 {
 	$itemCode = trim($itemCode);
-	$size = trim($size);
-	$color = trim($color);
 	if ($itemCode === '') {
 		return '';
 	}
-	if ($size !== '' && $color !== '') {
-		return $itemCode . '-' . $size . '-' . $color;
+	// Remove dimension 'x' or 'X' (e.g. in "12" x 18"" or "12x18") when followed by digits
+	$cleanSize = preg_replace('/[xX](?=[^a-zA-Z0-9]*\d)/', '', $size);
+	// Strip all non-alphanumeric characters (keep only letters and numbers: a-z, A-Z, 0-9)
+	$cleanSize = preg_replace('/[^a-zA-Z0-9]/', '', $cleanSize);
+
+	$cleanColor = preg_replace('/[^a-zA-Z0-9]/', '', $color);
+
+	if ($cleanSize !== '' && $cleanColor !== '') {
+		return $itemCode . '-' . $cleanSize . '-' . $cleanColor;
 	}
-	if ($size !== '' && $color === '') {
-		return $itemCode . '-' . $size;
+	if ($cleanSize !== '') {
+		return $itemCode . '-' . $cleanSize;
 	}
-	if ($size === '' && $color !== '') {
-		return $itemCode . '--' . $color;
+	if ($cleanColor !== '') {
+		return $itemCode . '--' . $cleanColor;
 	}
 	return $itemCode;
+}
+
+/**
+ * Legacy alias for generateItemSku().
+ */
+function buildAutoSkuFromItemVariant(string $itemCode, string $size = '', string $color = ''): string
+{
+	return generateItemSku($itemCode, $size, $color);
 }

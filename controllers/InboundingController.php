@@ -1593,7 +1593,7 @@ class InboundingController {
             $generated_sku = $item_code;
         } elseif ($is_variant === 'Y') {
             if(!empty($item_code)) {
-                $generated_sku = $item_code . '-' . $size . '-' . $color;
+                $generated_sku = generateItemSku($item_code, $size, $color);
             } else {
                 echo "Error: Parent Item Code is missing."; exit;
             }

@@ -2086,20 +2086,8 @@ class Inbounding {
             $s_raw = trim($var['size'] ?? '');
             $c_raw = trim($var['color'] ?? '');
 
-            // 2. Convert to lowercase and replace all spaces with a single dash
-            // preg_replace handles one or more spaces (' ') and turns them into one dash
-            $f_size  = preg_replace('/\s+/', '-', strtolower($s_raw));
-            $f_color = preg_replace('/\s+/', '-', strtolower($c_raw));
-
-            // 3. Construct the SKU
-            // Pattern: itemcode-size-color
-            $generated_sku = $item_code . '-' . $f_size . '-' . $f_color;
-
-            // 4. Final Cleanup
-            // Remove trailing dashes if the color was empty
-            // Also remove double dashes if the size was empty, e.g., "SA001--red" -> "SA001-red"
-            $generated_sku = rtrim($generated_sku, '-');
-            $generated_sku = str_replace('--', '-', $generated_sku);
+            // Construct SKU by stripping special characters from size and color without changing raw size/color values
+            $generated_sku = generateItemSku($item_code, $s_raw, $c_raw);
 
             if (!empty($id) && is_numeric($id)) {
                 // Types: s (sku) + ssidsddddsdddddsisss (others) + i (id) = 22 params
