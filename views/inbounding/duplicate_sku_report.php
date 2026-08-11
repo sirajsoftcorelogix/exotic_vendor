@@ -49,8 +49,8 @@ $exportUrl = '?' . http_build_query($exportParams);
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
         <div>
             <div class="flex items-center gap-2 text-xs font-semibold text-gray-500 mb-1">
-                <a href="<?php echo base_url('?page=inbounding&action=list'); ?>" class="hover:text-amber-600 transition flex items-center gap-1">
-                    <i class="fas fa-arrow-left text-xs"></i> Inbound Dashboard
+                <a href="<?php echo base_url('?page=products&action=list'); ?>" class="hover:text-amber-600 transition flex items-center gap-1">
+                    <i class="fas fa-arrow-left text-xs"></i> Product Listing
                 </a>
                 <span>/</span>
                 <span class="text-gray-800">Duplicate SKU Audit Report</span>
@@ -65,8 +65,8 @@ $exportUrl = '?' . http_build_query($exportParams);
             <a href="<?php echo base_url($exportUrl); ?>" class="w-full md:w-auto inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm transition">
                 <i class="fas fa-file-excel"></i> Export CSV
             </a>
-            <a href="<?php echo base_url('?page=inbounding&action=list'); ?>" class="w-full md:w-auto inline-flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs px-4 py-2.5 rounded-xl border border-gray-300 transition">
-                <i class="fas fa-list"></i> Back to Inbound
+            <a href="<?php echo base_url('?page=products&action=list'); ?>" class="w-full md:w-auto inline-flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs px-4 py-2.5 rounded-xl border border-gray-300 transition">
+                <i class="fas fa-boxes"></i> Back to Products
             </a>
         </div>
     </div>
