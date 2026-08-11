@@ -2881,12 +2881,37 @@ class Inbounding {
     }
 
     /**
-     * Get all duplicate SKU report rows for CSV export without pagination limits.
+     * Bulk delete all duplicate inbounded products from vp_products.
+     * Optionally respects search text or filter criteria.
+     *
+     * @return array{deleted_count: int, failed_count: int}
      */
-    public function getDuplicateSkuReportExportData($search = '', $filters = []): array
+    public function deleteAllDuplicateInboundedProducts($search = '', $filters = []): array
     {
-        $res = $this->getDuplicateSkuReport(1, 10000, $search, $filters);
-        return $res['rows'] ?? [];
+        $rows = $this->getDuplicateSkuReportExportData($search, array_merge($filters, [
+            'inbound_status' => 'inbounded'
+        ]));
+
+        $deletedCount = 0;
+        $failedCount = 0;
+
+        foreach ($rows as $row) {
+            $pid = (int)($row['product_id'] ?? 0);
+            $inboundStatus = $row['inbound_status'] ?? 'Not Inbounded';
+
+            if ($pid > 0 && $inboundStatus !== 'Not Inbounded') {
+                if ($this->deleteProductFromCatalog($pid)) {
+                    $deletedCount++;
+                } else {
+                    $failedCount++;
+                }
+            }
+        }
+
+        return [
+            'deleted_count' => $deletedCount,
+            'failed_count' => $failedCount,
+        ];
     }
     public function getProductByItemcode($itemcode) {
         $sql = "SELECT id FROM vp_products WHERE item_code = ? LIMIT 1";
