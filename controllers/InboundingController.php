@@ -1599,7 +1599,7 @@ class InboundingController {
             }
         }
 
-        // --- SKU VALIDATION AGAINST vp_products ---
+        // --- SKU VALIDATION AGAINST vp_products, vp_variations & vp_inbound ---
         $skusToCheck = [];
         if (!empty($generated_sku)) {
             $skusToCheck[] = $generated_sku;
@@ -1618,7 +1618,7 @@ class InboundingController {
             }
         }
 
-        $skuCheck = $this->validateInboundSkusAgainstCatalog($skusToCheck, $item_code);
+        $skuCheck = $this->validateInboundSkusAgainstCatalog($skusToCheck, $item_code, $id);
         if ($skuCheck['has_duplicates']) {
             $action_clicked = $_POST['save_action'] ?? '';
             $wantsJson = (
@@ -2062,7 +2062,7 @@ class InboundingController {
         }
         unset($variant);
 
-        // Validate generated SKUs against vp_products
+        // Validate generated SKUs against vp_products, vp_variations, and vp_inbound
         $skusToCheck = [];
         if (!empty($item_code)) {
             foreach ($allVariations as $var) {
@@ -2074,7 +2074,7 @@ class InboundingController {
                 }
             }
         }
-        $skuCheck = $this->validateInboundSkusAgainstCatalog($skusToCheck, $item_code);
+        $skuCheck = $this->validateInboundSkusAgainstCatalog($skusToCheck, $item_code, $record_id);
         if ($skuCheck['has_duplicates']) {
             $this->redirectForm3WithError($skuCheck['message'], $record_id);
             exit;
@@ -2230,10 +2230,10 @@ class InboundingController {
     }
 
     /**
-     * Validate an array of generated SKUs against vp_products.
+     * Validate an array of generated SKUs against vp_products, vp_variations, and vp_inbound.
      * Returns an array with boolean 'has_duplicates', array of 'duplicates', and a human-readable 'message'.
      */
-    private function validateInboundSkusAgainstCatalog(array $skusToCheck, string $currentItemCode = ''): array
+    private function validateInboundSkusAgainstCatalog(array $skusToCheck, string $currentItemCode = '', int $excludeInboundId = 0): array
     {
         global $inboundingModel;
         if (!$inboundingModel) {
@@ -2245,29 +2245,54 @@ class InboundingController {
 
         foreach ($skusToCheck as $sku) {
             $sku = trim((string) $sku);
-            if ($sku === '' || isset($seen[strtoupper($sku)])) {
+            if ($sku === '') {
                 continue;
             }
-            $seen[strtoupper($sku)] = true;
-
-            $existing = $inboundingModel->checkSkuExistsInProducts($sku, $currentItemCode);
-            if (!empty($existing)) {
+            $upperSku = strtoupper($sku);
+            if (isset($seen[$upperSku])) {
                 $duplicates[] = [
                     'sku' => $sku,
+                    'source' => 'submission_duplicate',
+                    'existing_item_code' => $currentItemCode,
+                    'existing_title' => '',
+                    'existing_id' => 0,
+                    'message' => "SKU '{$sku}' is repeated multiple times in this submission.",
+                ];
+                continue;
+            }
+            $seen[$upperSku] = true;
+
+            $existing = $inboundingModel->checkSkuExistsInDb($sku, $currentItemCode, $excludeInboundId);
+            if (!empty($existing)) {
+                $sourceLabel = $existing['source'] ?? 'database';
+                if ($sourceLabel === 'vp_products') {
+                    $sourceName = 'vp_products (Published Products)';
+                } elseif ($sourceLabel === 'vp_variations') {
+                    $sourceName = 'vp_variations (Inbound Variations)';
+                } elseif ($sourceLabel === 'vp_inbound') {
+                    $sourceName = 'vp_inbound (Inbound Catalog)';
+                } else {
+                    $sourceName = $sourceLabel;
+                }
+
+                $duplicates[] = [
+                    'sku' => $sku,
+                    'source' => $sourceLabel,
+                    'source_name' => $sourceName,
                     'existing_item_code' => $existing['item_code'] ?? '',
                     'existing_title' => $existing['title'] ?? '',
                     'existing_id' => $existing['id'] ?? 0,
+                    'message' => "SKU '{$sku}' already exists in {$sourceName}" . (!empty($existing['item_code']) ? " (Item Code: {$existing['item_code']})" : '') . '.',
                 ];
             }
         }
 
         if (!empty($duplicates)) {
             $first = $duplicates[0];
-            $itemCodeStr = !empty($first['existing_item_code']) ? " (Item Code: {$first['existing_item_code']})" : '';
             return [
                 'has_duplicates' => true,
                 'duplicates' => $duplicates,
-                'message' => "SKU '{$first['sku']}' is already present in vp_products{$itemCodeStr}.",
+                'message' => $first['message'],
             ];
         }
 
@@ -2279,7 +2304,7 @@ class InboundingController {
     }
 
     /**
-     * AJAX endpoint to check if generated SKUs already exist in vp_products.
+     * AJAX endpoint to check if generated SKUs already exist in vp_products, vp_variations, or vp_inbound.
      */
     public function checkSkuExistsAjax(): void
     {
@@ -2292,6 +2317,7 @@ class InboundingController {
         $itemCode = trim((string) ($_REQUEST['item_code'] ?? $_REQUEST['Item_code'] ?? ''));
         $size = trim((string) ($_REQUEST['size'] ?? ''));
         $color = trim((string) ($_REQUEST['color'] ?? ''));
+        $inboundId = (int) ($_REQUEST['inbound_id'] ?? $_REQUEST['id'] ?? 0);
 
         $skusToCheck = [];
 
@@ -2327,7 +2353,7 @@ class InboundingController {
             }
         }
 
-        $check = $this->validateInboundSkusAgainstCatalog($skusToCheck, $itemCode);
+        $check = $this->validateInboundSkusAgainstCatalog($skusToCheck, $itemCode, $inboundId);
 
         echo json_encode([
             'success' => true,
