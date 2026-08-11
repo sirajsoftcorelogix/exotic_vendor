@@ -62,6 +62,11 @@ $exportUrl = '?' . http_build_query($exportParams);
         </div>
 
         <div class="flex items-center gap-2 w-full md:w-auto">
+            <button type="button" 
+                    onclick="deleteAllDuplicateInboundedProducts()"
+                    class="w-full md:w-auto inline-flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm transition">
+                <i class="fas fa-trash-alt"></i> Delete All Duplicate Inbounded SKUs
+            </button>
             <a href="<?php echo base_url($exportUrl); ?>" class="w-full md:w-auto inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm transition">
                 <i class="fas fa-file-excel"></i> Export CSV
             </a>
@@ -408,6 +413,99 @@ function executeProductDelete(productId) {
             });
         } else {
             alert('An error occurred while deleting the product.');
+        }
+    });
+}
+
+function deleteAllDuplicateInboundedProducts() {
+    const confirmMessage = "Are you sure you want to delete ALL duplicate inbounded SKUs from vp_products? This action cannot be undone.";
+
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: 'Delete All Duplicate Inbounded SKUs?',
+            text: 'Are you sure you want to delete all duplicate inbounded product entries from vp_products? This operation cannot be undone.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Yes, Delete All Duplicate SKUs'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                executeDeleteAllDuplicateInbounded();
+            }
+        });
+    } else {
+        if (confirm(confirmMessage)) {
+            executeDeleteAllDuplicateInbounded();
+        }
+    }
+}
+
+function executeDeleteAllDuplicateInbounded() {
+    const formData = new FormData();
+    const searchText = "<?php echo htmlspecialchars(addslashes($search), ENT_QUOTES, 'UTF-8'); ?>";
+    const inboundStatus = "<?php echo htmlspecialchars(addslashes($selInboundStatus), ENT_QUOTES, 'UTF-8'); ?>";
+    const inboundFrom = "<?php echo htmlspecialchars(addslashes($inboundFrom), ENT_QUOTES, 'UTF-8'); ?>";
+    const inboundTo = "<?php echo htmlspecialchars(addslashes($inboundTo), ENT_QUOTES, 'UTF-8'); ?>";
+
+    if (searchText) formData.append('search_text', searchText);
+    if (inboundStatus) formData.append('inbound_status', inboundStatus);
+    if (inboundFrom) formData.append('inbound_from', inboundFrom);
+    if (inboundTo) formData.append('inbound_to', inboundTo);
+
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: 'Bulk Deleting Products...',
+            text: 'Removing duplicate inbounded products from vp_products...',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+    }
+
+    fetch('index.php?page=inbounding&action=deleteAllDuplicateInboundedProducts', {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data && data.success) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Bulk Deletion Complete',
+                    text: data.message || 'Duplicate inbounded products deleted successfully.',
+                    confirmButtonColor: '#d97824'
+                }).then(() => {
+                    window.location.reload();
+                });
+            } else {
+                alert(data.message || 'Duplicate inbounded products deleted successfully.');
+                window.location.reload();
+            }
+        } else {
+            const errorMsg = (data && data.message) ? data.message : 'No products were deleted.';
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Notice',
+                    text: errorMsg
+                });
+            } else {
+                alert(errorMsg);
+            }
+        }
+    })
+    .catch(err => {
+        console.error('Bulk delete error:', err);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'An error occurred during bulk deletion.'
+            });
+        } else {
+            alert('An error occurred during bulk deletion.');
         }
     });
 }

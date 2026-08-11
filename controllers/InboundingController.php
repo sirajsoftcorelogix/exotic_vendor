@@ -3783,5 +3783,44 @@ class InboundingController {
         }
         exit;
     }
+
+    /**
+     * AJAX endpoint to bulk delete all duplicate inbounded products from vp_products.
+     */
+    public function deleteAllDuplicateInboundedProductsAjax(): void
+    {
+        is_login();
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        header('Content-Type: application/json; charset=utf-8');
+
+        global $inboundingModel;
+        if (!$inboundingModel) {
+            $inboundingModel = new Inbounding();
+        }
+
+        $search = isset($_POST['search_text']) ? trim($_POST['search_text']) : '';
+        $filters = [
+            'inbound_status' => $_POST['inbound_status'] ?? '',
+            'inbound_from'   => $_POST['inbound_from'] ?? '',
+            'inbound_to'     => $_POST['inbound_to'] ?? '',
+        ];
+
+        $res = $inboundingModel->deleteAllDuplicateInboundedProducts($search, $filters);
+        $deleted = $res['deleted_count'];
+        $failed = $res['failed_count'];
+
+        if ($deleted > 0) {
+            $msg = "Successfully deleted {$deleted} duplicate inbounded product(s) from vp_products.";
+            if ($failed > 0) {
+                $msg .= " ({$failed} failed to delete)";
+            }
+            echo json_encode(['success' => true, 'message' => $msg, 'deleted_count' => $deleted, 'failed_count' => $failed]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'No duplicate inbounded products were found to delete.']);
+        }
+        exit;
+    }
 }
 ?>

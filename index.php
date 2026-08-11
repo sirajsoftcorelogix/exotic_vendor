@@ -1388,6 +1388,9 @@ switch ($page) {
             case 'deleteDuplicateProduct':
                 $controller->deleteDuplicateProductAjax();
                 break;
+            case 'deleteAllDuplicateInboundedProducts':
+                $controller->deleteAllDuplicateInboundedProductsAjax();
+                break;
             // --- ADD THIS NEW CASE ---
             case 'download_photos':
                 $controller->download_photos();
