@@ -3649,5 +3649,106 @@ class InboundingController {
         readfile($filepath);
         exit;
     }
+
+    /**
+     * Render Duplicate SKU Report connected with vp_products, vp_inbound, vp_variations, and vp_users.
+     */
+    public function duplicateSkuReport(): void
+    {
+        is_login();
+        global $inboundingModel;
+        if (!$inboundingModel) {
+            $inboundingModel = new Inbounding();
+        }
+
+        $page = isset($_GET['page_no']) ? (int) $_GET['page_no'] : 1;
+        $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 50;
+        $search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
+
+        $filters = [
+            'inbound_status' => $_GET['inbound_status'] ?? '',
+            'inbound_from'   => $_GET['inbound_from'] ?? '',
+            'inbound_to'     => $_GET['inbound_to'] ?? '',
+        ];
+
+        $reportData = $inboundingModel->getDuplicateSkuReport($page, $limit, $search, $filters);
+
+        renderTemplate('views/inbounding/duplicate_sku_report.php', [
+            'data' => array_merge($reportData, [
+                'search' => $search,
+                'filters' => $filters,
+            ]),
+        ], 'Duplicate Product SKUs Report');
+    }
+
+    /**
+     * Export Duplicate SKU Report to CSV
+     */
+    public function exportDuplicateSkuReport(): void
+    {
+        is_login();
+        global $inboundingModel;
+        if (!$inboundingModel) {
+            $inboundingModel = new Inbounding();
+        }
+
+        $search = isset($_GET['search_text']) ? trim($_GET['search_text']) : '';
+        $filters = [
+            'inbound_status' => $_GET['inbound_status'] ?? '',
+            'inbound_from'   => $_GET['inbound_from'] ?? '',
+            'inbound_to'     => $_GET['inbound_to'] ?? '',
+        ];
+
+        $rows = $inboundingModel->getDuplicateSkuReportExportData($search, $filters);
+
+        $filename = 'duplicate_skus_report_' . date('Y-m-d_His') . '.csv';
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        $output = fopen('php://output', 'w');
+
+        // CSV Header
+        fputcsv($output, [
+            'Product ID',
+            'Product SKU',
+            'Product Item Code',
+            'Product Title',
+            'Size',
+            'Color',
+            'Price (India)',
+            'Product Date',
+            'Inbound Status',
+            'Inbound ID',
+            'Inbound Item Code',
+            'Inbound Created Date',
+            'Inbound Received By (User)',
+            'Inbound Feeded By (User)'
+        ]);
+
+        foreach ($rows as $r) {
+            fputcsv($output, [
+                $r['product_id'] ?? '',
+                $r['product_sku'] ?? '',
+                $r['product_item_code'] ?? '',
+                $r['product_title'] ?? '',
+                $r['product_size'] ?? '',
+                $r['product_color'] ?? '',
+                $r['finalprice'] ?? $r['itemprice'] ?? '0.00',
+                $r['product_created_on'] ?? $r['product_updated_at'] ?? '',
+                $r['inbound_status'] ?? 'Not Inbounded',
+                $r['inbound_id'] ? '#' . $r['inbound_id'] : 'N/A',
+                $r['inbound_item_code'] ?? 'N/A',
+                $r['inbound_created_at'] ?? $r['inbound_added_date'] ?? 'N/A',
+                $r['received_by_user_name'] ?? 'N/A',
+                $r['updated_by_user_name'] ?? 'N/A',
+            ]);
+        }
+
+        fclose($output);
+        exit;
+    }
 }
 ?>

@@ -1377,6 +1377,14 @@ switch ($page) {
             case 'checkSkuExists':
                 $controller->checkSkuExistsAjax();
                 break;
+            case 'duplicateSkuReport':
+            case 'duplicate_sku_report':
+                $controller->duplicateSkuReport();
+                break;
+            case 'exportDuplicateSkuReport':
+            case 'export_duplicate_sku_report':
+                $controller->exportDuplicateSkuReport();
+                break;
             // --- ADD THIS NEW CASE ---
             case 'download_photos':
                 $controller->download_photos();
