@@ -187,6 +187,7 @@ $exportUrl = '?' . http_build_query($exportParams);
                             <th class="py-3 px-4">#</th>
                             <th class="py-3 px-4">Duplicate SKU</th>
                             <th class="py-3 px-4">Product Info</th>
+                            <th class="py-3 px-4">Group Name</th>
                             <th class="py-3 px-4">Title & Attributes</th>
                             <th class="py-3 px-4">Product Added</th>
                             <th class="py-3 px-4">Inbound Process?</th>
@@ -227,6 +228,12 @@ $exportUrl = '?' . http_build_query($exportParams);
                                 <td class="py-3.5 px-4">
                                     <div class="font-bold text-gray-900">ID: #<?php echo (int)($r['product_id'] ?? 0); ?></div>
                                     <div class="text-[11px] font-mono text-gray-500 mt-0.5">Code: <?php echo htmlspecialchars((string)($r['product_item_code'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></div>
+                                </td>
+
+                                <td class="py-3.5 px-4 font-medium text-gray-800">
+                                    <span class="inline-block bg-gray-100 text-gray-800 px-2 py-0.5 rounded border border-gray-200 font-semibold text-[11px]">
+                                        <?php echo htmlspecialchars((string)($r['product_group_name'] ?? 'N/A'), ENT_QUOTES, 'UTF-8'); ?>
+                                    </span>
                                 </td>
 
                                 <td class="py-3.5 px-4 max-w-xs">

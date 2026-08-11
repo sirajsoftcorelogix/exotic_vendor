@@ -2837,6 +2837,7 @@ class Inbounding {
                 p.sku AS product_sku,
                 p.item_code AS product_item_code,
                 p.title AS product_title,
+                p.groupname AS product_group_name,
                 p.size AS product_size,
                 p.color AS product_color,
                 p.itemprice,
