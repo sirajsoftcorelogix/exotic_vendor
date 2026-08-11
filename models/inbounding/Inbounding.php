@@ -2730,6 +2730,29 @@ class Inbounding {
     }
 
     /**
+     * Delete a duplicate product row from vp_products.
+     */
+    public function deleteProductFromCatalog(int $productId): bool {
+        if ($productId <= 0) {
+            return false;
+        }
+
+        // Clean up mapping if table exists
+        @$this->conn->query("DELETE FROM vp_vendor_products_mapping WHERE product_id = $productId");
+
+        // Delete from vp_products
+        $stmt = $this->conn->prepare("DELETE FROM vp_products WHERE id = ?");
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('i', $productId);
+        $ok = $stmt->execute();
+        $stmt->close();
+
+        return $ok;
+    }
+
+    /**
      * Get report data for duplicate SKUs in vp_products connected with vp_inbound, vp_variations, and vp_users.
      */
     public function getDuplicateSkuReport($page = 1, $limit = 50, $search = '', $filters = []): array

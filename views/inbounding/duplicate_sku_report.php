@@ -313,16 +313,11 @@ $exportUrl = '?' . http_build_query($exportParams);
                                 </td>
 
                                 <td class="py-3.5 px-4 text-right whitespace-nowrap">
-                                    <div class="flex items-center justify-end gap-1.5">
-                                        <?php if (!empty($r['inbound_id'])): ?>
-                                            <a href="<?php echo base_url('?page=inbounding&action=desktopform&id=' . (int)$r['inbound_id']); ?>" target="_blank" class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[11px] rounded-lg border border-amber-200 transition">
-                                                Edit Inbound
-                                            </a>
-                                        <?php endif; ?>
-                                        <a href="<?php echo base_url('?page=products&action=edit&id=' . (int)$r['product_id']); ?>" target="_blank" class="px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-[11px] rounded-lg border border-gray-200 transition">
-                                            Edit Product
-                                        </a>
-                                    </div>
+                                    <button type="button" 
+                                            onclick="deleteDuplicateProduct(<?php echo (int)$r['product_id']; ?>, '<?php echo htmlspecialchars(addslashes((string)$r['product_sku']), ENT_QUOTES, 'UTF-8'); ?>')"
+                                            class="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-800 font-bold text-[11px] rounded-lg border border-red-200 transition inline-flex items-center gap-1.5 shadow-sm">
+                                        <i class="fas fa-trash-alt text-[10px]"></i> Delete
+                                    </button>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -367,3 +362,93 @@ $exportUrl = '?' . http_build_query($exportParams);
     </div>
 
 </div>
+
+<script>
+function deleteDuplicateProduct(productId, sku) {
+    if (!productId) return;
+
+    const confirmMessage = `Are you sure you want to delete duplicate product #${productId} (SKU: ${sku}) from vp_products?`;
+
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: 'Delete Duplicate Product?',
+            text: `Are you sure you want to delete product #${productId} (SKU: ${sku}) from vp_products? This action cannot be undone.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Yes, Delete Product'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                executeProductDelete(productId);
+            }
+        });
+    } else {
+        if (confirm(confirmMessage)) {
+            executeProductDelete(productId);
+        }
+    }
+}
+
+function executeProductDelete(productId) {
+    const formData = new FormData();
+    formData.append('product_id', productId);
+
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: 'Deleting Product...',
+            text: 'Removing product from catalog...',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+    }
+
+    fetch('index.php?page=inbounding&action=deleteDuplicateProduct', {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data && data.success) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Deleted!',
+                    text: data.message || 'Product deleted successfully.',
+                    timer: 1500,
+                    showConfirmButton: false
+                }).then(() => {
+                    window.location.reload();
+                });
+            } else {
+                alert(data.message || 'Product deleted successfully.');
+                window.location.reload();
+            }
+        } else {
+            const errorMsg = (data && data.message) ? data.message : 'Failed to delete product.';
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Delete Failed',
+                    text: errorMsg
+                });
+            } else {
+                alert(errorMsg);
+            }
+        }
+    })
+    .catch(err => {
+        console.error('Delete error:', err);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'An error occurred while deleting the product.'
+            });
+        } else {
+            alert('An error occurred while deleting the product.');
+        }
+    });
+}
+</script>

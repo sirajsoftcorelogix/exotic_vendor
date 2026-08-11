@@ -3750,5 +3750,36 @@ class InboundingController {
         fclose($output);
         exit;
     }
+
+    /**
+     * AJAX endpoint to delete a duplicate product from vp_products.
+     */
+    public function deleteDuplicateProductAjax(): void
+    {
+        is_login();
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        header('Content-Type: application/json; charset=utf-8');
+
+        $productId = (int) ($_POST['product_id'] ?? 0);
+        if ($productId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid product ID.']);
+            exit;
+        }
+
+        global $inboundingModel;
+        if (!$inboundingModel) {
+            $inboundingModel = new Inbounding();
+        }
+
+        $deleted = $inboundingModel->deleteProductFromCatalog($productId);
+        if ($deleted) {
+            echo json_encode(['success' => true, 'message' => "Product #{$productId} deleted successfully from vp_products."]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Failed to delete product from database.']);
+        }
+        exit;
+    }
 }
 ?>
