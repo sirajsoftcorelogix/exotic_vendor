@@ -1599,6 +1599,53 @@ class InboundingController {
             }
         }
 
+        // --- SKU VALIDATION AGAINST vp_products ---
+        $skusToCheck = [];
+        if (!empty($generated_sku)) {
+            $skusToCheck[] = $generated_sku;
+        }
+        $postedVariations = $_POST['variations'] ?? [];
+        if (is_array($postedVariations) && !empty($postedVariations)) {
+            foreach ($postedVariations as $v) {
+                $vSize = trim($v['size'] ?? '');
+                $vColor = trim($v['color'] ?? '');
+                if (!empty($item_code)) {
+                    $vSku = generateItemSku($item_code, $vSize, $vColor);
+                    if (!empty($vSku)) {
+                        $skusToCheck[] = $vSku;
+                    }
+                }
+            }
+        }
+
+        $skuCheck = $this->validateInboundSkusAgainstCatalog($skusToCheck, $item_code);
+        if ($skuCheck['has_duplicates']) {
+            $action_clicked = $_POST['save_action'] ?? '';
+            $wantsJson = (
+                $action_clicked === 'preview_json' || ($action_clicked === 'draft' && (
+                    (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string) $_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
+                    || (isset($_SERVER['HTTP_ACCEPT']) && stripos((string) $_SERVER['HTTP_ACCEPT'], 'application/json') !== false)
+                ))
+            );
+
+            if ($wantsJson || $action_clicked === 'preview_json') {
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'status' => 'error',
+                    'message' => $skuCheck['message'],
+                    'duplicates' => $skuCheck['duplicates'],
+                ]);
+                exit;
+            }
+
+            $_SESSION['desktopform_flash'] = ['text' => $skuCheck['message']];
+            header("Location: " . base_url('?page=inbounding&action=desktopform&id=' . $id));
+            exit;
+        }
+
         // --- Handle Inputs ---
         $cat_input = $_POST['category_code'] ?? '';
         $category_val = is_array($cat_input) ? implode(',', $cat_input) : $cat_input;
@@ -2015,6 +2062,24 @@ class InboundingController {
         }
         unset($variant);
 
+        // Validate generated SKUs against vp_products
+        $skusToCheck = [];
+        if (!empty($item_code)) {
+            foreach ($allVariations as $var) {
+                $vSize = trim($var['size'] ?? '');
+                $vColor = trim($var['color'] ?? '');
+                $vSku = generateItemSku($item_code, $vSize, $vColor);
+                if (!empty($vSku)) {
+                    $skusToCheck[] = $vSku;
+                }
+            }
+        }
+        $skuCheck = $this->validateInboundSkusAgainstCatalog($skusToCheck, $item_code);
+        if ($skuCheck['has_duplicates']) {
+            $this->redirectForm3WithError($skuCheck['message'], $record_id);
+            exit;
+        }
+
         // 3. Extract Base Variant (Index 0)
         $mainVariant = $allVariations[0] ?? [];
 
@@ -2160,6 +2225,115 @@ class InboundingController {
         echo json_encode([
             'success' => false,
             'message' => 'No product found for item code: ' . $itemCode,
+        ]);
+        exit;
+    }
+
+    /**
+     * Validate an array of generated SKUs against vp_products.
+     * Returns an array with boolean 'has_duplicates', array of 'duplicates', and a human-readable 'message'.
+     */
+    private function validateInboundSkusAgainstCatalog(array $skusToCheck, string $currentItemCode = ''): array
+    {
+        global $inboundingModel;
+        if (!$inboundingModel) {
+            $inboundingModel = new Inbounding();
+        }
+
+        $duplicates = [];
+        $seen = [];
+
+        foreach ($skusToCheck as $sku) {
+            $sku = trim((string) $sku);
+            if ($sku === '' || isset($seen[strtoupper($sku)])) {
+                continue;
+            }
+            $seen[strtoupper($sku)] = true;
+
+            $existing = $inboundingModel->checkSkuExistsInProducts($sku, $currentItemCode);
+            if (!empty($existing)) {
+                $duplicates[] = [
+                    'sku' => $sku,
+                    'existing_item_code' => $existing['item_code'] ?? '',
+                    'existing_title' => $existing['title'] ?? '',
+                    'existing_id' => $existing['id'] ?? 0,
+                ];
+            }
+        }
+
+        if (!empty($duplicates)) {
+            $first = $duplicates[0];
+            $itemCodeStr = !empty($first['existing_item_code']) ? " (Item Code: {$first['existing_item_code']})" : '';
+            return [
+                'has_duplicates' => true,
+                'duplicates' => $duplicates,
+                'message' => "SKU '{$first['sku']}' is already present in vp_products{$itemCodeStr}.",
+            ];
+        }
+
+        return [
+            'has_duplicates' => false,
+            'duplicates' => [],
+            'message' => '',
+        ];
+    }
+
+    /**
+     * AJAX endpoint to check if generated SKUs already exist in vp_products.
+     */
+    public function checkSkuExistsAjax(): void
+    {
+        is_login();
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        header('Content-Type: application/json; charset=utf-8');
+
+        $itemCode = trim((string) ($_REQUEST['item_code'] ?? $_REQUEST['Item_code'] ?? ''));
+        $size = trim((string) ($_REQUEST['size'] ?? ''));
+        $color = trim((string) ($_REQUEST['color'] ?? ''));
+
+        $skusToCheck = [];
+
+        // Pre-computed SKUs passed directly
+        if (!empty($_REQUEST['skus']) && is_array($_REQUEST['skus'])) {
+            foreach ($_REQUEST['skus'] as $s) {
+                if (trim((string)$s) !== '') {
+                    $skusToCheck[] = trim((string)$s);
+                }
+            }
+        } elseif (!empty($_REQUEST['sku']) && is_string($_REQUEST['sku'])) {
+            $skusToCheck[] = trim($_REQUEST['sku']);
+        } else {
+            // Generate SKUs from item_code, size, color and variations
+            if ($itemCode !== '') {
+                $mainSku = generateItemSku($itemCode, $size, $color);
+                if ($mainSku !== '') {
+                    $skusToCheck[] = $mainSku;
+                }
+            }
+
+            if (!empty($_REQUEST['variations']) && is_array($_REQUEST['variations'])) {
+                foreach ($_REQUEST['variations'] as $v) {
+                    $vSize = trim((string) ($v['size'] ?? ''));
+                    $vColor = trim((string) ($v['color'] ?? ''));
+                    if ($itemCode !== '') {
+                        $vSku = generateItemSku($itemCode, $vSize, $vColor);
+                        if ($vSku !== '') {
+                            $skusToCheck[] = $vSku;
+                        }
+                    }
+                }
+            }
+        }
+
+        $check = $this->validateInboundSkusAgainstCatalog($skusToCheck, $itemCode);
+
+        echo json_encode([
+            'success' => true,
+            'has_duplicates' => $check['has_duplicates'],
+            'duplicates' => $check['duplicates'],
+            'message' => $check['message'],
         ]);
         exit;
     }

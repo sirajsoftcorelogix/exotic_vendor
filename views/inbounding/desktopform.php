@@ -674,10 +674,12 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     <div class="flex flex-col">
                         <label class="text-xs font-bold text-[#333] mb-1.5">SKU (Auto):</label>
                         <input type="text" 
+                               id="auto_generated_sku_field"
                                readonly
                                value="<?php echo htmlspecialchars($data['form2']['sku'] ?? ''); ?>"
                                class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#555] w-full bg-gray-200 cursor-not-allowed focus:outline-none" 
                                placeholder="Generated on Save">
+                        <p id="sku_duplicate_warning" class="hidden text-xs text-red-600 font-bold mt-1"></p>
                     </div>
                     <div class="flex flex-col sm:col-span-2 md:col-span-1">
                         <label class="text-xs font-bold text-[#333] mb-1.5">Parent Item Code:</label>
@@ -5925,8 +5927,7 @@ function validateAndSubmit(actionType) {
     });
     
     if (actionType === 'draft') {
-        document.getElementById('hidden_save_action').value = actionType;
-        form.submit();
+        performSkuCheckAndSubmit(actionType);
         return; // stop further execution
     }
 
@@ -5947,8 +5948,7 @@ function validateAndSubmit(actionType) {
         });
     } else {
         // Validation Passed - Submit
-        document.getElementById('hidden_save_action').value = actionType;
-        form.submit();
+        performSkuCheckAndSubmit(actionType);
     }
 }
 </script>

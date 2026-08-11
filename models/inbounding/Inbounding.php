@@ -2618,6 +2618,42 @@ class Inbounding {
 
         return null;
     }
+
+    /**
+     * Validate whether a SKU already exists in vp_products.
+     * Optionally exclude matching item_code (e.g. if re-saving an already published inbound record).
+     * Returns matching product row if found, null otherwise.
+     */
+    public function checkSkuExistsInProducts(string $sku, string $excludeItemCode = ''): ?array {
+        $sku = strtoupper(trim($sku));
+        $excludeItemCode = strtoupper(trim($excludeItemCode));
+        if ($sku === '') {
+            return null;
+        }
+
+        if ($excludeItemCode !== '') {
+            $sql = "SELECT id, sku, item_code, title FROM vp_products WHERE UPPER(TRIM(sku)) = ? AND UPPER(TRIM(COALESCE(item_code, ''))) != ? LIMIT 1";
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) {
+                return null;
+            }
+            $stmt->bind_param('ss', $sku, $excludeItemCode);
+        } else {
+            $sql = "SELECT id, sku, item_code, title FROM vp_products WHERE UPPER(TRIM(sku)) = ? LIMIT 1";
+            $stmt = $this->conn->prepare($sql);
+            if (!$stmt) {
+                return null;
+            }
+            $stmt->bind_param('s', $sku);
+        }
+
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+
+        return $row ?: null;
+    }
     public function getProductByItemcode($itemcode) {
         $sql = "SELECT id FROM vp_products WHERE item_code = ? LIMIT 1";
         $stmt = $this->conn->prepare($sql);

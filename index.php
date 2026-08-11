@@ -1374,6 +1374,9 @@ switch ($page) {
             case 'validateRedirectItemCode':
                 $controller->validateRedirectItemCodeAjax();
                 break;
+            case 'checkSkuExists':
+                $controller->checkSkuExistsAjax();
+                break;
             // --- ADD THIS NEW CASE ---
             case 'download_photos':
                 $controller->download_photos();
