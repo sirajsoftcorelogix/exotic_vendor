@@ -2636,7 +2636,7 @@ class Inbounding {
 
         // 1. Check vp_products (Published catalog)
         if ($excludeItemCode !== '') {
-            $stmt = $this->conn->prepare("SELECT id, sku, item_code, title, 'vp_products' AS source FROM vp_products WHERE UPPER(TRIM(sku)) = ? AND UPPER(TRIM(COALESCE(item_code, ''))) != ? LIMIT 1");
+            $stmt = $this->conn->prepare("SELECT id, sku, item_code, title, 'vp_products' AS source FROM vp_products WHERE CONVERT(UPPER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ? AND CONVERT(UPPER(TRIM(COALESCE(item_code, ''))) USING utf8mb4) COLLATE utf8mb4_general_ci != ? LIMIT 1");
             if ($stmt) {
                 $stmt->bind_param('ss', $sku, $excludeItemCode);
                 $stmt->execute();
@@ -2648,7 +2648,7 @@ class Inbounding {
                 }
             }
         } else {
-            $stmt = $this->conn->prepare("SELECT id, sku, item_code, title, 'vp_products' AS source FROM vp_products WHERE UPPER(TRIM(sku)) = ? LIMIT 1");
+            $stmt = $this->conn->prepare("SELECT id, sku, item_code, title, 'vp_products' AS source FROM vp_products WHERE CONVERT(UPPER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ? LIMIT 1");
             if ($stmt) {
                 $stmt->bind_param('s', $sku);
                 $stmt->execute();
@@ -2665,7 +2665,7 @@ class Inbounding {
         $varSql = "SELECT v.id, v.sku, v.it_id, v.color, v.size, 'vp_variations' AS source, COALESCE(i.Item_code, '') AS item_code 
                    FROM vp_variations v 
                    LEFT JOIN vp_inbound i ON i.id = v.it_id 
-                   WHERE UPPER(TRIM(v.sku)) = ?";
+                   WHERE CONVERT(UPPER(TRIM(v.sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ?";
         $params = [$sku];
         $types = 's';
 
@@ -2675,7 +2675,7 @@ class Inbounding {
             $types .= 'i';
         }
         if ($excludeItemCode !== '') {
-            $varSql .= " AND UPPER(TRIM(COALESCE(i.Item_code, ''))) != ?";
+            $varSql .= " AND CONVERT(UPPER(TRIM(COALESCE(i.Item_code, ''))) USING utf8mb4) COLLATE utf8mb4_general_ci != ?";
             $params[] = $excludeItemCode;
             $types .= 's';
         }
@@ -2694,7 +2694,7 @@ class Inbounding {
         }
 
         // 3. Check vp_inbound (Main inbound items)
-        $inbSql = "SELECT id, sku, Item_code AS item_code, title, 'vp_inbound' AS source FROM vp_inbound WHERE UPPER(TRIM(sku)) = ?";
+        $inbSql = "SELECT id, sku, Item_code AS item_code, title, 'vp_inbound' AS source FROM vp_inbound WHERE CONVERT(UPPER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ?";
         $inbParams = [$sku];
         $inbTypes = 's';
 
@@ -2704,7 +2704,7 @@ class Inbounding {
             $inbTypes .= 'i';
         }
         if ($excludeItemCode !== '') {
-            $inbSql .= " AND UPPER(TRIM(COALESCE(Item_code, ''))) != ?";
+            $inbSql .= " AND CONVERT(UPPER(TRIM(COALESCE(Item_code, ''))) USING utf8mb4) COLLATE utf8mb4_general_ci != ?";
             $inbParams[] = $excludeItemCode;
             $inbTypes .= 's';
         }
@@ -2743,7 +2743,7 @@ class Inbounding {
         // Text search
         if (!empty($search)) {
             $s = $this->conn->real_escape_string(trim($search));
-            $where[] = "(p.sku LIKE '%$s%' OR p.item_code LIKE '%$s%' OR p.title LIKE '%$s%' OR u_rec_main.name LIKE '%$s%' OR u_rec_var.name LIKE '%$s%' OR u_upd_main.name LIKE '%$s%' OR u_upd_var.name LIKE '%$s%')";
+            $where[] = "(CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_general_ci LIKE '%$s%' OR CONVERT(p.item_code USING utf8mb4) COLLATE utf8mb4_general_ci LIKE '%$s%' OR CONVERT(p.title USING utf8mb4) COLLATE utf8mb4_general_ci LIKE '%$s%' OR CONVERT(u_rec_main.name USING utf8mb4) COLLATE utf8mb4_general_ci LIKE '%$s%' OR CONVERT(u_rec_var.name USING utf8mb4) COLLATE utf8mb4_general_ci LIKE '%$s%' OR CONVERT(u_upd_main.name USING utf8mb4) COLLATE utf8mb4_general_ci LIKE '%$s%' OR CONVERT(u_upd_var.name USING utf8mb4) COLLATE utf8mb4_general_ci LIKE '%$s%')";
         }
 
         // Inbound Status Filter
@@ -2767,23 +2767,23 @@ class Inbounding {
         $baseFrom = "
             FROM vp_products p
             INNER JOIN (
-                SELECT LOWER(TRIM(sku)) AS clean_sku
+                SELECT CONVERT(LOWER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci AS clean_sku
                 FROM vp_products
                 WHERE TRIM(COALESCE(sku, '')) != ''
-                GROUP BY LOWER(TRIM(sku))
+                GROUP BY CONVERT(LOWER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci
                 HAVING COUNT(*) > 1
-            ) dup ON LOWER(TRIM(p.sku)) = dup.clean_sku
+            ) dup ON CONVERT(LOWER(TRIM(p.sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = dup.clean_sku
 
-            LEFT JOIN vp_inbound i_main ON LOWER(TRIM(i_main.sku)) = LOWER(TRIM(p.sku))
+            LEFT JOIN vp_inbound i_main ON CONVERT(LOWER(TRIM(i_main.sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = CONVERT(LOWER(TRIM(p.sku)) USING utf8mb4) COLLATE utf8mb4_general_ci
             LEFT JOIN vp_users u_rec_main ON i_main.received_by_user_id = u_rec_main.id
             LEFT JOIN vp_users u_upd_main ON i_main.updated_by_user_id = u_upd_main.id
 
-            LEFT JOIN vp_variations v ON LOWER(TRIM(v.sku)) = LOWER(TRIM(p.sku))
+            LEFT JOIN vp_variations v ON CONVERT(LOWER(TRIM(v.sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = CONVERT(LOWER(TRIM(p.sku)) USING utf8mb4) COLLATE utf8mb4_general_ci
             LEFT JOIN vp_inbound i_var ON v.it_id = i_var.id
             LEFT JOIN vp_users u_rec_var ON i_var.received_by_user_id = u_rec_var.id
             LEFT JOIN vp_users u_upd_var ON i_var.updated_by_user_id = u_upd_var.id
 
-            LEFT JOIN vp_inbound i_fallback ON (i_main.id IS NULL AND i_var.id IS NULL AND LOWER(TRIM(i_fallback.Item_code)) = LOWER(TRIM(p.item_code)))
+            LEFT JOIN vp_inbound i_fallback ON (i_main.id IS NULL AND i_var.id IS NULL AND CONVERT(LOWER(TRIM(i_fallback.Item_code)) USING utf8mb4) COLLATE utf8mb4_general_ci = CONVERT(LOWER(TRIM(p.item_code)) USING utf8mb4) COLLATE utf8mb4_general_ci)
             LEFT JOIN vp_users u_rec_fb ON i_fallback.received_by_user_id = u_rec_fb.id
             LEFT JOIN vp_users u_upd_fb ON i_fallback.updated_by_user_id = u_upd_fb.id
         ";
