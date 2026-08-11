@@ -71,53 +71,6 @@ $exportUrl = '?' . http_build_query($exportParams);
         </div>
     </div>
 
-    <!-- Summary Statistics Cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="bg-white p-4 rounded-2xl border border-amber-200 shadow-sm flex items-center justify-between">
-            <div>
-                <p class="text-xs font-bold uppercase tracking-wider text-amber-600">Duplicate SKU Clusters</p>
-                <p class="text-2xl font-extrabold text-gray-900 mt-1"><?php echo number_format($stats['total_duplicate_skus'] ?? 0); ?></p>
-                <p class="text-[11px] text-gray-500 mt-0.5">Unique SKU strings appearing multiple times</p>
-            </div>
-            <div class="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 text-xl font-bold shrink-0">
-                <i class="fas fa-copy"></i>
-            </div>
-        </div>
-
-        <div class="bg-white p-4 rounded-2xl border border-red-200 shadow-sm flex items-center justify-between">
-            <div>
-                <p class="text-xs font-bold uppercase tracking-wider text-red-600">Affected Duplicate Products</p>
-                <p class="text-2xl font-extrabold text-gray-900 mt-1"><?php echo number_format($stats['total_affected_products'] ?? 0); ?></p>
-                <p class="text-[11px] text-gray-500 mt-0.5">Total product rows in <code class="text-[10px] bg-gray-100 px-1 rounded">vp_products</code></p>
-            </div>
-            <div class="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-600 text-xl font-bold shrink-0">
-                <i class="fas fa-boxes"></i>
-            </div>
-        </div>
-
-        <div class="bg-white p-4 rounded-2xl border border-emerald-200 shadow-sm flex items-center justify-between">
-            <div>
-                <p class="text-xs font-bold uppercase tracking-wider text-emerald-600">Inbounded Products</p>
-                <p class="text-2xl font-extrabold text-gray-900 mt-1"><?php echo number_format($stats['inbounded_products_count'] ?? 0); ?></p>
-                <p class="text-[11px] text-gray-500 mt-0.5">Created through Inbound process</p>
-            </div>
-            <div class="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 text-xl font-bold shrink-0">
-                <i class="fas fa-truck-loading"></i>
-            </div>
-        </div>
-
-        <div class="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between">
-            <div>
-                <p class="text-xs font-bold uppercase tracking-wider text-gray-500">Non-Inbounded Products</p>
-                <p class="text-2xl font-extrabold text-gray-900 mt-1"><?php echo number_format($stats['non_inbounded_products_count'] ?? 0); ?></p>
-                <p class="text-[11px] text-gray-500 mt-0.5">Created directly / Catalog import</p>
-            </div>
-            <div class="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-500 text-xl font-bold shrink-0">
-                <i class="fas fa-database"></i>
-            </div>
-        </div>
-    </div>
-
     <!-- Filter & Search Panel -->
     <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
         <form method="get" action="" class="space-y-4">
