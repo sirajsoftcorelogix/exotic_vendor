@@ -2728,6 +2728,142 @@ class Inbounding {
     public function checkSkuExistsInProducts(string $sku, string $excludeItemCode = ''): ?array {
         return $this->checkSkuExistsInDb($sku, $excludeItemCode);
     }
+
+    /**
+     * Get report data for duplicate SKUs in vp_products connected with vp_inbound, vp_variations, and vp_users.
+     */
+    public function getDuplicateSkuReport($page = 1, $limit = 50, $search = '', $filters = []): array
+    {
+        $page = max(1, (int)$page);
+        $limit = max(1, (int)$limit);
+        $offset = ($page - 1) * $limit;
+
+        $where = ["TRIM(COALESCE(p.sku, '')) != ''"];
+
+        // Text search
+        if (!empty($search)) {
+            $s = $this->conn->real_escape_string(trim($search));
+            $where[] = "(p.sku LIKE '%$s%' OR p.item_code LIKE '%$s%' OR p.title LIKE '%$s%' OR u_rec_main.name LIKE '%$s%' OR u_rec_var.name LIKE '%$s%' OR u_upd_main.name LIKE '%$s%' OR u_upd_var.name LIKE '%$s%')";
+        }
+
+        // Inbound Status Filter
+        if (!empty($filters['inbound_status'])) {
+            if ($filters['inbound_status'] === 'inbounded') {
+                $where[] = "(i_main.id IS NOT NULL OR i_var.id IS NOT NULL OR i_fallback.id IS NOT NULL)";
+            } elseif ($filters['inbound_status'] === 'not_inbounded') {
+                $where[] = "(i_main.id IS NULL AND i_var.id IS NULL AND i_fallback.id IS NULL)";
+            }
+        }
+
+        // Inbound Created Date Range Filter
+        if (!empty($filters['inbound_from']) && !empty($filters['inbound_to'])) {
+            $from = $this->conn->real_escape_string(trim($filters['inbound_from'])) . ' 00:00:00';
+            $to   = $this->conn->real_escape_string(trim($filters['inbound_to'])) . ' 23:59:59';
+            $where[] = "COALESCE(i_main.created_at, i_var.created_at, i_fallback.created_at) BETWEEN '$from' AND '$to'";
+        }
+
+        $whereSql = implode(' AND ', $where);
+
+        $baseFrom = "
+            FROM vp_products p
+            INNER JOIN (
+                SELECT LOWER(TRIM(sku)) AS clean_sku
+                FROM vp_products
+                WHERE TRIM(COALESCE(sku, '')) != ''
+                GROUP BY LOWER(TRIM(sku))
+                HAVING COUNT(*) > 1
+            ) dup ON LOWER(TRIM(p.sku)) = dup.clean_sku
+
+            LEFT JOIN vp_inbound i_main ON LOWER(TRIM(i_main.sku)) = LOWER(TRIM(p.sku))
+            LEFT JOIN vp_users u_rec_main ON i_main.received_by_user_id = u_rec_main.id
+            LEFT JOIN vp_users u_upd_main ON i_main.updated_by_user_id = u_upd_main.id
+
+            LEFT JOIN vp_variations v ON LOWER(TRIM(v.sku)) = LOWER(TRIM(p.sku))
+            LEFT JOIN vp_inbound i_var ON v.it_id = i_var.id
+            LEFT JOIN vp_users u_rec_var ON i_var.received_by_user_id = u_rec_var.id
+            LEFT JOIN vp_users u_upd_var ON i_var.updated_by_user_id = u_upd_var.id
+
+            LEFT JOIN vp_inbound i_fallback ON (i_main.id IS NULL AND i_var.id IS NULL AND LOWER(TRIM(i_fallback.Item_code)) = LOWER(TRIM(p.item_code)))
+            LEFT JOIN vp_users u_rec_fb ON i_fallback.received_by_user_id = u_rec_fb.id
+            LEFT JOIN vp_users u_upd_fb ON i_fallback.updated_by_user_id = u_upd_fb.id
+        ";
+
+        $countSql = "SELECT COUNT(*) AS total_rows $baseFrom WHERE $whereSql";
+        $totalRes = $this->conn->query($countSql);
+        $totalRows = $totalRes ? (int)($totalRes->fetch_assoc()['total_rows'] ?? 0) : 0;
+
+        $statsSql = "
+            SELECT 
+                COUNT(DISTINCT dup.clean_sku) AS total_duplicate_skus,
+                COUNT(*) AS total_affected_products,
+                SUM(CASE WHEN (i_main.id IS NOT NULL OR i_var.id IS NOT NULL OR i_fallback.id IS NOT NULL) THEN 1 ELSE 0 END) AS inbounded_products_count,
+                SUM(CASE WHEN (i_main.id IS NULL AND i_var.id IS NULL AND i_fallback.id IS NULL) THEN 1 ELSE 0 END) AS non_inbounded_products_count
+            $baseFrom WHERE $whereSql
+        ";
+        $statsRes = $this->conn->query($statsSql);
+        $stats = $statsRes ? $statsRes->fetch_assoc() : [
+            'total_duplicate_skus' => 0,
+            'total_affected_products' => 0,
+            'inbounded_products_count' => 0,
+            'non_inbounded_products_count' => 0,
+        ];
+
+        $dataSql = "
+            SELECT 
+                p.id AS product_id,
+                p.sku AS product_sku,
+                p.item_code AS product_item_code,
+                p.title AS product_title,
+                p.size AS product_size,
+                p.color AS product_color,
+                p.itemprice,
+                p.finalprice,
+                p.created_on AS product_created_on,
+                p.updated_at AS product_updated_at,
+                
+                COALESCE(i_main.id, i_var.id, i_fallback.id) AS inbound_id,
+                COALESCE(i_main.Item_code, i_var.Item_code, i_fallback.Item_code) AS inbound_item_code,
+                COALESCE(i_main.sku, v.sku, i_fallback.sku) AS inbound_sku,
+                COALESCE(i_main.created_at, i_var.created_at, i_fallback.created_at) AS inbound_created_at,
+                COALESCE(i_main.added_date, i_var.added_date, i_fallback.added_date) AS inbound_added_date,
+                COALESCE(i_main.received_by_user_id, i_var.received_by_user_id, i_fallback.received_by_user_id) AS received_by_user_id,
+                COALESCE(u_rec_main.name, u_rec_var.name, u_rec_fb.name) AS received_by_user_name,
+                COALESCE(i_main.updated_by_user_id, i_var.updated_by_user_id, i_fallback.updated_by_user_id) AS updated_by_user_id,
+                COALESCE(u_upd_main.name, u_upd_var.name, u_upd_fb.name) AS updated_by_user_name,
+                
+                CASE 
+                    WHEN i_main.id IS NOT NULL THEN 'Main Item Inbound'
+                    WHEN i_var.id IS NOT NULL THEN 'Variation Inbound'
+                    WHEN i_fallback.id IS NOT NULL THEN 'Item Code Match'
+                    ELSE 'Not Inbounded'
+                END AS inbound_status
+            $baseFrom
+            WHERE $whereSql
+            ORDER BY dup.clean_sku ASC, p.id ASC
+            LIMIT $limit OFFSET $offset
+        ";
+
+        $dataRes = $this->conn->query($dataSql);
+        $rows = $dataRes ? $dataRes->fetch_all(MYSQLI_ASSOC) : [];
+
+        return [
+            'rows' => $rows,
+            'total' => $totalRows,
+            'page' => $page,
+            'limit' => $limit,
+            'total_pages' => max(1, ceil($totalRows / $limit)),
+            'stats' => $stats,
+        ];
+    }
+
+    /**
+     * Get all duplicate SKU report rows for CSV export without pagination limits.
+     */
+    public function getDuplicateSkuReportExportData($search = '', $filters = []): array
+    {
+        $res = $this->getDuplicateSkuReport(1, 10000, $search, $filters);
+        return $res['rows'] ?? [];
+    }
     public function getProductByItemcode($itemcode) {
         $sql = "SELECT id FROM vp_products WHERE item_code = ? LIMIT 1";
         $stmt = $this->conn->prepare($sql);
