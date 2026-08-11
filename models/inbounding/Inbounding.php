@@ -2618,6 +2618,116 @@ class Inbounding {
 
         return null;
     }
+
+    /**
+     * Check whether a SKU already exists across database tables (vp_products, vp_variations, or vp_inbound).
+     *
+     * @param string $sku
+     * @param string $excludeItemCode
+     * @param int $excludeInboundId
+     * @return array|null Returns array details of matching record if found, or null if not found.
+     */
+    public function checkSkuExistsInDb(string $sku, string $excludeItemCode = '', int $excludeInboundId = 0): ?array {
+        $sku = strtoupper(trim($sku));
+        if ($sku === '') {
+            return null;
+        }
+        $excludeItemCode = strtoupper(trim($excludeItemCode));
+
+        // 1. Check vp_products (Published catalog)
+        if ($excludeItemCode !== '') {
+            $stmt = $this->conn->prepare("SELECT id, sku, item_code, title, 'vp_products' AS source FROM vp_products WHERE UPPER(TRIM(sku)) = ? AND UPPER(TRIM(COALESCE(item_code, ''))) != ? LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param('ss', $sku, $excludeItemCode);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                $row = $res ? $res->fetch_assoc() : null;
+                $stmt->close();
+                if ($row) {
+                    return $row;
+                }
+            }
+        } else {
+            $stmt = $this->conn->prepare("SELECT id, sku, item_code, title, 'vp_products' AS source FROM vp_products WHERE UPPER(TRIM(sku)) = ? LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param('s', $sku);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                $row = $res ? $res->fetch_assoc() : null;
+                $stmt->close();
+                if ($row) {
+                    return $row;
+                }
+            }
+        }
+
+        // 2. Check vp_variations (Inbound variations)
+        $varSql = "SELECT v.id, v.sku, v.it_id, v.color, v.size, 'vp_variations' AS source, COALESCE(i.Item_code, '') AS item_code 
+                   FROM vp_variations v 
+                   LEFT JOIN vp_inbound i ON i.id = v.it_id 
+                   WHERE UPPER(TRIM(v.sku)) = ?";
+        $params = [$sku];
+        $types = 's';
+
+        if ($excludeInboundId > 0) {
+            $varSql .= " AND v.it_id != ?";
+            $params[] = $excludeInboundId;
+            $types .= 'i';
+        }
+        if ($excludeItemCode !== '') {
+            $varSql .= " AND UPPER(TRIM(COALESCE(i.Item_code, ''))) != ?";
+            $params[] = $excludeItemCode;
+            $types .= 's';
+        }
+        $varSql .= " LIMIT 1";
+
+        $stmtVar = $this->conn->prepare($varSql);
+        if ($stmtVar) {
+            $stmtVar->bind_param($types, ...$params);
+            $stmtVar->execute();
+            $resVar = $stmtVar->get_result();
+            $rowVar = $resVar ? $resVar->fetch_assoc() : null;
+            $stmtVar->close();
+            if ($rowVar) {
+                return $rowVar;
+            }
+        }
+
+        // 3. Check vp_inbound (Main inbound items)
+        $inbSql = "SELECT id, sku, Item_code AS item_code, title, 'vp_inbound' AS source FROM vp_inbound WHERE UPPER(TRIM(sku)) = ?";
+        $inbParams = [$sku];
+        $inbTypes = 's';
+
+        if ($excludeInboundId > 0) {
+            $inbSql .= " AND id != ?";
+            $inbParams[] = $excludeInboundId;
+            $inbTypes .= 'i';
+        }
+        if ($excludeItemCode !== '') {
+            $inbSql .= " AND UPPER(TRIM(COALESCE(Item_code, ''))) != ?";
+            $inbParams[] = $excludeItemCode;
+            $inbTypes .= 's';
+        }
+        $inbSql .= " LIMIT 1";
+
+        $stmtInb = $this->conn->prepare($inbSql);
+        if ($stmtInb) {
+            $stmtInb->bind_param($inbTypes, ...$inbParams);
+            $stmtInb->execute();
+            $resInb = $stmtInb->get_result();
+            $rowInb = $resInb ? $resInb->fetch_assoc() : null;
+            $stmtInb->close();
+            if ($rowInb) {
+                return $rowInb;
+            }
+        }
+
+        return null;
+    }
+
+    public function checkSkuExistsInProducts(string $sku, string $excludeItemCode = ''): ?array {
+        return $this->checkSkuExistsInDb($sku, $excludeItemCode);
+    }
     public function getProductByItemcode($itemcode) {
         $sql = "SELECT id FROM vp_products WHERE item_code = ? LIMIT 1";
         $stmt = $this->conn->prepare($sql);

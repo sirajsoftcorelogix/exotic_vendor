@@ -674,10 +674,12 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     <div class="flex flex-col">
                         <label class="text-xs font-bold text-[#333] mb-1.5">SKU (Auto):</label>
                         <input type="text" 
+                               id="auto_generated_sku_field"
                                readonly
                                value="<?php echo htmlspecialchars($data['form2']['sku'] ?? ''); ?>"
                                class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#555] w-full bg-gray-200 cursor-not-allowed focus:outline-none" 
                                placeholder="Generated on Save">
+                        <p id="sku_duplicate_warning" class="hidden text-xs text-red-600 font-bold mt-1"></p>
                     </div>
                     <div class="flex flex-col sm:col-span-2 md:col-span-1">
                         <label class="text-xs font-bold text-[#333] mb-1.5">Parent Item Code:</label>
@@ -5946,14 +5948,196 @@ function validateAndSubmit(actionType) {
             confirmButtonColor: '#d97824'
         });
     } else {
-        // Validation Passed - Submit
+        performSkuCheckAndSubmit(actionType);
+    }
+}
+
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function cleanSkuSegment(val) {
+    if (!val) return '';
+    let clean = String(val).replace(/[xX](?=[^a-zA-Z0-9]*\d)/g, '');
+    return clean.replace(/[^a-zA-Z0-9]/g, '');
+}
+
+function generateJsItemSku(itemCode, size, color) {
+    itemCode = (itemCode || '').trim();
+    if (!itemCode) return '';
+    let cleanSize = cleanSkuSegment(size);
+    let cleanColor = cleanSkuSegment(color);
+    if (cleanSize !== '' && cleanColor !== '') return itemCode + '-' + cleanSize + '-' + cleanColor;
+    if (cleanSize !== '') return itemCode + '-' + cleanSize;
+    if (cleanColor !== '') return itemCode + '--' + cleanColor;
+    return itemCode;
+}
+
+let skuCheckDebounceTimer = null;
+function updateLiveSkuPreviewAndCheck() {
+    const skuField = document.getElementById('auto_generated_sku_field');
+    const warningEl = document.getElementById('sku_duplicate_warning');
+    const form = document.getElementById('product_form');
+    if (!form) return;
+
+    const getVal = (name) => {
+        const el = form.querySelector(`[name="${name}"]`);
+        return el ? el.value.trim() : '';
+    };
+
+    const itemCode = getVal('Item_code');
+    const size = getVal('size');
+    const color = getVal('color');
+    const isVariant = getVal('is_variant');
+    const recordId = "<?php echo (int)($record_id ?? 0); ?>";
+
+    let mainSku = '';
+    if (isVariant === 'N') {
+        mainSku = itemCode;
+    } else if (itemCode) {
+        mainSku = generateJsItemSku(itemCode, size, color);
+    }
+
+    if (skuField && mainSku) {
+        skuField.value = mainSku;
+    }
+
+    if (skuCheckDebounceTimer) clearTimeout(skuCheckDebounceTimer);
+    skuCheckDebounceTimer = setTimeout(() => {
+        if (!itemCode && !mainSku) {
+            if (warningEl) {
+                warningEl.textContent = '';
+                warningEl.classList.add('hidden');
+            }
+            return;
+        }
+
+        let formData = new FormData();
+        formData.append('item_code', itemCode);
+        formData.append('size', size);
+        formData.append('color', color);
+        formData.append('is_variant', isVariant);
+        if (recordId) formData.append('inbound_id', recordId);
+
+        document.querySelectorAll('.variation-card').forEach((card, idx) => {
+            const sInput = card.querySelector('input[name*="[size]"], select[name*="[size]"]');
+            const cInput = card.querySelector('input[name*="[color]"], select[name*="[color]"]');
+            formData.append(`variations[${idx}][size]`, sInput ? sInput.value.trim() : '');
+            formData.append(`variations[${idx}][color]`, cInput ? cInput.value.trim() : '');
+        });
+
+        fetch('index.php?page=inbounding&action=checkSkuExists', {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (warningEl) {
+                if (data && data.has_duplicates) {
+                    const first = data.duplicates[0];
+                    warningEl.innerHTML = `⚠️ ${escapeHtml(first.message || ('SKU ' + first.sku + ' is already present!'))}`;
+                    warningEl.classList.remove('hidden');
+                } else {
+                    warningEl.textContent = '';
+                    warningEl.classList.add('hidden');
+                }
+            }
+        })
+        .catch(() => {});
+    }, 400);
+}
+
+function performSkuCheckAndSubmit(actionType) {
+    const form = document.getElementById('product_form');
+    if (!form) return;
+
+    const getVal = (name) => {
+        const el = form.querySelector(`[name="${name}"]`);
+        return el ? el.value.trim() : '';
+    };
+
+    const recordId = "<?php echo (int)($record_id ?? 0); ?>";
+
+    let formData = new FormData();
+    formData.append('item_code', getVal('Item_code'));
+    formData.append('size', getVal('size'));
+    formData.append('color', getVal('color'));
+    formData.append('is_variant', getVal('is_variant'));
+    if (recordId) formData.append('inbound_id', recordId);
+
+    document.querySelectorAll('.variation-card').forEach((card, idx) => {
+        const sInput = card.querySelector('input[name*="[size]"], select[name*="[size]"]');
+        const cInput = card.querySelector('input[name*="[color]"], select[name*="[color]"]');
+        formData.append(`variations[${idx}][size]`, sInput ? sInput.value.trim() : '');
+        formData.append(`variations[${idx}][color]`, cInput ? cInput.value.trim() : '');
+    });
+
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: 'Validating SKU...',
+            text: 'Checking if SKU already exists in catalog...',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+    }
+
+    fetch('index.php?page=inbounding&action=checkSkuExists', {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data && data.has_duplicates) {
+            let dupHtml = data.duplicates.map(d => 
+                `<p class="text-xs text-red-700 font-bold mb-1">• ${escapeHtml(d.message || ('SKU ' + d.sku + ' already exists.'))}</p>`
+            ).join('');
+
+            Swal.fire({
+                icon: 'error',
+                title: 'SKU Already Present',
+                html: `<div class="text-left"><p class="text-sm text-gray-700 mb-2 font-medium">Cannot save inbound item because the generated SKU already exists in database:</p><div class="bg-red-50 border border-red-200 rounded p-3 mb-2">${dupHtml}</div><p class="text-xs text-gray-500">Please modify the size, color, or parent item code to make the SKU unique.</p></div>`,
+                confirmButtonColor: '#d33'
+            });
+        } else {
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+            document.getElementById('hidden_save_action').value = actionType;
+            form.submit();
+        }
+    })
+    .catch(err => {
+        console.error('SKU validation error:', err);
         document.getElementById('hidden_save_action').value = actionType;
         form.submit();
-    }
+    });
+}
 }
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const mainForm = document.getElementById('product_form');
+    if (mainForm) {
+        mainForm.addEventListener('input', function(e) {
+            if (e.target.matches('[name="size"], [name="color"], [name="Item_code"], [name="is_variant"], input[name*="[size]"], select[name*="[size]"], input[name*="[color]"], select[name*="[color]"]')) {
+                updateLiveSkuPreviewAndCheck();
+            }
+        });
+        mainForm.addEventListener('change', function(e) {
+            if (e.target.matches('[name="size"], [name="color"], [name="Item_code"], [name="is_variant"], input[name*="[size]"], select[name*="[size]"], input[name*="[color]"], select[name*="[color]"]')) {
+                updateLiveSkuPreviewAndCheck();
+            }
+        });
+        updateLiveSkuPreviewAndCheck();
+    }
     
     // 1. Get Markup Data from PHP
     const markupMap = <?php echo json_encode($data['markup_list'] ?? []); ?>;
