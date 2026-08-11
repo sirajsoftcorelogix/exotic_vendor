@@ -691,7 +691,7 @@ class POSRegisterController
      * Handle E-way bill and IRN generation for POS checkout
      * Calls DomesticEwbIrnService after invoice is created
      */
-    private function handlePosEwbGeneration(mysqli $conn, int $invoiceId, array $payload, int $orderNumber): void
+    private function handlePosEwbGeneration(mysqli $conn, int $invoiceId, array $payload, string $orderNumber): void
     {
         try {
             // echo "POS EWB: Starting E-way bill generation for invoice $invoiceId\n";
@@ -745,7 +745,7 @@ class POSRegisterController
                 error_log("POS EWB: Failed to prepare customer query: " . $conn->error);
                 return;
             }            
-            $custStmt->bind_param("ii", $custId, $orderNumber);
+            $custStmt->bind_param("is", $custId, $orderNumber);
             $custStmt->execute();
             $customer = $custStmt->get_result()->fetch_assoc();
             $custStmt->close();
@@ -841,7 +841,7 @@ class POSRegisterController
                 error_log("POS EWB: Missing Alankit API credentials in config.php");
                 return;
             }
-            echo "POS EWB: Alankit API credentials loaded successfully.\n";
+            //echo "POS EWB: Alankit API credentials loaded successfully.\n";
             $ewbService = new DomesticEwbIrnService($conn, $alankitConfig);
             $result = $ewbService->generateIrnAndEwb($invoiceId, $invoice, $items, $customer, $firm, $ewbData);
 
@@ -5130,7 +5130,7 @@ class POSRegisterController
         
         // Generate IRN and E-way bill if requested
         if (!empty($payload['generate_ewb']) && $payload['generate_ewb'] === '1' && !empty($invoiceMeta['invoice_id'])) {
-            $this->handlePosEwbGeneration($conn, (int)$invoiceMeta['invoice_id'], $payload, $orderNumber);
+            $this->handlePosEwbGeneration($conn, (int)$invoiceMeta['invoice_id'], $payload, (string)$orderNumber);
         }
         
         $fulfillmentStatusMeta = $this->syncPosCheckoutOrderFulfillmentStatus(
@@ -5317,8 +5317,314 @@ class POSRegisterController
         if (empty($row['invoice_poitem_ids']) || !is_array($row['invoice_poitem_ids'])) {
             $row['invoice_poitem_ids'] = $this->resolveInvoicePoitemIdsForOrderNumber($conn, $row['order_id'] ?? '');
         }
+        $row = $this->attachIrnEwbStatusToReceiptRow($conn, $row);
         $row = $this->applyPosReceiptCompanyHeader($row, $conn);
         renderTemplateClean('views/pos_register/order_confirmation.php', $row, 'Order confirmation');
+    }
+
+    /**
+     * Regenerate IRN / E-way bill from checkout receipt popup.
+     * POST JSON: { invoice_id: int, order_number: string }
+     */
+    public function regenerate_irn_ewb(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+        global $conn;
+
+        $raw = (string)file_get_contents('php://input');
+        $data = json_decode($raw, true);
+        if (!is_array($data)) {
+            $data = $_POST;
+        }
+
+        $invoiceId = (int)($data['invoice_id'] ?? 0);
+        $orderNumber = trim((string)($data['order_number'] ?? ''));
+
+        if ($invoiceId <= 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invoice ID is required.',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+        if ($orderNumber === '') {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Order number is required for IRN/EWB regeneration.',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $regenPayload = [];
+
+        $tradeStmt = $conn->prepare('SELECT trade_name FROM vp_order_info WHERE order_number = ? ORDER BY id DESC LIMIT 1');
+        if ($tradeStmt) {
+            $tradeStmt->bind_param('s', $orderNumber);
+            $tradeStmt->execute();
+            $tradeRow = $tradeStmt->get_result()->fetch_assoc();
+            $tradeStmt->close();
+            if (is_array($tradeRow)) {
+                $tradeName = trim((string)($tradeRow['trade_name'] ?? ''));
+                if ($tradeName !== '') {
+                    $regenPayload['confirm_trade_name'] = $tradeName;
+                }
+            }
+        }
+
+        $trackingRow = $this->fetchIrnEwbTrackingRowByInvoiceId($conn, $invoiceId);
+        if (is_array($trackingRow)) {
+            $vehNo = trim((string)($trackingRow['veh_no'] ?? ''));
+            $vehType = strtoupper(trim((string)($trackingRow['veh_type'] ?? '')));
+
+            if ($vehNo !== '') {
+                $regenPayload['ewb_veh_no'] = $vehNo;
+                if ($vehType === 'ODC') {
+                    $regenPayload['ewb_veh_type'] = '4';
+                    $regenPayload['ewb_ship_veh_no'] = $vehNo;
+                } else {
+                    $regenPayload['ewb_veh_type'] = '1';
+                }
+            }
+        }
+
+        $this->handlePosEwbGeneration($conn, $invoiceId, $regenPayload, $orderNumber);
+
+        $latest = $this->fetchIrnEwbTrackingRowByInvoiceId($conn, $invoiceId);
+        $irnStatus = strtolower(trim((string)($latest['irn_status'] ?? '')));
+        $ewbStatus = strtolower(trim((string)($latest['ewb_status'] ?? '')));
+        $generated = ($irnStatus === 'generated' && $ewbStatus === 'generated');
+
+        echo json_encode([
+            'success' => $generated,
+            'triggered' => true,
+            'message' => $generated
+                ? 'IRN and E-way bill generated successfully.'
+                : 'Regeneration completed but IRN/E-way bill is still pending or failed. Check status details.',
+            'invoice_id' => $invoiceId,
+            'order_number' => $orderNumber,
+            'status' => [
+                'irn_status' => (string)($latest['irn_status'] ?? ''),
+                'ewb_status' => (string)($latest['ewb_status'] ?? ''),
+                'irn_error' => trim((string)($latest['irn_error'] ?? '')),
+                'ewb_error' => trim((string)($latest['ewb_error'] ?? '')),
+                'irn_response' => trim((string)($latest['irn_response'] ?? '')),
+                'ewb_response' => trim((string)($latest['ewb_response'] ?? '')),
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    /**
+     * Regenerate only E-way bill when IRN is already generated and EWB is pending.
+     * POST JSON: { invoice_id: int, order_number: string }
+     */
+    public function regenerate_ewb_with_irn(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+        global $conn;
+
+        $raw = (string)file_get_contents('php://input');
+        $data = json_decode($raw, true);
+        if (!is_array($data)) {
+            $data = $_POST;
+        }
+
+        $invoiceId = (int)($data['invoice_id'] ?? 0);
+        $orderNumber = trim((string)($data['order_number'] ?? ''));
+
+        if ($invoiceId <= 0 || $orderNumber === '') {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invoice ID and order number are required.',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $tracking = $this->fetchIrnEwbTrackingRowByInvoiceId($conn, $invoiceId);
+        if (!is_array($tracking)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'No IRN/EWB tracking record found for this invoice.',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $irnStatus = strtolower(trim((string)($tracking['irn_status'] ?? '')));
+        $ewbStatus = strtolower(trim((string)($tracking['ewb_status'] ?? '')));
+        $irn = trim((string)($tracking['irn'] ?? ''));
+
+        if ($irnStatus !== 'generated' || $ewbStatus !== 'pending' || $irn === '') {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Regenerate EWB with IRN is allowed only when IRN is generated and EWB is pending.',
+                'status' => [
+                    'irn_status' => (string)($tracking['irn_status'] ?? ''),
+                    'ewb_status' => (string)($tracking['ewb_status'] ?? ''),
+                ],
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $invStmt = $conn->prepare('SELECT * FROM vp_invoices WHERE id = ? LIMIT 1');
+        $invoice = null;
+        if ($invStmt) {
+            $invStmt->bind_param('i', $invoiceId);
+            $invStmt->execute();
+            $invoice = $invStmt->get_result()->fetch_assoc();
+            $invStmt->close();
+        }
+        if (!is_array($invoice)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invoice not found for EWB regeneration.',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $custStmt = $conn->prepare('SELECT * FROM vp_order_info WHERE customer_id = ? AND order_number = ? ORDER BY id DESC LIMIT 1');
+        $customer = null;
+        if ($custStmt) {
+            $custId = (int)($invoice['customer_id'] ?? 0);
+            $custStmt->bind_param('is', $custId, $orderNumber);
+            $custStmt->execute();
+            $customer = $custStmt->get_result()->fetch_assoc();
+            $custStmt->close();
+        }
+        if (!is_array($customer)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Customer/order info not found for EWB regeneration.',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $config = include __DIR__ . '/../config.php';
+        $alankitConfig = $config['alankit'] ?? [];
+        require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
+        $ewbService = new DomesticEwbIrnService($conn, $alankitConfig);
+        $invoiceNumberParts = explode('-', $invoice['invoice_number'] ?? '');
+        $invoiceNumber = end($invoiceNumberParts);        
+        $ewbData = [
+            'distance' => 100,
+            'trans_mode' => '1',
+            'veh_no' => trim((string)($tracking['veh_no'] ?? '')),
+            'veh_type' => trim((string)($tracking['veh_type'] ?? 'R')),
+            'trans_doc_no' => trim((string)($invoiceNumber ?? $invoiceId)),
+            'trn_doc_dt' => date('d/m/Y')
+        ];
+
+        $regenResult = $ewbService->regenerateEwbWithIrn($invoiceId, $irn, $invoice, $customer, $ewbData);
+        $latest = $this->fetchIrnEwbTrackingRowByInvoiceId($conn, $invoiceId);
+
+        echo json_encode([
+            'success' => !empty($regenResult['status']),
+            'triggered' => true,
+            'message' => (string)($regenResult['message'] ?? 'EWB regeneration completed.'),
+            'invoice_id' => $invoiceId,
+            'order_number' => $orderNumber,
+            'status' => [
+                'irn_status' => (string)($latest['irn_status'] ?? ''),
+                'ewb_status' => (string)($latest['ewb_status'] ?? ''),
+                'irn_error' => trim((string)($latest['irn_error'] ?? '')),
+                'ewb_error' => trim((string)($latest['ewb_error'] ?? '')),
+                'irn_response' => trim((string)($latest['irn_response'] ?? '')),
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    /**
+     * Fetch saved IRN/EWB tracking row by vp_invoices_id.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function fetchIrnEwbTrackingRowByInvoiceId(mysqli $conn, int $invoiceId): ?array
+    {
+        if ($invoiceId <= 0) {
+            return null;
+        }
+
+        $stmt = $conn->prepare(
+            'SELECT irn, ewb_no, irn_status, ewb_status, irn_error, ewb_error, irn_response, ewb_response, veh_no, veh_type
+             FROM vp_domestic_ewb_irn
+             WHERE vp_invoices_id = ?
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+
+        $stmt->bind_param('i', $invoiceId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+
+        return is_array($row) ? $row : null;
+    }
+
+    /**
+     * Attach IRN/EWB generation status to receipt row for popup diagnostics.
+     * Shows popup only when IRN or EWB is not generated for the resolved invoice.
+     *
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function attachIrnEwbStatusToReceiptRow(mysqli $conn, array $row): array
+    {
+        $row['show_irn_ewb_popup'] = false;
+        $row['irn_ewb_popup_title'] = 'IRN / E-way Bill Status';
+        $row['irn_ewb_popup_invoice_id'] = (int)($row['invoice_id'] ?? 0);
+        $row['irn_status'] = '';
+        $row['ewb_status'] = '';
+        $row['irn_error'] = '';
+        $row['ewb_error'] = '';
+        $row['irn_response'] = '';
+        $row['ewb_response'] = '';
+        $row['irn_ewb_status_note'] = '';
+        $row['ewb_regen_with_irn_allowed'] = false;
+
+        $invoiceId = (int)($row['invoice_id'] ?? 0);
+        if ($invoiceId <= 0) {
+            return $row;
+        }
+
+        $statusRow = $this->fetchIrnEwbTrackingRowByInvoiceId($conn, $invoiceId);
+
+        if (!is_array($statusRow)) {
+            $row['show_irn_ewb_popup'] = true;
+            $row['irn_ewb_status_note'] = 'No IRN/E-way bill tracking record found for this invoice.';
+            return $row;
+        }
+
+        $irnStatus = strtolower(trim((string)($statusRow['irn_status'] ?? '')));
+        $ewbStatus = strtolower(trim((string)($statusRow['ewb_status'] ?? '')));
+
+        $row['irn_status'] = (string)($statusRow['irn_status'] ?? '');
+        $row['ewb_status'] = (string)($statusRow['ewb_status'] ?? '');
+        $row['irn'] = trim((string)($statusRow['irn'] ?? ''));
+        $row['ewb_no'] = trim((string)($statusRow['ewb_no'] ?? ''));
+        $row['irn_error'] = trim((string)($statusRow['irn_error'] ?? ''));
+        $row['ewb_error'] = trim((string)($statusRow['ewb_error'] ?? ''));
+        $row['irn_response'] = trim((string)($statusRow['irn_response'] ?? ''));
+        $row['ewb_response'] = trim((string)($statusRow['ewb_response'] ?? ''));
+
+        $irnGenerated = ($irnStatus === 'generated');
+        $ewbGenerated = ($ewbStatus === 'generated');
+        $row['ewb_regen_with_irn_allowed'] = ($irnGenerated && $ewbStatus === 'pending' && trim((string)($statusRow['irn'] ?? '')) !== '');
+
+        if (!$irnGenerated || !$ewbGenerated) {
+            $row['show_irn_ewb_popup'] = true;
+            if ($row['irn_error'] === '' && $row['ewb_error'] === '' && $row['irn_response'] === '') {
+                $row['irn_ewb_status_note'] = 'IRN/E-way bill is not generated yet, and no error payload is available.';
+            }
+        }
+
+        return $row;
     }
 
     /**
