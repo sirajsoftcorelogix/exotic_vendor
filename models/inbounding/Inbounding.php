@@ -2662,7 +2662,7 @@ class Inbounding {
         }
 
         // 2. Check vp_variations (Inbound variations)
-        $varSql = "SELECT v.id, v.sku, v.it_id, v.color, v.size, 'vp_variations' AS source, COALESCE(i.Item_code, '') AS item_code 
+        $varSql = "SELECT v.id, v.sku, v.it_id, v.color, v.size, 'vp_variations' AS source, COALESCE(i.Item_code, '') AS item_code, COALESCE(i.product_title, '') AS title 
                    FROM vp_variations v 
                    LEFT JOIN vp_inbound i ON i.id = v.it_id 
                    WHERE CONVERT(UPPER(TRIM(v.sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ?";
@@ -2694,7 +2694,7 @@ class Inbounding {
         }
 
         // 3. Check vp_inbound (Main inbound items)
-        $inbSql = "SELECT id, sku, Item_code AS item_code, title, 'vp_inbound' AS source FROM vp_inbound WHERE CONVERT(UPPER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ?";
+        $inbSql = "SELECT id, sku, Item_code AS item_code, product_title AS title, 'vp_inbound' AS source FROM vp_inbound WHERE CONVERT(UPPER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ?";
         $inbParams = [$sku];
         $inbTypes = 's';
 
