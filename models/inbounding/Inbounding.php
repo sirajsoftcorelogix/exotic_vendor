@@ -2906,6 +2906,15 @@ class Inbounding {
     }
 
     /**
+     * Get all report data rows for CSV export or bulk actions without pagination limits.
+     */
+    public function getDuplicateSkuReportExportData($search = '', $filters = []): array
+    {
+        $res = $this->getDuplicateSkuReport(1, 1000000, $search, $filters);
+        return $res['rows'] ?? [];
+    }
+
+    /**
      * Bulk delete all duplicate inbounded products from vp_products.
      * Optionally respects search text or filter criteria.
      *
