@@ -21,7 +21,7 @@ Given:
 - Component list price: $L_c$ (Base item or addon list price)
 - Total order list price pool: $L_{\text{total}} = \sum L_c$
 - Total order-level discount: $D_{\text{total}}$ (sum of `custom_reduce`, `coupon_reduce`, `giftvoucher_reduce`, `credit`)
-  $$\text{Example}: D_{\text{total}} = 7,240.00$$
+  $$\text{Example}: D_{\text{total}} = 7,200.00$$
 
 ### Formula Steps per Component ($c$):
 
@@ -34,31 +34,31 @@ Given:
 
 2. **Discount Value**:
    $$D_c = D_{\text{total}} \times \frac{L_c}{L_{\text{total}}}$$
-   - Line 1 Base Discount: $7240 \times 40.025413\% = 2,917.85$
-   - Line 1 Addon Discount: $7240 \times 0.635324\% = 46.32$
-   - Line 2 Base Discount: $7240 \times 58.703939\% = 4,279.52$
-   - Line 2 Addon Discount: $7240 \times 0.635324\% = 46.32$
+   - Line 1 Base Discount: $7200 \times 40.025413\% = 2,881.83$
+   - Line 1 Addon Discount: $7200 \times 0.635324\% = 45.74$
+   - Line 2 Base Discount: $7200 \times 58.703939\% = 4,226.68$
+   - Line 2 Addon Discount: $7200 \times 0.635324\% = 45.74$
 
 3. **Discounted Price (incl. GST) / Line Total**:
    $$\text{Discounted Price}_c = L_c - D_c$$
-   - Line 1 Base: $6300 - 2917.85 = 3,382.15$
-   - Line 1 Addon: $100 - 46.32 = 53.68$
-   - Line 2 Base: $9240 - 4279.52 = 4,960.48$
-   - Line 2 Addon: $100 - 46.32 = 53.68$
+   - Line 1 Base: $6300 - 2881.83 = 3,418.17$
+   - Line 1 Addon: $100 - 45.74 = 54.26$
+   - Line 2 Base: $9240 - 4226.68 = 5,013.32$
+   - Line 2 Addon: $100 - 45.74 = 54.26$
 
 4. **Taxable Value**:
    $$\text{Taxable Value}_c = \frac{\text{Discounted Price}_c}{1 + \frac{\text{GST}\%}{100}}$$
-   - At $5\%$ GST: $3382.15 / 1.05 = 3,221.09$
+   - At $5\%$ GST for Line 1 Base: $3418.17 / 1.05 = 3,255.40$
 
 5. **GST Amount**:
    $$\text{GST Amount}_c = \text{Discounted Price}_c - \text{Taxable Value}_c$$
-   - At $5\%$ GST: $3382.15 - 3221.09 = 161.05$
+   - At $5\%$ GST for Line 1 Base: $3418.17 - 3255.40 = 162.77$
 
 6. **Order Totals**:
    - **Total Before Discount (incl. GST)** = $L_{\text{total}} = 15,740.00$
-   - **Fixed Discount** = $D_{\text{total}} = 7,240.00$
-   - **GST Total** = $\sum \text{GST Amount}_c = 402.38$
-   - **Net Chargeable Amount** = $L_{\text{total}} - D_{\text{total}} = 8,500.00$ (or $8,396.31$ after summing rounded component lines)
+   - **Fixed Discount** = $D_{\text{total}} = 7,200.00$
+   - **GST Total** = $\sum \text{GST Amount}_c = 406.67$
+   - **Net Chargeable Amount** = $L_{\text{total}} - D_{\text{total}} = 8,540.00$ (or $8,540.01$ after summing rounded line totals)
 
 ---
 
