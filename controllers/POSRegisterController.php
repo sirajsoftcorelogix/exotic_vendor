@@ -5431,24 +5431,13 @@ class POSRegisterController
         $irnStatus = 'pending';
         $ewbStatus = 'pending';
 
-        $stmt = $conn->prepare("
-            SELECT d.irn, d.ewb, d.ewb_no, d.irn_status, d.ewb_status, i.irn as inv_irn, i.ewb_number as inv_ewb
-            FROM vp_invoices i
-            LEFT JOIN vp_domestic_ewb_irn d ON d.vp_invoices_id = i.id
-            WHERE i.order_number = ? OR i.invoice_number = ?
-            LIMIT 1
-        ");
-        if ($stmt) {
-            $stmt->bind_param("ss", $orderNumber, $orderNumber);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            if ($res && $row = $res->fetch_assoc()) {
-                $existingIrn = !empty($row['irn']) ? $row['irn'] : (!empty($row['inv_irn']) ? $row['inv_irn'] : null);
-                $existingEwb = !empty($row['ewb_no']) ? $row['ewb_no'] : (!empty($row['ewb']) ? $row['ewb'] : (!empty($row['inv_ewb']) ? $row['inv_ewb'] : null));
-                $irnStatus = !empty($row['irn_status']) ? $row['irn_status'] : (!empty($existingIrn) ? 'generated' : 'pending');
-                $ewbStatus = !empty($row['ewb_status']) ? $row['ewb_status'] : (!empty($existingEwb) ? 'generated' : 'pending');
-            }
-            $stmt->close();
+        require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
+        $row = DomesticEwbIrnService::getEwbIrnStatusByOrderNumber($conn, $orderNumber);
+        if ($row) {
+            $existingIrn = !empty($row['irn']) ? $row['irn'] : (!empty($row['inv_irn']) ? $row['inv_irn'] : null);
+            $existingEwb = !empty($row['ewb_no']) ? $row['ewb_no'] : (!empty($row['ewb']) ? $row['ewb'] : (!empty($row['inv_ewb']) ? $row['inv_ewb'] : null));
+            $irnStatus = !empty($row['irn_status']) ? $row['irn_status'] : (!empty($existingIrn) ? 'generated' : 'pending');
+            $ewbStatus = !empty($row['ewb_status']) ? $row['ewb_status'] : (!empty($existingEwb) ? 'generated' : 'pending');
         }
 
         return [
@@ -5532,16 +5521,8 @@ class POSRegisterController
         $existingRecord = null;
         $invoiceId = (int)($invoice['id'] ?? 0);
         if ($invoiceId > 0) {
-            $stmt = $conn->prepare("SELECT * FROM vp_domestic_ewb_irn WHERE vp_invoices_id = ? LIMIT 1");
-            if ($stmt) {
-                $stmt->bind_param("i", $invoiceId);
-                $stmt->execute();
-                $res = $stmt->get_result();
-                if ($res && $res->num_rows > 0) {
-                    $existingRecord = $res->fetch_assoc();
-                }
-                $stmt->close();
-            }
+            require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
+            $existingRecord = DomesticEwbIrnService::findRecordByInvoiceId($conn, $invoiceId);
         }
 
         $grandTotal = (float)($invoice['total_amount'] ?? $orderInfo['custom_total'] ?? 0);
@@ -5708,16 +5689,8 @@ class POSRegisterController
         $existingRecord = null;
         $invoiceId = (int)($invoice['id'] ?? 0);
         if ($invoiceId > 0) {
-            $stmt = $conn->prepare("SELECT * FROM vp_domestic_ewb_irn WHERE vp_invoices_id = ? LIMIT 1");
-            if ($stmt) {
-                $stmt->bind_param("i", $invoiceId);
-                $stmt->execute();
-                $res = $stmt->get_result();
-                if ($res && $res->num_rows > 0) {
-                    $existingRecord = $res->fetch_assoc();
-                }
-                $stmt->close();
-            }
+            require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
+            $existingRecord = DomesticEwbIrnService::findRecordByInvoiceId($conn, $invoiceId);
         }
 
         $grandTotal = (float)($invoice['total_amount'] ?? $orderInfo['custom_total'] ?? 0);
