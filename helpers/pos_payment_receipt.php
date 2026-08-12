@@ -253,10 +253,6 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
         $giftReduce = round((float)($row['gift_reduce'] ?? 0), 2);
         $creditReduce = round((float)($row['credit'] ?? 0), 2);
 
-        if ($creditReduce > 0.001 && abs($customReduce - $creditReduce) < 0.01) {
-            $customReduce = 0.0;
-        }
-
         $reductions = round($customReduce + $couponReduce + $giftReduce + $creditReduce, 2);
         if ($grossTotal > 0) {
             return max(0.0, round($grossTotal - $reductions, 2));

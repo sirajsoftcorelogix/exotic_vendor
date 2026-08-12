@@ -134,17 +134,11 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
         if ($giftReduce <= 0) {
             $giftReduce = max($giftReduce, round((float)($orderRow['giftvoucher_reduce'] ?? 0), 2));
         }
+        if ($cashReduce <= 0) {
+            $cashReduce = max($cashReduce, round((float)($orderRow['custom_reduce'] ?? 0), 2));
+        }
         if ($creditReduce <= 0) {
             $creditReduce = max($creditReduce, round((float)($orderRow['credit'] ?? 0), 2));
-        }
-
-        $rowCustom = round((float)($orderRow['custom_reduce'] ?? 0), 2);
-        if ($cashReduce <= 0 && $rowCustom > 0.001) {
-            if ($creditReduce > 0.001 && abs($rowCustom - $creditReduce) < 0.01) {
-                // duplicate store credit stored in custom_reduce column
-            } else {
-                $cashReduce = max($cashReduce, $rowCustom);
-            }
         }
 
         $couponCandidates[] = $orderRow['coupon'] ?? '';
@@ -488,9 +482,6 @@ function pos_order_resolve_order_custom_reduce(array $orderLines, ?array $orderI
         if ($fromInfo > 0) {
             return $fromInfo;
         }
-        $infoCredit = round((float)($orderInfo['credit'] ?? 0), 2);
-    } else {
-        $infoCredit = 0.0;
     }
 
     $max = 0.0;
@@ -501,11 +492,7 @@ function pos_order_resolve_order_custom_reduce(array $orderLines, ?array $orderI
         if (strtolower(trim((string)($orderRow['status'] ?? ''))) === 'cancelled') {
             continue;
         }
-        $val = round((float)($orderRow['custom_reduce'] ?? 0), 2);
-        if ($infoCredit > 0.001 && abs($val - $infoCredit) < 0.01) {
-            continue;
-        }
-        $max = max($max, $val);
+        $max = max($max, round((float)($orderRow['custom_reduce'] ?? 0), 2));
     }
 
     return $max;
