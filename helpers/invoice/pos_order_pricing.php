@@ -309,6 +309,9 @@ function pos_order_build_line_display_pricing_map(array $orderLines, ?array $inv
             if (!is_array($orderRow)) {
                 continue;
             }
+            if (strtolower(trim((string)($orderRow['status'] ?? ''))) === 'cancelled') {
+                continue;
+            }
             $meta = pos_order_line_meta_for_item($orderRow, (int)$index, $lineItemsMeta);
             $listOverride = is_array($meta) ? (float)($meta['list_unit_incl'] ?? 0) : 0.0;
             $listUnit = $listOverride > 0 ? $listOverride : pos_order_inclusive_unit_price($orderRow, 'list');
@@ -334,6 +337,9 @@ function pos_order_build_line_display_pricing_map(array $orderLines, ?array $inv
     $pendingLines = [];
     foreach ($orderLines as $index => $orderRow) {
         if (!is_array($orderRow)) {
+            continue;
+        }
+        if (strtolower(trim((string)($orderRow['status'] ?? ''))) === 'cancelled') {
             continue;
         }
 
