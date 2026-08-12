@@ -28,7 +28,9 @@ class DomesticEwbIrnService {
             SELECT d.irn, d.ewb, d.ewb_no, d.irn_status, d.ewb_status, i.irn as inv_irn, i.ewb_number as inv_ewb
             FROM vp_invoices i
             LEFT JOIN vp_domestic_ewb_irn d ON d.vp_invoices_id = i.id
-            WHERE i.order_number = ? OR i.invoice_number = ?
+            LEFT JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
+            LEFT JOIN vp_invoice_items ii ON ii.invoice_id = i.id
+            WHERE oi.order_number = ? OR i.invoice_number = ? OR ii.order_number = ?
             LIMIT 1
         ");
         if (!$stmt) {
@@ -36,14 +38,16 @@ class DomesticEwbIrnService {
                 SELECT d.irn, d.ewb, d.ewb_no, d.irn_status, d.ewb_status, NULL as inv_irn, NULL as inv_ewb
                 FROM vp_invoices i
                 LEFT JOIN vp_domestic_ewb_irn d ON d.vp_invoices_id = i.id
-                WHERE i.order_number = ? OR i.invoice_number = ?
+                LEFT JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
+                LEFT JOIN vp_invoice_items ii ON ii.invoice_id = i.id
+                WHERE oi.order_number = ? OR i.invoice_number = ? OR ii.order_number = ?
                 LIMIT 1
             ");
         }
         if (!$stmt) {
             return null;
         }
-        $stmt->bind_param("ss", $orderNumber, $orderNumber);
+        $stmt->bind_param("sss", $orderNumber, $orderNumber, $orderNumber);
         $stmt->execute();
         $res = $stmt->get_result();
         $row = ($res && $res->num_rows > 0) ? $res->fetch_assoc() : null;

@@ -5459,6 +5459,48 @@ class POSRegisterController
         ];
     }
 
+    private function findInvoiceByOrderNumber(mysqli $conn, string $orderNumber): ?array
+    {
+        if ($orderNumber === '') {
+            return null;
+        }
+
+        // 1. Attempt direct order_number column lookup
+        $stmt = @$conn->prepare("SELECT * FROM vp_invoices WHERE order_number = ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param("s", $orderNumber);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res && $row = $res->fetch_assoc()) {
+                $stmt->close();
+                return $row;
+            }
+            $stmt->close();
+        }
+
+        // 2. Fallback via vp_order_info_id or vp_invoice_items
+        $stmt = @$conn->prepare("
+            SELECT i.* FROM vp_invoices i
+            LEFT JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
+            LEFT JOIN vp_invoice_items ii ON ii.invoice_id = i.id
+            WHERE oi.order_number = ? OR ii.order_number = ?
+            ORDER BY i.id DESC
+            LIMIT 1
+        ");
+        if ($stmt) {
+            $stmt->bind_param("ss", $orderNumber, $orderNumber);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res && $row = $res->fetch_assoc()) {
+                $stmt->close();
+                return $row;
+            }
+            $stmt->close();
+        }
+
+        return null;
+    }
+
     /**
      * Input collection screen for E-Invoice (IRN) generation
      */
@@ -5478,17 +5520,7 @@ class POSRegisterController
         $orderInfo = $ordersModel->getAddressInfoByOrderNumber($orderNumber) ?? [];
 
         // Fetch invoice
-        $invoice = null;
-        $stmt = $conn->prepare("SELECT * FROM vp_invoices WHERE order_number = ? LIMIT 1");
-        if ($stmt) {
-            $stmt->bind_param("s", $orderNumber);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            if ($res && $res->num_rows > 0) {
-                $invoice = $res->fetch_assoc();
-            }
-            $stmt->close();
-        }
+        $invoice = $this->findInvoiceByOrderNumber($conn, $orderNumber);
 
         if (!$invoice) {
             $invoice = [
@@ -5584,16 +5616,9 @@ class POSRegisterController
             }
         }
         if (!$invoice) {
-            $stmt = $conn->prepare("SELECT * FROM vp_invoices WHERE order_number = ? LIMIT 1");
-            if ($stmt) {
-                $stmt->bind_param("s", $orderNumber);
-                $stmt->execute();
-                $res = $stmt->get_result();
-                if ($res && $res->num_rows > 0) {
-                    $invoice = $res->fetch_assoc();
-                    $invoiceId = (int)$invoice['id'];
-                }
-                $stmt->close();
+            $invoice = $this->findInvoiceByOrderNumber($conn, $orderNumber);
+            if ($invoice) {
+                $invoiceId = (int)($invoice['id'] ?? 0);
             }
         }
 
@@ -5661,17 +5686,7 @@ class POSRegisterController
         $orderInfo = $ordersModel->getAddressInfoByOrderNumber($orderNumber) ?? [];
 
         // Fetch invoice
-        $invoice = null;
-        $stmt = $conn->prepare("SELECT * FROM vp_invoices WHERE order_number = ? LIMIT 1");
-        if ($stmt) {
-            $stmt->bind_param("s", $orderNumber);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            if ($res && $res->num_rows > 0) {
-                $invoice = $res->fetch_assoc();
-            }
-            $stmt->close();
-        }
+        $invoice = $this->findInvoiceByOrderNumber($conn, $orderNumber);
 
         if (!$invoice) {
             $invoice = [
@@ -5751,16 +5766,9 @@ class POSRegisterController
             }
         }
         if (!$invoice) {
-            $stmt = $conn->prepare("SELECT * FROM vp_invoices WHERE order_number = ? LIMIT 1");
-            if ($stmt) {
-                $stmt->bind_param("s", $orderNumber);
-                $stmt->execute();
-                $res = $stmt->get_result();
-                if ($res && $res->num_rows > 0) {
-                    $invoice = $res->fetch_assoc();
-                    $invoiceId = (int)$invoice['id'];
-                }
-                $stmt->close();
+            $invoice = $this->findInvoiceByOrderNumber($conn, $orderNumber);
+            if ($invoice) {
+                $invoiceId = (int)($invoice['id'] ?? 0);
             }
         }
 
