@@ -24,13 +24,22 @@ class DomesticEwbIrnService {
             return null;
         }
 
-        $stmt = $db->prepare("
+        $stmt = @$db->prepare("
             SELECT d.irn, d.ewb, d.ewb_no, d.irn_status, d.ewb_status, i.irn as inv_irn, i.ewb_number as inv_ewb
             FROM vp_invoices i
             LEFT JOIN vp_domestic_ewb_irn d ON d.vp_invoices_id = i.id
             WHERE i.order_number = ? OR i.invoice_number = ?
             LIMIT 1
         ");
+        if (!$stmt) {
+            $stmt = @$db->prepare("
+                SELECT d.irn, d.ewb, d.ewb_no, d.irn_status, d.ewb_status, NULL as inv_irn, NULL as inv_ewb
+                FROM vp_invoices i
+                LEFT JOIN vp_domestic_ewb_irn d ON d.vp_invoices_id = i.id
+                WHERE i.order_number = ? OR i.invoice_number = ?
+                LIMIT 1
+            ");
+        }
         if (!$stmt) {
             return null;
         }
