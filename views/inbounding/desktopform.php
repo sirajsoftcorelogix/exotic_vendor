@@ -6120,7 +6120,6 @@ function performSkuCheckAndSubmit(actionType) {
         form.submit();
     });
 }
-}
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
