@@ -2737,8 +2737,33 @@ class Inbounding {
             return false;
         }
 
-        // Clean up mapping if table exists
-        @$this->conn->query("DELETE FROM vp_vendor_products_mapping WHERE product_id = $productId");
+        // Get item_code before deleting from vp_products
+        $itemCode = '';
+        try {
+            $res = $this->conn->query("SELECT item_code FROM vp_products WHERE id = " . (int)$productId . " LIMIT 1");
+            if ($res && $row = $res->fetch_assoc()) {
+                $itemCode = trim((string)($row['item_code'] ?? ''));
+            }
+        } catch (Throwable $e) {
+            // Ignore fetch error safely
+        }
+
+        // Clean up product_vendor_map
+        if ($itemCode !== '') {
+            try {
+                $chkPvm = $this->conn->query("SHOW TABLES LIKE 'product_vendor_map'");
+                if ($chkPvm && $chkPvm->num_rows > 0) {
+                    $stmtPvm = $this->conn->prepare("DELETE FROM product_vendor_map WHERE item_code = ?");
+                    if ($stmtPvm) {
+                        $stmtPvm->bind_param('s', $itemCode);
+                        $stmtPvm->execute();
+                        $stmtPvm->close();
+                    }
+                }
+            } catch (Throwable $e) {
+                // Ignore missing table error safely
+            }
+        }
 
         // Delete from vp_products
         $stmt = $this->conn->prepare("DELETE FROM vp_products WHERE id = ?");
