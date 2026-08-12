@@ -2268,14 +2268,14 @@ class POSOrder
             $credit = 0.0;
 
             $calcStmt = $this->db->prepare(
-                'SELECT
-                    IFNULL(SUM(o.finalprice * o.quantity), 0) AS gross_total,
+                "SELECT
+                    IFNULL(SUM(CASE WHEN o.status IS NULL OR o.status != 'cancelled' THEN o.finalprice * o.quantity ELSE 0 END), 0) AS gross_total,
                     IFNULL(MAX(oi.coupon_reduce), 0) AS coupon_reduce,
                     IFNULL(MAX(oi.giftvoucher_reduce), 0) AS giftvoucher_reduce,
                     IFNULL(MAX(oi.credit), 0) AS credit
                  FROM vp_orders o
                  LEFT JOIN vp_order_info oi ON oi.order_number COLLATE utf8mb4_unicode_ci = o.order_number COLLATE utf8mb4_unicode_ci
-                 WHERE o.order_number = ?'
+                 WHERE o.order_number = ?"
             );
             if ($calcStmt) {
                 $calcStmt->bind_param('s', $orderNumber);
@@ -2288,6 +2288,10 @@ class POSOrder
                     $credit       = max(0.0, round((float)($calcRow['credit'] ?? 0), 2));
                 }
                 $calcStmt->close();
+            }
+
+            if ($credit > 0.001 && abs($customReduce - $credit) < 0.01) {
+                $customReduce = 0.0;
             }
 
             $totalReductions = $customReduce + $couponReduce + $giftReduce + $credit;
