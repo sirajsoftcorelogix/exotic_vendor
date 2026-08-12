@@ -210,7 +210,7 @@ class EInvoiceService
         ?string $ackNo = null,
         ?string $ackDt = null
     ): void {
-        $stmt = $this->db->prepare("
+        $stmt = @$this->db->prepare("
             UPDATE vp_invoices
             SET irn = ?, ewb_number = COALESCE(?, ewb_number), ack_number = COALESCE(?, ack_number), ack_date = COALESCE(?, ack_date)
             WHERE id = ?
