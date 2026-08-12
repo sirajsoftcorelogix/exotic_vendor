@@ -15,7 +15,8 @@ function pos_invoice_order_level_discount_total(array $posMeta): float
     return round(
         (float)($posMeta['coupon_discount'] ?? 0)
         + (float)($posMeta['cash_discount'] ?? 0)
-        + (float)($posMeta['gift_discount'] ?? 0),
+        + (float)($posMeta['gift_discount'] ?? 0)
+        + (float)($posMeta['credit_discount'] ?? 0),
         2
     );
 }

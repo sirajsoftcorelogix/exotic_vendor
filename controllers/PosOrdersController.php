@@ -1159,7 +1159,35 @@ class PosOrdersController
             $commanModel
         );
 
-        if (is_array($invoiceDisplay) && pos_order_line_pricing_should_override_invoice_summary($linePricingByLineId, is_array($orderInfo) ? $orderInfo : null, $order)) {
+        if (!is_array($invoiceDisplay)) {
+            $pricingAggregate = pos_order_aggregate_line_pricing_summary(
+                $linePricingByLineId,
+                is_array($orderInfo) ? $orderInfo : null
+            );
+            if (is_array($pricingAggregate)) {
+                $discountMeta = pos_order_resolve_discount_meta(
+                    null,
+                    is_array($orderInfo) ? $orderInfo : null,
+                    $order
+                );
+                $invoiceDisplay = [
+                    'id' => 0,
+                    'invoice_number' => 'Pending Invoice',
+                    'invoice_date' => $order[0]['date_added'] ?? date('Y-m-d'),
+                    'status' => 'pending',
+                    'subtotal' => round($pricingAggregate['gross_incl'] - $pricingAggregate['total_gst'], 2),
+                    'tax_amount' => $pricingAggregate['total_gst'],
+                    'subtotal_goods_incl' => $pricingAggregate['gross_incl'],
+                    'grand_total' => $pricingAggregate['net_chargeable'],
+                    'pdf_grand_total' => $pricingAggregate['net_chargeable'],
+                    'summary_rows' => pos_order_build_summary_rows_from_line_pricing(
+                        $pricingAggregate,
+                        $discountMeta,
+                        is_array($orderInfo) ? $orderInfo : null
+                    ),
+                ];
+            }
+        } elseif (pos_order_line_pricing_should_override_invoice_summary($linePricingByLineId, is_array($orderInfo) ? $orderInfo : null, $order)) {
             $pricingAggregate = pos_order_aggregate_line_pricing_summary(
                 $linePricingByLineId,
                 is_array($orderInfo) ? $orderInfo : null

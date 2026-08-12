@@ -95,6 +95,7 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
     $couponReduce = round((float)($meta['coupon_discount'] ?? 0), 2);
     $giftReduce = round((float)($meta['gift_discount'] ?? 0), 2);
     $cashReduce = round((float)($meta['cash_discount'] ?? 0), 2);
+    $creditReduce = round((float)($meta['credit_discount'] ?? 0), 2);
     $giftName = trim((string)($meta['gift_voucher_name'] ?? ''));
     $couponCandidates = [
         $meta['coupon_raw'] ?? '',
@@ -111,6 +112,9 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
         if ($cashReduce <= 0) {
             $cashReduce = round((float)($orderInfo['custom_reduce'] ?? 0), 2);
         }
+        if ($creditReduce <= 0) {
+            $creditReduce = round((float)($orderInfo['credit'] ?? 0), 2);
+        }
         $couponCandidates[] = $orderInfo['coupon'] ?? '';
         if ($giftName === '') {
             $giftName = trim((string)($orderInfo['giftvoucher'] ?? ''));
@@ -119,6 +123,9 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
 
     foreach ($orderLines as $orderRow) {
         if (!is_array($orderRow)) {
+            continue;
+        }
+        if (strtolower(trim((string)($orderRow['status'] ?? ''))) === 'cancelled') {
             continue;
         }
         if ($couponReduce <= 0) {
@@ -130,6 +137,10 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
         if ($cashReduce <= 0) {
             $cashReduce = max($cashReduce, round((float)($orderRow['custom_reduce'] ?? 0), 2));
         }
+        if ($creditReduce <= 0) {
+            $creditReduce = max($creditReduce, round((float)($orderRow['credit'] ?? 0), 2));
+        }
+
         $couponCandidates[] = $orderRow['coupon'] ?? '';
         if ($giftName === '') {
             $giftName = trim((string)($orderRow['giftvoucher'] ?? ''));
@@ -146,6 +157,9 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
     }
     if ($cashReduce > 0) {
         $meta['cash_discount'] = $cashReduce;
+    }
+    if ($creditReduce > 0) {
+        $meta['credit_discount'] = $creditReduce;
     }
     if ($couponRaw !== '') {
         $meta['coupon_display_name'] = pos_order_parse_coupon_code($couponRaw);
@@ -295,6 +309,9 @@ function pos_order_build_line_display_pricing_map(array $orderLines, ?array $inv
             if (!is_array($orderRow)) {
                 continue;
             }
+            if (strtolower(trim((string)($orderRow['status'] ?? ''))) === 'cancelled') {
+                continue;
+            }
             $meta = pos_order_line_meta_for_item($orderRow, (int)$index, $lineItemsMeta);
             $listOverride = is_array($meta) ? (float)($meta['list_unit_incl'] ?? 0) : 0.0;
             $listUnit = $listOverride > 0 ? $listOverride : pos_order_inclusive_unit_price($orderRow, 'list');
@@ -320,6 +337,9 @@ function pos_order_build_line_display_pricing_map(array $orderLines, ?array $inv
     $pendingLines = [];
     foreach ($orderLines as $index => $orderRow) {
         if (!is_array($orderRow)) {
+            continue;
+        }
+        if (strtolower(trim((string)($orderRow['status'] ?? ''))) === 'cancelled') {
             continue;
         }
 
@@ -475,6 +495,9 @@ function pos_order_resolve_order_custom_reduce(array $orderLines, ?array $orderI
         if (!is_array($orderRow)) {
             continue;
         }
+        if (strtolower(trim((string)($orderRow['status'] ?? ''))) === 'cancelled') {
+            continue;
+        }
         $max = max($max, round((float)($orderRow['custom_reduce'] ?? 0), 2));
     }
 
@@ -494,7 +517,7 @@ function pos_order_build_order_wide_pricing_components(array $pendingLines, bool
         $orderRow = $pendingLine['order_row'];
         $pricing = $pendingLine['pricing'] ?? [];
         $baseListIncl = pos_order_line_list_price_incl($orderRow);
-        $baseDiscIncl = pos_order_inclusive_line_total($orderRow, 'disc');
+        $baseDiscIncl = $baseListIncl;
         $gstRate = $applyGst ? (float)($orderRow['gst'] ?? 0) : 0.0;
         foreach (pos_order_build_pricing_components($orderRow, $baseListIncl, $baseDiscIncl) as $component) {
             $component['line_id'] = (int)$lineId;
@@ -588,6 +611,7 @@ function pos_order_apply_proportional_custom_reduce(array $components, float $cu
         $row['custom_reduce_allocated'] = $customReduceAllocated;
         $row['discount_value'] = round($baseDiscValue + $customReduceAllocated, 2);
         $row['discounted_incl'] = round(max(0.0, $listIncl - (float)$row['discount_value']), 2);
+
         $result[] = $row;
     }
 
@@ -743,6 +767,7 @@ function pos_order_build_order_level_discount_lines(array $discountMeta, ?array 
     $cash = round((float)($discountMeta['cash_discount'] ?? 0), 2);
     $coupon = round((float)($discountMeta['coupon_discount'] ?? 0), 2);
     $gift = round((float)($discountMeta['gift_discount'] ?? 0), 2);
+    $credit = round((float)($discountMeta['credit_discount'] ?? 0), 2);
 
     if ($cash > 0.001) {
         $lines[] = [
@@ -771,6 +796,13 @@ function pos_order_build_order_level_discount_lines(array $discountMeta, ?array 
         $lines[] = [
             'label' => pos_order_gift_voucher_discount_label($giftName),
             'amount' => $gift,
+        ];
+    }
+
+    if ($credit > 0.001) {
+        $lines[] = [
+            'label' => 'Store Credit Applied:',
+            'amount' => $credit,
         ];
     }
 

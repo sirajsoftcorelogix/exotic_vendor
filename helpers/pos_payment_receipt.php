@@ -167,60 +167,95 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
         }
     }
 
-    $stmt = $conn->prepare('SELECT total FROM vp_order_info WHERE order_number = ? LIMIT 1');
+    $hasCancelled = false;
+    $stmt = $conn->prepare("SELECT COUNT(*) as c FROM vp_orders WHERE order_number = ? AND status = 'cancelled'");
     if ($stmt) {
         $stmt->bind_param('s', $orderNumber);
         $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
+        $res = $stmt->get_result()->fetch_assoc();
         $stmt->close();
-        $total = round((float)($row['total'] ?? 0), 2);
-        if ($total > 0) {
-            return $total;
+        if (!empty($res['c']) && (int)$res['c'] > 0) {
+            $hasCancelled = true;
+        }
+    }
+
+    if (!$hasCancelled) {
+        $stmt = $conn->prepare('SELECT total FROM vp_order_info WHERE order_number = ? LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('s', $orderNumber);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            $total = round((float)($row['total'] ?? 0), 2);
+            if ($total > 0) {
+                return $total;
+            }
+        }
+
+        $stmt = $conn->prepare(
+            'SELECT i.total_amount FROM vp_invoices i
+             INNER JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
+             WHERE oi.order_number = ? ORDER BY i.id DESC LIMIT 1'
+        );
+        if ($stmt) {
+            $stmt->bind_param('s', $orderNumber);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            $total = round((float)($row['total_amount'] ?? 0), 2);
+            if ($total > 0) {
+                return $total;
+            }
         }
     }
 
     $stmt = $conn->prepare(
-        'SELECT i.total_amount FROM vp_invoices i
-         INNER JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
-         WHERE oi.order_number = ? ORDER BY i.id DESC LIMIT 1'
-    );
-    if ($stmt) {
-        $stmt->bind_param('s', $orderNumber);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        $total = round((float)($row['total_amount'] ?? 0), 2);
-        if ($total > 0) {
-            return $total;
-        }
-    }
-
-    $stmt = $conn->prepare(
-        'SELECT
-            IFNULL(SUM(o.finalprice * o.quantity), 0) AS subtotal,
-            IFNULL(MAX(o.custom_reduce), 0) AS custom_reduce,
+        "SELECT
+            IFNULL(SUM(CASE WHEN o.status IS NULL OR o.status != 'cancelled' THEN IF(IFNULL(o.itemprice, 0) > 0, o.itemprice, o.finalprice) * o.quantity ELSE 0 END), 0) AS list_subtotal,
+            IFNULL(MAX(CASE WHEN o.status IS NULL OR o.status != 'cancelled' THEN o.custom_reduce ELSE 0 END), 0) AS custom_reduce,
             IFNULL(MAX(oi.coupon_reduce), 0) AS coupon_reduce,
             IFNULL(MAX(oi.giftvoucher_reduce), 0) AS gift_reduce,
             IFNULL(MAX(oi.credit), 0) AS credit
          FROM vp_orders o
          LEFT JOIN vp_order_info oi ON oi.order_number COLLATE utf8mb4_unicode_ci = o.order_number COLLATE utf8mb4_unicode_ci
-         WHERE o.order_number = ?'
+         WHERE o.order_number = ?"
     );
     if ($stmt) {
         $stmt->bind_param('s', $orderNumber);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
-        $subtotal = round((float)($row['subtotal'] ?? 0), 2);
-        $reductions = round(
-            (float)($row['custom_reduce'] ?? 0)
-            + (float)($row['coupon_reduce'] ?? 0)
-            + (float)($row['gift_reduce'] ?? 0)
-            + (float)($row['credit'] ?? 0),
-            2
-        );
-        if ($subtotal > 0) {
-            return max(0.0, round($subtotal - $reductions, 2));
+
+        $listSubtotal = round((float)($row['list_subtotal'] ?? 0), 2);
+
+        $addonsTotal = 0.0;
+        $stmtAddons = $conn->prepare("SELECT addons, quantity FROM vp_orders WHERE order_number = ? AND (status IS NULL OR status != 'cancelled')");
+        if ($stmtAddons) {
+            $stmtAddons->bind_param('s', $orderNumber);
+            $stmtAddons->execute();
+            $resAddons = $stmtAddons->get_result();
+            if ($resAddons) {
+                require_once __DIR__ . '/../models/order/order.php';
+                while ($aRow = $resAddons->fetch_assoc()) {
+                    $parsedAddons = Order::parseVendorOrderLineAddonsList($aRow['addons'] ?? null);
+                    $qty = max(1, (int)($aRow['quantity'] ?? 1));
+                    foreach ($parsedAddons as $addonItem) {
+                        $addonsTotal += round((float)($addonItem['price'] ?? 0) * $qty, 2);
+                    }
+                }
+            }
+            $stmtAddons->close();
+        }
+
+        $grossTotal = round($listSubtotal + $addonsTotal, 2);
+        $customReduce = round((float)($row['custom_reduce'] ?? 0), 2);
+        $couponReduce = round((float)($row['coupon_reduce'] ?? 0), 2);
+        $giftReduce = round((float)($row['gift_reduce'] ?? 0), 2);
+        $creditReduce = round((float)($row['credit'] ?? 0), 2);
+
+        $reductions = round($customReduce + $couponReduce + $giftReduce + $creditReduce, 2);
+        if ($grossTotal > 0) {
+            return max(0.0, round($grossTotal - $reductions, 2));
         }
     }
 
