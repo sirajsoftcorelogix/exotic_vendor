@@ -176,18 +176,30 @@ if (isset($_GET['action']) && $_GET['action'] === 'repair_one') {
     exit;
 }
 
-// API Endpoint to fetch next pending IDs without doing expensive COUNT(*)
+// API Endpoint to fetch next pending IDs using cursor pagination (last_id) to avoid table scans
 if (isset($_GET['action']) && $_GET['action'] === 'get_pending') {
     header('Content-Type: application/json');
 
+    $lastId = isset($_GET['last_id']) ? (int)$_GET['last_id'] : 0;
     $limit = 100;
-    // Fast index scan to fetch next 100 IDs needing repair
-    $idSql = "SELECT id FROM vp_stock WHERE item_code IS NULL OR item_code = '' OR size IS NULL OR color IS NULL ORDER BY id ASC LIMIT {$limit}";
+
+    // Fast indexed primary key scan: SELECT id FROM vp_stock WHERE id > last_id ... LIMIT 100
+    $idSql = "SELECT id, item_code, size, color FROM vp_stock WHERE id > {$lastId} ORDER BY id ASC LIMIT {$limit}";
     $idRes = $conn->query($idSql);
     $ids = [];
+    $maxId = $lastId;
+
     if ($idRes) {
         while ($r = $idRes->fetch_assoc()) {
-            $ids[] = (int) $r['id'];
+            $curId = (int) $r['id'];
+            $maxId = $curId;
+            $ic = trim((string)($r['item_code'] ?? ''));
+            $sz = trim((string)($r['size'] ?? ''));
+            $cl = trim((string)($r['color'] ?? ''));
+
+            if ($ic === '' || $sz === '' || $cl === '') {
+                $ids[] = $curId;
+            }
         }
         $idRes->free();
     }
@@ -195,7 +207,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_pending') {
     echo json_encode([
         'success' => true,
         'total_pending' => 'Ready',
-        'ids' => $ids
+        'ids' => $ids,
+        'last_id' => $maxId
     ]);
     exit;
 }
@@ -321,15 +334,19 @@ let isRunning = false;
 let processed = 0;
 let errors = 0;
 let pendingIds = [];
+let lastProcessedId = 0;
 
 async function fetchPending() {
     try {
-        const res = await fetch('?action=get_pending');
+        const res = await fetch(`?action=get_pending&last_id=${lastProcessedId}`);
         const data = await res.json();
         if (data.success) {
-            document.getElementById('pendingCount').innerText = data.total_pending;
+            document.getElementById('pendingCount').innerText = 'Ready';
             pendingIds = data.ids;
-            return data.total_pending;
+            if (data.last_id) {
+                lastProcessedId = data.last_id;
+            }
+            return pendingIds.length;
         }
     } catch (e) {
         console.error(e);
