@@ -28,14 +28,40 @@
 class BusyXmlGenerator
 {
     /**
-     * Resolve STPTName (Sales Tax/Purchase Tax Name for BUSY) dynamically based on billing details and GST
-     * 
+     * Translate payment type into BUSY MasterName1 / PartyName
      * Rules:
-     * 1. billing State = Delhi & Country = India -> L/GST-ItemWise
-     * 2. billing State = Not Delhi & Country = India -> I/GST-ItemWise
-     * 3. Country != India & GST > 0 -> I/GST-Export
-     * 4. Country != India & GST = 0 -> I/GST-EXPORT-ZERO RATED
+     * - UPI -> YES2971
+     * - Bank Transfer -> YES2971
+     * - Cheque -> YES2971
+     * - POS -> POS
+     * - COD -> courier_name from vp_dispatch_details
      */
+    public function translatePaymentType(string $rawPaymentType, array $data = []): string
+    {
+        $clean = strtolower(trim(str_replace(['_', '-'], ' ', $rawPaymentType)));
+
+        if ($clean === 'upi' || $clean === 'bank transfer' || $clean === 'cheque') {
+            return 'YES2971';
+        }
+
+        if ($clean === 'pos' || $clean === 'pos machine') {
+            return 'POS';
+        }
+
+        if ($clean === 'cod') {
+            $courierName = trim((string)($data['dispatch_courier_name'] ?? $data['courier_name'] ?? ''));
+            if ($courierName !== '') {
+                return $courierName;
+            }
+            return 'COD';
+        }
+
+        if ($rawPaymentType !== '') {
+            return (strtolower($rawPaymentType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $rawPaymentType));
+        }
+
+        return '';
+    }
     public function resolveStptName(array $data): string
     {
         // If explicitly set and non-empty, respect it
@@ -109,13 +135,16 @@ class BusyXmlGenerator
         $xml->addChild('STPTName', htmlspecialchars($stptName));
         
         // Resolve Payment Type / Party Name / MasterName1
-        $paymentType = trim($invoice['payment_type'] ?? $invoice['payment_mode'] ?? '');
-        if ($paymentType !== '') {
-            $paymentType = (strtolower($paymentType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $paymentType));
-        }
+        $rawPaymentType = trim($invoice['payment_type'] ?? $invoice['payment_mode'] ?? '');
+        $translated = $this->translatePaymentType($rawPaymentType, $invoice);
 
-        $partyName = $invoice['party_name'] ?? ($paymentType !== '' ? $paymentType : ($invoice['customer_name'] ?? 'Walk-in Customer'));
-        $masterName1 = $invoice['master_name1'] ?? ($paymentType !== '' ? $paymentType : 'Main');
+        $partyName = !empty($invoice['party_name']) && $invoice['party_name'] !== $rawPaymentType
+            ? $this->translatePaymentType($invoice['party_name'], $invoice)
+            : ($translated !== '' ? $translated : ($invoice['customer_name'] ?? 'Walk-in Customer'));
+
+        $masterName1 = !empty($invoice['master_name1']) && $invoice['master_name1'] !== $rawPaymentType
+            ? $this->translatePaymentType($invoice['master_name1'], $invoice)
+            : ($translated !== '' ? $translated : 'Main');
 
         // Master details
         $xml->addChild('MasterName1', htmlspecialchars($masterName1));
@@ -296,13 +325,16 @@ class BusyXmlGenerator
         $xml->addChild('STPTName', htmlspecialchars($stptName));
         
         // Resolve Payment Type / Party Name / MasterName1
-        $paymentType = trim($salesReturn['payment_type'] ?? $salesReturn['payment_mode'] ?? '');
-        if ($paymentType !== '') {
-            $paymentType = (strtolower($paymentType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $paymentType));
-        }
+        $rawPaymentType = trim($salesReturn['payment_type'] ?? $salesReturn['payment_mode'] ?? '');
+        $translated = $this->translatePaymentType($rawPaymentType, $salesReturn);
 
-        $partyName = $salesReturn['party_name'] ?? ($paymentType !== '' ? $paymentType : ($salesReturn['customer_name'] ?? 'Walk-in Customer'));
-        $masterName1 = $salesReturn['master_name1'] ?? ($paymentType !== '' ? $paymentType : ($salesReturn['customer_name'] ?? 'Main'));
+        $partyName = !empty($salesReturn['party_name']) && $salesReturn['party_name'] !== $rawPaymentType
+            ? $this->translatePaymentType($salesReturn['party_name'], $salesReturn)
+            : ($translated !== '' ? $translated : ($salesReturn['customer_name'] ?? 'Walk-in Customer'));
+
+        $masterName1 = !empty($salesReturn['master_name1']) && $salesReturn['master_name1'] !== $rawPaymentType
+            ? $this->translatePaymentType($salesReturn['master_name1'], $salesReturn)
+            : ($translated !== '' ? $translated : ($salesReturn['customer_name'] ?? 'Main'));
 
         // Master details
         $xml->addChild('MasterName1', htmlspecialchars($masterName1));

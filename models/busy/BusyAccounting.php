@@ -326,7 +326,12 @@ class BusyAccounting
                         FROM pos_payments pp 
                         WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(c.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci 
                         ORDER BY pp.payment_amount DESC, pp.id DESC 
-                        LIMIT 1) AS pos_payment_mode
+                        LIMIT 1) AS pos_payment_mode,
+                       (SELECT dd.courier_name 
+                        FROM vp_dispatch_details dd 
+                        WHERE dd.invoice_id = i.id AND dd.courier_name IS NOT NULL AND TRIM(dd.courier_name) <> '' 
+                        ORDER BY dd.id DESC 
+                        LIMIT 1) AS dispatch_courier_name
                 FROM vp_invoices i
                 LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id
                 WHERE {$whereSql}
@@ -491,6 +496,11 @@ class BusyAccounting
                         WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(sr.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci 
                         ORDER BY pp.payment_amount DESC, pp.id DESC 
                         LIMIT 1) AS pos_payment_mode,
+                       (SELECT dd.courier_name 
+                        FROM vp_dispatch_details dd 
+                        WHERE dd.invoice_id = sr.invoice_id AND dd.courier_name IS NOT NULL AND TRIM(dd.courier_name) <> '' 
+                        ORDER BY dd.id DESC 
+                        LIMIT 1) AS dispatch_courier_name,
                        COALESCE(sri_sum.taxable, 0) AS taxable_amount,
                        COALESCE(sri_sum.tax, 0) AS tax_amount
                 FROM vp_sales_returns sr
@@ -576,7 +586,12 @@ class BusyAccounting
                         FROM pos_payments pp 
                         WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(c.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci 
                         ORDER BY pp.payment_amount DESC, pp.id DESC 
-                        LIMIT 1) AS pos_payment_mode
+                        LIMIT 1) AS pos_payment_mode,
+                       (SELECT dd.courier_name 
+                        FROM vp_dispatch_details dd 
+                        WHERE dd.invoice_id = i.id AND dd.courier_name IS NOT NULL AND TRIM(dd.courier_name) <> '' 
+                        ORDER BY dd.id DESC 
+                        LIMIT 1) AS dispatch_courier_name
                 FROM vp_invoices i
                 LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id
                 WHERE i.id = ? AND LOWER(TRIM(COALESCE(i.status, ''))) <> 'cancelled' LIMIT 1";
@@ -676,7 +691,12 @@ class BusyAccounting
                         FROM pos_payments pp 
                         WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(sr.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci 
                         ORDER BY pp.payment_amount DESC, pp.id DESC 
-                        LIMIT 1) AS pos_payment_mode
+                        LIMIT 1) AS pos_payment_mode,
+                       (SELECT dd.courier_name 
+                        FROM vp_dispatch_details dd 
+                        WHERE dd.invoice_id = sr.invoice_id AND dd.courier_name IS NOT NULL AND TRIM(dd.courier_name) <> '' 
+                        ORDER BY dd.id DESC 
+                        LIMIT 1) AS dispatch_courier_name
                 FROM vp_sales_returns sr
                 LEFT JOIN vp_invoices i ON sr.invoice_id = i.id
                 LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id
