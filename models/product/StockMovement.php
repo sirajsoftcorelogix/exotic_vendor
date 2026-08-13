@@ -484,6 +484,11 @@ final class StockMovement
             self::syncProductPhysicalStock($conn, $productId);
         }
 
+        // Keep vp_stock table synced with the latest running_stock for this SKU and warehouse
+        if ($sku !== '' && $warehouseId > 0) {
+            self::syncVpStockFromRunningStock($conn, $sku, $warehouseId, $runningStock, $movementId);
+        }
+
         return ['running_stock' => $runningStock, 'movement_id' => $movementId];
     }
 
@@ -629,6 +634,35 @@ final class StockMovement
                       CONVERT(sm.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(p.title USING utf8mb4) COLLATE utf8mb4_unicode_ci 
                       OR CONVERT(sm.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci <> CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci
                   )";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->execute();
+        $affected = (int) $stmt->affected_rows;
+        $stmt->close();
+
+        return max(0, $affected);
+    }
+
+    /**
+     * Resync all vp_stock rows from the latest running_stock per (sku, warehouse_id) in vp_stock_movements.
+     */
+    public static function syncAllVpStockFromMovements(\mysqli $conn): int
+    {
+        $sql = "INSERT INTO vp_stock (sku, warehouse_id, current_stock, last_trans_id)
+                SELECT sm.sku, sm.warehouse_id, sm.running_stock, sm.id
+                FROM vp_stock_movements sm
+                INNER JOIN (
+                    SELECT sku, warehouse_id, MAX(id) AS max_id
+                    FROM vp_stock_movements
+                    WHERE sku IS NOT NULL AND TRIM(sku) <> '' AND warehouse_id > 0
+                    GROUP BY sku, warehouse_id
+                ) latest ON sm.sku = latest.sku AND sm.warehouse_id = latest.warehouse_id AND sm.id = latest.max_id
+                ON DUPLICATE KEY UPDATE
+                    current_stock = VALUES(current_stock),
+                    last_trans_id = VALUES(last_trans_id),
+                    updated_at = NOW()";
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
             return 0;
