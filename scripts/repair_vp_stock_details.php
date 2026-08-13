@@ -75,12 +75,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'batch_repair') {
     $batchSize = 5; // Fixed batch size of 5 as requested
 
     // Fetch batch of 5 vp_stock rows using primary key > $lastId
+    // Join using primary keys / indexed column sm.id = s.last_trans_id
     $sql = "SELECT s.id, s.sku, s.warehouse_id, s.current_stock, s.last_trans_id,
                    sm.item_code AS m_item_code, sm.size AS m_size, sm.color AS m_color,
                    p.item_code AS p_item_code, p.size AS p_size, p.color AS p_color
             FROM vp_stock s
             LEFT JOIN vp_stock_movements sm ON s.last_trans_id = sm.id
-            LEFT JOIN vp_products p ON (sm.product_id = p.id OR (p.sku IS NOT NULL AND p.sku = s.sku))
+            LEFT JOIN vp_products p ON sm.product_id = p.id
             WHERE s.id > {$lastId}
             ORDER BY s.id ASC
             LIMIT {$batchSize}";
@@ -152,7 +153,7 @@ if ($isCli) {
                        p.item_code AS p_item_code, p.size AS p_size, p.color AS p_color
                 FROM vp_stock s
                 LEFT JOIN vp_stock_movements sm ON s.last_trans_id = sm.id
-                LEFT JOIN vp_products p ON (sm.product_id = p.id OR (p.sku IS NOT NULL AND p.sku = s.sku))
+                LEFT JOIN vp_products p ON sm.product_id = p.id
                 WHERE s.id > {$lastId}
                 ORDER BY s.id ASC
                 LIMIT 5";
