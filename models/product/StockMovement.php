@@ -696,17 +696,22 @@ final class StockMovement
     {
         $sql = "INSERT INTO vp_stock (sku, warehouse_id, current_stock, last_trans_id, item_code, size, color)
                 SELECT sm.sku, sm.warehouse_id, sm.running_stock, sm.id,
-                       COALESCE(NULLIF(TRIM(sm.item_code), ''), p.item_code),
-                       COALESCE(NULLIF(TRIM(sm.size), ''), p.size),
-                       COALESCE(NULLIF(TRIM(sm.color), ''), p.color)
+                       COALESCE(NULLIF(TRIM(CONVERT(sm.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci), ''), CONVERT(p.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci),
+                       COALESCE(NULLIF(TRIM(CONVERT(sm.size USING utf8mb4) COLLATE utf8mb4_unicode_ci), ''), CONVERT(p.size USING utf8mb4) COLLATE utf8mb4_unicode_ci),
+                       COALESCE(NULLIF(TRIM(CONVERT(sm.color USING utf8mb4) COLLATE utf8mb4_unicode_ci), ''), CONVERT(p.color USING utf8mb4) COLLATE utf8mb4_unicode_ci)
                 FROM vp_stock_movements sm
-                LEFT JOIN vp_products p ON (sm.product_id = p.id OR (sm.product_id <= 0 AND sm.sku = p.sku))
+                LEFT JOIN vp_products p ON (
+                    sm.product_id = p.id 
+                    OR (sm.product_id <= 0 AND CONVERT(sm.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci)
+                )
                 INNER JOIN (
                     SELECT sku, warehouse_id, MAX(id) AS max_id
                     FROM vp_stock_movements
                     WHERE sku IS NOT NULL AND TRIM(sku) <> '' AND warehouse_id > 0
                     GROUP BY sku, warehouse_id
-                ) latest ON sm.sku = latest.sku AND sm.warehouse_id = latest.warehouse_id AND sm.id = latest.max_id
+                ) latest ON CONVERT(sm.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(latest.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci 
+                        AND sm.warehouse_id = latest.warehouse_id 
+                        AND sm.id = latest.max_id
                 ON DUPLICATE KEY UPDATE
                     current_stock = VALUES(current_stock),
                     last_trans_id = VALUES(last_trans_id),
