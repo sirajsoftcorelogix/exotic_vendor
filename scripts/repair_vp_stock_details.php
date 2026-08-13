@@ -8,7 +8,34 @@
  * Usage: php repair_vp_stock_details.php
  */
 
-require_once __DIR__ . '/config/config.php';
+$root = dirname(__DIR__);
+$configPath = $root . DIRECTORY_SEPARATOR . 'config.php';
+
+if (!is_file($configPath)) {
+    fwrite(STDERR, "Missing config.php at {$configPath}\n");
+    exit(1);
+}
+
+$config = require $configPath;
+
+$dbCfg = $config['db'] ?? null;
+if (!is_array($dbCfg) || empty($dbCfg['host']) || empty($dbCfg['name'])) {
+    fwrite(STDERR, "config.php must define ['db'] with host, name, user, pass.\n");
+    exit(1);
+}
+
+$host = $dbCfg['host'];
+$user = $dbCfg['user'] ?? '';
+$pass = $dbCfg['pass'] ?? '';
+$name = $dbCfg['name'];
+$port = (int)($dbCfg['port'] ?? 3306);
+
+$conn = new mysqli($host, $user, $pass, $name, $port);
+if ($conn->connect_error) {
+    fwrite(STDERR, "Connection failed: " . $conn->connect_error . "\n");
+    exit(1);
+}
+$conn->set_charset('utf8mb4');
 
 $batchSize = 500;
 $totalUpdated = 0;
