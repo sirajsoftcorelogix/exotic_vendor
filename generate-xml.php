@@ -43,10 +43,15 @@ class BusyXmlGenerator
             return $data['stpt_name'];
         }
 
-        $country = trim((string)($data['customer_country'] ?? $data['country'] ?? ''));
-        $state   = trim((string)($data['customer_state'] ?? $data['state'] ?? $data['customer_address4'] ?? ''));
+        $country  = trim((string)($data['customer_country'] ?? $data['country'] ?? ''));
+        $state    = trim((string)($data['customer_state'] ?? $data['state'] ?? $data['customer_address4'] ?? ''));
+        $gstin    = trim((string)($data['customer_gstin'] ?? $data['gstin'] ?? ''));
+        $stateCode = trim((string)($data['state_code'] ?? $data['customer_state_code'] ?? ''));
 
-        // Check if country is India or an Indian state (e.g. if state name was saved in country field)
+        // Resolve 2-digit Indian GST State Code
+        $resolvedGstStateCode = $this->resolveGstStateCode($stateCode !== '' ? $stateCode : $state, $gstin);
+
+        // Check if country is India or if a valid Indian GST State Code exists (01-38, 97)
         $isIndia = false;
         if ($country === '') {
             $isIndia = true;
@@ -54,18 +59,18 @@ class BusyXmlGenerator
             $cUpper = strtoupper($country);
             if (in_array($cUpper, ['IN', 'IND', 'INDIA'], true)) {
                 $isIndia = true;
-            } else {
-                // If country holds an Indian state name/code (e.g. 'DELHI', 'GUJARAT', '07')
-                $stateCode = $this->resolveGstStateCode($country, '');
-                if (!empty($stateCode) && ctype_digit($stateCode)) {
-                    $isIndia = true;
-                }
+            } elseif (!empty($resolvedGstStateCode) && ctype_digit($resolvedGstStateCode) && $resolvedGstStateCode !== '96') {
+                // StateCode is an Indian GST state code (01 to 38 or 97, excluding 96=Foreign)
+                $isIndia = true;
             }
         }
 
         if ($isIndia) {
-            $sUpper = strtoupper($state);
-            $isDelhi = in_array($sUpper, ['DELHI', 'NCT OF DELHI', 'NEW DELHI', '07', '7'], true);
+            $isDelhi = ($resolvedGstStateCode === '07');
+            if (!$isDelhi) {
+                $sUpper = strtoupper($state);
+                $isDelhi = in_array($sUpper, ['DELHI', 'NCT OF DELHI', 'NEW DELHI'], true);
+            }
             return $isDelhi ? 'L/GST-ItemWise' : 'I/GST-ItemWise';
         }
 

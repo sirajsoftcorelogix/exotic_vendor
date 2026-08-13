@@ -555,7 +555,7 @@ class BusyAccounting
     {
         $sql = "SELECT i.*, 
                        c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, 
-                       c.city, c.state, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type
+                       c.city, c.state, c.state_code, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type
                 FROM vp_invoices i
                 LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id
                 WHERE i.id = ? AND LOWER(TRIM(COALESCE(i.status, ''))) <> 'cancelled' LIMIT 1";
@@ -622,8 +622,9 @@ class BusyAccounting
         $invoice['customer_address2'] = trim($invoice['address_line2'] ?? '');
         $invoice['customer_address3'] = trim($invoice['city'] ?? '');
         $invoice['customer_address4'] = trim($invoice['state'] ?? '');
-        $invoice['customer_country']   = trim($invoice['country'] ?? '');
-        $invoice['customer_state']     = trim($invoice['state'] ?? '');
+        $invoice['customer_country']    = trim($invoice['country'] ?? '');
+        $invoice['customer_state']      = trim($invoice['state'] ?? '');
+        $invoice['customer_state_code'] = trim($invoice['state_code'] ?? '');
         $invoice['customer_zipcode']  = trim($invoice['zipcode'] ?? '');
         $invoice['customer_mobile']   = trim($invoice['mobile'] ?? '');
         $invoice['customer_email']    = trim($invoice['email'] ?? '');
@@ -646,7 +647,7 @@ class BusyAccounting
     {
         $sql = "SELECT sr.*, i.invoice_number, i.invoice_date, i.currency,
                        c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, 
-                       c.city, c.state, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type
+                       c.city, c.state, c.state_code, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type
                 FROM vp_sales_returns sr
                 LEFT JOIN vp_invoices i ON sr.invoice_id = i.id
                 LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id
@@ -716,8 +717,9 @@ class BusyAccounting
         $return['customer_address2'] = trim($return['address_line2'] ?? '');
         $return['customer_address3'] = trim($return['city'] ?? '');
         $return['customer_address4'] = trim($return['state'] ?? '');
-        $return['customer_country']   = trim($return['country'] ?? '');
-        $return['customer_state']     = trim($return['state'] ?? '');
+        $return['customer_country']    = trim($return['country'] ?? '');
+        $return['customer_state']      = trim($return['state'] ?? '');
+        $return['customer_state_code'] = trim($return['state_code'] ?? '');
         $return['customer_zipcode']  = trim($return['zipcode'] ?? '');
         $return['customer_mobile']   = trim($return['mobile'] ?? '');
         $return['customer_email']    = trim($return['email'] ?? '');
