@@ -180,12 +180,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'repair_one') {
 if (isset($_GET['action']) && $_GET['action'] === 'get_pending') {
     header('Content-Type: application/json');
 
-    $countSql = "SELECT COUNT(*) AS cnt FROM vp_stock WHERE item_code IS NULL OR size IS NULL OR color IS NULL";
+    // Use TRIM() checks to avoid index issues and match exact NULL/empty logic
+    $countSql = "SELECT COUNT(*) AS cnt FROM vp_stock WHERE TRIM(COALESCE(item_code, '')) = '' OR TRIM(COALESCE(size, '')) = '' OR TRIM(COALESCE(color, '')) = ''";
     $countRes = $conn->query($countSql);
     $count = $countRes ? (int) $countRes->fetch_assoc()['cnt'] : 0;
 
     $limit = 100;
-    $idSql = "SELECT id FROM vp_stock WHERE item_code IS NULL OR size IS NULL OR color IS NULL ORDER BY id ASC LIMIT {$limit}";
+    $idSql = "SELECT id FROM vp_stock WHERE TRIM(COALESCE(item_code, '')) = '' OR TRIM(COALESCE(size, '')) = '' OR TRIM(COALESCE(color, '')) = '' ORDER BY id ASC LIMIT {$limit}";
     $idRes = $conn->query($idSql);
     $ids = [];
     if ($idRes) {
@@ -210,7 +211,7 @@ if ($isCli) {
     $startTime = microtime(true);
 
     while (true) {
-        $batchSql = "SELECT s.id, s.sku, s.warehouse_id, s.current_stock, s.last_trans_id FROM vp_stock s WHERE (s.item_code IS NULL OR s.size IS NULL OR s.color IS NULL) ORDER BY s.id ASC LIMIT 10";
+        $batchSql = "SELECT s.id, s.sku, s.warehouse_id, s.current_stock, s.last_trans_id FROM vp_stock s WHERE (TRIM(COALESCE(s.item_code, '')) = '' OR TRIM(COALESCE(s.size, '')) = '' OR TRIM(COALESCE(s.color, '')) = '') ORDER BY s.id ASC LIMIT 10";
         $batchRes = $conn->query($batchSql);
         if (!$batchRes || $batchRes->num_rows === 0) {
             break;
