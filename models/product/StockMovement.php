@@ -346,6 +346,33 @@ final class StockMovement
         $productId = (int) ($data['product_id'] ?? 0);
         $sku = trim((string) ($data['sku'] ?? ''));
         $itemCode = trim((string) ($data['item_code'] ?? ''));
+
+        // Safeguard: Verify and resolve real SKU / item_code from vp_products if product_id is set
+        // Fixes legacy migration bugs where product title was accidentally saved into vp_stock_movements.sku
+        if ($productId > 0) {
+            $prodStmt = $conn->prepare('SELECT sku, item_code, title FROM vp_products WHERE id = ? LIMIT 1');
+            if ($prodStmt) {
+                $prodStmt->bind_param('i', $productId);
+                $prodStmt->execute();
+                $prodRow = $prodStmt->get_result()->fetch_assoc();
+                $prodStmt->close();
+                if ($prodRow) {
+                    $dbSku = trim((string)($prodRow['sku'] ?? ''));
+                    $dbItemCode = trim((string)($prodRow['item_code'] ?? ''));
+                    $dbTitle = trim((string)($prodRow['title'] ?? ''));
+
+                    if ($dbSku !== '' && ($sku === '' || $sku === $dbTitle || strcasecmp($sku, $dbTitle) === 0)) {
+                        $sku = $dbSku;
+                    } elseif ($sku === '' && $dbItemCode !== '') {
+                        $sku = $dbItemCode;
+                    }
+
+                    if ($itemCode === '' && $dbItemCode !== '') {
+                        $itemCode = $dbItemCode;
+                    }
+                }
+            }
+        }
         $size = trim((string) ($data['size'] ?? ''));
         $color = trim((string) ($data['color'] ?? ''));
         $warehouseId = (int) ($data['warehouse_id'] ?? 0);
@@ -586,5 +613,27 @@ final class StockMovement
         $cached[$key] = $col;
 
         return $col;
+    }
+
+    /**
+     * Correct/align corrupted sku values in vp_stock_movements (e.g. where item title was inserted instead of SKU).
+     */
+    public static function alignCorruptedStockMovementSkus(\mysqli $conn): int
+    {
+        $sql = "UPDATE vp_stock_movements sm
+                INNER JOIN vp_products p ON sm.product_id = p.id
+                SET sm.sku = COALESCE(NULLIF(TRIM(p.sku), ''), p.item_code)
+                WHERE sm.product_id > 0
+                  AND p.sku IS NOT NULL AND TRIM(p.sku) <> ''
+                  AND (sm.sku = p.title OR sm.sku <> p.sku)";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->execute();
+        $affected = (int) $stmt->affected_rows;
+        $stmt->close();
+
+        return max(0, $affected);
     }
 }
