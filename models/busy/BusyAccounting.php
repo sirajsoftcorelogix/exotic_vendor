@@ -622,7 +622,8 @@ class BusyAccounting
         $invoice['customer_address2'] = trim($invoice['address_line2'] ?? '');
         $invoice['customer_address3'] = trim($invoice['city'] ?? '');
         $invoice['customer_address4'] = trim($invoice['state'] ?? '');
-        $invoice['customer_state']    = trim($invoice['state'] ?? '');
+        $invoice['customer_country']   = trim($invoice['country'] ?? '');
+        $invoice['customer_state']     = trim($invoice['state'] ?? '');
         $invoice['customer_zipcode']  = trim($invoice['zipcode'] ?? '');
         $invoice['customer_mobile']   = trim($invoice['mobile'] ?? '');
         $invoice['customer_email']    = trim($invoice['email'] ?? '');
@@ -715,7 +716,8 @@ class BusyAccounting
         $return['customer_address2'] = trim($return['address_line2'] ?? '');
         $return['customer_address3'] = trim($return['city'] ?? '');
         $return['customer_address4'] = trim($return['state'] ?? '');
-        $return['customer_state']    = trim($return['state'] ?? '');
+        $return['customer_country']   = trim($return['country'] ?? '');
+        $return['customer_state']     = trim($return['state'] ?? '');
         $return['customer_zipcode']  = trim($return['zipcode'] ?? '');
         $return['customer_mobile']   = trim($return['mobile'] ?? '');
         $return['customer_email']    = trim($return['email'] ?? '');

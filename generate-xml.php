@@ -28,6 +28,51 @@
 class BusyXmlGenerator
 {
     /**
+     * Resolve STPTName (Sales Tax/Purchase Tax Name for BUSY) dynamically based on billing details and GST
+     * 
+     * Rules:
+     * 1. billing State = Delhi & Country = India -> L/GST-ItemWise
+     * 2. billing State = Not Delhi & Country = India -> I/GST-ItemWise
+     * 3. Country != India & GST > 0 -> I/GST-Export
+     * 4. Country != India & GST = 0 -> I/GST-EXPORT-ZERO RATED
+     */
+    public function resolveStptName(array $data): string
+    {
+        // If explicitly set, respect it
+        if (!empty($data['stpt_name'])) {
+            return $data['stpt_name'];
+        }
+
+        $country = trim((string)($data['customer_country'] ?? $data['country'] ?? ''));
+        $state   = trim((string)($data['customer_state'] ?? $data['state'] ?? ''));
+
+        // Check if country is India
+        $isIndia = false;
+        if ($country === '') {
+            // Default to India if not specified but GSTIN or state exists, or fallback to India
+            $isIndia = true;
+        } else {
+            $cUpper = strtoupper($country);
+            if (in_array($cUpper, ['IN', 'IND', 'INDIA'], true)) {
+                $isIndia = true;
+            }
+        }
+
+        if ($isIndia) {
+            $sUpper = strtoupper($state);
+            $isDelhi = in_array($sUpper, ['DELHI', 'NCT OF DELHI', 'NEW DELHI', '07', '7'], true);
+            return $isDelhi ? 'L/GST-ItemWise' : 'I/GST-ItemWise';
+        }
+
+        // Country != India (Export)
+        $taxAmount = (float)($data['tax_amount'] ?? $data['st_amount'] ?? 0);
+        $taxPercent = (float)($data['tax_percent'] ?? $data['tax_rate'] ?? 0);
+        $hasGst = ($taxAmount > 0 || $taxPercent > 0);
+
+        return $hasGst ? 'I/GST-Export' : 'I/GST-EXPORT-ZERO RATED';
+    }
+
+    /**
      * Generate Busy XML from invoice data
      * 
      * @param array $invoice Invoice data array
@@ -49,7 +94,9 @@ class BusyXmlGenerator
         $xml->addChild('VchType', $invoice['vch_type'] ?? '9'); // 9 = Sales
         $xml->addChild('StockUpdationDate', $formattedDate);
         $xml->addChild('VchNo', htmlspecialchars($invoice['vch_no'] ?? $invoice['invoice_number'] ?? ''));
-        $xml->addChild('STPTName', htmlspecialchars($invoice['stpt_name'] ?? 'I/GST-Export'));
+        
+        $stptName = $this->resolveStptName($invoice);
+        $xml->addChild('STPTName', htmlspecialchars($stptName));
         
         // Resolve Payment Type / Party Name / MasterName1
         $paymentType = trim($invoice['payment_type'] ?? $invoice['payment_mode'] ?? '');
@@ -234,7 +281,9 @@ class BusyXmlGenerator
         $xml->addChild('VchType', $salesReturn['vch_type'] ?? '3'); // 3 = Sales Return in BUSY
         $xml->addChild('StockUpdationDate', $formattedDate);
         $xml->addChild('VchNo', htmlspecialchars($salesReturn['vch_no'] ?? $salesReturn['return_number'] ?? ''));
-        $xml->addChild('STPTName', htmlspecialchars($salesReturn['stpt_name'] ?? 'I/GST-Export'));
+        
+        $stptName = $this->resolveStptName($salesReturn);
+        $xml->addChild('STPTName', htmlspecialchars($stptName));
         
         // Resolve Payment Type / Party Name / MasterName1
         $paymentType = trim($salesReturn['payment_type'] ?? $salesReturn['payment_mode'] ?? '');
