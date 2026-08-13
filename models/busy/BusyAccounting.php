@@ -321,7 +321,12 @@ class BusyAccounting
 
         $sql = "SELECT i.id, i.invoice_number, i.invoice_date, i.subtotal, i.tax_amount, i.discount_amount, 
                        i.total_amount, i.currency, i.status,
-                       c.first_name, c.last_name, c.gstin, c.payment_type AS order_payment_type
+                       c.first_name, c.last_name, c.gstin, c.payment_type AS order_payment_type, c.order_number,
+                       (SELECT pp.payment_mode 
+                        FROM pos_payments pp 
+                        WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(c.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci 
+                        ORDER BY pp.payment_amount DESC, pp.id DESC 
+                        LIMIT 1) AS pos_payment_mode
                 FROM vp_invoices i
                 LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id
                 WHERE {$whereSql}
@@ -347,6 +352,9 @@ class BusyAccounting
             }
 
             $payType = trim($r['order_payment_type'] ?? '');
+            if (strtolower($payType) === 'offline' && !empty($r['pos_payment_mode'])) {
+                $payType = trim($r['pos_payment_mode']);
+            }
             $payTypeFormatted = '';
             if ($payType !== '') {
                 $payTypeFormatted = (strtolower($payType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $payType));
@@ -478,6 +486,11 @@ class BusyAccounting
         $sql = "SELECT sr.id, sr.return_number, sr.order_number, sr.invoice_id, sr.return_date, sr.status,
                        i.invoice_number, i.currency,
                        c.first_name, c.last_name, c.gstin, c.payment_type AS order_payment_type,
+                       (SELECT pp.payment_mode 
+                        FROM pos_payments pp 
+                        WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(sr.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci 
+                        ORDER BY pp.payment_amount DESC, pp.id DESC 
+                        LIMIT 1) AS pos_payment_mode,
                        COALESCE(sri_sum.taxable, 0) AS taxable_amount,
                        COALESCE(sri_sum.tax, 0) AS tax_amount
                 FROM vp_sales_returns sr
@@ -518,6 +531,9 @@ class BusyAccounting
             }
 
             $payType = trim($r['order_payment_type'] ?? '');
+            if (strtolower($payType) === 'offline' && !empty($r['pos_payment_mode'])) {
+                $payType = trim($r['pos_payment_mode']);
+            }
             $payTypeFormatted = '';
             if ($payType !== '') {
                 $payTypeFormatted = (strtolower($payType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $payType));
@@ -555,7 +571,12 @@ class BusyAccounting
     {
         $sql = "SELECT i.*, 
                        c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, 
-                       c.city, c.state, c.state_code, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type
+                       c.city, c.state, c.state_code, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type, c.order_number,
+                       (SELECT pp.payment_mode 
+                        FROM pos_payments pp 
+                        WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(c.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci 
+                        ORDER BY pp.payment_amount DESC, pp.id DESC 
+                        LIMIT 1) AS pos_payment_mode
                 FROM vp_invoices i
                 LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id
                 WHERE i.id = ? AND LOWER(TRIM(COALESCE(i.status, ''))) <> 'cancelled' LIMIT 1";
@@ -610,6 +631,9 @@ class BusyAccounting
         }
 
         $payType = trim($invoice['order_payment_type'] ?? '');
+        if (strtolower($payType) === 'offline' && !empty($invoice['pos_payment_mode'])) {
+            $payType = trim($invoice['pos_payment_mode']);
+        }
         if ($payType !== '') {
             $payTypeFormatted = (strtolower($payType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $payType));
             $invoice['payment_type'] = $payTypeFormatted;
@@ -647,7 +671,12 @@ class BusyAccounting
     {
         $sql = "SELECT sr.*, i.invoice_number, i.invoice_date, i.currency,
                        c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, 
-                       c.city, c.state, c.state_code, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type
+                       c.city, c.state, c.state_code, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type,
+                       (SELECT pp.payment_mode 
+                        FROM pos_payments pp 
+                        WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(sr.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci 
+                        ORDER BY pp.payment_amount DESC, pp.id DESC 
+                        LIMIT 1) AS pos_payment_mode
                 FROM vp_sales_returns sr
                 LEFT JOIN vp_invoices i ON sr.invoice_id = i.id
                 LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id
@@ -705,6 +734,9 @@ class BusyAccounting
         }
 
         $payType = trim($return['order_payment_type'] ?? '');
+        if (strtolower($payType) === 'offline' && !empty($return['pos_payment_mode'])) {
+            $payType = trim($return['pos_payment_mode']);
+        }
         if ($payType !== '') {
             $payTypeFormatted = (strtolower($payType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $payType));
             $return['payment_type'] = $payTypeFormatted;
