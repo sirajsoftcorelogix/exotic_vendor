@@ -2,26 +2,25 @@
 /**
  * repair_vp_stock_details.php
  *
- * Incrementally populate item_code, size, and color in vp_stock in small batches.
- * Prevents lock wait timeouts and long transactions by updating in chunks.
+ * Frontend-based incremental repair of item_code, size, and color in vp_stock.
+ * Processes one row at a time via AJAX to prevent lock wait timeouts.
  * 
- * Usage: php repair_vp_stock_details.php
+ * Usage: Open this file in browser, or run via CLI: php repair_vp_stock_details.php
  */
 
+$isCli = (php_sapi_name() === 'cli');
 $root = dirname(__DIR__);
 $configPath = $root . DIRECTORY_SEPARATOR . 'config.php';
 
 if (!is_file($configPath)) {
-    fwrite(STDERR, "Missing config.php at {$configPath}\n");
-    exit(1);
+    die("Missing config.php at {$configPath}\n");
 }
 
 $config = require $configPath;
 
 $dbCfg = $config['db'] ?? null;
 if (!is_array($dbCfg) || empty($dbCfg['host']) || empty($dbCfg['name'])) {
-    fwrite(STDERR, "config.php must define ['db'] with host, name, user, pass.\n");
-    exit(1);
+    die("config.php must define ['db'] with host, name, user, pass.\n");
 }
 
 $host = $dbCfg['host'];
@@ -32,129 +31,341 @@ $port = (int)($dbCfg['port'] ?? 3306);
 
 $conn = new mysqli($host, $user, $pass, $name, $port);
 if ($conn->connect_error) {
-    fwrite(STDERR, "Connection failed: " . $conn->connect_error . "\n");
-    exit(1);
+    die("Connection failed: " . $conn->connect_error . "\n");
 }
 $conn->set_charset('utf8mb4');
 
-$batchSize = 50; // Reduced batch size to prevent lock contention on large tables
-$totalUpdated = 0;
-$startTime = microtime(true);
+// Helper to resolve item details for a single vp_stock row
+function resolveStockDetails(mysqli $conn, int $stockId, string $sku, int $lastTransId): array
+{
+    $itemCode = '';
+    $size = '';
+    $color = '';
 
-echo "Starting vp_stock repair in batches of {$batchSize}...\n";
-
-while (true) {
-    // Select batch of vp_stock rows needing repair
-    $batchSql = "SELECT s.id, s.sku, s.last_trans_id
-                 FROM vp_stock s
-                 WHERE (s.item_code IS NULL OR s.size IS NULL OR s.color IS NULL)
-                 ORDER BY s.id ASC
-                 LIMIT {$batchSize}";
-
-    $batchRes = $conn->query($batchSql);
-    if (!$batchRes || $batchRes->num_rows === 0) {
-        break; // No more rows to process
-    }
-
-    $stockRows = [];
-    while ($row = $batchRes->fetch_assoc()) {
-        $stockRows[] = $row;
-    }
-    $batchRes->free();
-
-    $updates = [];
-    foreach ($stockRows as $row) {
-        $stockId = (int) $row['id'];
-        $sku = (string) $row['sku'];
-        $lastTransId = (int) ($row['last_trans_id'] ?? 0);
-
-        // Resolve item details from movement or product table
-        $detSql = "SELECT sm.item_code AS m_item_code, sm.size AS m_size, sm.color AS m_color,
-                          p.item_code AS p_item_code, p.size AS p_size, p.color AS p_color
-                   FROM vp_stock_movements sm
-                   LEFT JOIN vp_products p ON sm.product_id = p.id
-                   WHERE sm.id = ?
-                   UNION
-                   SELECT NULL, NULL, NULL, item_code, size, color
-                   FROM vp_products p
-                   WHERE p.sku = ? OR p.item_code = ?
-                   LIMIT 1";
-
-        $stmt = $conn->prepare($detSql);
-        $itemCode = '';
-        $size = '';
-        $color = '';
-
-        if ($stmt) {
-            $stmt->bind_param('iss', $lastTransId, $sku, $sku);
-            $stmt->execute();
-            $det = $stmt->get_result()->fetch_assoc();
-            $stmt->close();
-
-            if ($det) {
-                $itemCode = trim((string)($det['m_item_code'] ?? $det['p_item_code'] ?? ''));
-                $size     = trim((string)($det['m_size'] ?? $det['p_size'] ?? ''));
-                $color    = trim((string)($det['m_color'] ?? $det['p_color'] ?? ''));
+    // Resolve from movement row
+    if ($lastTransId > 0) {
+        $mStmt = $conn->prepare('SELECT item_code, size, color FROM vp_stock_movements WHERE id = ? LIMIT 1');
+        if ($mStmt) {
+            $mStmt->bind_param('i', $lastTransId);
+            $mStmt->execute();
+            $mRow = $mStmt->get_result()->fetch_assoc();
+            $mStmt->close();
+            if ($mRow) {
+                $itemCode = trim((string)($mRow['item_code'] ?? ''));
+                $size     = trim((string)($mRow['size'] ?? ''));
+                $color    = trim((string)($mRow['color'] ?? ''));
             }
         }
+    }
 
-        if ($itemCode !== '' || $size !== '' || $color !== '') {
-            $updates[] = [
-                'id' => $stockId,
-                'item_code' => $itemCode,
-                'size' => $size,
-                'color' => $color
-            ];
+    // Resolve from products table if movement details missing
+    if ($itemCode === '' && $sku !== '') {
+        $pStmt = $conn->prepare('SELECT item_code, size, color FROM vp_products WHERE sku = ? OR item_code = ? LIMIT 1');
+        if ($pStmt) {
+            $pStmt->bind_param('ss', $sku, $sku);
+            $pStmt->execute();
+            $pRow = $pStmt->get_result()->fetch_assoc();
+            $pStmt->close();
+            if ($pRow) {
+                $itemCode = trim((string)($pRow['item_code'] ?? ''));
+                if ($size === '')  $size  = trim((string)($pRow['size'] ?? ''));
+                if ($color === '') $color = trim((string)($pRow['color'] ?? ''));
+            }
         }
     }
 
-    if (!empty($updates)) {
-        $conn->begin_transaction();
-        try {
-            $updStmt = $conn->prepare('UPDATE vp_stock SET item_code = NULLIF(?, ""), size = NULLIF(?, ""), color = NULLIF(?, ""), updated_at = NOW() WHERE id = ?');
-            if ($updStmt) {
-                $maxRetries = 3;
-                $retryCount = 0;
-                $done = false;
-                while (!$done && $retryCount <= $maxRetries) {
-                    try {
-                        foreach ($updates as $upd) {
-                            $updStmt->bind_param('sssi', $upd['item_code'], $upd['size'], $upd['color'], $upd['id']);
-                            $updStmt->execute();
-                        }
-                        $conn->commit();
-                        $done = true;
-                        $totalUpdated += count($updates);
-                        echo "Updated " . count($updates) . " rows (Total: {$totalUpdated})\n";
-                    } catch (mysqli_sql_exception $e) {
-                        $retryCount++;
-                        if (strpos($e->getMessage(), 'Lock wait timeout') !== false && $retryCount <= $maxRetries) {
-                            $conn->rollback();
-                            echo "Lock wait timeout, retrying batch (Attempt {$retryCount}/{$maxRetries}) after 5 seconds...\n";
-                            sleep(5);
-                            $conn->begin_transaction(); // Restart transaction
-                        } else {
-                            throw $e;
-                        }
-                    }
-                }
-                $updStmt->close();
-            }
-        } catch (Throwable $e) {
-            if ($conn->errno) {
-                @$conn->rollback();
-            }
-            echo "Error in batch: " . $e->getMessage() . "\n";
-        }
-    } else {
-        // If no updates were resolvable in this batch, skip ahead so we don't loop forever
-        $maxId = max(array_column($stockRows, 'id'));
-        $skipStmt = $conn->query("SELECT COUNT(*) AS cnt FROM vp_stock WHERE id > {$maxId} AND (item_code IS NULL OR size IS NULL OR color IS NULL)");
-        if ($skipStmt && $skipStmt->fetch_assoc()['cnt'] == 0) {
-            break;
-        }
-    }
+    return [
+        'item_code' => $itemCode,
+        'size'      => $size,
+        'color'     => $color
+    ];
 }
 
-$elapsed = round(microtime(true) - $startTime, 2);
-echo "Repair complete. Total updated: {$totalUpdated} rows in {$elapsed} seconds.\n";
+// API Endpoint for single row repair (AJAX)
+if (isset($_GET['action']) && $_GET['action'] === 'repair_one') {
+    header('Content-Type: application/json');
+
+    $stockId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+    if ($stockId <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Invalid stock ID']);
+        exit;
+    }
+
+    $stmt = $conn->prepare('SELECT id, sku, last_trans_id FROM vp_stock WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        echo json_encode(['success' => false, 'message' => 'DB error']);
+        exit;
+    }
+    $stmt->bind_param('i', $stockId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$row) {
+        echo json_encode(['success' => false, 'message' => 'Row not found']);
+        exit;
+    }
+
+    $details = resolveStockDetails($conn, $stockId, (string)$row['sku'], (int)$row['last_trans_id']);
+
+    if ($details['item_code'] === '' && $details['size'] === '' && $details['color'] === '') {
+        echo json_encode(['success' => false, 'message' => 'No item details resolved']);
+        exit;
+    }
+
+    // Update single row in its own transaction
+    $conn->begin_transaction();
+    try {
+        $updStmt = $conn->prepare('UPDATE vp_stock SET item_code = NULLIF(?, ""), size = NULLIF(?, ""), color = NULLIF(?, ""), updated_at = NOW() WHERE id = ?');
+        if ($updStmt) {
+            $updStmt->bind_param('sssi', $details['item_code'], $details['size'], $details['color'], $stockId);
+            $updStmt->execute();
+            $updStmt->close();
+        }
+        $conn->commit();
+
+        echo json_encode([
+            'success' => true,
+            'id' => $stockId,
+            'sku' => $row['sku'],
+            'item_code' => $details['item_code'],
+            'size' => $details['size'],
+            'color' => $details['color']
+        ]);
+    } catch (Throwable $e) {
+        $conn->rollback();
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+
+// API Endpoint to fetch pending count and next pending IDs
+if (isset($_GET['action']) && $_GET['action'] === 'get_pending') {
+    header('Content-Type: application/json');
+
+    $countSql = "SELECT COUNT(*) AS cnt FROM vp_stock WHERE item_code IS NULL OR size IS NULL OR color IS NULL";
+    $countRes = $conn->query($countSql);
+    $count = $countRes ? (int) $countRes->fetch_assoc()['cnt'] : 0;
+
+    $limit = 100;
+    $idSql = "SELECT id FROM vp_stock WHERE item_code IS NULL OR size IS NULL OR color IS NULL ORDER BY id ASC LIMIT {$limit}";
+    $idRes = $conn->query($idSql);
+    $ids = [];
+    if ($idRes) {
+        while ($r = $idRes->fetch_assoc()) {
+            $ids[] = (int) $r['id'];
+        }
+        $idRes->free();
+    }
+
+    echo json_encode([
+        'success' => true,
+        'total_pending' => $count,
+        'ids' => $ids
+    ]);
+    exit;
+}
+
+// CLI Mode
+if ($isCli) {
+    echo "Starting vp_stock repair in CLI mode...\n";
+    $totalUpdated = 0;
+    $startTime = microtime(true);
+
+    while (true) {
+        $batchSql = "SELECT s.id, s.sku, s.last_trans_id FROM vp_stock s WHERE (s.item_code IS NULL OR s.size IS NULL OR s.color IS NULL) ORDER BY s.id ASC LIMIT 10";
+        $batchRes = $conn->query($batchSql);
+        if (!$batchRes || $batchRes->num_rows === 0) {
+            break;
+        }
+
+        while ($row = $batchRes->fetch_assoc()) {
+            $stockId = (int) $row['id'];
+            $details = resolveStockDetails($conn, $stockId, (string)$row['sku'], (int)$row['last_trans_id']);
+
+            if ($details['item_code'] !== '' || $details['size'] !== '' || $details['color'] !== '') {
+                $conn->begin_transaction();
+                try {
+                    $updStmt = $conn->prepare('UPDATE vp_stock SET item_code = NULLIF(?, ""), size = NULLIF(?, ""), color = NULLIF(?, ""), updated_at = NOW() WHERE id = ?');
+                    if ($updStmt) {
+                        $updStmt->bind_param('sssi', $details['item_code'], $details['size'], $details['color'], $stockId);
+                        $updStmt->execute();
+                        $updStmt->close();
+                    }
+                    $conn->commit();
+                    $totalUpdated++;
+                    echo "Updated ID {$stockId} (SKU: {$row['sku']}) -> ItemCode: {$details['item_code']}\n";
+                } catch (Throwable $e) {
+                    $conn->rollback();
+                    echo "Error on ID {$stockId}: " . $e->getMessage() . "\n";
+                }
+            }
+        }
+        $batchRes->free();
+    }
+
+    $elapsed = round(microtime(true) - $startTime, 2);
+    echo "Repair complete. Total updated: {$totalUpdated} rows in {$elapsed} seconds.\n";
+    exit;
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Repair vp_stock Details</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 p-6">
+    <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-md p-6 border border-slate-200">
+        <h1 class="text-2xl font-bold text-slate-800 mb-4">Repair vp_stock Details (Frontend)</h1>
+        <p class="text-sm text-slate-600 mb-4">
+            This page processes each <code>vp_stock</code> row individually via AJAX to populate <code>item_code</code>, <code>size</code>, and <code>color</code> without lock wait timeouts.
+        </p>
+
+        <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-4 flex items-center justify-between">
+            <div>
+                <span class="text-sm font-semibold text-indigo-900">Pending Rows:</span>
+                <span id="pendingCount" class="text-lg font-bold text-indigo-700 ml-2">Loading...</span>
+            </div>
+            <div>
+                <span class="text-sm font-semibold text-indigo-900">Processed:</span>
+                <span id="processedCount" class="text-lg font-bold text-indigo-700 ml-2">0</span>
+            </div>
+            <div>
+                <span class="text-sm font-semibold text-indigo-900">Errors:</span>
+                <span id="errorCount" class="text-lg font-bold text-red-600 ml-2">0</span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3 mb-4">
+            <button id="startBtn" onclick="startRepair()" class="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition">
+                Start Repair
+            </button>
+            <button id="stopBtn" onclick="stopRepair()" disabled class="px-5 py-2 bg-slate-300 text-slate-600 rounded-lg cursor-not-allowed font-medium">
+                Stop
+            </button>
+        </div>
+
+        <div class="border border-slate-200 rounded-lg overflow-hidden">
+            <table class="w-full text-sm text-left">
+                <thead class="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                        <th class="px-4 py-2 font-semibold text-slate-700">ID</th>
+                        <th class="px-4 py-2 font-semibold text-slate-700">SKU</th>
+                        <th class="px-4 py-2 font-semibold text-slate-700">Item Code</th>
+                        <th class="px-4 py-2 font-semibold text-slate-700">Size</th>
+                        <th class="px-4 py-2 font-semibold text-slate-700">Color</th>
+                        <th class="px-4 py-2 font-semibold text-slate-700">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="logTableBody" class="divide-y divide-slate-100 bg-white">
+                    <tr id="placeholderRow">
+                        <td colspan="6" class="px-4 py-6 text-center text-slate-400 italic">Click "Start Repair" to begin processing pending rows.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+<script>
+let isRunning = false;
+let processed = 0;
+let errors = 0;
+let pendingIds = [];
+
+async function fetchPending() {
+    try {
+        const res = await fetch('?action=get_pending');
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('pendingCount').innerText = data.total_pending;
+            pendingIds = data.ids;
+            return data.total_pending;
+        }
+    } catch (e) {
+        console.error(e);
+    }
+    return 0;
+}
+
+async function processRow(id) {
+    const rowHtml = `<tr id="row-${id}" class="hover:bg-slate-50 transition">
+        <td class="px-4 py-2 font-mono text-xs">${id}</td>
+        <td class="px-4 py-2 font-mono text-xs">...</td>
+        <td class="px-4 py-2 font-mono text-xs text-slate-400">...</td>
+        <td class="px-4 py-2 font-mono text-xs text-slate-400">...</td>
+        <td class="px-4 py-2 font-mono text-xs text-slate-400">...</td>
+        <td class="px-4 py-2 text-indigo-600 font-medium">Processing...</td>
+    </tr>`;
+
+    const placeholder = document.getElementById('placeholderRow');
+    if (placeholder) placeholder.remove();
+
+    document.getElementById('logTableBody').insertAdjacentHTML('afterbegin', rowHtml);
+
+    try {
+        const res = await fetch(`?action=repair_one&id=${id}`);
+        const data = await res.json();
+
+        const rowEl = document.getElementById(`row-${id}`);
+        if (data.success) {
+            rowEl.cells[1].innerText = data.sku || '';
+            rowEl.cells[2].innerText = data.item_code || '—';
+            rowEl.cells[3].innerText = data.size || '—';
+            rowEl.cells[4].innerText = data.color || '—';
+            rowEl.cells[5].innerHTML = '<span class="text-emerald-600 font-semibold">Success</span>';
+            processed++;
+        } else {
+            rowEl.cells[5].innerHTML = `<span class="text-red-600 font-semibold">Failed: ${data.message}</span>`;
+            errors++;
+        }
+    } catch (e) {
+        errors++;
+    }
+
+    document.getElementById('processedCount').innerText = processed;
+    document.getElementById('errorCount').innerText = errors;
+}
+
+async function startRepair() {
+    if (isRunning) return;
+    isRunning = true;
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('startBtn').classList.add('opacity-50', 'cursor-not-allowed');
+    document.getElementById('stopBtn').disabled = false;
+    document.getElementById('stopBtn').classList.remove('bg-slate-300', 'text-slate-600', 'cursor-not-allowed');
+    document.getElementById('stopBtn').classList.add('bg-red-600', 'text-white', 'hover:bg-red-700');
+
+    while (isRunning) {
+        const pending = await fetchPending();
+        if (pending === 0 || pendingIds.length === 0) {
+            break;
+        }
+
+        // Process next 10 IDs sequentially to avoid DB locks
+        const idsToProcess = pendingIds.splice(0, 10);
+        for (const id of idsToProcess) {
+            if (!isRunning) break;
+            await processRow(id);
+        }
+
+        // Small delay between batches
+        await new Promise(r => setTimeout(r, 500));
+    }
+
+    isRunning = false;
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('startBtn').classList.remove('opacity-50', 'cursor-not-allowed');
+    document.getElementById('stopBtn').disabled = true;
+    document.getElementById('stopBtn').classList.remove('bg-red-600', 'text-white', 'hover:bg-red-700');
+    document.getElementById('stopBtn').classList.add('bg-slate-300', 'text-slate-600', 'cursor-not-allowed');
+}
+
+function stopRepair() {
+    isRunning = false;
+}
+</script>
+</body>
+</html>
