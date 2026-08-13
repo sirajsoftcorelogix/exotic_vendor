@@ -38,23 +38,28 @@ class BusyXmlGenerator
      */
     public function resolveStptName(array $data): string
     {
-        // If explicitly set, respect it
+        // If explicitly set and non-empty, respect it
         if (!empty($data['stpt_name'])) {
             return $data['stpt_name'];
         }
 
         $country = trim((string)($data['customer_country'] ?? $data['country'] ?? ''));
-        $state   = trim((string)($data['customer_state'] ?? $data['state'] ?? ''));
+        $state   = trim((string)($data['customer_state'] ?? $data['state'] ?? $data['customer_address4'] ?? ''));
 
-        // Check if country is India
+        // Check if country is India or an Indian state (e.g. if state name was saved in country field)
         $isIndia = false;
         if ($country === '') {
-            // Default to India if not specified but GSTIN or state exists, or fallback to India
             $isIndia = true;
         } else {
             $cUpper = strtoupper($country);
             if (in_array($cUpper, ['IN', 'IND', 'INDIA'], true)) {
                 $isIndia = true;
+            } else {
+                // If country holds an Indian state name/code (e.g. 'DELHI', 'GUJARAT', '07')
+                $stateCode = $this->resolveGstStateCode($country, '');
+                if (!empty($stateCode) && ctype_digit($stateCode)) {
+                    $isIndia = true;
+                }
             }
         }
 
