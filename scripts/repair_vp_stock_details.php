@@ -2,15 +2,24 @@
 /**
  * repair_vp_stock_details.php
  *
- * Web / CLI page to rebuild & repair vp_stock (item_code, size, color, current_stock).
- * Runs natively using StockMovement::syncAllVpStockFromMovements() or chunked batches.
+ * Frontend page to incrementally repair item_code, size, and color in vp_stock.
+ * Runs strictly in batches of 5 rows via AJAX with a visual progress bar.
  */
+
+// Disable HTML error output for clean JSON API responses
+@ini_set('display_errors', '0');
+error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED);
 
 $isCli = (php_sapi_name() === 'cli');
 $root = dirname(__DIR__);
 $configPath = $root . DIRECTORY_SEPARATOR . 'config.php';
 
 if (!is_file($configPath)) {
+    if (isset($_GET['action'])) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => "Missing config.php at {$configPath}"]);
+        exit;
+    }
     die("Missing config.php at {$configPath}\n");
 }
 
@@ -18,6 +27,11 @@ $config = require $configPath;
 
 $dbCfg = $config['db'] ?? null;
 if (!is_array($dbCfg) || empty($dbCfg['host']) || empty($dbCfg['name'])) {
+    if (isset($_GET['action'])) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => "config.php must define ['db'] with host, name, user, pass."]);
+        exit;
+    }
     die("config.php must define ['db'] with host, name, user, pass.\n");
 }
 
@@ -29,35 +43,38 @@ $port = (int)($dbCfg['port'] ?? 3306);
 
 $conn = new mysqli($host, $user, $pass, $name, $port);
 if ($conn->connect_error) {
+    if (isset($_GET['action'])) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => "Connection failed: " . $conn->connect_error]);
+        exit;
+    }
     die("Connection failed: " . $conn->connect_error . "\n");
 }
 $conn->set_charset('utf8mb4');
 
-require_once __DIR__ . '/../models/product/StockMovement.php';
-
-// Action 1: Full native rebuild via StockMovement::syncAllVpStockFromMovements()
-if (isset($_GET['action']) && $_GET['action'] === 'full_sync') {
+// Action 1: Get Initial Totals & Bounds
+if (isset($_GET['action']) && $_GET['action'] === 'get_meta') {
     header('Content-Type: application/json');
-    try {
-        $affected = StockMovement::syncAllVpStockFromMovements($conn);
-        echo json_encode([
-            'success' => true,
-            'message' => "Successfully synced {$affected} vp_stock row(s) directly from vp_stock_movements ledger."
-        ]);
-    } catch (Throwable $e) {
-        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
-    }
+
+    $maxRes = $conn->query("SELECT MAX(id) AS max_id, MIN(id) AS min_id FROM vp_stock");
+    $maxRow = $maxRes ? $maxRes->fetch_assoc() : ['max_id' => 0, 'min_id' => 0];
+    
+    echo json_encode([
+        'success' => true,
+        'min_id' => (int)($maxRow['min_id'] ?? 0),
+        'max_id' => (int)($maxRow['max_id'] ?? 0)
+    ]);
     exit;
 }
 
-// Action 2: Process batch of 100 IDs using fast primary key UPSERT
+// Action 2: Process batch of 5 IDs using fast primary key UPSERT
 if (isset($_GET['action']) && $_GET['action'] === 'batch_repair') {
     header('Content-Type: application/json');
 
     $lastId = isset($_GET['last_id']) ? (int)$_GET['last_id'] : 0;
-    $batchSize = 100;
+    $batchSize = 5; // Fixed batch size of 5 as requested
 
-    // Fetch batch of vp_stock rows using primary key > $lastId
+    // Fetch batch of 5 vp_stock rows using primary key > $lastId
     $sql = "SELECT s.id, s.sku, s.warehouse_id, s.current_stock, s.last_trans_id,
                    sm.item_code AS m_item_code, sm.size AS m_size, sm.color AS m_color,
                    p.item_code AS p_item_code, p.size AS p_size, p.color AS p_color
@@ -76,6 +93,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'batch_repair') {
 
     $updatedCount = 0;
     $maxId = $lastId;
+    $processedRows = [];
 
     $updStmt = $conn->prepare("UPDATE vp_stock 
                                SET item_code = NULLIF(?, ''), 
@@ -97,6 +115,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'batch_repair') {
             $updStmt->execute();
             $updatedCount++;
         }
+
+        $processedRows[] = [
+            'id' => $stockId,
+            'sku' => $r['sku'],
+            'item_code' => $ic,
+            'size' => $sz,
+            'color' => $cl
+        ];
     }
     if ($updStmt) {
         $updStmt->close();
@@ -105,22 +131,60 @@ if (isset($_GET['action']) && $_GET['action'] === 'batch_repair') {
 
     echo json_encode([
         'success' => true,
-        'batch_count' => $updatedCount,
+        'batch_count' => count($processedRows),
+        'updated_count' => $updatedCount,
         'last_id' => $maxId,
-        'has_more' => ($maxId > $lastId)
+        'has_more' => ($maxId > $lastId),
+        'rows' => $processedRows
     ]);
     exit;
 }
 
 // CLI Execution Mode
 if ($isCli) {
-    echo "Running native vp_stock rebuild via StockMovement::syncAllVpStockFromMovements()...\n";
-    try {
-        $affected = StockMovement::syncAllVpStockFromMovements($conn);
-        echo "Done! Successfully updated/inserted {$affected} row(s) in vp_stock.\n";
-    } catch (Throwable $e) {
-        echo "Error: " . $e->getMessage() . "\n";
+    echo "Starting vp_stock repair in CLI mode...\n";
+    $lastId = 0;
+    $totalUpdated = 0;
+
+    while (true) {
+        $sql = "SELECT s.id, s.sku, s.last_trans_id,
+                       sm.item_code AS m_item_code, sm.size AS m_size, sm.color AS m_color,
+                       p.item_code AS p_item_code, p.size AS p_size, p.color AS p_color
+                FROM vp_stock s
+                LEFT JOIN vp_stock_movements sm ON s.last_trans_id = sm.id
+                LEFT JOIN vp_products p ON (sm.product_id = p.id OR (p.sku IS NOT NULL AND p.sku = s.sku))
+                WHERE s.id > {$lastId}
+                ORDER BY s.id ASC
+                LIMIT 5";
+
+        $res = $conn->query($sql);
+        if (!$res || $res->num_rows === 0) break;
+
+        $maxId = $lastId;
+        $upd = $conn->prepare("UPDATE vp_stock SET item_code = NULLIF(?, ''), size = NULLIF(?, ''), color = NULLIF(?, ''), updated_at = NOW() WHERE id = ?");
+
+        while ($r = $res->fetch_assoc()) {
+            $stockId = (int)$r['id'];
+            $maxId = $stockId;
+            $ic = trim((string)($r['m_item_code'] ?? $r['p_item_code'] ?? ''));
+            $sz = trim((string)($r['m_size'] ?? $r['p_size'] ?? ''));
+            $cl = trim((string)($r['m_color'] ?? $r['p_color'] ?? ''));
+
+            if ($upd && ($ic !== '' || $sz !== '' || $cl !== '')) {
+                $upd->bind_param('sssi', $ic, $sz, $cl, $stockId);
+                $upd->execute();
+                $totalUpdated++;
+            }
+        }
+        if ($upd) $upd->close();
+        $res->free();
+
+        if ($maxId <= $lastId) break;
+        $lastId = $maxId;
+        echo "Processed up to ID {$lastId} (Total updated: {$totalUpdated})\n";
     }
+
+    echo "CLI Repair complete. Total updated: {$totalUpdated} rows.\n";
     exit;
 }
 ?>
@@ -129,128 +193,170 @@ if ($isCli) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sync & Repair vp_stock</title>
+    <title>Repair vp_stock Details</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-50 p-6">
-    <div class="max-w-3xl mx-auto bg-white rounded-xl shadow-md p-6 border border-slate-200">
-        <h1 class="text-2xl font-bold text-slate-800 mb-2">Sync & Repair vp_stock Table</h1>
+    <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-md p-6 border border-slate-200">
+        <h1 class="text-2xl font-bold text-slate-800 mb-2">Repair vp_stock Details</h1>
         <p class="text-sm text-slate-600 mb-6">
-            Populate missing <code>item_code</code>, <code>size</code>, and <code>color</code> columns in <code>vp_stock</code> directly from the movement ledger and product catalog.
+            Populate missing <code>item_code</code>, <code>size</code>, and <code>color</code> in <code>vp_stock</code> in batches of 5 rows with progress tracking.
         </p>
 
-        <!-- Method 1: Instant Full Sync -->
+        <!-- Progress Card -->
         <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-5 mb-6">
-            <h2 class="text-lg font-bold text-indigo-900 mb-1">Option 1: Instant Native Ledger Sync (Recommended)</h2>
-            <p class="text-xs text-indigo-700 mb-4">
-                Executes a single optimized <code>INSERT ... ON DUPLICATE KEY UPDATE</code> to instantly sync all <code>vp_stock</code> rows from <code>vp_stock_movements</code>.
-            </p>
-            <button id="fullSyncBtn" onclick="runFullSync()" class="px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm transition">
-                ⚡ Run Instant Full Sync
-            </button>
-            <div id="fullSyncResult" class="mt-3 text-sm font-medium hidden"></div>
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm font-semibold text-indigo-900">Overall Progress</span>
+                <span id="percentText" class="text-sm font-bold text-indigo-700">0%</span>
+            </div>
+            <!-- Progress Bar -->
+            <div class="w-full bg-indigo-200 rounded-full h-3.5 mb-4 overflow-hidden">
+                <div id="progressBar" class="bg-indigo-600 h-3.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-4 text-center text-sm font-medium">
+                <div class="bg-white p-3 rounded border border-indigo-100 shadow-sm">
+                    <div class="text-slate-500 text-xs uppercase font-semibold">Processed Rows</div>
+                    <div id="processedCount" class="text-lg font-bold text-slate-800 mt-0.5">0</div>
+                </div>
+                <div class="bg-white p-3 rounded border border-indigo-100 shadow-sm">
+                    <div class="text-slate-500 text-xs uppercase font-semibold">Current ID</div>
+                    <div id="currentId" class="text-lg font-bold text-slate-800 mt-0.5">0</div>
+                </div>
+                <div class="bg-white p-3 rounded border border-indigo-100 shadow-sm">
+                    <div class="text-slate-500 text-xs uppercase font-semibold">Max ID</div>
+                    <div id="maxIdText" class="text-lg font-bold text-slate-800 mt-0.5">0</div>
+                </div>
+            </div>
         </div>
 
-        <!-- Method 2: Batch AJAX Sync -->
-        <div class="bg-slate-100 border border-slate-200 rounded-lg p-5">
-            <h2 class="text-lg font-bold text-slate-800 mb-1">Option 2: Chunked Batch Repair</h2>
-            <p class="text-xs text-slate-600 mb-4">
-                Iterates through <code>vp_stock</code> rows in small chunks of 100 using primary key cursor pagination.
-            </p>
-            <div class="flex items-center gap-4 mb-4">
-                <button id="batchStartBtn" onclick="startBatchRepair()" class="px-5 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 font-medium text-sm transition">
-                    Start Batch Sync
-                </button>
-                <button id="batchStopBtn" onclick="stopBatchRepair()" disabled class="px-5 py-2 bg-slate-300 text-slate-500 rounded-lg text-sm cursor-not-allowed font-medium">
-                    Stop
-                </button>
+        <div class="flex items-center gap-3 mb-6">
+            <button id="startBtn" onclick="startRepair()" class="px-6 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm transition shadow-sm">
+                ▶ Start Batch Repair
+            </button>
+            <button id="stopBtn" onclick="stopRepair()" disabled class="px-6 py-2.5 bg-slate-200 text-slate-500 rounded-lg text-sm cursor-not-allowed font-semibold">
+                ⏸ Pause
+            </button>
+        </div>
+
+        <!-- Live Activity Log -->
+        <div class="border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+            <div class="bg-slate-100 px-4 py-2.5 border-b border-slate-200 font-semibold text-slate-700 text-xs uppercase tracking-wider">
+                Live Processing Feed (Batch size: 5)
             </div>
-            <div id="batchProgress" class="text-xs font-mono text-slate-600 bg-white p-3 rounded border border-slate-200 h-24 overflow-y-auto hidden"></div>
+            <div id="logList" class="divide-y divide-slate-100 bg-white max-h-80 overflow-y-auto font-mono text-xs p-2">
+                <div id="placeholderLog" class="p-4 text-center text-slate-400 italic font-sans">
+                    Click "Start Batch Repair" to begin processing in batches of 5.
+                </div>
+            </div>
         </div>
     </div>
 
 <script>
-async function runFullSync() {
-    const btn = document.getElementById('fullSyncBtn');
-    const resDiv = document.getElementById('fullSyncResult');
-    
-    btn.disabled = true;
-    btn.innerText = 'Syncing...';
-    resDiv.classList.add('hidden');
+let isRunning = false;
+let lastId = 0;
+let minId = 0;
+let maxId = 0;
+let processedCount = 0;
 
+async function initMeta() {
     try {
-        const res = await fetch('?action=full_sync');
+        const res = await fetch('?action=get_meta');
         const data = await res.json();
-
-        resDiv.classList.remove('hidden');
         if (data.success) {
-            resDiv.className = 'mt-3 text-sm font-medium text-emerald-700 bg-emerald-50 p-3 rounded border border-emerald-200';
-            resDiv.innerText = data.message;
-        } else {
-            resDiv.className = 'mt-3 text-sm font-medium text-red-700 bg-red-50 p-3 rounded border border-red-200';
-            resDiv.innerText = 'Error: ' + data.message;
+            minId = data.min_id;
+            maxId = data.max_id;
+            document.getElementById('maxIdText').innerText = maxId;
+            document.getElementById('currentId').innerText = minId;
         }
     } catch (e) {
-        resDiv.classList.remove('hidden');
-        resDiv.className = 'mt-3 text-sm font-medium text-red-700 bg-red-50 p-3 rounded border border-red-200';
-        resDiv.innerText = 'Request failed: ' + e.message;
+        console.error('Failed to init meta:', e);
     }
-
-    btn.disabled = false;
-    btn.innerText = '⚡ Run Instant Full Sync';
 }
 
-let batchRunning = false;
-let lastId = 0;
-let totalBatchUpdated = 0;
+async function startRepair() {
+    if (isRunning) return;
+    isRunning = true;
 
-async function startBatchRepair() {
-    if (batchRunning) return;
-    batchRunning = true;
-    
-    document.getElementById('batchStartBtn').disabled = true;
-    document.getElementById('batchStopBtn').disabled = false;
-    document.getElementById('batchStopBtn').className = 'px-5 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 font-medium transition';
-    
-    const progressDiv = document.getElementById('batchProgress');
-    progressDiv.classList.remove('hidden');
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('startBtn').classList.add('opacity-50', 'cursor-not-allowed');
+    document.getElementById('stopBtn').disabled = false;
+    document.getElementById('stopBtn').className = 'px-6 py-2.5 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 font-semibold shadow-sm transition';
 
-    while (batchRunning) {
+    if (maxId === 0) {
+        await initMeta();
+    }
+
+    const placeholder = document.getElementById('placeholderLog');
+    if (placeholder) placeholder.remove();
+
+    const logList = document.getElementById('logList');
+
+    while (isRunning) {
         try {
             const res = await fetch(`?action=batch_repair&last_id=${lastId}`);
+            
+            // Validate response is JSON
+            const contentType = res.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await res.text();
+                logList.insertAdjacentHTML('afterbegin', `<div class="p-2 text-red-600 bg-red-50 rounded mb-1">JSON Error: ${text.substring(0, 100)}...</div>`);
+                break;
+            }
+
             const data = await res.json();
 
             if (data.success) {
-                totalBatchUpdated += data.batch_count;
-                lastId = data.last_id;
-                progressDiv.innerText += `Processed up to ID ${lastId} (Updated: ${data.batch_count}, Total: ${totalBatchUpdated})\n`;
-                progressDiv.scrollTop = progressDiv.scrollHeight;
-
-                if (!data.has_more) {
-                    progressDiv.innerText += `\nCompleted! Total updated: ${totalBatchUpdated} rows.\n`;
+                if (data.batch_count === 0 || !data.has_more) {
+                    logList.insertAdjacentHTML('afterbegin', `<div class="p-2 text-emerald-700 bg-emerald-50 rounded mb-1 font-semibold">🎉 Repair complete! All rows processed.</div>`);
+                    document.getElementById('progressBar').style.width = '100%';
+                    document.getElementById('percentText').innerText = '100%';
                     break;
                 }
+
+                lastId = data.last_id;
+                processedCount += data.batch_count;
+
+                document.getElementById('processedCount').innerText = processedCount;
+                document.getElementById('currentId').innerText = lastId;
+
+                // Update progress bar
+                if (maxId > 0) {
+                    const pct = Math.min(100, Math.round((lastId / maxId) * 100));
+                    document.getElementById('progressBar').style.width = pct + '%';
+                    document.getElementById('percentText').innerText = pct + '%';
+                }
+
+                // Log batch details
+                let rowSummary = data.rows.map(r => `ID ${r.id} (${r.sku || 'no-sku'}) -> ${r.item_code || 'N/A'}`).join(', ');
+                logList.insertAdjacentHTML('afterbegin', `<div class="p-2 border-b border-slate-100 flex items-center justify-between"><span class="text-slate-700">Batch [ID ${data.rows[0]?.id} .. ${lastId}]: ${rowSummary}</span><span class="text-emerald-600 font-semibold text-[10px]">OK</span></div>`);
+
             } else {
-                progressDiv.innerText += `Error at ID ${lastId}: ${data.message}\n`;
+                logList.insertAdjacentHTML('afterbegin', `<div class="p-2 text-red-600 bg-red-50 rounded mb-1">Batch Error: ${data.message}</div>`);
                 break;
             }
         } catch (e) {
-            progressDiv.innerText += `Network error: ${e.message}\n`;
+            logList.insertAdjacentHTML('afterbegin', `<div class="p-2 text-red-600 bg-red-50 rounded mb-1">Network Error: ${e.message}</div>`);
             break;
         }
 
-        await new Promise(r => setTimeout(r, 200));
+        // Small delay between batches
+        await new Promise(r => setTimeout(r, 150));
     }
 
-    batchRunning = false;
-    document.getElementById('batchStartBtn').disabled = false;
-    document.getElementById('batchStopBtn').disabled = true;
-    document.getElementById('batchStopBtn').className = 'px-5 py-2 bg-slate-300 text-slate-500 rounded-lg text-sm cursor-not-allowed font-medium';
+    isRunning = false;
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('startBtn').classList.remove('opacity-50', 'cursor-not-allowed');
+    document.getElementById('stopBtn').disabled = true;
+    document.getElementById('stopBtn').className = 'px-6 py-2.5 bg-slate-200 text-slate-500 rounded-lg text-sm cursor-not-allowed font-semibold';
 }
 
-function stopBatchRepair() {
-    batchRunning = false;
+function stopRepair() {
+    isRunning = false;
 }
+
+// Initialize bounds on page load
+initMeta();
 </script>
 </body>
 </html>
