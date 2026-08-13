@@ -625,7 +625,10 @@ final class StockMovement
                 SET sm.sku = COALESCE(NULLIF(TRIM(p.sku), ''), p.item_code)
                 WHERE sm.product_id > 0
                   AND p.sku IS NOT NULL AND TRIM(p.sku) <> ''
-                  AND (sm.sku = p.title OR sm.sku <> p.sku)";
+                  AND (
+                      CONVERT(sm.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(p.title USING utf8mb4) COLLATE utf8mb4_unicode_ci 
+                      OR CONVERT(sm.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci <> CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                  )";
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
             return 0;
