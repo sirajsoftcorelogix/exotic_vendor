@@ -37,7 +37,7 @@ if ($conn->connect_error) {
 }
 $conn->set_charset('utf8mb4');
 
-$batchSize = 500;
+$batchSize = 50; // Reduced batch size to prevent lock contention on large tables
 $totalUpdated = 0;
 $startTime = microtime(true);
 
@@ -113,18 +113,45 @@ while (true) {
         try {
             $updStmt = $conn->prepare('UPDATE vp_stock SET item_code = NULLIF(?, ""), size = NULLIF(?, ""), color = NULLIF(?, ""), updated_at = NOW() WHERE id = ?');
             if ($updStmt) {
-                foreach ($updates as $upd) {
-                    $updStmt->bind_param('sssi', $upd['item_code'], $upd['size'], $upd['color'], $upd['id']);
-                    $updStmt->execute();
+                $maxRetries = 3;
+                $retryCount = 0;
+                $done = false;
+                while (!$done && $retryCount <= $maxRetries) {
+                    try {
+                        foreach ($updates as $upd) {
+                            $updStmt->bind_param('sssi', $upd['item_code'], $upd['size'], $upd['color'], $upd['id']);
+                            $updStmt->execute();
+                        }
+                        $conn->commit();
+                        $done = true;
+                        $totalUpdated += count($updates);
+                        echo "Updated " . count($updates) . " rows (Total: {$totalUpdated})\n";
+                    } catch (mysqli_sql_exception $e) {
+                        $retryCount++;
+                        if (strpos($e->getMessage(), 'Lock wait timeout') !== false && $retryCount <= $maxRetries) {
+                            $conn->rollback();
+                            echo "Lock wait timeout, retrying batch (Attempt {$retryCount}/{$maxRetries}) after 5 seconds...\n";
+                            sleep(5);
+                            $conn->begin_transaction(); // Restart transaction
+                        } else {
+                            throw $e;
+                        }
+                    }
                 }
                 $updStmt->close();
             }
-            $conn->commit();
-            $totalUpdated += count($updates);
-            echo "Updated " . count($updates) . " rows (Total: {$totalUpdated})\n";
         } catch (Throwable $e) {
-            $conn->rollback();
+            if ($conn->errno) {
+                @$conn->rollback();
+            }
             echo "Error in batch: " . $e->getMessage() . "\n";
+        }
+    } else {
+        // If no updates were resolvable in this batch, skip ahead so we don't loop forever
+        $maxId = max(array_column($stockRows, 'id'));
+        $skipStmt = $conn->query("SELECT COUNT(*) AS cnt FROM vp_stock WHERE id > {$maxId} AND (item_code IS NULL OR size IS NULL OR color IS NULL)");
+        if ($skipStmt && $skipStmt->fetch_assoc()['cnt'] == 0) {
+            break;
         }
     }
 }
