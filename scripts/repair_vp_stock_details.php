@@ -3,7 +3,7 @@
  * repair_vp_stock_details.php
  *
  * Frontend-based incremental repair of item_code, size, and color in vp_stock.
- * Processes one row at a time via AJAX to prevent lock wait timeouts.
+ * Uses INSERT ... ON DUPLICATE KEY UPDATE to avoid locking entire table.
  * 
  * Usage: Open this file in browser, or run via CLI: php repair_vp_stock_details.php
  */
@@ -34,6 +34,24 @@ if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error . "\n");
 }
 $conn->set_charset('utf8mb4');
+
+// Ensure required indexes exist on vp_stock for fast single-row upserts
+function ensureVpStockIndexes(mysqli $conn): void
+{
+    $indexes = [
+        'sku' => "ALTER TABLE vp_stock ADD INDEX idx_sku (sku)",
+        'warehouse_id' => "ALTER TABLE vp_stock ADD INDEX idx_warehouse_id (warehouse_id)",
+        'id' => "ALTER TABLE vp_stock ADD PRIMARY KEY (id)" // Usually already primary, but safe to attempt
+    ];
+
+    foreach ($indexes as $col => $alterSql) {
+        $check = $conn->query("SHOW INDEX FROM vp_stock WHERE Column_name = '{$col}'");
+        if ($check && $check->num_rows === 0) {
+            @$conn->query($alterSql);
+        }
+        if ($check) $check->free();
+    }
+}
 
 // Helper to resolve item details for a single vp_stock row
 function resolveStockDetails(mysqli $conn, int $stockId, string $sku, int $lastTransId): array
@@ -91,7 +109,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'repair_one') {
         exit;
     }
 
-    $stmt = $conn->prepare('SELECT id, sku, last_trans_id FROM vp_stock WHERE id = ? LIMIT 1');
+    $stmt = $conn->prepare('SELECT id, sku, warehouse_id, current_stock, last_trans_id FROM vp_stock WHERE id = ? LIMIT 1');
     if (!$stmt) {
         echo json_encode(['success' => false, 'message' => 'DB error']);
         exit;
@@ -113,16 +131,36 @@ if (isset($_GET['action']) && $_GET['action'] === 'repair_one') {
         exit;
     }
 
-    // Update single row in its own transaction
-    $conn->begin_transaction();
+    // Use INSERT ... ON DUPLICATE KEY UPDATE to bypass table locks on UPDATE scans
+    $sql = "INSERT INTO vp_stock (id, sku, warehouse_id, current_stock, last_trans_id, item_code, size, color)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                item_code = VALUES(item_code),
+                size = VALUES(size),
+                color = VALUES(color),
+                updated_at = NOW()";
+
+    $updStmt = $conn->prepare($sql);
+    if (!$updStmt) {
+        echo json_encode(['success' => false, 'message' => 'Prepare failed: ' . $conn->error]);
+        exit;
+    }
+
+    $updStmt->bind_param(
+        'isiiisss',
+        $stockId,
+        $row['sku'],
+        $row['warehouse_id'],
+        $row['current_stock'],
+        $row['last_trans_id'],
+        $details['item_code'],
+        $details['size'],
+        $details['color']
+    );
+
     try {
-        $updStmt = $conn->prepare('UPDATE vp_stock SET item_code = NULLIF(?, ""), size = NULLIF(?, ""), color = NULLIF(?, ""), updated_at = NOW() WHERE id = ?');
-        if ($updStmt) {
-            $updStmt->bind_param('sssi', $details['item_code'], $details['size'], $details['color'], $stockId);
-            $updStmt->execute();
-            $updStmt->close();
-        }
-        $conn->commit();
+        $updStmt->execute();
+        $updStmt->close();
 
         echo json_encode([
             'success' => true,
@@ -133,7 +171,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'repair_one') {
             'color' => $details['color']
         ]);
     } catch (Throwable $e) {
-        $conn->rollback();
         echo json_encode(['success' => false, 'message' => $e->getMessage()]);
     }
     exit;
@@ -142,6 +179,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'repair_one') {
 // API Endpoint to fetch pending count and next pending IDs
 if (isset($_GET['action']) && $_GET['action'] === 'get_pending') {
     header('Content-Type: application/json');
+
+    ensureVpStockIndexes($conn);
 
     $countSql = "SELECT COUNT(*) AS cnt FROM vp_stock WHERE item_code IS NULL OR size IS NULL OR color IS NULL";
     $countRes = $conn->query($countSql);
@@ -172,8 +211,10 @@ if ($isCli) {
     $totalUpdated = 0;
     $startTime = microtime(true);
 
+    ensureVpStockIndexes($conn);
+
     while (true) {
-        $batchSql = "SELECT s.id, s.sku, s.last_trans_id FROM vp_stock s WHERE (s.item_code IS NULL OR s.size IS NULL OR s.color IS NULL) ORDER BY s.id ASC LIMIT 10";
+        $batchSql = "SELECT s.id, s.sku, s.warehouse_id, s.current_stock, s.last_trans_id FROM vp_stock s WHERE (s.item_code IS NULL OR s.size IS NULL OR s.color IS NULL) ORDER BY s.id ASC LIMIT 10";
         $batchRes = $conn->query($batchSql);
         if (!$batchRes || $batchRes->num_rows === 0) {
             break;
@@ -184,20 +225,33 @@ if ($isCli) {
             $details = resolveStockDetails($conn, $stockId, (string)$row['sku'], (int)$row['last_trans_id']);
 
             if ($details['item_code'] !== '' || $details['size'] !== '' || $details['color'] !== '') {
-                $conn->begin_transaction();
-                try {
-                    $updStmt = $conn->prepare('UPDATE vp_stock SET item_code = NULLIF(?, ""), size = NULLIF(?, ""), color = NULLIF(?, ""), updated_at = NOW() WHERE id = ?');
-                    if ($updStmt) {
-                        $updStmt->bind_param('sssi', $details['item_code'], $details['size'], $details['color'], $stockId);
-                        $updStmt->execute();
-                        $updStmt->close();
+                $sql = "INSERT INTO vp_stock (id, sku, warehouse_id, current_stock, last_trans_id, item_code, size, color)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ON DUPLICATE KEY UPDATE
+                            item_code = VALUES(item_code),
+                            size = VALUES(size),
+                            color = VALUES(color),
+                            updated_at = NOW()";
+                $updStmt = $conn->prepare($sql);
+                if ($updStmt) {
+                    $updStmt->bind_param(
+                        'isiiisss',
+                        $stockId,
+                        $row['sku'],
+                        $row['warehouse_id'],
+                        $row['current_stock'],
+                        $row['last_trans_id'],
+                        $details['item_code'],
+                        $details['size'],
+                        $details['color']
+                    );
+                    if ($updStmt->execute()) {
+                        $totalUpdated++;
+                        echo "Updated ID {$stockId} (SKU: {$row['sku']}) -> ItemCode: {$details['item_code']}\n";
+                    } else {
+                        echo "Error on ID {$stockId}: " . $updStmt->error . "\n";
                     }
-                    $conn->commit();
-                    $totalUpdated++;
-                    echo "Updated ID {$stockId} (SKU: {$row['sku']}) -> ItemCode: {$details['item_code']}\n";
-                } catch (Throwable $e) {
-                    $conn->rollback();
-                    echo "Error on ID {$stockId}: " . $e->getMessage() . "\n";
+                    $updStmt->close();
                 }
             }
         }
