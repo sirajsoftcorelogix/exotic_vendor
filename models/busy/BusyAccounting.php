@@ -382,7 +382,7 @@ class BusyAccounting
      */
     private function countSalesReturns(string $startDate, string $endDate, string $search): int
     {
-        $where = ["1=1"];
+        $where = ["1=1", "LOWER(TRIM(COALESCE(sr.status, ''))) <> 'cancelled'"];
         $params = [];
         $types = "";
 
@@ -437,7 +437,7 @@ class BusyAccounting
      */
     private function fetchSalesReturns(string $startDate, string $endDate, string $search, int $limit = 0, int $offset = 0): array
     {
-        $where = ["1=1"];
+        $where = ["1=1", "LOWER(TRIM(COALESCE(sr.status, ''))) <> 'cancelled'"];
         $params = [];
         $types = "";
 
