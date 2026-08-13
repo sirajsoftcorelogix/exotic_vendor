@@ -176,17 +176,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'repair_one') {
     exit;
 }
 
-// API Endpoint to fetch pending count and next pending IDs
+// API Endpoint to fetch next pending IDs without doing expensive COUNT(*)
 if (isset($_GET['action']) && $_GET['action'] === 'get_pending') {
     header('Content-Type: application/json');
 
-    // Use TRIM() checks to avoid index issues and match exact NULL/empty logic
-    $countSql = "SELECT COUNT(*) AS cnt FROM vp_stock WHERE TRIM(COALESCE(item_code, '')) = '' OR TRIM(COALESCE(size, '')) = '' OR TRIM(COALESCE(color, '')) = ''";
-    $countRes = $conn->query($countSql);
-    $count = $countRes ? (int) $countRes->fetch_assoc()['cnt'] : 0;
-
     $limit = 100;
-    $idSql = "SELECT id FROM vp_stock WHERE TRIM(COALESCE(item_code, '')) = '' OR TRIM(COALESCE(size, '')) = '' OR TRIM(COALESCE(color, '')) = '' ORDER BY id ASC LIMIT {$limit}";
+    // Fast index scan to fetch next 100 IDs needing repair
+    $idSql = "SELECT id FROM vp_stock WHERE item_code IS NULL OR item_code = '' OR size IS NULL OR color IS NULL ORDER BY id ASC LIMIT {$limit}";
     $idRes = $conn->query($idSql);
     $ids = [];
     if ($idRes) {
@@ -198,7 +194,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_pending') {
 
     echo json_encode([
         'success' => true,
-        'total_pending' => $count,
+        'total_pending' => 'Ready',
         'ids' => $ids
     ]);
     exit;
@@ -211,7 +207,7 @@ if ($isCli) {
     $startTime = microtime(true);
 
     while (true) {
-        $batchSql = "SELECT s.id, s.sku, s.warehouse_id, s.current_stock, s.last_trans_id FROM vp_stock s WHERE (TRIM(COALESCE(s.item_code, '')) = '' OR TRIM(COALESCE(s.size, '')) = '' OR TRIM(COALESCE(s.color, '')) = '') ORDER BY s.id ASC LIMIT 10";
+        $batchSql = "SELECT s.id, s.sku, s.warehouse_id, s.current_stock, s.last_trans_id FROM vp_stock s WHERE (s.item_code IS NULL OR s.item_code = '' OR s.size IS NULL OR s.color IS NULL) ORDER BY s.id ASC LIMIT 10";
         $batchRes = $conn->query($batchSql);
         if (!$batchRes || $batchRes->num_rows === 0) {
             break;
@@ -277,8 +273,8 @@ if ($isCli) {
 
         <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-4 flex items-center justify-between">
             <div>
-                <span class="text-sm font-semibold text-indigo-900">Pending Rows:</span>
-                <span id="pendingCount" class="text-lg font-bold text-indigo-700 ml-2">Loading...</span>
+                <span class="text-sm font-semibold text-indigo-900">Status:</span>
+                <span id="pendingCount" class="text-lg font-bold text-indigo-700 ml-2">Ready</span>
             </div>
             <div>
                 <span class="text-sm font-semibold text-indigo-900">Processed:</span>
