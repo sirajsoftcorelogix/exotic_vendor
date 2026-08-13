@@ -180,8 +180,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'repair_one') {
 if (isset($_GET['action']) && $_GET['action'] === 'get_pending') {
     header('Content-Type: application/json');
 
-    ensureVpStockIndexes($conn);
-
     $countSql = "SELECT COUNT(*) AS cnt FROM vp_stock WHERE item_code IS NULL OR size IS NULL OR color IS NULL";
     $countRes = $conn->query($countSql);
     $count = $countRes ? (int) $countRes->fetch_assoc()['cnt'] : 0;
@@ -210,8 +208,6 @@ if ($isCli) {
     echo "Starting vp_stock repair in CLI mode...\n";
     $totalUpdated = 0;
     $startTime = microtime(true);
-
-    ensureVpStockIndexes($conn);
 
     while (true) {
         $batchSql = "SELECT s.id, s.sku, s.warehouse_id, s.current_stock, s.last_trans_id FROM vp_stock s WHERE (s.item_code IS NULL OR s.size IS NULL OR s.color IS NULL) ORDER BY s.id ASC LIMIT 10";
