@@ -604,17 +604,34 @@ class Order
             }
         }
 
-        // Check for duplicate combination (same key as bulk update / refresh upsert)
-        $checkSql = 'SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? LIMIT 1';
-        $checkStmt = $this->db->prepare($checkSql);
-        $checkStmt->bind_param('ss', $data['order_number'], $data['item_code']);
-        $checkStmt->execute();
-        $checkStmt->bind_result($count);
-        $checkStmt->fetch();
-        $checkStmt->close();
+        // Check for duplicate combination (considering order_number, item_code, sku, size, and color)
+        $orderNum = trim((string)($data['order_number'] ?? ''));
+        $itemCode = trim((string)($data['item_code'] ?? ''));
+        $sku = trim((string)($data['sku'] ?? ''));
+        $size = trim((string)($data['size'] ?? ''));
+        $color = trim((string)($data['color'] ?? ''));
 
-        if ($count > 0) {
-            return ['success' => false, 'message' => 'Duplicate ' . $data['order_number'] . '-' . $data['item_code'] . ' order_number + item_code combination.'];
+        $existingLine = $this->findOrderLineByOrderNumberAndItemCode($orderNum, $itemCode, $sku, $size, $color);
+        if ($existingLine !== null) {
+            $variantMatched = false;
+            if ($sku !== '' || $size !== '' || $color !== '') {
+                $exSku = trim((string)($existingLine['sku'] ?? ''));
+                $exSize = trim((string)($existingLine['size'] ?? ''));
+                $exColor = trim((string)($existingLine['color'] ?? ''));
+                if ($sku !== '' && strcasecmp($exSku, $sku) === 0) {
+                    $variantMatched = true;
+                } elseif ($size !== '' || $color !== '') {
+                    if (strcasecmp($exSize, $size) === 0 && strcasecmp($exColor, $color) === 0) {
+                        $variantMatched = true;
+                    }
+                }
+            } else {
+                $variantMatched = true; // Fallback when no variant parameters provided
+            }
+
+            if ($variantMatched) {
+                return ['success' => false, 'message' => 'Duplicate ' . $orderNum . '-' . $itemCode . ' order_number + item_code combination.'];
+            }
         }
 
         $data = $this->normalizeOrderNumericFields($data);
@@ -1537,6 +1554,24 @@ class Order
             $data['updated_at'] = date('Y-m-d H:i:s');
         }
 
+        $lineId = (int)($data['id'] ?? 0);
+        if ($lineId <= 0) {
+            $existing = $this->findOrderLineByOrderNumberAndItemCode(
+                (string)$data['order_number'],
+                (string)$data['item_code'],
+                (string)($data['sku'] ?? ''),
+                (string)($data['size'] ?? ''),
+                (string)($data['color'] ?? '')
+            );
+            if ($existing && !empty($existing['id'])) {
+                $lineId = (int)$existing['id'];
+            }
+        }
+
+        $whereClause = ($lineId > 0)
+            ? 'WHERE id = ?'
+            : 'WHERE order_number = ? AND item_code = ?';
+
         $includeAddons = $this->vpOrdersHasAddonsColumn();
         $addonsSql = $includeAddons ? 'addons = ?, ' : '';
 
@@ -1551,7 +1586,7 @@ class Order
                 backorder_status = ?, backorder_percent = ?, backorder_delay = ?,
                 payment_type = ?, coupon = ?, coupon_reduce = ?, giftvoucher = ?, giftvoucher_reduce = ?,
                 credit = ?, vendor = ?, country = ?, material = ?, status = ?, esd = ?, updated_at = ?
-                WHERE order_number = ? AND item_code = ?";
+                {$whereClause}";
         $stmt = $this->db->prepare($sql);
 
         if (!$stmt) {
@@ -1609,9 +1644,14 @@ class Order
             $data['status'],
             $data['esd'],
             $data['updated_at'],
-            $data['order_number'],
-            $data['item_code'],
         ]);
+
+        if ($lineId > 0) {
+            $values[] = $lineId;
+        } else {
+            $values[] = $data['order_number'];
+            $values[] = $data['item_code'];
+        }
 
         // Build types string dynamically based on actual PHP types
         $types = '';
@@ -1687,37 +1727,83 @@ class Order
         return is_array($rows) ? $rows : [];
     }
 
-    public function orderLineExists(string $orderNumber, string $itemCode, string $sku): bool
-    {
-        $checkSql = 'SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? AND sku = ? LIMIT 1';
-        $checkStmt = $this->db->prepare($checkSql);
-        if (!$checkStmt) {
-            return false;
-        }
-        $checkStmt->bind_param('sss', $orderNumber, $itemCode, $sku);
-        $checkStmt->execute();
-        $checkStmt->bind_result($count);
-        $checkStmt->fetch();
-        $checkStmt->close();
-
-        return (int)($count ?? 0) > 0;
+    public function orderLineExists(
+        string $orderNumber,
+        string $itemCode,
+        string $sku = '',
+        string $size = '',
+        string $color = ''
+    ): bool {
+        return $this->findOrderLineByOrderNumberAndItemCode($orderNumber, $itemCode, $sku, $size, $color) !== null;
     }
 
     /**
-     * Match imported lines the same way bulk update does (order_number + item_code).
+     * Match imported lines taking into account order_number, item_code, and variant details (sku, size, color).
      *
      * @return array<string, mixed>|null
      */
-    public function findOrderLineByOrderNumberAndItemCode(string $orderNumber, string $itemCode): ?array
-    {
+    public function findOrderLineByOrderNumberAndItemCode(
+        string $orderNumber,
+        string $itemCode,
+        string $sku = '',
+        string $size = '',
+        string $color = ''
+    ): ?array {
         $orderNumber = trim($orderNumber);
         $itemCode = trim($itemCode);
+        $sku = trim($sku);
+        $size = trim($size);
+        $color = trim($color);
+
         if ($orderNumber === '' || $itemCode === '') {
             return null;
         }
 
+        // Try exact match by order_number, item_code, and sku + size + color
+        if ($sku !== '' && ($size !== '' || $color !== '')) {
+            $sql = 'SELECT id, order_number, item_code, sku, size, color, status FROM vp_orders 
+                    WHERE order_number = ? AND item_code = ? AND (sku = ? OR (IFNULL(size, "") = ? AND IFNULL(color, "") = ?)) LIMIT 1';
+            $stmt = $this->db->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param('sssss', $orderNumber, $itemCode, $sku, $size, $color);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if (is_array($row)) {
+                    return $row;
+                }
+            }
+        } elseif ($sku !== '') {
+            $sql = 'SELECT id, order_number, item_code, sku, size, color, status FROM vp_orders 
+                    WHERE order_number = ? AND item_code = ? AND sku = ? LIMIT 1';
+            $stmt = $this->db->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param('sss', $orderNumber, $itemCode, $sku);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if (is_array($row)) {
+                    return $row;
+                }
+            }
+        } elseif ($size !== '' || $color !== '') {
+            $sql = 'SELECT id, order_number, item_code, sku, size, color, status FROM vp_orders 
+                    WHERE order_number = ? AND item_code = ? AND IFNULL(size, "") = ? AND IFNULL(color, "") = ? LIMIT 1';
+            $stmt = $this->db->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param('ssss', $orderNumber, $itemCode, $size, $color);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if (is_array($row)) {
+                    return $row;
+                }
+            }
+        }
+
+        // Fallback: match by order_number and item_code
         $stmt = $this->db->prepare(
-            'SELECT id, order_number, item_code, sku, status FROM vp_orders WHERE order_number = ? AND item_code = ? LIMIT 1'
+            'SELECT id, order_number, item_code, sku, size, color, status FROM vp_orders WHERE order_number = ? AND item_code = ? LIMIT 1'
         );
         if (!$stmt) {
             return null;
@@ -1759,18 +1845,37 @@ class Order
         $orderNumber = trim((string)($data['order_number'] ?? ''));
         $itemCode = trim((string)($data['item_code'] ?? ''));
         $sku = trim((string)($data['sku'] ?? ''));
+        $size = trim((string)($data['size'] ?? ''));
+        $color = trim((string)($data['color'] ?? ''));
 
         if ($orderNumber === '' || $itemCode === '') {
             return ['success' => false, 'message' => 'Order number and item code are required.', 'action' => 'none'];
         }
 
-        $existingLine = $this->findOrderLineByOrderNumberAndItemCode($orderNumber, $itemCode);
-        $exists = $existingLine !== null;
-        if ($exists && !$updateStatus && isset($existingLine['status'])) {
-            $data['status'] = $existingLine['status'];
+        $existingLine = $this->findOrderLineByOrderNumberAndItemCode($orderNumber, $itemCode, $sku, $size, $color);
+        $exists = false;
+        if ($existingLine !== null) {
+            if ($sku !== '' || $size !== '' || $color !== '') {
+                $exSku = trim((string)($existingLine['sku'] ?? ''));
+                $exSize = trim((string)($existingLine['size'] ?? ''));
+                $exColor = trim((string)($existingLine['color'] ?? ''));
+                if ($sku !== '' && strcasecmp($exSku, $sku) === 0) {
+                    $exists = true;
+                } elseif ($size !== '' || $color !== '') {
+                    if (strcasecmp($exSize, $size) === 0 && strcasecmp($exColor, $color) === 0) {
+                        $exists = true;
+                    }
+                }
+            } else {
+                $exists = true;
+            }
         }
 
-        if ($exists) {
+        if ($exists && $existingLine !== null) {
+            $data['id'] = $existingLine['id'];
+            if (!$updateStatus && isset($existingLine['status'])) {
+                $data['status'] = $existingLine['status'];
+            }
             $data['updated_at'] = date('Y-m-d H:i:s');
             $result = $this->updateImportedOrder($data);
             if (!is_array($result)) {
@@ -1804,26 +1909,33 @@ class Order
             return ['success' => false, 'message' => 'Order number or item code is missing.'];
         }
 
-        // Prepare SQL statement
-        $sql = "UPDATE vp_orders SET 
-                sku = ?, updated_at = ?
-                WHERE order_number = ? AND item_code = ?";
-        $stmt = $this->db->prepare($sql);
+        $lineId = (int)($data['id'] ?? 0);
+        if ($lineId <= 0) {
+            $existing = $this->findOrderLineByOrderNumberAndItemCode(
+                (string)$data['order_number'],
+                (string)$data['item_code'],
+                (string)($data['sku'] ?? ''),
+                (string)($data['size'] ?? ''),
+                (string)($data['color'] ?? '')
+            );
+            if ($existing && !empty($existing['id'])) {
+                $lineId = (int)$existing['id'];
+            }
+        }
 
+        if ($lineId > 0) {
+            $sql = "UPDATE vp_orders SET sku = ?, updated_at = ? WHERE id = ?";
+            $values = [$data['sku'], $data['updated_at'], $lineId];
+        } else {
+            $sql = "UPDATE vp_orders SET sku = ?, updated_at = ? WHERE order_number = ? AND item_code = ?";
+            $values = [$data['sku'], $data['updated_at'], $data['order_number'], $data['item_code']];
+        }
+
+        $stmt = $this->db->prepare($sql);
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
         }
 
-        // Bind parameters
-        // Prepare values in the same order as the SQL placeholders
-        $values = [
-            $data['sku'],
-            $data['updated_at'],
-            $data['order_number'],
-            $data['item_code']
-        ];
-
-        // Build types string dynamically based on actual PHP types
         $types = '';
         foreach ($values as $val) {
             if (is_int($val)) {
@@ -1831,27 +1943,17 @@ class Order
             } elseif (is_float($val) || is_double($val)) {
                 $types .= 'd';
             } else {
-                // treat null and other types as string
                 $types .= 's';
             }
         }
 
-        // mysqli_stmt::bind_param requires arguments passed by reference when using call_user_func_array
         $refs = [];
         foreach ($values as $key => $value) {
             $refs[$key] = &$values[$key];
         }
         array_unshift($refs, $types);
         call_user_func_array([$stmt, 'bind_param'], $refs);
-        // print binded parameters for debugging
-        //print_array($refs);        
 
-        // foreach ($refs as $ref) {
-        //     if ($ref === $types) continue; // Skip types string
-        //     echo $ref . "\n";
-        // }
-        //print_r($stmt);
-        //comment the below line after execution on 09-06-2024
         if ($stmt->execute()) {
             return ['success' => true, 'message' => 'Order updated successfully.', 'affected_rows' => $stmt->affected_rows, 'order_number' => $data['order_number'], 'item_code' => $data['item_code']];
         } else {
