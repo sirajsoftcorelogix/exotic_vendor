@@ -35,7 +35,7 @@ class POSRegisterController
 
     /** Prefer exact variant SKU over shared item_code; deprioritize parent rows. */
     private const VP_PRODUCT_BY_CODE_ORDER_SQL = ' ORDER BY (sku = ?) DESC,
-        CASE WHEN LOWER(TRIM(IFNULL(item_level, \'\'))) = \'parent\' THEN 1 ELSE 0 END,
+        CASE WHEN item_level = \'parent\' THEN 1 ELSE 0 END,
         id ASC ';
 
     private function isParentItemLevel(?string $itemLevel): bool
