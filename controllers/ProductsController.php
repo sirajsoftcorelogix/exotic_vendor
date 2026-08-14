@@ -4856,6 +4856,15 @@ class ProductsController
             $order['warehouses'] = $productModel->getAllWarehouses();
             $order['stock_movements'] = $productModel->get_stock_movements($id);
             $order['warehouse_location_stock'] = $productModel->getLatestRunningStockByWarehouseLocation((int)$id, $sku);
+            if ($physicalStock === 0 && !empty($order['warehouse_location_stock'])) {
+                $whTotal = (int)array_sum(array_column($order['warehouse_location_stock'], 'running_stock'));
+                if ($whTotal > 0) {
+                    $physicalStock = $whTotal;
+                    $order['physical_stock'] = $physicalStock;
+                    $order['stock_value'] = (float)$physicalStock * $costPrice;
+                    $order['available_stock'] = (float)$physicalStock - (float)$order['committed_stock'];
+                }
+            }
             $catalogDisplay = $productModel->buildProductCatalogDisplayFields($order);
             $order['item_identification'] = $catalogDisplay['item_identification'];
             $order['search_category_display'] = $catalogDisplay['search_category'];
@@ -5262,8 +5271,8 @@ class ProductsController
             $movementId = (int)($data['movement_id'] ?? 0);
             $productId = (int)($data['product_id'] ?? 0);
             $location = trim((string)($data['location'] ?? ''));
-            if ($movementId <= 0 || $productId <= 0) {
-                throw new Exception('Invalid movement/product reference.');
+            if ($productId <= 0) {
+                throw new Exception('Invalid product reference.');
             }
             $result = $productModel->updateStockMovementLocation($movementId, $productId, $location);
             echo json_encode($result);
