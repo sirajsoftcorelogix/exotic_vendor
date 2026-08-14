@@ -144,12 +144,13 @@ class pos
 
         // Stock scope: align with stock report (getStockReport) — default is "all" rows with a movement row.
         $stockFilter = strtolower(trim((string)$stockFilter));
+        $stockExpr = "GREATEST(COALESCE(sm.running_stock, 0), COALESCE(vs.current_stock, 0))";
         if ($stockFilter === 'out') {
-            $where .= ' AND COALESCE(sm.running_stock, 0) = 0 ';
+            $where .= " AND {$stockExpr} = 0 ";
         } elseif ($stockFilter === 'low') {
-            $where .= ' AND sm.running_stock BETWEEN 1 AND 5 ';
+            $where .= " AND {$stockExpr} BETWEEN 1 AND 5 ";
         } elseif ($stockFilter === 'in') {
-            $where .= ' AND COALESCE(sm.running_stock, 0) > 0 ';
+            $where .= " AND {$stockExpr} > 0 ";
         }
 
         /* ================= ORDER ================= */
@@ -189,24 +190,24 @@ class pos
             $orderExpr = $baseSell;
         }
 
-        // When searching, LEFT JOIN so products with no movements in this warehouse still appear with 0 stock.
-        $joinType = $hasSearch ? 'LEFT' : 'INNER';
+        // Combine latest ledger running_stock (from movements) and current_stock (from vp_stock cache)
         $stockFrom = "
     FROM vp_products p
-    {$joinType} JOIN (
-        SELECT sm1.product_id, sm1.running_stock, sm1.location
+    LEFT JOIN (
+        SELECT sm1.product_id, sm1.sku, sm1.running_stock, sm1.location
         FROM vp_stock_movements sm1
         INNER JOIN (
-            SELECT product_id, MAX(id) AS max_id
+            SELECT warehouse_id, MAX(id) AS max_id
             FROM vp_stock_movements
             WHERE warehouse_id = ?
-            GROUP BY product_id
+            GROUP BY warehouse_id, product_id
         ) latest
-            ON latest.product_id = sm1.product_id
-            AND latest.max_id = sm1.id
+            ON latest.max_id = sm1.id
         WHERE sm1.warehouse_id = ?
     ) sm
-        ON sm.product_id = p.id
+        ON (sm.product_id = p.id OR (sm.sku <> '' AND sm.sku = p.sku))
+    LEFT JOIN vp_stock vs
+        ON vs.warehouse_id = ? AND (vs.sku <> '' AND vs.sku = p.sku)
     ";
 
         /* ================= DATA QUERY ================= */
@@ -236,8 +237,8 @@ class pos
         p.gst,
         p.sourcingfee,
         p.shippingfee,
-        COALESCE(sm.running_stock, 0) AS stock_qty,
-        sm.location AS warehouse_location,
+        GREATEST(COALESCE(sm.running_stock, 0), COALESCE(vs.current_stock, 0)) AS stock_qty,
+        COALESCE(NULLIF(TRIM(sm.location), ''), p.location, '') AS warehouse_location,
         {$sellPriceExpr} AS price
     $stockFrom
     $where
@@ -247,8 +248,8 @@ class pos
 
         $dataStmt = $this->db->prepare($dataSql);
 
-        $dataTypes = "ii" . $types . "ii";
-        $dataParams = array_merge([(int)$warehouseId, (int)$warehouseId], $params, [$start, $length]);
+        $dataTypes = "iii" . $types . "ii";
+        $dataParams = array_merge([(int)$warehouseId, (int)$warehouseId, (int)$warehouseId], $params, [$start, $length]);
 
         $dataStmt->bind_param($dataTypes, ...$dataParams);
         $dataStmt->execute();
@@ -260,8 +261,8 @@ class pos
         // Filtered count with exactly same join + where conditions (stable pagination).
         $countSql = "SELECT COUNT(*) AS cnt $stockFrom $where";
         $countStmt = $this->db->prepare($countSql);
-        $countTypes = "ii" . $types;
-        $countParams = array_merge([(int)$warehouseId, (int)$warehouseId], $params);
+        $countTypes = "iii" . $types;
+        $countParams = array_merge([(int)$warehouseId, (int)$warehouseId, (int)$warehouseId], $params);
         $countStmt->bind_param($countTypes, ...$countParams);
         $countStmt->execute();
         $countRow = $countStmt->get_result()->fetch_assoc();
