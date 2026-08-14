@@ -57,22 +57,38 @@ final class StockMovement
     }
 
     /**
-     * Latest running_stock for one product at one warehouse (same basis as POS / product detail).
+     * Latest running_stock for one product/SKU at one warehouse (same basis as POS / product detail).
      */
-    public static function getLastRunningStockByProductId(\mysqli $conn, int $productId, int $warehouseId): float
+    public static function getLastRunningStockByProductId(\mysqli $conn, int $productId, int $warehouseId, string $sku = ''): float
     {
-        if ($productId <= 0 || $warehouseId <= 0) {
+        $sku = trim($sku);
+        if (($productId <= 0 && $sku === '') || $warehouseId <= 0) {
             return 0.0;
         }
+
+        if ($sku === '' && $productId > 0) {
+            $pStmt = $conn->prepare('SELECT sku FROM vp_products WHERE id = ? LIMIT 1');
+            if ($pStmt) {
+                $pStmt->bind_param('i', $productId);
+                $pStmt->execute();
+                $pRow = $pStmt->get_result()->fetch_assoc();
+                $pStmt->close();
+                if ($pRow) {
+                    $sku = trim((string)($pRow['sku'] ?? ''));
+                }
+            }
+        }
+
         $stmt = $conn->prepare(
             'SELECT running_stock FROM vp_stock_movements
-             WHERE product_id = ? AND warehouse_id = ?
+             WHERE ((product_id = ? AND product_id > 0) OR (sku = ? AND sku IS NOT NULL AND sku != \'\'))
+               AND warehouse_id = ?
              ORDER BY id DESC LIMIT 1'
         );
         if (!$stmt) {
             return 0.0;
         }
-        $stmt->bind_param('ii', $productId, $warehouseId);
+        $stmt->bind_param('isi', $productId, $sku, $warehouseId);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
@@ -98,26 +114,38 @@ final class StockMovement
         $stockMap = [];
         foreach (array_chunk($productIds, 100) as $chunk) {
             $placeholders = implode(',', array_fill(0, count($chunk), '?'));
-            $sql = "SELECT sm.product_id, sm.running_stock
-                    FROM vp_stock_movements sm
+            $sql = "SELECT p.id AS p_id, sm.product_id, sm.running_stock
+                    FROM vp_products p
                     INNER JOIN (
-                        SELECT product_id, MAX(id) AS max_id
-                        FROM vp_stock_movements
-                        WHERE warehouse_id = ? AND product_id IN ($placeholders)
-                        GROUP BY product_id
-                    ) latest ON sm.product_id = latest.product_id AND sm.id = latest.max_id
-                    WHERE sm.warehouse_id = ?";
+                        SELECT sm1.product_id, sm1.sku, sm1.running_stock
+                        FROM vp_stock_movements sm1
+                        INNER JOIN (
+                            SELECT MAX(id) AS max_id
+                            FROM vp_stock_movements
+                            WHERE warehouse_id = ?
+                            GROUP BY COALESCE(NULLIF(TRIM(sku), ''), CAST(product_id AS CHAR))
+                        ) latest ON sm1.id = latest.max_id
+                        WHERE sm1.warehouse_id = ?
+                    ) sm ON (sm.product_id > 0 AND sm.product_id = p.id)
+                         OR (sm.sku IS NOT NULL AND sm.sku != '' AND sm.sku = p.sku)
+                    WHERE p.id IN ($placeholders)";
             $stmt = $conn->prepare($sql);
             if (!$stmt) {
                 continue;
             }
-            $types = 'i' . str_repeat('i', count($chunk)) . 'i';
-            $params = array_merge([$warehouseId], $chunk, [$warehouseId]);
+            $types = 'ii' . str_repeat('i', count($chunk));
+            $params = array_merge([$warehouseId, $warehouseId], $chunk);
             $stmt->bind_param($types, ...$params);
             $stmt->execute();
             $result = $stmt->get_result();
             while ($row = $result->fetch_assoc()) {
-                $stockMap[(int) $row['product_id']] = (float) ($row['running_stock'] ?? 0);
+                $pid = (int) $row['p_id'];
+                $smPid = (int) $row['product_id'];
+                $rStock = (float) ($row['running_stock'] ?? 0);
+                $stockMap[$pid] = $rStock;
+                if ($smPid > 0) {
+                    $stockMap[$smPid] = $rStock;
+                }
             }
             $stmt->close();
         }
