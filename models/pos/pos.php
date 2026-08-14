@@ -145,13 +145,11 @@ class pos
         // Stock scope: align with stock report (getStockReport) — default is "all" rows with a movement row.
         $stockFilter = strtolower(trim((string)$stockFilter));
         if ($stockFilter === 'out') {
-            $where .= ' AND COALESCE(sm_pid.running_stock, sm_sku.running_stock, 0) = 0 AND (sm_pid.product_id IS NOT NULL OR sm_sku.sku IS NOT NULL) ';
+            $where .= ' AND COALESCE(sm.running_stock, 0) = 0 ';
         } elseif ($stockFilter === 'low') {
-            $where .= ' AND COALESCE(sm_pid.running_stock, sm_sku.running_stock, 0) BETWEEN 1 AND 5 ';
+            $where .= ' AND sm.running_stock BETWEEN 1 AND 5 ';
         } elseif ($stockFilter === 'in') {
-            $where .= ' AND COALESCE(sm_pid.running_stock, sm_sku.running_stock, 0) > 0 ';
-        } elseif (!$hasSearch) {
-            $where .= ' AND (sm_pid.product_id IS NOT NULL OR sm_sku.sku IS NOT NULL) ';
+            $where .= ' AND COALESCE(sm.running_stock, 0) > 0 ';
         }
 
         /* ================= ORDER ================= */
@@ -176,7 +174,7 @@ class pos
         $orderExpr = 'p.' . $orderColumn;
         $orderSuffix = $orderDir;
         if ($orderColumn === 'stock_qty') {
-            $orderExpr = 'COALESCE(sm_pid.running_stock, sm_sku.running_stock, 0)';
+            $orderExpr = 'COALESCE(sm.running_stock, 0)';
         } elseif ($orderColumn === 'price') {
             // GST-inclusive list price; deprioritize rows missing DB price_india (filled via API after query).
             $hasIndiaPrice = "CASE WHEN COALESCE(NULLIF(p.price_india, 0), 0) > 0 THEN 0 ELSE 1 END";
@@ -191,31 +189,23 @@ class pos
             $orderExpr = $baseSell;
         }
 
-        // Fast double LEFT JOIN on exact equality columns (product_id and sku) — avoids Cartesian OR joins.
+        // When searching, LEFT JOIN so products with no movements in this warehouse still appear with 0 stock.
+        // When not searching (default browse), INNER JOIN drives from the small sm stock table (~2k rows) for high performance.
+        $joinType = $hasSearch ? 'LEFT' : 'INNER';
         $stockFrom = "
     FROM vp_products p
-    LEFT JOIN (
-        SELECT sm1.product_id, sm1.running_stock, sm1.location
+    {$joinType} JOIN (
+        SELECT sm1.product_id, sm1.sku, sm1.running_stock, sm1.location
         FROM vp_stock_movements sm1
         INNER JOIN (
-            SELECT product_id, MAX(id) AS max_id
+            SELECT MAX(id) AS max_id
             FROM vp_stock_movements
-            WHERE warehouse_id = ? AND product_id > 0
-            GROUP BY product_id
+            WHERE warehouse_id = ?
+            GROUP BY COALESCE(NULLIF(product_id, 0), NULLIF(TRIM(sku), ''))
         ) latest ON latest.max_id = sm1.id
         WHERE sm1.warehouse_id = ?
-    ) sm_pid ON sm_pid.product_id = p.id
-    LEFT JOIN (
-        SELECT sm1.sku, sm1.running_stock, sm1.location
-        FROM vp_stock_movements sm1
-        INNER JOIN (
-            SELECT sku, MAX(id) AS max_id
-            FROM vp_stock_movements
-            WHERE warehouse_id = ? AND sku IS NOT NULL AND sku != ''
-            GROUP BY sku
-        ) latest ON latest.max_id = sm1.id
-        WHERE sm1.warehouse_id = ?
-    ) sm_sku ON sm_sku.sku = p.sku
+    ) sm ON (sm.product_id > 0 AND sm.product_id = p.id)
+         OR (sm.sku IS NOT NULL AND sm.sku != '' AND sm.sku = p.sku)
     ";
 
         /* ================= DATA QUERY ================= */
@@ -245,8 +235,8 @@ class pos
         p.gst,
         p.sourcingfee,
         p.shippingfee,
-        COALESCE(sm_pid.running_stock, sm_sku.running_stock, 0) AS stock_qty,
-        COALESCE(sm_pid.location, sm_sku.location, '') AS warehouse_location,
+        COALESCE(sm.running_stock, 0) AS stock_qty,
+        sm.location AS warehouse_location,
         {$sellPriceExpr} AS price
     $stockFrom
     $where
@@ -256,9 +246,9 @@ class pos
 
         $dataStmt = $this->db->prepare($dataSql);
 
-        $dataTypes = "iiii" . $types . "ii";
+        $dataTypes = "ii" . $types . "ii";
         $wh = (int)$warehouseId;
-        $dataParams = array_merge([$wh, $wh, $wh, $wh], $params, [$start, $length]);
+        $dataParams = array_merge([$wh, $wh], $params, [$start, $length]);
 
         $dataStmt->bind_param($dataTypes, ...$dataParams);
         $dataStmt->execute();
@@ -270,8 +260,8 @@ class pos
         // Filtered count with exactly same join + where conditions (stable pagination).
         $countSql = "SELECT COUNT(*) AS cnt $stockFrom $where";
         $countStmt = $this->db->prepare($countSql);
-        $countTypes = "iiii" . $types;
-        $countParams = array_merge([$wh, $wh, $wh, $wh], $params);
+        $countTypes = "ii" . $types;
+        $countParams = array_merge([$wh, $wh], $params);
         $countStmt->bind_param($countTypes, ...$countParams);
         $countStmt->execute();
         $countRow = $countStmt->get_result()->fetch_assoc();
@@ -445,39 +435,27 @@ class pos
         $search = trim((string) ($filters['search'] ?? ''));
         $hasSearch = parseStockReportSearchTerms($search) !== [];
 
-        // Fast double LEFT JOIN on exact equality columns (product_id and sku) — avoids Cartesian OR joins.
+        // When searching, LEFT JOIN so products with no movements in this warehouse still appear with 0 stock.
+        // When not searching (default browse), INNER JOIN drives from the small sm stock table (~2k rows) for high performance.
+        $joinType = $hasSearch ? 'LEFT' : 'INNER';
         $join = "
-            LEFT JOIN (
-                SELECT sm1.product_id, sm1.running_stock, sm1.location
+            {$joinType} JOIN (
+                SELECT sm1.product_id, sm1.sku, sm1.running_stock, sm1.location
                 FROM vp_stock_movements sm1
                 INNER JOIN (
-                    SELECT product_id, MAX(id) AS max_id
+                    SELECT MAX(id) AS max_id
                     FROM vp_stock_movements
-                    WHERE warehouse_id = ? AND product_id > 0
-                    GROUP BY product_id
+                    WHERE warehouse_id = ?
+                    GROUP BY COALESCE(NULLIF(product_id, 0), NULLIF(TRIM(sku), ''))
                 ) latest ON latest.max_id = sm1.id
                 WHERE sm1.warehouse_id = ?
-            ) sm_pid ON sm_pid.product_id = p.id
-            LEFT JOIN (
-                SELECT sm1.sku, sm1.running_stock, sm1.location
-                FROM vp_stock_movements sm1
-                INNER JOIN (
-                    SELECT sku, MAX(id) AS max_id
-                    FROM vp_stock_movements
-                    WHERE warehouse_id = ? AND sku IS NOT NULL AND sku != ''
-                    GROUP BY sku
-                ) latest ON latest.max_id = sm1.id
-                WHERE sm1.warehouse_id = ?
-            ) sm_sku ON sm_sku.sku = p.sku
+            ) sm ON (sm.product_id > 0 AND sm.product_id = p.id)
+                 OR (sm.sku IS NOT NULL AND sm.sku != '' AND sm.sku = p.sku)
         ";
 
         $where = ' WHERE p.is_active = 1 ' . $this->sqlExcludeParentItemLevel('p');
-        if (!$hasSearch) {
-            $where .= ' AND (sm_pid.product_id IS NOT NULL OR sm_sku.sku IS NOT NULL) ';
-        }
-        $wh = (int)$warehouseId;
-        $params = [$wh, $wh, $wh, $wh];
-        $types = 'iiii';
+        $params = [$warehouseId, $warehouseId];
+        $types = 'ii';
 
         if ($category !== '' && $category !== 'allProducts') {
             if (in_array(strtolower($category), ['virtual_codes', 'virtualcodes', 'virtual_code', 'virtual codes'], true)) {
@@ -503,17 +481,11 @@ class pos
             'join' => $join,
             'stats_join' => "
             LEFT JOIN (
-                SELECT product_id, COUNT(*) AS movement_count, MIN(running_stock) AS min_running_stock
+                SELECT MAX(product_id) AS product_id, MAX(sku) AS sku, COUNT(*) AS movement_count, MIN(running_stock) AS min_running_stock
                 FROM vp_stock_movements
-                WHERE product_id > 0
-                GROUP BY product_id
-            ) sm_stats_pid ON sm_stats_pid.product_id = p.id
-            LEFT JOIN (
-                SELECT sku, COUNT(*) AS movement_count, MIN(running_stock) AS min_running_stock
-                FROM vp_stock_movements
-                WHERE sku IS NOT NULL AND sku != ''
-                GROUP BY sku
-            ) sm_stats_sku ON sm_stats_sku.sku = p.sku
+                GROUP BY COALESCE(NULLIF(product_id, 0), NULLIF(TRIM(sku), ''))
+            ) sm_stats ON (sm_stats.product_id > 0 AND sm_stats.product_id = p.id)
+                       OR (sm_stats.sku IS NOT NULL AND sm_stats.sku != '' AND sm_stats.sku = p.sku)
             ",
             'where' => $where,
             'params' => $params,
@@ -557,16 +529,16 @@ class pos
                 p.image,
                 ({$this->sqlPosIndiaSellBaseExpr('p')} * (1 + IFNULL(p.gst, 0) / 100)) AS sell_price,
                 p.cost_price,
-                COALESCE(sm_pid.running_stock, sm_sku.running_stock, 0) AS stock_qty,
-                COALESCE(sm_pid.location, sm_sku.location, '') AS location,
-                COALESCE(sm_stats_pid.movement_count, sm_stats_sku.movement_count, 0) AS movement_count,
-                COALESCE(sm_stats_pid.min_running_stock, sm_stats_sku.min_running_stock) AS min_running_stock
+                COALESCE(sm.running_stock, 0) AS stock_qty,
+                sm.location AS location,
+                COALESCE(sm_stats.movement_count, 0) AS movement_count,
+                sm_stats.min_running_stock AS min_running_stock
             FROM vp_products p
             $join
             $statsJoin
             LEFT JOIN `category` cat ON cat.category = p.groupname
             $where
-            ORDER BY COALESCE(sm_pid.running_stock, sm_sku.running_stock, 0) ASC, p.title ASC
+            ORDER BY COALESCE(sm.running_stock, 0) ASC, p.title ASC
             LIMIT {$limit} OFFSET {$offset}
         ";
 
