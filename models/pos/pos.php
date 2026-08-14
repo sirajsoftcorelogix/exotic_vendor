@@ -194,19 +194,19 @@ class pos
         $stockFrom = "
     FROM vp_products p
     {$joinType} JOIN (
-        SELECT sm1.product_id, sm1.running_stock, sm1.location
+        SELECT sm1.product_id, sm1.sku, sm1.running_stock, sm1.location
         FROM vp_stock_movements sm1
         INNER JOIN (
-            SELECT product_id, MAX(id) AS max_id
+            SELECT MAX(id) AS max_id
             FROM vp_stock_movements
             WHERE warehouse_id = ?
-            GROUP BY product_id
+            GROUP BY COALESCE(NULLIF(TRIM(sku), ''), CAST(product_id AS CHAR))
         ) latest
-            ON latest.product_id = sm1.product_id
-            AND latest.max_id = sm1.id
+            ON latest.max_id = sm1.id
         WHERE sm1.warehouse_id = ?
     ) sm
-        ON sm.product_id = p.id
+        ON (sm.product_id > 0 AND sm.product_id = p.id)
+        OR (sm.sku IS NOT NULL AND sm.sku != '' AND sm.sku = p.sku)
     ";
 
         /* ================= DATA QUERY ================= */
@@ -440,18 +440,18 @@ class pos
         $joinType = $hasSearch ? 'LEFT' : 'INNER';
         $join = "
             {$joinType} JOIN (
-                SELECT sm1.product_id, sm1.running_stock, sm1.location
+                SELECT sm1.product_id, sm1.sku, sm1.running_stock, sm1.location
                 FROM vp_stock_movements sm1
                 INNER JOIN (
-                    SELECT product_id, MAX(id) AS max_id
+                    SELECT MAX(id) AS max_id
                     FROM vp_stock_movements
                     WHERE warehouse_id = ?
-                    GROUP BY product_id
+                    GROUP BY COALESCE(NULLIF(TRIM(sku), ''), CAST(product_id AS CHAR))
                 ) latest
-                    ON latest.product_id = sm1.product_id
-                    AND latest.max_id = sm1.id
+                    ON latest.max_id = sm1.id
                 WHERE sm1.warehouse_id = ?
-            ) sm ON sm.product_id = p.id
+            ) sm ON (sm.product_id > 0 AND sm.product_id = p.id)
+                 OR (sm.sku IS NOT NULL AND sm.sku != '' AND sm.sku = p.sku)
         ";
 
         $where = ' WHERE p.is_active = 1 ' . $this->sqlExcludeParentItemLevel('p');
@@ -482,10 +482,11 @@ class pos
             'join' => $join,
             'stats_join' => "
             LEFT JOIN (
-                SELECT product_id, COUNT(*) AS movement_count, MIN(running_stock) AS min_running_stock
+                SELECT product_id, sku, COUNT(*) AS movement_count, MIN(running_stock) AS min_running_stock
                 FROM vp_stock_movements
-                GROUP BY product_id
-            ) sm_stats ON sm_stats.product_id = p.id
+                GROUP BY COALESCE(NULLIF(TRIM(sku), ''), CAST(product_id AS CHAR))
+            ) sm_stats ON (sm_stats.product_id > 0 AND sm_stats.product_id = p.id)
+                       OR (sm_stats.sku IS NOT NULL AND sm_stats.sku != '' AND sm_stats.sku = p.sku)
             ",
             'where' => $where,
             'params' => $params,
@@ -584,5 +585,606 @@ class pos
         $stmt->close();
 
         return (int)($res['cnt'] ?? 0);
+    }
+
+    /**
+     * Resolve item_level for a catalogue code (sku or item_code), including parent rows.
+     */
+    public function lookupProductItemLevelForCode(string $code): string
+    {
+        $code = trim($code);
+        if ($code === '' || !$this->db) {
+            return '';
+        }
+        $stmt = $this->db->prepare(
+            'SELECT item_level FROM vp_products
+             WHERE is_active = 1 AND (sku = ? OR item_code = ?)
+             ORDER BY (sku = ?) DESC,
+                      CASE WHEN LOWER(TRIM(IFNULL(item_level, \'\'))) = \'parent\' THEN 1 ELSE 0 END,
+                      id ASC
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return '';
+        }
+        $stmt->bind_param('sss', $code, $code, $code);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return trim((string)($row['item_level'] ?? ''));
+    }
+
+    /**
+     * Resolve single product row for code.
+     */
+    public function getProductByCode(string $code): ?array
+    {
+        $code = trim($code);
+        if ($code === '' || !$this->db) {
+            return null;
+        }
+        $stmt = $this->db->prepare(
+            'SELECT id, item_code, sku, title, image, material, size, color, hsn, gst,
+                    price_india, itemprice, finalprice, mrp_india,
+                    groupname, itemtype, sourcingfee, shippingfee,
+                    product_weight, product_weight_unit,
+                    prod_height, prod_width, prod_length, length_unit, item_level, published
+             FROM vp_products WHERE is_active = 1
+               AND (sku = ? OR item_code = ?)
+             ORDER BY (sku = ?) DESC,
+                      CASE WHEN LOWER(TRIM(IFNULL(item_level, \'\'))) = \'parent\' THEN 1 ELSE 0 END,
+                      id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('sss', $code, $code, $code);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return $row ?: null;
+    }
+
+    /**
+     * Resolve single product row by id or code.
+     */
+    public function getProductByIdOrCode(int $productId, string $code = ''): ?array
+    {
+        if (!$this->db) {
+            return null;
+        }
+        if ($productId > 0) {
+            $stmt = $this->db->prepare('SELECT id, item_code, sku, title FROM vp_products WHERE id = ? LIMIT 1');
+            if (!$stmt) {
+                return null;
+            }
+            $stmt->bind_param('i', $productId);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            return $row ?: null;
+        }
+
+        $code = trim($code);
+        if ($code === '') {
+            return null;
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT id, item_code, sku, title FROM vp_products
+             WHERE is_active = 1 AND (sku = ? OR item_code = ?)
+             ORDER BY (sku = ?) DESC,
+                      CASE WHEN LOWER(TRIM(IFNULL(item_level, \'\'))) = \'parent\' THEN 1 ELSE 0 END,
+                      id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('sss', $code, $code, $code);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return $row ?: null;
+    }
+
+    /**
+     * Fetch price fields from vp_products for code.
+     */
+    public function resolveIndiaSellPriceRowFromVp(string $code): array
+    {
+        $code = trim($code);
+        if ($code === '' || !$this->db) {
+            return [];
+        }
+        $stmt = $this->db->prepare(
+            'SELECT price_india, finalprice, itemprice, gst
+             FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?)
+             ORDER BY (sku = ?) DESC,
+                      CASE WHEN LOWER(TRIM(IFNULL(item_level, \'\'))) = \'parent\' THEN 1 ELSE 0 END,
+                      id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('sss', $code, $code, $code);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return $row ?: [];
+    }
+
+    /**
+     * vp_products.gst fallback row.
+     */
+    public function fetchVpProductGstFallbackRow(string $code): array
+    {
+        $code = trim($code);
+        if ($code === '' || !$this->db) {
+            return [];
+        }
+        $stmt = $this->db->prepare(
+            'SELECT gst FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?)
+             ORDER BY (sku = ?) DESC,
+                      CASE WHEN LOWER(TRIM(IFNULL(item_level, \'\'))) = \'parent\' THEN 1 ELSE 0 END,
+                      id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('sss', $code, $code, $code);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return $row ?: [];
+    }
+
+    /**
+     * All active VP product ids matching sku or item_code.
+     *
+     * @return list<int>
+     */
+    public function resolveVpProductIdsForStockLookup(string $code): array
+    {
+        $code = trim($code);
+        if ($code === '' || !$this->db) {
+            return [];
+        }
+        $stmt = $this->db->prepare(
+            'SELECT id FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('ss', $code, $code);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $ids = [];
+        while ($row = $res->fetch_assoc()) {
+            if (!empty($row['id'])) {
+                $ids[] = (int)$row['id'];
+            }
+        }
+        $stmt->close();
+
+        return $ids;
+    }
+
+    /**
+     * Latest running_stock and location for one product ID/SKU at one warehouse.
+     *
+     * @return array{running_stock: float, location: string}
+     */
+    public function getWarehouseStockSnapshot(int $productId, int $warehouseId, string $sku = ''): array
+    {
+        $empty = ['running_stock' => 0.0, 'location' => ''];
+        $sku = trim($sku);
+        if (($productId <= 0 && $sku === '') || $warehouseId <= 0 || !$this->db) {
+            return $empty;
+        }
+
+        if ($sku === '' && $productId > 0) {
+            $sStmt = $this->db->prepare('SELECT sku FROM vp_products WHERE id = ? LIMIT 1');
+            if ($sStmt) {
+                $sStmt->bind_param('i', $productId);
+                $sStmt->execute();
+                $sRow = $sStmt->get_result()->fetch_assoc();
+                $sStmt->close();
+                if ($sRow) {
+                    $sku = trim((string)($sRow['sku'] ?? ''));
+                }
+            }
+        }
+
+        $sql = '
+            SELECT sm.running_stock, sm.location
+            FROM vp_stock_movements sm
+            INNER JOIN (
+                SELECT warehouse_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE warehouse_id = ?
+                  AND ((product_id = ? AND product_id > 0) OR (sku = ? AND sku IS NOT NULL AND sku != \'\'))
+                GROUP BY warehouse_id
+            ) latest ON latest.max_id = sm.id
+            WHERE sm.warehouse_id = ?
+            LIMIT 1';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return $empty;
+        }
+        $stmt->bind_param('iisi', $warehouseId, $productId, $sku, $warehouseId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row || !array_key_exists('running_stock', $row)) {
+            return $empty;
+        }
+
+        return [
+            'running_stock' => (float)$row['running_stock'],
+            'location' => trim((string)($row['location'] ?? '')),
+        ];
+    }
+
+    /** Latest running_stock for one SKU at one warehouse. */
+    public function getWarehouseStockForProductId(int $productId, int $warehouseId, string $sku = ''): float
+    {
+        return $this->getWarehouseStockSnapshot($productId, $warehouseId, $sku)['running_stock'];
+    }
+
+    /** Sum of latest running_stock per warehouse for this product (all locations). */
+    public function getTotalStockAcrossWarehouses(int $productId, string $sku = ''): float
+    {
+        $sku = trim($sku);
+        if (($productId <= 0 && $sku === '') || !$this->db) {
+            return 0.0;
+        }
+
+        if ($sku === '' && $productId > 0) {
+            $sStmt = $this->db->prepare('SELECT sku FROM vp_products WHERE id = ? LIMIT 1');
+            if ($sStmt) {
+                $sStmt->bind_param('i', $productId);
+                $sStmt->execute();
+                $sRow = $sStmt->get_result()->fetch_assoc();
+                $sStmt->close();
+                if ($sRow) {
+                    $sku = trim((string)($sRow['sku'] ?? ''));
+                }
+            }
+        }
+
+        $sql = '
+            SELECT COALESCE(SUM(sm.running_stock), 0) AS t
+            FROM vp_stock_movements sm
+            INNER JOIN (
+                SELECT warehouse_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE (product_id = ? AND product_id > 0)
+                   OR (sku = ? AND sku IS NOT NULL AND sku != \'\')
+                GROUP BY warehouse_id
+            ) latest ON sm.id = latest.max_id';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return 0.0;
+        }
+        $stmt->bind_param('is', $productId, $sku);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return isset($row['t']) ? (float)$row['t'] : 0.0;
+    }
+
+    private static $defaultWarehouseCache = false;
+
+    /** Default warehouse row from exotic_address. */
+    public function getDefaultWarehouseRow(): ?array
+    {
+        if (self::$defaultWarehouseCache !== false) {
+            return self::$defaultWarehouseCache;
+        }
+        if (!$this->db) {
+            self::$defaultWarehouseCache = null;
+            return null;
+        }
+        $stmt = $this->db->prepare(
+            'SELECT id, address_title FROM exotic_address WHERE is_active = 1 AND is_default = 1 ORDER BY id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            self::$defaultWarehouseCache = null;
+            return null;
+        }
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (empty($row['id'])) {
+            self::$defaultWarehouseCache = null;
+            return null;
+        }
+
+        self::$defaultWarehouseCache = [
+            'id' => (int)$row['id'],
+            'address_title' => trim((string)($row['address_title'] ?? '')),
+        ];
+
+        return self::$defaultWarehouseCache;
+    }
+
+    /** Footer text from default exotic address */
+    public function getDefaultExoticAddressFooterString(): string
+    {
+        if (!$this->db) {
+            return '';
+        }
+        $stmt = $this->db->prepare(
+            'SELECT display_name, address_title, `address` FROM exotic_address WHERE is_active = 1 AND is_default = 1 ORDER BY id ASC LIMIT 1'
+        );
+        if (!$stmt) {
+            return '';
+        }
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row) {
+            return '';
+        }
+        $disp = trim((string)($row['display_name'] ?? ''));
+        $title = trim((string)($row['address_title'] ?? ''));
+        $addr = trim(preg_replace('/\s+/u', ' ', strip_tags((string)($row['address'] ?? ''))));
+        $parts = [];
+        if ($disp !== '') {
+            $parts[] = $disp;
+        }
+        if ($addr !== '') {
+            $parts[] = $addr;
+        } elseif ($title !== '') {
+            $parts[] = $title;
+        }
+
+        return trim(implode(', ', $parts));
+    }
+
+    /**
+     * POS stock context for a VP product at the session warehouse.
+     */
+    public function resolvePosStockContext(int $productId, int $currentWarehouseId, string $currentWarehouseName = '', string $sku = ''): array
+    {
+        $currentWarehouseName = trim($currentWarehouseName);
+        $sku = trim($sku);
+        $empty = [
+            'current_warehouse_id' => $currentWarehouseId,
+            'current_warehouse_name' => $currentWarehouseName,
+            'current_stock_qty' => 0.0,
+            'current_location' => '',
+            'total_qty_all_warehouses' => 0.0,
+            'default_store_qty' => null,
+            'default_store_name' => '',
+            'mapped_at_current' => false,
+            'mapped_anywhere' => false,
+            'alternative_warehouses' => [],
+            'default_warehouse' => null,
+            'allow_order' => true,
+            'enforce_qty_cap' => false,
+            'qty_cap' => null,
+            'warning_message' => '',
+            'warning_type' => 'none',
+        ];
+
+        if (($productId <= 0 && $sku === '') || !$this->db) {
+            return $empty;
+        }
+
+        if ($sku === '' && $productId > 0) {
+            $sStmt = $this->db->prepare('SELECT sku FROM vp_products WHERE id = ? LIMIT 1');
+            if ($sStmt) {
+                $sStmt->bind_param('i', $productId);
+                $sStmt->execute();
+                $sRow = $sStmt->get_result()->fetch_assoc();
+                $sStmt->close();
+                if ($sRow) {
+                    $sku = trim((string)($sRow['sku'] ?? ''));
+                }
+            }
+        }
+
+        $stockSql = "
+            SELECT sm.warehouse_id,
+                   COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
+                   sm.running_stock AS stock_qty,
+                   sm.location AS warehouse_location
+            FROM vp_stock_movements sm
+            INNER JOIN (
+                SELECT warehouse_id, MAX(id) AS max_id
+                FROM vp_stock_movements
+                WHERE (product_id = ? AND product_id > 0)
+                   OR (sku = ? AND sku IS NOT NULL AND sku != '')
+                GROUP BY warehouse_id
+            ) latest ON latest.max_id = sm.id
+            LEFT JOIN exotic_address ea ON ea.id = sm.warehouse_id
+            ORDER BY warehouse_name ASC";
+
+        $stockStmt = $this->db->prepare($stockSql);
+        if (!$stockStmt) {
+            return $empty;
+        }
+        $stockStmt->bind_param('is', $productId, $sku);
+        $stockStmt->execute();
+        $rows = $stockStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stockStmt->close();
+
+        $mappedAtCurrent = false;
+        $currentStock = 0.0;
+        $currentLocation = '';
+        $totalQtyAll = 0.0;
+        $alternativeWarehouses = [];
+        foreach ($rows as $row) {
+            $wid = (int)($row['warehouse_id'] ?? 0);
+            $stockQty = (float)($row['stock_qty'] ?? 0);
+            $totalQtyAll += $stockQty;
+            $entry = [
+                'warehouse_id' => $wid,
+                'warehouse_name' => trim((string)($row['warehouse_name'] ?? '')),
+                'stock_qty' => $stockQty,
+            ];
+            if ($wid === $currentWarehouseId) {
+                $mappedAtCurrent = true;
+                $currentStock = $stockQty;
+                $currentLocation = trim((string)($row['warehouse_location'] ?? ''));
+            } elseif ($stockQty > 0) {
+                $alternativeWarehouses[] = $entry;
+            }
+        }
+
+        $mappedAnywhere = !empty($rows);
+        $defaultWarehouse = $this->getDefaultWarehouseRow();
+        $defaultStoreName = trim((string)($defaultWarehouse['address_title'] ?? ''));
+        $defaultStoreQty = null;
+        if ($defaultWarehouse !== null && !empty($defaultWarehouse['id'])) {
+            $defWhId = (int)$defaultWarehouse['id'];
+            foreach ($rows as $row) {
+                if ((int)($row['warehouse_id'] ?? 0) === $defWhId) {
+                    $defaultStoreQty = (float)($row['stock_qty'] ?? 0);
+                    break;
+                }
+            }
+        }
+        $storeLabel = $currentWarehouseName !== '' ? $currentWarehouseName : 'this store';
+
+        $altNames = array_values(array_filter(array_map(static function (array $w): string {
+            return trim((string)($w['warehouse_name'] ?? ''));
+        }, $alternativeWarehouses)));
+
+        $warningMessage = '';
+        $warningType = 'none';
+
+        if (!$mappedAnywhere) {
+            $warningType = 'unmapped_anywhere';
+            $defaultName = trim((string)($defaultWarehouse['address_title'] ?? ''));
+            if ($defaultName === '') {
+                $defaultName = 'Default Store';
+            }
+            $warningMessage = 'This item is not mapped to any store. It will be treated as mapped to the default store ('
+                . $defaultName . '). You can create an order for ' . $storeLabel . '.';
+        } elseif (!$mappedAtCurrent && !empty($altNames)) {
+            $warningType = 'unmapped_current';
+            $warningMessage = 'This item is not mapped to ' . $storeLabel . '. Stock is available at '
+                . implode(', ', $altNames) . '. You can still create an order for ' . $storeLabel . '.';
+        } elseif (!$mappedAtCurrent) {
+            $warningType = 'unmapped_current';
+            $warningMessage = 'This item is not mapped to ' . $storeLabel . '. You can still create an order for ' . $storeLabel . '.';
+        } elseif ($currentStock <= 0 && !empty($altNames)) {
+            $warningType = 'cross_store';
+            $warningMessage = 'Out of stock at ' . $storeLabel . '. Stock is available at '
+                . implode(', ', $altNames) . '. You can still create an order.';
+        } elseif ($mappedAtCurrent && $currentStock <= 0) {
+            $warningType = 'out_of_stock_local';
+            $warningMessage = 'This item is out of stock at ' . $storeLabel . '. You can still create an order.';
+        }
+
+        $enforceQtyCap = $mappedAtCurrent && $currentStock > 0;
+
+        return [
+            'current_warehouse_id' => $currentWarehouseId,
+            'current_warehouse_name' => $currentWarehouseName,
+            'current_stock_qty' => $currentStock,
+            'current_location' => $currentLocation,
+            'total_qty_all_warehouses' => $totalQtyAll,
+            'default_store_qty' => $defaultStoreQty,
+            'default_store_name' => $defaultStoreName,
+            'mapped_at_current' => $mappedAtCurrent,
+            'mapped_anywhere' => $mappedAnywhere,
+            'alternative_warehouses' => $alternativeWarehouses,
+            'default_warehouse' => $defaultWarehouse,
+            'allow_order' => true,
+            'enforce_qty_cap' => $enforceQtyCap,
+            'qty_cap' => $enforceQtyCap ? (int) floor($currentStock) : null,
+            'warning_message' => $warningMessage,
+            'warning_type' => $warningType,
+        ];
+    }
+
+    /**
+     * Other VP rows with the same item_code (excluding the opened variant), with warehouse stock when available.
+     *
+     * @return list<array{id:int, sku:string, title:string, stock_qty:float}>
+     */
+    public function fetchSiblingSkusByItemCode(string $itemCode, string $excludeSku, int $warehouseId): array
+    {
+        if ($itemCode === '' || !$this->db || $excludeSku === '') {
+            return [];
+        }
+
+        if ($warehouseId <= 0) {
+            $sql = 'SELECT id, sku, title, 0 AS stock_qty
+                    FROM vp_products
+                    WHERE is_active = 1
+                      AND LOWER(TRIM(IFNULL(item_level, \'\'))) <> \'parent\'
+                      AND item_code = ? AND sku <> ?
+                    ORDER BY sku ASC';
+            $stmt = $this->db->prepare($sql);
+            if (!$stmt) {
+                return [];
+            }
+            $stmt->bind_param('ss', $itemCode, $excludeSku);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $out = [];
+            while ($row = $res->fetch_assoc()) {
+                $out[] = [
+                    'id' => (int)($row['id'] ?? 0),
+                    'sku' => (string)($row['sku'] ?? ''),
+                    'title' => (string)($row['title'] ?? ''),
+                    'stock_qty' => (float)($row['stock_qty'] ?? 0),
+                ];
+            }
+            $stmt->close();
+
+            return $out;
+        }
+
+        $sql = '
+            SELECT p.id, p.sku, p.title, COALESCE(sm.running_stock, 0) AS stock_qty
+            FROM vp_products p
+            LEFT JOIN (
+                SELECT sm1.product_id, sm1.sku, sm1.running_stock
+                FROM vp_stock_movements sm1
+                INNER JOIN (
+                    SELECT MAX(id) AS max_id
+                    FROM vp_stock_movements
+                    WHERE warehouse_id = ?
+                    GROUP BY COALESCE(NULLIF(TRIM(sku), \'\'), CAST(product_id AS CHAR))
+                ) latest ON latest.max_id = sm1.id
+                WHERE sm1.warehouse_id = ?
+            ) sm ON (sm.product_id > 0 AND sm.product_id = p.id)
+                 OR (sm.sku IS NOT NULL AND sm.sku != \'\' AND sm.sku = p.sku)
+            WHERE p.is_active = 1
+              AND LOWER(TRIM(IFNULL(item_level, \'\'))) <> \'parent\'
+              AND p.item_code = ? AND p.sku <> ?
+            ORDER BY p.sku ASC';
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('iiss', $warehouseId, $warehouseId, $itemCode, $excludeSku);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $out = [];
+        while ($row = $res->fetch_assoc()) {
+            $out[] = [
+                'id' => (int)($row['id'] ?? 0),
+                'sku' => (string)($row['sku'] ?? ''),
+                'title' => (string)($row['title'] ?? ''),
+                'stock_qty' => (float)($row['stock_qty'] ?? 0),
+            ];
+        }
+        $stmt->close();
+
+        return $out;
     }
 }
