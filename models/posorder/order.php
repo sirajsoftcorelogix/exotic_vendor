@@ -439,67 +439,12 @@ class POSOrder
             return false;
         }
     }*/
-    /**
-     * Match imported lines taking into account order_number, item_code, and variant details (sku, size, color).
-     *
-     * @return array<string, mixed>|null
-     */
-    public function findOrderLineByOrderNumberAndItemCode(
-        string $orderNumber,
-        string $itemCode,
-        string $sku = '',
-        string $size = '',
-        string $color = ''
-    ): ?array {
+    public function findOrderLineByOrderNumberAndItemCode(string $orderNumber, string $itemCode): ?array
+    {
         $orderNumber = trim($orderNumber);
         $itemCode = trim($itemCode);
-        $sku = trim($sku);
-        $size = trim($size);
-        $color = trim($color);
-
         if ($orderNumber === '' || $itemCode === '') {
             return null;
-        }
-
-        if ($sku !== '' && ($size !== '' || $color !== '')) {
-            $sql = 'SELECT id, order_number, item_code, sku, size, color, status FROM vp_orders 
-                    WHERE order_number = ? AND item_code = ? AND (sku = ? OR (IFNULL(size, "") = ? AND IFNULL(color, "") = ?)) LIMIT 1';
-            $stmt = $this->db->prepare($sql);
-            if ($stmt) {
-                $stmt->bind_param('sssss', $orderNumber, $itemCode, $sku, $size, $color);
-                $stmt->execute();
-                $row = $stmt->get_result()->fetch_assoc();
-                $stmt->close();
-                if (is_array($row)) {
-                    return $row;
-                }
-            }
-        } elseif ($sku !== '') {
-            $sql = 'SELECT id, order_number, item_code, sku, size, color, status FROM vp_orders 
-                    WHERE order_number = ? AND item_code = ? AND sku = ? LIMIT 1';
-            $stmt = $this->db->prepare($sql);
-            if ($stmt) {
-                $stmt->bind_param('sss', $orderNumber, $itemCode, $sku);
-                $stmt->execute();
-                $row = $stmt->get_result()->fetch_assoc();
-                $stmt->close();
-                if (is_array($row)) {
-                    return $row;
-                }
-            }
-        } elseif ($size !== '' || $color !== '') {
-            $sql = 'SELECT id, order_number, item_code, sku, size, color, status FROM vp_orders 
-                    WHERE order_number = ? AND item_code = ? AND IFNULL(size, "") = ? AND IFNULL(color, "") = ? LIMIT 1';
-            $stmt = $this->db->prepare($sql);
-            if ($stmt) {
-                $stmt->bind_param('ssss', $orderNumber, $itemCode, $size, $color);
-                $stmt->execute();
-                $row = $stmt->get_result()->fetch_assoc();
-                $stmt->close();
-                if (is_array($row)) {
-                    return $row;
-                }
-            }
         }
 
         $stmt = $this->db->prepare(
@@ -516,14 +461,26 @@ class POSOrder
         return is_array($row) ? $row : null;
     }
 
-    public function orderLineExists(
-        string $orderNumber,
-        string $itemCode,
-        string $sku = '',
-        string $size = '',
-        string $color = ''
-    ): bool {
-        return $this->findOrderLineByOrderNumberAndItemCode($orderNumber, $itemCode, $sku, $size, $color) !== null;
+    public function orderLineExists(string $orderNumber, string $itemCode, string $sku = ''): bool
+    {
+        $checkSql = ($sku !== '')
+            ? 'SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? AND sku = ? LIMIT 1'
+            : 'SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? LIMIT 1';
+        $checkStmt = $this->db->prepare($checkSql);
+        if (!$checkStmt) {
+            return false;
+        }
+        if ($sku !== '') {
+            $checkStmt->bind_param('sss', $orderNumber, $itemCode, $sku);
+        } else {
+            $checkStmt->bind_param('ss', $orderNumber, $itemCode);
+        }
+        $checkStmt->execute();
+        $checkStmt->bind_result($count);
+        $checkStmt->fetch();
+        $checkStmt->close();
+
+        return (int)($count ?? 0) > 0;
     }
 
     public function insertOrder($data)
@@ -542,33 +499,19 @@ class POSOrder
         }
 
         // Check for duplicate combination (considering order_number, item_code, sku, size, and color)
-        $orderNum = trim((string)($data['order_number'] ?? ''));
-        $itemCode = trim((string)($data['item_code'] ?? ''));
-        $sku = trim((string)($data['sku'] ?? ''));
-        $size = trim((string)($data['size'] ?? ''));
-        $color = trim((string)($data['color'] ?? ''));
+        $checkSql = 'SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? AND IFNULL(sku, "") = ? AND IFNULL(size, "") = ? AND IFNULL(color, "") = ? LIMIT 1';
+        $checkStmt = $this->db->prepare($checkSql);
+        $skuVal = (string)($data['sku'] ?? '');
+        $sizeVal = (string)($data['size'] ?? '');
+        $colorVal = (string)($data['color'] ?? '');
+        $checkStmt->bind_param('sssss', $data['order_number'], $data['item_code'], $skuVal, $sizeVal, $colorVal);
+        $checkStmt->execute();
+        $checkStmt->bind_result($count);
+        $checkStmt->fetch();
+        $checkStmt->close();
 
-        $existingLine = $this->findOrderLineByOrderNumberAndItemCode($orderNum, $itemCode, $sku, $size, $color);
-        if ($existingLine !== null) {
-            $variantMatched = false;
-            if ($sku !== '' || $size !== '' || $color !== '') {
-                $exSku = trim((string)($existingLine['sku'] ?? ''));
-                $exSize = trim((string)($existingLine['size'] ?? ''));
-                $exColor = trim((string)($existingLine['color'] ?? ''));
-                if ($sku !== '' && strcasecmp($exSku, $sku) === 0) {
-                    $variantMatched = true;
-                } elseif ($size !== '' || $color !== '') {
-                    if (strcasecmp($exSize, $size) === 0 && strcasecmp($exColor, $color) === 0) {
-                        $variantMatched = true;
-                    }
-                }
-            } else {
-                $variantMatched = true; // Fallback when no variant parameters provided
-            }
-
-            if ($variantMatched) {
-                return ['success' => false, 'message' => 'Duplicate ' . $orderNum . '-' . $itemCode . ' order_number + item_code combination.'];
-            }
+        if ($count > 0) {
+            return ['success' => false, 'message' => 'Duplicate ' . $data['order_number'] . '-' . $data['item_code'] . ' order_number + item_code combination.'];
         }
 
         // Insert
@@ -1669,19 +1612,6 @@ class POSOrder
         }
 
         $lineId = (int)($data['id'] ?? 0);
-        if ($lineId <= 0) {
-            $existing = $this->findOrderLineByOrderNumberAndItemCode(
-                (string)$data['order_number'],
-                (string)$data['item_code'],
-                (string)($data['sku'] ?? ''),
-                (string)($data['size'] ?? ''),
-                (string)($data['color'] ?? '')
-            );
-            if ($existing && !empty($existing['id'])) {
-                $lineId = (int)$existing['id'];
-            }
-        }
-
         $whereClause = ($lineId > 0)
             ? 'WHERE id = ?'
             : 'WHERE order_number = ? AND item_code = ?';
@@ -1697,7 +1627,7 @@ class POSOrder
                 backorder_status = ?, backorder_percent = ?, backorder_delay = ?,
                 payment_type = ?, coupon = ?, coupon_reduce = ?, giftvoucher = ?, giftvoucher_reduce = ?,
                 credit = ?, vendor = ?, country = ?, material = ?, status = ?, esd = ?, updated_at = ?
-                {$whereClause}";
+                WHERE order_number = ? AND item_code = ?";
         $stmt = $this->db->prepare($sql);
 
         if (!$stmt) {
@@ -1751,14 +1681,9 @@ class POSOrder
             $data['status'],
             $data['esd'],
             $data['updated_at'],
+            $data['order_number'],
+            $data['item_code'],
         ];
-
-        if ($lineId > 0) {
-            $values[] = $lineId;
-        } else {
-            $values[] = $data['order_number'];
-            $values[] = $data['item_code'];
-        }
 
         // Build types string dynamically based on actual PHP types
         $types = '';
