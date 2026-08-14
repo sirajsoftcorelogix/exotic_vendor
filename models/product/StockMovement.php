@@ -114,38 +114,44 @@ final class StockMovement
         $stockMap = [];
         foreach (array_chunk($productIds, 100) as $chunk) {
             $placeholders = implode(',', array_fill(0, count($chunk), '?'));
-            $sql = "SELECT p.id AS p_id, sm.product_id, sm.running_stock
+            $sql = "SELECT p.id AS p_id, COALESCE(sm_pid.running_stock, sm_sku.running_stock, 0) AS running_stock
                     FROM vp_products p
-                    INNER JOIN (
-                        SELECT sm1.product_id, sm1.sku, sm1.running_stock
+                    LEFT JOIN (
+                        SELECT sm1.product_id, sm1.running_stock
                         FROM vp_stock_movements sm1
                         INNER JOIN (
-                            SELECT MAX(id) AS max_id
+                            SELECT product_id, MAX(id) AS max_id
                             FROM vp_stock_movements
-                            WHERE warehouse_id = ?
-                            GROUP BY COALESCE(NULLIF(TRIM(sku), ''), CAST(product_id AS CHAR))
+                            WHERE warehouse_id = ? AND product_id > 0
+                            GROUP BY product_id
                         ) latest ON sm1.id = latest.max_id
                         WHERE sm1.warehouse_id = ?
-                    ) sm ON (sm.product_id > 0 AND sm.product_id = p.id)
-                         OR (sm.sku IS NOT NULL AND sm.sku != '' AND sm.sku = p.sku)
+                    ) sm_pid ON sm_pid.product_id = p.id
+                    LEFT JOIN (
+                        SELECT sm1.sku, sm1.running_stock
+                        FROM vp_stock_movements sm1
+                        INNER JOIN (
+                            SELECT sku, MAX(id) AS max_id
+                            FROM vp_stock_movements
+                            WHERE warehouse_id = ? AND sku IS NOT NULL AND sku != ''
+                            GROUP BY sku
+                        ) latest ON sm1.id = latest.max_id
+                        WHERE sm1.warehouse_id = ?
+                    ) sm_sku ON sm_sku.sku = p.sku
                     WHERE p.id IN ($placeholders)";
             $stmt = $conn->prepare($sql);
             if (!$stmt) {
                 continue;
             }
-            $types = 'ii' . str_repeat('i', count($chunk));
-            $params = array_merge([$warehouseId, $warehouseId], $chunk);
+            $types = 'iiii' . str_repeat('i', count($chunk));
+            $params = array_merge([$warehouseId, $warehouseId, $warehouseId, $warehouseId], $chunk);
             $stmt->bind_param($types, ...$params);
             $stmt->execute();
             $result = $stmt->get_result();
             while ($row = $result->fetch_assoc()) {
                 $pid = (int) $row['p_id'];
-                $smPid = (int) $row['product_id'];
                 $rStock = (float) ($row['running_stock'] ?? 0);
                 $stockMap[$pid] = $rStock;
-                if ($smPid > 0) {
-                    $stockMap[$smPid] = $rStock;
-                }
             }
             $stmt->close();
         }

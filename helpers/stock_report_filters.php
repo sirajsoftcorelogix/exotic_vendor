@@ -48,7 +48,7 @@ function appendStockReportStockStatusFiltersSql(string &$where, array $filters):
 {
     appendStockReportQuantityStatusSql(
         $where,
-        'sm.running_stock',
+        'COALESCE(sm_pid.running_stock, sm_sku.running_stock, 0)',
         (string) ($filters['physical_stock_status'] ?? 'all')
     );
     appendStockReportQuantityStatusSql(
@@ -198,7 +198,7 @@ function appendStockReportLocationFilterSql(
         return;
     }
 
-    $where .= " AND IFNULL(sm.location, '') LIKE ? ";
+    $where .= " AND IFNULL(COALESCE(sm_pid.location, sm_sku.location), '') LIKE ? ";
     $params[] = '%' . $location . '%';
     $types .= 's';
 }
