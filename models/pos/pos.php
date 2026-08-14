@@ -482,7 +482,7 @@ class pos
             'join' => $join,
             'stats_join' => "
             LEFT JOIN (
-                SELECT product_id, sku, COUNT(*) AS movement_count, MIN(running_stock) AS min_running_stock
+                SELECT MAX(product_id) AS product_id, MAX(sku) AS sku, COUNT(*) AS movement_count, MIN(running_stock) AS min_running_stock
                 FROM vp_stock_movements
                 GROUP BY COALESCE(NULLIF(TRIM(sku), ''), CAST(product_id AS CHAR))
             ) sm_stats ON (sm_stats.product_id > 0 AND sm_stats.product_id = p.id)
