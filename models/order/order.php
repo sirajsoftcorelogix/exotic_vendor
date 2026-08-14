@@ -604,10 +604,13 @@ class Order
             }
         }
 
-        // Check for duplicate combination (same key as bulk update / refresh upsert)
-        $checkSql = 'SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? LIMIT 1';
+        // Check for duplicate combination (considering order_number, item_code, sku, size, and color)
+        $checkSql = 'SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? AND IFNULL(sku, "") = ? AND IFNULL(size, "") = ? AND IFNULL(color, "") = ? LIMIT 1';
         $checkStmt = $this->db->prepare($checkSql);
-        $checkStmt->bind_param('ss', $data['order_number'], $data['item_code']);
+        $skuVal = (string)($data['sku'] ?? '');
+        $sizeVal = (string)($data['size'] ?? '');
+        $colorVal = (string)($data['color'] ?? '');
+        $checkStmt->bind_param('sssss', $data['order_number'], $data['item_code'], $skuVal, $sizeVal, $colorVal);
         $checkStmt->execute();
         $checkStmt->bind_result($count);
         $checkStmt->fetch();

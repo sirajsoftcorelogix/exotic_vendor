@@ -2732,11 +2732,25 @@ class OrdersController
         return in_array(strtolower(trim((string)$raw)), ['1', 'true', 'yes', 'on'], true);
     }
 
-    private static function vendorOrderLineMatchKey(string $itemCode, string $sku = ''): string
-    {
-        unset($sku);
+    private static function vendorOrderLineMatchKey(
+        string $itemCode,
+        string $sku = '',
+        string $size = '',
+        string $color = ''
+    ): string {
+        $itemCode = strtolower(trim($itemCode));
+        $sku = strtolower(trim($sku));
+        $size = strtolower(trim($size));
+        $color = strtolower(trim($color));
 
-        return strtolower(trim($itemCode));
+        if ($sku !== '') {
+            return $itemCode . '|' . $sku;
+        }
+        if ($size !== '' || $color !== '') {
+            return $itemCode . '|' . $size . '|' . $color;
+        }
+
+        return $itemCode;
     }
 
     /**
@@ -2911,7 +2925,12 @@ class OrdersController
         $dbLines = $ordersModel->getOrderLinesByOrderNumber($orderNumber);
         $dbByKey = [];
         foreach ($dbLines as $row) {
-            $key = self::vendorOrderLineMatchKey((string)($row['item_code'] ?? ''), (string)($row['sku'] ?? ''));
+            $key = self::vendorOrderLineMatchKey(
+                (string)($row['item_code'] ?? ''),
+                (string)($row['sku'] ?? ''),
+                (string)($row['size'] ?? ''),
+                (string)($row['color'] ?? '')
+            );
             $dbByKey[$key] = $row;
         }
 
@@ -2923,7 +2942,9 @@ class OrdersController
             }
             $itemCode = trim((string)($item['itemcode'] ?? ''));
             $sku = trim((string)($item['sku'] ?? ''));
-            $key = self::vendorOrderLineMatchKey($itemCode, $sku);
+            $size = trim((string)($item['size'] ?? ''));
+            $color = trim((string)($item['color'] ?? ''));
+            $key = self::vendorOrderLineMatchKey($itemCode, $sku, $size, $color);
             $apiStatus = $this->resolveVendorImportStatus($vendorOrder, $item, $statusList);
             $dbRow = $dbByKey[$key] ?? null;
             $dbStatus = $dbRow ? trim((string)($dbRow['status'] ?? '')) : '';
