@@ -225,4 +225,5 @@ include __DIR__ . '/partials/detail_hero.php';
 <?php require_once __DIR__ . '/partials/copy_sku_script.php'; ?>
 <?php require_once __DIR__ . '/partials/availability_script.php'; ?>
 <?php require_once __DIR__ . '/partials/search_script.php'; ?>
+<?php require_once __DIR__ . '/partials/sort_script.php'; ?>
 <?php require_once __DIR__ . '/partials/row_menu_script.php'; ?>

@@ -16,10 +16,28 @@ $tabType = $tabType ?? 'full';
             <tr class="bg-gray-50/95 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
                 <th class="px-3 py-3 w-10"></th>
                 <th class="px-3 py-3 whitespace-nowrap">#</th>
-                <th class="px-2 py-3 whitespace-nowrap w-44 max-w-44">Location</th>
+                <th class="px-2 py-3 whitespace-nowrap w-44 max-w-44">
+                    <button type="button"
+                            class="js-picklist-sort-btn inline-flex items-center gap-1.5 font-semibold text-gray-700 hover:text-amber-900 focus:outline-none group cursor-pointer"
+                            data-sort-key="location"
+                            title="Sort by Location">
+                        <span>Location</span>
+                        <span class="inline-flex text-[10px] text-gray-400 group-hover:text-amber-700 js-sort-icon">
+                            <i class="fas fa-sort" aria-hidden="true"></i>
+                        </span>
+                    </button>
+                </th>
                 <th class="px-3 py-3 whitespace-nowrap">
                     <span class="inline-flex items-center gap-1.5">
-                        Order #
+                        <button type="button"
+                                class="js-picklist-sort-btn inline-flex items-center gap-1.5 font-semibold text-gray-700 hover:text-amber-900 focus:outline-none group cursor-pointer"
+                                data-sort-key="order"
+                                title="Sort by Order Number">
+                            <span>Order #</span>
+                            <span class="inline-flex text-[10px] text-gray-400 group-hover:text-amber-700 js-sort-icon">
+                                <i class="fas fa-sort" aria-hidden="true"></i>
+                            </span>
+                        </button>
                         <button type="button"
                                 class="js-picklist-copy-column shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md border border-gray-200 bg-white text-gray-500 hover:text-amber-700 hover:border-amber-300 hover:bg-amber-50/50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                                 data-copy-column="order"
@@ -32,7 +50,15 @@ $tabType = $tabType ?? 'full';
                 </th>
                 <th class="px-3 py-3 whitespace-nowrap">
                     <span class="inline-flex items-center gap-1.5">
-                        SKU
+                        <button type="button"
+                                class="js-picklist-sort-btn inline-flex items-center gap-1.5 font-semibold text-gray-700 hover:text-amber-900 focus:outline-none group cursor-pointer"
+                                data-sort-key="sku"
+                                title="Sort by SKU">
+                            <span>SKU</span>
+                            <span class="inline-flex text-[10px] text-gray-400 group-hover:text-amber-700 js-sort-icon">
+                                <i class="fas fa-sort" aria-hidden="true"></i>
+                            </span>
+                        </button>
                         <button type="button"
                                 class="js-picklist-copy-column shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md border border-gray-200 bg-white text-gray-500 hover:text-amber-700 hover:border-amber-300 hover:bg-amber-50/50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                                 data-copy-column="sku"
@@ -98,7 +124,10 @@ $tabType = $tabType ?? 'full';
                 ])));
                 ?>
                 <tr class="picklist-select-row picklist-item-row cursor-pointer hover:bg-amber-50/40 transition-colors <?= $rowToneClass ?>"
-                    data-search-text="<?= htmlspecialchars($searchText, ENT_QUOTES, 'UTF-8') ?>">
+                    data-search-text="<?= htmlspecialchars($searchText, ENT_QUOTES, 'UTF-8') ?>"
+                    data-sort-location="<?= htmlspecialchars($locationText === '—' ? '' : $locationText, ENT_QUOTES, 'UTF-8') ?>"
+                    data-sort-order="<?= htmlspecialchars($orderNumber, ENT_QUOTES, 'UTF-8') ?>"
+                    data-sort-sku="<?= htmlspecialchars($skuText, ENT_QUOTES, 'UTF-8') ?>">
                     <td class="px-3 py-3 align-middle">
                         <input type="checkbox"
                                class="picklist-item-cb w-5 h-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500 pointer-events-none"
