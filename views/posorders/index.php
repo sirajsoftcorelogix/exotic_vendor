@@ -914,6 +914,8 @@
                                                             </hr>
                                                             <a href="#" onclick="addOrderToInvoice(<?= $order['order_id'] ?>)" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Invoice</a>
                                                         <?php endif; ?>
+                                                        <hr class="my-1 mx-2"></hr>
+                                                        <a href="<?= base_url('index.php?daterange=&order_from=&order_till=&status_op=in&payment_type_op=in&order_number=' . rawurlencode(trim((string)($order['order_number'] ?? ''))) . '&stock_available=&priority=&country=&vendor=&item_code=&po_no=&item_name=&author=&publisher=&page=orders&action=list&options=unshipped') ?>" target="_blank" rel="noopener noreferrer" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Customer Orders</a>
                                                     </div>
                                                 </span>
                                             </div>
