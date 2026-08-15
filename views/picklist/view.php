@@ -84,7 +84,7 @@ include __DIR__ . '/partials/detail_hero.php';
     </div>
 
     <?php if ($items !== []): ?>
-        <div class="px-3 py-3 border-b border-gray-100 bg-gray-50/50">
+        <div class="px-3 py-3 border-b border-gray-100 bg-gray-50/50 flex flex-wrap items-center justify-between gap-2">
             <div class="flex flex-wrap items-center gap-2">
                 <label class="inline-flex items-center gap-2 cursor-pointer select-none text-sm font-semibold text-gray-800 shrink-0">
                     <input type="checkbox" id="picklist-select-all" class="w-5 h-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500" aria-label="Select all items in active tab">
@@ -103,6 +103,28 @@ include __DIR__ . '/partials/detail_hero.php';
                     <i class="fas fa-undo text-[11px]" aria-hidden="true"></i> Revert status
                 </button>
                 <span id="picklist-selected-count" class="text-xs font-medium text-gray-600 tabular-nums whitespace-nowrap">0 selected</span>
+            </div>
+
+            <div class="flex items-center gap-2 shrink-0">
+                <a href="?page=picklist&action=view&id=<?= (int) $plId ?>&print=full"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   id="tab-print-full-btn"
+                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-900 text-xs font-semibold shadow-xs hover:bg-emerald-100 transition"
+                   title="Print List A (Full Quantity Available)">
+                    <i class="fas fa-print text-emerald-700" aria-hidden="true"></i>
+                    <span>Print Full List</span>
+                </a>
+
+                <a href="?page=picklist&action=view&id=<?= (int) $plId ?>&print=short"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   id="tab-print-short-btn"
+                   class="hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-xs font-semibold shadow-xs hover:bg-amber-100 transition"
+                   title="Print List B (Partially Available & Not Available)">
+                    <i class="fas fa-print text-amber-700" aria-hidden="true"></i>
+                    <span>Print Short/Unavailable List</span>
+                </a>
             </div>
         </div>
     <?php endif; ?>
@@ -130,6 +152,8 @@ include __DIR__ . '/partials/detail_hero.php';
 (function() {
     const tabBtns = document.querySelectorAll('.js-picklist-tab-btn');
     const tabPanels = document.querySelectorAll('.js-picklist-tab-panel');
+    const printFullBtn = document.getElementById('tab-print-full-btn');
+    const printShortBtn = document.getElementById('tab-print-short-btn');
 
     function switchTab(targetTab) {
         tabBtns.forEach(btn => {
@@ -150,6 +174,16 @@ include __DIR__ . '/partials/detail_hero.php';
                 panel.classList.add('hidden');
             }
         });
+
+        if (printFullBtn && printShortBtn) {
+            if (targetTab === 'full') {
+                printFullBtn.classList.remove('hidden');
+                printShortBtn.classList.add('hidden');
+            } else {
+                printFullBtn.classList.add('hidden');
+                printShortBtn.classList.remove('hidden');
+            }
+        }
 
         if (window.updatePicklistBulkBar) {
             window.updatePicklistBulkBar();
