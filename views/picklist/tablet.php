@@ -84,7 +84,7 @@ include __DIR__ . '/partials/detail_hero.php';
 <?php endif; ?>
 
 <?php if ($items !== []): ?>
-    <div class="mb-3 px-1">
+    <div class="mb-3 px-1 flex flex-wrap items-center justify-between gap-2">
         <div class="flex flex-nowrap items-center gap-2 overflow-x-auto pb-0.5">
             <label class="inline-flex items-center gap-2 cursor-pointer select-none text-sm font-semibold text-gray-800 shrink-0">
                 <input type="checkbox" id="picklist-select-all" class="w-5 h-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500" aria-label="Select all items">
@@ -103,6 +103,21 @@ include __DIR__ . '/partials/detail_hero.php';
                 <i class="fas fa-undo text-[11px]" aria-hidden="true"></i> Revert status
             </button>
             <span id="picklist-selected-count" class="text-xs font-medium text-gray-600 tabular-nums whitespace-nowrap shrink-0">0 selected</span>
+        </div>
+
+        <div class="relative w-full sm:w-auto min-w-[16rem]">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                <i class="fas fa-search text-xs" aria-hidden="true"></i>
+            </div>
+            <input type="text"
+                   id="picklist-item-search"
+                   placeholder="Search location, order #, SKU, status..."
+                   class="w-full pl-8 pr-8 py-2 text-xs font-medium bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs">
+            <button type="button"
+                    id="picklist-search-clear"
+                    class="hidden absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none">
+                <i class="fas fa-times-circle text-xs" aria-hidden="true"></i>
+            </button>
         </div>
     </div>
 <?php endif; ?>
@@ -132,7 +147,31 @@ include __DIR__ . '/partials/detail_hero.php';
         <div class="pick-item rounded-2xl border shadow-sm transition-all <?= $cardToneClass ?>"
              data-item-id="<?= $itemId ?>"
              data-status="<?= htmlspecialchars($itemStatus, ENT_QUOTES, 'UTF-8') ?>"
-             data-picked="<?= $isPicked ? '1' : '0' ?>">
+             data-picked="<?= $isPicked ? '1' : '0' ?>"
+             <?php
+             $locationText = (string) ($item['warehouse_location'] ?: 'No location');
+             $orderNumber = trim((string) ($item['order_number'] ?? ''));
+             $skuText = picklist_item_sku($item);
+             $itemTitle = (string) ($item['title'] ?? '');
+             $availability = picklist_item_availability($item);
+             $availabilityTextMap = [
+                 'full' => 'available full_available full available',
+                 'partial' => 'partially_available partial_available partial available partially available',
+                 'none' => 'not_available not available unavailable none'
+             ];
+             $availText = $availabilityTextMap[$availability] ?? '';
+
+             $searchText = strtolower(implode(' ', array_filter([
+                 $locationText,
+                 $orderNumber,
+                 $skuText,
+                 $itemTitle,
+                 $itemStatus,
+                 $itemStatusLabel,
+                 $availText
+             ])));
+             ?>
+             data-search-text="<?= htmlspecialchars($searchText, ENT_QUOTES, 'UTF-8') ?>">
             <div class="p-4">
                 <div class="flex items-start gap-3">
                     <label class="flex-shrink-0 pt-1 cursor-pointer" onclick="event.stopPropagation();">
@@ -344,3 +383,4 @@ include __DIR__ . '/partials/detail_hero.php';
 })();
 </script>
 <?php require_once __DIR__ . '/partials/image_lightbox.php'; ?>
+<?php require_once __DIR__ . '/partials/search_script.php'; ?>

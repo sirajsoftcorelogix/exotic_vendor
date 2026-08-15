@@ -73,8 +73,32 @@ $tabType = $tabType ?? 'full';
                     ? 'bg-emerald-50/25'
                     : ($isNotAvailable ? 'bg-red-50/20' : ($isPartiallyAvailable ? 'bg-orange-50/20' : ''));
                 $shortfallQty = picklist_item_shortfall_qty($item);
+
+                $locationText = (string) ($item['warehouse_location'] ?: '—');
+                $orderNumber = trim((string) ($item['order_number'] ?? ''));
+                $skuText = picklist_item_sku($item);
+                $itemTitle = (string) ($item['title'] ?? '');
+
+                $availability = picklist_item_availability($item);
+                $availabilityTextMap = [
+                    'full' => 'available full_available full available',
+                    'partial' => 'partially_available partial_available partial available partially available',
+                    'none' => 'not_available not available unavailable none'
+                ];
+                $availText = $availabilityTextMap[$availability] ?? '';
+
+                $searchText = strtolower(implode(' ', array_filter([
+                    $locationText,
+                    $orderNumber,
+                    $skuText,
+                    $itemTitle,
+                    $itemStatus,
+                    $itemStatusLabel,
+                    $availText
+                ])));
                 ?>
-                <tr class="picklist-select-row cursor-pointer hover:bg-amber-50/40 transition-colors <?= $rowToneClass ?>">
+                <tr class="picklist-select-row picklist-item-row cursor-pointer hover:bg-amber-50/40 transition-colors <?= $rowToneClass ?>"
+                    data-search-text="<?= htmlspecialchars($searchText, ENT_QUOTES, 'UTF-8') ?>">
                     <td class="px-3 py-3 align-middle">
                         <input type="checkbox"
                                class="picklist-item-cb w-5 h-5 rounded border-gray-300 text-amber-600 focus:ring-amber-500 pointer-events-none"

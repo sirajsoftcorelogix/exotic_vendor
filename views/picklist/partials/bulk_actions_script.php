@@ -12,7 +12,10 @@
 
     function getActiveCheckboxes() {
         var container = getActiveContainer();
-        return Array.prototype.slice.call(container.querySelectorAll('.picklist-item-cb'));
+        return Array.prototype.slice.call(container.querySelectorAll('.picklist-item-cb')).filter(function(cb) {
+            var row = cb.closest('.picklist-item-row, .pick-item, tr');
+            return !row || !row.classList.contains('search-hidden');
+        });
     }
 
     function selectedCheckboxes() {
