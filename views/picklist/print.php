@@ -39,11 +39,14 @@ $showSectionB = ($printMode === '1' || $printMode === 'short');
         .item-img { width: 56px; height: 56px; object-fit: contain; }
         .title-meta { margin-top: 4px; font-size: 10px; color: #555; line-height: 1.35; }
         .section-count { font-weight: normal; color: #666; font-size: 12px; }
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; break-inside: avoid; }
+        h1, h2, .meta, .section-desc { page-break-after: avoid; break-after: avoid; }
         @media print {
             body { margin: 12px; }
             .no-print { display: none; }
-            .section { page-break-inside: avoid; }
-            .section-b { page-break-before: auto; }
+            .section { page-break-inside: auto; break-inside: auto; }
+            .section-b { page-break-before: auto; break-before: auto; }
         }
     </style>
 </head>
