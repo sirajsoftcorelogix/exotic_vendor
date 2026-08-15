@@ -72,11 +72,17 @@ $isTablet = ($mode ?? 'desktop') === 'tablet';
                         <i class="fas fa-desktop text-[11px] opacity-90" aria-hidden="true"></i>
                         <span>Desktop</span>
                     </a>
-                    <a href="?page=picklist&action=view&id=<?= (int) $plId ?>&print=1" target="_blank" rel="noopener noreferrer"
-                       class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-800 text-xs font-semibold shadow-sm hover:bg-gray-50 hover:border-gray-400 transition"
-                       title="Print picklist">
-                        <i class="fas fa-print text-[11px] opacity-90" aria-hidden="true"></i>
-                        <span>Print</span>
+                    <a href="?page=picklist&action=view&id=<?= (int) $plId ?>&print=full" target="_blank" rel="noopener noreferrer"
+                       class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-900 text-xs font-semibold shadow-sm hover:bg-emerald-100 hover:border-emerald-400 transition"
+                       title="Print List A (Full Quantity Available)">
+                        <i class="fas fa-print text-[11px] opacity-90 text-emerald-700" aria-hidden="true"></i>
+                        <span>Print Full List</span>
+                    </a>
+                    <a href="?page=picklist&action=view&id=<?= (int) $plId ?>&print=short" target="_blank" rel="noopener noreferrer"
+                       class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-xs font-semibold shadow-sm hover:bg-amber-100 hover:border-amber-400 transition"
+                       title="Print List B (Partially Available & Not Available)">
+                        <i class="fas fa-print text-[11px] opacity-90 text-amber-700" aria-hidden="true"></i>
+                        <span>Print Short/Unavailable List</span>
                     </a>
                     <?php if ((int) $total > 0): ?>
                     <a href="?page=picklist&action=print_labels&amp;id=<?= (int) $plId ?>" target="_blank" rel="noopener noreferrer"
@@ -93,11 +99,17 @@ $isTablet = ($mode ?? 'desktop') === 'tablet';
                         <i class="fas fa-tablet-alt text-[11px] opacity-90" aria-hidden="true"></i>
                         <span>Tablet</span>
                     </a>
-                    <a href="?page=picklist&action=view&id=<?= (int) $plId ?>&print=1" target="_blank" rel="noopener noreferrer"
-                       class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-800 text-xs font-semibold shadow-sm hover:bg-gray-50 hover:border-gray-400 transition"
-                       title="Print picklist">
-                        <i class="fas fa-print text-[11px] opacity-90" aria-hidden="true"></i>
-                        <span>Print</span>
+                    <a href="?page=picklist&action=view&id=<?= (int) $plId ?>&print=full" target="_blank" rel="noopener noreferrer"
+                       class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-900 text-xs font-semibold shadow-sm hover:bg-emerald-100 hover:border-emerald-400 transition"
+                       title="Print List A (Full Quantity Available)">
+                        <i class="fas fa-print text-[11px] opacity-90 text-emerald-700" aria-hidden="true"></i>
+                        <span>Print Full List</span>
+                    </a>
+                    <a href="?page=picklist&action=view&id=<?= (int) $plId ?>&print=short" target="_blank" rel="noopener noreferrer"
+                       class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-xs font-semibold shadow-sm hover:bg-amber-100 hover:border-amber-400 transition"
+                       title="Print List B (Partially Available & Not Available)">
+                        <i class="fas fa-print text-[11px] opacity-90 text-amber-700" aria-hidden="true"></i>
+                        <span>Print Short/Unavailable List</span>
                     </a>
                     <?php if ((int) $total > 0): ?>
                     <a href="?page=picklist&action=print_labels&amp;id=<?= (int) $plId ?>" target="_blank" rel="noopener noreferrer"

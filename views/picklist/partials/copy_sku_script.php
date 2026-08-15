@@ -62,35 +62,37 @@
         }
     }
 
-    document.querySelectorAll('.js-picklist-copy-text').forEach(function (btn) {
-        btn.addEventListener('click', function (e) {
+    document.addEventListener('click', function (e) {
+        var copyBtn = e.target.closest('.js-picklist-copy-text');
+        if (copyBtn) {
             e.preventDefault();
             e.stopPropagation();
-            copyText(btn.getAttribute('data-copy-text'), btn);
-        });
-    });
+            copyText(copyBtn.getAttribute('data-copy-text'), copyBtn);
+            return;
+        }
 
-    document.querySelectorAll('.js-picklist-copy-column').forEach(function (btn) {
-        btn.addEventListener('click', function (e) {
+        var colBtn = e.target.closest('.js-picklist-copy-column');
+        if (colBtn) {
             e.preventDefault();
             e.stopPropagation();
-            var column = btn.getAttribute('data-copy-column');
+            var column = colBtn.getAttribute('data-copy-column');
             if (!column) return;
 
+            var activePanel = document.querySelector('.js-picklist-tab-panel:not(.hidden)') || document;
             var values = [];
-            document.querySelectorAll('[data-picklist-column="' + column + '"]').forEach(function (cell) {
+            activePanel.querySelectorAll('[data-picklist-column="' + column + '"]').forEach(function (cell) {
                 values.push(String(cell.getAttribute('data-picklist-column-value') || '').trim());
             });
 
             if (!values.length) {
                 if (typeof showAlert === 'function') {
-                    showAlert('No values to copy.', 'warning');
+                    showAlert('No values to copy in active tab.', 'warning');
                 }
                 return;
             }
 
-            copyText(values.join('\n'), btn);
-        });
+            copyText(values.join('\n'), colBtn);
+        }
     });
 })();
 </script>
