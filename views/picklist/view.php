@@ -81,26 +81,6 @@ include __DIR__ . '/partials/detail_hero.php';
                 </span>
             </button>
         </div>
-
-        <div class="pb-2 flex items-center gap-2">
-            <a href="?page=picklist&action=view&id=<?= (int) $plId ?>&print=full"
-               target="_blank"
-               rel="noopener noreferrer"
-               id="tab-print-full-btn"
-               class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-900 text-xs font-semibold shadow-xs hover:bg-emerald-100 transition">
-                <i class="fas fa-print text-emerald-700" aria-hidden="true"></i>
-                <span>Print Tab A (Full List)</span>
-            </a>
-
-            <a href="?page=picklist&action=view&id=<?= (int) $plId ?>&print=short"
-               target="_blank"
-               rel="noopener noreferrer"
-               id="tab-print-short-btn"
-               class="hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-xs font-semibold shadow-xs hover:bg-amber-100 transition">
-                <i class="fas fa-print text-amber-700" aria-hidden="true"></i>
-                <span>Print Tab B (Short/Unavailable List)</span>
-            </a>
-        </div>
     </div>
 
     <?php if ($items !== []): ?>
@@ -150,8 +130,6 @@ include __DIR__ . '/partials/detail_hero.php';
 (function() {
     const tabBtns = document.querySelectorAll('.js-picklist-tab-btn');
     const tabPanels = document.querySelectorAll('.js-picklist-tab-panel');
-    const printFullBtn = document.getElementById('tab-print-full-btn');
-    const printShortBtn = document.getElementById('tab-print-short-btn');
 
     function switchTab(targetTab) {
         tabBtns.forEach(btn => {
@@ -172,16 +150,6 @@ include __DIR__ . '/partials/detail_hero.php';
                 panel.classList.add('hidden');
             }
         });
-
-        if (printFullBtn && printShortBtn) {
-            if (targetTab === 'full') {
-                printFullBtn.classList.remove('hidden');
-                printShortBtn.classList.add('hidden');
-            } else {
-                printFullBtn.classList.add('hidden');
-                printShortBtn.classList.remove('hidden');
-            }
-        }
 
         if (window.updatePicklistBulkBar) {
             window.updatePicklistBulkBar();
