@@ -934,6 +934,7 @@ class InvoicesController
         $totalIgstAmt = 0;
 
         require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
+        require_once __DIR__ . '/../helpers/invoice/invoice_box_variant.php';
         $resolvedUseIgst = invoice_resolve_uses_igst_for_invoice($invoice, $commanModel);
 
         // Build item rows
@@ -987,8 +988,8 @@ class InvoicesController
             $itemsrows .= '
                     <tr>
                         <td>' . ($idx + 1) . '</td>
-                        <td>' . htmlspecialchars($item['box_no'] ?? '') . '</td>
                         <td class="desc">' . htmlspecialchars($item['item_name'] ?? '') . '</td>
+                        <td>' . invoice_format_box_variant_cell($item, $conn) . '</td>
                         <td>' . htmlspecialchars($item['hsn'] ?? '') . '</td>
                         <td>' . $item['quantity'] . '</td>
                         <td class="right">' . number_format($item['unit_price'], 2) . '</td>
@@ -1009,8 +1010,8 @@ class InvoicesController
                 $itemsrows .= '
                     <tr>
                         <td>&nbsp;</td>
-                        <td>&nbsp;</td>
                         <td class="desc">&nbsp;</td>
+                        <td>&nbsp;</td>
                         <td>&nbsp;</td>
                         <td>&nbsp;</td>
                         <td class="right">&nbsp;</td>
@@ -1256,6 +1257,11 @@ class InvoicesController
 
                 $invoiceItems[] = [
                     'box_no' => $item['box_no'] ?? '',
+                    'color' => $item['color'] ?? '',
+                    'size' => $item['size'] ?? '',
+                    'order_number' => $item['order_number'] ?? '',
+                    'item_code' => $item['item_code'] ?? '',
+                    'product_id' => $item['product_id'] ?? '',
                     'item_name' => $item['item_name'] ?? '',
                     'hsn' => $item['hsn'] ?? '',
                     'quantity' => $quantity,
