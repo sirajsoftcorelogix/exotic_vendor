@@ -137,8 +137,7 @@ $plId = static function (array $pl): int {
                             $statusClass = $statusStyles[$st] ?? 'bg-gray-100 text-gray-700 border-gray-200';
                             $viewUrl = '?page=picklist&action=view&id=' . $id;
                             $tabletUrl = '?page=picklist&action=tablet&id=' . $id;
-                            $printFullUrl = $viewUrl . '&print=full';
-                            $printShortUrl = $viewUrl . '&print=short';
+                            $printUrl = $viewUrl . '&print=1';
                             $deleteUrl = '?page=picklist&action=delete&id=' . $id;
                             $deleteConfirm = 'Delete picklist ' . (string) ($pl['picklist_number'] ?? '') . '? Orders on this list will be set back to Item Received where applicable.';
                             ?>
@@ -191,15 +190,10 @@ $plId = static function (array $pl): int {
                                                 <i class="fas fa-tablet-alt w-4 text-center text-emerald-600" aria-hidden="true"></i>
                                                 Tablet
                                             </a>
-                                            <a href="<?= htmlspecialchars($printFullUrl) ?>" target="_blank" rel="noopener noreferrer"
+                                            <a href="<?= htmlspecialchars($printUrl) ?>" target="_blank" rel="noopener noreferrer"
                                                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
-                                                <i class="fas fa-print w-4 text-center text-emerald-600" aria-hidden="true"></i>
-                                                Print Full List
-                                            </a>
-                                            <a href="<?= htmlspecialchars($printShortUrl) ?>" target="_blank" rel="noopener noreferrer"
-                                               class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
-                                                <i class="fas fa-print w-4 text-center text-amber-600" aria-hidden="true"></i>
-                                                Print Short List
+                                                <i class="fas fa-print w-4 text-center text-gray-500" aria-hidden="true"></i>
+                                                Print
                                             </a>
                                             <div class="my-1 border-t border-gray-100"></div>
                                             <a href="<?= htmlspecialchars($deleteUrl) ?>"
