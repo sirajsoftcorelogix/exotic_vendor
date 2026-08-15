@@ -105,7 +105,23 @@ include __DIR__ . '/partials/detail_hero.php';
                 <span id="picklist-selected-count" class="text-xs font-medium text-gray-600 tabular-nums whitespace-nowrap">0 selected</span>
             </div>
 
-            <div class="flex items-center gap-2 shrink-0">
+            <div class="flex flex-wrap items-center gap-2 shrink-0">
+                <div class="relative w-64 sm:w-80">
+                    <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
+                        <i class="fas fa-search text-xs" aria-hidden="true"></i>
+                    </div>
+                    <input type="text"
+                           id="picklist-item-search"
+                           placeholder="Search location, order #, SKU, status..."
+                           class="w-full pl-8 pr-8 py-1.5 text-xs font-medium bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition shadow-2xs">
+                    <button type="button"
+                            id="picklist-search-clear"
+                            class="hidden absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none"
+                            title="Clear search">
+                        <i class="fas fa-times-circle text-xs" aria-hidden="true"></i>
+                    </button>
+                </div>
+
                 <a href="?page=picklist&action=view&id=<?= (int) $plId ?>&print=full"
                    target="_blank"
                    rel="noopener noreferrer"
@@ -208,4 +224,5 @@ include __DIR__ . '/partials/detail_hero.php';
 <?php require_once __DIR__ . '/partials/image_lightbox.php'; ?>
 <?php require_once __DIR__ . '/partials/copy_sku_script.php'; ?>
 <?php require_once __DIR__ . '/partials/availability_script.php'; ?>
+<?php require_once __DIR__ . '/partials/search_script.php'; ?>
 <?php require_once __DIR__ . '/partials/row_menu_script.php'; ?>
