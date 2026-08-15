@@ -54,13 +54,16 @@ class PicklistController
         }
 
         $items = $picklistModel->getPicklistItems($id);
-        $isPrint = isset($_GET['print']) && (string) $_GET['print'] === '1';
+        $isPrint = isset($_GET['print']) && in_array((string) $_GET['print'], ['1', 'full', 'short'], true);
+        $printMode = isset($_GET['print']) ? (string) $_GET['print'] : '1';
         $template = $isPrint ? 'views/picklist/print.php' : 'views/picklist/view.php';
-        $title = $isPrint ? 'Print Picklist' : 'Picklist ' . ($picklist['picklist_number'] ?? '');
+        $titleMode = $printMode === 'full' ? ' (Full List)' : ($printMode === 'short' ? ' (Short/Unavailable List)' : '');
+        $title = $isPrint ? 'Print Picklist' . $titleMode : 'Picklist ' . ($picklist['picklist_number'] ?? '');
 
         renderTemplate($template, [
             'picklist' => $picklist,
             'items' => $items,
+            'print_mode' => $printMode,
         ], $title);
     }
 
