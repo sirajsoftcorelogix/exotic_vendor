@@ -582,14 +582,9 @@
                         <?php endforeach; ?>
                     </select>
                     <!-- button refresh-->
-                    <!-- <span onclick="callImport()" title="Click to import" class="menu-button float-right text-orange-500 hover:bg-orange-200 font-semibold mr-2 cursor-pointer ">
-                       
+                    <span onclick="callImport()" title="Click to import" class="menu-button float-right text-orange-500 hover:bg-orange-200 font-semibold mr-2 cursor-pointer ">
                         <i class="fa-solid fa-download p-1 bg-white border border-orange-500"></i>
-                    </span> -->
-                    <!-- update imported orders -->
-                    <!-- <span onclick="callImportedUpdate()" title="Click to update" class="menu-button float-right text-blue-500 hover:bg-blue-200 font-semibold mr-2 cursor-pointer ">
-                <i class="fas fa-edit p-1 bg-white border border-blue-500"></i>
-            </span> -->
+                    </span>
                 </div>
             </div>
             <!-- Tabs -->
