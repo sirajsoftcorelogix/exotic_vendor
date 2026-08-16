@@ -218,15 +218,14 @@ class POSRegisterController
         $shippingGstin = HighValueComplianceValidator::normalizeGstin((string)($payload['confirm_sgstin'] ?? ''));
         $b2bGstin = $gstin !== '' ? $gstin : $shippingGstin;
         $derivedPan = '';
-        if ($b2bGstin !== '' && HighValueComplianceValidator::isValidGstin($b2bGstin)) {
+        if (HighValueComplianceValidator::isValidGstin($b2bGstin)) {
             $derivedPan = substr($b2bGstin, 2, 10);
+            if ($pan === '') {
+                $pan = $derivedPan;
+            }
         }
 
         $errors = [];
-        $b2bPan = HighValueComplianceValidator::validateB2bPanRequirement($b2bGstin, $pan);
-        if (!$b2bPan['ok']) {
-            $errors[] = $b2bPan['message'];
-        }
         if ($isHighValue && $b2bGstin === '') {
             if ($residency === 'INDIAN_RESIDENT') {
                 if ($pan === '') {
@@ -244,9 +243,11 @@ class POSRegisterController
                     $errors[] = 'Country of Residence is required for foreign national high value transactions.';
                 }
             }
+        } elseif ($isHighValue && $b2bGstin !== '' && !HighValueComplianceValidator::isValidGstin($b2bGstin)) {
+            $errors[] = 'GSTIN format is invalid.';
         }
 
-        if ($pan !== '' && !preg_match('/^[A-Z]{5}[0-9]{4}[A-Z]$/', $pan)) {
+        if ($b2bGstin === '' && $pan !== '' && !preg_match('/^[A-Z]{5}[0-9]{4}[A-Z]$/', $pan)) {
             $errors[] = 'PAN format is invalid.';
         }
         if ($passport !== '' && strlen($passport) < 6) {
@@ -299,21 +300,14 @@ class POSRegisterController
             return;
         }
         $this->ensureHighValueComplianceSchema($conn);
-        $residency = (string)($compliance['residency_status'] ?? 'INDIAN_RESIDENT');
-        $pan = (string)($compliance['pan'] ?? '');
-        $passport = (string)($compliance['passport'] ?? '');
-        $country = (string)($compliance['country_of_residence'] ?? '');
-
-        $stmt = $conn->prepare(
-            'UPDATE vp_customers
-             SET customer_residency_status = ?, customer_pan = ?, passport_number = ?, country_of_residence = ?
-             WHERE id = ?'
-        );
-        if ($stmt) {
-            $stmt->bind_param('ssssi', $residency, $pan, $passport, $country, $customerId);
-            $stmt->execute();
-            $stmt->close();
-        }
+        require_once __DIR__ . '/../helpers/compliance/HighValueComplianceValidator.php';
+        HighValueComplianceValidator::saveCustomerCompliance($conn, $customerId, [
+            'customer_residency_status' => $compliance['residency_status'] ?? 'INDIAN_RESIDENT',
+            'customer_pan' => $compliance['pan'] ?? '',
+            'passport_number' => $compliance['passport'] ?? '',
+            'country_of_residence' => $compliance['country_of_residence'] ?? '',
+            'confirm_gstin' => $compliance['gstin'] ?? '',
+        ]);
     }
 
     private function ensureVpOrderInfoTradeNameSchema(mysqli $conn): void
@@ -4360,18 +4354,6 @@ class POSRegisterController
             if (!$this->posPhoneMatchesCountryIso($shippingPhone, $shippingCountry, $conn)) {
                 $errors[] = 'Shipping phone country code must match shipping country';
             }
-        }
-
-        require_once __DIR__ . '/../helpers/compliance/HighValueComplianceValidator.php';
-        $billingGstin = HighValueComplianceValidator::normalizeGstin((string)($payload['confirm_gstin'] ?? ''));
-        $shippingGstin = HighValueComplianceValidator::normalizeGstin((string)($payload['confirm_sgstin'] ?? ''));
-        $b2bGstin = $billingGstin !== '' ? $billingGstin : $shippingGstin;
-        $b2bPan = HighValueComplianceValidator::validateB2bPanRequirement(
-            $b2bGstin,
-            (string)($payload['customer_pan'] ?? '')
-        );
-        if (!$b2bPan['ok']) {
-            $errors[] = $b2bPan['message'];
         }
 
         return $errors;

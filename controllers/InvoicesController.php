@@ -1379,6 +1379,22 @@ class InvoicesController
         global $commanModel;
         return $commanModel->getRecordByField('currency_master', 'currency_code', strtoupper($code));
     }
+    public function create_auto_from_order()
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+        $input = json_decode(file_get_contents('php://input'), true);
+        $orderNumber = trim((string)($input['orderid'] ?? ''));
+        if ($orderNumber === '') {
+            echo json_encode(['success' => false, 'message' => 'Order number missing']);
+            exit;
+        }
+        require_once __DIR__ . '/PosInvoiceController.php';
+        $posInv = new PosInvoiceController();
+        echo json_encode($posInv->createAutoInvoiceForOrder($orderNumber), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
     public function create_auto_from_order_bk()
     {
         is_login();

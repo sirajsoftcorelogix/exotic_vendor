@@ -52,21 +52,7 @@ class InvoiceCreationService
         // Validate High Value Transaction Compliance (PAN / Passport / GSTIN) at Invoice Creation
         require_once __DIR__ . '/../compliance/HighValueComplianceValidator.php';
         $invoiceTotal = (float)($header['total_amount'] ?? 0);
-        $gstin = HighValueComplianceValidator::normalizeGstin(
-            (string)($header['gstin'] ?? $header['confirm_gstin'] ?? $header['buyer_gstin'] ?? '')
-        );
-        if ($gstin === '' && $this->ordersModel && method_exists($this->ordersModel, 'getAddressInfoByOrderNumber')) {
-            foreach ($orderNumbers as $orderNumber) {
-                $info = $this->ordersModel->getAddressInfoByOrderNumber((string)$orderNumber);
-                if (!is_array($info)) {
-                    continue;
-                }
-                $gstin = HighValueComplianceValidator::normalizeGstin((string)($info['gstin'] ?? ''));
-                if ($gstin !== '') {
-                    break;
-                }
-            }
-        }
+        $gstin = $this->resolveOrderGstin($header, $orderNumbers);
         if ($gstin !== '') {
             $header['gstin'] = $gstin;
         }
@@ -348,5 +334,35 @@ class InvoiceCreationService
         $row = $this->commanModel->getRecordByField('currency_master', 'currency_code', strtoupper($code));
 
         return is_array($row) ? $row : null;
+    }
+
+    /**
+     * Billing/shipping GSTIN from the invoice header or vp_order_info.
+     *
+     * @param array<string, mixed> $header
+     * @param list<string> $orderNumbers
+     */
+    private function resolveOrderGstin(array $header, array $orderNumbers): string
+    {
+        require_once __DIR__ . '/../compliance/HighValueComplianceValidator.php';
+        $gstin = HighValueComplianceValidator::resolveGstinFromPayload($header);
+        if ($gstin !== '') {
+            return $gstin;
+        }
+
+        if ($this->ordersModel && method_exists($this->ordersModel, 'getAddressInfoByOrderNumber')) {
+            foreach ($orderNumbers as $orderNumber) {
+                $info = $this->ordersModel->getAddressInfoByOrderNumber((string)$orderNumber);
+                if (!is_array($info)) {
+                    continue;
+                }
+                $gstin = HighValueComplianceValidator::resolveGstinFromPayload($info);
+                if ($gstin !== '') {
+                    return $gstin;
+                }
+            }
+        }
+
+        return '';
     }
 }

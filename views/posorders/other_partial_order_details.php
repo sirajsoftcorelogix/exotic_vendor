@@ -647,7 +647,6 @@ $proformaPrintDisabledReason = $canPrintProforma
                     $billingCountry = trim((string)($orderremarks['country'] ?? 'IN'));
                     $billingMobile = trim((string)($orderremarks['mobile'] ?? ''));
                     $billingGstin = trim((string)($orderremarks['gstin'] ?? ''));
-                    $billingPan = strtoupper(trim((string)($customerdetails['customer_pan'] ?? '')));
 
                     $shippingAddress1 = trim((string)($orderremarks['shipping_address_line1'] ?? ''));
                     $shippingAddress2 = trim((string)($orderremarks['shipping_address_line2'] ?? ''));
@@ -758,11 +757,6 @@ $proformaPrintDisabledReason = $canPrintProforma
                                     <br><span class="text-xs text-gray-500">GSTIN:</span> <span id="billing_gstin"><?php echo htmlspecialchars($billingGstin); ?></span>
                                 <?php else: ?>
                                     <span id="billing_gstin" class="hidden"></span>
-                                <?php endif; ?>
-                                <?php if ($billingPan !== ''): ?>
-                                    <br><span class="text-xs text-gray-500">PAN:</span> <span id="billing_pan"><?php echo htmlspecialchars($billingPan); ?></span>
-                                <?php else: ?>
-                                    <span id="billing_pan" class="hidden"></span>
                                 <?php endif; ?>
                             </address>
                         </div>
@@ -1327,8 +1321,7 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
                                     include __DIR__ . '/../pos_register/partials/iso_country_options.php';
                                     ?>
                                 </select>
-                                <input type="text" id="edit_billing_gstin" name="gstin" placeholder="GSTIN (optional)" maxlength="15" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white uppercase focus:ring-blue-500 focus:border-blue-500">
-                                <input type="text" id="edit_billing_pan" name="customer_pan" placeholder="PAN (required if GSTIN is provided)" maxlength="10" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white uppercase focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_billing_gstin" name="gstin" placeholder="GSTIN (PAN not required if provided)" maxlength="15" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white uppercase focus:ring-blue-500 focus:border-blue-500">
                             </div>
                         </div>
                     </div>
@@ -1721,7 +1714,6 @@ window.orderJsonModalConfig = {
         document.getElementById('edit_billing_zipcode').value = document.getElementById('billing_zipcode')?.textContent.trim() || '';
         document.getElementById('edit_billing_country').value = document.getElementById('billing_country')?.dataset.code || 'IN';
         document.getElementById('edit_billing_gstin').value = document.getElementById('billing_gstin')?.textContent.trim() || '';
-        document.getElementById('edit_billing_pan').value = document.getElementById('billing_pan')?.textContent.trim() || '';
 
         const shippingCity = document.getElementById('shipping_city')?.textContent.trim() || '';
         const shippingState = document.getElementById('shipping_state')?.textContent.trim() || '';
@@ -1765,7 +1757,6 @@ window.orderJsonModalConfig = {
         const billing_country = document.getElementById('edit_shipping_country').value.trim();
         const gstin = document.getElementById('edit_billing_gstin').value.trim().toUpperCase();
         const shipping_gstin = document.getElementById('edit_shipping_gstin').value.trim().toUpperCase();
-        const customer_pan = (document.getElementById('edit_billing_pan')?.value || '').replace(/\s+/g, '').toUpperCase();
 
         if (!first_name || !phone || !address_line1) {
             const valMsg = "Billing first name, phone and Address Line 1 are required.";
@@ -1777,35 +1768,12 @@ window.orderJsonModalConfig = {
             return;
         }
 
-        const b2bGstin = (gstin || shipping_gstin).replace(/\s+/g, '').toUpperCase();
-        const gstinPattern = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
-        const panPattern = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
-        if (b2bGstin !== '' && b2bGstin !== 'URP') {
-            let panMsg = '';
-            if (customer_pan === '') {
-                panMsg = 'PAN is required for B2B orders when GSTIN is provided.';
-            } else if (!panPattern.test(customer_pan)) {
-                panMsg = 'PAN format is invalid. Enter a 10-character PAN (e.g. ABCDE1234F).';
-            } else if (gstinPattern.test(b2bGstin) && b2bGstin.substring(2, 12) !== customer_pan) {
-                panMsg = 'PAN must match the PAN in GSTIN (characters 3–12).';
-            }
-            if (panMsg) {
-                if (typeof window.showPosMessageModal === 'function') {
-                    window.showPosMessageModal({ title: 'PAN required', message: panMsg, tone: 'warning' });
-                } else {
-                    alert(panMsg);
-                }
-                document.getElementById('edit_billing_pan')?.focus();
-                return;
-            }
-        }
-
         fetch('index.php?page=posorders&action=update_name_email_ajax', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: `order_number=${encodeURIComponent(orderNumber)}&customer_name=${encodeURIComponent(name)}&customer_phone=${encodeURIComponent(phone)}&first_name=${encodeURIComponent(first_name)}&last_name=${encodeURIComponent(last_name)}&shipping_first_name=${encodeURIComponent(shipping_first_name)}&shipping_last_name=${encodeURIComponent(shipping_last_name)}&address_line1=${encodeURIComponent(address_line1)}&address_line2=${encodeURIComponent(address_line2)}&city=${encodeURIComponent(city)}&state=${encodeURIComponent(state)}&zipcode=${encodeURIComponent(zipcode)}&country=${encodeURIComponent(country)}&gstin=${encodeURIComponent(gstin)}&customer_pan=${encodeURIComponent(customer_pan)}&billing_address_line1=${encodeURIComponent(billing_address_line1)}&billing_address_line2=${encodeURIComponent(billing_address_line2)}&billing_city=${encodeURIComponent(billing_city)}&shipping_state=${encodeURIComponent(shipping_state)}&billing_zipcode=${encodeURIComponent(billing_zipcode)}&billing_country=${encodeURIComponent(billing_country)}&shipping_gstin=${encodeURIComponent(shipping_gstin)}`
+                body: `order_number=${encodeURIComponent(orderNumber)}&customer_name=${encodeURIComponent(name)}&customer_phone=${encodeURIComponent(phone)}&first_name=${encodeURIComponent(first_name)}&last_name=${encodeURIComponent(last_name)}&shipping_first_name=${encodeURIComponent(shipping_first_name)}&shipping_last_name=${encodeURIComponent(shipping_last_name)}&address_line1=${encodeURIComponent(address_line1)}&address_line2=${encodeURIComponent(address_line2)}&city=${encodeURIComponent(city)}&state=${encodeURIComponent(state)}&zipcode=${encodeURIComponent(zipcode)}&country=${encodeURIComponent(country)}&gstin=${encodeURIComponent(gstin)}&billing_address_line1=${encodeURIComponent(billing_address_line1)}&billing_address_line2=${encodeURIComponent(billing_address_line2)}&billing_city=${encodeURIComponent(billing_city)}&shipping_state=${encodeURIComponent(shipping_state)}&billing_zipcode=${encodeURIComponent(billing_zipcode)}&billing_country=${encodeURIComponent(billing_country)}&shipping_gstin=${encodeURIComponent(shipping_gstin)}`
             })
             .then(r => r.json())
             .then(data => {
@@ -2117,11 +2085,24 @@ window.orderJsonModalConfig = {
                     throw new Error((text || '').trim().slice(0, 200) || 'Invalid server response');
                 }
                 if (!data.success) {
+                    if (data.require_compliance && window.ComplianceDocModal) {
+                        window.ComplianceDocModal.open({
+                            customerId: data.customer_id,
+                            message: data.message,
+                            gstin: data.gstin || '',
+                            pan: data.pan || '',
+                            residencyStatus: data.residency_status || '',
+                            onSuccess: function () {
+                                createOrderFinalInvoice();
+                            }
+                        });
+                        return;
+                    }
                     if (errEl) {
                         errEl.textContent = data.message || 'Invoice could not be created.';
                         errEl.classList.remove('hidden');
-                    } else {
-                        alert(data.message || 'Invoice could not be created.');
+                    } else if (typeof window.showPosMessageModal === 'function') {
+                        window.showPosMessageModal({ title: 'Invoice', message: data.message || 'Invoice could not be created.', tone: 'error' });
                     }
                     return;
                 }
@@ -2446,6 +2427,7 @@ if ($canFollowUpOrder) {
 </div>
 
 <script src="<?php echo base_url('assets/js/pos_message_modal.js'); ?>"></script>
+<script src="<?php echo base_url('assets/js/compliance_doc_modal.js'); ?>"></script>
 <script>
 function openEditPricesModal() {
     const popup = document.getElementById('editOrderPricesPopup');

@@ -1347,6 +1347,11 @@ class PosOrdersController
             echo json_encode([
                 'success' => false,
                 'message' => (string)($invoiceMeta['message'] ?? 'Invoice could not be created.'),
+                'require_compliance' => !empty($invoiceMeta['require_compliance']),
+                'customer_id' => (int)($invoiceMeta['customer_id'] ?? 0),
+                'gstin' => (string)($invoiceMeta['gstin'] ?? ''),
+                'pan' => (string)($invoiceMeta['pan'] ?? ''),
+                'residency_status' => (string)($invoiceMeta['residency_status'] ?? ''),
             ]);
             exit;
         }
@@ -2236,23 +2241,12 @@ class PosOrdersController
         $billing_country = trim($_POST['billing_country'] ?? '');
         $gstin = strtoupper(trim($_POST['gstin'] ?? ''));
         $shipping_gstin = strtoupper(trim($_POST['shipping_gstin'] ?? ''));
-        $customer_pan = strtoupper(preg_replace('/\s+/', '', trim((string)($_POST['customer_pan'] ?? ''))));
         $state = trim($_POST['state'] ?? '');
         $shipping_state = trim($_POST['shipping_state'] ?? '');
         if (empty($order_number) || empty($first_name) || empty($customer_phone) || empty($address_line1)) {
             echo json_encode([
                 'success' => false,
                 'message' => 'Order number, billing first name, phone and Address Line 1 are required'
-            ]);
-            exit;
-        }
-        require_once __DIR__ . '/../helpers/compliance/HighValueComplianceValidator.php';
-        $b2bGstin = HighValueComplianceValidator::normalizeGstin($gstin !== '' ? $gstin : $shipping_gstin);
-        $b2bPan = HighValueComplianceValidator::validateB2bPanRequirement($b2bGstin, $customer_pan);
-        if (!$b2bPan['ok']) {
-            echo json_encode([
-                'success' => false,
-                'message' => $b2bPan['message']
             ]);
             exit;
         }
@@ -2277,8 +2271,7 @@ class PosOrdersController
             $first_name,
             $last_name,
             $shipping_first_name,
-            $shipping_last_name,
-            $customer_pan
+            $shipping_last_name
         );
         echo json_encode($result);
         exit;

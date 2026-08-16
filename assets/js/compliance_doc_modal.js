@@ -31,8 +31,8 @@
                             </svg>
                         </div>
                         <div>
-                            <h3 class="text-lg font-bold text-slate-900 dark:text-white">Invoice Compliance</h3>
-                            <p class="text-xs text-amber-600 dark:text-amber-400 font-medium">PAN is required for B2B invoices when GSTIN is provided</p>
+                            <h3 class="text-lg font-bold text-slate-900 dark:text-white">High-Value Invoice Compliance</h3>
+                            <p class="text-xs text-amber-600 dark:text-amber-400 font-medium">PAN / Passport required for invoices &ge; ₹2,00,000 unless GSTIN is provided</p>
                         </div>
                     </div>
                     <button type="button" id="compliance_doc_modal_close" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg">
@@ -42,7 +42,7 @@
 
                 <div class="mt-4 space-y-4">
                     <div id="compliance_doc_alert" class="p-3 text-xs rounded-xl bg-amber-50 text-amber-800 border border-amber-200">
-                        Please supply missing tax compliance details before proceeding.
+                        Invoice total exceeds statutory limit. Please supply missing tax compliance details before proceeding.
                     </div>
 
                     <form id="compliance_doc_form" onsubmit="return false;">
@@ -61,7 +61,6 @@
                             <div id="compliance_field_gstin_wrap">
                                 <label class="block font-medium text-slate-700 dark:text-slate-300 text-xs mb-1">GSTIN (B2B Tax Invoice)</label>
                                 <input type="text" id="compliance_doc_gstin" class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-700 text-sm uppercase" placeholder="e.g. 07AAAAA0000A1Z5" maxLength="15" />
-                                <p class="mt-1 text-[11px] text-amber-700">When GSTIN is entered, PAN is required and must match characters 3–12 of the GSTIN.</p>
                             </div>
 
                             <div id="compliance_field_pan_wrap">
@@ -101,41 +100,61 @@
         document.getElementById('compliance_doc_modal_close').addEventListener('click', hideModal);
         document.getElementById('compliance_doc_cancel_btn').addEventListener('click', hideModal);
         document.getElementById('compliance_doc_residency').addEventListener('change', updateFieldVisibility);
-        document.getElementById('compliance_doc_gstin').addEventListener('input', updateFieldVisibility);
+        document.getElementById('compliance_doc_gstin').addEventListener('input', function () {
+            const val = this.value.trim().toUpperCase();
+            this.value = val;
+            if (val.length === 15 && /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(val)) {
+                document.getElementById('compliance_doc_pan').value = val.substring(2, 12);
+            }
+            updateFieldVisibility();
+        });
 
         document.getElementById('compliance_doc_form').addEventListener('submit', handleSave);
     }
 
     function showComplianceNotice(message) {
         if (typeof window.showPosMessageModal === 'function') {
-            window.showPosMessageModal({ title: 'PAN required', message: message, tone: 'warning' });
+            window.showPosMessageModal({ title: 'Compliance', message: message, tone: 'warning' });
             return;
         }
-        alert(message);
+        console.error(message);
+    }
+
+    function normalizeGstin(value) {
+        const gstin = String(value || '').replace(/\s+/g, '').toUpperCase();
+        return gstin === 'URP' ? '' : gstin;
+    }
+
+    function hasB2bGstin() {
+        const el = document.getElementById('compliance_doc_gstin');
+        return normalizeGstin(el ? el.value : '') !== '';
     }
 
     function updateFieldVisibility() {
         const residency = document.getElementById('compliance_doc_residency').value;
-        const gstin = (document.getElementById('compliance_doc_gstin').value || '').replace(/\s+/g, '').toUpperCase();
         const panWrap = document.getElementById('compliance_field_pan_wrap');
         const passportWrap = document.getElementById('compliance_field_passport_wrap');
         const panStar = document.getElementById('compliance_pan_req_star');
-        const hasGstin = gstin !== '' && gstin !== 'URP';
+        const b2b = hasB2bGstin();
 
-        if (residency === 'INDIAN_RESIDENT' || hasGstin) {
+        if (b2b) {
+            panWrap.classList.add('hidden');
+            passportWrap.classList.add('hidden');
+            panStar.classList.add('hidden');
+            return;
+        }
+
+        if (residency === 'INDIAN_RESIDENT') {
             panWrap.classList.remove('hidden');
             passportWrap.classList.add('hidden');
             panStar.classList.remove('hidden');
         } else if (residency === 'NRI') {
             panWrap.classList.remove('hidden');
             passportWrap.classList.remove('hidden');
-            panStar.classList.toggle('hidden', !hasGstin);
+            panStar.classList.add('hidden');
         } else if (residency === 'FOREIGN_NATIONAL') {
-            panWrap.classList.toggle('hidden', !hasGstin);
+            panWrap.classList.add('hidden');
             passportWrap.classList.remove('hidden');
-            if (hasGstin) {
-                panStar.classList.remove('hidden');
-            }
         }
     }
 
@@ -213,21 +232,11 @@
             return;
         }
 
-        const gstinNorm = gstin === 'URP' ? '' : gstin;
+        const gstinNorm = normalizeGstin(gstin);
         const panPattern = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
         const gstinPattern = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 
         if (gstinNorm !== '') {
-            if (!panPattern.test(pan)) {
-                showComplianceNotice(pan === ''
-                    ? 'PAN is required for B2B orders when GSTIN is provided.'
-                    : 'Please enter a valid 10-character PAN Card number.');
-                return;
-            }
-            if (gstinPattern.test(gstinNorm) && gstinNorm.substring(2, 12) !== pan) {
-                showComplianceNotice('PAN must match the PAN in GSTIN (characters 3–12).');
-                return;
-            }
             if (!gstinPattern.test(gstinNorm)) {
                 showComplianceNotice('Please enter a valid 15-character GSTIN.');
                 return;
@@ -279,13 +288,13 @@
                         cb(data);
                     }
                 } else {
-                    alert((data && data.message) ? data.message : 'Failed to save compliance details.');
+                    showComplianceNotice((data && data.message) ? data.message : 'Failed to save compliance details.');
                 }
             })
             .catch(err => {
                 saveBtn.disabled = false;
                 saveBtn.innerText = 'Save & Generate Invoice';
-                alert('An error occurred while saving compliance details.');
+                showComplianceNotice('An error occurred while saving compliance details.');
                 console.error(err);
             });
     }

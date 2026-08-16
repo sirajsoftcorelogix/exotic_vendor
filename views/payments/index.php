@@ -302,6 +302,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
     </div>
 
 </div>
+<script src="<?php echo base_url(); ?>assets/js/pos_message_modal.js"></script>
 <script src="<?php echo base_url(); ?>assets/js/compliance_doc_modal.js"></script>
 <script>
     document.addEventListener("DOMContentLoaded", function() {
@@ -750,7 +751,9 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                         });
                         return;
                     }
-                    alert(data.message || 'Invoice could not be created');
+                    if (typeof window.showPosMessageModal === 'function') {
+                        window.showPosMessageModal({ title: 'Invoice', message: data.message || 'Invoice could not be created', tone: 'error' });
+                    }
                     return;
                 }
 
@@ -837,7 +840,9 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                         }
                     });
                 } else if (data.invoice_message) {
-                    alert(data.invoice_message);
+                    if (typeof window.showPosMessageModal === 'function') {
+                        window.showPosMessageModal({ title: 'Invoice', message: data.invoice_message, tone: 'warning' });
+                    }
                 }
 
                 closePaymentModal();
@@ -875,7 +880,9 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                         });
                         return;
                     }
-                    alert(data.message || 'Invoice failed');
+                    if (typeof window.showPosMessageModal === 'function') {
+                        window.showPosMessageModal({ title: 'Invoice', message: data.message || 'Invoice failed', tone: 'error' });
+                    }
                     return;
                 }
 

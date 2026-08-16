@@ -75,53 +75,26 @@ class HighValueComplianceValidator
     }
 
     /**
-     * PAN is required whenever a B2B GSTIN is supplied — it is not auto-derived.
-     *
-     * @return array{ok:bool,code:string,message:string}
+     * First non-empty GSTIN from payload, order info, or customer row.
      */
-    public static function validateB2bPanRequirement(string $gstin, string $pan): array
+    public static function resolveGstinFromPayload(array $payload, array $customer = []): string
     {
-        $gstin = self::normalizeGstin($gstin);
-        $pan = self::normalizePan($pan);
-
-        if ($gstin === '') {
-            return ['ok' => true, 'code' => 'NOT_B2B', 'message' => ''];
+        $candidates = [
+            $payload['confirm_gstin'] ?? '',
+            $payload['gstin'] ?? '',
+            $payload['buyer_gstin'] ?? '',
+            $payload['confirm_sgstin'] ?? '',
+            $payload['shipping_gstin'] ?? '',
+            $customer['gstin'] ?? '',
+        ];
+        foreach ($candidates as $candidate) {
+            $gstin = self::normalizeGstin((string)$candidate);
+            if ($gstin !== '') {
+                return $gstin;
+            }
         }
 
-        if (!self::isValidGstin($gstin)) {
-            return [
-                'ok' => false,
-                'code' => 'GSTIN_INVALID',
-                'message' => 'GSTIN format is invalid. Enter a valid 15-character GSTIN.',
-            ];
-        }
-
-        if ($pan === '') {
-            return [
-                'ok' => false,
-                'code' => 'PAN_REQUIRED_FOR_B2B',
-                'message' => 'PAN is required for B2B orders when GSTIN is provided.',
-            ];
-        }
-
-        if (!self::isValidPan($pan)) {
-            return [
-                'ok' => false,
-                'code' => 'PAN_INVALID',
-                'message' => 'PAN format is invalid. Enter a 10-character PAN (e.g. ABCDE1234F).',
-            ];
-        }
-
-        $derivedPan = substr($gstin, 2, 10);
-        if ($derivedPan !== $pan) {
-            return [
-                'ok' => false,
-                'code' => 'PAN_GSTIN_MISMATCH',
-                'message' => 'PAN must match the PAN in GSTIN (characters 3–12).',
-            ];
-        }
-
-        return ['ok' => true, 'code' => 'B2B_PAN_OK', 'message' => ''];
+        return '';
     }
 
     /**
@@ -231,9 +204,12 @@ class HighValueComplianceValidator
         $countryOfResidence = trim(
             (string)($payload['country_of_residence'] ?? $customer['country_of_residence'] ?? '')
         );
-        $gstin = self::normalizeGstin(
-            (string)($payload['confirm_gstin'] ?? $payload['gstin'] ?? $payload['buyer_gstin'] ?? $customer['gstin'] ?? '')
-        );
+        $gstin = self::resolveGstinFromPayload($payload, is_array($customer) ? $customer : []);
+
+        // B2B GSTIN auto-derives PAN; PAN is not collected separately.
+        if (self::isValidGstin($gstin) && $pan === '') {
+            $pan = substr($gstin, 2, 10);
+        }
 
         $baseResponse = [
             'is_high_value' => $isHighValue,
@@ -248,25 +224,29 @@ class HighValueComplianceValidator
             'missing_fields' => [],
         ];
 
-        $b2bPan = self::validateB2bPanRequirement($gstin, $pan);
-        if (!$b2bPan['ok']) {
-            $missing = ['pan'];
-            if ($gstin !== '' && !self::isValidGstin($gstin)) {
-                $missing[] = 'gstin';
-            }
-            return array_merge($baseResponse, [
-                'ok' => false,
-                'code' => $b2bPan['code'],
-                'message' => $b2bPan['message'],
-                'missing_fields' => $missing,
-            ]);
-        }
-
         if (!$isHighValue) {
             return array_merge($baseResponse, [
                 'ok' => true,
-                'code' => $gstin !== '' ? 'B2B_PAN_OK' : 'NOT_HIGH_VALUE',
-                'message' => $gstin !== '' ? 'B2B GSTIN and PAN present.' : 'Transaction total is below high value limit.',
+                'code' => 'NOT_HIGH_VALUE',
+                'message' => 'Transaction total is below high value limit.',
+            ]);
+        }
+
+        // B2B with GSTIN: PAN is not required (derived from GSTIN when format is valid).
+        if (self::isB2bGstinProvided($gstin)) {
+            if (!self::isValidGstin($gstin)) {
+                return array_merge($baseResponse, [
+                    'ok' => false,
+                    'code' => 'GSTIN_INVALID',
+                    'message' => 'GSTIN format is invalid. Enter a valid 15-character GSTIN.',
+                    'missing_fields' => ['gstin'],
+                ]);
+            }
+
+            return array_merge($baseResponse, [
+                'ok' => true,
+                'code' => 'GSTIN_PRESENT',
+                'message' => 'Compliant via GSTIN. PAN is not required for B2B.',
             ]);
         }
 
@@ -344,11 +324,10 @@ class HighValueComplianceValidator
         $pan = self::normalizePan((string)($data['customer_pan'] ?? ''));
         $passport = self::normalizePassport((string)($data['passport_number'] ?? ''));
         $country = trim((string)($data['country_of_residence'] ?? ''));
-        $gstin = self::normalizeGstin((string)($data['confirm_gstin'] ?? $data['gstin'] ?? ''));
+        $gstin = self::resolveGstinFromPayload($data);
 
-        $b2bPan = self::validateB2bPanRequirement($gstin, $pan);
-        if (!$b2bPan['ok']) {
-            return ['success' => false, 'message' => $b2bPan['message']];
+        if (self::isValidGstin($gstin) && $pan === '') {
+            $pan = substr($gstin, 2, 10);
         }
 
         $stmt = $conn->prepare(

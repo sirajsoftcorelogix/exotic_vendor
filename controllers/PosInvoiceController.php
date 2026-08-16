@@ -2784,7 +2784,7 @@ class PosInvoiceController
             'tax_amount' => 0,
             'discount_amount' => 0,
             'total_amount' => 0,
-            'gstin' => strtoupper(trim((string)($info['gstin'] ?? ''))),
+            'gstin' => strtoupper(trim((string)($info['gstin'] ?? $info['shipping_gstin'] ?? ''))),
         ];
         $customInvoiceNumber = trim($customInvoiceNumber);
         if ($customInvoiceNumber !== '') {
@@ -2890,6 +2890,7 @@ class PosInvoiceController
             'tax_amount' => 0,
             'discount_amount' => 0,
             'total_amount' => 0,
+            'gstin' => strtoupper(trim((string)($info['gstin'] ?? $info['shipping_gstin'] ?? ''))),
         ];
 
         foreach ($orderItems as $i => $item) {
