@@ -3019,7 +3019,6 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     var missing = [];
     var firstInvalidId = "";
     var firstName = String(payload.confirm_first_name || "").trim();
-    var lastName = String(payload.confirm_last_name || "").trim();
     var state = String(payload.confirm_state || "").trim();
     var zip = String(payload.confirm_zip || "").trim();
     if (!firstName) {
