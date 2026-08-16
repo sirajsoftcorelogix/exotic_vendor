@@ -4328,9 +4328,6 @@ class POSRegisterController
         if (trim((string)($payload['confirm_first_name'] ?? '')) === '') {
             $errors[] = 'First name';
         }
-        if (trim((string)($payload['confirm_last_name'] ?? '')) === '') {
-            $errors[] = 'Last name';
-        }
         if (trim((string)($payload['confirm_state'] ?? '')) === '') {
             $errors[] = 'State';
         }
