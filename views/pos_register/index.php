@@ -573,9 +573,10 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
           <label class="block text-xs font-medium text-slate-600">GSTIN<input id="confirm_gstin" class="w-full rounded border uppercase" placeholder="GSTIN (optional)" maxlength="15"></label>
           <label class="block text-xs font-medium text-slate-600">Trade Name<input id="confirm_trade_name" class="w-full rounded border" placeholder="Trade Name (optional)"></label>
         </div>
+        <p class="text-[11px] text-slate-500">B2B: when GSTIN is provided, PAN is not required.</p>
         <div id="highValueCompliancePanel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <div class="mb-2 font-semibold text-amber-950">High Value Transaction – Compliance Required</div>
-          <p class="mb-3 text-[11px] leading-snug text-amber-800">Additional details are required for final order completion. GSTIN B2B invoices derive PAN automatically.</p>
+          <p class="mb-3 text-[11px] leading-snug text-amber-800">Additional details are required for final order completion. If GSTIN is entered, PAN is not asked — it is derived from the GSTIN.</p>
           <label class="block font-medium">Customer residency <span class="field-req-star text-red-600">*</span>
             <select id="customer_residency_status" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm">
               <option value="INDIAN_RESIDENT">Indian Resident</option>
@@ -587,7 +588,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
             <label class="block font-medium">PAN <span id="panRequiredStar" class="field-req-star text-red-600">*</span>
               <input id="customer_pan" maxlength="10" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm uppercase" placeholder="ABCDE1234F">
             </label>
-            <p id="panComplianceHint" class="mt-1 text-[11px] text-amber-700">PAN is required unless GSTIN is entered.</p>
+            <p id="panComplianceHint" class="mt-1 text-[11px] text-amber-700">PAN is required unless GSTIN is entered (B2B).</p>
           </div>
           <div class="mt-3">
             <label class="block font-medium">Aadhaar
@@ -1006,6 +1007,9 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
             window.ComplianceDocModal.open({
               customerId: data.customer_id,
               message: data.message,
+              gstin: data.gstin || '',
+              pan: data.pan || '',
+              residencyStatus: data.residency_status || '',
               onSuccess: function () {
                 autoCreateInvoiceThenPreview(orderid);
               }
@@ -2769,9 +2773,26 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     }
   }
 
+  function posNormalizeGstin(value) {
+    var gstin = String(value || "").replace(/\s+/g, "").toUpperCase();
+    return gstin === "URP" ? "" : gstin;
+  }
+
+  function getB2bGstinFromForm() {
+    var billing = posNormalizeGstin(document.getElementById("confirm_gstin")?.value || "");
+    if (billing) {
+      return billing;
+    }
+    return posNormalizeGstin(document.getElementById("confirm_sgstin")?.value || "");
+  }
+
+  function posIsValidGstin(gstin) {
+    return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(posNormalizeGstin(gstin));
+  }
+
   function syncHighValueComplianceUi() {
     var highValue = isHighValueTransaction();
-    var gstin = (document.getElementById("confirm_gstin")?.value || "").trim();
+    var gstin = getB2bGstinFromForm();
     var residency = (document.getElementById("customer_residency_status")?.value || "INDIAN_RESIDENT").toUpperCase();
     var banner = document.getElementById("highValueComplianceBanner");
     var panel = document.getElementById("highValueCompliancePanel");
@@ -2783,6 +2804,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     var passportStar = document.getElementById("passportRequiredStar");
     var countryStar = document.getElementById("countryRequiredStar");
     var panVal = (document.getElementById("customer_pan")?.value || "").replace(/\s+/g, "").trim();
+    var hasGstin = gstin !== "";
 
     if (banner) {
       banner.textContent = "High Value Transaction – Compliance Required (limit " + formatInrAmount(getHighValueLimit()) + ")";
@@ -2794,16 +2816,15 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       return;
     }
 
-    var hasGstin = gstin !== "";
-    if (panWrap) panWrap.classList.toggle("hidden", residency === "FOREIGN_NATIONAL");
-    if (passportWrap) passportWrap.classList.toggle("hidden", residency === "INDIAN_RESIDENT");
-    if (countryWrap) countryWrap.classList.toggle("hidden", residency === "INDIAN_RESIDENT");
+    if (panWrap) panWrap.classList.toggle("hidden", hasGstin || residency === "FOREIGN_NATIONAL");
+    if (passportWrap) passportWrap.classList.toggle("hidden", hasGstin || residency === "INDIAN_RESIDENT");
+    if (countryWrap) countryWrap.classList.toggle("hidden", hasGstin || residency === "INDIAN_RESIDENT");
     if (panStar) panStar.classList.toggle("hidden", hasGstin || residency === "FOREIGN_NATIONAL" || (residency === "NRI" && panVal !== ""));
-    if (passportStar) passportStar.classList.toggle("hidden", residency === "INDIAN_RESIDENT" || (residency === "NRI" && panVal !== ""));
-    if (countryStar) countryStar.classList.toggle("hidden", residency === "INDIAN_RESIDENT" || (residency === "NRI" && panVal !== ""));
+    if (passportStar) passportStar.classList.toggle("hidden", hasGstin || residency === "INDIAN_RESIDENT" || (residency === "NRI" && panVal !== ""));
+    if (countryStar) countryStar.classList.toggle("hidden", hasGstin || residency === "INDIAN_RESIDENT" || (residency === "NRI" && panVal !== ""));
     if (panHint) {
       panHint.textContent = hasGstin
-        ? "GSTIN present. PAN will be derived automatically for B2B invoice handling."
+        ? "GSTIN present. PAN is not required for B2B — it is derived from the GSTIN."
         : (residency === "NRI" ? "For NRI, enter PAN or Passport Number with Country of Residence." : "PAN is required unless GSTIN is entered.");
     }
     updateConfirmAddressButtonState();
@@ -2811,9 +2832,9 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
 
   function isHighValueComplianceDataComplete() {
     if (!isHighValueTransaction()) return true;
-    var gstin = (document.getElementById("confirm_gstin")?.value || "").trim().toUpperCase();
+    var gstin = getB2bGstinFromForm();
     if (gstin !== "") {
-      return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin);
+      return posIsValidGstin(gstin);
     }
     var residency = (document.getElementById("customer_residency_status")?.value || "INDIAN_RESIDENT").toUpperCase();
     var pan = (document.getElementById("customer_pan")?.value || "").replace(/\s+/g, "").toUpperCase();
@@ -2835,16 +2856,16 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     if (isHighValueComplianceDataComplete()) {
       return { ok: true, message: "" };
     }
-    var gstin = (document.getElementById("confirm_gstin")?.value || "").trim().toUpperCase();
+    var gstin = getB2bGstinFromForm();
     var residency = (document.getElementById("customer_residency_status")?.value || "INDIAN_RESIDENT").toUpperCase();
     var pan = (document.getElementById("customer_pan")?.value || "").replace(/\s+/g, "").toUpperCase();
     var passport = (document.getElementById("passport_number")?.value || "").replace(/\s+/g, "").toUpperCase();
     var countryResidence = (document.getElementById("country_of_residence")?.value || "").trim();
     var message = "High value transaction compliance is incomplete.";
-    if (gstin !== "" && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) {
+    if (gstin !== "" && !posIsValidGstin(gstin)) {
       message = "GSTIN format is invalid.";
-      setPosFieldInvalid("confirm_gstin", true);
-    } else if (pan !== "" && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+      setPosFieldInvalid(posNormalizeGstin(document.getElementById("confirm_gstin")?.value || "") !== "" ? "confirm_gstin" : "confirm_sgstin", true);
+    } else if (gstin === "" && pan !== "" && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
       message = "PAN format is invalid.";
       setPosFieldInvalid("customer_pan", true);
     } else if (residency === "INDIAN_RESIDENT" && gstin === "" && pan === "") {
@@ -3624,7 +3645,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     syncAllPosStateFields().then(function() {
       ensurePosDefaultStateOnForm();
     });
-    ["customer_residency_status", "confirm_gstin", "customer_pan", "passport_number", "country_of_residence"].forEach(function(id) {
+    ["customer_residency_status", "confirm_gstin", "confirm_sgstin", "customer_pan", "passport_number", "country_of_residence"].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) {
         el.addEventListener("change", syncHighValueComplianceUi);

@@ -1347,6 +1347,11 @@ class PosOrdersController
             echo json_encode([
                 'success' => false,
                 'message' => (string)($invoiceMeta['message'] ?? 'Invoice could not be created.'),
+                'require_compliance' => !empty($invoiceMeta['require_compliance']),
+                'customer_id' => (int)($invoiceMeta['customer_id'] ?? 0),
+                'gstin' => (string)($invoiceMeta['gstin'] ?? ''),
+                'pan' => (string)($invoiceMeta['pan'] ?? ''),
+                'residency_status' => (string)($invoiceMeta['residency_status'] ?? ''),
             ]);
             exit;
         }

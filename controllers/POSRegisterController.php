@@ -214,17 +214,19 @@ class POSRegisterController
         $aadhaar = $this->normalizeAadhaar((string)($payload['customer_aadhaar'] ?? ''));
         $passport = $this->normalizePassport((string)($payload['passport_number'] ?? ''));
         $countryOfResidence = trim((string)($payload['country_of_residence'] ?? ''));
-        $gstin = strtoupper(trim((string)($payload['confirm_gstin'] ?? '')));
+        $gstin = HighValueComplianceValidator::normalizeGstin((string)($payload['confirm_gstin'] ?? ''));
+        $shippingGstin = HighValueComplianceValidator::normalizeGstin((string)($payload['confirm_sgstin'] ?? ''));
+        $b2bGstin = $gstin !== '' ? $gstin : $shippingGstin;
         $derivedPan = '';
-        if ($gstin !== '' && preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $gstin)) {
-            $derivedPan = substr($gstin, 2, 10);
+        if (HighValueComplianceValidator::isValidGstin($b2bGstin)) {
+            $derivedPan = substr($b2bGstin, 2, 10);
             if ($pan === '') {
                 $pan = $derivedPan;
             }
         }
 
         $errors = [];
-        if ($isHighValue && $gstin === '') {
+        if ($isHighValue && $b2bGstin === '') {
             if ($residency === 'INDIAN_RESIDENT') {
                 if ($pan === '') {
                     $errors[] = 'PAN is required for Indian resident high value transactions.';
@@ -241,9 +243,11 @@ class POSRegisterController
                     $errors[] = 'Country of Residence is required for foreign national high value transactions.';
                 }
             }
+        } elseif ($isHighValue && $b2bGstin !== '' && !HighValueComplianceValidator::isValidGstin($b2bGstin)) {
+            $errors[] = 'GSTIN format is invalid.';
         }
 
-        if ($pan !== '' && !preg_match('/^[A-Z]{5}[0-9]{4}[A-Z]$/', $pan)) {
+        if ($b2bGstin === '' && $pan !== '' && !preg_match('/^[A-Z]{5}[0-9]{4}[A-Z]$/', $pan)) {
             $errors[] = 'PAN format is invalid.';
         }
         if ($passport !== '' && strlen($passport) < 6) {
@@ -285,7 +289,7 @@ class POSRegisterController
             'aadhaar' => $aadhaar,
             'passport' => $passport,
             'country_of_residence' => $countryOfResidence,
-            'gstin' => $gstin,
+            'gstin' => $gstin !== '' ? $gstin : $b2bGstin,
             'derived_pan_from_gstin' => $derivedPan,
         ];
     }
@@ -296,21 +300,14 @@ class POSRegisterController
             return;
         }
         $this->ensureHighValueComplianceSchema($conn);
-        $residency = (string)($compliance['residency_status'] ?? 'INDIAN_RESIDENT');
-        $pan = (string)($compliance['pan'] ?? '');
-        $passport = (string)($compliance['passport'] ?? '');
-        $country = (string)($compliance['country_of_residence'] ?? '');
-
-        $stmt = $conn->prepare(
-            'UPDATE vp_customers
-             SET customer_residency_status = ?, customer_pan = ?, passport_number = ?, country_of_residence = ?
-             WHERE id = ?'
-        );
-        if ($stmt) {
-            $stmt->bind_param('ssssi', $residency, $pan, $passport, $country, $customerId);
-            $stmt->execute();
-            $stmt->close();
-        }
+        require_once __DIR__ . '/../helpers/compliance/HighValueComplianceValidator.php';
+        HighValueComplianceValidator::saveCustomerCompliance($conn, $customerId, [
+            'customer_residency_status' => $compliance['residency_status'] ?? 'INDIAN_RESIDENT',
+            'customer_pan' => $compliance['pan'] ?? '',
+            'passport_number' => $compliance['passport'] ?? '',
+            'country_of_residence' => $compliance['country_of_residence'] ?? '',
+            'confirm_gstin' => $compliance['gstin'] ?? '',
+        ]);
     }
 
     private function ensureVpOrderInfoTradeNameSchema(mysqli $conn): void

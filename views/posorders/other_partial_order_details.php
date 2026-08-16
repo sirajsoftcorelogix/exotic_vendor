@@ -1321,7 +1321,7 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
                                     include __DIR__ . '/../pos_register/partials/iso_country_options.php';
                                     ?>
                                 </select>
-                                <input type="text" id="edit_billing_gstin" name="gstin" placeholder="GSTIN (optional)" maxlength="15" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white uppercase focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_billing_gstin" name="gstin" placeholder="GSTIN (PAN not required if provided)" maxlength="15" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white uppercase focus:ring-blue-500 focus:border-blue-500">
                             </div>
                         </div>
                     </div>
@@ -2085,11 +2085,24 @@ window.orderJsonModalConfig = {
                     throw new Error((text || '').trim().slice(0, 200) || 'Invalid server response');
                 }
                 if (!data.success) {
+                    if (data.require_compliance && window.ComplianceDocModal) {
+                        window.ComplianceDocModal.open({
+                            customerId: data.customer_id,
+                            message: data.message,
+                            gstin: data.gstin || '',
+                            pan: data.pan || '',
+                            residencyStatus: data.residency_status || '',
+                            onSuccess: function () {
+                                createOrderFinalInvoice();
+                            }
+                        });
+                        return;
+                    }
                     if (errEl) {
                         errEl.textContent = data.message || 'Invoice could not be created.';
                         errEl.classList.remove('hidden');
-                    } else {
-                        alert(data.message || 'Invoice could not be created.');
+                    } else if (typeof window.showPosMessageModal === 'function') {
+                        window.showPosMessageModal({ title: 'Invoice', message: data.message || 'Invoice could not be created.', tone: 'error' });
                     }
                     return;
                 }
@@ -2414,6 +2427,7 @@ if ($canFollowUpOrder) {
 </div>
 
 <script src="<?php echo base_url('assets/js/pos_message_modal.js'); ?>"></script>
+<script src="<?php echo base_url('assets/js/compliance_doc_modal.js'); ?>"></script>
 <script>
 function openEditPricesModal() {
     const popup = document.getElementById('editOrderPricesPopup');
