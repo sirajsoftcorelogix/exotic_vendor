@@ -2784,6 +2784,7 @@ class PosInvoiceController
             'tax_amount' => 0,
             'discount_amount' => 0,
             'total_amount' => 0,
+            'gstin' => strtoupper(trim((string)($info['gstin'] ?? ''))),
         ];
         $customInvoiceNumber = trim($customInvoiceNumber);
         if ($customInvoiceNumber !== '') {

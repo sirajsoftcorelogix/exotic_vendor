@@ -1352,10 +1352,11 @@ class Order
     function getCustomerNameAndEmailByOrderNumber($order_number)
     {
         $sql = "
-            SELECT 
+            SELECT
                 c.name  AS customer_name,
                 c.phone AS customer_phone,
-                c.email AS customer_email
+                c.email AS customer_email,
+                c.customer_pan AS customer_pan
             FROM vp_order_info o
             LEFT JOIN vp_customers c ON o.customer_id = c.id
             WHERE o.order_number = ?";
@@ -1433,21 +1434,22 @@ class Order
             'message'       => $affected > 0 ? 'Remarks updated successfully' : 'No changes made (value was already the same)'
         ];
     }
-    public function updateCustomerNameAndEmail($order_number, $name, $phone, $address_line1 = '', $address_line2 = '', $city = '', $zipcode = '', $country = '', $billing_address_line1 = '', $billing_address_line2 = '', $billing_city = '', $billing_zipcode = '', $billing_country = '', $gstin = '', $shipping_gstin = '', $state = '', $shipping_state = '', $first_name = '', $last_name = '', $shipping_first_name = '', $shipping_last_name = '')
+    public function updateCustomerNameAndEmail($order_number, $name, $phone, $address_line1 = '', $address_line2 = '', $city = '', $zipcode = '', $country = '', $billing_address_line1 = '', $billing_address_line2 = '', $billing_city = '', $billing_zipcode = '', $billing_country = '', $gstin = '', $shipping_gstin = '', $state = '', $shipping_state = '', $first_name = '', $last_name = '', $shipping_first_name = '', $shipping_last_name = '', $customer_pan = '')
     {
 
         // Update customer (main operation)
+        $customer_pan = strtoupper(preg_replace('/\s+/', '', trim((string)$customer_pan)));
         $sql = "
             UPDATE vp_customers c
             INNER JOIN vp_orders o ON o.customer_id = c.id
-            SET c.name = ?, c.phone = ?
+            SET c.name = ?, c.phone = ?, c.customer_pan = IF(? = '', c.customer_pan, ?)
             WHERE o.order_number = ?
         ";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
             return ['success' => false, 'message' => $this->db->error];
         }
-        $stmt->bind_param('sss', $name, $phone, $order_number);
+        $stmt->bind_param('sssss', $name, $phone, $customer_pan, $customer_pan, $order_number);
         if (!$stmt->execute()) {
             return ['success' => false, 'message' => $stmt->error];
         }

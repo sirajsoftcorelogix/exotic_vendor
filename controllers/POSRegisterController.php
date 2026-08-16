@@ -214,17 +214,20 @@ class POSRegisterController
         $aadhaar = $this->normalizeAadhaar((string)($payload['customer_aadhaar'] ?? ''));
         $passport = $this->normalizePassport((string)($payload['passport_number'] ?? ''));
         $countryOfResidence = trim((string)($payload['country_of_residence'] ?? ''));
-        $gstin = strtoupper(trim((string)($payload['confirm_gstin'] ?? '')));
+        $gstin = HighValueComplianceValidator::normalizeGstin((string)($payload['confirm_gstin'] ?? ''));
+        $shippingGstin = HighValueComplianceValidator::normalizeGstin((string)($payload['confirm_sgstin'] ?? ''));
+        $b2bGstin = $gstin !== '' ? $gstin : $shippingGstin;
         $derivedPan = '';
-        if ($gstin !== '' && preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $gstin)) {
-            $derivedPan = substr($gstin, 2, 10);
-            if ($pan === '') {
-                $pan = $derivedPan;
-            }
+        if ($b2bGstin !== '' && HighValueComplianceValidator::isValidGstin($b2bGstin)) {
+            $derivedPan = substr($b2bGstin, 2, 10);
         }
 
         $errors = [];
-        if ($isHighValue && $gstin === '') {
+        $b2bPan = HighValueComplianceValidator::validateB2bPanRequirement($b2bGstin, $pan);
+        if (!$b2bPan['ok']) {
+            $errors[] = $b2bPan['message'];
+        }
+        if ($isHighValue && $b2bGstin === '') {
             if ($residency === 'INDIAN_RESIDENT') {
                 if ($pan === '') {
                     $errors[] = 'PAN is required for Indian resident high value transactions.';
@@ -285,7 +288,7 @@ class POSRegisterController
             'aadhaar' => $aadhaar,
             'passport' => $passport,
             'country_of_residence' => $countryOfResidence,
-            'gstin' => $gstin,
+            'gstin' => $gstin !== '' ? $gstin : $b2bGstin,
             'derived_pan_from_gstin' => $derivedPan,
         ];
     }
@@ -4357,6 +4360,18 @@ class POSRegisterController
             if (!$this->posPhoneMatchesCountryIso($shippingPhone, $shippingCountry, $conn)) {
                 $errors[] = 'Shipping phone country code must match shipping country';
             }
+        }
+
+        require_once __DIR__ . '/../helpers/compliance/HighValueComplianceValidator.php';
+        $billingGstin = HighValueComplianceValidator::normalizeGstin((string)($payload['confirm_gstin'] ?? ''));
+        $shippingGstin = HighValueComplianceValidator::normalizeGstin((string)($payload['confirm_sgstin'] ?? ''));
+        $b2bGstin = $billingGstin !== '' ? $billingGstin : $shippingGstin;
+        $b2bPan = HighValueComplianceValidator::validateB2bPanRequirement(
+            $b2bGstin,
+            (string)($payload['customer_pan'] ?? '')
+        );
+        if (!$b2bPan['ok']) {
+            $errors[] = $b2bPan['message'];
         }
 
         return $errors;

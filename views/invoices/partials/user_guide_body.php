@@ -243,10 +243,10 @@
 
         <p><strong>Note:</strong> <em>Passport Number</em> refers to the customer’s travel document — not your login password.</p>
 
-        <h3 class="text-lg font-semibold text-gray-800 mt-6">If customer enters a valid GSTIN</h3>
+        <h3 class="text-lg font-semibold text-gray-800 mt-6">If customer enters a GSTIN (B2B)</h3>
         <ul>
-            <li><strong>PAN is not required separately</strong> — PAN is derived automatically from the GSTIN for B2B handling.</li>
-            <li>Passport and country of residence are not required in this case.</li>
+            <li><strong>PAN is required</strong> — enter the 10-character PAN. It must match characters 3–12 of the GSTIN.</li>
+            <li>PAN is not derived automatically. The cashier must enter it on POS checkout, order details, or the invoice compliance prompt.</li>
         </ul>
 
         <h3 class="text-lg font-semibold text-gray-800 mt-6">If high value and <strong>no GSTIN</strong> — by residency</h3>
@@ -278,7 +278,8 @@
         <h3 class="text-lg font-semibold text-gray-800 mt-6">Optional &amp; other rules</h3>
         <ul>
             <li><strong>Aadhaar</strong> — optional (12 digits) when the compliance panel is shown.</li>
-            <li><strong>Below the high-value limit</strong> — PAN and passport are not required for checkout.</li>
+            <li><strong>B2B with GSTIN</strong> — PAN is always required, including below the high-value limit.</li>
+            <li><strong>Below the high-value limit without GSTIN</strong> — PAN and passport are not required for checkout.</li>
             <li><strong>Cash ₹2,00,000+</strong> (or limit): a separate <strong>Section 269ST</strong> cash warning must be acknowledged if paying by cash — this is independent of PAN/passport.</li>
         </ul>
 
@@ -305,7 +306,7 @@
         </details>
         <details class="not-prose mb-3 rounded-lg border border-gray-200 bg-white p-4">
             <summary class="font-semibold cursor-pointer text-gray-900">Checkout blocked — PAN or passport required.</summary>
-            <p class="mt-3 text-sm text-gray-600 mb-0">Order total is at or above the high value limit (default ₹2,00,000). Enter GSTIN (PAN auto-derived), or complete PAN/passport fields per residency type in the compliance panel on the POS billing step.</p>
+            <p class="mt-3 text-sm text-gray-600 mb-0">Order total is at or above the high value limit (default ₹2,00,000), or this is a B2B order with GSTIN. Enter PAN (required when GSTIN is provided), or complete PAN/passport fields per residency type in the compliance panel on the POS billing step.</p>
         </details>
         <details class="not-prose mb-3 rounded-lg border border-gray-200 bg-white p-4">
             <summary class="font-semibold cursor-pointer text-gray-900">“Invoice already exists for this order”.</summary>

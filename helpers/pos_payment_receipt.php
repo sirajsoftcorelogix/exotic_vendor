@@ -1032,6 +1032,13 @@ function pos_payment_finalize_invoice_for_order(mysqli $conn, string $orderNumbe
         'invoice_id' => 0,
         'created' => false,
         'message' => (string)($created['message'] ?? 'Invoice could not be created.'),
+        'require_compliance' => !empty($created['require_compliance']),
+        'compliance_code' => $created['compliance_code'] ?? '',
+        'customer_id' => (int)($created['customer_id'] ?? 0),
+        'gstin' => (string)($created['gstin'] ?? ''),
+        'pan' => (string)($created['pan'] ?? ''),
+        'residency_status' => (string)($created['residency_status'] ?? ''),
+        'missing_fields' => $created['missing_fields'] ?? [],
     ];
 }
 

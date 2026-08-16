@@ -737,6 +737,19 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
             .then(data => {
 
                 if (!data.success) {
+                    if (data.require_compliance && window.ComplianceDocModal) {
+                        window.ComplianceDocModal.open({
+                            customerId: data.customer_id,
+                            message: data.message,
+                            gstin: data.gstin || '',
+                            pan: data.pan || '',
+                            residencyStatus: data.residency_status || '',
+                            onSuccess: function () {
+                                createInvoiceFromPayment(paymentId);
+                            }
+                        });
+                        return;
+                    }
                     alert(data.message || 'Invoice could not be created');
                     return;
                 }
@@ -811,6 +824,18 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                         `?page=posinvoice&action=generate_pdf&invoice_id=${data.invoice_id}`,
                         '_blank'
                     );
+                } else if (data.require_compliance && window.ComplianceDocModal) {
+                    const orderId = document.getElementById('payment_order_id').value;
+                    window.ComplianceDocModal.open({
+                        customerId: data.customer_id,
+                        message: data.invoice_message || data.message,
+                        gstin: data.gstin || '',
+                        pan: data.pan || '',
+                        residencyStatus: data.residency_status || '',
+                        onSuccess: function () {
+                            createFinalInvoice(orderId);
+                        }
+                    });
                 } else if (data.invoice_message) {
                     alert(data.invoice_message);
                 }
@@ -841,6 +866,9 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                         window.ComplianceDocModal.open({
                             customerId: data.customer_id,
                             message: data.message,
+                            gstin: data.gstin || '',
+                            pan: data.pan || '',
+                            residencyStatus: data.residency_status || '',
                             onSuccess: function () {
                                 createFinalInvoice(orderId);
                             }

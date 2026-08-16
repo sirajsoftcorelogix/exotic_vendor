@@ -31,8 +31,8 @@
                             </svg>
                         </div>
                         <div>
-                            <h3 class="text-lg font-bold text-slate-900 dark:text-white">High-Value Invoice Compliance</h3>
-                            <p class="text-xs text-amber-600 dark:text-amber-400 font-medium">Pan / Passport required for invoices &ge; ₹2,00,000</p>
+                            <h3 class="text-lg font-bold text-slate-900 dark:text-white">Invoice Compliance</h3>
+                            <p class="text-xs text-amber-600 dark:text-amber-400 font-medium">PAN is required for B2B invoices when GSTIN is provided</p>
                         </div>
                     </div>
                     <button type="button" id="compliance_doc_modal_close" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg">
@@ -42,7 +42,7 @@
 
                 <div class="mt-4 space-y-4">
                     <div id="compliance_doc_alert" class="p-3 text-xs rounded-xl bg-amber-50 text-amber-800 border border-amber-200">
-                        Invoice total exceeds statutory limit. Please supply missing tax compliance details before proceeding.
+                        Please supply missing tax compliance details before proceeding.
                     </div>
 
                     <form id="compliance_doc_form" onsubmit="return false;">
@@ -61,6 +61,7 @@
                             <div id="compliance_field_gstin_wrap">
                                 <label class="block font-medium text-slate-700 dark:text-slate-300 text-xs mb-1">GSTIN (B2B Tax Invoice)</label>
                                 <input type="text" id="compliance_doc_gstin" class="w-full rounded-lg border-slate-300 dark:border-slate-600 dark:bg-slate-700 text-sm uppercase" placeholder="e.g. 07AAAAA0000A1Z5" maxLength="15" />
+                                <p class="mt-1 text-[11px] text-amber-700">When GSTIN is entered, PAN is required and must match characters 3–12 of the GSTIN.</p>
                             </div>
 
                             <div id="compliance_field_pan_wrap">
@@ -100,34 +101,41 @@
         document.getElementById('compliance_doc_modal_close').addEventListener('click', hideModal);
         document.getElementById('compliance_doc_cancel_btn').addEventListener('click', hideModal);
         document.getElementById('compliance_doc_residency').addEventListener('change', updateFieldVisibility);
-        document.getElementById('compliance_doc_gstin').addEventListener('input', function () {
-            const val = this.value.trim().toUpperCase();
-            if (val.length === 15 && /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(val)) {
-                const panPan = val.substring(2, 12);
-                document.getElementById('compliance_doc_pan').value = panPan;
-            }
-        });
+        document.getElementById('compliance_doc_gstin').addEventListener('input', updateFieldVisibility);
 
         document.getElementById('compliance_doc_form').addEventListener('submit', handleSave);
     }
 
+    function showComplianceNotice(message) {
+        if (typeof window.showPosMessageModal === 'function') {
+            window.showPosMessageModal({ title: 'PAN required', message: message, tone: 'warning' });
+            return;
+        }
+        alert(message);
+    }
+
     function updateFieldVisibility() {
         const residency = document.getElementById('compliance_doc_residency').value;
+        const gstin = (document.getElementById('compliance_doc_gstin').value || '').replace(/\s+/g, '').toUpperCase();
         const panWrap = document.getElementById('compliance_field_pan_wrap');
         const passportWrap = document.getElementById('compliance_field_passport_wrap');
         const panStar = document.getElementById('compliance_pan_req_star');
+        const hasGstin = gstin !== '' && gstin !== 'URP';
 
-        if (residency === 'INDIAN_RESIDENT') {
+        if (residency === 'INDIAN_RESIDENT' || hasGstin) {
             panWrap.classList.remove('hidden');
             passportWrap.classList.add('hidden');
             panStar.classList.remove('hidden');
         } else if (residency === 'NRI') {
             panWrap.classList.remove('hidden');
             passportWrap.classList.remove('hidden');
-            panStar.classList.add('hidden'); // Optional if Passport provided
+            panStar.classList.toggle('hidden', !hasGstin);
         } else if (residency === 'FOREIGN_NATIONAL') {
-            panWrap.classList.add('hidden');
+            panWrap.classList.toggle('hidden', !hasGstin);
             passportWrap.classList.remove('hidden');
+            if (hasGstin) {
+                panStar.classList.remove('hidden');
+            }
         }
     }
 
@@ -201,29 +209,45 @@
         const gstin = document.getElementById('compliance_doc_gstin').value.trim().toUpperCase();
 
         if (customerId <= 0) {
-            alert('Customer ID is missing.');
+            showComplianceNotice('Customer ID is missing.');
             return;
         }
 
-        // Validation
-        if (gstin === '') {
-            if (residency === 'INDIAN_RESIDENT') {
-                if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
-                    alert('Please enter a valid 10-character PAN Card number.');
-                    return;
-                }
-            } else if (residency === 'NRI') {
-                const hasValidPan = /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan);
-                const hasValidPassport = passport.length >= 6 && country !== '';
-                if (!hasValidPan && !hasValidPassport) {
-                    alert('Please provide a valid PAN Card OR Passport Number with Country of Residence for NRI customer.');
-                    return;
-                }
-            } else if (residency === 'FOREIGN_NATIONAL') {
-                if (passport.length < 6 || country === '') {
-                    alert('Please enter Passport Number and Country of Residence for Foreign National customer.');
-                    return;
-                }
+        const gstinNorm = gstin === 'URP' ? '' : gstin;
+        const panPattern = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+        const gstinPattern = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+
+        if (gstinNorm !== '') {
+            if (!panPattern.test(pan)) {
+                showComplianceNotice(pan === ''
+                    ? 'PAN is required for B2B orders when GSTIN is provided.'
+                    : 'Please enter a valid 10-character PAN Card number.');
+                return;
+            }
+            if (gstinPattern.test(gstinNorm) && gstinNorm.substring(2, 12) !== pan) {
+                showComplianceNotice('PAN must match the PAN in GSTIN (characters 3–12).');
+                return;
+            }
+            if (!gstinPattern.test(gstinNorm)) {
+                showComplianceNotice('Please enter a valid 15-character GSTIN.');
+                return;
+            }
+        } else if (residency === 'INDIAN_RESIDENT') {
+            if (!panPattern.test(pan)) {
+                showComplianceNotice('Please enter a valid 10-character PAN Card number.');
+                return;
+            }
+        } else if (residency === 'NRI') {
+            const hasValidPan = panPattern.test(pan);
+            const hasValidPassport = passport.length >= 6 && country !== '';
+            if (!hasValidPan && !hasValidPassport) {
+                showComplianceNotice('Please provide a valid PAN Card OR Passport Number with Country of Residence for NRI customer.');
+                return;
+            }
+        } else if (residency === 'FOREIGN_NATIONAL') {
+            if (passport.length < 6 || country === '') {
+                showComplianceNotice('Please enter Passport Number and Country of Residence for Foreign National customer.');
+                return;
             }
         }
 

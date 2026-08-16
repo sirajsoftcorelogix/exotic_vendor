@@ -33,6 +33,7 @@ class InvoiceRequestBuilder
                     ? (int)$post['pos_flag']
                     : ((string)($options['source'] ?? '') === 'pos' ? 1 : 0),
                 'batch_no' => trim((string)($post['batch_no'] ?? '')),
+                'gstin' => strtoupper(trim((string)($post['gstin'] ?? ''))),
                 'created_by' => (int)($options['created_by'] ?? ($_SESSION['user']['id'] ?? 0)),
             ],
             'lines' => self::linesFromPost($post),

@@ -9,6 +9,9 @@
  */
 class HighValueComplianceValidator
 {
+    public const GSTIN_PATTERN = '/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/';
+    public const PAN_PATTERN = '/^[A-Z]{5}[0-9]{4}[A-Z]$/';
+
     /**
      * Get high-value transaction limit threshold (default: ₹2,00,000.00).
      */
@@ -38,6 +41,87 @@ class HighValueComplianceValidator
     public static function normalizePan(string $pan): string
     {
         return strtoupper(preg_replace('/\s+/', '', trim($pan)));
+    }
+
+    /**
+     * Normalize GSTIN (uppercase, no spaces). "URP" (unregistered) is treated as empty.
+     */
+    public static function normalizeGstin(string $gstin): string
+    {
+        $gstin = strtoupper(preg_replace('/\s+/', '', trim($gstin)));
+        if ($gstin === 'URP') {
+            return '';
+        }
+
+        return $gstin;
+    }
+
+    public static function isValidPan(string $pan): bool
+    {
+        return (bool) preg_match(self::PAN_PATTERN, self::normalizePan($pan));
+    }
+
+    public static function isValidGstin(string $gstin): bool
+    {
+        return (bool) preg_match(self::GSTIN_PATTERN, self::normalizeGstin($gstin));
+    }
+
+    /**
+     * B2B when a real GSTIN is present (not blank / URP).
+     */
+    public static function isB2bGstinProvided(string $gstin): bool
+    {
+        return self::normalizeGstin($gstin) !== '';
+    }
+
+    /**
+     * PAN is required whenever a B2B GSTIN is supplied — it is not auto-derived.
+     *
+     * @return array{ok:bool,code:string,message:string}
+     */
+    public static function validateB2bPanRequirement(string $gstin, string $pan): array
+    {
+        $gstin = self::normalizeGstin($gstin);
+        $pan = self::normalizePan($pan);
+
+        if ($gstin === '') {
+            return ['ok' => true, 'code' => 'NOT_B2B', 'message' => ''];
+        }
+
+        if (!self::isValidGstin($gstin)) {
+            return [
+                'ok' => false,
+                'code' => 'GSTIN_INVALID',
+                'message' => 'GSTIN format is invalid. Enter a valid 15-character GSTIN.',
+            ];
+        }
+
+        if ($pan === '') {
+            return [
+                'ok' => false,
+                'code' => 'PAN_REQUIRED_FOR_B2B',
+                'message' => 'PAN is required for B2B orders when GSTIN is provided.',
+            ];
+        }
+
+        if (!self::isValidPan($pan)) {
+            return [
+                'ok' => false,
+                'code' => 'PAN_INVALID',
+                'message' => 'PAN format is invalid. Enter a 10-character PAN (e.g. ABCDE1234F).',
+            ];
+        }
+
+        $derivedPan = substr($gstin, 2, 10);
+        if ($derivedPan !== $pan) {
+            return [
+                'ok' => false,
+                'code' => 'PAN_GSTIN_MISMATCH',
+                'message' => 'PAN must match the PAN in GSTIN (characters 3–12).',
+            ];
+        }
+
+        return ['ok' => true, 'code' => 'B2B_PAN_OK', 'message' => ''];
     }
 
     /**
@@ -147,17 +231,9 @@ class HighValueComplianceValidator
         $countryOfResidence = trim(
             (string)($payload['country_of_residence'] ?? $customer['country_of_residence'] ?? '')
         );
-        $gstin = strtoupper(trim(
-            (string)($payload['confirm_gstin'] ?? $payload['gstin'] ?? $customer['gstin'] ?? '')
-        ));
-
-        // GSTIN auto-derives PAN if present
-        if ($gstin !== '' && preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $gstin)) {
-            $derivedPan = substr($gstin, 2, 10);
-            if ($pan === '') {
-                $pan = $derivedPan;
-            }
-        }
+        $gstin = self::normalizeGstin(
+            (string)($payload['confirm_gstin'] ?? $payload['gstin'] ?? $payload['buyer_gstin'] ?? $customer['gstin'] ?? '')
+        );
 
         $baseResponse = [
             'is_high_value' => $isHighValue,
@@ -172,20 +248,25 @@ class HighValueComplianceValidator
             'missing_fields' => [],
         ];
 
-        if (!$isHighValue) {
+        $b2bPan = self::validateB2bPanRequirement($gstin, $pan);
+        if (!$b2bPan['ok']) {
+            $missing = ['pan'];
+            if ($gstin !== '' && !self::isValidGstin($gstin)) {
+                $missing[] = 'gstin';
+            }
             return array_merge($baseResponse, [
-                'ok' => true,
-                'code' => 'NOT_HIGH_VALUE',
-                'message' => 'Transaction total is below high value limit.',
+                'ok' => false,
+                'code' => $b2bPan['code'],
+                'message' => $b2bPan['message'],
+                'missing_fields' => $missing,
             ]);
         }
 
-        // B2B with valid GSTIN is automatically compliant
-        if ($gstin !== '' && preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $gstin)) {
+        if (!$isHighValue) {
             return array_merge($baseResponse, [
                 'ok' => true,
-                'code' => 'GSTIN_PRESENT',
-                'message' => 'Compliant via GSTIN.',
+                'code' => $gstin !== '' ? 'B2B_PAN_OK' : 'NOT_HIGH_VALUE',
+                'message' => $gstin !== '' ? 'B2B GSTIN and PAN present.' : 'Transaction total is below high value limit.',
             ]);
         }
 
@@ -263,13 +344,11 @@ class HighValueComplianceValidator
         $pan = self::normalizePan((string)($data['customer_pan'] ?? ''));
         $passport = self::normalizePassport((string)($data['passport_number'] ?? ''));
         $country = trim((string)($data['country_of_residence'] ?? ''));
-        $gstin = strtoupper(trim((string)($data['confirm_gstin'] ?? $data['gstin'] ?? '')));
+        $gstin = self::normalizeGstin((string)($data['confirm_gstin'] ?? $data['gstin'] ?? ''));
 
-        if ($gstin !== '' && preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $gstin)) {
-            $derivedPan = substr($gstin, 2, 10);
-            if ($pan === '') {
-                $pan = $derivedPan;
-            }
+        $b2bPan = self::validateB2bPanRequirement($gstin, $pan);
+        if (!$b2bPan['ok']) {
+            return ['success' => false, 'message' => $b2bPan['message']];
         }
 
         $stmt = $conn->prepare(
