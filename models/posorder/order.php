@@ -888,6 +888,164 @@ class POSOrder
     }
 
     /**
+     * Search orders by order_number prefix/like or customer name/phone for autocomplete and jump.
+     *
+     * @param string $query Search term
+     * @param bool $exact Whether to check for exact order match only
+     * @param int $limit Maximum results to return
+     * @return array
+     */
+    public function searchOrdersForAutocomplete(string $query, bool $exact = false, int $limit = 20): array
+    {
+        $query = trim($query);
+        if ($query === '') {
+            return [];
+        }
+
+        if ($exact) {
+            $lines = $this->getOrderLineItemsByRef($query);
+            if (!empty($lines) && is_array($lines)) {
+                $orderNum = (string)($lines[0]['order_number'] ?? $query);
+                return [
+                    'order_number' => $orderNum,
+                    'exists' => true,
+                ];
+            }
+            return [];
+        }
+
+        $likeQuery = '%' . $query . '%';
+        $prefixQuery = $query . '%';
+        $limitInt = max(1, min((int)$limit, 50));
+
+        $sql = "
+            SELECT 
+                tbl.order_number,
+                tbl.order_date,
+                tbl.status,
+                tbl.customer_name
+            FROM (
+                SELECT 
+                    o.order_number,
+                    MIN(o.date_added) AS order_date,
+                    MAX(o.status) AS status,
+                    MAX(COALESCE(
+                        NULLIF(TRIM(CONCAT(COALESCE(oi.first_name, ''), ' ', COALESCE(oi.last_name, ''))), ''),
+                        NULLIF(TRIM(oi.name), ''),
+                        NULLIF(TRIM(c.name), ''),
+                        ''
+                    )) AS customer_name,
+                    MAX(o.id) AS max_id,
+                    CASE 
+                        WHEN o.order_number = ? THEN 1
+                        WHEN o.order_number LIKE ? THEN 2
+                        ELSE 3
+                    END AS match_priority
+                FROM vp_orders o
+                LEFT JOIN vp_order_info oi ON oi.order_number = o.order_number
+                LEFT JOIN vp_customers c ON oi.customer_id = c.id
+                WHERE o.order_number LIKE ?
+                   OR oi.order_number LIKE ?
+                   OR oi.first_name LIKE ?
+                   OR oi.last_name LIKE ?
+                   OR oi.name LIKE ?
+                   OR oi.phone LIKE ?
+                GROUP BY o.order_number
+            ) tbl
+            ORDER BY tbl.match_priority ASC, tbl.max_id DESC
+            LIMIT ?
+        ";
+
+        $stmt = $this->db->prepare($sql);
+        $results = [];
+        $seenOrderNumbers = [];
+
+        if ($stmt) {
+            $stmt->bind_param(
+                'ssssssssi',
+                $query,
+                $prefixQuery,
+                $likeQuery,
+                $likeQuery,
+                $likeQuery,
+                $likeQuery,
+                $likeQuery,
+                $likeQuery,
+                $limitInt
+            );
+
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res) {
+                while ($row = $res->fetch_assoc()) {
+                    $orderNum = (string)($row['order_number'] ?? '');
+                    if ($orderNum !== '' && !isset($seenOrderNumbers[$orderNum])) {
+                        $seenOrderNumbers[$orderNum] = true;
+                        $results[] = [
+                            'order_number' => $orderNum,
+                            'customer_name' => (string)($row['customer_name'] ?? ''),
+                            'date_added' => !empty($row['order_date']) ? date('d M Y', strtotime((string)$row['order_date'])) : '',
+                            'status' => (string)($row['status'] ?? ''),
+                        ];
+                    }
+                }
+            }
+            $stmt->close();
+        }
+
+        if (count($results) < $limitInt) {
+            $remainingLimit = $limitInt - count($results);
+            $sqlInfo = "
+                SELECT 
+                    oi.order_number,
+                    oi.date_added AS order_date,
+                    COALESCE(
+                        NULLIF(TRIM(CONCAT(COALESCE(oi.first_name, ''), ' ', COALESCE(oi.last_name, ''))), ''),
+                        NULLIF(TRIM(oi.name), ''),
+                        NULLIF(TRIM(c.name), ''),
+                        ''
+                    ) AS customer_name
+                FROM vp_order_info oi
+                LEFT JOIN vp_customers c ON oi.customer_id = c.id
+                WHERE (oi.order_number LIKE ? OR oi.first_name LIKE ? OR oi.last_name LIKE ? OR oi.name LIKE ? OR oi.phone LIKE ?)
+                ORDER BY oi.id DESC
+                LIMIT ?
+            ";
+            $stmtInfo = $this->db->prepare($sqlInfo);
+            if ($stmtInfo) {
+                $stmtInfo->bind_param(
+                    'sssssi',
+                    $likeQuery,
+                    $likeQuery,
+                    $likeQuery,
+                    $likeQuery,
+                    $likeQuery,
+                    $remainingLimit
+                );
+                $stmtInfo->execute();
+                $resInfo = $stmtInfo->get_result();
+                if ($resInfo) {
+                    while ($row = $resInfo->fetch_assoc()) {
+                        $orderNum = (string)($row['order_number'] ?? '');
+                        if ($orderNum !== '' && !isset($seenOrderNumbers[$orderNum])) {
+                            $seenOrderNumbers[$orderNum] = true;
+                            $results[] = [
+                                'order_number' => $orderNum,
+                                'customer_name' => (string)($row['customer_name'] ?? ''),
+                                'date_added' => !empty($row['order_date']) ? date('d M Y', strtotime((string)$row['order_date'])) : '',
+                                'status' => 'pending',
+                            ];
+                        }
+                    }
+                }
+                $stmtInfo->close();
+            }
+        }
+
+        return $results;
+    }
+
+    /**
      * Tables/columns that store the business order_number string (updated on rename).
      *
      * Not included (by design):

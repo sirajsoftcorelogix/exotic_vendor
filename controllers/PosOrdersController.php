@@ -1099,6 +1099,40 @@ class PosOrdersController
         ], 'Order ' . $resolvedOrderNumber);
     }
 
+    public function searchOrdersAjax(): void
+    {
+        is_login();
+        header('Content-Type: application/json');
+        global $ordersModel;
+
+        $q = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
+        $exact = isset($_GET['exact']) && (string)$_GET['exact'] === '1';
+
+        if ($q === '') {
+            echo json_encode(['success' => false, 'message' => 'Please enter an order number']);
+            exit;
+        }
+
+        if ($exact) {
+            $exactResult = $ordersModel->searchOrdersForAutocomplete($q, true);
+            if (!empty($exactResult['exists']) && !empty($exactResult['order_number'])) {
+                echo json_encode(['success' => true, 'order_number' => $exactResult['order_number']]);
+                exit;
+            }
+            echo json_encode(['success' => false, 'message' => 'No order found with order number "' . $q . '".']);
+            exit;
+        }
+
+        $orders = $ordersModel->searchOrdersForAutocomplete($q, false, 20);
+        if (!empty($orders)) {
+            echo json_encode(['success' => true, 'orders' => $orders]);
+            exit;
+        }
+
+        echo json_encode(['success' => false, 'message' => 'No orders found matching "' . $q . '".']);
+        exit;
+    }
+
     public function getOrderDetailsHTML()
     {
         is_login();
