@@ -911,6 +911,12 @@ class OrdersController
 
         exit;
     }
+    public function searchOrdersAjax(): void
+    {
+        require_once __DIR__ . '/PosOrdersController.php';
+        $posController = new PosOrdersController();
+        $posController->searchOrdersAjax();
+    }
     public function getOrderDetailsHTML()
     {
         global $conn;

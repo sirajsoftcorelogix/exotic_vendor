@@ -150,6 +150,208 @@ $proformaPrintDisabledReason = $canPrintProforma
 ?>
 
 <div class="min-h-screen bg-gray-50 p-6 font-sans text-gray-900">
+    <!-- Order quick jump (order detail) -->
+    <div class="mb-6 bg-gradient-to-r from-amber-50 via-white to-orange-50/50 rounded-xl border border-amber-100/80 shadow-sm p-4 sm:p-5">
+        <form id="orderDetailSearchForm" class="relative" autocomplete="off">
+            <label for="orderDetailSearchInput" class="block text-sm font-semibold text-gray-800 mb-1.5">
+                <i class="fas fa-search text-amber-600 mr-1.5" aria-hidden="true"></i>Jump to order by Order Number
+            </label>
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-3">
+                <div class="relative flex-1 min-w-0">
+                    <span class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-500/90 z-10">
+                        <i class="fas fa-shopping-bag text-sm"></i>
+                    </span>
+                    <input type="text" id="orderDetailSearchInput" name="order_jump"
+                        class="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg shadow-inner bg-white/90 placeholder:text-gray-400 focus:ring-2 focus:ring-amber-400/80 focus:border-amber-500 outline-none transition"
+                        placeholder="Type Order Number — suggestions appear after 2 characters"
+                        value="<?php echo htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8'); ?>"
+                        aria-autocomplete="list" aria-controls="orderDetailSearchSuggestions" aria-expanded="false" />
+                    <div id="orderDetailSearchSuggestions" role="listbox"
+                        class="hidden absolute left-0 right-0 top-full mt-1.5 max-h-72 overflow-y-auto rounded-xl border border-gray-200/90 bg-white shadow-xl shadow-amber-900/10 z-[100] py-1">
+                    </div>
+                </div>
+                <button type="submit"
+                    class="shrink-0 inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-sm font-semibold shadow-md shadow-amber-600/25 border border-amber-600/30 transition w-full sm:w-auto">
+                    <i class="fas fa-arrow-right text-xs opacity-90"></i> Go
+                </button>
+            </div>
+            <p class="mt-1.5 text-xs text-gray-500">Select a suggestion or enter the full Order Number and press <kbd class="px-1 rounded bg-gray-100 border text-[10px]">Go</kbd></p>
+            <p id="orderDetailSearchError" class="hidden mt-3 text-sm font-medium text-red-600 flex items-center gap-2">
+                <i class="fas fa-exclamation-circle"></i><span id="orderDetailSearchErrorText"></span>
+            </p>
+        </form>
+    </div>
+    <script>
+    (function () {
+        var searchBase = <?php echo json_encode(base_url('?page=' . $orderStatusPage . '&action=search_orders'), JSON_UNESCAPED_SLASHES); ?>;
+        var detailBase = <?php echo json_encode(base_url('?page=' . $orderStatusPage . '&action=get_order_details_html&type=outer&order_number='), JSON_UNESCAPED_SLASHES); ?>;
+        var currentOrderNumber = <?php echo json_encode($displayOrderNumber, JSON_UNESCAPED_SLASHES); ?>;
+
+        var form = document.getElementById('orderDetailSearchForm');
+        var input = document.getElementById('orderDetailSearchInput');
+        var box = document.getElementById('orderDetailSearchSuggestions');
+        var errWrap = document.getElementById('orderDetailSearchError');
+        var errText = document.getElementById('orderDetailSearchErrorText');
+        var debounceTimer = null;
+        var activeFetch = 0;
+        var suggestAbort = null;
+
+        function hideError() {
+            if (errWrap) errWrap.classList.add('hidden');
+            if (errText) errText.textContent = '';
+        }
+
+        function showError(msg) {
+            if (errText) errText.textContent = msg;
+            if (errWrap) errWrap.classList.remove('hidden');
+        }
+
+        function closeSuggestions() {
+            if (box) {
+                box.classList.add('hidden');
+                box.innerHTML = '';
+            }
+            if (input) input.setAttribute('aria-expanded', 'false');
+        }
+
+        function goToOrder(orderNum) {
+            orderNum = (orderNum || '').trim();
+            if (!orderNum) return;
+            if (orderNum.toLowerCase() === currentOrderNumber.toLowerCase()) {
+                showError('You are already viewing order #' + currentOrderNumber + '.');
+                return;
+            }
+            window.location.href = detailBase + encodeURIComponent(orderNum);
+        }
+
+        function escapeHtml(s) {
+            var d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        function renderSuggestions(orders) {
+            if (!box) return;
+            box.innerHTML = '';
+            if (!orders || !orders.length) {
+                closeSuggestions();
+                return;
+            }
+            if (input) input.setAttribute('aria-expanded', 'true');
+            box.classList.remove('hidden');
+            orders.forEach(function (ord) {
+                var num = (ord.order_number != null ? String(ord.order_number) : '');
+                var name = (ord.customer_name != null ? String(ord.customer_name) : '');
+                var dt = (ord.date_added != null ? String(ord.date_added) : '');
+                var status = (ord.status != null ? String(ord.status) : '');
+
+                var meta = [];
+                if (name) meta.push(name);
+                if (dt) meta.push(dt);
+                if (status) meta.push(status);
+
+                var row = document.createElement('button');
+                row.type = 'button';
+                row.setAttribute('role', 'option');
+                row.className = 'w-full text-left px-4 py-2.5 text-sm hover:bg-amber-50/90 focus:bg-amber-50 outline-none border-b border-gray-50 last:border-0 flex flex-col gap-0.5 transition';
+                row.innerHTML = '<span class="font-semibold text-gray-900 tracking-tight">#' + escapeHtml(num) + '</span>' +
+                    (meta.length ? '<span class="text-xs text-gray-500">' + escapeHtml(meta.join(' · ')) + '</span>' : '');
+                row.addEventListener('click', function () {
+                    if (input) input.value = num;
+                    closeSuggestions();
+                    goToOrder(num);
+                });
+                box.appendChild(row);
+            });
+        }
+
+        function fetchSuggestions(q) {
+            if (q.length < 2) {
+                closeSuggestions();
+                return;
+            }
+            var myId = ++activeFetch;
+            if (suggestAbort) {
+                try { suggestAbort.abort(); } catch (e) {}
+            }
+            suggestAbort = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+            var url = searchBase + (searchBase.indexOf('?') >= 0 ? '&' : '?') + 'q=' + encodeURIComponent(q);
+            var opts = { credentials: 'same-origin', headers: { 'Accept': 'application/json' } };
+            if (suggestAbort) opts.signal = suggestAbort.signal;
+            fetch(url, opts)
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (myId !== activeFetch) return;
+                    if (data.success && data.orders && data.orders.length) {
+                        renderSuggestions(data.orders);
+                    } else {
+                        closeSuggestions();
+                    }
+                })
+                .catch(function (err) {
+                    if (err && err.name === 'AbortError') return;
+                    if (myId !== activeFetch) return;
+                    closeSuggestions();
+                });
+        }
+
+        if (input) {
+            input.addEventListener('input', function () {
+                hideError();
+                var q = (input.value || '').trim();
+                clearTimeout(debounceTimer);
+                if (q.length < 2) {
+                    if (suggestAbort) {
+                        try { suggestAbort.abort(); } catch (e) {}
+                    }
+                    closeSuggestions();
+                    return;
+                }
+                debounceTimer = setTimeout(function () { fetchSuggestions(q); }, 200);
+            });
+
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') closeSuggestions();
+            });
+        }
+
+        if (form) {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                hideError();
+                var q = (input ? input.value : '').trim();
+                if (!q) {
+                    showError('Please enter an Order Number.');
+                    return;
+                }
+                if (q.toLowerCase() === currentOrderNumber.toLowerCase()) {
+                    showError('You are already viewing order #' + currentOrderNumber + '.');
+                    return;
+                }
+
+                var checkUrl = searchBase + (searchBase.indexOf('?') >= 0 ? '&' : '?') + 'q=' + encodeURIComponent(q) + '&exact=1';
+                fetch(checkUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data.success && data.order_number) {
+                            goToOrder(data.order_number);
+                        } else {
+                            showError(data.message || ('Order #' + q + ' not found.'));
+                        }
+                    })
+                    .catch(function () {
+                        goToOrder(q);
+                    });
+            });
+        }
+
+        document.addEventListener('click', function (e) {
+            if (form && !form.contains(e.target)) {
+                closeSuggestions();
+            }
+        });
+    })();
+    </script>
     <?php if (is_array($followUpFlash) && trim((string)($followUpFlash['text'] ?? '')) !== ''): ?>
         <?php
         $flashType = strtolower(trim((string)($followUpFlash['type'] ?? 'info')));
