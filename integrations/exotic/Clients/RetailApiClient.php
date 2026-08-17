@@ -164,11 +164,31 @@ class RetailApiClient
 
     /**
      * Resolve ISO 2-letter country code for active customer to pass in x-api-countrycode header.
+     *
+     * Case 1: If currency INR is selected in POS -> return 'IN'
+     * Case 2: If Customer Currency is selected in POS -> return Billing Country
      */
     public function resolveCustomerCountryCode(): string
     {
         $conn = $this->conn ?: ($GLOBALS['conn'] instanceof mysqli ? $GLOBALS['conn'] : null);
 
+        $currencyMode = '';
+        if (isset($_REQUEST['currency_mode'])) {
+            $currencyMode = strtoupper(trim((string)$_REQUEST['currency_mode']));
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                $_SESSION['pos_currency_mode'] = ($currencyMode === 'INR') ? 'INR' : 'CUSTOMER';
+            }
+        } elseif (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['pos_currency_mode'])) {
+            $currencyMode = strtoupper(trim((string)$_SESSION['pos_currency_mode']));
+        }
+
+        // Case 1: If currency INR is selected choose IN
+        if ($currencyMode === 'INR') {
+            return 'IN';
+        }
+
+        // Case 2: Customer Currency is selected -> Choose billing country
+        // 1) Explicit custom country code set on RetailApiClient (e.g. from checkout billing address confirm)
         if (!empty($this->customCountryCode)) {
             require_once dirname(__DIR__, 3) . '/helpers/courier/country_codes.php';
             $iso2 = normalizeCountryIso2($this->customCountryCode, $conn);
@@ -179,43 +199,57 @@ class RetailApiClient
 
         $countryStr = '';
 
+        // 2) Active selected customer in session
         if (!empty($_SESSION['pos_customer_id'])) {
             $cid = (int)$_SESSION['pos_customer_id'];
             if ($cid > 0 && $conn instanceof mysqli) {
-                $stmt = $conn->prepare('SELECT country_of_residence FROM vp_customers WHERE id = ? LIMIT 1');
-                if ($stmt) {
-                    $stmt->bind_param('i', $cid);
-                    $stmt->execute();
-                    $res = $stmt->get_result();
-                    $row = $res ? $res->fetch_assoc() : null;
-                    $stmt->close();
-                    if ($row && !empty($row['country_of_residence'])) {
-                        $countryStr = trim((string)$row['country_of_residence']);
+                // Check pos_customer_details first for bill_country (Billing Country)
+                $detStmt = $conn->prepare('SELECT bill_country, ship_country FROM pos_customer_details WHERE customer_id = ? LIMIT 1');
+                if ($detStmt) {
+                    $detStmt->bind_param('i', $cid);
+                    $detStmt->execute();
+                    $det = $detStmt->get_result()->fetch_assoc();
+                    $detStmt->close();
+                    if ($det) {
+                        $countryStr = trim((string)($det['bill_country'] ?? ''));
                     }
                 }
 
+                // If bill_country was not set in pos_customer_details, fallback to vp_customers.country_of_residence
                 if ($countryStr === '') {
-                    $detStmt = $conn->prepare('SELECT bill_country, ship_country FROM pos_customer_details WHERE customer_id = ? LIMIT 1');
-                    if ($detStmt) {
-                        $detStmt->bind_param('i', $cid);
-                        $detStmt->execute();
-                        $det = $detStmt->get_result()->fetch_assoc();
-                        $detStmt->close();
-                        if ($det) {
-                            $countryStr = trim((string)($det['bill_country'] ?? ''));
-                            if ($countryStr === '') {
-                                $countryStr = trim((string)($det['ship_country'] ?? ''));
-                            }
+                    $stmt = $conn->prepare('SELECT country_of_residence FROM vp_customers WHERE id = ? LIMIT 1');
+                    if ($stmt) {
+                        $stmt->bind_param('i', $cid);
+                        $stmt->execute();
+                        $res = $stmt->get_result();
+                        $row = $res ? $res->fetch_assoc() : null;
+                        $stmt->close();
+                        if ($row && !empty($row['country_of_residence'])) {
+                            $countryStr = trim((string)$row['country_of_residence']);
                         }
                     }
+                }
+
+                // If still empty, check pos_customer_details.ship_country
+                if ($countryStr === '' && isset($det['ship_country'])) {
+                    $countryStr = trim((string)$det['ship_country']);
                 }
             }
         }
 
+        // 3) Form data in session
         if ($countryStr === '' && !empty($_SESSION['pos_customer_form'])) {
             $form = $_SESSION['pos_customer_form'];
             if (is_array($form)) {
-                $countryStr = trim((string)($form['country_of_residence'] ?? $form['country'] ?? ''));
+                $countryStr = trim((string)($form['bill_country'] ?? $form['confirm_country'] ?? $form['country_of_residence'] ?? $form['country'] ?? ''));
+            }
+        }
+
+        // 4) Selected customer array in session
+        if ($countryStr === '' && !empty($_SESSION['selected_customer'])) {
+            $sc = $_SESSION['selected_customer'];
+            if (is_array($sc)) {
+                $countryStr = trim((string)($sc['bill_country'] ?? $sc['country_of_residence'] ?? $sc['country'] ?? ''));
             }
         }
 
