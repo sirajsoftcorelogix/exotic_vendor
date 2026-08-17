@@ -2773,16 +2773,6 @@ class Order
             $totalReductions = $customReduce + $couponReduce + $giftReduce + $credit;
             $netTotal = max(0.0, round($grossTotal - $totalReductions, 2));
 
-            // Update vp_orders custom_reduce as well so line-level queries remain consistent
-            $lineDiscStmt = $this->db->prepare(
-                'UPDATE vp_orders SET custom_reduce = ? WHERE order_number = ?'
-            );
-            if ($lineDiscStmt) {
-                $lineDiscStmt->bind_param('ds', $customReduce, $orderNumber);
-                $lineDiscStmt->execute();
-                $lineDiscStmt->close();
-            }
-
             // Update vp_order_info.total & vp_order_info.custom_reduce
             $infoStmt = $this->db->prepare(
                 'UPDATE vp_order_info SET total = ?, custom_reduce = ? WHERE order_number = ?'
