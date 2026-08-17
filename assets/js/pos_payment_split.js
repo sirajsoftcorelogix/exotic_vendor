@@ -30,16 +30,22 @@
             };
         }
 
-        if (window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
+        var cartData = window.__posCartLastRetrieveData;
+        if (cartData && typeof cartData === 'object') {
+            if (cartData.currency_code) code = String(cartData.currency_code).trim().toUpperCase();
+            if (cartData.currency_symbol) symbol = String(cartData.currency_symbol).trim();
+        }
+
+        if (code === 'INR' && window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
             code = String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
             if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) symbol = String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
-        } else if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
+        } else if (code === 'INR' && window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
             var ic = window.POS_INITIAL_CUSTOMER;
             if (ic.currency_code) code = String(ic.currency_code).trim().toUpperCase();
             if (ic.currency_symbol) symbol = String(ic.currency_symbol).trim();
         }
 
-        if (!symbol) {
+        if (!symbol || (symbol === '₹' && code !== 'INR')) {
             if (code === 'INR') symbol = '₹';
             else if (code === 'USD') symbol = '$';
             else if (code === 'EUR') symbol = '€';
@@ -325,7 +331,19 @@
         }
     }
 
+    function syncPaymentSplitCurrencyHeaders() {
+        var info = getPaymentCurrencyInfo();
+        var labelText = 'Amount (' + info.symbol + ')';
+        document.querySelectorAll('.payment-split-amount-header').forEach(function (el) {
+            el.textContent = labelText;
+        });
+        document.querySelectorAll('.payment-split-amount-label').forEach(function (el) {
+            el.textContent = labelText;
+        });
+    }
+
     function recalcPaymentSplitUi() {
+        syncPaymentSplitCurrencyHeaders();
         var orderTotal = getTargetTotal();
         var displayTotal = getDisplayOrderTotal();
         var stage = String(document.getElementById('payment_stage')?.value || 'final').toLowerCase();

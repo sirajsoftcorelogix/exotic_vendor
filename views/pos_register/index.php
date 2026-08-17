@@ -435,7 +435,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
         </div>
         <div class="hidden sm:grid sm:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_2.5rem] gap-2 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-white border-b border-slate-100">
           <span>Mode</span>
-          <span>Amount (₹)</span>
+          <span class="payment-split-amount-header">Amount (₹)</span>
           <span>Transaction / ref</span>
           <span></span>
         </div>
@@ -499,7 +499,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       <select class="payment-split-mode mt-0.5 sm:mt-0 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></select>
     </div>
     <div>
-      <label class="sm:hidden text-[10px] font-semibold text-slate-500 uppercase">Amount (₹)</label>
+      <label class="payment-split-amount-label sm:hidden text-[10px] font-semibold text-slate-500 uppercase">Amount (₹)</label>
       <input type="number" step="0.01" min="0" class="payment-split-amount mt-0.5 sm:mt-0 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm tabular-nums" placeholder="0.00" />
     </div>
     <div>
@@ -1264,16 +1264,67 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     });
   }
 
+  function getPaymentCurrencyInfo() {
+    var code = "INR";
+    var symbol = "₹";
+
+    if (window.POS_CURRENCY_MODE === "INR") {
+      return { code: "INR", symbol: "₹" };
+    }
+
+    var cartData = window.__posCartLastRetrieveData;
+    if (cartData && typeof cartData === "object") {
+      if (cartData.currency_code) code = String(cartData.currency_code).trim().toUpperCase();
+      if (cartData.currency_symbol) symbol = String(cartData.currency_symbol).trim();
+    }
+
+    if (code === "INR" && window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
+      code = String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
+      if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) symbol = String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
+    } else if (code === "INR" && window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
+      var ic = window.POS_INITIAL_CUSTOMER;
+      if (ic.currency_code) code = String(ic.currency_code).trim().toUpperCase();
+      if (ic.currency_symbol) symbol = String(ic.currency_symbol).trim();
+    }
+
+    if (!symbol || (symbol === "₹" && code !== "INR")) {
+      if (code === "INR") symbol = "₹";
+      else if (code === "USD") symbol = "$";
+      else if (code === "EUR") symbol = "€";
+      else if (code === "GBP") symbol = "£";
+      else symbol = code;
+    }
+
+    return { code: code, symbol: symbol };
+  }
+
   function formatPaymentInr(amount) {
     var n = parseFloat(String(amount));
     if (!isFinite(n)) {
       n = 0;
     }
+    var info = getPaymentCurrencyInfo();
     try {
-      return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+      return new Intl.NumberFormat(info.code === "INR" ? "en-IN" : "en-US", {
+        style: "currency",
+        currency: info.code,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(n);
     } catch (e) {
-      return "₹ " + n.toFixed(2);
+      return info.symbol + " " + n.toFixed(2);
     }
+  }
+
+  function syncPaymentSplitCurrencyHeaders() {
+    var info = getPaymentCurrencyInfo();
+    var labelText = "Amount (" + info.symbol + ")";
+    document.querySelectorAll(".payment-split-amount-header").forEach(function(el) {
+      el.textContent = labelText;
+    });
+    document.querySelectorAll(".payment-split-amount-label").forEach(function(el) {
+      el.textContent = labelText;
+    });
   }
 
   function getPaymentSplitRowsContainer() {
@@ -1417,6 +1468,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
   }
 
   function recalcPaymentSplitUi() {
+    syncPaymentSplitCurrencyHeaders();
     var orderTotal = getCurrentCheckoutTotal();
     var stage = String(document.getElementById("payment_stage")?.value || "final").toLowerCase();
     var target = orderTotal;
@@ -1613,7 +1665,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       var isPayOnPickup = splits.some(function(s) { return s.mode === "pay_on_pickup"; });
       var pendingLabel = isPayOnPickup ? "Advance plus Pay on Pickup" : "Advance plus COD";
       if (paymentAmount + 0.02 < grandTotal) {
-        showErr(pendingLabel + " must equal order total ₹ " + grandTotal);
+        showErr(pendingLabel + " must equal order total " + formatPaymentInr(grandTotal));
         return null;
       }
       if (paymentAmount - 0.02 > grandTotal) {
@@ -1629,7 +1681,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
 
       if (paymentStage === "final") {
         if (paymentAmount + 0.02 < grandTotal) {
-          showErr("Final payment must be FULL amount ₹ " + grandTotal);
+          showErr("Final payment must be FULL amount " + formatPaymentInr(grandTotal));
           return null;
         }
         if (paymentAmount - 0.02 > grandTotal) {
@@ -1638,7 +1690,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
         }
       } else if (paymentStage === "partial" || paymentStage === "advance") {
         if (paymentAmount + 0.02 >= grandTotal) {
-          showErr("Partial payment must be less than total ₹ " + grandTotal);
+          showErr("Partial payment must be less than total " + formatPaymentInr(grandTotal));
           return null;
         }
       }
