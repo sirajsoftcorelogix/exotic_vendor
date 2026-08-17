@@ -2653,6 +2653,12 @@ class POSRegisterController
     }
     public function productsAjax()
     {
+        global $conn;
+        if ($conn instanceof \mysqli) {
+            require_once 'models/product/product.php';
+            $this->cleanupExpiredUnpublishedLocks($conn, new \Product($conn));
+        }
+
         $pageNo  = $_GET['page_no'] ?? 1;
         $perPage = $_GET['per_page'] ?? 48;
 
@@ -3762,6 +3768,12 @@ class POSRegisterController
         $this->clearBufferedHttpOutput();
         header('Content-Type: application/json; charset=utf-8');
 
+        global $conn;
+        if ($conn instanceof \mysqli) {
+            require_once 'models/product/product.php';
+            $this->cleanupExpiredUnpublishedLocks($conn, new \Product($conn));
+        }
+
         $op = trim((string)($_REQUEST['op'] ?? ''));
         if ($op !== 'retrieve') {
             require_once dirname(__DIR__) . '/helpers/order_follow_up.php';
@@ -3866,9 +3878,31 @@ class POSRegisterController
 
             case 'delete':
                 $cartid = $this->resolveCartLineIdFromRequest();
-                $this->emitCartApiResponse($this->retailApiClient->call('/cart/delete', 'GET', [
+                global $conn;
+                $deletedItem = null;
+                if ($conn instanceof \mysqli) {
+                    $ctxRet = $this->exoticCartDiscountContext();
+                    $retRes = $this->retailApiClient->call('/cart/retrieve', 'GET', $ctxRet['query'], null, null, $ctxRet['extraHeaders']);
+                    $cartData = is_array($retRes['data'] ?? null) ? $retRes['data'] : [];
+                    $items = $cartData['cartitems'] ?? $cartData['cart_items'] ?? $cartData['items'] ?? $cartData['lines'] ?? [];
+                    foreach ($items as $it) {
+                        $ref = (string)($it['cartref'] ?? $it['cartid'] ?? $it['id'] ?? '');
+                        if ($ref !== '' && $ref === (string)$cartid) {
+                            $deletedItem = $it;
+                            break;
+                        }
+                    }
+                }
+
+                $delRes = $this->retailApiClient->call('/cart/delete', 'GET', [
                     'cartid' => $cartid,
-                ]));
+                ]);
+
+                if ($deletedItem !== null && $conn instanceof \mysqli) {
+                    $this->releaseUnpublishedLocksForCartItems($conn, [$deletedItem]);
+                }
+
+                $this->emitCartApiResponse($delRes);
                 return;
 
             case 'addcoupon':
@@ -4860,6 +4894,10 @@ class POSRegisterController
             } elseif (!empty($linkResult['message'])) {
                 $successMessage .= ' Follow-up link: ' . (string) $linkResult['message'];
             }
+        }
+
+        if ($conn instanceof \mysqli && !empty($items) && is_array($items)) {
+            $this->releaseUnpublishedLocksForCartItems($conn, $items);
         }
 
         $this->clearPosExoticCartCustomDiscount();
@@ -6406,7 +6444,7 @@ class POSRegisterController
                     $productModel->setProductPublished($resolvedProductId, 1);
                 }
 
-                $stmtIns = $conn->prepare("INSERT INTO `vp_pos_unpublished_locks` (product_id, token, user_id, store_id, expires_at) VALUES (?, ?, ?, ?, NOW() + INTERVAL 45 SECOND)");
+                $stmtIns = $conn->prepare("INSERT INTO `vp_pos_unpublished_locks` (product_id, token, user_id, store_id, expires_at) VALUES (?, ?, ?, ?, NOW() + INTERVAL 30 MINUTE)");
                 $stmtIns->bind_param('isii', $resolvedProductId, $lockToken, $userId, $storeId);
                 $stmtIns->execute();
                 $stmtIns->close();
@@ -6494,6 +6532,82 @@ class POSRegisterController
             ]);
             return;
         }
+    }
+
+    /**
+     * Release unpublished product locks for a list of cart/order items, setting published = 0 if no active locks remain.
+     *
+     * @param \mysqli $conn
+     * @param array $items Array of cart items or order lines
+     */
+    public function releaseUnpublishedLocksForCartItems(\mysqli $conn, array $items): void
+    {
+        if (empty($items)) {
+            return;
+        }
+        $this->ensureUnpublishedLockTableExists($conn);
+        require_once 'models/product/product.php';
+        $productModel = new \Product($conn);
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $itemCode = trim((string)($item['item_code'] ?? $item['itemcode'] ?? $item['code'] ?? ''));
+            $sku      = trim((string)($item['sku'] ?? ''));
+            $pid      = (int)($item['product_id'] ?? $item['id'] ?? 0);
+
+            $product = null;
+            if ($pid > 0) {
+                $product = $productModel->getProduct($pid);
+            }
+            if (!$product && $itemCode !== '') {
+                $res = $productModel->getProductByItemCode($itemCode);
+                if (is_array($res)) {
+                    $product = isset($res['id']) ? $res : ($res[0] ?? null);
+                }
+            }
+            if (!$product && $sku !== '') {
+                $product = $productModel->getProductByskuExact($sku);
+            }
+
+            if (!$product) {
+                continue;
+            }
+
+            $resolvedPid = (int)($product['id'] ?? 0);
+            if ($resolvedPid <= 0) {
+                continue;
+            }
+
+            $syncItemCode = trim((string)($product['item_code'] ?? $itemCode));
+            $syncSize     = trim((string)($product['size'] ?? ($item['size'] ?? '')));
+            $syncColor    = trim((string)($product['color'] ?? ($item['color'] ?? '')));
+
+            // Delete lease locks for this product
+            $stmtDel = $conn->prepare("DELETE FROM `vp_pos_unpublished_locks` WHERE product_id = ?");
+            if ($stmtDel) {
+                $stmtDel->bind_param('i', $resolvedPid);
+                $stmtDel->execute();
+                $stmtDel->close();
+            }
+
+            // Check remaining locks
+            $stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM `vp_pos_unpublished_locks` WHERE product_id = ? AND expires_at >= NOW()");
+            if ($stmt) {
+                $stmt->bind_param('i', $resolvedPid);
+                $stmt->execute();
+                $cntRow = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+
+                $remaining = (int)($cntRow['cnt'] ?? 0);
+                if ($remaining === 0) {
+                    $productModel->setProductPublished($resolvedPid, 0);
+                    $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 0);
+                }
+            }
+        }
+        $this->cleanupExpiredUnpublishedLocks($conn, $productModel);
     }
 
     private function ensureUnpublishedLockTableExists(\mysqli $conn): void

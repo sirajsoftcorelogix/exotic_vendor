@@ -4904,10 +4904,13 @@
             } else {
               toast(parentMsg, 'red');
             }
-            return r;
+          } else {
+            openPosCartApiDebugModal();
           }
-          openPosCartApiDebugModal();
-          return r;
+          // Cart addition failed: release lock immediately
+          return releaseLockOnFailedAdd(statusParams, lockToken).then(function () {
+            return r;
+          });
         }
         toast('Added to cart.', 'green');
         if (typeof window.closePosProductModal === 'function') {
@@ -4932,33 +4935,32 @@
       .catch(function (err) {
         console.error('Error adding unpublished product to cart:', err);
         toast('Failed to add unpublished product to cart.', 'red');
+        return releaseLockOnFailedAdd(statusParams, lockToken);
       })
       .finally(function () {
-        // Step 5: Once added to cart (or on failure/error), release lock and set status = 0 if no active locks remain
-        if (typeof window.updateUnpublishedProductTimerStatus === 'function') {
-          window.updateUnpublishedProductTimerStatus('Resetting product status...');
+        if (typeof window.hideUnpublishedProductTimerModal === 'function') {
+          window.hideUnpublishedProductTimerModal();
         }
-        $.ajax({
-          url: '?page=pos_register&action=update-product-published',
-          type: 'POST',
-          contentType: 'application/json',
-          data: JSON.stringify({
-            product_id: statusParams.product_id,
-            item_code: statusParams.item_code,
-            sku: statusParams.sku,
-            size: statusParams.size,
-            color: statusParams.color,
-            published: 0,
-            token: lockToken
-          }),
-          dataType: 'json'
-        }).always(function () {
-          if (typeof window.hideUnpublishedProductTimerModal === 'function') {
-            window.hideUnpublishedProductTimerModal();
-          }
-          setPanelBusy(false);
-        });
+        setPanelBusy(false);
       });
+  }
+
+  function releaseLockOnFailedAdd(statusParams, token) {
+    return $.ajax({
+      url: '?page=pos_register&action=update-product-published',
+      type: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({
+        product_id: statusParams.product_id,
+        item_code: statusParams.item_code,
+        sku: statusParams.sku,
+        size: statusParams.size,
+        color: statusParams.color,
+        published: 0,
+        token: token || ''
+      }),
+      dataType: 'json'
+    });
   }
 
   /** @param {Record<string, unknown>} [payload] */
