@@ -850,7 +850,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       <label class="text-xs text-gray-600">Discount Type</label>
       <select id="discount_type"
         class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-        <option value="fixed">Fixed Amount (₹)</option>
+        <option value="fixed" id="discount_type_option_fixed">Fixed Amount (₹)</option>
         <option value="percent">Percentage (%)</option>
       </select>
     </div>
@@ -3813,6 +3813,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     if (checkoutOptions.confirmLocalFallback) {
       body.confirm_local_fallback = "1";
     }
+    body.currency_mode = window.POS_CURRENCY_MODE || "CUSTOMER";
     setPosCheckoutLoading(true);
     fetch("index.php?page=pos_register&action=checkout-create", {
       method: "POST",
@@ -3954,9 +3955,16 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
   function updateDiscountPlaceholder() {
     const typeEl = document.getElementById("discount_type");
     const valueEl = document.getElementById("discount_value");
+    const fixedOpt = document.getElementById("discount_type_option_fixed");
+    const info = typeof getPaymentCurrencyInfo === "function" ? getPaymentCurrencyInfo() : { symbol: "₹" };
+
+    if (fixedOpt) {
+      fixedOpt.textContent = "Fixed Amount (" + info.symbol + ")";
+    }
+
     if (!typeEl || !valueEl) return;
 
-    valueEl.placeholder = typeEl.value === "percent" ? "Enter percentage" : "Enter amount";
+    valueEl.placeholder = typeEl.value === "percent" ? "Enter percentage" : "Enter amount (" + info.symbol + ")";
   }
 
   (function () {

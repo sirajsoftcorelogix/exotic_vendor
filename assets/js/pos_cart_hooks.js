@@ -355,7 +355,7 @@
   function cartUrl(op, query) {
     var qs = 'page=pos_register&action=cart-api&op=' + encodeURIComponent(op);
     query = query || {};
-    if (op === 'retrieve' && !query.currency_mode && window.POS_CURRENCY_MODE) {
+    if (!query.currency_mode && window.POS_CURRENCY_MODE) {
       query.currency_mode = window.POS_CURRENCY_MODE;
     }
     Object.keys(query).forEach(function (k) {
@@ -1669,7 +1669,7 @@
         : '<option value="percent"' + (showMode === 'percent' ? ' selected' : '') + '>% Off</option>') +
       '<option value="fixed_line"' +
       (showMode === 'fixed_line' ? ' selected' : '') +
-      '>Fixed \u20b9 off line</option>' +
+      '>Fixed ' + escapeHtml(getCartCurrencySymbol(row)) + ' off line</option>' +
       '</select>' +
       '<input type="number" step="0.01" min="0"' +
       (showMode === 'percent' ? ' max="100"' : '') +
@@ -1678,7 +1678,7 @@
       '" data-cartref="' +
       escapeHtml(ref) +
       '" placeholder="' +
-      (showMode === 'percent' ? '%' : '\u20b9') +
+      (showMode === 'percent' ? '%' : escapeHtml(getCartCurrencySymbol(row))) +
       '" value="' +
       (showMode === 'fixed_line' && showValFixed > 0.001
         ? escapeHtml(String(showValFixed))
@@ -3937,7 +3937,7 @@
         '<div class="flex flex-wrap items-stretch gap-2">' +
         '<select class="pos-cart-customdisc-mode shrink-0 rounded border border-slate-300 bg-white px-2 py-2 text-xs font-medium text-slate-800 shadow-sm outline-none focus:border-orange-500" aria-label="Discount type">' +
         '<option value="percent">% Off</option>' +
-        '<option value="fixed">Fixed (₹)</option>' +
+        '<option value="fixed">Fixed (' + getCartCurrencySymbol(data) + ')</option>' +
         '</select>' +
         '<input type="number" step="0.01" min="0" class="pos-cart-customdisc-input min-w-[5rem] flex-1 rounded border border-slate-300 bg-white px-3 py-2 text-xs shadow-sm outline-none focus:border-orange-500 placeholder:text-slate-400" placeholder="Amount" />' +
         '<button type="button" class="pos-cart-customdisc-apply shrink-0 rounded bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800">Apply</button>' +
@@ -5193,10 +5193,11 @@
         }
         return undefined;
       }
+      var currInfo = typeof getCartCurrencyInfo === 'function' ? getCartCurrencyInfo(window.__posCartLastRetrieveData) : { symbol: '₹' };
       if (mode === 'fixed' && a > send + 0.01) {
-        toast('Discount capped at ₹' + send.toFixed(2) + ' (sub total minus coupon).', 'green');
+        toast('Discount capped at ' + currInfo.symbol + send.toFixed(2) + ' (sub total minus coupon).', 'green');
       } else if (mode === 'percent') {
-        toast('Applied ' + formatPctLabel(a) + ' (₹' + send.toFixed(2) + ').', 'green');
+        toast('Applied ' + formatPctLabel(a) + ' (' + currInfo.symbol + send.toFixed(2) + ').', 'green');
       }
       return cartRequest('customdiscount', { query: { custom_reduce: String(send) } })
         .then(function (r) {
