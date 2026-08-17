@@ -4766,6 +4766,10 @@
               }
               return r;
             }
+            // Cart addition failed: if item might be unpublished in API, sync status and activate
+            if (p && (p.product_id || p.id || body.code || body.item_code)) {
+              return syncAndHandleUnpublishedAddToCart(p, body);
+            }
             openPosCartApiDebugModal();
             return r;
           }
@@ -4785,6 +4789,16 @@
           return refreshCartInternal().then(function (r2) {
             if (r2 && r2.data && typeof r2.data === 'object') {
               toastIfQtyCappedAfterSuccess(requestedQty, r2.data, { code: body.code });
+
+              // Check if added cart item price is shown as 0 (zero)
+              var addedRow = findCartLineByCode(r2.data, String(body.code || body.item_code || '').toUpperCase());
+              if (addedRow) {
+                var priceVal = parseFloat(pickFirst(addedRow, ['itemprice', 'price', 'unit_price', 'amount']) || 0);
+                if (priceVal <= 0) {
+                  toast('Item price is ₹0 (inactive in API). Syncing status and activating product...', 'amber');
+                  return syncAndHandleUnpublishedAddToCart(p, body);
+                }
+              }
             }
             return r2;
           });
@@ -4794,6 +4808,51 @@
         });
     });
   };
+
+  /**
+   * Sync API unpublished status (0) to local DB, then trigger unpublished cart addition flow.
+   * @param {Record<string, unknown>} p
+   * @param {Record<string, unknown>} body
+   */
+  function syncAndHandleUnpublishedAddToCart(p, body) {
+    p = p || {};
+    body = body || {};
+    var productId = p.product_id || p.id || $('#modal_product_id').val() || 0;
+    var itemCode = p.item_code || body.item_code || body.code || '';
+    var sku = p.sku || body.code || '';
+    var size = p.size || body.size || '';
+    var color = p.color || body.color || '';
+
+    if (!productId && window.productApiCache) {
+      var cached = window.productApiCache[body.code] || window.productApiCache[body.item_code];
+      if (cached && (cached.id || cached.product_id)) {
+        productId = cached.id || cached.product_id;
+      }
+    }
+
+    var statusParams = {
+      product_id: productId,
+      item_code: itemCode,
+      sku: sku,
+      size: size,
+      color: color,
+      published: 0
+    };
+
+    return $.ajax({
+      url: '?page=pos_register&action=update-product-published',
+      type: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(statusParams),
+      dataType: 'json'
+    }).always(function () {
+      p.published = 0;
+      p.is_published = false;
+      p.status = 0;
+      p.status_label = 'Unpublished';
+      return handleUnpublishedAddToCart(p, body);
+    });
+  }
 
   /**
    * Handle adding an unpublished product (vp_products.published = 0) to cart:
