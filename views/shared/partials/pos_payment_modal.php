@@ -64,7 +64,7 @@ $posPaymentModalCloseHandler = trim((string)($posPaymentModalCloseHandler ?? 'Po
                 </div>
                 <div class="hidden sm:grid sm:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_2.5rem] gap-2 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-white border-b border-slate-100">
                     <span>Mode</span>
-                    <span>Amount (₹)</span>
+                    <span class="payment-split-amount-header">Amount (₹)</span>
                     <span>Transaction / ref</span>
                     <span></span>
                 </div>
@@ -122,7 +122,7 @@ $posPaymentModalCloseHandler = trim((string)($posPaymentModalCloseHandler ?? 'Po
             <select class="payment-split-mode mt-0.5 sm:mt-0 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></select>
         </div>
         <div>
-            <label class="sm:hidden text-[10px] font-semibold text-slate-500 uppercase">Amount (₹)</label>
+            <label class="payment-split-amount-label sm:hidden text-[10px] font-semibold text-slate-500 uppercase">Amount (₹)</label>
             <input type="number" step="0.01" min="0" class="payment-split-amount mt-0.5 sm:mt-0 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm tabular-nums" placeholder="0.00" />
         </div>
         <div>

@@ -4003,7 +4003,7 @@
       } else {
         inpDisc.removeAttribute('max');
         inpDisc.setAttribute('step', '0.01');
-        inpDisc.placeholder = 'Amount (₹)';
+        inpDisc.placeholder = 'Amount (' + getCartCurrencySymbol(data) + ')';
       }
     }
 
@@ -4114,7 +4114,8 @@
             } else {
               inpM.removeAttribute('max');
               inpM.setAttribute('step', '0.01');
-              inpM.placeholder = 'Amount (₹)';
+              var sym = typeof getCartCurrencySymbol === 'function' ? getCartCurrencySymbol(window.__posCartLastRetrieveData) : '₹';
+              inpM.placeholder = 'Amount (' + sym + ')';
             }
           }
           return;
