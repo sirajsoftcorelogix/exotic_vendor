@@ -4986,11 +4986,6 @@ class POSRegisterController
         }
         $row = $this->attachIrnEwbStatusToReceiptRow($conn, $row);
         $row = $this->applyPosReceiptCompanyHeader($row, $conn);
-        $row['einvoice_eligibility'] = $this->resolveReceiptEinvoiceEwaybillEligibility(
-            $conn,
-            (string)($row['order_id'] ?? ''),
-            (float)($row['receipt_grand_total'] ?? $row['receipt_subtotal_goods'] ?? 0)
-        );
         renderTemplateClean('views/pos_register/order_confirmation.php', $row, 'Order confirmation');
     }
 
