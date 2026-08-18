@@ -6283,6 +6283,8 @@ class POSRegisterController
             $userId = (int)($_SESSION['user']['id'] ?? 0);
             $storeId = (int)($_SESSION['warehouse_id'] ?? 0);
 
+            $wasUnpublishedInDb = (int)($product['published'] ?? 0) === 0;
+
             $activeCountBefore = 0;
             $conn->begin_transaction();
             try {
@@ -6299,8 +6301,9 @@ class POSRegisterController
                     $productModel->setProductPublished($resolvedProductId, 1);
                 }
 
-                $stmtIns = $conn->prepare("INSERT INTO `vp_pos_unpublished_locks` (product_id, token, user_id, store_id, expires_at) VALUES (?, ?, ?, ?, NOW() + INTERVAL 30 MINUTE)");
-                $stmtIns->bind_param('isii', $resolvedProductId, $lockToken, $userId, $storeId);
+                $wasUnpubVal = $wasUnpublishedInDb ? 1 : 0;
+                $stmtIns = $conn->prepare("INSERT INTO `vp_pos_unpublished_locks` (product_id, token, user_id, store_id, was_unpublished, expires_at) VALUES (?, ?, ?, ?, ?, NOW() + INTERVAL 30 MINUTE)");
+                $stmtIns->bind_param('isiii', $resolvedProductId, $lockToken, $userId, $storeId, $wasUnpubVal);
                 $stmtIns->execute();
                 $stmtIns->close();
 
@@ -6356,8 +6359,21 @@ class POSRegisterController
 
                 $remainingLocks = (int)($resCnt['cnt'] ?? 0);
 
+                $wasUnpublishedFlag = false;
                 if ($remainingLocks === 0) {
-                    $productModel->setProductPublished($resolvedProductId, 0);
+                    $chkLockStmt = $conn->prepare("SELECT was_unpublished FROM `vp_pos_unpublished_locks` WHERE product_id = ? ORDER BY id DESC LIMIT 1");
+                    if ($chkLockStmt) {
+                        $chkLockStmt->bind_param('i', $resolvedProductId);
+                        $chkLockStmt->execute();
+                        $lockRow = $chkLockStmt->get_result()->fetch_assoc();
+                        $chkLockStmt->close();
+                        if ($lockRow && (int)($lockRow['was_unpublished'] ?? 0) === 1) {
+                            $wasUnpublishedFlag = true;
+                        }
+                    }
+                    if ($wasUnpublishedFlag) {
+                        $productModel->setProductPublished($resolvedProductId, 0);
+                    }
                 }
 
                 $conn->commit();
@@ -6370,11 +6386,11 @@ class POSRegisterController
             $this->cleanupExpiredUnpublishedLocks($conn, $productModel);
 
             $vendorSyncResult = null;
-            if ($remainingLocks === 0) {
+            if ($remainingLocks === 0 && $wasUnpublishedFlag) {
                 $vendorSyncResult = $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 0);
                 $msg = 'Product row lock released and published status set back to 0.';
             } else {
-                $msg = 'Row lock released. Product remains published = 1 because ' . $remainingLocks . ' other store row lock(s) are active.';
+                $msg = 'Row lock released.';
             }
 
             vendorJsonResponse([
@@ -6457,8 +6473,13 @@ class POSRegisterController
 
                 $remaining = (int)($cntRow['cnt'] ?? 0);
                 if ($remaining === 0) {
-                    $productModel->setProductPublished($resolvedPid, 0);
-                    $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 0);
+                    $pRow = $productModel->getProduct($resolvedPid);
+                    // Only set published = 0 if this lock was created for an item that was originally unpublished (was_unpublished = 1)
+                    $chkLock = $conn->query("SELECT was_unpublished FROM `vp_pos_unpublished_locks` WHERE product_id = {$resolvedPid} AND was_unpublished = 1 LIMIT 1");
+                    if ($chkLock && $chkLock->num_rows > 0) {
+                        $productModel->setProductPublished($resolvedPid, 0);
+                        $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 0);
+                    }
                 }
             }
         }
@@ -6477,12 +6498,16 @@ class POSRegisterController
             `token` VARCHAR(64) NOT NULL,
             `user_id` INT DEFAULT 0,
             `store_id` INT DEFAULT 0,
+            `was_unpublished` TINYINT(1) DEFAULT 1,
             `expires_at` DATETIME NOT NULL,
             `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX `idx_product_expires` (`product_id`, `expires_at`),
             INDEX `idx_token` (`token`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
         $conn->query($sql);
+        if (!$this->columnExists($conn, 'vp_pos_unpublished_locks', 'was_unpublished')) {
+            @$conn->query("ALTER TABLE `vp_pos_unpublished_locks` ADD COLUMN `was_unpublished` TINYINT(1) DEFAULT 1 AFTER `store_id`");
+        }
         $checked = true;
     }
 
@@ -6514,7 +6539,9 @@ class POSRegisterController
                 $activeCount = (int)($resCnt['cnt'] ?? 0);
                 if ($activeCount === 0) {
                     $pRow = $productModel->getProduct($pid);
-                    if ($pRow && (int)($pRow['published'] ?? 0) === 1) {
+                    // Only set published = 0 if this lock was created for an item that was originally unpublished (was_unpublished = 1)
+                    $chkLock = $conn->query("SELECT was_unpublished FROM `vp_pos_unpublished_locks` WHERE product_id = {$pid} AND was_unpublished = 1 LIMIT 1");
+                    if ($chkLock && $chkLock->num_rows > 0) {
                         $productModel->setProductPublished($pid, 0);
                         $this->syncProductPublishedToVendorApi(
                             trim((string)($pRow['item_code'] ?? '')),
