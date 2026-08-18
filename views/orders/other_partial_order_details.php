@@ -155,8 +155,14 @@ if ($invoiceIdForReturn > 0) {
                             stroke-width="1.5">
                             <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                         </svg>
+                        <?php
+                        $orderHeaderDateRaw = trim((string)($orderremarks['created_at'] ?? ($order[0]['order_date'] ?? '')));
+                        $orderHeaderDateLabel = ($orderHeaderDateRaw !== '' && $orderHeaderDateRaw !== '0000-00-00 00:00:00' && $orderHeaderDateRaw !== '0000-00-00')
+                            ? date('d-M-Y', strtotime($orderHeaderDateRaw))
+                            : '—';
+                        ?>
                         <span
-                            class="text-sm font-medium text-gray-600"><?php echo date('d-M-Y', strtotime($orderremarks['created_at'] ?? '')); ?></span>
+                            class="text-sm font-medium text-gray-600"><?php echo htmlspecialchars($orderHeaderDateLabel); ?></span>
                     </div>
                 </div>
 
@@ -261,7 +267,13 @@ if ($invoiceIdForReturn > 0) {
 
                                             <div class="mt-4 text-center px-2">
                                                 <p class="text-[12px] font-bold text-gray-900 leading-tight">Created</p>
-                                                <p class="text-[10px] text-gray-500 mt-1"><?= date('d M, Y', strtotime($item['order_date'] ?? 'now')) ?></p>
+                                                <?php
+                                                $itemOrderDateRaw = trim((string)($item['order_date'] ?? ''));
+                                                $itemOrderDateLabel = ($itemOrderDateRaw !== '' && $itemOrderDateRaw !== '0000-00-00 00:00:00' && $itemOrderDateRaw !== '0000-00-00')
+                                                    ? date('d M, Y', strtotime($itemOrderDateRaw))
+                                                    : '—';
+                                                ?>
+                                                <p class="text-[10px] text-gray-500 mt-1"><?= htmlspecialchars($itemOrderDateLabel) ?></p>
                                                 <p class="text-[9px] text-gray-400 italic">System</p>
                                             </div>
                                         </div>
