@@ -3101,6 +3101,9 @@ class OrdersController
         }
 
         try {
+            if (!isset($vendorOrder['payment_mode']) && function_exists('pos_payment_resolve_order_payment_mode')) {
+                $vendorOrder['payment_mode'] = pos_payment_resolve_order_payment_mode($conn, $orderNumber, (string)($vendorOrder['payment_type'] ?? ''));
+            }
             $ordersModel->insertAddressInfo($vendorOrder, $customerId);
         } catch (\Throwable $e) {
             error_log('[order refresh insertAddressInfo] ' . $e->getMessage());
