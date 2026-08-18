@@ -84,6 +84,25 @@ class POSRegisterController
         return null;
     }
 
+    private function tableExists(mysqli $conn, string $table): bool
+    {
+        $stmt = $conn->prepare(
+            'SELECT 1
+             FROM INFORMATION_SCHEMA.TABLES
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = ?
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('s', $table);
+        $stmt->execute();
+        $exists = (bool)$stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $exists;
+    }
+
     private function columnExists(mysqli $conn, string $table, string $column): bool
     {
         $stmt = $conn->prepare(
