@@ -165,7 +165,7 @@ function pos_invoice_build_amount_summary_rows(
             'is_grand' => false,
         ];
         $standaloneLineDisc = max(0.0, round($lineDisc - $orderLevelDisc, 2));
-        if ($standaloneLineDisc > 0.001) {
+        if ($standaloneLineDisc > 0.001 && abs($subInclGst - ($grandTotal + $orderLevelDisc)) > 0.02) {
             $rows[] = [
                 'label' => 'Line Discount',
                 'amount' => $standaloneLineDisc,
