@@ -140,6 +140,33 @@ if (!function_exists('picklist_split_items_for_print')) {
             }
         }
 
+        usort($short, static function (array $a, array $b): int {
+            $ordA = (string) ($a['order_number'] ?? '');
+            $ordB = (string) ($b['order_number'] ?? '');
+            $cmp = strnatcasecmp($ordA, $ordB);
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+
+            $locA = trim((string) ($a['warehouse_location'] ?? ''));
+            $locB = trim((string) ($b['warehouse_location'] ?? ''));
+            if ($locA === '' && $locB !== '') {
+                return 1;
+            }
+            if ($locB === '' && $locA !== '') {
+                return -1;
+            }
+            $cmpLoc = strnatcasecmp($locA, $locB);
+            if ($cmpLoc !== 0) {
+                return $cmpLoc;
+            }
+
+            $skuA = picklist_item_sku($a);
+            $skuB = picklist_item_sku($b);
+
+            return strnatcasecmp($skuA, $skuB);
+        });
+
         return ['full' => $full, 'short' => $short];
     }
 }

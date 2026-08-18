@@ -43,7 +43,11 @@ class PurchaseOrderItem {
            FROM vp_po_items poi
            LEFT JOIN vp_products vp ON poi.product_id = vp.id
            LEFT JOIN vp_orders vo ON poi.order_number = vo.order_number AND poi.item_code = vo.item_code
-           LEFT JOIN vp_stock vs ON vs.item_code = poi.item_code AND COALESCE(vs.size,'') = COALESCE(poi.size,'') AND COALESCE(vs.color,'') = COALESCE(poi.color,'')
+           LEFT JOIN vp_stock vs ON (
+               (poi.sku IS NOT NULL AND poi.sku <> '' AND vs.sku = poi.sku) OR
+               (vp.sku IS NOT NULL AND vp.sku <> '' AND vs.sku = vp.sku) OR
+               (vs.item_code = poi.item_code AND COALESCE(vs.size,'') = COALESCE(poi.size,'') AND COALESCE(vs.color,'') = COALESCE(poi.color,''))
+           )
            WHERE poi.purchase_orders_id = ? ";
 
         $stmt = $this->conn->prepare($query);

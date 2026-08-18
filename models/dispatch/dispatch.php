@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../shiprocket_service.php';
 require_once __DIR__ . '/../../helpers/dispatch_delivery_dates.php';
 require_once __DIR__ . '/../../helpers/dispatch_courier_identity.php';
 require_once __DIR__ . '/../../helpers/exotic_india_shipment_api.php';
+require_once __DIR__ . '/../../helpers/pos_payment_receipt.php';
 
 class Dispatch {
     private $db;
@@ -169,6 +170,9 @@ class Dispatch {
         if ($stmt->execute()) {
             $dispatchId = (int) $this->db->insert_id;
             $this->maybeLogExoticIndiaShipment($dispatchId);
+            if (!empty($order_number) && function_exists('pos_payment_update_order_info_payment_mode')) {
+                pos_payment_update_order_info_payment_mode($this->db, (string)$order_number);
+            }
             return $dispatchId;
         }
         if ($stmt->error) {
@@ -538,6 +542,10 @@ class Dispatch {
         $stmt->close();
         if ($result) {
             $this->maybeLogExoticIndiaShipment($dispatchId, is_array($record) ? $record : []);
+            $orderNo = is_array($record) ? (string)($record['order_number'] ?? '') : '';
+            if ($orderNo !== '' && function_exists('pos_payment_update_order_info_payment_mode')) {
+                pos_payment_update_order_info_payment_mode($this->db, $orderNo);
+            }
         }
 
         return $result;

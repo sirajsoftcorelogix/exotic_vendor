@@ -155,8 +155,14 @@ if ($invoiceIdForReturn > 0) {
                             stroke-width="1.5">
                             <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                         </svg>
+                        <?php
+                        $orderHeaderDateRaw = trim((string)($orderremarks['created_at'] ?? ($order[0]['order_date'] ?? '')));
+                        $orderHeaderDateLabel = ($orderHeaderDateRaw !== '' && $orderHeaderDateRaw !== '0000-00-00 00:00:00' && $orderHeaderDateRaw !== '0000-00-00')
+                            ? date('d-M-Y', strtotime($orderHeaderDateRaw))
+                            : '—';
+                        ?>
                         <span
-                            class="text-sm font-medium text-gray-600"><?php echo date('d-M-Y', strtotime($orderremarks['created_at'] ?? '')); ?></span>
+                            class="text-sm font-medium text-gray-600"><?php echo htmlspecialchars($orderHeaderDateLabel); ?></span>
                     </div>
                 </div>
 
@@ -261,7 +267,13 @@ if ($invoiceIdForReturn > 0) {
 
                                             <div class="mt-4 text-center px-2">
                                                 <p class="text-[12px] font-bold text-gray-900 leading-tight">Created</p>
-                                                <p class="text-[10px] text-gray-500 mt-1"><?= date('d M, Y', strtotime($item['order_date'] ?? 'now')) ?></p>
+                                                <?php
+                                                $itemOrderDateRaw = trim((string)($item['order_date'] ?? ''));
+                                                $itemOrderDateLabel = ($itemOrderDateRaw !== '' && $itemOrderDateRaw !== '0000-00-00 00:00:00' && $itemOrderDateRaw !== '0000-00-00')
+                                                    ? date('d M, Y', strtotime($itemOrderDateRaw))
+                                                    : '—';
+                                                ?>
+                                                <p class="text-[10px] text-gray-500 mt-1"><?= htmlspecialchars($itemOrderDateLabel) ?></p>
                                                 <p class="text-[9px] text-gray-400 italic">System</p>
                                             </div>
                                         </div>
@@ -472,10 +484,12 @@ if ($invoiceIdForReturn > 0) {
                     $customerNameParts = preg_split('/\s+/', trim((string)($customerdetails['customer_name'] ?? '')), 2);
                     $fallbackFirstName = trim((string)($customerNameParts[0] ?? ''));
                     $fallbackLastName = trim((string)($customerNameParts[1] ?? ''));
+
                     $billingFirstName = trim((string)($orderremarks['first_name'] ?? ''));
                     $billingLastName = trim((string)($orderremarks['last_name'] ?? ''));
                     $shippingFirstName = trim((string)($orderremarks['shipping_first_name'] ?? ''));
                     $shippingLastName = trim((string)($orderremarks['shipping_last_name'] ?? ''));
+
                     if ($billingFirstName === '' && $billingLastName === '') {
                         $billingFirstName = $fallbackFirstName;
                         $billingLastName = $fallbackLastName;
@@ -484,11 +498,79 @@ if ($invoiceIdForReturn > 0) {
                         $shippingFirstName = $billingFirstName;
                         $shippingLastName = $billingLastName;
                     }
+                    if ($billingFirstName === '' && $shippingFirstName !== '') {
+                        $billingFirstName = $shippingFirstName;
+                        if ($billingLastName === '') {
+                            $billingLastName = $shippingLastName;
+                        }
+                    }
+                    if ($shippingFirstName === '' && $billingFirstName !== '') {
+                        $shippingFirstName = $billingFirstName;
+                        if ($shippingLastName === '') {
+                            $shippingLastName = $billingLastName;
+                        }
+                    }
                     $billingDisplayName = trim($billingFirstName . ' ' . $billingLastName);
                     $shippingDisplayName = trim($shippingFirstName . ' ' . $shippingLastName);
+
+                    $customerPhone = trim((string)($orderremarks['mobile'] ?? ($orderremarks['shipping_mobile'] ?? ($customerdetails['customer_phone'] ?? ''))));
+                    $customerName = $billingDisplayName !== '' ? $billingDisplayName : ($shippingDisplayName !== '' ? $shippingDisplayName : trim((string)($customerdetails['customer_name'] ?? '')));
+
+                    $billingAddress1 = trim((string)($orderremarks['address_line1'] ?? ''));
+                    $billingAddress2 = trim((string)($orderremarks['address_line2'] ?? ''));
+                    $billingCity = trim((string)($orderremarks['city'] ?? ''));
+                    $billingState = trim((string)($orderremarks['state'] ?? ''));
+                    $billingZipcode = trim((string)($orderremarks['zipcode'] ?? ''));
+                    $billingCountry = trim((string)($orderremarks['country'] ?? 'IN'));
+                    $billingMobile = trim((string)($orderremarks['mobile'] ?? ''));
+                    $billingGstin = trim((string)($orderremarks['gstin'] ?? ''));
+
+                    $shippingAddress1 = trim((string)($orderremarks['shipping_address_line1'] ?? ''));
+                    $shippingAddress2 = trim((string)($orderremarks['shipping_address_line2'] ?? ''));
+                    $shippingCity = trim((string)($orderremarks['shipping_city'] ?? ''));
+                    $shippingState = trim((string)($orderremarks['shipping_state'] ?? ''));
+                    $shippingZipcode = trim((string)($orderremarks['shipping_zipcode'] ?? ''));
+                    $shippingCountry = trim((string)($orderremarks['shipping_country'] ?? ''));
+                    $shippingMobile = trim((string)($orderremarks['shipping_mobile'] ?? ''));
+                    $shippingGstin = trim((string)($orderremarks['shipping_gstin'] ?? ''));
+
+                    if ($shippingAddress1 === '' && $shippingCity === '') {
+                        $shippingAddress1 = $billingAddress1;
+                        $shippingAddress2 = $billingAddress2;
+                        $shippingCity = $billingCity;
+                        $shippingState = $billingState;
+                        $shippingZipcode = $billingZipcode;
+                        $shippingCountry = $billingCountry !== '' ? $billingCountry : 'IN';
+                        if ($shippingMobile === '') {
+                            $shippingMobile = $billingMobile;
+                        }
+                        if ($shippingGstin === '') {
+                            $shippingGstin = $billingGstin;
+                        }
+                    }
+                    if ($billingAddress1 === '' && $billingCity === '') {
+                        $billingAddress1 = $shippingAddress1;
+                        $billingAddress2 = $shippingAddress2;
+                        $billingCity = $shippingCity;
+                        $billingState = $shippingState;
+                        $billingZipcode = $shippingZipcode;
+                        $billingCountry = $shippingCountry !== '' ? $shippingCountry : 'IN';
+                        if ($billingMobile === '') {
+                            $billingMobile = $shippingMobile;
+                        }
+                        if ($billingGstin === '') {
+                            $billingGstin = $shippingGstin;
+                        }
+                    }
+                    if ($shippingCountry === '') {
+                        $shippingCountry = $billingCountry !== '' ? $billingCountry : 'IN';
+                    }
+                    if ($billingCountry === '') {
+                        $billingCountry = $shippingCountry !== '' ? $shippingCountry : 'IN';
+                    }
                     ?>
-                    <span id="display-customer-name" class="hidden"><?php echo htmlspecialchars($customerdetails['customer_name'] ?? ''); ?></span>
-                    <span id="display-customer-phone" class="hidden"><?php echo htmlspecialchars($customerdetails['customer_phone'] ?? ''); ?></span>
+                    <span id="display-customer-name" class="hidden"><?php echo htmlspecialchars($customerName); ?></span>
+                    <span id="display-customer-phone" class="hidden"><?php echo htmlspecialchars($customerPhone); ?></span>
                     <span id="billing_first_name" class="hidden"><?php echo htmlspecialchars($billingFirstName); ?></span>
                     <span id="billing_last_name" class="hidden"><?php echo htmlspecialchars($billingLastName); ?></span>
                     <span id="shipping_first_name" class="hidden"><?php echo htmlspecialchars($shippingFirstName); ?></span>
@@ -502,32 +584,32 @@ if ($invoiceIdForReturn > 0) {
                                 <?php else: ?>
                                     <span class="block font-medium hidden" id="shipping_display_name"></span>
                                 <?php endif; ?>
-                                <span id="shipping_address1"><?php echo htmlspecialchars($orderremarks['shipping_address_line1'] ?? ''); ?></span>
-                                <?php if (!empty($orderremarks['shipping_address_line2'])): ?>
-                                    <br><span id="shipping_address2"><?php echo htmlspecialchars($orderremarks['shipping_address_line2']); ?></span>
+                                <span id="shipping_address1"><?php echo htmlspecialchars($shippingAddress1); ?></span>
+                                <?php if ($shippingAddress2 !== ''): ?>
+                                    <br><span id="shipping_address2"><?php echo htmlspecialchars($shippingAddress2); ?></span>
                                 <?php else: ?>
                                     <span id="shipping_address2" class="hidden"></span>
                                 <?php endif; ?>
                                 <br>
-                                <span id="shipping_city"><?php echo htmlspecialchars($orderremarks['shipping_city'] ?? ''); ?></span><?php if (!empty($orderremarks['shipping_state'])): ?>,
-                                    <span id="shipping_state"><?php echo htmlspecialchars($orderremarks['shipping_state']); ?></span><?php else: ?><span id="shipping_state" class="hidden"></span><?php endif; ?>
-                                <?php if (!empty($orderremarks['shipping_zipcode'])): ?>
-                                    - <span id="shipping_zipcode"><?php echo htmlspecialchars($orderremarks['shipping_zipcode']); ?></span>
+                                <span id="shipping_city"><?php echo htmlspecialchars($shippingCity); ?></span><?php if ($shippingState !== ''): ?>,
+                                    <span id="shipping_state"><?php echo htmlspecialchars($shippingState); ?></span><?php else: ?><span id="shipping_state" class="hidden"></span><?php endif; ?>
+                                <?php if ($shippingZipcode !== ''): ?>
+                                    - <span id="shipping_zipcode"><?php echo htmlspecialchars($shippingZipcode); ?></span>
                                 <?php else: ?>
                                     <span id="shipping_zipcode" class="hidden"></span>
                                 <?php endif; ?>
-                                <?php if (!empty($orderremarks['shipping_country'])): ?>
-                                    <br><span id="shipping_country" data-code="<?php echo htmlspecialchars($orderremarks['shipping_country']); ?>"><?php echo htmlspecialchars($resolveCountryLabel($orderremarks['shipping_country'])); ?></span>
+                                <?php if ($shippingCountry !== ''): ?>
+                                    <br><span id="shipping_country" data-code="<?php echo htmlspecialchars($shippingCountry); ?>"><?php echo htmlspecialchars($resolveCountryLabel($shippingCountry)); ?></span>
                                 <?php else: ?>
                                     <span id="shipping_country" class="hidden"></span>
                                 <?php endif; ?>
-                                <?php if (!empty($orderremarks['shipping_mobile'])): ?>
-                                    <br><span id="shipping_mobile" class="mt-1 block"><?php echo htmlspecialchars($orderremarks['shipping_mobile']); ?></span>
+                                <?php if ($shippingMobile !== ''): ?>
+                                    <br><span id="shipping_mobile" class="mt-1 block"><?php echo htmlspecialchars($shippingMobile); ?></span>
                                 <?php else: ?>
                                     <span id="shipping_mobile" class="hidden"></span>
                                 <?php endif; ?>
-                                <?php if (!empty($orderremarks['shipping_gstin'])): ?>
-                                    <br><span class="text-xs text-gray-500">GSTIN:</span> <span id="shipping_gstin"><?php echo htmlspecialchars($orderremarks['shipping_gstin']); ?></span>
+                                <?php if ($shippingGstin !== ''): ?>
+                                    <br><span class="text-xs text-gray-500">GSTIN:</span> <span id="shipping_gstin"><?php echo htmlspecialchars($shippingGstin); ?></span>
                                 <?php else: ?>
                                     <span id="shipping_gstin" class="hidden"></span>
                                 <?php endif; ?>
@@ -541,27 +623,32 @@ if ($invoiceIdForReturn > 0) {
                                 <?php else: ?>
                                     <span class="block font-medium hidden" id="billing_display_name"></span>
                                 <?php endif; ?>
-                                <span id="billing_address1"><?php echo htmlspecialchars($orderremarks['address_line1'] ?? ''); ?></span>
-                                <?php if (!empty($orderremarks['address_line2'])): ?>
-                                    <br><span id="billing_address2"><?php echo htmlspecialchars($orderremarks['address_line2']); ?></span>
+                                <span id="billing_address1"><?php echo htmlspecialchars($billingAddress1); ?></span>
+                                <?php if ($billingAddress2 !== ''): ?>
+                                    <br><span id="billing_address2"><?php echo htmlspecialchars($billingAddress2); ?></span>
                                 <?php else: ?>
                                     <span id="billing_address2" class="hidden"></span>
                                 <?php endif; ?>
                                 <br>
-                                <span id="billing_city"><?php echo htmlspecialchars($orderremarks['city'] ?? ''); ?></span><?php if (!empty($orderremarks['state'])): ?>,
-                                    <span id="billing_state"><?php echo htmlspecialchars($orderremarks['state']); ?></span><?php else: ?><span id="billing_state" class="hidden"></span><?php endif; ?>
-                                <?php if (!empty($orderremarks['zipcode'])): ?>
-                                    - <span id="billing_zipcode"><?php echo htmlspecialchars($orderremarks['zipcode']); ?></span>
+                                <span id="billing_city"><?php echo htmlspecialchars($billingCity); ?></span><?php if ($billingState !== ''): ?>,
+                                    <span id="billing_state"><?php echo htmlspecialchars($billingState); ?></span><?php else: ?><span id="billing_state" class="hidden"></span><?php endif; ?>
+                                <?php if ($billingZipcode !== ''): ?>
+                                    - <span id="billing_zipcode"><?php echo htmlspecialchars($billingZipcode); ?></span>
                                 <?php else: ?>
                                     <span id="billing_zipcode" class="hidden"></span>
                                 <?php endif; ?>
-                                <?php if (!empty($orderremarks['country'])): ?>
-                                    <br><span id="billing_country" data-code="<?php echo htmlspecialchars($orderremarks['country']); ?>"><?php echo htmlspecialchars($resolveCountryLabel($orderremarks['country'])); ?></span>
+                                <?php if ($billingCountry !== ''): ?>
+                                    <br><span id="billing_country" data-code="<?php echo htmlspecialchars($billingCountry); ?>"><?php echo htmlspecialchars($resolveCountryLabel($billingCountry)); ?></span>
                                 <?php else: ?>
                                     <span id="billing_country" class="hidden"></span>
                                 <?php endif; ?>
-                                <?php if (!empty($orderremarks['gstin'])): ?>
-                                    <br><span class="text-xs text-gray-500">GSTIN:</span> <span id="billing_gstin"><?php echo htmlspecialchars($orderremarks['gstin']); ?></span>
+                                <?php if ($billingMobile !== ''): ?>
+                                    <br><span id="billing_mobile" class="mt-1 block"><?php echo htmlspecialchars($billingMobile); ?></span>
+                                <?php else: ?>
+                                    <span id="billing_mobile" class="hidden"></span>
+                                <?php endif; ?>
+                                <?php if ($billingGstin !== ''): ?>
+                                    <br><span class="text-xs text-gray-500">GSTIN:</span> <span id="billing_gstin"><?php echo htmlspecialchars($billingGstin); ?></span>
                                 <?php else: ?>
                                     <span id="billing_gstin" class="hidden"></span>
                                 <?php endif; ?>
@@ -661,15 +748,15 @@ if ($invoiceIdForReturn > 0) {
                                     <input type="text" id="edit_shipping_first_name" name="shipping_first_name" placeholder="First Name" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                     <input type="text" id="edit_shipping_last_name" name="shipping_last_name" placeholder="Last Name" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 </div>
-                                <input type="text" id="edit_shipping_address_line1" name="billing_address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
-                                <input type="text" id="edit_shipping_address_line2" name="billing_address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_shipping_address_line1" name="shipping_address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_shipping_address_line2" name="shipping_address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 <div class="grid grid-cols-2 gap-2">
-                                    <input type="text" id="edit_shipping_city" name="billing_city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
-                                    <input type="text" id="edit_shipping_zipcode" name="billing_zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                    <input type="text" id="edit_shipping_city" name="shipping_city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                    <input type="text" id="edit_shipping_zipcode" name="shipping_zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 </div>
                                 <input type="text" id="edit_shipping_state" name="shipping_state" placeholder="State" class="hidden w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 <select id="edit_shipping_state_select" class="hidden w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500"></select>
-                                <select id="edit_shipping_country" name="billing_country" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <select id="edit_shipping_country" name="shipping_country" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                     <?php
                                     $selected_iso = strtoupper(trim((string)($orderremarks['shipping_country'] ?? 'IN')));
                                     $country_list = $countries;
@@ -685,9 +772,9 @@ if ($invoiceIdForReturn > 0) {
                             <div class="space-y-2">
                                 <div class="grid grid-cols-2 gap-2">
                                     <input type="text" id="edit_billing_first_name" name="first_name" placeholder="First Name *" required class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
-                                    <input type="text" id="edit_billing_last_name" name="last_name" placeholder="Last Name *" required class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                    <input type="text" id="edit_billing_last_name" name="last_name" placeholder="Last Name" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 </div>
-                                <input type="text" id="edit_billing_address_line1" name="address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_billing_address_line1" name="address_line1" placeholder="Address Line 1 *" required class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 <input type="text" id="edit_billing_address_line2" name="address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 <div class="grid grid-cols-2 gap-2">
                                     <input type="text" id="edit_billing_city" name="city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
@@ -1198,10 +1285,12 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
             });
     }
 
-    function populateOrderStateSelect(selectEl, states, selectedValue) {
+    function populateOrderStateSelect(selectEl, states, selectedValue, cityName) {
         if (!selectEl) return;
         const selected = String(selectedValue || '').trim();
         const selectedLower = selected.toLowerCase();
+        const cityLower = String(cityName || '').trim().toLowerCase();
+
         let html = '<option value="">Select state</option>';
         (states || []).forEach(state => {
             const name = String((state && state.name) || '').trim();
@@ -1210,20 +1299,46 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
             html += '<option value="' + esc + '">' + esc + '</option>';
         });
         selectEl.innerHTML = html;
+
         if (selected) {
             let matched = false;
             Array.from(selectEl.options).forEach(opt => {
-                if (opt.value.toLowerCase() === selectedLower) {
+                const optValLower = opt.value.toLowerCase();
+                if (optValLower === selectedLower) {
                     opt.selected = true;
                     matched = true;
                 }
             });
+
+            if (!matched && states && states.length) {
+                // Try matching by state code or iso (e.g. "WB" -> "West Bengal")
+                states.forEach(state => {
+                    if (matched) return;
+                    const codeLower = String(state.code || state.iso || '').trim().toLowerCase();
+                    if (codeLower && codeLower === selectedLower) {
+                        const name = String(state.name || '').trim();
+                        Array.from(selectEl.options).forEach(opt => {
+                            if (opt.value.toLowerCase() === name.toLowerCase()) {
+                                opt.selected = true;
+                                matched = true;
+                            }
+                        });
+                    }
+                });
+            }
+
             if (!matched) {
-                const opt = document.createElement('option');
-                opt.value = selected;
-                opt.textContent = selected;
-                opt.selected = true;
-                selectEl.appendChild(opt);
+                // Check if selected value matches the city name
+                if (cityLower && selectedLower === cityLower) {
+                    // Stored value was actually the city name, leave dropdown as "Select state"
+                    selectEl.value = '';
+                } else {
+                    const opt = document.createElement('option');
+                    opt.value = selected;
+                    opt.textContent = selected;
+                    opt.selected = true;
+                    selectEl.appendChild(opt);
+                }
             }
         }
     }
@@ -1247,7 +1362,7 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
         return inputEl ? String(inputEl.value || '').trim() : '';
     }
 
-    function syncOrderStateField(kind, preferredValue) {
+    function syncOrderStateField(kind, preferredValue, cityName) {
         const cfg = ORDER_STATE_FIELD_CONFIG[kind];
         if (!cfg) return Promise.resolve();
         const countryEl = document.getElementById(cfg.countryId);
@@ -1259,8 +1374,14 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
         const useDropdown = isOrderStateDropdownCountry(country);
         const value = preferredValue !== undefined ? String(preferredValue || '').trim() : getOrderStateValue(kind);
 
+        const currentCity = cityName !== undefined ? String(cityName || '').trim() : (
+            kind === 'shipping'
+                ? (document.getElementById('edit_shipping_city')?.value || '').trim()
+                : (document.getElementById('edit_billing_city')?.value || '').trim()
+        );
+
         if (!useDropdown) {
-            inputEl.value = value;
+            inputEl.value = (value && currentCity && value.toLowerCase() === currentCity.toLowerCase()) ? '' : value;
             selectEl.classList.add('hidden');
             inputEl.classList.remove('hidden');
             return Promise.resolve();
@@ -1272,36 +1393,68 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
         selectEl.classList.remove('hidden');
 
         return fetchOrderCountryStates(country).then(states => {
-            populateOrderStateSelect(selectEl, states, value);
+            populateOrderStateSelect(selectEl, states, value, currentCity);
+            if (inputEl) inputEl.value = getOrderStateValue(kind);
         });
     }
 
     function openNameEmailPopup(orderNumber) {
         document.getElementById('edit_order_number').value = orderNumber;
-        document.getElementById('edit_phone').value = document.getElementById('display-customer-phone')?.textContent.trim() || '';
-        document.getElementById('edit_shipping_first_name').value = document.getElementById('shipping_first_name')?.textContent.trim() || '';
-        document.getElementById('edit_shipping_last_name').value = document.getElementById('shipping_last_name')?.textContent.trim() || '';
-        document.getElementById('edit_billing_first_name').value = document.getElementById('billing_first_name')?.textContent.trim() || '';
-        document.getElementById('edit_billing_last_name').value = document.getElementById('billing_last_name')?.textContent.trim() || '';
-        document.getElementById('edit_shipping_address_line1').value = document.getElementById('shipping_address1')?.textContent.trim() || '';
-        document.getElementById('edit_shipping_address_line2').value = document.getElementById('shipping_address2')?.textContent.trim() || '';
-        document.getElementById('edit_shipping_city').value = document.getElementById('shipping_city')?.textContent.trim() || '';
-        document.getElementById('edit_shipping_zipcode').value = document.getElementById('shipping_zipcode')?.textContent.trim() || '';
-        document.getElementById('edit_shipping_country').value = document.getElementById('shipping_country')?.dataset.code || 'IN';
-        document.getElementById('edit_shipping_gstin').value = document.getElementById('shipping_gstin')?.textContent.trim() || '';
-        document.getElementById('edit_billing_address_line1').value = document.getElementById('billing_address1')?.textContent.trim() || '';
-        document.getElementById('edit_billing_address_line2').value = document.getElementById('billing_address2')?.textContent.trim() || '';
-        document.getElementById('edit_billing_city').value = document.getElementById('billing_city')?.textContent.trim() || '';
-        document.getElementById('edit_billing_zipcode').value = document.getElementById('billing_zipcode')?.textContent.trim() || '';
-        document.getElementById('edit_billing_country').value = document.getElementById('billing_country')?.dataset.code || 'IN';
-        document.getElementById('edit_billing_gstin').value = document.getElementById('billing_gstin')?.textContent.trim() || '';
+        const phoneVal = document.getElementById('display-customer-phone')?.textContent.trim() || document.getElementById('shipping_mobile')?.textContent.trim() || '';
+        document.getElementById('edit_phone').value = phoneVal;
 
-        const shippingState = document.getElementById('shipping_state')?.textContent.trim() || '';
-        const billingState = document.getElementById('billing_state')?.textContent.trim() || '';
+        const shipFirst = document.getElementById('shipping_first_name')?.textContent.trim() || '';
+        const shipLast = document.getElementById('shipping_last_name')?.textContent.trim() || '';
+        const billFirst = document.getElementById('billing_first_name')?.textContent.trim() || '';
+        const billLast = document.getElementById('billing_last_name')?.textContent.trim() || '';
+
+        const customerNameVal = document.getElementById('display-customer-name')?.textContent.trim() || '';
+        const nameParts = customerNameVal ? customerNameVal.split(/\s+/) : [];
+        const fallbackFirst = nameParts[0] || '';
+        const fallbackLast = nameParts.slice(1).join(' ') || '';
+
+        document.getElementById('edit_shipping_first_name').value = shipFirst || billFirst || fallbackFirst;
+        document.getElementById('edit_shipping_last_name').value = shipLast || billLast || fallbackLast;
+        document.getElementById('edit_billing_first_name').value = billFirst || shipFirst || fallbackFirst;
+        document.getElementById('edit_billing_last_name').value = billLast || shipLast || fallbackLast;
+
+        const shipAddr1 = document.getElementById('shipping_address1')?.textContent.trim() || '';
+        const shipAddr2 = document.getElementById('shipping_address2')?.textContent.trim() || '';
+        const shipCity = document.getElementById('shipping_city')?.textContent.trim() || '';
+        const shipZip = document.getElementById('shipping_zipcode')?.textContent.trim() || '';
+        const shipCountry = document.getElementById('shipping_country')?.dataset.code || 'IN';
+        const shipGstin = document.getElementById('shipping_gstin')?.textContent.trim() || '';
+
+        const billAddr1 = document.getElementById('billing_address1')?.textContent.trim() || '';
+        const billAddr2 = document.getElementById('billing_address2')?.textContent.trim() || '';
+        const billCity = document.getElementById('billing_city')?.textContent.trim() || '';
+        const billZip = document.getElementById('billing_zipcode')?.textContent.trim() || '';
+        const billCountry = document.getElementById('billing_country')?.dataset.code || 'IN';
+        const billGstin = document.getElementById('billing_gstin')?.textContent.trim() || '';
+
+        document.getElementById('edit_shipping_address_line1').value = shipAddr1 || billAddr1;
+        document.getElementById('edit_shipping_address_line2').value = shipAddr2 || billAddr2;
+        document.getElementById('edit_shipping_city').value = shipCity || billCity;
+        document.getElementById('edit_shipping_zipcode').value = shipZip || billZip;
+        document.getElementById('edit_shipping_country').value = shipCountry || billCountry || 'IN';
+        document.getElementById('edit_shipping_gstin').value = shipGstin || billGstin;
+
+        document.getElementById('edit_billing_address_line1').value = billAddr1 || shipAddr1;
+        document.getElementById('edit_billing_address_line2').value = billAddr2 || shipAddr2;
+        document.getElementById('edit_billing_city').value = billCity || shipCity;
+        document.getElementById('edit_billing_zipcode').value = billZip || shipZip;
+        document.getElementById('edit_billing_country').value = billCountry || shipCountry || 'IN';
+        document.getElementById('edit_billing_gstin').value = billGstin || shipGstin;
+
+        const shippingCity = shipCity || billCity;
+        const shippingState = document.getElementById('shipping_state')?.textContent.trim() || document.getElementById('billing_state')?.textContent.trim() || '';
+
+        const billingCity = billCity || shipCity;
+        const billingState = document.getElementById('billing_state')?.textContent.trim() || document.getElementById('shipping_state')?.textContent.trim() || '';
 
         Promise.all([
-            syncOrderStateField('shipping', shippingState),
-            syncOrderStateField('billing', billingState)
+            syncOrderStateField('shipping', shippingState, shippingCity),
+            syncOrderStateField('billing', billingState, billingCity)
         ]).then(() => {
             document.getElementById('nameEmailPopup').classList.remove('hidden');
         });
@@ -1315,53 +1468,126 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
         e.preventDefault();
 
         const orderNumber = document.getElementById('edit_order_number').value;
-        const first_name = document.getElementById('edit_billing_first_name').value.trim();
-        const last_name = document.getElementById('edit_billing_last_name').value.trim();
-        const shipping_first_name = document.getElementById('edit_shipping_first_name').value.trim();
-        const shipping_last_name = document.getElementById('edit_shipping_last_name').value.trim();
-        const name = [first_name, last_name].filter(Boolean).join(' ');
-        const phone = document.getElementById('edit_phone').value.trim();
-        const address_line1 = document.getElementById('edit_billing_address_line1').value.trim();
-        const address_line2 = document.getElementById('edit_billing_address_line2').value.trim();
-        const city = document.getElementById('edit_billing_city').value.trim();
-        const state = getOrderStateValue('billing');
-        const zipcode = document.getElementById('edit_billing_zipcode').value.trim();
-        const country = document.getElementById('edit_billing_country').value.trim();
-        const billing_address_line1 = document.getElementById('edit_shipping_address_line1').value.trim();
-        const billing_address_line2 = document.getElementById('edit_shipping_address_line2').value.trim();
-        const billing_city = document.getElementById('edit_shipping_city').value.trim();
-        const shipping_state = getOrderStateValue('shipping');
-        const billing_zipcode = document.getElementById('edit_shipping_zipcode').value.trim();
-        const billing_country = document.getElementById('edit_shipping_country').value.trim();
+        let first_name = document.getElementById('edit_billing_first_name').value.trim();
+        let last_name = document.getElementById('edit_billing_last_name').value.trim();
+        let shipping_first_name = document.getElementById('edit_shipping_first_name').value.trim();
+        let shipping_last_name = document.getElementById('edit_shipping_last_name').value.trim();
+        let phone = document.getElementById('edit_phone').value.trim();
+
+        let address_line1 = document.getElementById('edit_billing_address_line1').value.trim();
+        let address_line2 = document.getElementById('edit_billing_address_line2').value.trim();
+        let city = document.getElementById('edit_billing_city').value.trim();
+        let state = getOrderStateValue('billing');
+        let zipcode = document.getElementById('edit_billing_zipcode').value.trim();
+        let country = document.getElementById('edit_billing_country').value.trim();
+
+        let shipping_address_line1 = document.getElementById('edit_shipping_address_line1').value.trim();
+        let shipping_address_line2 = document.getElementById('edit_shipping_address_line2').value.trim();
+        let shipping_city = document.getElementById('edit_shipping_city').value.trim();
+        let shipping_state = getOrderStateValue('shipping');
+        let shipping_zipcode = document.getElementById('edit_shipping_zipcode').value.trim();
+        let shipping_country = document.getElementById('edit_shipping_country').value.trim();
+
         const gstin = document.getElementById('edit_billing_gstin').value.trim().toUpperCase();
         const shipping_gstin = document.getElementById('edit_shipping_gstin').value.trim().toUpperCase();
 
-        if (!first_name || !last_name || !phone) {
-            alert("Billing first name, last name and phone are required.");
+        if (!first_name && shipping_first_name) first_name = shipping_first_name;
+        if (!shipping_first_name && first_name) shipping_first_name = first_name;
+        if (!last_name && shipping_last_name) last_name = shipping_last_name;
+        if (!shipping_last_name && last_name) shipping_last_name = last_name;
+
+        if (!address_line1 && shipping_address_line1) address_line1 = shipping_address_line1;
+        if (!shipping_address_line1 && address_line1) shipping_address_line1 = address_line1;
+        if (!address_line2 && shipping_address_line2) address_line2 = shipping_address_line2;
+        if (!shipping_address_line2 && address_line2) shipping_address_line2 = address_line2;
+        if (!city && shipping_city) city = shipping_city;
+        if (!shipping_city && city) shipping_city = city;
+        if (!state && shipping_state) state = shipping_state;
+        if (!shipping_state && state) shipping_state = state;
+        if (!zipcode && shipping_zipcode) zipcode = shipping_zipcode;
+        if (!shipping_zipcode && zipcode) shipping_zipcode = zipcode;
+        if (!country && shipping_country) country = shipping_country;
+        if (!shipping_country && country) shipping_country = country;
+
+        const name = [first_name, last_name].filter(Boolean).join(' ');
+
+        if (!first_name || !phone || !address_line1) {
+            const valMsg = "Billing first name, phone and Address Line 1 are required.";
+            if (typeof window.showPosMessageModal === 'function') {
+                window.showPosMessageModal({ title: 'Validation Required', message: valMsg, tone: 'warning' });
+            } else {
+                alert(valMsg);
+            }
             return;
         }
 
-        fetch('index.php?page=orders&action=update_name_email_ajax', {
+        const params = new URLSearchParams({
+            order_number: orderNumber,
+            customer_name: name,
+            customer_phone: phone,
+            first_name: first_name,
+            last_name: last_name,
+            shipping_first_name: shipping_first_name,
+            shipping_last_name: shipping_last_name,
+            address_line1: address_line1,
+            address_line2: address_line2,
+            city: city,
+            state: state,
+            zipcode: zipcode,
+            country: country,
+            gstin: gstin,
+            billing_address_line1: shipping_address_line1,
+            billing_address_line2: shipping_address_line2,
+            billing_city: shipping_city,
+            shipping_state: shipping_state,
+            billing_zipcode: shipping_zipcode,
+            billing_country: shipping_country,
+            shipping_gstin: shipping_gstin
+        });
+
+        const fetchUrl = `index.php?page=${encodeURIComponent(<?php echo json_encode($orderStatusPage ?? 'orders', JSON_UNESCAPED_SLASHES); ?>)}&action=update_name_email_ajax`;
+
+        fetch(fetchUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: `order_number=${encodeURIComponent(orderNumber)}&customer_name=${encodeURIComponent(name)}&customer_phone=${encodeURIComponent(phone)}&first_name=${encodeURIComponent(first_name)}&last_name=${encodeURIComponent(last_name)}&shipping_first_name=${encodeURIComponent(shipping_first_name)}&shipping_last_name=${encodeURIComponent(shipping_last_name)}&address_line1=${encodeURIComponent(address_line1)}&address_line2=${encodeURIComponent(address_line2)}&city=${encodeURIComponent(city)}&state=${encodeURIComponent(state)}&zipcode=${encodeURIComponent(zipcode)}&country=${encodeURIComponent(country)}&gstin=${encodeURIComponent(gstin)}&billing_address_line1=${encodeURIComponent(billing_address_line1)}&billing_address_line2=${encodeURIComponent(billing_address_line2)}&billing_city=${encodeURIComponent(billing_city)}&shipping_state=${encodeURIComponent(shipping_state)}&billing_zipcode=${encodeURIComponent(billing_zipcode)}&billing_country=${encodeURIComponent(billing_country)}&shipping_gstin=${encodeURIComponent(shipping_gstin)}`
+                body: params.toString()
             })
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
-                    alert("Customer information updated successfully!");
-                    closeNameEmailPopup();
-
-                    // Optional â€“ safer for consistency with other parts of the page
-                    window.location.reload();
+                    if (typeof window.showPosMessageModal === 'function') {
+                        window.showPosMessageModal({
+                            title: 'Success',
+                            message: 'Customer information updated successfully!',
+                            tone: 'success',
+                            onClose: function() {
+                                closeNameEmailPopup();
+                                window.location.reload();
+                            }
+                        });
+                    } else {
+                        alert("Customer information updated successfully!");
+                        closeNameEmailPopup();
+                        window.location.reload();
+                    }
                 } else {
-                    alert("Failed to save: " + (data.message || "Unknown error"));
+                    const errMsg = "Failed to save: " + (data.message || "Unknown error");
+                    if (typeof window.showPosMessageModal === 'function') {
+                        window.showPosMessageModal({ title: 'Error', message: errMsg, tone: 'error' });
+                    } else {
+                        alert(errMsg);
+                    }
                 }
             })
             .catch(() => {
-                alert("Connection problem. Please try again.");
+                const connMsg = "Connection problem. Please try again.";
+                if (typeof window.showPosMessageModal === 'function') {
+                    window.showPosMessageModal({ title: 'Error', message: connMsg, tone: 'error' });
+                } else {
+                    alert(connMsg);
+                }
             });
     });
 
@@ -1398,6 +1624,14 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
         });
         document.getElementById('edit_billing_country')?.addEventListener('change', function() {
             syncOrderStateField('billing', '');
+        });
+        document.getElementById('edit_shipping_state_select')?.addEventListener('change', function() {
+            const inputEl = document.getElementById('edit_shipping_state');
+            if (inputEl) inputEl.value = this.value;
+        });
+        document.getElementById('edit_billing_state_select')?.addEventListener('change', function() {
+            const inputEl = document.getElementById('edit_billing_state');
+            if (inputEl) inputEl.value = this.value;
         });
     });
 </script>

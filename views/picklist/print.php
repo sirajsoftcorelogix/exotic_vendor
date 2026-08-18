@@ -4,6 +4,8 @@ require_once __DIR__ . '/partials/item_helpers.php';
 
 $picklist = $data['picklist'] ?? [];
 $items = $data['items'] ?? [];
+$printMode = (string) ($data['print_mode'] ?? '1');
+
 $split = picklist_split_items_for_print($items);
 $fullItems = $split['full'];
 $shortItems = $split['short'];
@@ -11,12 +13,15 @@ $plNumber = (string) ($picklist['picklist_number'] ?? '');
 $picker = (string) ($picklist['picker_name'] ?? 'Unassigned');
 $created = !empty($picklist['created_at']) ? date('d M Y H:i', strtotime($picklist['created_at'])) : '';
 $showBookColumns = picklist_any_book_items($items);
+
+$showSectionA = ($printMode === '1' || $printMode === 'full');
+$showSectionB = ($printMode === '1' || $printMode === 'short');
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Print — <?= htmlspecialchars($plNumber) ?></title>
+    <title>Print — <?= htmlspecialchars($plNumber) ?><?= $printMode === 'full' ? ' (Full List)' : ($printMode === 'short' ? ' (Short/Unavailable List)' : '') ?></title>
     <style>
         body { font-family: Arial, sans-serif; font-size: 11px; color: #111; margin: 24px; }
         h1 { font-size: 18px; margin: 0 0 4px; }
@@ -34,11 +39,14 @@ $showBookColumns = picklist_any_book_items($items);
         .item-img { width: 56px; height: 56px; object-fit: contain; }
         .title-meta { margin-top: 4px; font-size: 10px; color: #555; line-height: 1.35; }
         .section-count { font-weight: normal; color: #666; font-size: 12px; }
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; break-inside: avoid; }
+        h1, h2, .meta, .section-desc { page-break-after: avoid; break-after: avoid; }
         @media print {
             body { margin: 12px; }
             .no-print { display: none; }
-            .section { page-break-inside: avoid; }
-            .section-b { page-break-before: auto; }
+            .section { page-break-inside: auto; break-inside: auto; }
+            .section-b { page-break-before: auto; break-before: auto; }
         }
     </style>
 </head>
@@ -47,12 +55,13 @@ $showBookColumns = picklist_any_book_items($items);
         <button onclick="window.print()">Print</button>
         <button onclick="window.close()">Close</button>
     </div>
-    <h1>Picklist: <?= htmlspecialchars($plNumber) ?></h1>
+    <h1>Picklist: <?= htmlspecialchars($plNumber) ?><?= $printMode === 'full' ? ' — Full Quantity Available' : ($printMode === 'short' ? ' — Partially Available & Not Available' : '') ?></h1>
     <div class="meta">
-        Picker: <?= htmlspecialchars($picker) ?> · Created: <?= htmlspecialchars($created) ?> · Items: <?= count($items) ?>
+        Picker: <?= htmlspecialchars($picker) ?> · Created: <?= htmlspecialchars($created) ?> · Total Items: <?= count($items) ?>
         (Full: <?= count($fullItems) ?> · Short/Unavailable: <?= count($shortItems) ?>)
     </div>
 
+    <?php if ($showSectionA): ?>
     <div class="section section-a">
         <h2>A) Full quantity available <span class="section-count">(<?= count($fullItems) ?> item<?= count($fullItems) === 1 ? '' : 's' ?>)</span></h2>
         <p class="section-desc">Physical stock meets or exceeds order quantity for every line on the order — pick the full order qty.</p>
@@ -63,17 +72,20 @@ $showBookColumns = picklist_any_book_items($items);
         include __DIR__ . '/partials/print_items_table.php';
         ?>
     </div>
+    <?php endif; ?>
 
+    <?php if ($showSectionB): ?>
     <div class="section section-b">
         <h2>B) Partially available &amp; not available <span class="section-count">(<?= count($shortItems) ?> item<?= count($shortItems) === 1 ? '' : 's' ?>)</span></h2>
         <p class="section-desc">If any line on an order is short or unavailable, all lines for that order are listed here — pick what is available; shortfall shown for follow-up.</p>
         <?php
         $printItems = $shortItems;
         $showShortfallColumns = true;
-        $startIndex = count($fullItems);
+        $startIndex = $showSectionA ? count($fullItems) : 0;
         include __DIR__ . '/partials/print_items_table.php';
         ?>
     </div>
+    <?php endif; ?>
 
     <script>window.onload = function() { window.print(); };</script>
 </body>

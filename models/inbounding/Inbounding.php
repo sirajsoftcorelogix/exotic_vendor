@@ -2086,20 +2086,8 @@ class Inbounding {
             $s_raw = trim($var['size'] ?? '');
             $c_raw = trim($var['color'] ?? '');
 
-            // 2. Convert to lowercase and replace all spaces with a single dash
-            // preg_replace handles one or more spaces (' ') and turns them into one dash
-            $f_size  = preg_replace('/\s+/', '-', strtolower($s_raw));
-            $f_color = preg_replace('/\s+/', '-', strtolower($c_raw));
-
-            // 3. Construct the SKU
-            // Pattern: itemcode-size-color
-            $generated_sku = $item_code . '-' . $f_size . '-' . $f_color;
-
-            // 4. Final Cleanup
-            // Remove trailing dashes if the color was empty
-            // Also remove double dashes if the size was empty, e.g., "SA001--red" -> "SA001-red"
-            $generated_sku = rtrim($generated_sku, '-');
-            $generated_sku = str_replace('--', '-', $generated_sku);
+            // Construct SKU by stripping special characters from size and color without changing raw size/color values
+            $generated_sku = generateItemSku($item_code, $s_raw, $c_raw);
 
             if (!empty($id) && is_numeric($id)) {
                 // Types: s (sku) + ssidsddddsdddddsisss (others) + i (id) = 22 params
@@ -2629,6 +2617,335 @@ class Inbounding {
         }
 
         return null;
+    }
+
+    /**
+     * Check whether a SKU already exists across database tables (vp_products, vp_variations, or vp_inbound).
+     *
+     * @param string $sku
+     * @param string $excludeItemCode
+     * @param int $excludeInboundId
+     * @return array|null Returns array details of matching record if found, or null if not found.
+     */
+    public function checkSkuExistsInDb(string $sku, string $excludeItemCode = '', int $excludeInboundId = 0): ?array {
+        $sku = strtoupper(trim($sku));
+        if ($sku === '') {
+            return null;
+        }
+        $excludeItemCode = strtoupper(trim($excludeItemCode));
+
+        // 1. Check vp_products (Published catalog)
+        if ($excludeItemCode !== '') {
+            $stmt = $this->conn->prepare("SELECT id, sku, item_code, title, 'vp_products' AS source FROM vp_products WHERE CONVERT(UPPER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ? AND CONVERT(UPPER(TRIM(COALESCE(item_code, ''))) USING utf8mb4) COLLATE utf8mb4_general_ci != ? LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param('ss', $sku, $excludeItemCode);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                $row = $res ? $res->fetch_assoc() : null;
+                $stmt->close();
+                if ($row) {
+                    return $row;
+                }
+            }
+        } else {
+            $stmt = $this->conn->prepare("SELECT id, sku, item_code, title, 'vp_products' AS source FROM vp_products WHERE CONVERT(UPPER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ? LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param('s', $sku);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                $row = $res ? $res->fetch_assoc() : null;
+                $stmt->close();
+                if ($row) {
+                    return $row;
+                }
+            }
+        }
+
+        // 2. Check vp_variations (Inbound variations)
+        $varSql = "SELECT v.id, v.sku, v.it_id, v.color, v.size, 'vp_variations' AS source, COALESCE(i.Item_code, '') AS item_code, COALESCE(i.product_title, '') AS title 
+                   FROM vp_variations v 
+                   LEFT JOIN vp_inbound i ON i.id = v.it_id 
+                   WHERE CONVERT(UPPER(TRIM(v.sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ?";
+        $params = [$sku];
+        $types = 's';
+
+        if ($excludeInboundId > 0) {
+            $varSql .= " AND v.it_id != ?";
+            $params[] = $excludeInboundId;
+            $types .= 'i';
+        }
+        if ($excludeItemCode !== '') {
+            $varSql .= " AND CONVERT(UPPER(TRIM(COALESCE(i.Item_code, ''))) USING utf8mb4) COLLATE utf8mb4_general_ci != ?";
+            $params[] = $excludeItemCode;
+            $types .= 's';
+        }
+        $varSql .= " LIMIT 1";
+
+        $stmtVar = $this->conn->prepare($varSql);
+        if ($stmtVar) {
+            $stmtVar->bind_param($types, ...$params);
+            $stmtVar->execute();
+            $resVar = $stmtVar->get_result();
+            $rowVar = $resVar ? $resVar->fetch_assoc() : null;
+            $stmtVar->close();
+            if ($rowVar) {
+                return $rowVar;
+            }
+        }
+
+        // 3. Check vp_inbound (Main inbound items)
+        $inbSql = "SELECT id, sku, Item_code AS item_code, product_title AS title, 'vp_inbound' AS source FROM vp_inbound WHERE CONVERT(UPPER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ?";
+        $inbParams = [$sku];
+        $inbTypes = 's';
+
+        if ($excludeInboundId > 0) {
+            $inbSql .= " AND id != ?";
+            $inbParams[] = $excludeInboundId;
+            $inbTypes .= 'i';
+        }
+        if ($excludeItemCode !== '') {
+            $inbSql .= " AND CONVERT(UPPER(TRIM(COALESCE(Item_code, ''))) USING utf8mb4) COLLATE utf8mb4_general_ci != ?";
+            $inbParams[] = $excludeItemCode;
+            $inbTypes .= 's';
+        }
+        $inbSql .= " LIMIT 1";
+
+        $stmtInb = $this->conn->prepare($inbSql);
+        if ($stmtInb) {
+            $stmtInb->bind_param($inbTypes, ...$inbParams);
+            $stmtInb->execute();
+            $resInb = $stmtInb->get_result();
+            $rowInb = $resInb ? $resInb->fetch_assoc() : null;
+            $stmtInb->close();
+            if ($rowInb) {
+                return $rowInb;
+            }
+        }
+
+        return null;
+    }
+
+    public function checkSkuExistsInProducts(string $sku, string $excludeItemCode = ''): ?array {
+        return $this->checkSkuExistsInDb($sku, $excludeItemCode);
+    }
+
+    /**
+     * Delete a duplicate product row from vp_products.
+     */
+    public function deleteProductFromCatalog(int $productId): bool {
+        if ($productId <= 0) {
+            return false;
+        }
+
+        // Get item_code before deleting from vp_products
+        $itemCode = '';
+        try {
+            $res = $this->conn->query("SELECT item_code FROM vp_products WHERE id = " . (int)$productId . " LIMIT 1");
+            if ($res && $row = $res->fetch_assoc()) {
+                $itemCode = trim((string)($row['item_code'] ?? ''));
+            }
+        } catch (Throwable $e) {
+            // Ignore fetch error safely
+        }
+
+        // Clean up product_vendor_map
+        if ($itemCode !== '') {
+            try {
+                $chkPvm = $this->conn->query("SHOW TABLES LIKE 'product_vendor_map'");
+                if ($chkPvm && $chkPvm->num_rows > 0) {
+                    $stmtPvm = $this->conn->prepare("DELETE FROM product_vendor_map WHERE item_code = ?");
+                    if ($stmtPvm) {
+                        $stmtPvm->bind_param('s', $itemCode);
+                        $stmtPvm->execute();
+                        $stmtPvm->close();
+                    }
+                }
+            } catch (Throwable $e) {
+                // Ignore missing table error safely
+            }
+        }
+
+        // Delete from vp_products
+        $stmt = $this->conn->prepare("DELETE FROM vp_products WHERE id = ?");
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('i', $productId);
+        $ok = $stmt->execute();
+        $stmt->close();
+
+        return $ok;
+    }
+
+    /**
+     * Get report data for duplicate SKUs in vp_products connected with vp_inbound, vp_variations, and vp_users.
+     */
+    public function getDuplicateSkuReport($page = 1, $limit = 50, $search = '', $filters = []): array
+    {
+        $page = max(1, (int)$page);
+        $limit = max(1, (int)$limit);
+        $offset = ($page - 1) * $limit;
+
+        $where = ["TRIM(COALESCE(p.sku, '')) != ''"];
+
+        // Text search
+        if (!empty($search)) {
+            $s = $this->conn->real_escape_string(trim($search));
+            $where[] = "(CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_general_ci LIKE '%$s%' OR CONVERT(p.item_code USING utf8mb4) COLLATE utf8mb4_general_ci LIKE '%$s%' OR CONVERT(p.title USING utf8mb4) COLLATE utf8mb4_general_ci LIKE '%$s%' OR CONVERT(u_rec_main.name USING utf8mb4) COLLATE utf8mb4_general_ci LIKE '%$s%' OR CONVERT(u_rec_var.name USING utf8mb4) COLLATE utf8mb4_general_ci LIKE '%$s%' OR CONVERT(u_upd_main.name USING utf8mb4) COLLATE utf8mb4_general_ci LIKE '%$s%' OR CONVERT(u_upd_var.name USING utf8mb4) COLLATE utf8mb4_general_ci LIKE '%$s%')";
+        }
+
+        // Inbound Status Filter
+        if (!empty($filters['inbound_status'])) {
+            if ($filters['inbound_status'] === 'inbounded') {
+                $where[] = "(i_main.id IS NOT NULL OR i_var.id IS NOT NULL OR i_fallback.id IS NOT NULL)";
+            } elseif ($filters['inbound_status'] === 'not_inbounded') {
+                $where[] = "(i_main.id IS NULL AND i_var.id IS NULL AND i_fallback.id IS NULL)";
+            }
+        }
+
+        // Inbound Created Date Range Filter
+        if (!empty($filters['inbound_from']) && !empty($filters['inbound_to'])) {
+            $from = $this->conn->real_escape_string(trim($filters['inbound_from'])) . ' 00:00:00';
+            $to   = $this->conn->real_escape_string(trim($filters['inbound_to'])) . ' 23:59:59';
+            $where[] = "COALESCE(i_main.created_at, i_var.created_at, i_fallback.created_at) BETWEEN '$from' AND '$to'";
+        }
+
+        $whereSql = implode(' AND ', $where);
+
+        $baseFrom = "
+            FROM vp_products p
+            INNER JOIN (
+                SELECT CONVERT(LOWER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci AS clean_sku
+                FROM vp_products
+                WHERE TRIM(COALESCE(sku, '')) != ''
+                GROUP BY CONVERT(LOWER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci
+                HAVING COUNT(*) > 1
+            ) dup ON CONVERT(LOWER(TRIM(p.sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = dup.clean_sku
+
+            LEFT JOIN vp_inbound i_main ON CONVERT(LOWER(TRIM(i_main.sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = CONVERT(LOWER(TRIM(p.sku)) USING utf8mb4) COLLATE utf8mb4_general_ci
+            LEFT JOIN vp_users u_rec_main ON i_main.received_by_user_id = u_rec_main.id
+            LEFT JOIN vp_users u_upd_main ON i_main.updated_by_user_id = u_upd_main.id
+
+            LEFT JOIN vp_variations v ON CONVERT(LOWER(TRIM(v.sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = CONVERT(LOWER(TRIM(p.sku)) USING utf8mb4) COLLATE utf8mb4_general_ci
+            LEFT JOIN vp_inbound i_var ON v.it_id = i_var.id
+            LEFT JOIN vp_users u_rec_var ON i_var.received_by_user_id = u_rec_var.id
+            LEFT JOIN vp_users u_upd_var ON i_var.updated_by_user_id = u_upd_var.id
+
+            LEFT JOIN vp_inbound i_fallback ON (i_main.id IS NULL AND i_var.id IS NULL AND CONVERT(LOWER(TRIM(i_fallback.Item_code)) USING utf8mb4) COLLATE utf8mb4_general_ci = CONVERT(LOWER(TRIM(p.item_code)) USING utf8mb4) COLLATE utf8mb4_general_ci)
+            LEFT JOIN vp_users u_rec_fb ON i_fallback.received_by_user_id = u_rec_fb.id
+            LEFT JOIN vp_users u_upd_fb ON i_fallback.updated_by_user_id = u_upd_fb.id
+        ";
+
+        $countSql = "SELECT COUNT(*) AS total_rows $baseFrom WHERE $whereSql";
+        $totalRes = $this->conn->query($countSql);
+        $totalRows = $totalRes ? (int)($totalRes->fetch_assoc()['total_rows'] ?? 0) : 0;
+
+        $statsSql = "
+            SELECT 
+                COUNT(DISTINCT dup.clean_sku) AS total_duplicate_skus,
+                COUNT(*) AS total_affected_products,
+                SUM(CASE WHEN (i_main.id IS NOT NULL OR i_var.id IS NOT NULL OR i_fallback.id IS NOT NULL) THEN 1 ELSE 0 END) AS inbounded_products_count,
+                SUM(CASE WHEN (i_main.id IS NULL AND i_var.id IS NULL AND i_fallback.id IS NULL) THEN 1 ELSE 0 END) AS non_inbounded_products_count
+            $baseFrom WHERE $whereSql
+        ";
+        $statsRes = $this->conn->query($statsSql);
+        $stats = $statsRes ? $statsRes->fetch_assoc() : [
+            'total_duplicate_skus' => 0,
+            'total_affected_products' => 0,
+            'inbounded_products_count' => 0,
+            'non_inbounded_products_count' => 0,
+        ];
+
+        $dataSql = "
+            SELECT 
+                p.id AS product_id,
+                p.sku AS product_sku,
+                p.item_code AS product_item_code,
+                p.title AS product_title,
+                p.groupname AS product_group_name,
+                p.size AS product_size,
+                p.color AS product_color,
+                p.itemprice,
+                p.finalprice,
+                p.created_on AS product_created_on,
+                p.updated_at AS product_updated_at,
+                
+                COALESCE(i_main.id, i_var.id, i_fallback.id) AS inbound_id,
+                COALESCE(i_main.Item_code, i_var.Item_code, i_fallback.Item_code) AS inbound_item_code,
+                COALESCE(i_main.sku, v.sku, i_fallback.sku) AS inbound_sku,
+                COALESCE(i_main.created_at, i_var.created_at, i_fallback.created_at) AS inbound_created_at,
+                COALESCE(i_main.added_date, i_var.added_date, i_fallback.added_date) AS inbound_added_date,
+                COALESCE(i_main.received_by_user_id, i_var.received_by_user_id, i_fallback.received_by_user_id) AS received_by_user_id,
+                COALESCE(u_rec_main.name, u_rec_var.name, u_rec_fb.name) AS received_by_user_name,
+                COALESCE(i_main.updated_by_user_id, i_var.updated_by_user_id, i_fallback.updated_by_user_id) AS updated_by_user_id,
+                COALESCE(u_upd_main.name, u_upd_var.name, u_upd_fb.name) AS updated_by_user_name,
+                
+                CASE 
+                    WHEN i_main.id IS NOT NULL THEN 'Main Item Inbound'
+                    WHEN i_var.id IS NOT NULL THEN 'Variation Inbound'
+                    WHEN i_fallback.id IS NOT NULL THEN 'Item Code Match'
+                    ELSE 'Not Inbounded'
+                END AS inbound_status
+            $baseFrom
+            WHERE $whereSql
+            ORDER BY dup.clean_sku ASC, p.id ASC
+            LIMIT $limit OFFSET $offset
+        ";
+
+        $dataRes = $this->conn->query($dataSql);
+        $rows = $dataRes ? $dataRes->fetch_all(MYSQLI_ASSOC) : [];
+
+        return [
+            'rows' => $rows,
+            'total' => $totalRows,
+            'page' => $page,
+            'limit' => $limit,
+            'total_pages' => max(1, ceil($totalRows / $limit)),
+            'stats' => $stats,
+        ];
+    }
+
+    /**
+     * Get all report data rows for CSV export or bulk actions without pagination limits.
+     */
+    public function getDuplicateSkuReportExportData($search = '', $filters = []): array
+    {
+        $res = $this->getDuplicateSkuReport(1, 1000000, $search, $filters);
+        return $res['rows'] ?? [];
+    }
+
+    /**
+     * Bulk delete all duplicate inbounded products from vp_products.
+     * Optionally respects search text or filter criteria.
+     *
+     * @return array{deleted_count: int, failed_count: int}
+     */
+    public function deleteAllDuplicateInboundedProducts($search = '', $filters = []): array
+    {
+        $rows = $this->getDuplicateSkuReportExportData($search, array_merge($filters, [
+            'inbound_status' => 'inbounded'
+        ]));
+
+        $deletedCount = 0;
+        $failedCount = 0;
+
+        foreach ($rows as $row) {
+            $pid = (int)($row['product_id'] ?? 0);
+            $inboundStatus = $row['inbound_status'] ?? 'Not Inbounded';
+
+            if ($pid > 0 && $inboundStatus !== 'Not Inbounded') {
+                if ($this->deleteProductFromCatalog($pid)) {
+                    $deletedCount++;
+                } else {
+                    $failedCount++;
+                }
+            }
+        }
+
+        return [
+            'deleted_count' => $deletedCount,
+            'failed_count' => $failedCount,
+        ];
     }
     public function getProductByItemcode($itemcode) {
         $sql = "SELECT id FROM vp_products WHERE item_code = ? LIMIT 1";

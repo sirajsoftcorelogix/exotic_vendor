@@ -361,13 +361,35 @@ function pos_invoice_repair_order_payable_totals(mysqli $conn, string $orderNumb
     $conn->begin_transaction();
 
     try {
-        $stmt = $conn->prepare(
-            'UPDATE vp_order_info SET total = ? WHERE order_number = ? LIMIT 1'
-        );
-        if (!$stmt) {
-            throw new RuntimeException('Prepare failed for vp_order_info update: ' . $conn->error);
+        $cashDiscountFromMeta = round((float)($analysis['notes_meta']['cash_discount'] ?? 0), 2);
+        if ($cashDiscountFromMeta <= 0) {
+            $crStmt = $conn->prepare('SELECT IFNULL(MAX(custom_reduce), 0) AS max_cr FROM vp_orders WHERE order_number = ?');
+            if ($crStmt) {
+                $crStmt->bind_param('s', $orderNumber);
+                $crStmt->execute();
+                $crRow = $crStmt->get_result()->fetch_assoc();
+                $cashDiscountFromMeta = round((float)($crRow['max_cr'] ?? 0), 2);
+                $crStmt->close();
+            }
         }
-        $stmt->bind_param('ds', $netPayable, $orderNumber);
+
+        if ($cashDiscountFromMeta > 0) {
+            $stmt = $conn->prepare(
+                'UPDATE vp_order_info SET total = ?, custom_reduce = CASE WHEN IFNULL(custom_reduce, 0) <= 0 THEN ? ELSE custom_reduce END WHERE order_number = ? LIMIT 1'
+            );
+            if (!$stmt) {
+                throw new RuntimeException('Prepare failed for vp_order_info update: ' . $conn->error);
+            }
+            $stmt->bind_param('dds', $netPayable, $cashDiscountFromMeta, $orderNumber);
+        } else {
+            $stmt = $conn->prepare(
+                'UPDATE vp_order_info SET total = ? WHERE order_number = ? LIMIT 1'
+            );
+            if (!$stmt) {
+                throw new RuntimeException('Prepare failed for vp_order_info update: ' . $conn->error);
+            }
+            $stmt->bind_param('ds', $netPayable, $orderNumber);
+        }
         $stmt->execute();
         $stmt->close();
 

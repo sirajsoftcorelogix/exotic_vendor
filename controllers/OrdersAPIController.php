@@ -692,7 +692,7 @@ class OrdersAPIController
             // Fetch invoices with pagination
             $sql = "SELECT DISTINCT i.id, i.invoice_number, i.invoice_date, i.updated_at, i.customer_id, i.total_amount, 
                            i.subtotal, i.tax_amount, i.discount_amount, i.status, i.currency,
-                           c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, c.city, c.zipcode, c.state, c.country, c.gstin,
+                           c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, c.city, c.zipcode, c.state, c.country, c.gstin, c.payment_type, c.payment_mode, 
                            ea.address_title,                           
                            ea.address                          
                     FROM vp_invoices i
@@ -889,7 +889,7 @@ class OrdersAPIController
                         'VchDate'             => $formattedDate,
                         'VchNo.'              => $voucherNo,
                         'Sales Type'          => 'Sales',
-                        'Party Name'          => $firmDetail['firm_name'] ?? '',
+                        'Party Name'          => $invoice['payment_type'] == 'offline' ? $invoice['payment_mode'] ?? '' : ($invoice['payment_type'] ?? ''),
                         'GSTIN'               => $firmDetail['gstin'] ?? '',
                         'Material Centre'     => $invoice['address_title'] ?? 'Main Location',
                         'Narration'           => '',

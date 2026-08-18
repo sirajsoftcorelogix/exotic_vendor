@@ -384,6 +384,10 @@ class PosOrdersController
                 //print_array($maped);             
             }
             //add address info
+            if (!isset($order['payment_mode']) && function_exists('pos_payment_resolve_order_payment_mode')) {
+                global $conn;
+                $order['payment_mode'] = pos_payment_resolve_order_payment_mode($conn, (string)($order['orderid'] ?? ''), (string)($order['payment_type'] ?? ''));
+            }
             $addressdata[] = $ordersModel->insertAddressInfo($order, $customerdata['customer_id'] ?? 0);
             //print_array($addressdata);
             //print_array($order);exit;
@@ -822,11 +826,14 @@ class PosOrdersController
 
         $lines = [];
 
-        if ($line > 0.001) {
+        $orderLevelDisc = round($coupon + $cash + $gift, 2);
+        $standaloneLineDisc = max(0.0, round($line - $orderLevelDisc, 2));
+
+        if ($standaloneLineDisc > 0.001) {
             $lines[] = [
                 'type' => 'line',
                 'label' => 'Line Discount',
-                'amount' => $line,
+                'amount' => $standaloneLineDisc,
                 'note' => $absorbed ? 'Included in line item prices (list vs discounted price).' : '',
             ];
         }
@@ -1096,6 +1103,40 @@ class PosOrdersController
         ], 'Order ' . $resolvedOrderNumber);
     }
 
+    public function searchOrdersAjax(): void
+    {
+        is_login();
+        header('Content-Type: application/json');
+        global $ordersModel;
+
+        $q = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
+        $exact = isset($_GET['exact']) && (string)$_GET['exact'] === '1';
+
+        if ($q === '') {
+            echo json_encode(['success' => false, 'message' => 'Please enter an order number']);
+            exit;
+        }
+
+        if ($exact) {
+            $exactResult = $ordersModel->searchOrdersForAutocomplete($q, true);
+            if (!empty($exactResult['exists']) && !empty($exactResult['order_number'])) {
+                echo json_encode(['success' => true, 'order_number' => $exactResult['order_number']]);
+                exit;
+            }
+            echo json_encode(['success' => false, 'message' => 'No order found with order number "' . $q . '".']);
+            exit;
+        }
+
+        $orders = $ordersModel->searchOrdersForAutocomplete($q, false, 20);
+        if (!empty($orders)) {
+            echo json_encode(['success' => true, 'orders' => $orders]);
+            exit;
+        }
+
+        echo json_encode(['success' => false, 'message' => 'No orders found matching "' . $q . '".']);
+        exit;
+    }
+
     public function getOrderDetailsHTML()
     {
         is_login();
@@ -1156,7 +1197,35 @@ class PosOrdersController
             $commanModel
         );
 
-        if (is_array($invoiceDisplay) && pos_order_line_pricing_should_override_invoice_summary($linePricingByLineId, is_array($orderInfo) ? $orderInfo : null, $order)) {
+        if (!is_array($invoiceDisplay)) {
+            $pricingAggregate = pos_order_aggregate_line_pricing_summary(
+                $linePricingByLineId,
+                is_array($orderInfo) ? $orderInfo : null
+            );
+            if (is_array($pricingAggregate)) {
+                $discountMeta = pos_order_resolve_discount_meta(
+                    null,
+                    is_array($orderInfo) ? $orderInfo : null,
+                    $order
+                );
+                $invoiceDisplay = [
+                    'id' => 0,
+                    'invoice_number' => 'Pending Invoice',
+                    'invoice_date' => $order[0]['date_added'] ?? date('Y-m-d'),
+                    'status' => 'pending',
+                    'subtotal' => round($pricingAggregate['gross_incl'] - $pricingAggregate['total_gst'], 2),
+                    'tax_amount' => $pricingAggregate['total_gst'],
+                    'subtotal_goods_incl' => $pricingAggregate['gross_incl'],
+                    'grand_total' => $pricingAggregate['net_chargeable'],
+                    'pdf_grand_total' => $pricingAggregate['net_chargeable'],
+                    'summary_rows' => pos_order_build_summary_rows_from_line_pricing(
+                        $pricingAggregate,
+                        $discountMeta,
+                        is_array($orderInfo) ? $orderInfo : null
+                    ),
+                ];
+            }
+        } elseif (pos_order_line_pricing_should_override_invoice_summary($linePricingByLineId, is_array($orderInfo) ? $orderInfo : null, $order)) {
             $pricingAggregate = pos_order_aggregate_line_pricing_summary(
                 $linePricingByLineId,
                 is_array($orderInfo) ? $orderInfo : null
@@ -1316,6 +1385,11 @@ class PosOrdersController
             echo json_encode([
                 'success' => false,
                 'message' => (string)($invoiceMeta['message'] ?? 'Invoice could not be created.'),
+                'require_compliance' => !empty($invoiceMeta['require_compliance']),
+                'customer_id' => (int)($invoiceMeta['customer_id'] ?? 0),
+                'gstin' => (string)($invoiceMeta['gstin'] ?? ''),
+                'pan' => (string)($invoiceMeta['pan'] ?? ''),
+                'residency_status' => (string)($invoiceMeta['residency_status'] ?? ''),
             ]);
             exit;
         }
@@ -2190,14 +2264,13 @@ class PosOrdersController
         $shipping_first_name = trim($_POST['shipping_first_name'] ?? '');
         $shipping_last_name = trim($_POST['shipping_last_name'] ?? '');
         $customer_name  = trim($_POST['customer_name']  ?? '');
-        if ($customer_name === '') {
-            $customer_name = trim($first_name . ' ' . $last_name);
-        }
+
         $address_line1 = trim($_POST['address_line1'] ?? '');
         $address_line2 = trim($_POST['address_line2'] ?? '');
         $city = trim($_POST['city'] ?? '');
         $zipcode = trim($_POST['zipcode'] ?? '');
         $country = trim($_POST['country'] ?? '');
+
         $billing_address_line1 = trim($_POST['billing_address_line1'] ?? '');
         $billing_address_line2 = trim($_POST['billing_address_line2'] ?? '');
         $billing_city = trim($_POST['billing_city'] ?? '');
@@ -2207,10 +2280,71 @@ class PosOrdersController
         $shipping_gstin = strtoupper(trim($_POST['shipping_gstin'] ?? ''));
         $state = trim($_POST['state'] ?? '');
         $shipping_state = trim($_POST['shipping_state'] ?? '');
-        if (empty($order_number) || empty($first_name) || empty($last_name) || empty($customer_phone)) {
+
+        if ($first_name === '' && $shipping_first_name !== '') {
+            $first_name = $shipping_first_name;
+        }
+        if ($shipping_first_name === '' && $first_name !== '') {
+            $shipping_first_name = $first_name;
+        }
+        if ($last_name === '' && $shipping_last_name !== '') {
+            $last_name = $shipping_last_name;
+        }
+        if ($shipping_last_name === '' && $last_name !== '') {
+            $shipping_last_name = $last_name;
+        }
+        if ($first_name === '' && $customer_name !== '') {
+            $nameParts = preg_split('/\s+/', $customer_name, 2);
+            $first_name = trim($nameParts[0] ?? '');
+            if ($last_name === '') {
+                $last_name = trim($nameParts[1] ?? '');
+            }
+        }
+        if ($customer_name === '') {
+            $customer_name = trim($first_name . ' ' . $last_name);
+        }
+
+        if ($address_line1 === '' && $billing_address_line1 !== '') {
+            $address_line1 = $billing_address_line1;
+        }
+        if ($billing_address_line1 === '' && $address_line1 !== '') {
+            $billing_address_line1 = $address_line1;
+        }
+        if ($address_line2 === '' && $billing_address_line2 !== '') {
+            $address_line2 = $billing_address_line2;
+        }
+        if ($billing_address_line2 === '' && $address_line2 !== '') {
+            $billing_address_line2 = $address_line2;
+        }
+        if ($city === '' && $billing_city !== '') {
+            $city = $billing_city;
+        }
+        if ($billing_city === '' && $city !== '') {
+            $billing_city = $city;
+        }
+        if ($state === '' && $shipping_state !== '') {
+            $state = $shipping_state;
+        }
+        if ($shipping_state === '' && $state !== '') {
+            $shipping_state = $state;
+        }
+        if ($zipcode === '' && $billing_zipcode !== '') {
+            $zipcode = $billing_zipcode;
+        }
+        if ($billing_zipcode === '' && $zipcode !== '') {
+            $billing_zipcode = $zipcode;
+        }
+        if ($country === '' && $billing_country !== '') {
+            $country = $billing_country;
+        }
+        if ($billing_country === '' && $country !== '') {
+            $billing_country = $country;
+        }
+
+        if (empty($order_number) || empty($first_name) || empty($customer_phone) || empty($address_line1)) {
             echo json_encode([
                 'success' => false,
-                'message' => 'Order number, billing first name, last name and phone are required'
+                'message' => 'Order number, billing first name, phone and Address Line 1 are required'
             ]);
             exit;
         }
@@ -2280,6 +2414,14 @@ class PosOrdersController
         } else {
             $existingOrderInfo = $ordersModel->getRemarksByOrderNumber($orderNumber);
             $customReduce = (float)($existingOrderInfo['custom_reduce'] ?? 0);
+            if ($customReduce <= 0.001) {
+                $existingLines = $ordersModel->getOrderLineItemsByRef($orderNumber);
+                if (is_array($existingLines)) {
+                    foreach ($existingLines as $line) {
+                        $customReduce = max($customReduce, round((float)($line['custom_reduce'] ?? 0), 2));
+                    }
+                }
+            }
         }
 
         if (is_string($itemsInput)) {

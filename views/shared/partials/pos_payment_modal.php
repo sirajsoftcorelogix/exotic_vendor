@@ -25,6 +25,7 @@ $posPaymentModalCloseHandler = trim((string)($posPaymentModalCloseHandler ?? 'Po
                         <option value="final">Final</option>
                         <option value="partial">Partial</option>
                         <option value="advance">Advance</option>
+                        <option value="zero_advance">Zero Advance Payment</option>
                     </select>
                 </div>
                 <div>
@@ -51,7 +52,7 @@ $posPaymentModalCloseHandler = trim((string)($posPaymentModalCloseHandler ?? 'Po
                 <p id="payment_summary_hint" class="mt-2 hidden text-[11px] text-slate-600"></p>
             </div>
 
-            <div class="rounded-xl border border-slate-200 overflow-hidden">
+            <div id="payment_split_section" class="rounded-xl border border-slate-200 overflow-hidden">
                 <div class="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2.5">
                     <div>
                         <h3 class="text-sm font-semibold text-slate-800">Payment split</h3>
@@ -63,7 +64,7 @@ $posPaymentModalCloseHandler = trim((string)($posPaymentModalCloseHandler ?? 'Po
                 </div>
                 <div class="hidden sm:grid sm:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_2.5rem] gap-2 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-white border-b border-slate-100">
                     <span>Mode</span>
-                    <span>Amount (₹)</span>
+                    <span class="payment-split-amount-header">Amount (₹)</span>
                     <span>Transaction / ref</span>
                     <span></span>
                 </div>
@@ -71,6 +72,15 @@ $posPaymentModalCloseHandler = trim((string)($posPaymentModalCloseHandler ?? 'Po
                 <div class="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-xs">
                     <span class="text-slate-600"><span id="payment_split_count">0</span> payment line(s)</span>
                     <span class="font-semibold text-slate-800">Split total: <span id="payment_split_total" class="text-orange-700 tabular-nums">₹ 0.00</span></span>
+                </div>
+            </div>
+            <div id="zero_advance_notice" class="hidden rounded-xl border border-blue-200 bg-blue-50/80 p-3.5 text-xs text-blue-900 flex items-start gap-2.5">
+                <svg class="w-5 h-5 text-blue-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                    <span class="font-semibold text-sm text-blue-900 block">Zero Advance Payment</span>
+                    No payment is required at checkout. The full order amount will be collected when the item is picked up in store.
                 </div>
             </div>
             <div id="payment_split_validation" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"></div>
@@ -112,7 +122,7 @@ $posPaymentModalCloseHandler = trim((string)($posPaymentModalCloseHandler ?? 'Po
             <select class="payment-split-mode mt-0.5 sm:mt-0 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></select>
         </div>
         <div>
-            <label class="sm:hidden text-[10px] font-semibold text-slate-500 uppercase">Amount (₹)</label>
+            <label class="payment-split-amount-label sm:hidden text-[10px] font-semibold text-slate-500 uppercase">Amount (₹)</label>
             <input type="number" step="0.01" min="0" class="payment-split-amount mt-0.5 sm:mt-0 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm tabular-nums" placeholder="0.00" />
         </div>
         <div>

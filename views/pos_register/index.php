@@ -396,6 +396,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
             <option value="final">Final</option>
             <option value="partial">Partial</option>
             <option value="advance">Advance</option>
+            <option value="zero_advance">Zero Advance Payment</option>
           </select>
         </div>
         <div>
@@ -422,7 +423,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
         <p id="payment_summary_hint" class="mt-2 hidden text-[11px] text-slate-600"></p>
       </div>
 
-      <div class="rounded-xl border border-slate-200 overflow-hidden">
+      <div id="payment_split_section" class="rounded-xl border border-slate-200 overflow-hidden">
         <div class="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2.5">
           <div>
             <h3 class="text-sm font-semibold text-slate-800">Payment split</h3>
@@ -434,7 +435,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
         </div>
         <div class="hidden sm:grid sm:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_2.5rem] gap-2 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-white border-b border-slate-100">
           <span>Mode</span>
-          <span>Amount (₹)</span>
+          <span class="payment-split-amount-header">Amount (₹)</span>
           <span>Transaction / ref</span>
           <span></span>
         </div>
@@ -442,6 +443,15 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
         <div class="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-xs">
           <span class="text-slate-600"><span id="payment_split_count">0</span> payment line(s)</span>
           <span class="font-semibold text-slate-800">Split total: <span id="payment_split_total" class="text-orange-700 tabular-nums">₹ 0.00</span></span>
+        </div>
+      </div>
+      <div id="zero_advance_notice" class="hidden rounded-xl border border-blue-200 bg-blue-50/80 p-3.5 text-xs text-blue-900 flex items-start gap-2.5">
+        <svg class="w-5 h-5 text-blue-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div>
+          <span class="font-semibold text-sm text-blue-900 block">Zero Advance Payment</span>
+          No payment is required at checkout. The full order amount will be collected when the item is picked up in store.
         </div>
       </div>
       <div id="payment_split_validation" class="hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 pr-8 text-xs text-red-700 relative">
@@ -489,7 +499,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       <select class="payment-split-mode mt-0.5 sm:mt-0 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></select>
     </div>
     <div>
-      <label class="sm:hidden text-[10px] font-semibold text-slate-500 uppercase">Amount (₹)</label>
+      <label class="payment-split-amount-label sm:hidden text-[10px] font-semibold text-slate-500 uppercase">Amount (₹)</label>
       <input type="number" step="0.01" min="0" class="payment-split-amount mt-0.5 sm:mt-0 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm tabular-nums" placeholder="0.00" />
     </div>
     <div>
@@ -525,7 +535,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
         <h3 class="text-sm font-semibold text-slate-800">Billing Information</h3>
         <div class="grid grid-cols-2 gap-3">
           <label class="block text-xs font-medium text-slate-600">First Name <span class="field-req-star text-red-600">*</span><input id="confirm_first_name" class="w-full rounded border" placeholder="First Name"></label>
-          <label class="block text-xs font-medium text-slate-600">Last Name <span class="field-req-star text-red-600">*</span><input id="confirm_last_name" class="w-full rounded border" placeholder="Last Name"></label>
+          <label class="block text-xs font-medium text-slate-600">Last Name<input id="confirm_last_name" class="w-full rounded border" placeholder="Last Name"></label>
         </div>
         <label class="block text-xs font-medium text-slate-600">Email<input id="confirm_email" type="email" class="w-full rounded border" placeholder="Email"></label>
         <label class="block text-xs font-medium text-slate-600">Phone <span class="field-req-star text-red-600">*</span>
@@ -563,9 +573,10 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
           <label class="block text-xs font-medium text-slate-600">GSTIN<input id="confirm_gstin" class="w-full rounded border uppercase" placeholder="GSTIN (optional)" maxlength="15"></label>
           <label class="block text-xs font-medium text-slate-600">Trade Name<input id="confirm_trade_name" class="w-full rounded border" placeholder="Trade Name (optional)"></label>
         </div>
+        <p class="text-[11px] text-slate-500">B2B: when GSTIN is provided, PAN is not required.</p>
         <div id="highValueCompliancePanel" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <div class="mb-2 font-semibold text-amber-950">High Value Transaction – Compliance Required</div>
-          <p class="mb-3 text-[11px] leading-snug text-amber-800">Additional details are required for final order completion. GSTIN B2B invoices derive PAN automatically.</p>
+          <p class="mb-3 text-[11px] leading-snug text-amber-800">Additional details are required for final order completion. If GSTIN is entered, PAN is not asked — it is derived from the GSTIN.</p>
           <label class="block font-medium">Customer residency <span class="field-req-star text-red-600">*</span>
             <select id="customer_residency_status" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm">
               <option value="INDIAN_RESIDENT">Indian Resident</option>
@@ -577,7 +588,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
             <label class="block font-medium">PAN <span id="panRequiredStar" class="field-req-star text-red-600">*</span>
               <input id="customer_pan" maxlength="10" class="mt-1 w-full rounded border border-amber-200 bg-white px-3 py-2 text-sm uppercase" placeholder="ABCDE1234F">
             </label>
-            <p id="panComplianceHint" class="mt-1 text-[11px] text-amber-700">PAN is required unless GSTIN is entered.</p>
+            <p id="panComplianceHint" class="mt-1 text-[11px] text-amber-700">PAN is required unless GSTIN is entered (B2B).</p>
           </div>
           <div class="mt-3">
             <label class="block font-medium">Aadhaar
@@ -668,15 +679,16 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       <p class="mt-1 text-xs text-slate-500">Confirm how this order will be fulfilled before submitting.</p>
     </div>
     <div class="space-y-3 p-5 flex-1 overflow-y-auto">
-      <label class="delivery-status-option flex cursor-pointer items-start gap-3 rounded-xl border-2 border-orange-400 bg-orange-50/60 p-4 transition hover:bg-orange-50">
-        <input type="radio" name="pos_delivery_status" value="collected_from_showroom" class="mt-1 h-4 w-4 border-slate-300 text-orange-600 focus:ring-orange-500" checked>
+      <label id="delivery_status_label_collected" class="delivery-status-option flex cursor-pointer items-start gap-3 rounded-xl border-2 border-orange-400 bg-orange-50/60 p-4 transition hover:bg-orange-50">
+        <input type="radio" id="delivery_status_collected" name="pos_delivery_status" value="collected_from_showroom" class="mt-1 h-4 w-4 border-slate-300 text-orange-600 focus:ring-orange-500" checked>
         <span>
           <span class="block text-sm font-semibold text-slate-800">Collected from showroom by Customer</span>
           <span class="mt-0.5 block text-xs text-slate-500">Customer took goods from the store now · marks order <strong>Shipped</strong></span>
+          <span id="zero_advance_delivery_lock_msg" class="hidden mt-1.5 text-[11px] font-medium text-amber-700">Not available for Zero Advance Payment orders (must remain Pending until store pickup payment).</span>
         </span>
       </label>
-      <label class="delivery-status-option flex cursor-pointer items-start gap-3 rounded-xl border-2 border-transparent bg-slate-50 p-4 transition hover:border-slate-200 hover:bg-white">
-        <input type="radio" name="pos_delivery_status" value="deliver_later" class="mt-1 h-4 w-4 border-slate-300 text-orange-600 focus:ring-orange-500">
+      <label id="delivery_status_label_deliver_later" class="delivery-status-option flex cursor-pointer items-start gap-3 rounded-xl border-2 border-transparent bg-slate-50 p-4 transition hover:border-slate-200 hover:bg-white">
+        <input type="radio" id="delivery_status_deliver_later" name="pos_delivery_status" value="deliver_later" class="mt-1 h-4 w-4 border-slate-300 text-orange-600 focus:ring-orange-500">
         <span>
           <span class="block text-sm font-semibold text-slate-800">Deliver to customer Later</span>
           <span class="mt-0.5 block text-xs text-slate-500">Goods will be dispatched later · keeps order <strong>Pending</strong></span>
@@ -838,7 +850,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       <label class="text-xs text-gray-600">Discount Type</label>
       <select id="discount_type"
         class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-        <option value="fixed">Fixed Amount (₹)</option>
+        <option value="fixed" id="discount_type_option_fixed">Fixed Amount (₹)</option>
         <option value="percent">Percentage (%)</option>
       </select>
     </div>
@@ -995,6 +1007,9 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
             window.ComplianceDocModal.open({
               customerId: data.customer_id,
               message: data.message,
+              gstin: data.gstin || '',
+              pan: data.pan || '',
+              residencyStatus: data.residency_status || '',
               onSuccess: function () {
                 autoCreateInvoiceThenPreview(orderid);
               }
@@ -1210,6 +1225,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     if (!options.length) {
       options = [
         ["cash", "Cash"],
+        ["pay_on_pickup", "Pay on Pickup (Store Pay Later)"],
         ["cod", "Cash on Delivery (COD)"],
         ["upi", "UPI"],
         ["bank_transfer", "Bank transfer"],
@@ -1248,16 +1264,67 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     });
   }
 
+  function getPaymentCurrencyInfo() {
+    var code = "INR";
+    var symbol = "₹";
+
+    if (window.POS_CURRENCY_MODE === "INR") {
+      return { code: "INR", symbol: "₹" };
+    }
+
+    var cartData = window.__posCartLastRetrieveData;
+    if (cartData && typeof cartData === "object") {
+      if (cartData.currency_code) code = String(cartData.currency_code).trim().toUpperCase();
+      if (cartData.currency_symbol) symbol = String(cartData.currency_symbol).trim();
+    }
+
+    if (code === "INR" && window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
+      code = String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
+      if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) symbol = String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
+    } else if (code === "INR" && window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
+      var ic = window.POS_INITIAL_CUSTOMER;
+      if (ic.currency_code) code = String(ic.currency_code).trim().toUpperCase();
+      if (ic.currency_symbol) symbol = String(ic.currency_symbol).trim();
+    }
+
+    if (!symbol || (symbol === "₹" && code !== "INR")) {
+      if (code === "INR") symbol = "₹";
+      else if (code === "USD") symbol = "$";
+      else if (code === "EUR") symbol = "€";
+      else if (code === "GBP") symbol = "£";
+      else symbol = code;
+    }
+
+    return { code: code, symbol: symbol };
+  }
+
   function formatPaymentInr(amount) {
     var n = parseFloat(String(amount));
     if (!isFinite(n)) {
       n = 0;
     }
+    var info = getPaymentCurrencyInfo();
     try {
-      return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+      return new Intl.NumberFormat(info.code === "INR" ? "en-IN" : "en-US", {
+        style: "currency",
+        currency: info.code,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(n);
     } catch (e) {
-      return "₹ " + n.toFixed(2);
+      return info.symbol + " " + n.toFixed(2);
     }
+  }
+
+  function syncPaymentSplitCurrencyHeaders() {
+    var info = getPaymentCurrencyInfo();
+    var labelText = "Amount (" + info.symbol + ")";
+    document.querySelectorAll(".payment-split-amount-header").forEach(function(el) {
+      el.textContent = labelText;
+    });
+    document.querySelectorAll(".payment-split-amount-label").forEach(function(el) {
+      el.textContent = labelText;
+    });
   }
 
   function getPaymentSplitRowsContainer() {
@@ -1350,10 +1417,15 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     return out;
   }
 
+  function isPendingPaymentMode(mode) {
+    var m = String(mode || "").toLowerCase();
+    return m === "cod" || m === "pay_on_pickup";
+  }
+
   function getPaymentSplitAdvanceTotalFromUi() {
     var total = 0;
     collectAllPaymentSplitRowsFromUi().forEach(function(s) {
-      if (s.mode !== "cod") total += s.amount;
+      if (!isPendingPaymentMode(s.mode)) total += s.amount;
     });
     return Math.round(total * 100) / 100;
   }
@@ -1361,7 +1433,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
   function getPaymentSplitCodTotalFromUi() {
     var total = 0;
     collectAllPaymentSplitRowsFromUi().forEach(function(s) {
-      if (s.mode === "cod") total += s.amount;
+      if (isPendingPaymentMode(s.mode)) total += s.amount;
     });
     return Math.round(total * 100) / 100;
   }
@@ -1396,17 +1468,21 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
   }
 
   function recalcPaymentSplitUi() {
-    var splits = collectAllPaymentSplitRowsFromUi();
-    var splitTotal = getPaymentSplitTotalFromUi();
-    var advanceTotal = getPaymentSplitAdvanceTotalFromUi();
-    var codTotal = getPaymentSplitCodTotalFromUi();
-    var hasCod = paymentSplitHasCodFromUi();
+    syncPaymentSplitCurrencyHeaders();
     var orderTotal = getCurrentCheckoutTotal();
     var stage = String(document.getElementById("payment_stage")?.value || "final").toLowerCase();
     var target = orderTotal;
-    var balance = Math.round((target - splitTotal) * 100) / 100;
 
-    syncLegacyPaymentHiddenFields(splits, hasCod ? advanceTotal : splitTotal);
+    var isZeroAdvance = stage === "zero_advance";
+    var splitSection = document.getElementById("payment_split_section");
+    var zeroNotice = document.getElementById("zero_advance_notice");
+
+    if (splitSection) {
+      splitSection.classList.toggle("hidden", isZeroAdvance);
+    }
+    if (zeroNotice) {
+      zeroNotice.classList.toggle("hidden", !isZeroAdvance);
+    }
 
     var orderEl = document.getElementById("payment_summary_order");
     var paidEl = document.getElementById("payment_summary_paid");
@@ -1416,9 +1492,39 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     var countEl = document.getElementById("payment_split_count");
     var totalEl = document.getElementById("payment_split_total");
 
+    if (isZeroAdvance) {
+      syncLegacyPaymentHiddenFields([{ mode: "pay_on_pickup", amount: target, transaction_id: "" }], 0);
+      if (orderEl) orderEl.textContent = formatPaymentInr(target);
+      if (paidEl) paidEl.textContent = formatPaymentInr(0);
+      if (balLabelEl) balLabelEl.textContent = "Pending on pickup";
+      if (balEl) {
+        balEl.textContent = formatPaymentInr(target);
+        balEl.className = "mt-0.5 text-lg font-bold text-amber-700 tabular-nums";
+      }
+      if (countEl) countEl.textContent = "0";
+      if (totalEl) totalEl.textContent = formatPaymentInr(0);
+      if (hintEl) {
+        hintEl.textContent = "Zero advance payment — full amount " + formatPaymentInr(target) + " will be collected on store pickup.";
+        hintEl.classList.remove("hidden");
+      }
+      syncCustomInvoiceNumberField();
+      return;
+    }
+
+    var splits = collectAllPaymentSplitRowsFromUi();
+    var splitTotal = getPaymentSplitTotalFromUi();
+    var advanceTotal = getPaymentSplitAdvanceTotalFromUi();
+    var codTotal = getPaymentSplitCodTotalFromUi();
+    var hasCod = paymentSplitHasCodFromUi();
+    var balance = Math.round((target - splitTotal) * 100) / 100;
+
+    syncLegacyPaymentHiddenFields(splits, hasCod ? advanceTotal : splitTotal);
+
+    var isPayOnPickup = splits.some(function(s) { return s.mode === "pay_on_pickup"; });
+
     if (orderEl) orderEl.textContent = formatPaymentInr(target);
     if (paidEl) paidEl.textContent = formatPaymentInr(hasCod ? advanceTotal : splitTotal);
-    if (balLabelEl) balLabelEl.textContent = hasCod ? "COD pending" : "Balance";
+    if (balLabelEl) balLabelEl.textContent = hasCod ? (isPayOnPickup ? "Pending on pickup" : "COD pending") : "Balance";
     if (balEl) {
       balEl.textContent = formatPaymentInr(hasCod ? codTotal : balance);
       if (hasCod) {
@@ -1441,7 +1547,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
           hintEl.textContent = "Advance plus COD must equal order total (" + formatPaymentInr(orderTotal) + ").";
           hintEl.classList.remove("hidden");
         } else if (codTotal > 0.001) {
-          hintEl.textContent = formatPaymentInr(codTotal) + " will be collected on delivery.";
+          hintEl.textContent = formatPaymentInr(codTotal) + (isPayOnPickup ? " will be collected on store pickup." : " will be collected on delivery.");
           hintEl.classList.remove("hidden");
         } else {
           hintEl.classList.add("hidden");
@@ -1485,13 +1591,32 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       }
     };
 
+    hideErr();
+    var paymentStage = String(document.getElementById("payment_stage")?.value || "final").toLowerCase();
+
+    if (paymentStage === "zero_advance") {
+      return {
+        payment_stage: "zero_advance",
+        payment_amount: 0,
+        advanceTotal: 0,
+        codTotal: grandTotal,
+        hasCod: true,
+        primaryMode: "pay_on_pickup",
+        primaryTxn: "",
+        splits: [{
+          mode: "pay_on_pickup",
+          amount: grandTotal,
+          transaction_id: ""
+        }]
+      };
+    }
+
     var splits = collectAllPaymentSplitRowsFromUi();
     if (!splits.length) {
       showErr("Add at least one payment line.");
       return null;
     }
 
-    var paymentStage = String(document.getElementById("payment_stage")?.value || "final").toLowerCase();
     var advanceTotal = getPaymentSplitAdvanceTotalFromUi();
     var codTotal = getPaymentSplitCodTotalFromUi();
     var paymentAmount = getPaymentSplitTotalFromUi();
@@ -1537,12 +1662,14 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     }
 
     if (hasCod) {
+      var isPayOnPickup = splits.some(function(s) { return s.mode === "pay_on_pickup"; });
+      var pendingLabel = isPayOnPickup ? "Advance plus Pay on Pickup" : "Advance plus COD";
       if (paymentAmount + 0.02 < grandTotal) {
-        showErr("Advance plus COD must equal order total ₹ " + grandTotal);
+        showErr(pendingLabel + " must equal order total " + formatPaymentInr(grandTotal));
         return null;
       }
       if (paymentAmount - 0.02 > grandTotal) {
-        showErr("Advance plus COD exceeds order total.");
+        showErr(pendingLabel + " exceeds order total.");
         return null;
       }
       paymentStage = "advance";
@@ -1554,7 +1681,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
 
       if (paymentStage === "final") {
         if (paymentAmount + 0.02 < grandTotal) {
-          showErr("Final payment must be FULL amount ₹ " + grandTotal);
+          showErr("Final payment must be FULL amount " + formatPaymentInr(grandTotal));
           return null;
         }
         if (paymentAmount - 0.02 > grandTotal) {
@@ -1563,7 +1690,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
         }
       } else if (paymentStage === "partial" || paymentStage === "advance") {
         if (paymentAmount + 0.02 >= grandTotal) {
-          showErr("Partial payment must be less than total ₹ " + grandTotal);
+          showErr("Partial payment must be less than total " + formatPaymentInr(grandTotal));
           return null;
         }
       }
@@ -1700,10 +1827,18 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     document.querySelectorAll("#deliveryStatusModal .delivery-status-option").forEach(function(label) {
       var radio = label.querySelector('input[name="pos_delivery_status"]');
       var on = radio && radio.checked;
-      label.classList.toggle("border-orange-400", !!on);
-      label.classList.toggle("bg-orange-50/60", !!on);
-      label.classList.toggle("border-transparent", !on);
-      label.classList.toggle("bg-slate-50", !on);
+      var isDisabled = radio && radio.disabled;
+      if (isDisabled) {
+        label.classList.remove("border-orange-400", "bg-orange-50/60", "border-transparent", "bg-slate-50", "hover:bg-orange-50", "hover:border-slate-200", "hover:bg-white");
+        label.classList.add("border-slate-200", "bg-slate-100", "opacity-50", "cursor-not-allowed", "pointer-events-none");
+      } else {
+        label.classList.remove("border-slate-200", "bg-slate-100", "opacity-50", "cursor-not-allowed", "pointer-events-none");
+        label.classList.add("cursor-pointer");
+        label.classList.toggle("border-orange-400", !!on);
+        label.classList.toggle("bg-orange-50/60", !!on);
+        label.classList.toggle("border-transparent", !on);
+        label.classList.toggle("bg-slate-50", !on);
+      }
     });
   }
 
@@ -1764,17 +1899,54 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       err.classList.add("hidden");
       err.textContent = "";
     }
-    var status = addressPayload && addressPayload.pos_delivery_status ? String(addressPayload.pos_delivery_status) : "";
-    var selectedRadio = status
-      ? document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"][value="' + status + '"]')
-      : null;
-    var defaultRadio = document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"][value="collected_from_showroom"]');
-    if (selectedRadio) {
-      selectedRadio.checked = true;
-    } else if (defaultRadio) {
-      defaultRadio.checked = true;
+
+    var stageVal = String(document.getElementById("payment_stage")?.value || "").toLowerCase();
+    if (!stageVal && addressPayload && addressPayload.payment_stage) {
+      stageVal = String(addressPayload.payment_stage).toLowerCase();
     }
+    var isZeroAdvance = stageVal === "zero_advance";
+
+    var collectedRadio = document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"][value="collected_from_showroom"]');
+    var deliverLaterRadio = document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"][value="deliver_later"]');
+    var lockMsg = document.getElementById("zero_advance_delivery_lock_msg");
+
+    if (isZeroAdvance) {
+      if (collectedRadio) {
+        collectedRadio.disabled = true;
+        collectedRadio.checked = false;
+      }
+      if (lockMsg) {
+        lockMsg.classList.remove("hidden");
+      }
+      if (deliverLaterRadio) {
+        deliverLaterRadio.disabled = false;
+        deliverLaterRadio.checked = true;
+      }
+    } else {
+      if (collectedRadio) {
+        collectedRadio.disabled = false;
+      }
+      if (lockMsg) {
+        lockMsg.classList.add("hidden");
+      }
+      if (deliverLaterRadio) {
+        deliverLaterRadio.disabled = false;
+      }
+
+      var status = addressPayload && addressPayload.pos_delivery_status ? String(addressPayload.pos_delivery_status) : "";
+      var selectedRadio = status
+        ? document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"][value="' + status + '"]')
+        : null;
+      var defaultRadio = document.querySelector('#deliveryStatusModal input[name="pos_delivery_status"][value="collected_from_showroom"]');
+      if (selectedRadio) {
+        selectedRadio.checked = true;
+      } else if (defaultRadio) {
+        defaultRadio.checked = true;
+      }
+    }
+
     syncDeliveryStatusOptionStyles();
+    syncEwayBillSectionVisibility();
     if (modal) {
       modal.classList.remove("hidden");
     }
@@ -2653,9 +2825,26 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     }
   }
 
+  function posNormalizeGstin(value) {
+    var gstin = String(value || "").replace(/\s+/g, "").toUpperCase();
+    return gstin === "URP" ? "" : gstin;
+  }
+
+  function getB2bGstinFromForm() {
+    var billing = posNormalizeGstin(document.getElementById("confirm_gstin")?.value || "");
+    if (billing) {
+      return billing;
+    }
+    return posNormalizeGstin(document.getElementById("confirm_sgstin")?.value || "");
+  }
+
+  function posIsValidGstin(gstin) {
+    return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(posNormalizeGstin(gstin));
+  }
+
   function syncHighValueComplianceUi() {
     var highValue = isHighValueTransaction();
-    var gstin = (document.getElementById("confirm_gstin")?.value || "").trim();
+    var gstin = getB2bGstinFromForm();
     var residency = (document.getElementById("customer_residency_status")?.value || "INDIAN_RESIDENT").toUpperCase();
     var banner = document.getElementById("highValueComplianceBanner");
     var panel = document.getElementById("highValueCompliancePanel");
@@ -2667,6 +2856,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     var passportStar = document.getElementById("passportRequiredStar");
     var countryStar = document.getElementById("countryRequiredStar");
     var panVal = (document.getElementById("customer_pan")?.value || "").replace(/\s+/g, "").trim();
+    var hasGstin = gstin !== "";
 
     if (banner) {
       banner.textContent = "High Value Transaction – Compliance Required (limit " + formatInrAmount(getHighValueLimit()) + ")";
@@ -2678,16 +2868,15 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       return;
     }
 
-    var hasGstin = gstin !== "";
-    if (panWrap) panWrap.classList.toggle("hidden", residency === "FOREIGN_NATIONAL");
-    if (passportWrap) passportWrap.classList.toggle("hidden", residency === "INDIAN_RESIDENT");
-    if (countryWrap) countryWrap.classList.toggle("hidden", residency === "INDIAN_RESIDENT");
+    if (panWrap) panWrap.classList.toggle("hidden", hasGstin || residency === "FOREIGN_NATIONAL");
+    if (passportWrap) passportWrap.classList.toggle("hidden", hasGstin || residency === "INDIAN_RESIDENT");
+    if (countryWrap) countryWrap.classList.toggle("hidden", hasGstin || residency === "INDIAN_RESIDENT");
     if (panStar) panStar.classList.toggle("hidden", hasGstin || residency === "FOREIGN_NATIONAL" || (residency === "NRI" && panVal !== ""));
-    if (passportStar) passportStar.classList.toggle("hidden", residency === "INDIAN_RESIDENT" || (residency === "NRI" && panVal !== ""));
-    if (countryStar) countryStar.classList.toggle("hidden", residency === "INDIAN_RESIDENT" || (residency === "NRI" && panVal !== ""));
+    if (passportStar) passportStar.classList.toggle("hidden", hasGstin || residency === "INDIAN_RESIDENT" || (residency === "NRI" && panVal !== ""));
+    if (countryStar) countryStar.classList.toggle("hidden", hasGstin || residency === "INDIAN_RESIDENT" || (residency === "NRI" && panVal !== ""));
     if (panHint) {
       panHint.textContent = hasGstin
-        ? "GSTIN present. PAN will be derived automatically for B2B invoice handling."
+        ? "GSTIN present. PAN is not required for B2B — it is derived from the GSTIN."
         : (residency === "NRI" ? "For NRI, enter PAN or Passport Number with Country of Residence." : "PAN is required unless GSTIN is entered.");
     }
     updateConfirmAddressButtonState();
@@ -2695,9 +2884,9 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
 
   function isHighValueComplianceDataComplete() {
     if (!isHighValueTransaction()) return true;
-    var gstin = (document.getElementById("confirm_gstin")?.value || "").trim().toUpperCase();
+    var gstin = getB2bGstinFromForm();
     if (gstin !== "") {
-      return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin);
+      return posIsValidGstin(gstin);
     }
     var residency = (document.getElementById("customer_residency_status")?.value || "INDIAN_RESIDENT").toUpperCase();
     var pan = (document.getElementById("customer_pan")?.value || "").replace(/\s+/g, "").toUpperCase();
@@ -2719,16 +2908,16 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     if (isHighValueComplianceDataComplete()) {
       return { ok: true, message: "" };
     }
-    var gstin = (document.getElementById("confirm_gstin")?.value || "").trim().toUpperCase();
+    var gstin = getB2bGstinFromForm();
     var residency = (document.getElementById("customer_residency_status")?.value || "INDIAN_RESIDENT").toUpperCase();
     var pan = (document.getElementById("customer_pan")?.value || "").replace(/\s+/g, "").toUpperCase();
     var passport = (document.getElementById("passport_number")?.value || "").replace(/\s+/g, "").toUpperCase();
     var countryResidence = (document.getElementById("country_of_residence")?.value || "").trim();
     var message = "High value transaction compliance is incomplete.";
-    if (gstin !== "" && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) {
+    if (gstin !== "" && !posIsValidGstin(gstin)) {
       message = "GSTIN format is invalid.";
-      setPosFieldInvalid("confirm_gstin", true);
-    } else if (pan !== "" && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+      setPosFieldInvalid(posNormalizeGstin(document.getElementById("confirm_gstin")?.value || "") !== "" ? "confirm_gstin" : "confirm_sgstin", true);
+    } else if (gstin === "" && pan !== "" && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
       message = "PAN format is invalid.";
       setPosFieldInvalid("customer_pan", true);
     } else if (residency === "INDIAN_RESIDENT" && gstin === "" && pan === "") {
@@ -2882,18 +3071,12 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     var missing = [];
     var firstInvalidId = "";
     var firstName = String(payload.confirm_first_name || "").trim();
-    var lastName = String(payload.confirm_last_name || "").trim();
     var state = String(payload.confirm_state || "").trim();
     var zip = String(payload.confirm_zip || "").trim();
     if (!firstName) {
       missing.push("First name");
       setPosFieldInvalid("confirm_first_name", true);
       firstInvalidId = "confirm_first_name";
-    }
-    if (!lastName) {
-      missing.push("Last name");
-      setPosFieldInvalid("confirm_last_name", true);
-      if (!firstInvalidId) firstInvalidId = "confirm_last_name";
     }
     if (!zip) {
       missing.push("ZIP / Pincode");
@@ -3513,7 +3696,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     syncAllPosStateFields().then(function() {
       ensurePosDefaultStateOnForm();
     });
-    ["customer_residency_status", "confirm_gstin", "customer_pan", "passport_number", "country_of_residence"].forEach(function(id) {
+    ["customer_residency_status", "confirm_gstin", "confirm_sgstin", "customer_pan", "passport_number", "country_of_residence"].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) {
         el.addEventListener("change", syncHighValueComplianceUi);
@@ -3544,6 +3727,10 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     var payStage = document.getElementById("payment_stage").value;
     var paySplits = collectPaymentSplitsFromUi();
     var payAmt = getPaymentSplitTotalFromUi();
+    if (payStage === "zero_advance") {
+      paySplits = [{ mode: "pay_on_pickup", amount: orderTotal, transaction_id: "" }];
+      payAmt = 0;
+    }
     if (waivedFollowUp) {
       orderTotal = 0;
       payStage = "final";
@@ -3626,6 +3813,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     if (checkoutOptions.confirmLocalFallback) {
       body.confirm_local_fallback = "1";
     }
+    body.currency_mode = window.POS_CURRENCY_MODE || "CUSTOMER";
     setPosCheckoutLoading(true);
     fetch("index.php?page=pos_register&action=checkout-create", {
       method: "POST",
@@ -3767,9 +3955,16 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
   function updateDiscountPlaceholder() {
     const typeEl = document.getElementById("discount_type");
     const valueEl = document.getElementById("discount_value");
+    const fixedOpt = document.getElementById("discount_type_option_fixed");
+    const info = typeof getPaymentCurrencyInfo === "function" ? getPaymentCurrencyInfo() : { symbol: "₹" };
+
+    if (fixedOpt) {
+      fixedOpt.textContent = "Fixed Amount (" + info.symbol + ")";
+    }
+
     if (!typeEl || !valueEl) return;
 
-    valueEl.placeholder = typeEl.value === "percent" ? "Enter percentage" : "Enter amount";
+    valueEl.placeholder = typeEl.value === "percent" ? "Enter percentage" : "Enter amount (" + info.symbol + ")";
   }
 
   (function () {

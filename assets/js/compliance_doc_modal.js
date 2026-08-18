@@ -32,7 +32,7 @@
                         </div>
                         <div>
                             <h3 class="text-lg font-bold text-slate-900 dark:text-white">High-Value Invoice Compliance</h3>
-                            <p class="text-xs text-amber-600 dark:text-amber-400 font-medium">Pan / Passport required for invoices &ge; ₹2,00,000</p>
+                            <p class="text-xs text-amber-600 dark:text-amber-400 font-medium">PAN / Passport required for invoices &ge; ₹2,00,000 unless GSTIN is provided</p>
                         </div>
                     </div>
                     <button type="button" id="compliance_doc_modal_close" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg">
@@ -102,13 +102,32 @@
         document.getElementById('compliance_doc_residency').addEventListener('change', updateFieldVisibility);
         document.getElementById('compliance_doc_gstin').addEventListener('input', function () {
             const val = this.value.trim().toUpperCase();
+            this.value = val;
             if (val.length === 15 && /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(val)) {
-                const panPan = val.substring(2, 12);
-                document.getElementById('compliance_doc_pan').value = panPan;
+                document.getElementById('compliance_doc_pan').value = val.substring(2, 12);
             }
+            updateFieldVisibility();
         });
 
         document.getElementById('compliance_doc_form').addEventListener('submit', handleSave);
+    }
+
+    function showComplianceNotice(message) {
+        if (typeof window.showPosMessageModal === 'function') {
+            window.showPosMessageModal({ title: 'Compliance', message: message, tone: 'warning' });
+            return;
+        }
+        console.error(message);
+    }
+
+    function normalizeGstin(value) {
+        const gstin = String(value || '').replace(/\s+/g, '').toUpperCase();
+        return gstin === 'URP' ? '' : gstin;
+    }
+
+    function hasB2bGstin() {
+        const el = document.getElementById('compliance_doc_gstin');
+        return normalizeGstin(el ? el.value : '') !== '';
     }
 
     function updateFieldVisibility() {
@@ -116,6 +135,14 @@
         const panWrap = document.getElementById('compliance_field_pan_wrap');
         const passportWrap = document.getElementById('compliance_field_passport_wrap');
         const panStar = document.getElementById('compliance_pan_req_star');
+        const b2b = hasB2bGstin();
+
+        if (b2b) {
+            panWrap.classList.add('hidden');
+            passportWrap.classList.add('hidden');
+            panStar.classList.add('hidden');
+            return;
+        }
 
         if (residency === 'INDIAN_RESIDENT') {
             panWrap.classList.remove('hidden');
@@ -124,7 +151,7 @@
         } else if (residency === 'NRI') {
             panWrap.classList.remove('hidden');
             passportWrap.classList.remove('hidden');
-            panStar.classList.add('hidden'); // Optional if Passport provided
+            panStar.classList.add('hidden');
         } else if (residency === 'FOREIGN_NATIONAL') {
             panWrap.classList.add('hidden');
             passportWrap.classList.remove('hidden');
@@ -201,29 +228,35 @@
         const gstin = document.getElementById('compliance_doc_gstin').value.trim().toUpperCase();
 
         if (customerId <= 0) {
-            alert('Customer ID is missing.');
+            showComplianceNotice('Customer ID is missing.');
             return;
         }
 
-        // Validation
-        if (gstin === '') {
-            if (residency === 'INDIAN_RESIDENT') {
-                if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
-                    alert('Please enter a valid 10-character PAN Card number.');
-                    return;
-                }
-            } else if (residency === 'NRI') {
-                const hasValidPan = /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan);
-                const hasValidPassport = passport.length >= 6 && country !== '';
-                if (!hasValidPan && !hasValidPassport) {
-                    alert('Please provide a valid PAN Card OR Passport Number with Country of Residence for NRI customer.');
-                    return;
-                }
-            } else if (residency === 'FOREIGN_NATIONAL') {
-                if (passport.length < 6 || country === '') {
-                    alert('Please enter Passport Number and Country of Residence for Foreign National customer.');
-                    return;
-                }
+        const gstinNorm = normalizeGstin(gstin);
+        const panPattern = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+        const gstinPattern = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+
+        if (gstinNorm !== '') {
+            if (!gstinPattern.test(gstinNorm)) {
+                showComplianceNotice('Please enter a valid 15-character GSTIN.');
+                return;
+            }
+        } else if (residency === 'INDIAN_RESIDENT') {
+            if (!panPattern.test(pan)) {
+                showComplianceNotice('Please enter a valid 10-character PAN Card number.');
+                return;
+            }
+        } else if (residency === 'NRI') {
+            const hasValidPan = panPattern.test(pan);
+            const hasValidPassport = passport.length >= 6 && country !== '';
+            if (!hasValidPan && !hasValidPassport) {
+                showComplianceNotice('Please provide a valid PAN Card OR Passport Number with Country of Residence for NRI customer.');
+                return;
+            }
+        } else if (residency === 'FOREIGN_NATIONAL') {
+            if (passport.length < 6 || country === '') {
+                showComplianceNotice('Please enter Passport Number and Country of Residence for Foreign National customer.');
+                return;
             }
         }
 
@@ -255,13 +288,13 @@
                         cb(data);
                     }
                 } else {
-                    alert((data && data.message) ? data.message : 'Failed to save compliance details.');
+                    showComplianceNotice((data && data.message) ? data.message : 'Failed to save compliance details.');
                 }
             })
             .catch(err => {
                 saveBtn.disabled = false;
                 saveBtn.innerText = 'Save & Generate Invoice';
-                alert('An error occurred while saving compliance details.');
+                showComplianceNotice('An error occurred while saving compliance details.');
                 console.error(err);
             });
     }

@@ -59,11 +59,12 @@ final class StockMovement
     /**
      * Latest running_stock for one product at one warehouse (same basis as POS / product detail).
      */
-    public static function getLastRunningStockByProductId(\mysqli $conn, int $productId, int $warehouseId): float
+    public static function getLastRunningStockByProductId(\mysqli $conn, int $productId, int $warehouseId, string $sku = ''): float
     {
         if ($productId <= 0 || $warehouseId <= 0) {
             return 0.0;
         }
+
         $stmt = $conn->prepare(
             'SELECT running_stock FROM vp_stock_movements
              WHERE product_id = ? AND warehouse_id = ?
@@ -346,6 +347,33 @@ final class StockMovement
         $productId = (int) ($data['product_id'] ?? 0);
         $sku = trim((string) ($data['sku'] ?? ''));
         $itemCode = trim((string) ($data['item_code'] ?? ''));
+
+        // Safeguard: Verify and resolve real SKU / item_code from vp_products if product_id is set
+        // Fixes legacy migration bugs where product title was accidentally saved into vp_stock_movements.sku
+        if ($productId > 0) {
+            $prodStmt = $conn->prepare('SELECT sku, item_code, title FROM vp_products WHERE id = ? LIMIT 1');
+            if ($prodStmt) {
+                $prodStmt->bind_param('i', $productId);
+                $prodStmt->execute();
+                $prodRow = $prodStmt->get_result()->fetch_assoc();
+                $prodStmt->close();
+                if ($prodRow) {
+                    $dbSku = trim((string)($prodRow['sku'] ?? ''));
+                    $dbItemCode = trim((string)($prodRow['item_code'] ?? ''));
+                    $dbTitle = trim((string)($prodRow['title'] ?? ''));
+
+                    if ($dbSku !== '' && ($sku === '' || $sku === $dbTitle || strcasecmp($sku, $dbTitle) === 0)) {
+                        $sku = $dbSku;
+                    } elseif ($sku === '' && $dbItemCode !== '') {
+                        $sku = $dbItemCode;
+                    }
+
+                    if ($itemCode === '' && $dbItemCode !== '') {
+                        $itemCode = $dbItemCode;
+                    }
+                }
+            }
+        }
         $size = trim((string) ($data['size'] ?? ''));
         $color = trim((string) ($data['color'] ?? ''));
         $warehouseId = (int) ($data['warehouse_id'] ?? 0);
@@ -457,11 +485,17 @@ final class StockMovement
             self::syncProductPhysicalStock($conn, $productId);
         }
 
+        // Keep vp_stock table synced with the latest running_stock for this SKU and warehouse
+        if ($sku !== '' && $warehouseId > 0) {
+            self::syncVpStockFromRunningStock($conn, $sku, $warehouseId, $runningStock, $movementId);
+        }
+
         return ['running_stock' => $runningStock, 'movement_id' => $movementId];
     }
 
     /**
-     * Keep vp_stock.current_stock aligned with the latest warehouse running_stock from the ledger.
+     * Keep vp_stock.current_stock aligned with the latest warehouse running_stock from the ledger,
+     * including item_code, size, and color from vp_products / vp_stock_movements.
      */
     public static function syncVpStockFromRunningStock(
         \mysqli $conn,
@@ -475,6 +509,41 @@ final class StockMovement
             return;
         }
 
+        // Resolve item_code, size, color from latest movement row or product table
+        $itemCode = '';
+        $size = '';
+        $color = '';
+
+        if ($lastTransId > 0) {
+            $mStmt = $conn->prepare('SELECT item_code, size, color FROM vp_stock_movements WHERE id = ? LIMIT 1');
+            if ($mStmt) {
+                $mStmt->bind_param('i', $lastTransId);
+                $mStmt->execute();
+                $mRow = $mStmt->get_result()->fetch_assoc();
+                $mStmt->close();
+                if ($mRow) {
+                    $itemCode = trim((string)($mRow['item_code'] ?? ''));
+                    $size     = trim((string)($mRow['size'] ?? ''));
+                    $color    = trim((string)($mRow['color'] ?? ''));
+                }
+            }
+        }
+
+        if ($itemCode === '') {
+            $pStmt = $conn->prepare('SELECT item_code, size, color FROM vp_products WHERE sku = ? OR item_code = ? LIMIT 1');
+            if ($pStmt) {
+                $pStmt->bind_param('ss', $sku, $sku);
+                $pStmt->execute();
+                $pRow = $pStmt->get_result()->fetch_assoc();
+                $pStmt->close();
+                if ($pRow) {
+                    $itemCode = trim((string)($pRow['item_code'] ?? ''));
+                    if ($size === '')  $size  = trim((string)($pRow['size'] ?? ''));
+                    if ($color === '') $color = trim((string)($pRow['color'] ?? ''));
+                }
+            }
+        }
+
         $selectStock = $conn->prepare('SELECT id FROM vp_stock WHERE sku = ? AND warehouse_id = ? LIMIT 1');
         if (!$selectStock) {
             return;
@@ -486,11 +555,11 @@ final class StockMovement
 
         if ($row) {
             $stockId = (int) ($row['id'] ?? 0);
-            $updateStock = $conn->prepare('UPDATE vp_stock SET current_stock = ?, last_trans_id = ? WHERE id = ?');
+            $updateStock = $conn->prepare('UPDATE vp_stock SET current_stock = ?, last_trans_id = ?, item_code = COALESCE(NULLIF(?, ""), item_code), size = COALESCE(NULLIF(?, ""), size), color = COALESCE(NULLIF(?, ""), color), updated_at = NOW() WHERE id = ?');
             if (!$updateStock) {
                 return;
             }
-            $updateStock->bind_param('dii', $runningStock, $lastTransId, $stockId);
+            $updateStock->bind_param('diissi', $runningStock, $lastTransId, $itemCode, $size, $color, $stockId);
             $updateStock->execute();
             $updateStock->close();
 
@@ -498,13 +567,21 @@ final class StockMovement
         }
 
         $insertStock = $conn->prepare(
-            'INSERT INTO vp_stock (sku, warehouse_id, current_stock, last_trans_id) VALUES (?, ?, ?, ?)'
+            'INSERT INTO vp_stock (sku, warehouse_id, current_stock, last_trans_id, item_code, size, color) VALUES (?, ?, ?, ?, ?, ?, ?)'
         );
         if (!$insertStock) {
             return;
         }
-        $insertStock->bind_param('sidi', $sku, $warehouseId, $runningStock, $lastTransId);
-        $insertStock->execute();
+        $insertStock->bind_param('sidisss', $sku, $warehouseId, $runningStock, $lastTransId, $itemCode, $size, $color);
+        if (!$insertStock->execute()) {
+            // Fallback for schema variants where item_code/size/color might not exist or differ
+            $fallback = $conn->prepare('INSERT INTO vp_stock (sku, warehouse_id, current_stock, last_trans_id) VALUES (?, ?, ?, ?)');
+            if ($fallback) {
+                $fallback->bind_param('sidi', $sku, $warehouseId, $runningStock, $lastTransId);
+                $fallback->execute();
+                $fallback->close();
+            }
+        }
         $insertStock->close();
     }
 
@@ -586,5 +663,72 @@ final class StockMovement
         $cached[$key] = $col;
 
         return $col;
+    }
+
+    /**
+     * Correct/align corrupted sku values in vp_stock_movements (e.g. where item title was inserted instead of SKU).
+     */
+    public static function alignCorruptedStockMovementSkus(\mysqli $conn): int
+    {
+        $sql = "UPDATE vp_stock_movements sm
+                INNER JOIN vp_products p ON sm.product_id = p.id
+                SET sm.sku = COALESCE(NULLIF(TRIM(p.sku), ''), p.item_code)
+                WHERE sm.product_id > 0
+                  AND p.sku IS NOT NULL AND TRIM(p.sku) <> ''
+                  AND (
+                      CONVERT(sm.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(p.title USING utf8mb4) COLLATE utf8mb4_unicode_ci 
+                      OR CONVERT(sm.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci <> CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                  )";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->execute();
+        $affected = (int) $stmt->affected_rows;
+        $stmt->close();
+
+        return max(0, $affected);
+    }
+
+    /**
+     * Resync all vp_stock rows from the latest running_stock per (sku, warehouse_id) in vp_stock_movements.
+     */
+    public static function syncAllVpStockFromMovements(\mysqli $conn): int
+    {
+        // Drop non-indexed functions (CONVERT/COLLATE) from joins to leverage table indexes and avoid lock timeouts
+        $sql = "INSERT INTO vp_stock (sku, warehouse_id, current_stock, last_trans_id, item_code, size, color)
+                SELECT sm.sku, sm.warehouse_id, sm.running_stock, sm.id,
+                       COALESCE(NULLIF(TRIM(sm.item_code), ''), p.item_code),
+                       COALESCE(NULLIF(TRIM(sm.size), ''), p.size),
+                       COALESCE(NULLIF(TRIM(sm.color), ''), p.color)
+                FROM vp_stock_movements sm
+                LEFT JOIN vp_products p ON (
+                    sm.product_id = p.id 
+                    OR (sm.product_id <= 0 AND sm.sku = p.sku)
+                )
+                INNER JOIN (
+                    SELECT sku, warehouse_id, MAX(id) AS max_id
+                    FROM vp_stock_movements
+                    WHERE sku IS NOT NULL AND TRIM(sku) <> '' AND warehouse_id > 0
+                    GROUP BY sku, warehouse_id
+                ) latest ON sm.sku = latest.sku 
+                        AND sm.warehouse_id = latest.warehouse_id 
+                        AND sm.id = latest.max_id
+                ON DUPLICATE KEY UPDATE
+                    current_stock = VALUES(current_stock),
+                    last_trans_id = VALUES(last_trans_id),
+                    item_code = COALESCE(VALUES(item_code), item_code),
+                    size = COALESCE(VALUES(size), size),
+                    color = COALESCE(VALUES(color), color),
+                    updated_at = NOW()";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->execute();
+        $affected = (int) $stmt->affected_rows;
+        $stmt->close();
+
+        return max(0, $affected);
     }
 }

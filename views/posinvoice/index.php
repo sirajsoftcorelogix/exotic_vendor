@@ -173,11 +173,11 @@
                     <div>
                         <label for="status" class="block text-xs font-semibold text-gray-600 mb-1">Invoice status</label>
                         <select id="status" class="pi-filter-input">
-                            <option value="">All statuses</option>
-                            <option value="draft">Draft</option>
-                            <option value="proforma">Proforma</option>
+                            <option value="">Active (excluding cancelled)</option>
                             <option value="final">Final</option>
+                            <option value="proforma">Proforma</option>
                             <option value="cancelled">Cancelled</option>
+                            <option value="all">All (including cancelled)</option>
                         </select>
                     </div>
                 </div>

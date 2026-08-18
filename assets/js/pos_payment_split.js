@@ -30,16 +30,22 @@
             };
         }
 
-        if (window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
+        var cartData = window.__posCartLastRetrieveData;
+        if (cartData && typeof cartData === 'object') {
+            if (cartData.currency_code) code = String(cartData.currency_code).trim().toUpperCase();
+            if (cartData.currency_symbol) symbol = String(cartData.currency_symbol).trim();
+        }
+
+        if (code === 'INR' && window.POS_CURRENT_CUSTOMER_CURRENCY_CODE) {
             code = String(window.POS_CURRENT_CUSTOMER_CURRENCY_CODE).trim().toUpperCase();
             if (window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL) symbol = String(window.POS_CURRENT_CUSTOMER_CURRENCY_SYMBOL).trim();
-        } else if (window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
+        } else if (code === 'INR' && window.POS_INITIAL_CUSTOMER && window.POS_INITIAL_CUSTOMER.currency_code) {
             var ic = window.POS_INITIAL_CUSTOMER;
             if (ic.currency_code) code = String(ic.currency_code).trim().toUpperCase();
             if (ic.currency_symbol) symbol = String(ic.currency_symbol).trim();
         }
 
-        if (!symbol) {
+        if (!symbol || (symbol === '₹' && code !== 'INR')) {
             if (code === 'INR') symbol = '₹';
             else if (code === 'USD') symbol = '$';
             else if (code === 'EUR') symbol = '€';
@@ -233,10 +239,15 @@
         return out;
     }
 
+    function isPendingPaymentMode(mode) {
+        var m = String(mode || '').toLowerCase();
+        return m === 'cod' || m === 'pay_on_pickup';
+    }
+
     function getPaymentSplitAdvanceTotalFromUi() {
         var total = 0;
         collectAllPaymentSplitRowsFromUi().forEach(function (s) {
-            if (s.mode !== 'cod') {
+            if (!isPendingPaymentMode(s.mode)) {
                 total += s.amount;
             }
         });
@@ -246,7 +257,7 @@
     function getPaymentSplitCodTotalFromUi() {
         var total = 0;
         collectAllPaymentSplitRowsFromUi().forEach(function (s) {
-            if (s.mode === 'cod') {
+            if (isPendingPaymentMode(s.mode)) {
                 total += s.amount;
             }
         });
@@ -320,18 +331,33 @@
         }
     }
 
+    function syncPaymentSplitCurrencyHeaders() {
+        var info = getPaymentCurrencyInfo();
+        var labelText = 'Amount (' + info.symbol + ')';
+        document.querySelectorAll('.payment-split-amount-header').forEach(function (el) {
+            el.textContent = labelText;
+        });
+        document.querySelectorAll('.payment-split-amount-label').forEach(function (el) {
+            el.textContent = labelText;
+        });
+    }
+
     function recalcPaymentSplitUi() {
-        var splits = collectAllPaymentSplitRowsFromUi();
-        var splitTotal = getPaymentSplitTotalFromUi();
-        var advanceTotal = getPaymentSplitAdvanceTotalFromUi();
-        var codTotal = getPaymentSplitCodTotalFromUi();
-        var hasCod = paymentSplitHasCodFromUi();
+        syncPaymentSplitCurrencyHeaders();
         var orderTotal = getTargetTotal();
         var displayTotal = getDisplayOrderTotal();
         var stage = String(document.getElementById('payment_stage')?.value || 'final').toLowerCase();
-        var balance = Math.round((orderTotal - splitTotal) * 100) / 100;
 
-        syncLegacyPaymentHiddenFields(splits, hasCod ? advanceTotal : splitTotal);
+        var isZeroAdvance = stage === 'zero_advance';
+        var splitSection = document.getElementById('payment_split_section');
+        var zeroNotice = document.getElementById('zero_advance_notice');
+
+        if (splitSection) {
+            splitSection.classList.toggle('hidden', isZeroAdvance);
+        }
+        if (zeroNotice) {
+            zeroNotice.classList.toggle('hidden', !isZeroAdvance);
+        }
 
         var orderEl = document.getElementById('payment_summary_order');
         var paidEl = document.getElementById('payment_summary_paid');
@@ -341,6 +367,36 @@
         var countEl = document.getElementById('payment_split_count');
         var totalEl = document.getElementById('payment_split_total');
 
+        if (isZeroAdvance) {
+            syncLegacyPaymentHiddenFields([{ mode: 'pay_on_pickup', amount: orderTotal, transaction_id: '' }], 0);
+            if (orderEl) orderEl.textContent = formatPaymentInr(displayTotal);
+            if (paidEl) paidEl.textContent = formatPaymentInr(0);
+            if (balLabelEl) balLabelEl.textContent = 'Pending on pickup';
+            if (balEl) {
+                balEl.textContent = formatPaymentInr(orderTotal);
+                balEl.className = 'mt-0.5 text-lg font-bold text-amber-700 tabular-nums';
+            }
+            if (countEl) countEl.textContent = '0';
+            if (totalEl) totalEl.textContent = formatPaymentInr(0);
+            if (hintEl) {
+                hintEl.textContent = 'Zero advance payment — full amount ' + formatPaymentInr(orderTotal) + ' will be collected on store pickup.';
+                hintEl.classList.remove('hidden');
+            }
+            syncCustomInvoiceNumberField();
+            return;
+        }
+
+        var splits = collectAllPaymentSplitRowsFromUi();
+        var splitTotal = getPaymentSplitTotalFromUi();
+        var advanceTotal = getPaymentSplitAdvanceTotalFromUi();
+        var codTotal = getPaymentSplitCodTotalFromUi();
+        var hasCod = paymentSplitHasCodFromUi();
+        var balance = Math.round((orderTotal - splitTotal) * 100) / 100;
+
+        syncLegacyPaymentHiddenFields(splits, hasCod ? advanceTotal : splitTotal);
+
+        var isPayOnPickup = splits.some(function (s) { return s.mode === 'pay_on_pickup'; });
+
         if (orderEl) {
             orderEl.textContent = formatPaymentInr(displayTotal);
         }
@@ -348,7 +404,7 @@
             paidEl.textContent = formatPaymentInr(hasCod ? advanceTotal : splitTotal);
         }
         if (balLabelEl) {
-            balLabelEl.textContent = hasCod ? 'COD pending' : 'Balance';
+            balLabelEl.textContent = hasCod ? (isPayOnPickup ? 'Pending on pickup' : 'COD pending') : 'Balance';
         }
         if (balEl) {
             balEl.textContent = formatPaymentInr(hasCod ? codTotal : balance);
@@ -376,7 +432,7 @@
                     hintEl.textContent = 'Advance plus COD must equal order total (' + formatPaymentInr(orderTotal) + ').';
                     hintEl.classList.remove('hidden');
                 } else if (codTotal > 0.001) {
-                    hintEl.textContent = formatPaymentInr(codTotal) + ' will be collected on delivery.';
+                    hintEl.textContent = formatPaymentInr(codTotal) + (isPayOnPickup ? ' will be collected on store pickup.' : ' will be collected on delivery.');
                     hintEl.classList.remove('hidden');
                 } else {
                     hintEl.classList.add('hidden');
@@ -417,13 +473,33 @@
         options = options || {};
         hideSplitValidationError();
         var grandTotal = getTargetTotal();
+        var paymentStage = String(document.getElementById('payment_stage')?.value || 'final').toLowerCase();
+
+        if (paymentStage === 'zero_advance') {
+            return {
+                payment_stage: 'zero_advance',
+                payment_amount: 0,
+                advanceTotal: 0,
+                codTotal: grandTotal,
+                hasCod: true,
+                primaryMode: 'pay_on_pickup',
+                primaryTxn: '',
+                splits: [{
+                    mode: 'pay_on_pickup',
+                    amount: grandTotal,
+                    transaction_id: ''
+                }],
+                payment_date: String(document.getElementById('payment_date')?.value || ''),
+                payment_note: String(document.getElementById('payment_note')?.value || ''),
+            };
+        }
+
         var splits = collectAllPaymentSplitRowsFromUi();
         if (!splits.length) {
             showSplitValidationError('Add at least one payment line.');
             return null;
         }
 
-        var paymentStage = String(document.getElementById('payment_stage')?.value || 'final').toLowerCase();
         var advanceTotal = getPaymentSplitAdvanceTotalFromUi();
         var codTotal = getPaymentSplitCodTotalFromUi();
         var paymentAmount = getPaymentSplitTotalFromUi();
@@ -469,12 +545,14 @@
         }
 
         if (hasCod) {
+            var isPayOnPickup = splits.some(function (s) { return s.mode === 'pay_on_pickup'; });
+            var pendingLabel = isPayOnPickup ? 'Advance plus Pay on Pickup' : 'Advance plus COD';
             if (paymentAmount + 0.02 < grandTotal) {
-                showSplitValidationError('Advance plus COD must equal order total ₹ ' + grandTotal);
+                showSplitValidationError(pendingLabel + ' must equal order total ₹ ' + grandTotal);
                 return null;
             }
             if (paymentAmount - 0.02 > grandTotal) {
-                showSplitValidationError('Advance plus COD exceeds order total.');
+                showSplitValidationError(pendingLabel + ' exceeds order total.');
                 return null;
             }
             paymentStage = 'advance';

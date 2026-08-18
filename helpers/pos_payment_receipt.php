@@ -167,60 +167,95 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
         }
     }
 
-    $stmt = $conn->prepare('SELECT total FROM vp_order_info WHERE order_number = ? LIMIT 1');
+    $hasCancelled = false;
+    $stmt = $conn->prepare("SELECT COUNT(*) as c FROM vp_orders WHERE order_number = ? AND status = 'cancelled'");
     if ($stmt) {
         $stmt->bind_param('s', $orderNumber);
         $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
+        $res = $stmt->get_result()->fetch_assoc();
         $stmt->close();
-        $total = round((float)($row['total'] ?? 0), 2);
-        if ($total > 0) {
-            return $total;
+        if (!empty($res['c']) && (int)$res['c'] > 0) {
+            $hasCancelled = true;
+        }
+    }
+
+    if (!$hasCancelled) {
+        $stmt = $conn->prepare('SELECT total FROM vp_order_info WHERE order_number = ? LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('s', $orderNumber);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            $total = round((float)($row['total'] ?? 0), 2);
+            if ($total > 0) {
+                return $total;
+            }
+        }
+
+        $stmt = $conn->prepare(
+            'SELECT i.total_amount FROM vp_invoices i
+             INNER JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
+             WHERE oi.order_number = ? ORDER BY i.id DESC LIMIT 1'
+        );
+        if ($stmt) {
+            $stmt->bind_param('s', $orderNumber);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            $total = round((float)($row['total_amount'] ?? 0), 2);
+            if ($total > 0) {
+                return $total;
+            }
         }
     }
 
     $stmt = $conn->prepare(
-        'SELECT i.total_amount FROM vp_invoices i
-         INNER JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
-         WHERE oi.order_number = ? ORDER BY i.id DESC LIMIT 1'
-    );
-    if ($stmt) {
-        $stmt->bind_param('s', $orderNumber);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        $total = round((float)($row['total_amount'] ?? 0), 2);
-        if ($total > 0) {
-            return $total;
-        }
-    }
-
-    $stmt = $conn->prepare(
-        'SELECT
-            IFNULL(SUM(o.finalprice * o.quantity), 0) AS subtotal,
-            IFNULL(MAX(o.custom_reduce), 0) AS custom_reduce,
+        "SELECT
+            IFNULL(SUM(CASE WHEN o.status IS NULL OR o.status != 'cancelled' THEN IF(IFNULL(o.itemprice, 0) > 0, o.itemprice, o.finalprice) * o.quantity ELSE 0 END), 0) AS list_subtotal,
+            IFNULL(MAX(CASE WHEN o.status IS NULL OR o.status != 'cancelled' THEN o.custom_reduce ELSE 0 END), 0) AS custom_reduce,
             IFNULL(MAX(oi.coupon_reduce), 0) AS coupon_reduce,
             IFNULL(MAX(oi.giftvoucher_reduce), 0) AS gift_reduce,
             IFNULL(MAX(oi.credit), 0) AS credit
          FROM vp_orders o
          LEFT JOIN vp_order_info oi ON oi.order_number COLLATE utf8mb4_unicode_ci = o.order_number COLLATE utf8mb4_unicode_ci
-         WHERE o.order_number = ?'
+         WHERE o.order_number = ?"
     );
     if ($stmt) {
         $stmt->bind_param('s', $orderNumber);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
-        $subtotal = round((float)($row['subtotal'] ?? 0), 2);
-        $reductions = round(
-            (float)($row['custom_reduce'] ?? 0)
-            + (float)($row['coupon_reduce'] ?? 0)
-            + (float)($row['gift_reduce'] ?? 0)
-            + (float)($row['credit'] ?? 0),
-            2
-        );
-        if ($subtotal > 0) {
-            return max(0.0, round($subtotal - $reductions, 2));
+
+        $listSubtotal = round((float)($row['list_subtotal'] ?? 0), 2);
+
+        $addonsTotal = 0.0;
+        $stmtAddons = $conn->prepare("SELECT addons, quantity FROM vp_orders WHERE order_number = ? AND (status IS NULL OR status != 'cancelled')");
+        if ($stmtAddons) {
+            $stmtAddons->bind_param('s', $orderNumber);
+            $stmtAddons->execute();
+            $resAddons = $stmtAddons->get_result();
+            if ($resAddons) {
+                require_once __DIR__ . '/../models/order/order.php';
+                while ($aRow = $resAddons->fetch_assoc()) {
+                    $parsedAddons = Order::parseVendorOrderLineAddonsList($aRow['addons'] ?? null);
+                    $qty = max(1, (int)($aRow['quantity'] ?? 1));
+                    foreach ($parsedAddons as $addonItem) {
+                        $addonsTotal += round((float)($addonItem['price'] ?? 0) * $qty, 2);
+                    }
+                }
+            }
+            $stmtAddons->close();
+        }
+
+        $grossTotal = round($listSubtotal + $addonsTotal, 2);
+        $customReduce = round((float)($row['custom_reduce'] ?? 0), 2);
+        $couponReduce = round((float)($row['coupon_reduce'] ?? 0), 2);
+        $giftReduce = round((float)($row['gift_reduce'] ?? 0), 2);
+        $creditReduce = round((float)($row['credit'] ?? 0), 2);
+
+        $reductions = round($customReduce + $couponReduce + $giftReduce + $creditReduce, 2);
+        if ($grossTotal > 0) {
+            return max(0.0, round($grossTotal - $reductions, 2));
         }
     }
 
@@ -338,7 +373,8 @@ function pos_payment_sync_checkout_order_payable(
 
 function pos_payment_is_cod_mode(string $mode): bool
 {
-    return strtolower(trim($mode)) === 'cod';
+    $m = strtolower(trim($mode));
+    return $m === 'cod' || $m === 'pay_on_pickup';
 }
 
 /**
@@ -378,7 +414,7 @@ function pos_payment_split_cod_total(array $splits): float
  */
 function pos_payment_allowed_modes(): array
 {
-    return ['cash', 'cod', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque', 'adminorder', 'waived'];
+    return ['cash', 'pay_on_pickup', 'cod', 'upi', 'bank_transfer', 'pos_machine', 'razorpay', 'cheque', 'adminorder', 'waived'];
 }
 
 function pos_payment_is_waived_mode(string $mode): bool
@@ -393,6 +429,7 @@ function pos_payment_mode_options_for_view(): array
 {
     $labels = [
         'cash' => 'Cash',
+        'pay_on_pickup' => 'Pay on Pickup (Store Pay Later)',
         'cod' => 'Cash on Delivery (COD)',
         'upi' => 'UPI',
         'bank_transfer' => 'Bank transfer',
@@ -423,6 +460,16 @@ function pos_payment_mode_options_for_view(): array
 function pos_payment_resolve_splits_from_payload(array $payload): array
 {
     $allowed = pos_payment_allowed_modes();
+    $paymentStage = strtolower(trim((string)($payload['payment_stage'] ?? '')));
+    if ($paymentStage === 'zero_advance') {
+        return [
+            'splits' => [],
+            'total' => 0.0,
+            'primary_mode' => 'pay_on_pickup',
+            'primary_txn' => '',
+        ];
+    }
+
     $splits = [];
     $raw = $payload['payment_splits'] ?? null;
     if (is_array($raw)) {
@@ -447,14 +494,23 @@ function pos_payment_resolve_splits_from_payload(array $payload): array
     }
 
     if ($splits === []) {
-        $mode = strtolower(trim((string)($payload['payment_type'] ?? $payload['payment_mode'] ?? 'cash')));
-        $amount = round((float)($payload['amount'] ?? $payload['payment_amount'] ?? 0), 2);
-        if ($amount > 0 || pos_payment_is_waived_mode($mode)) {
+        if (strtolower(trim((string)($payload['payment_stage'] ?? ''))) === 'zero_advance') {
+            $amount = round((float)($payload['order_total'] ?? $payload['receipt_order_total'] ?? $payload['amount'] ?? 0), 2);
             $splits[] = [
-                'mode' => in_array($mode, $allowed, true) ? $mode : 'cash',
-                'amount' => pos_payment_is_waived_mode($mode) ? 0.0 : $amount,
-                'transaction_id' => trim((string)($payload['transaction_id'] ?? '')),
+                'mode' => 'pay_on_pickup',
+                'amount' => $amount,
+                'transaction_id' => '',
             ];
+        } else {
+            $mode = strtolower(trim((string)($payload['payment_type'] ?? $payload['payment_mode'] ?? 'cash')));
+            $amount = round((float)($payload['amount'] ?? $payload['payment_amount'] ?? 0), 2);
+            if ($amount > 0 || pos_payment_is_waived_mode($mode)) {
+                $splits[] = [
+                    'mode' => in_array($mode, $allowed, true) ? $mode : 'cash',
+                    'amount' => pos_payment_is_waived_mode($mode) ? 0.0 : $amount,
+                    'transaction_id' => trim((string)($payload['transaction_id'] ?? '')),
+                ];
+            }
         }
     }
 
@@ -490,6 +546,11 @@ function pos_payment_validate_splits(
     string $paymentStage,
     ?array $followUpSession = null
 ): array {
+    $paymentStage = strtolower(trim($paymentStage));
+    if ($paymentStage === 'zero_advance') {
+        return [];
+    }
+
     $errors = [];
     $splits = $splitBundle['splits'] ?? [];
     if ($splits === []) {
@@ -558,10 +619,18 @@ function pos_payment_validate_splits(
     }
 
     if ($hasCod) {
+        $hasPickup = false;
+        foreach ($splits as $split) {
+            if (strtolower(trim((string)($split['mode'] ?? ''))) === 'pay_on_pickup') {
+                $hasPickup = true;
+                break;
+            }
+        }
+        $pendingLabel = $hasPickup ? 'Advance plus Pay on Pickup' : 'Advance plus COD';
         if ($splitTotal + 0.02 < $targetTotal) {
-            $errors[] = 'Advance plus COD must equal order total ₹ ' . $targetTotal . '.';
+            $errors[] = $pendingLabel . ' must equal order total ₹ ' . $targetTotal . '.';
         } elseif ($splitTotal - 0.02 > $targetTotal) {
-            $errors[] = 'Advance plus COD exceeds order total.';
+            $errors[] = $pendingLabel . ' exceeds order total.';
         }
     } else {
         $paymentAmount = round((float)($splitBundle['total'] ?? 0), 2);
@@ -684,7 +753,7 @@ function pos_payment_mark_cod_collected_if_fully_paid(mysqli $conn, string $orde
         'UPDATE pos_payments
          SET payment_status = \'success\'
          WHERE order_number = ?
-           AND LOWER(TRIM(payment_mode)) = \'cod\'
+           AND LOWER(TRIM(payment_mode)) IN (\'cod\', \'pay_on_pickup\')
            AND LOWER(TRIM(COALESCE(payment_status, \'pending\'))) = \'pending\''
     );
     if (!$stmt) {
@@ -963,6 +1032,13 @@ function pos_payment_finalize_invoice_for_order(mysqli $conn, string $orderNumbe
         'invoice_id' => 0,
         'created' => false,
         'message' => (string)($created['message'] ?? 'Invoice could not be created.'),
+        'require_compliance' => !empty($created['require_compliance']),
+        'compliance_code' => $created['compliance_code'] ?? '',
+        'customer_id' => (int)($created['customer_id'] ?? 0),
+        'gstin' => (string)($created['gstin'] ?? ''),
+        'pan' => (string)($created['pan'] ?? ''),
+        'residency_status' => (string)($created['residency_status'] ?? ''),
+        'missing_fields' => $created['missing_fields'] ?? [],
     ];
 }
 
@@ -1070,6 +1146,9 @@ function pos_payment_insert_row(
     $pendingAmtSnap = $snap['pending_amount'];
     $paymentStatus = pos_payment_is_cod_mode($paymentMode) ? 'pending' : 'success';
 
+    $stageClean = strtolower(trim($paymentStage));
+    $dbPaymentStage = ($stageClean === 'zero_advance') ? 'advance' : $stageClean;
+
     if ($customerId > 0) {
         $stmt = $conn->prepare(
             'INSERT INTO pos_payments (order_number, receipt_number, customer_id, payment_stage, payment_mode, payment_amount, order_amount, pending_amount, transaction_id, note, payment_date, user_id, warehouse_id, currency, payment_status, created_at)
@@ -1091,7 +1170,7 @@ function pos_payment_insert_row(
             $orderNumber,
             $receiptNumber,
             $cid,
-            $paymentStage,
+            $dbPaymentStage,
             $paymentMode,
             $amount,
             $orderAmtSnap,
@@ -1139,6 +1218,8 @@ function pos_payment_insert_row(
         $newId = (int)$conn->insert_id;
         $stmt->close();
 
+        pos_payment_update_order_info_payment_mode($conn, $orderNumber);
+
         return [
             'success' => true,
             'payment_id' => $newId,
@@ -1167,7 +1248,7 @@ function pos_payment_insert_row(
         'ssssdddssiis',
         $orderNumber,
         $receiptNumber,
-        $paymentStage,
+        $dbPaymentStage,
         $paymentMode,
         $amount,
         $orderAmtSnap,
@@ -1195,6 +1276,8 @@ function pos_payment_insert_row(
     $newId = (int)$conn->insert_id;
     $stmt->close();
 
+    pos_payment_update_order_info_payment_mode($conn, $orderNumber);
+
     return [
         'success' => true,
         'payment_id' => $newId,
@@ -1203,4 +1286,151 @@ function pos_payment_insert_row(
         'order_amount' => $orderAmtSnap,
         'pending_amount' => $pendingAmtSnap,
     ];
+}
+
+/**
+ * Ensure vp_order_info table has payment_mode column.
+ */
+function pos_payment_ensure_order_info_payment_mode_column(mysqli $conn): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $check = $conn->query("SHOW COLUMNS FROM vp_order_info LIKE 'payment_mode'");
+    if ($check && $check->num_rows === 0) {
+        @$conn->query("ALTER TABLE vp_order_info ADD COLUMN payment_mode VARCHAR(100) NULL DEFAULT NULL AFTER payment_type");
+    }
+    $done = true;
+}
+
+/**
+ * Auto fill vp_order_info.payment_mode on the basis of payment_type and pos_payments.payment_mode.
+ * 
+ * Rules:
+ * If payment_type = 'offline':
+ *   Check pos_payments for order_number.
+ *   If any pos_payments.payment_mode is 'bank_transfer' or 'upi': set value 'YES2971'
+ *   Else if pos_payments.payment_mode exists: set value pos_payments.payment_mode
+ *   Else: set 'offline'
+ * Else:
+ *   Set payment_type value
+ */
+function pos_payment_resolve_order_payment_mode(mysqli $conn, string $orderNumber, ?string $paymentType = null): string
+{
+    pos_payment_ensure_order_info_payment_mode_column($conn);
+
+    $orderNumber = trim($orderNumber);
+    $payType = trim((string)$paymentType);
+
+    if ($payType === '' && $orderNumber !== '') {
+        $stmt = $conn->prepare('SELECT payment_type FROM vp_order_info WHERE order_number = ? LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('s', $orderNumber);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res && $row = $res->fetch_assoc()) {
+                $payType = trim((string)($row['payment_type'] ?? ''));
+            }
+            $stmt->close();
+        }
+    }
+
+    $isCod = (strtolower($payType) === 'cod');
+
+    if (strtolower($payType) === 'offline' && $orderNumber !== '') {
+        // Check if any payment split is cod
+        $stmt = $conn->prepare("SELECT payment_mode FROM pos_payments WHERE order_number = ? AND LOWER(TRIM(payment_mode)) = 'cod' LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('s', $orderNumber);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res && $res->num_rows > 0) {
+                $isCod = true;
+            }
+            $stmt->close();
+        }
+    }
+
+    if ($isCod) {
+        if ($orderNumber !== '') {
+            $stmt = $conn->prepare("SELECT courier_name FROM vp_dispatch_details WHERE order_number = ? AND courier_name IS NOT NULL AND TRIM(courier_name) <> '' ORDER BY id DESC LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param('s', $orderNumber);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($res && $row = $res->fetch_assoc()) {
+                    $courierName = trim((string)($row['courier_name'] ?? ''));
+                    $stmt->close();
+                    if ($courierName !== '') {
+                        return $courierName;
+                    }
+                } else {
+                    $stmt->close();
+                }
+            }
+        }
+        return 'COD';
+    }
+
+    if (strtolower($payType) === 'offline') {
+        if ($orderNumber !== '') {
+            // Check if any payment split is bank_transfer or upi
+            $stmt = $conn->prepare("SELECT payment_mode FROM pos_payments WHERE order_number = ? AND (LOWER(TRIM(payment_mode)) = 'bank_transfer' OR LOWER(TRIM(payment_mode)) = 'upi') LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param('s', $orderNumber);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($res && $res->num_rows > 0) {
+                    $stmt->close();
+                    return 'YES2971';
+                }
+                $stmt->close();
+            }
+
+            // Otherwise fetch the latest payment mode
+            $stmt = $conn->prepare('SELECT payment_mode FROM pos_payments WHERE order_number = ? ORDER BY id DESC LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('s', $orderNumber);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($res && $row = $res->fetch_assoc()) {
+                    $posMode = strtolower(trim((string)($row['payment_mode'] ?? '')));
+                    $rawMode = trim((string)($row['payment_mode'] ?? ''));
+                    $stmt->close();
+                    if ($posMode === 'bank_transfer' || $posMode === 'upi') {
+                        return 'YES2971';
+                    }
+                    if ($rawMode !== '') {
+                        return $rawMode;
+                    }
+                } else {
+                    $stmt->close();
+                }
+            }
+        }
+        return 'offline';
+    }
+
+    return $payType !== '' ? $payType : 'offline';
+}
+
+/**
+ * Update vp_order_info.payment_mode for given order_number.
+ */
+function pos_payment_update_order_info_payment_mode(mysqli $conn, string $orderNumber): void
+{
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return;
+    }
+
+    $resolvedMode = pos_payment_resolve_order_payment_mode($conn, $orderNumber);
+
+    $stmt = $conn->prepare('UPDATE vp_order_info SET payment_mode = ? WHERE order_number = ?');
+    if ($stmt) {
+        $stmt->bind_param('ss', $resolvedMode, $orderNumber);
+        $stmt->execute();
+        $stmt->close();
+    }
 }

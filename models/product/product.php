@@ -5682,77 +5682,245 @@ class product
     }
     /**
      * Latest running_stock per warehouse for product detail — same basis as POS stock report
-     * (latest vp_stock_movements row per warehouse + product_id, not a sum of quantities).
+     * Get running stock and location grouped by warehouse for a product/SKU.
+     * Combines latest vp_stock_movements ledger balance per warehouse and vp_stock per-warehouse records.
      *
      * @param int $productId
-     * @param string $sku Unused; kept for call-site compatibility
+     * @param string $sku
      * @return list<array<string,mixed>>
      */
     public function getLatestRunningStockByWarehouseLocation($productId, $sku = '')
     {
         $productId = (int)$productId;
-        if ($productId <= 0) {
+        $sku = trim((string)$sku);
+
+        if ($productId <= 0 && $sku === '') {
             return [];
         }
 
-        $sql = "SELECT 
-                    sm.id AS movement_id,
-                    sm.warehouse_id,
-                    COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
-                    sm.location,
-                    sm.running_stock,
-                    sm.updated_at,
-                    sm.created_at
-                FROM vp_stock_movements sm
-                INNER JOIN (
-                    SELECT warehouse_id, MAX(id) AS max_id
-                    FROM vp_stock_movements
-                    WHERE product_id = ?
-                    GROUP BY warehouse_id
-                ) latest ON latest.max_id = sm.id
-                LEFT JOIN exotic_address ea ON ea.id = sm.warehouse_id
-                WHERE sm.product_id = ?
-                ORDER BY ea.address_title ASC, sm.location ASC";
-        $stmt = $this->db->prepare($sql);
-        if ($stmt === false) {
-            return [];
+        // 1. Resolve product details (SKU, item_code, location) from vp_products if available
+        $itemCode = '';
+        $productLocation = '';
+        if ($productId > 0) {
+            $pStmt = $this->db->prepare('SELECT sku, item_code, location FROM vp_products WHERE id = ? LIMIT 1');
+            if ($pStmt) {
+                $pStmt->bind_param('i', $productId);
+                $pStmt->execute();
+                $pRow = $pStmt->get_result()->fetch_assoc();
+                $pStmt->close();
+                if ($pRow) {
+                    if ($sku === '') {
+                        $sku = trim((string)($pRow['sku'] ?? ''));
+                    }
+                    $itemCode = trim((string)($pRow['item_code'] ?? ''));
+                    $productLocation = trim((string)($pRow['location'] ?? ''));
+                }
+            }
+        } elseif ($sku !== '') {
+            $pStmt = $this->db->prepare('SELECT id, item_code, location FROM vp_products WHERE sku = ? LIMIT 1');
+            if ($pStmt) {
+                $pStmt->bind_param('s', $sku);
+                $pStmt->execute();
+                $pRow = $pStmt->get_result()->fetch_assoc();
+                $pStmt->close();
+                if ($pRow) {
+                    $productId = (int)($pRow['id'] ?? 0);
+                    $itemCode = trim((string)($pRow['item_code'] ?? ''));
+                    $productLocation = trim((string)($pRow['location'] ?? ''));
+                }
+            }
         }
-        $stmt->bind_param('ii', $productId, $productId);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $rows = [];
-        if ($result && $result->num_rows > 0) {
-            $rows = $result->fetch_all(MYSQLI_ASSOC);
-        }
-        $stmt->close();
 
-        return $rows;
+        $warehouseStockMap = [];
+
+        // 2. Fetch latest stock movements per warehouse from vp_stock_movements
+        $whereConditions = [];
+        $types = '';
+        $params = [];
+
+        if ($productId > 0) {
+            $whereConditions[] = 'sm.product_id = ?';
+            $types .= 'i';
+            $params[] = $productId;
+        }
+        if ($sku !== '') {
+            $whereConditions[] = "(sm.sku != '' AND sm.sku = ?)";
+            $types .= 's';
+            $params[] = $sku;
+        }
+
+        if (!empty($whereConditions)) {
+            $whereClause = implode(' OR ', $whereConditions);
+
+            $subWhereConditions = [];
+            $subTypes = '';
+            $subParams = [];
+
+            if ($productId > 0) {
+                $subWhereConditions[] = 'product_id = ?';
+                $subTypes .= 'i';
+                $subParams[] = $productId;
+            }
+            if ($sku !== '') {
+                $subWhereConditions[] = "(sku != '' AND sku = ?)";
+                $subTypes .= 's';
+                $subParams[] = $sku;
+            }
+            $subWhereClause = implode(' OR ', $subWhereConditions);
+
+            $sql = "SELECT 
+                        sm.id AS movement_id,
+                        sm.warehouse_id,
+                        COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
+                        sm.location,
+                        sm.running_stock,
+                        sm.updated_at,
+                        sm.created_at
+                    FROM vp_stock_movements sm
+                    INNER JOIN (
+                        SELECT warehouse_id, MAX(id) AS max_id
+                        FROM vp_stock_movements
+                        WHERE {$subWhereClause}
+                        GROUP BY warehouse_id
+                    ) latest ON latest.max_id = sm.id
+                    LEFT JOIN exotic_address ea ON ea.id = sm.warehouse_id
+                    WHERE {$whereClause}
+                    ORDER BY ea.address_title ASC, sm.location ASC";
+
+            $stmt = $this->db->prepare($sql);
+            if ($stmt) {
+                $allTypes = $subTypes . $types;
+                $allParams = array_merge($subParams, $params);
+                $stmt->bind_param($allTypes, ...$allParams);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                if ($result) {
+                    while ($row = $result->fetch_assoc()) {
+                        $wid = (int)($row['warehouse_id'] ?? 0);
+                        if ($wid <= 0) continue;
+                        $loc = trim((string)($row['location'] ?? ''));
+                        if ($loc === '' && $productLocation !== '') {
+                            $loc = $productLocation;
+                        }
+                        $warehouseStockMap[$wid] = [
+                            'movement_id'    => (int)($row['movement_id'] ?? 0),
+                            'warehouse_id'   => $wid,
+                            'warehouse_name' => (string)($row['warehouse_name'] ?? ('Warehouse #' . $wid)),
+                            'location'       => $loc,
+                            'running_stock'  => (float)($row['running_stock'] ?? 0),
+                            'updated_at'     => $row['updated_at'] ?? null,
+                            'created_at'     => $row['created_at'] ?? null,
+                        ];
+                    }
+                }
+                $stmt->close();
+            }
+        }
+
+        // 3. Query vp_stock table for warehouse records matching SKU or item_code
+        $stockWhere = [];
+        $sTypes = '';
+        $sParams = [];
+
+        if ($sku !== '') {
+            $stockWhere[] = 's.sku = ?';
+            $sTypes .= 's';
+            $sParams[] = $sku;
+        }
+        if ($itemCode !== '') {
+            $stockWhere[] = "(s.sku = '' AND s.item_code = ?)";
+            $sTypes .= 's';
+            $sParams[] = $itemCode;
+        }
+
+        if (!empty($stockWhere)) {
+            $sWhereClause = implode(' OR ', $stockWhere);
+            $sSql = "SELECT 
+                        s.id AS stock_id,
+                        s.warehouse_id,
+                        COALESCE(ea.address_title, CONCAT('Warehouse #', s.warehouse_id)) AS warehouse_name,
+                        s.current_stock,
+                        s.last_trans_id,
+                        s.updated_at
+                    FROM vp_stock s
+                    LEFT JOIN exotic_address ea ON ea.id = s.warehouse_id
+                    WHERE {$sWhereClause}";
+
+            $sStmt = $this->db->prepare($sSql);
+            if ($sStmt) {
+                $sStmt->bind_param($sTypes, ...$sParams);
+                $sStmt->execute();
+                $sResult = $sStmt->get_result();
+                if ($sResult) {
+                    while ($sRow = $sResult->fetch_assoc()) {
+                        $wid = (int)($sRow['warehouse_id'] ?? 0);
+                        if ($wid <= 0) continue;
+
+                        if (!isset($warehouseStockMap[$wid])) {
+                            $warehouseStockMap[$wid] = [
+                                'movement_id'    => (int)($sRow['last_trans_id'] ?? 0),
+                                'warehouse_id'   => $wid,
+                                'warehouse_name' => (string)($sRow['warehouse_name'] ?? ('Warehouse #' . $wid)),
+                                'location'       => $productLocation,
+                                'running_stock'  => (float)($sRow['current_stock'] ?? 0),
+                                'updated_at'     => $sRow['updated_at'] ?? null,
+                                'created_at'     => $sRow['updated_at'] ?? null,
+                            ];
+                        }
+                    }
+                }
+                $sStmt->close();
+            }
+        }
+
+        // Sort rows by warehouse_name ASC
+        usort($warehouseStockMap, static function ($a, $b) {
+            return strnatcasecmp($a['warehouse_name'] ?? '', $b['warehouse_name'] ?? '');
+        });
+
+        return array_values($warehouseStockMap);
     }
     public function updateStockMovementLocation($movementId, $productId, $location)
     {
-        $sql = "UPDATE vp_stock_movements 
-                SET location = ?, updated_at = NOW()
-                WHERE id = ? AND product_id = ?";
-        $stmt = $this->db->prepare($sql);
-        if (!$stmt) {
-            return ['success' => false, 'message' => 'Prepare failed: ' . $this->db->error];
-        }
         $movementId = (int)$movementId;
         $productId = (int)$productId;
         $location = trim((string)$location);
-        $stmt->bind_param('sii', $location, $movementId, $productId);
-        if (!$stmt->execute()) {
-            return ['success' => false, 'message' => 'Update failed: ' . $stmt->error];
-        }
-        if ($stmt->affected_rows < 1) {
-            return ['success' => false, 'message' => 'No stock movement row updated.'];
+
+        if ($productId <= 0) {
+            return ['success' => false, 'message' => 'Invalid product reference.'];
         }
 
+        $movementUpdated = false;
+        if ($movementId > 0) {
+            $sql = "UPDATE vp_stock_movements 
+                    SET location = ?, updated_at = NOW()
+                    WHERE id = ? AND product_id = ?";
+            $stmt = $this->db->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param('sii', $location, $movementId, $productId);
+                if ($stmt->execute() && $stmt->affected_rows > 0) {
+                    $movementUpdated = true;
+                }
+                $stmt->close();
+            }
+        }
+
+        // Always update product location on vp_products
         $productStmt = $this->db->prepare('UPDATE vp_products SET location = ?, updated_at = NOW() WHERE id = ?');
         if ($productStmt) {
             $productStmt->bind_param('si', $location, $productId);
             $productStmt->execute();
             $productStmt->close();
+        }
+
+        // Also update all stock movements for this product ID if movementId was not updated directly
+        if (!$movementUpdated) {
+            $allMovStmt = $this->db->prepare('UPDATE vp_stock_movements SET location = ?, updated_at = NOW() WHERE product_id = ?');
+            if ($allMovStmt) {
+                $allMovStmt->bind_param('si', $location, $productId);
+                $allMovStmt->execute();
+                $allMovStmt->close();
+            }
         }
 
         $product = $this->getProduct($productId);

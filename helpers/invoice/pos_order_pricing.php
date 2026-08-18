@@ -95,6 +95,7 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
     $couponReduce = round((float)($meta['coupon_discount'] ?? 0), 2);
     $giftReduce = round((float)($meta['gift_discount'] ?? 0), 2);
     $cashReduce = round((float)($meta['cash_discount'] ?? 0), 2);
+    $creditReduce = round((float)($meta['credit_discount'] ?? 0), 2);
     $giftName = trim((string)($meta['gift_voucher_name'] ?? ''));
     $couponCandidates = [
         $meta['coupon_raw'] ?? '',
@@ -111,6 +112,9 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
         if ($cashReduce <= 0) {
             $cashReduce = round((float)($orderInfo['custom_reduce'] ?? 0), 2);
         }
+        if ($creditReduce <= 0) {
+            $creditReduce = round((float)($orderInfo['credit'] ?? 0), 2);
+        }
         $couponCandidates[] = $orderInfo['coupon'] ?? '';
         if ($giftName === '') {
             $giftName = trim((string)($orderInfo['giftvoucher'] ?? ''));
@@ -119,6 +123,9 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
 
     foreach ($orderLines as $orderRow) {
         if (!is_array($orderRow)) {
+            continue;
+        }
+        if (strtolower(trim((string)($orderRow['status'] ?? ''))) === 'cancelled') {
             continue;
         }
         if ($couponReduce <= 0) {
@@ -130,6 +137,10 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
         if ($cashReduce <= 0) {
             $cashReduce = max($cashReduce, round((float)($orderRow['custom_reduce'] ?? 0), 2));
         }
+        if ($creditReduce <= 0) {
+            $creditReduce = max($creditReduce, round((float)($orderRow['credit'] ?? 0), 2));
+        }
+
         $couponCandidates[] = $orderRow['coupon'] ?? '';
         if ($giftName === '') {
             $giftName = trim((string)($orderRow['giftvoucher'] ?? ''));
@@ -146,6 +157,9 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
     }
     if ($cashReduce > 0) {
         $meta['cash_discount'] = $cashReduce;
+    }
+    if ($creditReduce > 0) {
+        $meta['credit_discount'] = $creditReduce;
     }
     if ($couponRaw !== '') {
         $meta['coupon_display_name'] = pos_order_parse_coupon_code($couponRaw);
@@ -295,6 +309,9 @@ function pos_order_build_line_display_pricing_map(array $orderLines, ?array $inv
             if (!is_array($orderRow)) {
                 continue;
             }
+            if (strtolower(trim((string)($orderRow['status'] ?? ''))) === 'cancelled') {
+                continue;
+            }
             $meta = pos_order_line_meta_for_item($orderRow, (int)$index, $lineItemsMeta);
             $listOverride = is_array($meta) ? (float)($meta['list_unit_incl'] ?? 0) : 0.0;
             $listUnit = $listOverride > 0 ? $listOverride : pos_order_inclusive_unit_price($orderRow, 'list');
@@ -320,6 +337,9 @@ function pos_order_build_line_display_pricing_map(array $orderLines, ?array $inv
     $pendingLines = [];
     foreach ($orderLines as $index => $orderRow) {
         if (!is_array($orderRow)) {
+            continue;
+        }
+        if (strtolower(trim((string)($orderRow['status'] ?? ''))) === 'cancelled') {
             continue;
         }
 
@@ -417,24 +437,39 @@ function pos_order_line_addons_total(array $orderRow): float
  *
  * @return list<array{type: string, name: string, list_incl: float}>
  */
-function pos_order_build_pricing_components(array $orderRow, float $baseListIncl): array
+function pos_order_build_pricing_components(array $orderRow, float $baseListIncl, float $baseDiscIncl = 0.0): array
 {
     $baseName = trim((string)($orderRow['title'] ?? ''));
     if ($baseName === '') {
         $baseName = 'Base item';
     }
 
+    $baseListIncl = round(max(0.0, $baseListIncl), 2);
+    if ($baseDiscIncl <= 0.0) {
+        $baseDiscIncl = pos_order_inclusive_line_total($orderRow, 'disc');
+    }
+    if ($baseDiscIncl <= 0.0 || $baseDiscIncl > $baseListIncl) {
+        $baseDiscIncl = $baseListIncl;
+    }
+    $baseDiscIncl = round($baseDiscIncl, 2);
+    $baseDiscVal = round(max(0.0, $baseListIncl - $baseDiscIncl), 2);
+
     $components = [[
         'type' => 'base',
         'name' => $baseName,
-        'list_incl' => round($baseListIncl, 2),
+        'list_incl' => $baseListIncl,
+        'base_discounted_incl' => $baseDiscIncl,
+        'base_discount_value' => $baseDiscVal,
     ]];
 
     foreach (pos_order_line_addon_rows($orderRow) as $addon) {
+        $addonList = round((float)($addon['line_incl'] ?? 0), 2);
         $components[] = [
             'type' => 'addon',
             'name' => (string)($addon['name'] ?? ''),
-            'list_incl' => round((float)($addon['line_incl'] ?? 0), 2),
+            'list_incl' => $addonList,
+            'base_discounted_incl' => $addonList,
+            'base_discount_value' => 0.0,
         ];
     }
 
@@ -460,6 +495,9 @@ function pos_order_resolve_order_custom_reduce(array $orderLines, ?array $orderI
         if (!is_array($orderRow)) {
             continue;
         }
+        if (strtolower(trim((string)($orderRow['status'] ?? ''))) === 'cancelled') {
+            continue;
+        }
         $max = max($max, round((float)($orderRow['custom_reduce'] ?? 0), 2));
     }
 
@@ -477,9 +515,11 @@ function pos_order_build_order_wide_pricing_components(array $pendingLines, bool
     $allComponents = [];
     foreach ($pendingLines as $lineId => $pendingLine) {
         $orderRow = $pendingLine['order_row'];
+        $pricing = $pendingLine['pricing'] ?? [];
         $baseListIncl = pos_order_line_list_price_incl($orderRow);
+        $baseDiscIncl = $baseListIncl;
         $gstRate = $applyGst ? (float)($orderRow['gst'] ?? 0) : 0.0;
-        foreach (pos_order_build_pricing_components($orderRow, $baseListIncl) as $component) {
+        foreach (pos_order_build_pricing_components($orderRow, $baseListIncl, $baseDiscIncl) as $component) {
             $component['line_id'] = (int)$lineId;
             $component['gst_rate'] = $gstRate;
             $allComponents[] = $component;
@@ -552,19 +592,26 @@ function pos_order_apply_proportional_custom_reduce(array $components, float $cu
 
     foreach ($components as $index => $component) {
         $listIncl = round((float)($component['list_incl'] ?? 0), 2);
+        $baseDiscValue = isset($component['base_discount_value'])
+            ? round((float)$component['base_discount_value'], 2)
+            : max(0.0, round($listIncl - (float)($component['base_discounted_incl'] ?? $listIncl), 2));
+
         $row = $component;
         $row['discount_pct'] = round(100 * $listIncl / $totalList, 4);
 
         if ($customReduce <= 0.0) {
-            $row['discount_value'] = 0.0;
+            $customReduceAllocated = 0.0;
         } elseif ($index === $count - 1) {
-            $row['discount_value'] = round($customReduce - $allocated, 2);
+            $customReduceAllocated = round($customReduce - $allocated, 2);
         } else {
-            $row['discount_value'] = round($customReduce * ($listIncl / $totalList), 2);
-            $allocated += (float)$row['discount_value'];
+            $customReduceAllocated = round($customReduce * ($listIncl / $totalList), 2);
+            $allocated += $customReduceAllocated;
         }
 
-        $row['discounted_incl'] = round($listIncl - (float)$row['discount_value'], 2);
+        $row['custom_reduce_allocated'] = $customReduceAllocated;
+        $row['discount_value'] = round($baseDiscValue + $customReduceAllocated, 2);
+        $row['discounted_incl'] = round(max(0.0, $listIncl - (float)$row['discount_value']), 2);
+
         $result[] = $row;
     }
 
@@ -645,7 +692,8 @@ function pos_order_enrich_line_display_pricing(array $orderRow, array $pricing, 
         $customReduce = $orderCustomReduce > 0
             ? $orderCustomReduce
             : max(0.0, round((float)($orderRow['custom_reduce'] ?? 0), 2));
-        $components = pos_order_build_pricing_components($orderRow, $baseListIncl);
+        $baseDiscIncl = pos_order_inclusive_line_total($orderRow, 'disc');
+        $components = pos_order_build_pricing_components($orderRow, $baseListIncl, $baseDiscIncl);
         $components = pos_order_apply_proportional_custom_reduce($components, $customReduce);
         $taxResult = pos_order_compute_component_tax_rows($components, $gstRate, $applyGst);
         $components = $taxResult['components'];
@@ -688,6 +736,7 @@ function pos_order_enrich_line_display_pricing(array $orderRow, array $pricing, 
     $pricing['order_custom_reduce'] = $orderCustomReduce;
     $pricing['gross_incl'] = $grossIncl;
     $pricing['chargeable_value'] = $netChargeable;
+    $pricing['discount_amount'] = max(0.0, round($grossIncl - $netChargeable, 2));
     $pricing['list_price_incl'] = pos_order_line_list_price_incl($orderRow);
     $pricing['taxable_value'] = $taxResult['taxable_value'];
     $pricing['total_gst'] = $taxResult['total_gst'];
@@ -718,6 +767,7 @@ function pos_order_build_order_level_discount_lines(array $discountMeta, ?array 
     $cash = round((float)($discountMeta['cash_discount'] ?? 0), 2);
     $coupon = round((float)($discountMeta['coupon_discount'] ?? 0), 2);
     $gift = round((float)($discountMeta['gift_discount'] ?? 0), 2);
+    $credit = round((float)($discountMeta['credit_discount'] ?? 0), 2);
 
     if ($cash > 0.001) {
         $lines[] = [
@@ -746,6 +796,13 @@ function pos_order_build_order_level_discount_lines(array $discountMeta, ?array 
         $lines[] = [
             'label' => pos_order_gift_voucher_discount_label($giftName),
             'amount' => $gift,
+        ];
+    }
+
+    if ($credit > 0.001) {
+        $lines[] = [
+            'label' => 'Store Credit Applied:',
+            'amount' => $credit,
         ];
     }
 

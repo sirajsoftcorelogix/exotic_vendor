@@ -15,6 +15,65 @@ class DomesticEwbIrnService {
         $this->alankitConfig = $alankitConfig;
         $this->lastError = null;
     }
+
+    /**
+     * Get IRN/EWB status row joining vp_invoices by order_number or invoice_number
+     */
+    public static function getEwbIrnStatusByOrderNumber($db, string $orderNumber): ?array {
+        if ($orderNumber === '') {
+            return null;
+        }
+
+        $stmt = @$db->prepare("
+            SELECT d.irn, d.ewb, d.ewb_no, d.irn_status, d.ewb_status, i.irn as inv_irn, i.ewb_number as inv_ewb
+            FROM vp_invoices i
+            LEFT JOIN vp_domestic_ewb_irn d ON d.vp_invoices_id = i.id
+            LEFT JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
+            LEFT JOIN vp_invoice_items ii ON ii.invoice_id = i.id
+            WHERE oi.order_number = ? OR i.invoice_number = ? OR ii.order_number = ?
+            LIMIT 1
+        ");
+        if (!$stmt) {
+            $stmt = @$db->prepare("
+                SELECT d.irn, d.ewb, d.ewb_no, d.irn_status, d.ewb_status, NULL as inv_irn, NULL as inv_ewb
+                FROM vp_invoices i
+                LEFT JOIN vp_domestic_ewb_irn d ON d.vp_invoices_id = i.id
+                LEFT JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
+                LEFT JOIN vp_invoice_items ii ON ii.invoice_id = i.id
+                WHERE oi.order_number = ? OR i.invoice_number = ? OR ii.order_number = ?
+                LIMIT 1
+            ");
+        }
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param("sss", $orderNumber, $orderNumber, $orderNumber);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = ($res && $res->num_rows > 0) ? $res->fetch_assoc() : null;
+        $stmt->close();
+        return $row;
+    }
+
+    /**
+     * Find record by invoice ID
+     */
+    public static function findRecordByInvoiceId($db, int $invoiceId): ?array {
+        if ($invoiceId <= 0) {
+            return null;
+        }
+
+        $stmt = $db->prepare("SELECT * FROM vp_domestic_ewb_irn WHERE vp_invoices_id = ? LIMIT 1");
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param("i", $invoiceId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = ($res && $res->num_rows > 0) ? $res->fetch_assoc() : null;
+        $stmt->close();
+        return $row;
+    }
     
     /**
      * Get the last error message
@@ -600,16 +659,7 @@ class DomesticEwbIrnService {
      * Get existing E-way bill record
      */
     public function getEwbIrnRecord($invoiceId) {
-        $query = "SELECT * FROM vp_domestic_ewb_irn WHERE vp_invoices_id = ?";
-        $stmt = $this->db->prepare($query);
-        if (!$stmt) {
-            error_log("Failed to prepare statement: " . $this->db->error);
-            return null;
-        }
-        $stmt->bind_param("i", $invoiceId);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        return $result->fetch_assoc();
+        return self::findRecordByInvoiceId($this->db, (int)$invoiceId);
     }
     
     /**

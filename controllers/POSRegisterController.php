@@ -35,7 +35,7 @@ class POSRegisterController
 
     /** Prefer exact variant SKU over shared item_code; deprioritize parent rows. */
     private const VP_PRODUCT_BY_CODE_ORDER_SQL = ' ORDER BY (sku = ?) DESC,
-        CASE WHEN LOWER(TRIM(IFNULL(item_level, \'\'))) = \'parent\' THEN 1 ELSE 0 END,
+        CASE WHEN item_level = \'parent\' THEN 1 ELSE 0 END,
         id ASC ';
 
     private function isParentItemLevel(?string $itemLevel): bool
@@ -48,28 +48,7 @@ class POSRegisterController
      */
     private function lookupProductItemLevelForCode(mysqli $conn, string $code): string
     {
-        $code = trim($code);
-        if ($code === '') {
-            return '';
-        }
-        // Prefer exact SKU, then non-parent rows (many variants share the same item_code).
-        $stmt = $conn->prepare(
-            'SELECT item_level FROM vp_products
-             WHERE is_active = 1 AND (sku = ? OR item_code = ?)
-             ORDER BY (sku = ?) DESC,
-                      CASE WHEN LOWER(TRIM(IFNULL(item_level, \'\'))) = \'parent\' THEN 1 ELSE 0 END,
-                      id ASC
-             LIMIT 1'
-        );
-        if (!$stmt) {
-            return '';
-        }
-        $stmt->bind_param('sss', $code, $code, $code);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-
-        return trim((string)($row['item_level'] ?? ''));
+        return $this->pos->lookupProductItemLevelForCode($code);
     }
 
     /**
@@ -235,17 +214,19 @@ class POSRegisterController
         $aadhaar = $this->normalizeAadhaar((string)($payload['customer_aadhaar'] ?? ''));
         $passport = $this->normalizePassport((string)($payload['passport_number'] ?? ''));
         $countryOfResidence = trim((string)($payload['country_of_residence'] ?? ''));
-        $gstin = strtoupper(trim((string)($payload['confirm_gstin'] ?? '')));
+        $gstin = HighValueComplianceValidator::normalizeGstin((string)($payload['confirm_gstin'] ?? ''));
+        $shippingGstin = HighValueComplianceValidator::normalizeGstin((string)($payload['confirm_sgstin'] ?? ''));
+        $b2bGstin = $gstin !== '' ? $gstin : $shippingGstin;
         $derivedPan = '';
-        if ($gstin !== '' && preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $gstin)) {
-            $derivedPan = substr($gstin, 2, 10);
+        if (HighValueComplianceValidator::isValidGstin($b2bGstin)) {
+            $derivedPan = substr($b2bGstin, 2, 10);
             if ($pan === '') {
                 $pan = $derivedPan;
             }
         }
 
         $errors = [];
-        if ($isHighValue && $gstin === '') {
+        if ($isHighValue && $b2bGstin === '') {
             if ($residency === 'INDIAN_RESIDENT') {
                 if ($pan === '') {
                     $errors[] = 'PAN is required for Indian resident high value transactions.';
@@ -262,9 +243,11 @@ class POSRegisterController
                     $errors[] = 'Country of Residence is required for foreign national high value transactions.';
                 }
             }
+        } elseif ($isHighValue && $b2bGstin !== '' && !HighValueComplianceValidator::isValidGstin($b2bGstin)) {
+            $errors[] = 'GSTIN format is invalid.';
         }
 
-        if ($pan !== '' && !preg_match('/^[A-Z]{5}[0-9]{4}[A-Z]$/', $pan)) {
+        if ($b2bGstin === '' && $pan !== '' && !preg_match('/^[A-Z]{5}[0-9]{4}[A-Z]$/', $pan)) {
             $errors[] = 'PAN format is invalid.';
         }
         if ($passport !== '' && strlen($passport) < 6) {
@@ -306,7 +289,7 @@ class POSRegisterController
             'aadhaar' => $aadhaar,
             'passport' => $passport,
             'country_of_residence' => $countryOfResidence,
-            'gstin' => $gstin,
+            'gstin' => $gstin !== '' ? $gstin : $b2bGstin,
             'derived_pan_from_gstin' => $derivedPan,
         ];
     }
@@ -317,21 +300,14 @@ class POSRegisterController
             return;
         }
         $this->ensureHighValueComplianceSchema($conn);
-        $residency = (string)($compliance['residency_status'] ?? 'INDIAN_RESIDENT');
-        $pan = (string)($compliance['pan'] ?? '');
-        $passport = (string)($compliance['passport'] ?? '');
-        $country = (string)($compliance['country_of_residence'] ?? '');
-
-        $stmt = $conn->prepare(
-            'UPDATE vp_customers
-             SET customer_residency_status = ?, customer_pan = ?, passport_number = ?, country_of_residence = ?
-             WHERE id = ?'
-        );
-        if ($stmt) {
-            $stmt->bind_param('ssssi', $residency, $pan, $passport, $country, $customerId);
-            $stmt->execute();
-            $stmt->close();
-        }
+        require_once __DIR__ . '/../helpers/compliance/HighValueComplianceValidator.php';
+        HighValueComplianceValidator::saveCustomerCompliance($conn, $customerId, [
+            'customer_residency_status' => $compliance['residency_status'] ?? 'INDIAN_RESIDENT',
+            'customer_pan' => $compliance['pan'] ?? '',
+            'passport_number' => $compliance['passport'] ?? '',
+            'country_of_residence' => $compliance['country_of_residence'] ?? '',
+            'confirm_gstin' => $compliance['gstin'] ?? '',
+        ]);
     }
 
     private function ensureVpOrderInfoTradeNameSchema(mysqli $conn): void
@@ -647,6 +623,18 @@ class POSRegisterController
     private function resolvePosDeliveryStatusFromPayload(array $payload, mysqli $conn): array
     {
         $raw = strtolower(trim((string)($payload['pos_delivery_status'] ?? '')));
+        $paymentStage = strtolower(trim((string)($payload['payment_stage'] ?? '')));
+
+        if ($paymentStage === 'zero_advance' && $raw === 'collected_from_showroom') {
+            return [
+                'ok' => false,
+                'local_status' => '',
+                'exotic_status' => 0,
+                'label' => '',
+                'error' => 'Zero Advance Payment orders cannot be collected from showroom immediately. Please select Deliver to customer Later (Pending).',
+            ];
+        }
+
         $map = [
             'collected_from_showroom' => [
                 'local_status' => 'shipped',
@@ -1276,7 +1264,12 @@ class POSRegisterController
         foreach (($stateRows['states'] ?? []) as $row) {
             $name = trim((string)($row['name'] ?? ''));
             if ($name !== '') {
-                $out[] = ['id' => (int)($row['id'] ?? 0), 'name' => $name];
+                $out[] = [
+                    'id' => (int)($row['id'] ?? 0),
+                    'name' => $name,
+                    'code' => trim((string)($row['code'] ?? $row['state_code'] ?? '')),
+                    'iso' => trim((string)($row['iso2'] ?? $row['iso'] ?? ''))
+                ];
             }
         }
         echo json_encode($out, JSON_UNESCAPED_UNICODE);
@@ -2660,6 +2653,12 @@ class POSRegisterController
     }
     public function productsAjax()
     {
+        global $conn;
+        if ($conn instanceof \mysqli) {
+            require_once 'models/product/product.php';
+            $this->cleanupExpiredUnpublishedLocks($conn, new \Product($conn));
+        }
+
         $pageNo  = $_GET['page_no'] ?? 1;
         $perPage = $_GET['per_page'] ?? 48;
 
@@ -3143,21 +3142,7 @@ class POSRegisterController
      */
     private function resolveIndiaSellPriceFromVp($conn, string $code): float
     {
-        if ($code === '' || !$conn) {
-            return 0.0;
-        }
-        $stmt = $conn->prepare(
-            'SELECT price_india, finalprice, itemprice, gst
-             FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?)'
-            . self::VP_PRODUCT_BY_CODE_ORDER_SQL . ' LIMIT 1'
-        );
-        if (!$stmt) {
-            return 0.0;
-        }
-        $stmt->bind_param('sss', $code, $code, $code);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
+        $row = $this->pos->resolveIndiaSellPriceRowFromVp($code);
         if (!$row) {
             return 0.0;
         }
@@ -3176,22 +3161,7 @@ class POSRegisterController
      */
     private function fetchVpProductGstFallbackRow($conn, string $code): array
     {
-        if ($code === '' || !$conn) {
-            return [];
-        }
-        $stmt = $conn->prepare(
-            'SELECT gst FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?)'
-            . self::VP_PRODUCT_BY_CODE_ORDER_SQL . ' LIMIT 1'
-        );
-        if (!$stmt) {
-            return [];
-        }
-        $stmt->bind_param('sss', $code, $code, $code);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-
-        return is_array($row) ? $row : [];
+        return $this->pos->fetchVpProductGstFallbackRow($code);
     }
 
     /** First usable image path/URL from a /product/code JSON payload. */
@@ -3215,27 +3185,7 @@ class POSRegisterController
      */
     private function resolveVpProductIdsForStockLookup($conn, string $code): array
     {
-        if ($code === '' || !$conn) {
-            return [];
-        }
-        $stmt = $conn->prepare(
-            'SELECT id FROM vp_products WHERE is_active = 1 AND (sku = ? OR item_code = ?) ORDER BY id ASC'
-        );
-        if (!$stmt) {
-            return [];
-        }
-        $stmt->bind_param('ss', $code, $code);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        $ids = [];
-        while ($row = $res->fetch_assoc()) {
-            if (!empty($row['id'])) {
-                $ids[] = (int)$row['id'];
-            }
-        }
-        $stmt->close();
-
-        return $ids;
+        return $this->pos->resolveVpProductIdsForStockLookup($code);
     }
 
     /**
@@ -3243,111 +3193,32 @@ class POSRegisterController
      *
      * @return array{running_stock: float, location: string}
      */
-    private function getWarehouseStockSnapshotForProductId($conn, int $productId, int $warehouseId): array
+    /**
+     * Latest running_stock and location for one product ID/SKU at one warehouse (same basis as POS product grid).
+     *
+     * @return array{running_stock: float, location: string}
+     */
+    private function getWarehouseStockSnapshotForProductId($conn, int $productId, int $warehouseId, string $sku = ''): array
     {
-        $empty = ['running_stock' => 0.0, 'location' => ''];
-        if ($productId <= 0 || $warehouseId <= 0 || !$conn) {
-            return $empty;
-        }
-        $sql = '
-            SELECT sm.running_stock, sm.location
-            FROM vp_stock_movements sm
-            INNER JOIN (
-                SELECT product_id, MAX(id) AS max_id
-                FROM vp_stock_movements
-                WHERE warehouse_id = ?
-                GROUP BY product_id
-            ) latest ON latest.product_id = sm.product_id AND latest.max_id = sm.id
-            WHERE sm.warehouse_id = ? AND sm.product_id = ?
-            LIMIT 1';
-        $stmt = $conn->prepare($sql);
-        if (!$stmt) {
-            return $empty;
-        }
-        $stmt->bind_param('iii', $warehouseId, $warehouseId, $productId);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        if (!$row || !array_key_exists('running_stock', $row)) {
-            return $empty;
-        }
-
-        return [
-            'running_stock' => (float)$row['running_stock'],
-            'location' => trim((string)($row['location'] ?? '')),
-        ];
+        return $this->pos->getWarehouseStockSnapshot($productId, $warehouseId, $sku);
     }
 
     /** Latest running_stock for one SKU at one warehouse (same basis as POS product grid). */
-    private function getWarehouseStockForProductId($conn, int $productId, int $warehouseId): float
+    private function getWarehouseStockForProductId($conn, int $productId, int $warehouseId, string $sku = ''): float
     {
-        return $this->getWarehouseStockSnapshotForProductId($conn, $productId, $warehouseId)['running_stock'];
+        return $this->pos->getWarehouseStockForProductId($productId, $warehouseId, $sku);
     }
 
     /** Sum of latest running_stock per warehouse for this product (all locations). */
-    private function getTotalStockAcrossWarehouses($conn, int $productId): float
+    private function getTotalStockAcrossWarehouses($conn, int $productId, string $sku = ''): float
     {
-        if ($productId <= 0 || !$conn) {
-            return 0.0;
-        }
-        $sql = '
-            SELECT COALESCE(SUM(sm.running_stock), 0) AS t
-            FROM vp_stock_movements sm
-            INNER JOIN (
-                SELECT warehouse_id, product_id, MAX(id) AS max_id
-                FROM vp_stock_movements
-                WHERE product_id = ?
-                GROUP BY warehouse_id, product_id
-            ) latest ON sm.warehouse_id = latest.warehouse_id
-                AND sm.product_id = latest.product_id
-                AND sm.id = latest.max_id
-            WHERE sm.product_id = ?';
-        $stmt = $conn->prepare($sql);
-        if (!$stmt) {
-            return 0.0;
-        }
-        $stmt->bind_param('ii', $productId, $productId);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-
-        return isset($row['t']) ? (float)$row['t'] : 0.0;
+        return $this->pos->getTotalStockAcrossWarehouses($productId, $sku);
     }
 
     /** Default warehouse row from exotic_address (POS / GRN “default store”). */
     private function getDefaultWarehouseRow($conn): ?array
     {
-        if (self::$defaultWarehouseCache !== false) {
-            return self::$defaultWarehouseCache;
-        }
-        if (!$conn) {
-            self::$defaultWarehouseCache = null;
-
-            return null;
-        }
-        $stmt = $conn->prepare(
-            'SELECT id, address_title FROM exotic_address WHERE is_active = 1 AND is_default = 1 ORDER BY id ASC LIMIT 1'
-        );
-        if (!$stmt) {
-            self::$defaultWarehouseCache = null;
-
-            return null;
-        }
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        if (empty($row['id'])) {
-            self::$defaultWarehouseCache = null;
-
-            return null;
-        }
-
-        self::$defaultWarehouseCache = [
-            'id' => (int)$row['id'],
-            'address_title' => trim((string)($row['address_title'] ?? '')),
-        ];
-
-        return self::$defaultWarehouseCache;
+        return $this->pos->getDefaultWarehouseRow();
     }
 
     /**
@@ -3369,146 +3240,9 @@ class POSRegisterController
      *   warning_type:string
      * }
      */
-    private function resolvePosStockContext($conn, int $productId, int $currentWarehouseId, string $currentWarehouseName = ''): array
+    private function resolvePosStockContext($conn, int $productId, int $currentWarehouseId, string $currentWarehouseName = '', string $sku = ''): array
     {
-        $currentWarehouseName = trim($currentWarehouseName);
-        $empty = [
-            'current_warehouse_id' => $currentWarehouseId,
-            'current_warehouse_name' => $currentWarehouseName,
-            'current_stock_qty' => 0.0,
-            'current_location' => '',
-            'total_qty_all_warehouses' => 0.0,
-            'default_store_qty' => null,
-            'default_store_name' => '',
-            'mapped_at_current' => false,
-            'mapped_anywhere' => false,
-            'alternative_warehouses' => [],
-            'default_warehouse' => null,
-            'allow_order' => true,
-            'enforce_qty_cap' => false,
-            'qty_cap' => null,
-            'warning_message' => '',
-            'warning_type' => 'none',
-        ];
-
-        if ($productId <= 0 || !$conn) {
-            return $empty;
-        }
-
-        $stockSql = "
-            SELECT sm.warehouse_id,
-                   COALESCE(ea.address_title, CONCAT('Warehouse #', sm.warehouse_id)) AS warehouse_name,
-                   sm.running_stock AS stock_qty,
-                   sm.location AS warehouse_location
-            FROM vp_stock_movements sm
-            INNER JOIN (
-                SELECT warehouse_id, product_id, MAX(id) AS max_id
-                FROM vp_stock_movements
-                WHERE product_id = ?
-                GROUP BY warehouse_id, product_id
-            ) latest ON latest.max_id = sm.id
-            LEFT JOIN exotic_address ea ON ea.id = sm.warehouse_id
-            WHERE sm.product_id = ?
-            ORDER BY warehouse_name ASC";
-
-        $stockStmt = $conn->prepare($stockSql);
-        if (!$stockStmt) {
-            return $empty;
-        }
-        $stockStmt->bind_param('ii', $productId, $productId);
-        $stockStmt->execute();
-        $rows = $stockStmt->get_result()->fetch_all(MYSQLI_ASSOC);
-        $stockStmt->close();
-
-        $mappedAtCurrent = false;
-        $currentStock = 0.0;
-        $currentLocation = '';
-        $totalQtyAll = 0.0;
-        $alternativeWarehouses = [];
-        foreach ($rows as $row) {
-            $wid = (int)($row['warehouse_id'] ?? 0);
-            $stockQty = (float)($row['stock_qty'] ?? 0);
-            $totalQtyAll += $stockQty;
-            $entry = [
-                'warehouse_id' => $wid,
-                'warehouse_name' => trim((string)($row['warehouse_name'] ?? '')),
-                'stock_qty' => $stockQty,
-            ];
-            if ($wid === $currentWarehouseId) {
-                $mappedAtCurrent = true;
-                $currentStock = $stockQty;
-                $currentLocation = trim((string)($row['warehouse_location'] ?? ''));
-            } elseif ($stockQty > 0) {
-                $alternativeWarehouses[] = $entry;
-            }
-        }
-
-        $mappedAnywhere = !empty($rows);
-        $defaultWarehouse = $this->getDefaultWarehouseRow($conn);
-        $defaultStoreName = trim((string)($defaultWarehouse['address_title'] ?? ''));
-        $defaultStoreQty = null;
-        if ($defaultWarehouse !== null && !empty($defaultWarehouse['id'])) {
-            $defWhId = (int)$defaultWarehouse['id'];
-            foreach ($rows as $row) {
-                if ((int)($row['warehouse_id'] ?? 0) === $defWhId) {
-                    $defaultStoreQty = (float)($row['stock_qty'] ?? 0);
-                    break;
-                }
-            }
-        }
-        $storeLabel = $currentWarehouseName !== '' ? $currentWarehouseName : 'this store';
-
-        $altNames = array_values(array_filter(array_map(static function (array $w): string {
-            return trim((string)($w['warehouse_name'] ?? ''));
-        }, $alternativeWarehouses)));
-
-        $warningMessage = '';
-        $warningType = 'none';
-
-        if (!$mappedAnywhere) {
-            $warningType = 'unmapped_anywhere';
-            $defaultName = trim((string)($defaultWarehouse['address_title'] ?? ''));
-            if ($defaultName === '') {
-                $defaultName = 'Default Store';
-            }
-            $warningMessage = 'This item is not mapped to any store. It will be treated as mapped to the default store ('
-                . $defaultName . '). You can create an order for ' . $storeLabel . '.';
-        } elseif (!$mappedAtCurrent && !empty($altNames)) {
-            $warningType = 'unmapped_current';
-            $warningMessage = 'This item is not mapped to ' . $storeLabel . '. Stock is available at '
-                . implode(', ', $altNames) . '. You can still create an order for ' . $storeLabel . '.';
-        } elseif (!$mappedAtCurrent) {
-            $warningType = 'unmapped_current';
-            $warningMessage = 'This item is not mapped to ' . $storeLabel . '. You can still create an order for ' . $storeLabel . '.';
-        } elseif ($currentStock <= 0 && !empty($altNames)) {
-            $warningType = 'cross_store';
-            $warningMessage = 'Out of stock at ' . $storeLabel . '. Stock is available at '
-                . implode(', ', $altNames) . '. You can still create an order.';
-        } elseif ($mappedAtCurrent && $currentStock <= 0) {
-            $warningType = 'out_of_stock_local';
-            $warningMessage = 'This item is out of stock at ' . $storeLabel . '. You can still create an order.';
-        }
-
-        $enforceQtyCap = $mappedAtCurrent && $currentStock > 0;
-
-        return [
-            'current_warehouse_id' => $currentWarehouseId,
-            'current_warehouse_name' => $currentWarehouseName,
-            'current_stock_qty' => $currentStock,
-            'current_location' => $currentLocation,
-            'total_qty_all_warehouses' => $totalQtyAll,
-            'default_store_qty' => $defaultStoreQty,
-            'default_store_name' => $defaultStoreName,
-            'mapped_at_current' => $mappedAtCurrent,
-            'mapped_anywhere' => $mappedAnywhere,
-            'alternative_warehouses' => $alternativeWarehouses,
-            'default_warehouse' => $defaultWarehouse,
-            'allow_order' => true,
-            'enforce_qty_cap' => $enforceQtyCap,
-            'qty_cap' => $enforceQtyCap ? (int) floor($currentStock) : null,
-            'warning_message' => $warningMessage,
-            'warning_type' => $warningType,
-        ];
+        return $this->pos->resolvePosStockContext($productId, $currentWarehouseId, $currentWarehouseName, $sku);
     }
 
     /**
@@ -3629,32 +3363,7 @@ class POSRegisterController
      */
     private function getDefaultExoticAddressFooterString(mysqli $conn): string
     {
-        $stmt = $conn->prepare(
-            'SELECT display_name, address_title, `address` FROM exotic_address WHERE is_active = 1 AND is_default = 1 ORDER BY id ASC LIMIT 1'
-        );
-        if (!$stmt) {
-            return '';
-        }
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        if (!$row) {
-            return '';
-        }
-        $disp = trim((string)($row['display_name'] ?? ''));
-        $title = trim((string)($row['address_title'] ?? ''));
-        $addr = trim(preg_replace('/\s+/u', ' ', strip_tags((string)($row['address'] ?? ''))));
-        $parts = [];
-        if ($disp !== '') {
-            $parts[] = $disp;
-        }
-        if ($addr !== '') {
-            $parts[] = $addr;
-        } elseif ($title !== '') {
-            $parts[] = $title;
-        }
-
-        return trim(implode(', ', $parts));
+        return $this->pos->getDefaultExoticAddressFooterString();
     }
 
     /**
@@ -3692,76 +3401,7 @@ class POSRegisterController
      */
     private function fetchSiblingSkusByItemCode($conn, string $itemCode, string $excludeSku, int $warehouseId): array
     {
-        if ($itemCode === '' || !$conn || $excludeSku === '') {
-            return [];
-        }
-
-        if ($warehouseId <= 0) {
-            $sql = 'SELECT id, sku, title, 0 AS stock_qty
-                    FROM vp_products
-                    WHERE is_active = 1
-                      AND LOWER(TRIM(IFNULL(item_level, \'\'))) <> \'parent\'
-                      AND item_code = ? AND sku <> ?
-                    ORDER BY sku ASC';
-            $stmt = $conn->prepare($sql);
-            if (!$stmt) {
-                return [];
-            }
-            $stmt->bind_param('ss', $itemCode, $excludeSku);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            $out = [];
-            while ($row = $res->fetch_assoc()) {
-                $out[] = [
-                    'id' => (int)($row['id'] ?? 0),
-                    'sku' => (string)($row['sku'] ?? ''),
-                    'title' => (string)($row['title'] ?? ''),
-                    'stock_qty' => (float)($row['stock_qty'] ?? 0),
-                ];
-            }
-            $stmt->close();
-
-            return $out;
-        }
-
-        $sql = '
-            SELECT p.id, p.sku, p.title, COALESCE(sm.running_stock, 0) AS stock_qty
-            FROM vp_products p
-            LEFT JOIN (
-                SELECT sm1.product_id, sm1.running_stock
-                FROM vp_stock_movements sm1
-                INNER JOIN (
-                    SELECT product_id, MAX(id) AS max_id
-                    FROM vp_stock_movements
-                    WHERE warehouse_id = ?
-                    GROUP BY product_id
-                ) latest ON latest.product_id = sm1.product_id AND latest.max_id = sm1.id
-                WHERE sm1.warehouse_id = ?
-            ) sm ON sm.product_id = p.id
-            WHERE p.is_active = 1
-              AND LOWER(TRIM(IFNULL(p.item_level, \'\'))) <> \'parent\'
-              AND p.item_code = ? AND p.sku <> ?
-            ORDER BY p.sku ASC';
-
-        $stmt = $conn->prepare($sql);
-        if (!$stmt) {
-            return [];
-        }
-        $stmt->bind_param('iiss', $warehouseId, $warehouseId, $itemCode, $excludeSku);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        $out = [];
-        while ($row = $res->fetch_assoc()) {
-            $out[] = [
-                'id' => (int)($row['id'] ?? 0),
-                'sku' => (string)($row['sku'] ?? ''),
-                'title' => (string)($row['title'] ?? ''),
-                'stock_qty' => (float)($row['stock_qty'] ?? 0),
-            ];
-        }
-        $stmt->close();
-
-        return $out;
+        return $this->pos->fetchSiblingSkusByItemCode($itemCode, $excludeSku, $warehouseId);
     }
 
     public function siblingSkusAjax(): void
@@ -3795,30 +3435,11 @@ class POSRegisterController
         $dbItemCode = '';
         $dbSku = '';
         $dbImageRaw = '';
-        $dbRow = [];
-        if (!empty($conn)) {
-            $stmt = $conn->prepare(
-                'SELECT id, item_code, sku, title, image, material, size, color, hsn, gst,
-                        price_india, itemprice, finalprice, mrp_india,
-                        groupname, itemtype, sourcingfee, shippingfee,
-                        product_weight, product_weight_unit,
-                        prod_height, prod_width, prod_length, length_unit, item_level, published
-                 FROM vp_products WHERE is_active = 1
-                   AND (sku = ? OR item_code = ?)'
-                . self::VP_PRODUCT_BY_CODE_ORDER_SQL . ' LIMIT 1'
-            );
-            if ($stmt) {
-                $stmt->bind_param('sss', $code, $code, $code);
-                $stmt->execute();
-                $row = $stmt->get_result()->fetch_assoc();
-                $stmt->close();
-                if ($row) {
-                    $dbRow = $row;
-                    $dbItemCode = trim((string)($row['item_code'] ?? ''));
-                    $dbSku = trim((string)($row['sku'] ?? ''));
-                    $dbImageRaw = trim((string)($row['image'] ?? ''));
-                }
-            }
+        $dbRow = $this->pos->getProductByCode($code) ?? [];
+        if (!empty($dbRow)) {
+            $dbItemCode = trim((string)($dbRow['item_code'] ?? ''));
+            $dbSku = trim((string)($dbRow['sku'] ?? ''));
+            $dbImageRaw = trim((string)($dbRow['image'] ?? ''));
         }
 
         $res = $this->retailApiClient->call('/product/code', 'GET', ['code' => $code]);
@@ -3906,8 +3527,8 @@ class POSRegisterController
         }
 
         $vpId = isset($dbRow['id']) ? (int)$dbRow['id'] : 0;
-        $stockContext = ($vpId > 0)
-            ? $this->resolvePosStockContext($conn, $vpId, $warehouseId, $currentWarehouseName)
+        $stockContext = ($vpId > 0 || $dbSku !== '')
+            ? $this->resolvePosStockContext($conn, $vpId, $warehouseId, $currentWarehouseName, $dbSku)
             : [
                 'allow_order' => true,
                 'enforce_qty_cap' => false,
@@ -3941,14 +3562,37 @@ class POSRegisterController
         }
 
         $publishedVal = 1;
-        if (array_key_exists('published', $dbRow) && $dbRow['published'] !== null && $dbRow['published'] !== '') {
-            $publishedVal = (int)$dbRow['published'];
-        } elseif (isset($data['published'])) {
+
+        // Check if Exotic API response indicates item is unpublished / status = 0
+        $apiIsUnpublished = false;
+        if (isset($data['published'])) {
             $s = strtolower(trim((string)$data['published']));
-            $publishedVal = ($s === '0' || $s === 'false' || $s === 'unpublished') ? 0 : 1;
-        } elseif (isset($data['status']) && (is_numeric($data['status']) || strtolower((string)$data['status']) === 'unpublished')) {
+            if ($s === '0' || $s === 'false' || $s === 'unpublished') {
+                $apiIsUnpublished = true;
+            }
+        }
+        if (!$apiIsUnpublished && isset($data['status'])) {
             $s = strtolower(trim((string)$data['status']));
-            $publishedVal = ($s === '0' || $s === 'unpublished') ? 0 : 1;
+            if ($s === '0' || $s === 'false' || $s === 'unpublished') {
+                $apiIsUnpublished = true;
+            }
+        }
+        if (!$apiIsUnpublished && isset($data['is_published'])) {
+            if ($data['is_published'] === false || $data['is_published'] === 0 || $data['is_published'] === '0') {
+                $apiIsUnpublished = true;
+            }
+        }
+
+        if ($apiIsUnpublished) {
+            $publishedVal = 0;
+            // Sync status from API to local DB if local DB is currently published = 1
+            if ($vpId > 0) {
+                require_once 'models/product/product.php';
+                $productModel = new \Product($conn);
+                $productModel->setProductPublished($vpId, 0);
+            }
+        } elseif (array_key_exists('published', $dbRow) && $dbRow['published'] !== null && $dbRow['published'] !== '') {
+            $publishedVal = (int)$dbRow['published'];
         }
 
         $product = [
@@ -4102,42 +3746,15 @@ class POSRegisterController
             exit;
         }
 
-        if ($productId <= 0) {
-            $sql = 'SELECT id, item_code, sku, title
-                    FROM vp_products
-                    WHERE is_active = 1 AND (sku = ? OR item_code = ?)'
-                . self::VP_PRODUCT_BY_CODE_ORDER_SQL . ' LIMIT 1';
-            $stmt = $conn->prepare($sql);
-            if (!$stmt) {
-                echo json_encode(['success' => false, 'message' => 'Could not prepare product query.']);
-                exit;
-            }
-            $stmt->bind_param('sss', $q, $q, $q);
-            $stmt->execute();
-            $product = $stmt->get_result()->fetch_assoc();
-            $stmt->close();
-            if (!$product) {
-                echo json_encode(['success' => false, 'message' => 'Product not found.']);
-                exit;
-            }
-            $productId = (int)$product['id'];
-        } else {
-            $stmt = $conn->prepare("SELECT id, item_code, sku, title FROM vp_products WHERE id = ? LIMIT 1");
-            if (!$stmt) {
-                echo json_encode(['success' => false, 'message' => 'Could not prepare product query.']);
-                exit;
-            }
-            $stmt->bind_param('i', $productId);
-            $stmt->execute();
-            $product = $stmt->get_result()->fetch_assoc();
-            $stmt->close();
-            if (!$product) {
-                echo json_encode(['success' => false, 'message' => 'Product not found.']);
-                exit;
-            }
+        $product = $this->pos->getProductByIdOrCode($productId, $q);
+        if (!$product) {
+            echo json_encode(['success' => false, 'message' => 'Product not found.']);
+            exit;
         }
+        $productId = (int)$product['id'];
 
-        $stockContext = $this->resolvePosStockContext($conn, $productId, $currentWarehouseId, $currentWarehouseName);
+        $reqSku = trim((string)($product['sku'] ?? ''));
+        $stockContext = $this->resolvePosStockContext($conn, $productId, $currentWarehouseId, $currentWarehouseName, $reqSku);
         $currentWarehouse = [
             'warehouse_id' => $currentWarehouseId,
             'warehouse_name' => $currentWarehouseName !== '' ? $currentWarehouseName : 'Current Store',
@@ -4174,6 +3791,12 @@ class POSRegisterController
         $this->clearBufferedHttpOutput();
         header('Content-Type: application/json; charset=utf-8');
 
+        global $conn;
+        if ($conn instanceof \mysqli) {
+            require_once 'models/product/product.php';
+            $this->cleanupExpiredUnpublishedLocks($conn, new \Product($conn));
+        }
+
         $op = trim((string)($_REQUEST['op'] ?? ''));
         if ($op !== 'retrieve') {
             require_once dirname(__DIR__) . '/helpers/order_follow_up.php';
@@ -4183,13 +3806,13 @@ class POSRegisterController
             }
         }
 
+        $currencyMode = trim((string)($_REQUEST['currency_mode'] ?? $_GET['currency_mode'] ?? $_POST['currency_mode'] ?? ''));
+        if ($currencyMode !== '') {
+            $_SESSION['pos_currency_mode'] = ($currencyMode === 'INR') ? 'INR' : 'CUSTOMER';
+        }
+
         switch ($op) {
             case 'retrieve':
-                // Respect currency mode selection: when mode is 'INR', force 'IN' header so Exotic API returns INR cart prices
-                $currencyMode = trim((string)($_REQUEST['currency_mode'] ?? $_GET['currency_mode'] ?? ''));
-                if ($currencyMode === 'INR') {
-                    $this->retailApiClient->setCustomerCountryCode('IN');
-                }
                 // Same discount / gift query + header as add/modifyqty so cart totals reflect applied coupon.
                 $ctx = $this->exoticCartDiscountContext();
                 $this->emitCartApiResponse($this->retailApiClient->call(
@@ -4278,9 +3901,31 @@ class POSRegisterController
 
             case 'delete':
                 $cartid = $this->resolveCartLineIdFromRequest();
-                $this->emitCartApiResponse($this->retailApiClient->call('/cart/delete', 'GET', [
+                global $conn;
+                $deletedItem = null;
+                if ($conn instanceof \mysqli) {
+                    $ctxRet = $this->exoticCartDiscountContext();
+                    $retRes = $this->retailApiClient->call('/cart/retrieve', 'GET', $ctxRet['query'], null, null, $ctxRet['extraHeaders']);
+                    $cartData = is_array($retRes['data'] ?? null) ? $retRes['data'] : [];
+                    $items = $cartData['cartitems'] ?? $cartData['cart_items'] ?? $cartData['items'] ?? $cartData['lines'] ?? [];
+                    foreach ($items as $it) {
+                        $ref = (string)($it['cartref'] ?? $it['cartid'] ?? $it['id'] ?? '');
+                        if ($ref !== '' && $ref === (string)$cartid) {
+                            $deletedItem = $it;
+                            break;
+                        }
+                    }
+                }
+
+                $delRes = $this->retailApiClient->call('/cart/delete', 'GET', [
                     'cartid' => $cartid,
-                ]));
+                ]);
+
+                if ($deletedItem !== null && $conn instanceof \mysqli) {
+                    $this->releaseUnpublishedLocksForCartItems($conn, [$deletedItem]);
+                }
+
+                $this->emitCartApiResponse($delRes);
                 return;
 
             case 'addcoupon':
@@ -4740,9 +4385,6 @@ class POSRegisterController
         if (trim((string)($payload['confirm_first_name'] ?? '')) === '') {
             $errors[] = 'First name';
         }
-        if (trim((string)($payload['confirm_last_name'] ?? '')) === '') {
-            $errors[] = 'Last name';
-        }
         if (trim((string)($payload['confirm_state'] ?? '')) === '') {
             $errors[] = 'State';
         }
@@ -4817,7 +4459,7 @@ class POSRegisterController
         $codAmount = pos_payment_split_cod_total($splitBundle['splits']);
         $hasCodPending = $codAmount > 0.001;
 
-        if ($hasCodPending) {
+        if ($hasCodPending && $paymentStage !== 'zero_advance') {
             $paymentStage = 'advance';
         }
 
@@ -4879,7 +4521,12 @@ class POSRegisterController
             $this->clearPosExoticCartCustomDiscount();
         }
 
-        $checkoutCountry = trim((string)($payload['country_of_residence'] ?? $payload['confirm_country'] ?? $payload['confirm_scountry'] ?? ''));
+        $currencyMode = trim((string)($payload['currency_mode'] ?? $_REQUEST['currency_mode'] ?? ''));
+        if ($currencyMode !== '') {
+            $_SESSION['pos_currency_mode'] = ($currencyMode === 'INR') ? 'INR' : 'CUSTOMER';
+        }
+
+        $checkoutCountry = trim((string)($payload['confirm_country'] ?? $payload['bill_country'] ?? $payload['country_of_residence'] ?? $payload['confirm_scountry'] ?? ''));
         if ($checkoutCountry !== '') {
             $this->retailApiClient->setCustomerCountryCode($checkoutCountry);
         }
@@ -5025,15 +4672,18 @@ class POSRegisterController
             $invoiceLinePrices = [];
         }
 
-        $short = pos_payment_resolve_short_code_for_warehouse($conn, (int)($_SESSION['warehouse_id'] ?? 0));
-        try {
-            $receiptNo = pos_payment_generate_next_receipt_number($conn, $short);
-        } catch (\Throwable $e) {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Receipt number error: ' . $e->getMessage(),
-            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-            exit;
+        $receiptNo = '';
+        if ($paymentStage !== 'zero_advance') {
+            $short = pos_payment_resolve_short_code_for_warehouse($conn, (int)($_SESSION['warehouse_id'] ?? 0));
+            try {
+                $receiptNo = pos_payment_generate_next_receipt_number($conn, $short);
+            } catch (\Throwable $e) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Receipt number error: ' . $e->getMessage(),
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
         }
 
         $note = $this->appendHighValueComplianceToNote(trim((string)($payload['payment_note'] ?? '')), $orderTotal, $paymentMode, $compliance);
@@ -5051,39 +4701,41 @@ class POSRegisterController
 
         $pay = null;
         $paymentIds = [];
-        $sortedSplits = $splitBundle['splits'];
-        usort($sortedSplits, static function (array $a, array $b): int {
-            $aCod = (($a['mode'] ?? '') === 'cod') ? 1 : 0;
-            $bCod = (($b['mode'] ?? '') === 'cod') ? 1 : 0;
+        if ($paymentStage !== 'zero_advance') {
+            $sortedSplits = $splitBundle['splits'];
+            usort($sortedSplits, static function (array $a, array $b): int {
+                $aCod = (in_array(($a['mode'] ?? ''), ['cod', 'pay_on_pickup'], true)) ? 1 : 0;
+                $bCod = (in_array(($b['mode'] ?? ''), ['cod', 'pay_on_pickup'], true)) ? 1 : 0;
 
-            return $aCod <=> $bCod;
-        });
+                return $aCod <=> $bCod;
+            });
 
-        foreach ($sortedSplits as $split) {
-            $pay = pos_payment_insert_row(
-                $conn,
-                $orderNumber,
-                $receiptNo,
-                $customerId,
-                $paymentStage,
-                (string)$split['mode'],
-                (float)$split['amount'],
-                (string)$split['transaction_id'],
-                $note,
-                $userId,
-                $whId,
-                true,
-                $orderTotal
-            );
-            if (empty($pay['success'])) {
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'Exotic order ' . $orderNumber . ' was created but local payment row failed: ' . (string)($pay['error'] ?? 'unknown'),
-                    'order_number' => $orderNumber,
-                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                exit;
+            foreach ($sortedSplits as $split) {
+                $pay = pos_payment_insert_row(
+                    $conn,
+                    $orderNumber,
+                    $receiptNo,
+                    $customerId,
+                    $paymentStage,
+                    (string)$split['mode'],
+                    (float)$split['amount'],
+                    (string)$split['transaction_id'],
+                    $note,
+                    $userId,
+                    $whId,
+                    true,
+                    $orderTotal
+                );
+                if (empty($pay['success'])) {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Exotic order ' . $orderNumber . ' was created but local payment row failed: ' . (string)($pay['error'] ?? 'unknown'),
+                        'order_number' => $orderNumber,
+                    ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                    exit;
+                }
+                $paymentIds[] = (int)($pay['payment_id'] ?? 0);
             }
-            $paymentIds[] = (int)($pay['payment_id'] ?? 0);
         }
 
         require_once 'models/customer/Customer.php';
@@ -5140,7 +4792,9 @@ class POSRegisterController
             (int)$deliveryStatus['exotic_status']
         );
 
-        $modeLabel = $this->formatPosPaymentSplitsLabel($splitBundle['splits']);
+        $modeLabel = ($paymentStage === 'zero_advance')
+            ? 'Pay on Pickup (Zero Advance)'
+            : $this->formatPosPaymentSplitsLabel($splitBundle['splits']);
         $receiptPaymentSplits = [];
         foreach ($splitBundle['splits'] as $splitRow) {
             $receiptPaymentSplits[] = [
@@ -5182,12 +4836,14 @@ class POSRegisterController
             'payment_splits' => $receiptPaymentSplits,
             'receipt_payment_splits' => $receiptPaymentSplits,
             'transaction_id' => $txn,
-            'receipt_banner_text' => $hasCodPending
-                ? ($advanceAmount > 0.001
-                    ? 'Order ' . $orderNumber . ' placed. Advance ₹ ' . number_format($advanceAmount, 2, '.', ',')
-                        . ' received. COD ₹ ' . number_format($codAmount, 2, '.', ',') . ' pending on delivery.'
-                    : 'Order ' . $orderNumber . ' placed on COD. ₹ ' . number_format($codAmount, 2, '.', ',') . ' to collect on delivery.')
-                : 'Thank you. Payment of ₹ ' . number_format($paymentAmount, 2, '.', ',') . ' recorded for order ' . $orderNumber . '.',
+            'receipt_banner_text' => ($paymentStage === 'zero_advance')
+                ? 'Order ' . $orderNumber . ' placed with Zero Advance Payment. Full amount of ₹ ' . number_format($codAmount > 0 ? $codAmount : $orderTotal, 2, '.', ',') . ' to be collected on store pickup.'
+                : ($hasCodPending
+                    ? ($advanceAmount > 0.001
+                        ? 'Order ' . $orderNumber . ' placed. Advance ₹ ' . number_format($advanceAmount, 2, '.', ',')
+                            . ' received. COD ₹ ' . number_format($codAmount, 2, '.', ',') . ' pending on delivery.'
+                        : 'Order ' . $orderNumber . ' placed on COD. ₹ ' . number_format($codAmount, 2, '.', ',') . ' to collect on delivery.')
+                    : 'Thank you. Payment of ₹ ' . number_format($paymentAmount, 2, '.', ',') . ' recorded for order ' . $orderNumber . '.'),
             'receipt_billing_block' => $this->formatAddressLinesFromPayload($payload, 'billing'),
             'receipt_shipping_block' => $this->formatAddressLinesFromPayload($payload, 'shipping'),
             'receipt_lines' => [],
@@ -5205,7 +4861,9 @@ class POSRegisterController
             'receipt_amount_in_words' => '',
             'receipt_amount_received' => $advanceAmount,
             'receipt_cod_pending_amount' => $codAmount,
-            'receipt_pending_amount' => $hasCodPending ? $codAmount : (float)($pay['pending_amount'] ?? 0),
+            'receipt_pending_amount' => ($paymentStage === 'zero_advance')
+                ? $orderTotal
+                : ($hasCodPending ? $codAmount : (float)($pay['pending_amount'] ?? 0)),
             'has_cod_pending' => $hasCodPending,
             'import_status' => $invoiceMeta['import_status'],
             'show_invoice_pdf_button' => $invoiceMeta['show_invoice_pdf_button'],
@@ -5259,6 +4917,10 @@ class POSRegisterController
             } elseif (!empty($linkResult['message'])) {
                 $successMessage .= ' Follow-up link: ' . (string) $linkResult['message'];
             }
+        }
+
+        if ($conn instanceof \mysqli && !empty($items) && is_array($items)) {
+            $this->releaseUnpublishedLocksForCartItems($conn, $items);
         }
 
         $this->clearPosExoticCartCustomDiscount();
@@ -5319,6 +4981,11 @@ class POSRegisterController
         }
         $row = $this->attachIrnEwbStatusToReceiptRow($conn, $row);
         $row = $this->applyPosReceiptCompanyHeader($row, $conn);
+        $row['einvoice_eligibility'] = $this->resolveReceiptEinvoiceEwaybillEligibility(
+            $conn,
+            (string)($row['order_id'] ?? ''),
+            (float)($row['receipt_grand_total'] ?? $row['receipt_subtotal_goods'] ?? 0)
+        );
         renderTemplateClean('views/pos_register/order_confirmation.php', $row, 'Order confirmation');
     }
 
@@ -5923,7 +5590,8 @@ class POSRegisterController
                 if (!is_array($splitRow)) {
                     continue;
                 }
-                if (strtolower(trim((string)($splitRow['mode'] ?? ''))) === 'cod') {
+                $m = strtolower(trim((string)($splitRow['mode'] ?? '')));
+                if ($m === 'cod' || $m === 'pay_on_pickup') {
                     $codAmount += round((float)($splitRow['amount'] ?? 0), 2);
                 }
             }
@@ -6029,6 +5697,7 @@ class POSRegisterController
             'razorpay' => 'razorpay',
             'adminorder' => 'adminorder',
             'cod' => 'cod',
+            'pay_on_pickup' => 'cod',
             'offline' => 'offline',
         ];
 
@@ -6086,6 +5755,7 @@ class POSRegisterController
         $m = strtolower(trim($mode));
         $map = [
             'cash' => 'Cash',
+            'pay_on_pickup' => 'Pay on Pickup',
             'cod' => 'Cash on Delivery',
             'upi' => 'UPI',
             'bank_transfer' => 'Bank transfer',
@@ -6105,6 +5775,7 @@ class POSRegisterController
     {
         $labels = [
             'cash' => 'Cash',
+            'pay_on_pickup' => 'Pay on Pickup (Store Pay Later)',
             'cod' => 'Cash on Delivery (COD)',
             'upi' => 'UPI',
             'bank_transfer' => 'Bank transfer',
@@ -6483,12 +6154,14 @@ class POSRegisterController
             'payment_splits' => $receiptPaymentSplits,
             'receipt_payment_splits' => $receiptPaymentSplits,
             'transaction_id' => $txn,
-            'receipt_banner_text' => $hasCodPending
-                ? ($advanceAmount > 0.001
-                    ? 'Order ' . $orderNumber . ' placed. Advance ₹ ' . number_format($advanceAmount, 2, '.', ',')
-                        . ' received. COD ₹ ' . number_format($codAmount, 2, '.', ',') . ' pending on delivery.'
-                    : 'Order ' . $orderNumber . ' placed on COD. ₹ ' . number_format($codAmount, 2, '.', ',') . ' to collect on delivery.')
-                : 'Thank you. Payment of ₹ ' . number_format($paymentAmount, 2, '.', ',') . ' recorded for order ' . $orderNumber . '.',
+            'receipt_banner_text' => ($paymentStage === 'zero_advance')
+                ? 'Order ' . $orderNumber . ' placed with Zero Advance Payment. Full amount of ₹ ' . number_format($codAmount > 0 ? $codAmount : $orderTotal, 2, '.', ',') . ' to be collected on store pickup.'
+                : ($hasCodPending
+                    ? ($advanceAmount > 0.001
+                        ? 'Order ' . $orderNumber . ' placed. Advance ₹ ' . number_format($advanceAmount, 2, '.', ',')
+                            . ' received. COD ₹ ' . number_format($codAmount, 2, '.', ',') . ' pending on delivery.'
+                        : 'Order ' . $orderNumber . ' placed on COD. ₹ ' . number_format($codAmount, 2, '.', ',') . ' to collect on delivery.')
+                    : 'Thank you. Payment of ₹ ' . number_format($paymentAmount, 2, '.', ',') . ' recorded for order ' . $orderNumber . '.'),
             'receipt_billing_block' => $this->formatAddressLinesFromOrderInfo($orderInfo, 'billing'),
             'receipt_shipping_block' => $this->formatAddressLinesFromOrderInfo($orderInfo, 'shipping'),
             'receipt_lines' => [],
@@ -6626,7 +6299,7 @@ class POSRegisterController
                     $productModel->setProductPublished($resolvedProductId, 1);
                 }
 
-                $stmtIns = $conn->prepare("INSERT INTO `vp_pos_unpublished_locks` (product_id, token, user_id, store_id, expires_at) VALUES (?, ?, ?, ?, NOW() + INTERVAL 45 SECOND)");
+                $stmtIns = $conn->prepare("INSERT INTO `vp_pos_unpublished_locks` (product_id, token, user_id, store_id, expires_at) VALUES (?, ?, ?, ?, NOW() + INTERVAL 30 MINUTE)");
                 $stmtIns->bind_param('isii', $resolvedProductId, $lockToken, $userId, $storeId);
                 $stmtIns->execute();
                 $stmtIns->close();
@@ -6714,6 +6387,82 @@ class POSRegisterController
             ]);
             return;
         }
+    }
+
+    /**
+     * Release unpublished product locks for a list of cart/order items, setting published = 0 if no active locks remain.
+     *
+     * @param \mysqli $conn
+     * @param array $items Array of cart items or order lines
+     */
+    public function releaseUnpublishedLocksForCartItems(\mysqli $conn, array $items): void
+    {
+        if (empty($items)) {
+            return;
+        }
+        $this->ensureUnpublishedLockTableExists($conn);
+        require_once 'models/product/product.php';
+        $productModel = new \Product($conn);
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $itemCode = trim((string)($item['item_code'] ?? $item['itemcode'] ?? $item['code'] ?? ''));
+            $sku      = trim((string)($item['sku'] ?? ''));
+            $pid      = (int)($item['product_id'] ?? $item['id'] ?? 0);
+
+            $product = null;
+            if ($pid > 0) {
+                $product = $productModel->getProduct($pid);
+            }
+            if (!$product && $itemCode !== '') {
+                $res = $productModel->getProductByItemCode($itemCode);
+                if (is_array($res)) {
+                    $product = isset($res['id']) ? $res : ($res[0] ?? null);
+                }
+            }
+            if (!$product && $sku !== '') {
+                $product = $productModel->getProductByskuExact($sku);
+            }
+
+            if (!$product) {
+                continue;
+            }
+
+            $resolvedPid = (int)($product['id'] ?? 0);
+            if ($resolvedPid <= 0) {
+                continue;
+            }
+
+            $syncItemCode = trim((string)($product['item_code'] ?? $itemCode));
+            $syncSize     = trim((string)($product['size'] ?? ($item['size'] ?? '')));
+            $syncColor    = trim((string)($product['color'] ?? ($item['color'] ?? '')));
+
+            // Delete lease locks for this product
+            $stmtDel = $conn->prepare("DELETE FROM `vp_pos_unpublished_locks` WHERE product_id = ?");
+            if ($stmtDel) {
+                $stmtDel->bind_param('i', $resolvedPid);
+                $stmtDel->execute();
+                $stmtDel->close();
+            }
+
+            // Check remaining locks
+            $stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM `vp_pos_unpublished_locks` WHERE product_id = ? AND expires_at >= NOW()");
+            if ($stmt) {
+                $stmt->bind_param('i', $resolvedPid);
+                $stmt->execute();
+                $cntRow = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+
+                $remaining = (int)($cntRow['cnt'] ?? 0);
+                if ($remaining === 0) {
+                    $productModel->setProductPublished($resolvedPid, 0);
+                    $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 0);
+                }
+            }
+        }
+        $this->cleanupExpiredUnpublishedLocks($conn, $productModel);
     }
 
     private function ensureUnpublishedLockTableExists(\mysqli $conn): void

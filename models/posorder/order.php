@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../../helpers/order_filter_autocomplete.php';
 require_once __DIR__ . '/../../helpers/order_list_filters.php';
+require_once __DIR__ . '/../../helpers/pos_payment_receipt.php';
 
 class POSOrder
 {
@@ -454,10 +455,13 @@ class POSOrder
             }
         }
 
-        // ✅ Check for duplicate combination
-        $checkSql = "SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? AND sku = ? LIMIT 1";
+        // ✅ Check for duplicate combination (considering order_number, item_code, sku, size, and color)
+        $checkSql = 'SELECT 1 FROM vp_orders WHERE order_number = ? AND item_code = ? AND IFNULL(sku, "") = ? AND IFNULL(size, "") = ? AND IFNULL(color, "") = ? LIMIT 1';
         $checkStmt = $this->db->prepare($checkSql);
-        $checkStmt->bind_param('sss', $data['order_number'], $data['item_code'], $data['sku']);
+        $skuVal = (string)($data['sku'] ?? '');
+        $sizeVal = (string)($data['size'] ?? '');
+        $colorVal = (string)($data['color'] ?? '');
+        $checkStmt->bind_param('sssss', $data['order_number'], $data['item_code'], $skuVal, $sizeVal, $colorVal);
         $checkStmt->execute();
         $checkStmt->bind_result($count);
         $checkStmt->fetch();
@@ -882,6 +886,164 @@ class POSOrder
         }
 
         return null;
+    }
+
+    /**
+     * Search orders by order_number prefix/like or customer name/phone for autocomplete and jump.
+     *
+     * @param string $query Search term
+     * @param bool $exact Whether to check for exact order match only
+     * @param int $limit Maximum results to return
+     * @return array
+     */
+    public function searchOrdersForAutocomplete(string $query, bool $exact = false, int $limit = 20): array
+    {
+        $query = trim($query);
+        if ($query === '') {
+            return [];
+        }
+
+        if ($exact) {
+            $lines = $this->getOrderLineItemsByRef($query);
+            if (!empty($lines) && is_array($lines)) {
+                $orderNum = (string)($lines[0]['order_number'] ?? $query);
+                return [
+                    'order_number' => $orderNum,
+                    'exists' => true,
+                ];
+            }
+            return [];
+        }
+
+        $likeQuery = '%' . $query . '%';
+        $prefixQuery = $query . '%';
+        $limitInt = max(1, min((int)$limit, 50));
+
+        $sql = "
+            SELECT 
+                tbl.order_number,
+                tbl.order_date,
+                tbl.status,
+                tbl.customer_name
+            FROM (
+                SELECT 
+                    o.order_number,
+                    MIN(o.date_added) AS order_date,
+                    MAX(o.status) AS status,
+                    MAX(COALESCE(
+                        NULLIF(TRIM(CONCAT(COALESCE(oi.first_name, ''), ' ', COALESCE(oi.last_name, ''))), ''),
+                        NULLIF(TRIM(oi.name), ''),
+                        NULLIF(TRIM(c.name), ''),
+                        ''
+                    )) AS customer_name,
+                    MAX(o.id) AS max_id,
+                    CASE 
+                        WHEN o.order_number = ? THEN 1
+                        WHEN o.order_number LIKE ? THEN 2
+                        ELSE 3
+                    END AS match_priority
+                FROM vp_orders o
+                LEFT JOIN vp_order_info oi ON oi.order_number = o.order_number
+                LEFT JOIN vp_customers c ON oi.customer_id = c.id
+                WHERE o.order_number LIKE ?
+                   OR oi.order_number LIKE ?
+                   OR oi.first_name LIKE ?
+                   OR oi.last_name LIKE ?
+                   OR oi.name LIKE ?
+                   OR oi.phone LIKE ?
+                GROUP BY o.order_number
+            ) tbl
+            ORDER BY tbl.match_priority ASC, tbl.max_id DESC
+            LIMIT ?
+        ";
+
+        $stmt = $this->db->prepare($sql);
+        $results = [];
+        $seenOrderNumbers = [];
+
+        if ($stmt) {
+            $stmt->bind_param(
+                'ssssssssi',
+                $query,
+                $prefixQuery,
+                $likeQuery,
+                $likeQuery,
+                $likeQuery,
+                $likeQuery,
+                $likeQuery,
+                $likeQuery,
+                $limitInt
+            );
+
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res) {
+                while ($row = $res->fetch_assoc()) {
+                    $orderNum = (string)($row['order_number'] ?? '');
+                    if ($orderNum !== '' && !isset($seenOrderNumbers[$orderNum])) {
+                        $seenOrderNumbers[$orderNum] = true;
+                        $results[] = [
+                            'order_number' => $orderNum,
+                            'customer_name' => (string)($row['customer_name'] ?? ''),
+                            'date_added' => !empty($row['order_date']) ? date('d M Y', strtotime((string)$row['order_date'])) : '',
+                            'status' => (string)($row['status'] ?? ''),
+                        ];
+                    }
+                }
+            }
+            $stmt->close();
+        }
+
+        if (count($results) < $limitInt) {
+            $remainingLimit = $limitInt - count($results);
+            $sqlInfo = "
+                SELECT 
+                    oi.order_number,
+                    oi.date_added AS order_date,
+                    COALESCE(
+                        NULLIF(TRIM(CONCAT(COALESCE(oi.first_name, ''), ' ', COALESCE(oi.last_name, ''))), ''),
+                        NULLIF(TRIM(oi.name), ''),
+                        NULLIF(TRIM(c.name), ''),
+                        ''
+                    ) AS customer_name
+                FROM vp_order_info oi
+                LEFT JOIN vp_customers c ON oi.customer_id = c.id
+                WHERE (oi.order_number LIKE ? OR oi.first_name LIKE ? OR oi.last_name LIKE ? OR oi.name LIKE ? OR oi.phone LIKE ?)
+                ORDER BY oi.id DESC
+                LIMIT ?
+            ";
+            $stmtInfo = $this->db->prepare($sqlInfo);
+            if ($stmtInfo) {
+                $stmtInfo->bind_param(
+                    'sssssi',
+                    $likeQuery,
+                    $likeQuery,
+                    $likeQuery,
+                    $likeQuery,
+                    $likeQuery,
+                    $remainingLimit
+                );
+                $stmtInfo->execute();
+                $resInfo = $stmtInfo->get_result();
+                if ($resInfo) {
+                    while ($row = $resInfo->fetch_assoc()) {
+                        $orderNum = (string)($row['order_number'] ?? '');
+                        if ($orderNum !== '' && !isset($seenOrderNumbers[$orderNum])) {
+                            $seenOrderNumbers[$orderNum] = true;
+                            $results[] = [
+                                'order_number' => $orderNum,
+                                'customer_name' => (string)($row['customer_name'] ?? ''),
+                                'date_added' => !empty($row['order_date']) ? date('d M Y', strtotime((string)$row['order_date'])) : '',
+                                'status' => 'pending',
+                            ];
+                        }
+                    }
+                }
+                $stmtInfo->close();
+            }
+        }
+
+        return $results;
     }
 
     /**
@@ -1502,38 +1664,88 @@ class POSOrder
             return ['success' => false, 'message' => $stmt->error];
         }
 
-        // Update address – don't fail the whole operation if this fails
-        $sql_addr = "
-            UPDATE vp_order_info 
-            SET first_name = ?, last_name = ?, address_line1 = ?, address_line2 = ?, city = ?, state = ?, zipcode = ?, country = ?, gstin = ?,
-                shipping_first_name = ?, shipping_last_name = ?, shipping_address_line1 = ?, shipping_address_line2 = ?, shipping_city = ?, shipping_state = ?, shipping_zipcode = ?, shipping_country = ?, shipping_gstin = ?
-            WHERE order_number = ?
-        ";
-        $stmt_addr = $this->db->prepare($sql_addr);
-        if ($stmt_addr) {
-            $stmt_addr->bind_param(
-                'sssssssssssssssssss',
-                $first_name,
-                $last_name,
-                $address_line1,
-                $address_line2,
-                $city,
-                $state,
-                $zipcode,
-                $country,
-                $gstin,
-                $shipping_first_name,
-                $shipping_last_name,
-                $billing_address_line1,
-                $billing_address_line2,
-                $billing_city,
-                $shipping_state,
-                $billing_zipcode,
-                $billing_country,
-                $shipping_gstin,
-                $order_number
-            );
-            $stmt_addr->execute();  // ← ignore result
+        // Check if vp_order_info row exists for this order
+        $check_stmt = $this->db->prepare("SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1");
+        $has_info = false;
+        if ($check_stmt) {
+            $check_stmt->bind_param('s', $order_number);
+            $check_stmt->execute();
+            $check_res = $check_stmt->get_result();
+            if ($check_res && $check_res->num_rows > 0) {
+                $has_info = true;
+            }
+        }
+
+        if ($has_info) {
+            $sql_addr = "
+                UPDATE vp_order_info 
+                SET first_name = ?, last_name = ?, address_line1 = ?, address_line2 = ?, city = ?, state = ?, zipcode = ?, country = ?, gstin = ?,
+                    shipping_first_name = ?, shipping_last_name = ?, shipping_address_line1 = ?, shipping_address_line2 = ?, shipping_city = ?, shipping_state = ?, shipping_zipcode = ?, shipping_country = ?, shipping_gstin = ?, mobile = ?, shipping_mobile = ?
+                WHERE order_number = ?
+            ";
+            $stmt_addr = $this->db->prepare($sql_addr);
+            if ($stmt_addr) {
+                $stmt_addr->bind_param(
+                    'sssssssssssssssssssss',
+                    $first_name,
+                    $last_name,
+                    $address_line1,
+                    $address_line2,
+                    $city,
+                    $state,
+                    $zipcode,
+                    $country,
+                    $gstin,
+                    $shipping_first_name,
+                    $shipping_last_name,
+                    $billing_address_line1,
+                    $billing_address_line2,
+                    $billing_city,
+                    $shipping_state,
+                    $billing_zipcode,
+                    $billing_country,
+                    $shipping_gstin,
+                    $phone,
+                    $phone,
+                    $order_number
+                );
+                $stmt_addr->execute();
+            }
+        } else {
+            $sql_addr = "
+                INSERT INTO vp_order_info 
+                (order_number, first_name, last_name, address_line1, address_line2, city, state, zipcode, country, gstin,
+                 shipping_first_name, shipping_last_name, shipping_address_line1, shipping_address_line2, shipping_city, shipping_state, shipping_zipcode, shipping_country, shipping_gstin, mobile, shipping_mobile)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ";
+            $stmt_addr = $this->db->prepare($sql_addr);
+            if ($stmt_addr) {
+                $stmt_addr->bind_param(
+                    'sssssssssssssssssssss',
+                    $order_number,
+                    $first_name,
+                    $last_name,
+                    $address_line1,
+                    $address_line2,
+                    $city,
+                    $state,
+                    $zipcode,
+                    $country,
+                    $gstin,
+                    $shipping_first_name,
+                    $shipping_last_name,
+                    $billing_address_line1,
+                    $billing_address_line2,
+                    $billing_city,
+                    $shipping_state,
+                    $billing_zipcode,
+                    $billing_country,
+                    $shipping_gstin,
+                    $phone,
+                    $phone
+                );
+                $stmt_addr->execute();
+            }
         }
 
         return [
@@ -1930,9 +2142,11 @@ class POSOrder
             'transid',
             'currency',
             'payment_type',
+            'payment_mode',
             'coupon',
             'coupon_reduce',
-            'credit'
+            'credit',
+            'custom_reduce'
         ];
 
         $insertCols   = [];
@@ -1940,16 +2154,18 @@ class POSOrder
         $values       = [];
         $types        = '';
 
+        $addressInfo = (isset($data['address_info']) && is_array($data['address_info'])) ? $data['address_info'] : [];
+
         foreach ($columns as $col) {
-            if (array_key_exists($col, $data['address_info'])) {
+            if (array_key_exists($col, $addressInfo) && !in_array($col, $insertCols, true)) {
                 $insertCols[]   = $col;
                 $placeholders[] = '?';
-                $values[]       = $data['address_info'][$col];
+                $values[]       = $addressInfo[$col];
                 $types         .= 's'; // all strings (safe for phone, zip, email)
             }
         }
         //order_number add 
-        if ($data['orderid'] !== null) {
+        if ($data['orderid'] !== null && !in_array('order_number', $insertCols, true)) {
             $insertCols[]   = 'order_number';
             $placeholders[] = '?';
             $values[]       = $data['orderid'];
@@ -1957,7 +2173,7 @@ class POSOrder
         }
 
         //customer_id add
-        if ($customer_id !== null) {
+        if ($customer_id !== null && !in_array('customer_id', $insertCols, true)) {
             $insertCols[]   = 'customer_id';
             $placeholders[] = '?';
             $values[]       = $customer_id;
@@ -1965,66 +2181,100 @@ class POSOrder
         }
 
         //total add
-        if (isset($data['total'])) {
+        if (isset($data['total']) && !in_array('total', $insertCols, true)) {
             $insertCols[]   = 'total';
             $placeholders[] = '?';
             $values[]       = floatval($data['total']);
             $types         .= 'd'; // decimal
         }
         //giftvoucher add
-        if (isset($data['giftvoucher'])) {
+        if (isset($data['giftvoucher']) && !in_array('giftvoucher', $insertCols, true)) {
             $insertCols[]   = 'giftvoucher';
             $placeholders[] = '?';
             $values[]       = floatval($data['giftvoucher']);
             $types         .= 'd'; // decimal
         }
         //giftvoucher_reduce add
-        if (isset($data['giftvoucher_reduce'])) {
+        if (isset($data['giftvoucher_reduce']) && !in_array('giftvoucher_reduce', $insertCols, true)) {
             $insertCols[]   = 'giftvoucher_reduce';
             $placeholders[] = '?';
             $values[]       = floatval($data['giftvoucher_reduce']);
             $types         .= 'd'; // decimal
         }
         //transid add
-        if (isset($data['transid'])) {
+        if (isset($data['transid']) && !in_array('transid', $insertCols, true)) {
             $insertCols[]   = 'transid';
             $placeholders[] = '?';
             $values[]       = $data['transid'];
             $types         .= 's'; // string
         }
         //currency add
-        if (isset($data['currency'])) {
+        if (isset($data['currency']) && !in_array('currency', $insertCols, true)) {
             $insertCols[]   = 'currency';
             $placeholders[] = '?';
             $values[]       = $data['currency'];
             $types         .= 's'; // string
         }
         //payment_type add
-        if (isset($data['payment_type'])) {
+        if (isset($data['payment_type']) && !in_array('payment_type', $insertCols, true)) {
             $insertCols[]   = 'payment_type';
             $placeholders[] = '?';
             $values[]       = $data['payment_type'];
             $types         .= 's'; // string
         }
+        //payment_mode add / auto-fill
+        if (!in_array('payment_mode', $insertCols, true)) {
+            $addressInfoArr = (isset($data['address_info']) && is_array($data['address_info'])) ? $data['address_info'] : [];
+            $payTypeForMode = $data['payment_type'] ?? ($addressInfoArr['payment_type'] ?? null);
+            $orderNoForMode = (string)($data['orderid'] ?? '');
+            $resolvedMode = null;
+
+            if (isset($data['payment_mode'])) {
+                $resolvedMode = $data['payment_mode'];
+            } elseif (isset($addressInfoArr['payment_mode'])) {
+                $resolvedMode = $addressInfoArr['payment_mode'];
+            } elseif ($payTypeForMode !== null && $this->db instanceof mysqli) {
+                $resolvedMode = pos_payment_resolve_order_payment_mode($this->db, $orderNoForMode, (string)$payTypeForMode);
+            }
+
+            if ($resolvedMode !== null) {
+                $insertCols[]   = 'payment_mode';
+                $placeholders[] = '?';
+                $values[]       = $resolvedMode;
+                $types         .= 's';
+            }
+        }
         //coupon add
-        if (isset($data['coupon'])) {
+        if (isset($data['coupon']) && !in_array('coupon', $insertCols, true)) {
             $insertCols[]   = 'coupon';
             $placeholders[] = '?';
             $values[]       = floatval($data['coupon']);
             $types         .= 'd'; // decimal
         }
         //coupon_reduce add
-        if (isset($data['coupon_reduce'])) {
+        if (isset($data['coupon_reduce']) && !in_array('coupon_reduce', $insertCols, true)) {
             $insertCols[]   = 'coupon_reduce';
             $placeholders[] = '?';
             $values[]       = floatval($data['coupon_reduce']);
             $types         .= 'd'; // decimal
         }
         //credit add
-        if (isset($data['credit'])) {
+        if (isset($data['credit']) && !in_array('credit', $insertCols, true)) {
             $insertCols[]   = 'credit';
             $placeholders[] = '?';
             $values[]       = floatval($data['credit']);
+            $types         .= 'd'; // decimal
+        }
+        //custom_reduce add
+        if (isset($data['custom_reduce']) && !in_array('custom_reduce', $insertCols, true)) {
+            $insertCols[]   = 'custom_reduce';
+            $placeholders[] = '?';
+            $values[]       = floatval($data['custom_reduce']);
+            $types         .= 'd'; // decimal
+        } elseif (isset($addressInfo['custom_reduce']) && !in_array('custom_reduce', $insertCols, true)) {
+            $insertCols[]   = 'custom_reduce';
+            $placeholders[] = '?';
+            $values[]       = floatval($addressInfo['custom_reduce']);
             $types         .= 'd'; // decimal
         }
 
@@ -2253,14 +2503,14 @@ class POSOrder
             $credit = 0.0;
 
             $calcStmt = $this->db->prepare(
-                'SELECT
-                    IFNULL(SUM(o.finalprice * o.quantity), 0) AS gross_total,
+                "SELECT
+                    IFNULL(SUM(CASE WHEN o.status IS NULL OR o.status != 'cancelled' THEN IF(IFNULL(o.itemprice, 0) > 0, o.itemprice, o.finalprice) * o.quantity ELSE 0 END), 0) AS gross_total,
                     IFNULL(MAX(oi.coupon_reduce), 0) AS coupon_reduce,
                     IFNULL(MAX(oi.giftvoucher_reduce), 0) AS giftvoucher_reduce,
                     IFNULL(MAX(oi.credit), 0) AS credit
                  FROM vp_orders o
                  LEFT JOIN vp_order_info oi ON oi.order_number COLLATE utf8mb4_unicode_ci = o.order_number COLLATE utf8mb4_unicode_ci
-                 WHERE o.order_number = ?'
+                 WHERE o.order_number = ?"
             );
             if ($calcStmt) {
                 $calcStmt->bind_param('s', $orderNumber);
