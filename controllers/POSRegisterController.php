@@ -3563,36 +3563,41 @@ class POSRegisterController
 
         $publishedVal = 1;
 
-        // Check if Exotic API response indicates item is unpublished / status = 0
-        $apiIsUnpublished = false;
-        if (isset($data['published'])) {
-            $s = strtolower(trim((string)$data['published']));
-            if ($s === '0' || $s === 'false' || $s === 'unpublished') {
-                $apiIsUnpublished = true;
+        // Trust local DB published status if available and active (published = 1 or is_active = 1)
+        if (array_key_exists('published', $dbRow) && $dbRow['published'] !== null && $dbRow['published'] !== '' && (int)$dbRow['published'] === 1) {
+            $publishedVal = 1;
+        } else {
+            // Check if Exotic API response indicates item is unpublished / status = 0
+            $apiIsUnpublished = false;
+            if (isset($data['published'])) {
+                $s = strtolower(trim((string)$data['published']));
+                if ($s === '0' || $s === 'false' || $s === 'unpublished') {
+                    $apiIsUnpublished = true;
+                }
             }
-        }
-        if (!$apiIsUnpublished && isset($data['status'])) {
-            $s = strtolower(trim((string)$data['status']));
-            if ($s === '0' || $s === 'false' || $s === 'unpublished') {
-                $apiIsUnpublished = true;
+            if (!$apiIsUnpublished && isset($data['status'])) {
+                $s = strtolower(trim((string)$data['status']));
+                if ($s === '0' || $s === 'false' || $s === 'unpublished') {
+                    $apiIsUnpublished = true;
+                }
             }
-        }
-        if (!$apiIsUnpublished && isset($data['is_published'])) {
-            if ($data['is_published'] === false || $data['is_published'] === 0 || $data['is_published'] === '0') {
-                $apiIsUnpublished = true;
+            if (!$apiIsUnpublished && isset($data['is_published'])) {
+                if ($data['is_published'] === false || $data['is_published'] === 0 || $data['is_published'] === '0') {
+                    $apiIsUnpublished = true;
+                }
             }
-        }
 
-        if ($apiIsUnpublished) {
-            $publishedVal = 0;
-            // Sync status from API to local DB if local DB is currently published = 1
-            if ($vpId > 0) {
-                require_once 'models/product/product.php';
-                $productModel = new \Product($conn);
-                $productModel->setProductPublished($vpId, 0);
+            if ($apiIsUnpublished) {
+                $publishedVal = 0;
+                // Sync status from API to local DB if local DB is currently published = 1
+                if ($vpId > 0) {
+                    require_once 'models/product/product.php';
+                    $productModel = new \Product($conn);
+                    $productModel->setProductPublished($vpId, 0);
+                }
+            } elseif (array_key_exists('published', $dbRow) && $dbRow['published'] !== null && $dbRow['published'] !== '') {
+                $publishedVal = (int)$dbRow['published'];
             }
-        } elseif (array_key_exists('published', $dbRow) && $dbRow['published'] !== null && $dbRow['published'] !== '') {
-            $publishedVal = (int)$dbRow['published'];
         }
 
         $product = [
