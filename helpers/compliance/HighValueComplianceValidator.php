@@ -13,8 +13,33 @@ class HighValueComplianceValidator
     public const PAN_PATTERN = '/^[A-Z]{5}[0-9]{4}[A-Z]$/';
 
     /**
-     * Get high-value transaction limit threshold (default: ₹2,00,000.00).
+     * Helper to check if a column exists on a table.
      */
+    private static function columnExists(mysqli $conn, string $table, string $column): bool
+    {
+        $res = $conn->query("SHOW COLUMNS FROM `{$table}` LIKE '{$column}'");
+        return $res && $res->num_rows > 0;
+    }
+
+    /**
+     * Ensure gstin column exists on vp_customers table defensively.
+     */
+    public static function ensureCustomerGstinColumn(mysqli $conn): bool
+    {
+        static $hasGstin = null;
+        if ($hasGstin !== null) {
+            return $hasGstin;
+        }
+
+        if (!self::columnExists($conn, 'vp_customers', 'gstin')) {
+            @$conn->query("ALTER TABLE vp_customers ADD COLUMN gstin VARCHAR(20) NULL DEFAULT NULL AFTER country_of_residence");
+            $hasGstin = self::columnExists($conn, 'vp_customers', 'gstin');
+        } else {
+            $hasGstin = true;
+        }
+
+        return $hasGstin;
+    }
     public static function getLimit(mysqli $conn): float
     {
         if (function_exists('app_setting')) {
@@ -330,18 +355,27 @@ class HighValueComplianceValidator
             $pan = substr($gstin, 2, 10);
         }
 
-        $stmt = $conn->prepare(
-            'UPDATE vp_customers
-             SET customer_residency_status = ?, customer_pan = ?, passport_number = ?, country_of_residence = ?' .
-             ($gstin !== '' ? ', gstin = ?' : '') .
-             ' WHERE id = ?'
-        );
+        $hasGstinCol = self::ensureCustomerGstinColumn($conn);
+
+        if ($gstin !== '' && $hasGstinCol) {
+            $stmt = $conn->prepare(
+                'UPDATE vp_customers
+                 SET customer_residency_status = ?, customer_pan = ?, passport_number = ?, country_of_residence = ?, gstin = ?
+                 WHERE id = ?'
+            );
+        } else {
+            $stmt = $conn->prepare(
+                'UPDATE vp_customers
+                 SET customer_residency_status = ?, customer_pan = ?, passport_number = ?, country_of_residence = ?
+                 WHERE id = ?'
+            );
+        }
 
         if (!$stmt) {
             return ['success' => false, 'message' => 'Database prepare failed: ' . $conn->error];
         }
 
-        if ($gstin !== '') {
+        if ($gstin !== '' && $hasGstinCol) {
             $stmt->bind_param('sssssi', $residency, $pan, $passport, $country, $gstin, $customerId);
         } else {
             $stmt->bind_param('ssssi', $residency, $pan, $passport, $country, $customerId);
