@@ -486,6 +486,18 @@ if ($invoiceIdForReturn > 0) {
                         $shippingFirstName = $billingFirstName;
                         $shippingLastName = $billingLastName;
                     }
+                    if ($billingFirstName === '' && $shippingFirstName !== '') {
+                        $billingFirstName = $shippingFirstName;
+                        if ($billingLastName === '') {
+                            $billingLastName = $shippingLastName;
+                        }
+                    }
+                    if ($shippingFirstName === '' && $billingFirstName !== '') {
+                        $shippingFirstName = $billingFirstName;
+                        if ($shippingLastName === '') {
+                            $shippingLastName = $billingLastName;
+                        }
+                    }
                     $billingDisplayName = trim($billingFirstName . ' ' . $billingLastName);
                     $shippingDisplayName = trim($shippingFirstName . ' ' . $shippingLastName);
 
@@ -524,8 +536,25 @@ if ($invoiceIdForReturn > 0) {
                             $shippingGstin = $billingGstin;
                         }
                     }
+                    if ($billingAddress1 === '' && $billingCity === '') {
+                        $billingAddress1 = $shippingAddress1;
+                        $billingAddress2 = $shippingAddress2;
+                        $billingCity = $shippingCity;
+                        $billingState = $shippingState;
+                        $billingZipcode = $shippingZipcode;
+                        $billingCountry = $shippingCountry !== '' ? $shippingCountry : 'IN';
+                        if ($billingMobile === '') {
+                            $billingMobile = $shippingMobile;
+                        }
+                        if ($billingGstin === '') {
+                            $billingGstin = $shippingGstin;
+                        }
+                    }
                     if ($shippingCountry === '') {
                         $shippingCountry = $billingCountry !== '' ? $billingCountry : 'IN';
+                    }
+                    if ($billingCountry === '') {
+                        $billingCountry = $shippingCountry !== '' ? $shippingCountry : 'IN';
                     }
                     ?>
                     <span id="display-customer-name" class="hidden"><?php echo htmlspecialchars($customerName); ?></span>
@@ -707,15 +736,15 @@ if ($invoiceIdForReturn > 0) {
                                     <input type="text" id="edit_shipping_first_name" name="shipping_first_name" placeholder="First Name" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                     <input type="text" id="edit_shipping_last_name" name="shipping_last_name" placeholder="Last Name" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 </div>
-                                <input type="text" id="edit_shipping_address_line1" name="billing_address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
-                                <input type="text" id="edit_shipping_address_line2" name="billing_address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_shipping_address_line1" name="shipping_address_line1" placeholder="Address Line 1" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="edit_shipping_address_line2" name="shipping_address_line2" placeholder="Address Line 2" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 <div class="grid grid-cols-2 gap-2">
-                                    <input type="text" id="edit_shipping_city" name="billing_city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
-                                    <input type="text" id="edit_shipping_zipcode" name="billing_zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                    <input type="text" id="edit_shipping_city" name="shipping_city" placeholder="City" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                    <input type="text" id="edit_shipping_zipcode" name="shipping_zipcode" placeholder="Zipcode" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 </div>
                                 <input type="text" id="edit_shipping_state" name="shipping_state" placeholder="State" class="hidden w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                 <select id="edit_shipping_state_select" class="hidden w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500"></select>
-                                <select id="edit_shipping_country" name="billing_country" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
+                                <select id="edit_shipping_country" name="shipping_country" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:ring-blue-500 focus:border-blue-500">
                                     <?php
                                     $selected_iso = strtoupper(trim((string)($orderremarks['shipping_country'] ?? 'IN')));
                                     $country_list = $countries;
@@ -1359,29 +1388,57 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
 
     function openNameEmailPopup(orderNumber) {
         document.getElementById('edit_order_number').value = orderNumber;
-        document.getElementById('edit_phone').value = document.getElementById('display-customer-phone')?.textContent.trim() || '';
-        document.getElementById('edit_shipping_first_name').value = document.getElementById('shipping_first_name')?.textContent.trim() || '';
-        document.getElementById('edit_shipping_last_name').value = document.getElementById('shipping_last_name')?.textContent.trim() || '';
-        document.getElementById('edit_billing_first_name').value = document.getElementById('billing_first_name')?.textContent.trim() || '';
-        document.getElementById('edit_billing_last_name').value = document.getElementById('billing_last_name')?.textContent.trim() || '';
-        document.getElementById('edit_shipping_address_line1').value = document.getElementById('shipping_address1')?.textContent.trim() || '';
-        document.getElementById('edit_shipping_address_line2').value = document.getElementById('shipping_address2')?.textContent.trim() || '';
-        document.getElementById('edit_shipping_city').value = document.getElementById('shipping_city')?.textContent.trim() || '';
-        document.getElementById('edit_shipping_zipcode').value = document.getElementById('shipping_zipcode')?.textContent.trim() || '';
-        document.getElementById('edit_shipping_country').value = document.getElementById('shipping_country')?.dataset.code || 'IN';
-        document.getElementById('edit_shipping_gstin').value = document.getElementById('shipping_gstin')?.textContent.trim() || '';
-        document.getElementById('edit_billing_address_line1').value = document.getElementById('billing_address1')?.textContent.trim() || '';
-        document.getElementById('edit_billing_address_line2').value = document.getElementById('billing_address2')?.textContent.trim() || '';
-        document.getElementById('edit_billing_city').value = document.getElementById('billing_city')?.textContent.trim() || '';
-        document.getElementById('edit_billing_zipcode').value = document.getElementById('billing_zipcode')?.textContent.trim() || '';
-        document.getElementById('edit_billing_country').value = document.getElementById('billing_country')?.dataset.code || 'IN';
-        document.getElementById('edit_billing_gstin').value = document.getElementById('billing_gstin')?.textContent.trim() || '';
+        const phoneVal = document.getElementById('display-customer-phone')?.textContent.trim() || document.getElementById('shipping_mobile')?.textContent.trim() || '';
+        document.getElementById('edit_phone').value = phoneVal;
 
-        const shippingCity = document.getElementById('shipping_city')?.textContent.trim() || '';
-        const shippingState = document.getElementById('shipping_state')?.textContent.trim() || '';
+        const shipFirst = document.getElementById('shipping_first_name')?.textContent.trim() || '';
+        const shipLast = document.getElementById('shipping_last_name')?.textContent.trim() || '';
+        const billFirst = document.getElementById('billing_first_name')?.textContent.trim() || '';
+        const billLast = document.getElementById('billing_last_name')?.textContent.trim() || '';
 
-        const billingCity = document.getElementById('billing_city')?.textContent.trim() || '';
-        const billingState = document.getElementById('billing_state')?.textContent.trim() || '';
+        const customerNameVal = document.getElementById('display-customer-name')?.textContent.trim() || '';
+        const nameParts = customerNameVal ? customerNameVal.split(/\s+/) : [];
+        const fallbackFirst = nameParts[0] || '';
+        const fallbackLast = nameParts.slice(1).join(' ') || '';
+
+        document.getElementById('edit_shipping_first_name').value = shipFirst || billFirst || fallbackFirst;
+        document.getElementById('edit_shipping_last_name').value = shipLast || billLast || fallbackLast;
+        document.getElementById('edit_billing_first_name').value = billFirst || shipFirst || fallbackFirst;
+        document.getElementById('edit_billing_last_name').value = billLast || shipLast || fallbackLast;
+
+        const shipAddr1 = document.getElementById('shipping_address1')?.textContent.trim() || '';
+        const shipAddr2 = document.getElementById('shipping_address2')?.textContent.trim() || '';
+        const shipCity = document.getElementById('shipping_city')?.textContent.trim() || '';
+        const shipZip = document.getElementById('shipping_zipcode')?.textContent.trim() || '';
+        const shipCountry = document.getElementById('shipping_country')?.dataset.code || 'IN';
+        const shipGstin = document.getElementById('shipping_gstin')?.textContent.trim() || '';
+
+        const billAddr1 = document.getElementById('billing_address1')?.textContent.trim() || '';
+        const billAddr2 = document.getElementById('billing_address2')?.textContent.trim() || '';
+        const billCity = document.getElementById('billing_city')?.textContent.trim() || '';
+        const billZip = document.getElementById('billing_zipcode')?.textContent.trim() || '';
+        const billCountry = document.getElementById('billing_country')?.dataset.code || 'IN';
+        const billGstin = document.getElementById('billing_gstin')?.textContent.trim() || '';
+
+        document.getElementById('edit_shipping_address_line1').value = shipAddr1 || billAddr1;
+        document.getElementById('edit_shipping_address_line2').value = shipAddr2 || billAddr2;
+        document.getElementById('edit_shipping_city').value = shipCity || billCity;
+        document.getElementById('edit_shipping_zipcode').value = shipZip || billZip;
+        document.getElementById('edit_shipping_country').value = shipCountry || billCountry || 'IN';
+        document.getElementById('edit_shipping_gstin').value = shipGstin || billGstin;
+
+        document.getElementById('edit_billing_address_line1').value = billAddr1 || shipAddr1;
+        document.getElementById('edit_billing_address_line2').value = billAddr2 || shipAddr2;
+        document.getElementById('edit_billing_city').value = billCity || shipCity;
+        document.getElementById('edit_billing_zipcode').value = billZip || shipZip;
+        document.getElementById('edit_billing_country').value = billCountry || shipCountry || 'IN';
+        document.getElementById('edit_billing_gstin').value = billGstin || shipGstin;
+
+        const shippingCity = shipCity || billCity;
+        const shippingState = document.getElementById('shipping_state')?.textContent.trim() || document.getElementById('billing_state')?.textContent.trim() || '';
+
+        const billingCity = billCity || shipCity;
+        const billingState = document.getElementById('billing_state')?.textContent.trim() || document.getElementById('shipping_state')?.textContent.trim() || '';
 
         Promise.all([
             syncOrderStateField('shipping', shippingState, shippingCity),
@@ -1399,26 +1456,48 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
         e.preventDefault();
 
         const orderNumber = document.getElementById('edit_order_number').value;
-        const first_name = document.getElementById('edit_billing_first_name').value.trim();
-        const last_name = document.getElementById('edit_billing_last_name').value.trim();
-        const shipping_first_name = document.getElementById('edit_shipping_first_name').value.trim();
-        const shipping_last_name = document.getElementById('edit_shipping_last_name').value.trim();
-        const name = [first_name, last_name].filter(Boolean).join(' ');
-        const phone = document.getElementById('edit_phone').value.trim();
-        const address_line1 = document.getElementById('edit_billing_address_line1').value.trim();
-        const address_line2 = document.getElementById('edit_billing_address_line2').value.trim();
-        const city = document.getElementById('edit_billing_city').value.trim();
-        const state = getOrderStateValue('billing');
-        const zipcode = document.getElementById('edit_billing_zipcode').value.trim();
-        const country = document.getElementById('edit_billing_country').value.trim();
-        const billing_address_line1 = document.getElementById('edit_shipping_address_line1').value.trim();
-        const billing_address_line2 = document.getElementById('edit_shipping_address_line2').value.trim();
-        const billing_city = document.getElementById('edit_shipping_city').value.trim();
-        const shipping_state = getOrderStateValue('shipping');
-        const billing_zipcode = document.getElementById('edit_shipping_zipcode').value.trim();
-        const billing_country = document.getElementById('edit_shipping_country').value.trim();
+        let first_name = document.getElementById('edit_billing_first_name').value.trim();
+        let last_name = document.getElementById('edit_billing_last_name').value.trim();
+        let shipping_first_name = document.getElementById('edit_shipping_first_name').value.trim();
+        let shipping_last_name = document.getElementById('edit_shipping_last_name').value.trim();
+        let phone = document.getElementById('edit_phone').value.trim();
+
+        let address_line1 = document.getElementById('edit_billing_address_line1').value.trim();
+        let address_line2 = document.getElementById('edit_billing_address_line2').value.trim();
+        let city = document.getElementById('edit_billing_city').value.trim();
+        let state = getOrderStateValue('billing');
+        let zipcode = document.getElementById('edit_billing_zipcode').value.trim();
+        let country = document.getElementById('edit_billing_country').value.trim();
+
+        let shipping_address_line1 = document.getElementById('edit_shipping_address_line1').value.trim();
+        let shipping_address_line2 = document.getElementById('edit_shipping_address_line2').value.trim();
+        let shipping_city = document.getElementById('edit_shipping_city').value.trim();
+        let shipping_state = getOrderStateValue('shipping');
+        let shipping_zipcode = document.getElementById('edit_shipping_zipcode').value.trim();
+        let shipping_country = document.getElementById('edit_shipping_country').value.trim();
+
         const gstin = document.getElementById('edit_billing_gstin').value.trim().toUpperCase();
         const shipping_gstin = document.getElementById('edit_shipping_gstin').value.trim().toUpperCase();
+
+        if (!first_name && shipping_first_name) first_name = shipping_first_name;
+        if (!shipping_first_name && first_name) shipping_first_name = first_name;
+        if (!last_name && shipping_last_name) last_name = shipping_last_name;
+        if (!shipping_last_name && last_name) shipping_last_name = last_name;
+
+        if (!address_line1 && shipping_address_line1) address_line1 = shipping_address_line1;
+        if (!shipping_address_line1 && address_line1) shipping_address_line1 = address_line1;
+        if (!address_line2 && shipping_address_line2) address_line2 = shipping_address_line2;
+        if (!shipping_address_line2 && address_line2) shipping_address_line2 = address_line2;
+        if (!city && shipping_city) city = shipping_city;
+        if (!shipping_city && city) shipping_city = city;
+        if (!state && shipping_state) state = shipping_state;
+        if (!shipping_state && state) shipping_state = state;
+        if (!zipcode && shipping_zipcode) zipcode = shipping_zipcode;
+        if (!shipping_zipcode && zipcode) shipping_zipcode = zipcode;
+        if (!country && shipping_country) country = shipping_country;
+        if (!shipping_country && country) shipping_country = country;
+
+        const name = [first_name, last_name].filter(Boolean).join(' ');
 
         if (!first_name || !phone || !address_line1) {
             const valMsg = "Billing first name, phone and Address Line 1 are required.";
@@ -1430,27 +1509,73 @@ document.getElementById('editOrderPricesForm')?.addEventListener('submit', funct
             return;
         }
 
-        fetch('index.php?page=orders&action=update_name_email_ajax', {
+        const params = new URLSearchParams({
+            order_number: orderNumber,
+            customer_name: name,
+            customer_phone: phone,
+            first_name: first_name,
+            last_name: last_name,
+            shipping_first_name: shipping_first_name,
+            shipping_last_name: shipping_last_name,
+            address_line1: address_line1,
+            address_line2: address_line2,
+            city: city,
+            state: state,
+            zipcode: zipcode,
+            country: country,
+            gstin: gstin,
+            billing_address_line1: shipping_address_line1,
+            billing_address_line2: shipping_address_line2,
+            billing_city: shipping_city,
+            shipping_state: shipping_state,
+            billing_zipcode: shipping_zipcode,
+            billing_country: shipping_country,
+            shipping_gstin: shipping_gstin
+        });
+
+        const fetchUrl = `index.php?page=${encodeURIComponent(<?php echo json_encode($orderStatusPage ?? 'orders', JSON_UNESCAPED_SLASHES); ?>)}&action=update_name_email_ajax`;
+
+        fetch(fetchUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: `order_number=${encodeURIComponent(orderNumber)}&customer_name=${encodeURIComponent(name)}&customer_phone=${encodeURIComponent(phone)}&first_name=${encodeURIComponent(first_name)}&last_name=${encodeURIComponent(last_name)}&shipping_first_name=${encodeURIComponent(shipping_first_name)}&shipping_last_name=${encodeURIComponent(shipping_last_name)}&address_line1=${encodeURIComponent(address_line1)}&address_line2=${encodeURIComponent(address_line2)}&city=${encodeURIComponent(city)}&state=${encodeURIComponent(state)}&zipcode=${encodeURIComponent(zipcode)}&country=${encodeURIComponent(country)}&gstin=${encodeURIComponent(gstin)}&billing_address_line1=${encodeURIComponent(billing_address_line1)}&billing_address_line2=${encodeURIComponent(billing_address_line2)}&billing_city=${encodeURIComponent(billing_city)}&shipping_state=${encodeURIComponent(shipping_state)}&billing_zipcode=${encodeURIComponent(billing_zipcode)}&billing_country=${encodeURIComponent(billing_country)}&shipping_gstin=${encodeURIComponent(shipping_gstin)}`
+                body: params.toString()
             })
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
-                    alert("Customer information updated successfully!");
-                    closeNameEmailPopup();
-
-                    // Optional â€“ safer for consistency with other parts of the page
-                    window.location.reload();
+                    if (typeof window.showPosMessageModal === 'function') {
+                        window.showPosMessageModal({
+                            title: 'Success',
+                            message: 'Customer information updated successfully!',
+                            tone: 'success',
+                            onClose: function() {
+                                closeNameEmailPopup();
+                                window.location.reload();
+                            }
+                        });
+                    } else {
+                        alert("Customer information updated successfully!");
+                        closeNameEmailPopup();
+                        window.location.reload();
+                    }
                 } else {
-                    alert("Failed to save: " + (data.message || "Unknown error"));
+                    const errMsg = "Failed to save: " + (data.message || "Unknown error");
+                    if (typeof window.showPosMessageModal === 'function') {
+                        window.showPosMessageModal({ title: 'Error', message: errMsg, tone: 'error' });
+                    } else {
+                        alert(errMsg);
+                    }
                 }
             })
             .catch(() => {
-                alert("Connection problem. Please try again.");
+                const connMsg = "Connection problem. Please try again.";
+                if (typeof window.showPosMessageModal === 'function') {
+                    window.showPosMessageModal({ title: 'Error', message: connMsg, tone: 'error' });
+                } else {
+                    alert(connMsg);
+                }
             });
     });
 
