@@ -6455,29 +6455,32 @@ class POSRegisterController
             $syncColor    = trim((string)($product['color'] ?? ($item['color'] ?? '')));
 
             // Check if this lock was created for an originally unpublished product BEFORE deleting
-            $chkLock = $conn->query("SELECT was_unpublished FROM `vp_pos_unpublished_locks` WHERE product_id = {$resolvedPid} AND was_unpublished = 1 LIMIT 1");
-            $wasUnpublishedLockExists = ($chkLock && $chkLock->num_rows > 0);
+            $wasUnpublishedLockExists = false;
+            if ($this->tableExists($conn, 'vp_pos_unpublished_locks')) {
+                $chkLock = $conn->query("SELECT was_unpublished FROM `vp_pos_unpublished_locks` WHERE product_id = {$resolvedPid} AND was_unpublished = 1 LIMIT 1");
+                $wasUnpublishedLockExists = ($chkLock && $chkLock->num_rows > 0);
 
-            // Delete lease locks for this product
-            $stmtDel = $conn->prepare("DELETE FROM `vp_pos_unpublished_locks` WHERE product_id = ?");
-            if ($stmtDel) {
-                $stmtDel->bind_param('i', $resolvedPid);
-                $stmtDel->execute();
-                $stmtDel->close();
-            }
+                // Delete lease locks for this product
+                $stmtDel = $conn->prepare("DELETE FROM `vp_pos_unpublished_locks` WHERE product_id = ?");
+                if ($stmtDel) {
+                    $stmtDel->bind_param('i', $resolvedPid);
+                    $stmtDel->execute();
+                    $stmtDel->close();
+                }
 
-            // Check remaining locks
-            $stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM `vp_pos_unpublished_locks` WHERE product_id = ? AND expires_at >= NOW()");
-            if ($stmt) {
-                $stmt->bind_param('i', $resolvedPid);
-                $stmt->execute();
-                $cntRow = $stmt->get_result()->fetch_assoc();
-                $stmt->close();
+                // Check remaining locks
+                $stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM `vp_pos_unpublished_locks` WHERE product_id = ? AND expires_at >= NOW()");
+                if ($stmt) {
+                    $stmt->bind_param('i', $resolvedPid);
+                    $stmt->execute();
+                    $cntRow = $stmt->get_result()->fetch_assoc();
+                    $stmt->close();
 
-                $remaining = (int)($cntRow['cnt'] ?? 0);
-                if ($remaining === 0 && $wasUnpublishedLockExists) {
-                    $productModel->setProductPublished($resolvedPid, 0);
-                    $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 0);
+                    $remaining = (int)($cntRow['cnt'] ?? 0);
+                    if ($remaining === 0 && $wasUnpublishedLockExists) {
+                        $productModel->setProductPublished($resolvedPid, 0);
+                        $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 0);
+                    }
                 }
             }
         }
