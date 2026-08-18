@@ -1663,38 +1663,86 @@ class POSOrder
             return ['success' => false, 'message' => $stmt->error];
         }
 
-        // Update address – don't fail the whole operation if this fails
-        $sql_addr = "
-            UPDATE vp_order_info 
-            SET first_name = ?, last_name = ?, address_line1 = ?, address_line2 = ?, city = ?, state = ?, zipcode = ?, country = ?, gstin = ?,
-                shipping_first_name = ?, shipping_last_name = ?, shipping_address_line1 = ?, shipping_address_line2 = ?, shipping_city = ?, shipping_state = ?, shipping_zipcode = ?, shipping_country = ?, shipping_gstin = ?
-            WHERE order_number = ?
-        ";
-        $stmt_addr = $this->db->prepare($sql_addr);
-        if ($stmt_addr) {
-            $stmt_addr->bind_param(
-                'sssssssssssssssssss',
-                $first_name,
-                $last_name,
-                $address_line1,
-                $address_line2,
-                $city,
-                $state,
-                $zipcode,
-                $country,
-                $gstin,
-                $shipping_first_name,
-                $shipping_last_name,
-                $billing_address_line1,
-                $billing_address_line2,
-                $billing_city,
-                $shipping_state,
-                $billing_zipcode,
-                $billing_country,
-                $shipping_gstin,
-                $order_number
-            );
-            $stmt_addr->execute();  // ← ignore result
+        // Check if vp_order_info row exists for this order
+        $check_stmt = $this->db->prepare("SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1");
+        $has_info = false;
+        if ($check_stmt) {
+            $check_stmt->bind_param('s', $order_number);
+            $check_stmt->execute();
+            $check_res = $check_stmt->get_result();
+            if ($check_res && $check_res->num_rows > 0) {
+                $has_info = true;
+            }
+        }
+
+        if ($has_info) {
+            $sql_addr = "
+                UPDATE vp_order_info 
+                SET first_name = ?, last_name = ?, address_line1 = ?, address_line2 = ?, city = ?, state = ?, zipcode = ?, country = ?, gstin = ?,
+                    shipping_first_name = ?, shipping_last_name = ?, shipping_address_line1 = ?, shipping_address_line2 = ?, shipping_city = ?, shipping_state = ?, shipping_zipcode = ?, shipping_country = ?, shipping_gstin = ?, mobile = ?
+                WHERE order_number = ?
+            ";
+            $stmt_addr = $this->db->prepare($sql_addr);
+            if ($stmt_addr) {
+                $stmt_addr->bind_param(
+                    'ssssssssssssssssssss',
+                    $first_name,
+                    $last_name,
+                    $address_line1,
+                    $address_line2,
+                    $city,
+                    $state,
+                    $zipcode,
+                    $country,
+                    $gstin,
+                    $shipping_first_name,
+                    $shipping_last_name,
+                    $billing_address_line1,
+                    $billing_address_line2,
+                    $billing_city,
+                    $shipping_state,
+                    $billing_zipcode,
+                    $billing_country,
+                    $shipping_gstin,
+                    $phone,
+                    $order_number
+                );
+                $stmt_addr->execute();
+            }
+        } else {
+            $sql_addr = "
+                INSERT INTO vp_order_info 
+                (order_number, first_name, last_name, address_line1, address_line2, city, state, zipcode, country, gstin,
+                 shipping_first_name, shipping_last_name, shipping_address_line1, shipping_address_line2, shipping_city, shipping_state, shipping_zipcode, shipping_country, shipping_gstin, mobile)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ";
+            $stmt_addr = $this->db->prepare($sql_addr);
+            if ($stmt_addr) {
+                $stmt_addr->bind_param(
+                    'ssssssssssssssssssss',
+                    $order_number,
+                    $first_name,
+                    $last_name,
+                    $address_line1,
+                    $address_line2,
+                    $city,
+                    $state,
+                    $zipcode,
+                    $country,
+                    $gstin,
+                    $shipping_first_name,
+                    $shipping_last_name,
+                    $billing_address_line1,
+                    $billing_address_line2,
+                    $billing_city,
+                    $shipping_state,
+                    $billing_zipcode,
+                    $billing_country,
+                    $shipping_gstin,
+                    $phone
+                );
+                $stmt_addr->execute();
+            }
         }
 
         return [
