@@ -52,9 +52,15 @@ class BusyXmlGenerator
         $xml->addChild('STPTName', htmlspecialchars($invoice['stpt_name'] ?? 'I/GST-Export'));
         
         // Resolve Payment Type / Party Name / MasterName1
-        $paymentType = trim($invoice['payment_type'] ?? $invoice['payment_mode'] ?? '');
+        $paymentType = trim($invoice['order_payment_mode'] ?? $invoice['payment_type'] ?? $invoice['payment_mode'] ?? '');
         if ($paymentType !== '') {
-            $paymentType = (strtolower($paymentType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $paymentType));
+            if (strtoupper($paymentType) === 'YES2971') {
+                $paymentType = 'YES2971';
+            } elseif (strtolower($paymentType) === 'cod') {
+                $paymentType = 'COD';
+            } else {
+                $paymentType = ucwords(str_replace('_', ' ', $paymentType));
+            }
         }
 
         $partyName = $invoice['party_name'] ?? ($paymentType !== '' ? $paymentType : ($invoice['customer_name'] ?? 'Walk-in Customer'));
@@ -237,9 +243,15 @@ class BusyXmlGenerator
         $xml->addChild('STPTName', htmlspecialchars($salesReturn['stpt_name'] ?? 'I/GST-Export'));
         
         // Resolve Payment Type / Party Name / MasterName1
-        $paymentType = trim($salesReturn['payment_type'] ?? $salesReturn['payment_mode'] ?? '');
+        $paymentType = trim($salesReturn['order_payment_mode'] ?? $salesReturn['payment_type'] ?? $salesReturn['payment_mode'] ?? '');
         if ($paymentType !== '') {
-            $paymentType = (strtolower($paymentType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $paymentType));
+            if (strtoupper($paymentType) === 'YES2971') {
+                $paymentType = 'YES2971';
+            } elseif (strtolower($paymentType) === 'cod') {
+                $paymentType = 'COD';
+            } else {
+                $paymentType = ucwords(str_replace('_', ' ', $paymentType));
+            }
         }
 
         $partyName = $salesReturn['party_name'] ?? ($paymentType !== '' ? $paymentType : ($salesReturn['customer_name'] ?? 'Walk-in Customer'));

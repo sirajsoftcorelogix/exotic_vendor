@@ -502,6 +502,9 @@ class OrdersController
             try {
                 $orderForAddress = $order;
                 $orderForAddress['orderid'] = $storeOrderNumber;
+                if (!isset($orderForAddress['payment_mode']) && function_exists('pos_payment_resolve_order_payment_mode')) {
+                    $orderForAddress['payment_mode'] = pos_payment_resolve_order_payment_mode($conn, $storeOrderNumber, (string)($order['payment_type'] ?? ''));
+                }
                 $addressdata[] = $ordersModel->insertAddressInfo($orderForAddress, $customerdata['customer_id'] ?? 0);
             } catch (\Throwable $e) {
                 error_log('[order import insertAddressInfo] ' . $e->getMessage());
