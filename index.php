@@ -322,6 +322,9 @@ switch ($page) {
             case 'get_order_details_html':
                 $controller->getOrderDetailsHTML();
                 break;
+            case 'search_orders':
+                $controller->searchOrdersAjax();
+                break;
             case 'get_order_details_for_dispatch':
                 $controller->getOrderDetailsForDispatch();
                 break;
@@ -1374,6 +1377,23 @@ switch ($page) {
             case 'validateRedirectItemCode':
                 $controller->validateRedirectItemCodeAjax();
                 break;
+            case 'checkSkuExists':
+                $controller->checkSkuExistsAjax();
+                break;
+            case 'duplicateSkuReport':
+            case 'duplicate_sku_report':
+                $controller->duplicateSkuReport();
+                break;
+            case 'exportDuplicateSkuReport':
+            case 'export_duplicate_sku_report':
+                $controller->exportDuplicateSkuReport();
+                break;
+            case 'deleteDuplicateProduct':
+                $controller->deleteDuplicateProductAjax();
+                break;
+            case 'deleteAllDuplicateInboundedProducts':
+                $controller->deleteAllDuplicateInboundedProductsAjax();
+                break;
             // --- ADD THIS NEW CASE ---
             case 'download_photos':
                 $controller->download_photos();
@@ -1624,6 +1644,18 @@ switch ($page) {
                 break;
             case 'update-product-published':
                 $controller->updateProductPublished();
+                break;
+            case 'einvoice-input':
+                $controller->einvoiceInput();
+                break;
+            case 'einvoice-submit':
+                $controller->einvoiceSubmit();
+                break;
+            case 'ewaybill-input':
+                $controller->ewaybillInput();
+                break;
+            case 'ewaybill-submit':
+                $controller->ewaybillSubmit();
                 break;
             default:
                 $controller->index();
@@ -1999,6 +2031,9 @@ switch ($page) {
                 break;
             case 'get_order_details_html':
                 $controller->getOrderDetailsHTML();
+                break;
+            case 'search_orders':
+                $controller->searchOrdersAjax();
                 break;
             case 'fetch_order_json':
                 require_once __DIR__ . '/helpers/order_json_fetch.php';

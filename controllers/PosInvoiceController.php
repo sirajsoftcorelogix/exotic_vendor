@@ -2203,6 +2203,7 @@ class PosInvoiceController
             : 13;
 
         require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
+        require_once __DIR__ . '/../helpers/invoice/invoice_box_variant.php';
         $resolvedUseIgst = invoice_resolve_uses_igst_for_invoice($invoice, $commanModel);
         $applyGstForInvoice = invoice_should_apply_gst_for_invoice($invoice, $commanModel, $posDiscountMeta);
 
@@ -2304,8 +2305,8 @@ class PosInvoiceController
                 $itemsrows .= '
                     <tr>
                         <td>' . ($idx + 1) . '</td>
-                        <td>' . htmlspecialchars($item['box_no'] ?? '') . '</td>
                         <td class="desc">' . $descHtml . '</td>
+                        <td>' . invoice_format_box_variant_cell($item, $conn) . '</td>
                         ' . $listPriceCell . $taxableValueCell . '
                         <td>' . $qtyInt . '</td>
                         <td class="right">' . number_format($sgstRate, 2) . '</td>
@@ -2325,8 +2326,8 @@ class PosInvoiceController
             $itemsrows .= '
                     <tr>
                         <td>' . ($idx + 1) . '</td>
-                        <td>' . htmlspecialchars($item['box_no'] ?? '') . '</td>
                         <td class="desc">' . htmlspecialchars($item['item_name'] ?? '') . '</td>
+                        <td>' . invoice_format_box_variant_cell($item, $conn) . '</td>
                         <td>' . htmlspecialchars($item['hsn'] ?? '') . '</td>
                         <td>' . $qtyInt . '</td>
                         <td class="right">' . number_format($unitPriceDisplay, 2) . '</td>
@@ -2352,8 +2353,8 @@ class PosInvoiceController
                     $itemsrows .= '
                     <tr>
                         <td>&nbsp;</td>
-                        <td>&nbsp;</td>
                         <td class="desc">&nbsp;</td>
+                        <td>&nbsp;</td>
                         ' . $emptyPriceCells . '
                         <td class="right">&nbsp;</td>
                         <td class="right">&nbsp;</td>
@@ -2369,8 +2370,8 @@ class PosInvoiceController
                     $itemsrows .= '
                     <tr>
                         <td>&nbsp;</td>
-                        <td>&nbsp;</td>
                         <td class="desc">&nbsp;</td>
+                        <td>&nbsp;</td>
                         <td>&nbsp;</td>
                         <td class="right">&nbsp;</td>
                         <td class="right">&nbsp;</td>
@@ -2541,6 +2542,12 @@ class PosInvoiceController
             !empty($invoice['pos_flag']) ? $paymentModel : null
         );
         $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
+        if ((!$customer || !is_array($customer)) && !empty($invoice['order_number'])) {
+            global $ordersModel;
+            if ($ordersModel) {
+                $customer = $ordersModel->getAddressInfoByOrderNumber($invoice['order_number']);
+            }
+        }
         $addressBlocks = invoice_resolve_bill_ship_html(is_array($customer) ? $customer : null, $conn ?? null);
         $billToInfo = $addressBlocks['bill'];
         $shipToInfo = $addressBlocks['ship'];
@@ -2777,6 +2784,7 @@ class PosInvoiceController
             'tax_amount' => 0,
             'discount_amount' => 0,
             'total_amount' => 0,
+            'gstin' => strtoupper(trim((string)($info['gstin'] ?? $info['shipping_gstin'] ?? ''))),
         ];
         $customInvoiceNumber = trim($customInvoiceNumber);
         if ($customInvoiceNumber !== '') {
@@ -2882,6 +2890,7 @@ class PosInvoiceController
             'tax_amount' => 0,
             'discount_amount' => 0,
             'total_amount' => 0,
+            'gstin' => strtoupper(trim((string)($info['gstin'] ?? $info['shipping_gstin'] ?? ''))),
         ];
 
         foreach ($orderItems as $i => $item) {

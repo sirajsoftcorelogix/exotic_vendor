@@ -63,7 +63,7 @@
       foreach ($items as $index => $item):
         $displaySku = trim($item['sku'] ?? '');
         if ($displaySku === '') {
-          $displaySku = buildAutoSkuFromItemVariant($item['item_code'] ?? '', $item['size'] ?? '', $item['color'] ?? '');
+          $displaySku = generateItemSku($item['item_code'] ?? '', $item['size'] ?? '', $item['color'] ?? '');
         }
       ?>
         <div class="bg-white rounded-lg p-4 grid grid-cols-12 gap-4 items-center table-row-text">

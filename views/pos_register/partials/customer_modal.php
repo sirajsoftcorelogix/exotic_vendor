@@ -23,8 +23,8 @@
         </div>
 
         <div>
-          <label class="text-gray-500">Last Name <span class="text-red-600">*</span></label>
-          <input name="last_name" required class="w-full border rounded px-2 py-1.5">
+          <label class="text-gray-500">Last Name</label>
+          <input name="last_name" class="w-full border rounded px-2 py-1.5">
         </div>
 
         <div>
@@ -38,8 +38,8 @@
         </div>
 
         <div class="col-span-2">
-          <label class="text-gray-500">Address 1</label>
-          <input name="address_line1" class="w-full border rounded px-2 py-1.5">
+          <label class="text-gray-500">Address 1 <span class="text-red-600">*</span></label>
+          <input name="address_line1" required class="w-full border rounded px-2 py-1.5">
         </div>
         <div class="col-span-2">
           <label class="text-gray-500">Address 2</label>

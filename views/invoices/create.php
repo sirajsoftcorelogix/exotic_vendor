@@ -263,9 +263,9 @@
                 <thead class="table-header">
                     <tr>
                         <th class="p-2 text-left w-0.5/12">S.No</th>
-                        <th class="p-2 text-left w-0.5/12">Box No</th>
                         <th class="p-2 text-left w-1/12">SKU</th>
                         <th class="p-2 text-left w-3/12" colspan="2">Item Name</th>
+                        <th class="p-2 text-left w-0.5/12">Variant</th>
                         <th class="p-2 text-left w-0.5/12">HSN </th>
                         <th class="p-2 text-left w-0.5/12">Qty</th>
                         <th class="p-2 text-left w-1/12">Unit Price</th>
@@ -291,12 +291,12 @@
                                 <input type="hidden" name="image_url[]" value="<?= $item['image'] ?? '' ?>">
                                 <input type="hidden" name="groupname[]" value="<?= $item['groupname'] ?? '' ?>">
                                 <td class="p-2 rounded-l-lg"><?php echo $index + 1; ?></td>
-                                <td class="p-0">
-                                    <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>
-                                </td>
                                 <td class="p-2"><span><?= $item['sku'] ?></span></td>
                                 <td class="p-2 " colspan="2"><span><?= htmlspecialchars($item['title'] ?? '') ?></span>
                                     <input type="hidden" name="item_name[]" value="<?= htmlspecialchars($item['title'] ?? '') ?>" required>
+                                </td>
+                                <td class="p-0">
+                                    <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>
                                 </td>
                                 <td class="p-2"><span><?= $item['hsn'] ?></span>
                                     <input type="hidden" name="hsn[]" value="<?= $item['hsn'] ?>">
@@ -1127,12 +1127,12 @@
                 <input type="hidden" name="image_url[]" value="${itemData.image || ''}">
                 <input type="hidden" name="groupname[]" value="${itemData.groupname || ''}">
                 <td class="p-2 rounded-l-lg">${tbody.children.length + 1}</td>
-                <td class="p-0">
-                    <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>
-                </td>
                 <td class="p-2"><span>${itemData.sku || ''}</span></td>
                 <td class="p-2 " colspan="2">${itemData.title ? htmlspecialchars(itemData.title) : ''}
                     <input type="hidden" name="item_name[]" value="${itemData.title ? htmlspecialchars(itemData.title) : ''}" required>
+                </td>
+                <td class="p-0">
+                    <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>
                 </td>
                 <td class="p-2"><span>${itemData.hsn || ''}</span>
                     <input type="hidden" name="hsn[]" value="${itemData.hsn || ''}" > 

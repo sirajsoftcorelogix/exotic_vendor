@@ -934,6 +934,7 @@ class InvoicesController
         $totalIgstAmt = 0;
 
         require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
+        require_once __DIR__ . '/../helpers/invoice/invoice_box_variant.php';
         $resolvedUseIgst = invoice_resolve_uses_igst_for_invoice($invoice, $commanModel);
 
         // Build item rows
@@ -987,8 +988,8 @@ class InvoicesController
             $itemsrows .= '
                     <tr>
                         <td>' . ($idx + 1) . '</td>
-                        <td>' . htmlspecialchars($item['box_no'] ?? '') . '</td>
                         <td class="desc">' . htmlspecialchars($item['item_name'] ?? '') . '</td>
+                        <td>' . invoice_format_box_variant_cell($item, $conn) . '</td>
                         <td>' . htmlspecialchars($item['hsn'] ?? '') . '</td>
                         <td>' . $item['quantity'] . '</td>
                         <td class="right">' . number_format($item['unit_price'], 2) . '</td>
@@ -1009,8 +1010,8 @@ class InvoicesController
                 $itemsrows .= '
                     <tr>
                         <td>&nbsp;</td>
-                        <td>&nbsp;</td>
                         <td class="desc">&nbsp;</td>
+                        <td>&nbsp;</td>
                         <td>&nbsp;</td>
                         <td>&nbsp;</td>
                         <td class="right">&nbsp;</td>
@@ -1099,6 +1100,12 @@ class InvoicesController
         // Fetch customer and address information
         require_once __DIR__ . '/../helpers/invoice/invoice_address_html.php';
         $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
+        if ((!$customer || !is_array($customer)) && !empty($invoice['order_number'])) {
+            global $ordersModel;
+            if ($ordersModel) {
+                $customer = $ordersModel->getAddressInfoByOrderNumber($invoice['order_number']);
+            }
+        }
         global $conn;
         $addressBlocks = invoice_resolve_bill_ship_html(is_array($customer) ? $customer : null, $conn ?? null);
         $billToInfo = $addressBlocks['bill'];
@@ -1250,6 +1257,11 @@ class InvoicesController
 
                 $invoiceItems[] = [
                     'box_no' => $item['box_no'] ?? '',
+                    'color' => $item['color'] ?? '',
+                    'size' => $item['size'] ?? '',
+                    'order_number' => $item['order_number'] ?? '',
+                    'item_code' => $item['item_code'] ?? '',
+                    'product_id' => $item['product_id'] ?? '',
                     'item_name' => $item['item_name'] ?? '',
                     'hsn' => $item['hsn'] ?? '',
                     'quantity' => $quantity,
@@ -1367,6 +1379,22 @@ class InvoicesController
         global $commanModel;
         return $commanModel->getRecordByField('currency_master', 'currency_code', strtoupper($code));
     }
+    public function create_auto_from_order()
+    {
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+        $input = json_decode(file_get_contents('php://input'), true);
+        $orderNumber = trim((string)($input['orderid'] ?? ''));
+        if ($orderNumber === '') {
+            echo json_encode(['success' => false, 'message' => 'Order number missing']);
+            exit;
+        }
+        require_once __DIR__ . '/PosInvoiceController.php';
+        $posInv = new PosInvoiceController();
+        echo json_encode($posInv->createAutoInvoiceForOrder($orderNumber), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
     public function create_auto_from_order_bk()
     {
         is_login();
@@ -1548,6 +1576,11 @@ class InvoicesController
             exit('Invoice not found');
         }
 
+        if (strtolower(trim((string)($invoice['status'] ?? ''))) === 'cancelled') {
+            http_response_code(400);
+            exit('Cancelled invoices cannot be exported to BUSY XML');
+        }
+
         $items = $invoiceModel->getInvoiceItems($invoiceId);
 
         // Add calculated tax totals
@@ -1585,8 +1618,8 @@ class InvoicesController
             exit('Bad request: Invalid date format. Use YYYY-MM-DD');
         }
 
-        // Fetch all invoices for the given date
-        $sql = "SELECT id FROM vp_invoices WHERE DATE(invoice_date) = ? ORDER BY invoice_date ASC";
+        // Fetch all non-cancelled invoices for the given date
+        $sql = "SELECT id FROM vp_invoices WHERE DATE(invoice_date) = ? AND LOWER(TRIM(COALESCE(status, ''))) <> 'cancelled' ORDER BY invoice_date ASC";
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
             http_response_code(500);

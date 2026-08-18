@@ -9,6 +9,9 @@
  */
 class HighValueComplianceValidator
 {
+    public const GSTIN_PATTERN = '/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/';
+    public const PAN_PATTERN = '/^[A-Z]{5}[0-9]{4}[A-Z]$/';
+
     /**
      * Get high-value transaction limit threshold (default: ₹2,00,000.00).
      */
@@ -38,6 +41,60 @@ class HighValueComplianceValidator
     public static function normalizePan(string $pan): string
     {
         return strtoupper(preg_replace('/\s+/', '', trim($pan)));
+    }
+
+    /**
+     * Normalize GSTIN (uppercase, no spaces). "URP" (unregistered) is treated as empty.
+     */
+    public static function normalizeGstin(string $gstin): string
+    {
+        $gstin = strtoupper(preg_replace('/\s+/', '', trim($gstin)));
+        if ($gstin === 'URP') {
+            return '';
+        }
+
+        return $gstin;
+    }
+
+    public static function isValidPan(string $pan): bool
+    {
+        return (bool) preg_match(self::PAN_PATTERN, self::normalizePan($pan));
+    }
+
+    public static function isValidGstin(string $gstin): bool
+    {
+        return (bool) preg_match(self::GSTIN_PATTERN, self::normalizeGstin($gstin));
+    }
+
+    /**
+     * B2B when a real GSTIN is present (not blank / URP).
+     */
+    public static function isB2bGstinProvided(string $gstin): bool
+    {
+        return self::normalizeGstin($gstin) !== '';
+    }
+
+    /**
+     * First non-empty GSTIN from payload, order info, or customer row.
+     */
+    public static function resolveGstinFromPayload(array $payload, array $customer = []): string
+    {
+        $candidates = [
+            $payload['confirm_gstin'] ?? '',
+            $payload['gstin'] ?? '',
+            $payload['buyer_gstin'] ?? '',
+            $payload['confirm_sgstin'] ?? '',
+            $payload['shipping_gstin'] ?? '',
+            $customer['gstin'] ?? '',
+        ];
+        foreach ($candidates as $candidate) {
+            $gstin = self::normalizeGstin((string)$candidate);
+            if ($gstin !== '') {
+                return $gstin;
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -147,16 +204,11 @@ class HighValueComplianceValidator
         $countryOfResidence = trim(
             (string)($payload['country_of_residence'] ?? $customer['country_of_residence'] ?? '')
         );
-        $gstin = strtoupper(trim(
-            (string)($payload['confirm_gstin'] ?? $payload['gstin'] ?? $customer['gstin'] ?? '')
-        ));
+        $gstin = self::resolveGstinFromPayload($payload, is_array($customer) ? $customer : []);
 
-        // GSTIN auto-derives PAN if present
-        if ($gstin !== '' && preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $gstin)) {
-            $derivedPan = substr($gstin, 2, 10);
-            if ($pan === '') {
-                $pan = $derivedPan;
-            }
+        // B2B GSTIN auto-derives PAN; PAN is not collected separately.
+        if (self::isValidGstin($gstin) && $pan === '') {
+            $pan = substr($gstin, 2, 10);
         }
 
         $baseResponse = [
@@ -180,12 +232,21 @@ class HighValueComplianceValidator
             ]);
         }
 
-        // B2B with valid GSTIN is automatically compliant
-        if ($gstin !== '' && preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $gstin)) {
+        // B2B with GSTIN: PAN is not required (derived from GSTIN when format is valid).
+        if (self::isB2bGstinProvided($gstin)) {
+            if (!self::isValidGstin($gstin)) {
+                return array_merge($baseResponse, [
+                    'ok' => false,
+                    'code' => 'GSTIN_INVALID',
+                    'message' => 'GSTIN format is invalid. Enter a valid 15-character GSTIN.',
+                    'missing_fields' => ['gstin'],
+                ]);
+            }
+
             return array_merge($baseResponse, [
                 'ok' => true,
                 'code' => 'GSTIN_PRESENT',
-                'message' => 'Compliant via GSTIN.',
+                'message' => 'Compliant via GSTIN. PAN is not required for B2B.',
             ]);
         }
 
@@ -263,13 +324,10 @@ class HighValueComplianceValidator
         $pan = self::normalizePan((string)($data['customer_pan'] ?? ''));
         $passport = self::normalizePassport((string)($data['passport_number'] ?? ''));
         $country = trim((string)($data['country_of_residence'] ?? ''));
-        $gstin = strtoupper(trim((string)($data['confirm_gstin'] ?? $data['gstin'] ?? '')));
+        $gstin = self::resolveGstinFromPayload($data);
 
-        if ($gstin !== '' && preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $gstin)) {
-            $derivedPan = substr($gstin, 2, 10);
-            if ($pan === '') {
-                $pan = $derivedPan;
-            }
+        if (self::isValidGstin($gstin) && $pan === '') {
+            $pan = substr($gstin, 2, 10);
         }
 
         $stmt = $conn->prepare(

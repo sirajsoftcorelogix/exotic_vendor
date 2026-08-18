@@ -634,7 +634,7 @@ class POSInvoice
             FROM vp_invoices i
             LEFT JOIN vp_order_info o ON o.id = i.vp_order_info_id
             LEFT JOIN exotic_address ea ON ea.id = i.warehouse_id
-            WHERE i.pos_flag = 1
+            WHERE i.pos_flag = 1 AND LOWER(TRIM(COALESCE(i.status, ''))) <> 'cancelled'
         ";
 
         $this->appendPosInvoiceListFiltersSql($sql, $filters, $payableSql, $discountSql);
@@ -725,7 +725,7 @@ class POSInvoice
             FROM vp_invoices i
             LEFT JOIN vp_order_info o ON o.id = i.vp_order_info_id
             LEFT JOIN exotic_address ea ON ea.id = i.warehouse_id
-            WHERE i.pos_flag = 1
+            WHERE i.pos_flag = 1 AND LOWER(TRIM(COALESCE(i.status, ''))) <> 'cancelled'
         ";
 
         $this->appendPosInvoiceListFiltersSql($sql, $filters, $payableSql, $discountSql);
@@ -871,7 +871,7 @@ class POSInvoice
                 ROUND(SUM(i.total_amount), 2) AS gross_total
             FROM vp_invoices i
             LEFT JOIN vp_order_info o ON o.id = i.vp_order_info_id
-            WHERE i.pos_flag = 1
+            WHERE i.pos_flag = 1 AND LOWER(TRIM(COALESCE(i.status, ''))) <> 'cancelled'
         ";
 
         $this->appendPosInvoiceListFiltersSql($sql, $filters, $payableSql, $discountSql);
@@ -965,7 +965,12 @@ class POSInvoice
         }
 
         if (!empty($filters['status'])) {
-            $sql .= " AND i.status = '" . $this->db->real_escape_string((string) $filters['status']) . "'";
+            $statusVal = strtolower(trim((string) $filters['status']));
+            if ($statusVal !== 'all') {
+                $sql .= " AND i.status = '" . $this->db->real_escape_string($statusVal) . "'";
+            }
+        } else {
+            $sql .= " AND LOWER(TRIM(COALESCE(i.status, ''))) <> 'cancelled'";
         }
 
         if (!empty($filters['from_date'])) {

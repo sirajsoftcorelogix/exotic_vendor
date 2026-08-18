@@ -15,7 +15,7 @@ function invoice_resolve_bill_ship_html(?array $orderInfo, $conn = null): array
     $bill = invoice_format_order_info_address_html($orderInfo, 'billing', $conn);
     $ship = invoice_format_order_info_address_html($orderInfo, 'shipping', $conn);
 
-    if (!invoice_order_info_has_shipping($orderInfo)) {
+    if (!invoice_order_info_has_shipping($orderInfo) || $ship === '') {
         $ship = $bill;
     }
 
@@ -89,26 +89,20 @@ function invoice_format_order_info_address_html(array $orderInfo, string $type, 
     $isShipping = $type === 'shipping';
     $prefix = $isShipping ? 'shipping_' : '';
 
+    $line1 = trim((string)($orderInfo[$prefix . 'address_line1'] ?? ''));
+    if ($line1 === '') {
+        return '';
+    }
+
     $firstName = trim((string)($orderInfo[$prefix . 'first_name'] ?? ''));
     $lastName = trim((string)($orderInfo[$prefix . 'last_name'] ?? ''));
-    if ($firstName === '' && $lastName === '' && !$isShipping) {
-        $firstName = trim((string)($orderInfo['first_name'] ?? ''));
-        $lastName = trim((string)($orderInfo['last_name'] ?? ''));
-    }
-    if ($firstName === '' && $lastName === '' && $isShipping) {
+    if ($firstName === '' && $lastName === '') {
         $firstName = trim((string)($orderInfo['first_name'] ?? ''));
         $lastName = trim((string)($orderInfo['last_name'] ?? ''));
     }
 
-    $line1 = trim((string)($orderInfo[$prefix . 'address_line1'] ?? ''));
+    $company = trim((string)($orderInfo[$prefix . 'company'] ?? ''));
     $line2 = trim((string)($orderInfo[$prefix . 'address_line2'] ?? ''));
-    if ($isShipping && $line1 === '') {
-        return '';
-    }
-    if (!$isShipping && $line1 === '') {
-        return '';
-    }
-
     $city = trim((string)($orderInfo[$prefix . 'city'] ?? ''));
     $state = trim((string)($orderInfo[$prefix . 'state'] ?? ''));
     $zip = trim((string)($orderInfo[$prefix . 'zipcode'] ?? ''));
@@ -118,13 +112,20 @@ function invoice_format_order_info_address_html(array $orderInfo, string $type, 
     }
 
     $name = trim($firstName . ' ' . $lastName);
+
     $html = '<strong>' . htmlspecialchars($name !== '' ? $name : 'N/A') . '</strong><br>';
+    if ($company !== '') {
+        $html .= htmlspecialchars($company) . '<br>';
+    }
     $html .= htmlspecialchars($line1);
     if ($line2 !== '') {
-        $html .= htmlspecialchars($line2);
+        $html .= ', ' . htmlspecialchars($line2);
     }
     $html .= '<br>';
-    $html .= htmlspecialchars(trim($city . ' ' . $state . ' ' . $zip)) . '<br>';
+    $csz = array_values(array_filter([$city, $state, $zip]));
+    if (!empty($csz)) {
+        $html .= htmlspecialchars(implode(', ', $csz)) . '<br>';
+    }
     if (!$isShipping) {
         $gstStateCode = invoice_resolve_billing_gst_state_code($orderInfo, $conn);
         if ($gstStateCode !== '') {

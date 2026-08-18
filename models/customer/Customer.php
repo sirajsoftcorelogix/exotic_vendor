@@ -1051,10 +1051,10 @@ class Customer
         $phone = trim((string)($post['mobile'] ?? ''));
         $email = trim((string)($post['cus_email'] ?? ''));
 
-        if ($first === '' || $last === '') {
+        if ($first === '') {
             return [
                 'success' => false,
-                'message' => 'First name and last name are required.'
+                'message' => 'First name is required.'
             ];
         }
 

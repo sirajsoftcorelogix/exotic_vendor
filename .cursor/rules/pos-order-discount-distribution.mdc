@@ -1,0 +1,70 @@
+---
+description: Formula and rule for POS order discount distribution across line items and addons
+globs: helpers/invoice/**,controllers/PosOrdersController.php,models/order/order.php,models/posorder/order.php,views/posorders/**
+alwaysApply: false
+---
+
+# POS Order Discount Distribution & Line Item Pricing Rule
+
+This rule defines the exact formula and standards for allocating order-level discounts (custom discount / store credit / coupon) across all line items and addons (including custom addons / express shipping), and computing line totals, taxable values, and GST amounts.
+
+## 1. List Price Pool Definition
+
+- **Base Item List Price**: Original list price per unit taken from `vp_orders.itemprice` (or `finalprice` if `itemprice` is 0/empty) $\times$ `quantity`.
+- **Addons / Shipping Options**: Line addons / shipping options (e.g. `Express_Shipping = 100`) are included as distinct components in the list price pool.
+- **Total List Price Pool ($L_{\text{total}}$)**: The sum of all active base item list prices + all active addon list prices.
+  $$\text{Example (Order 3093696)}: 6300 + 100 + 9240 + 100 = 15,740.00$$
+
+## 2. Proportional Discount Distribution Formula
+
+Given:
+- Component list price: $L_c$ (Base item or addon list price)
+- Total order list price pool: $L_{\text{total}} = \sum L_c$
+- Total order-level discount: $D_{\text{total}}$ (sum of `custom_reduce`, `coupon_reduce`, `giftvoucher_reduce`, `credit`)
+  $$\text{Example}: D_{\text{total}} = 7,200.00$$
+
+### Formula Steps per Component ($c$):
+
+1. **Distribution Percentage**:
+   $$\text{Pct}_c = \frac{L_c}{L_{\text{total}}} \times 100$$
+   - Line 1 Base ($6300$): $6300 / 15740 \times 100 = 40.025413\%$
+   - Line 1 Addon ($100$): $100 / 15740 \times 100 = 0.635324\%$
+   - Line 2 Base ($9240$): $9240 / 15740 \times 100 = 58.703939\%$
+   - Line 2 Addon ($100$): $100 / 15740 \times 100 = 0.635324\%$
+
+2. **Discount Value**:
+   $$D_c = D_{\text{total}} \times \frac{L_c}{L_{\text{total}}}$$
+   - Line 1 Base Discount: $7200 \times 40.025413\% = 2,881.83$
+   - Line 1 Addon Discount: $7200 \times 0.635324\% = 45.74$
+   - Line 2 Base Discount: $7200 \times 58.703939\% = 4,226.68$
+   - Line 2 Addon Discount: $7200 \times 0.635324\% = 45.74$
+
+3. **Discounted Price (incl. GST) / Line Total**:
+   $$\text{Discounted Price}_c = L_c - D_c$$
+   - Line 1 Base: $6300 - 2881.83 = 3,418.17$
+   - Line 1 Addon: $100 - 45.74 = 54.26$
+   - Line 2 Base: $9240 - 4226.68 = 5,013.32$
+   - Line 2 Addon: $100 - 45.74 = 54.26$
+
+4. **Taxable Value**:
+   $$\text{Taxable Value}_c = \frac{\text{Discounted Price}_c}{1 + \frac{\text{GST}\%}{100}}$$
+   - At $5\%$ GST for Line 1 Base: $3418.17 / 1.05 = 3,255.40$
+
+5. **GST Amount**:
+   $$\text{GST Amount}_c = \text{Discounted Price}_c - \text{Taxable Value}_c$$
+   - At $5\%$ GST for Line 1 Base: $3418.17 - 3255.40 = 162.77$
+
+6. **Order Totals**:
+   - **Total Before Discount (incl. GST)** = $L_{\text{total}} = 15,740.00$
+   - **Fixed Discount** = $D_{\text{total}} = 7,200.00$
+   - **GST Total** = $\sum \text{GST Amount}_c = 406.67$
+   - **Net Chargeable Amount** = $L_{\text{total}} - D_{\text{total}} = 8,540.00$ (or $8,540.01$ after summing rounded line totals)
+
+---
+
+## 3. Order Summary & Deduplication Standards
+
+1. **Pool Composition**: Include all active base items and active addons into the list pool $L_{\text{total}}$.
+2. **Cancelled Items**: Exclude lines or addons with status `cancelled`.
+3. **No Double Deduction**: Order-level discounts are distributed starting from component list prices ($L_c$). They must **never** be subtracted twice from an already-discounted price.
+4. **Pending Invoice Fallback**: If an order has no generated invoice in `vp_invoices` yet, the order details summary is constructed using the above component distribution formula to ensure the sidebar summary matches the line items cleanly.

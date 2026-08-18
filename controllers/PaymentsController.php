@@ -294,6 +294,11 @@ class PaymentsController
             'invoice_id' => (int)($invoiceMeta['invoice_id'] ?? 0),
             'invoice_created' => !empty($invoiceMeta['created']),
             'invoice_message' => $invoiceMeta['message'] ?? null,
+            'require_compliance' => !empty($invoiceMeta['require_compliance']),
+            'customer_id' => (int)($invoiceMeta['customer_id'] ?? 0),
+            'gstin' => (string)($invoiceMeta['gstin'] ?? ''),
+            'pan' => (string)($invoiceMeta['pan'] ?? ''),
+            'residency_status' => (string)($invoiceMeta['residency_status'] ?? ''),
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
@@ -331,6 +336,11 @@ class PaymentsController
             vendorJsonResponse([
                 'success' => false,
                 'message' => $invoiceMeta['message'] ?? 'Final invoice could not be created.',
+                'require_compliance' => !empty($invoiceMeta['require_compliance']),
+                'customer_id' => (int)($invoiceMeta['customer_id'] ?? 0),
+                'gstin' => (string)($invoiceMeta['gstin'] ?? ''),
+                'pan' => (string)($invoiceMeta['pan'] ?? ''),
+                'residency_status' => (string)($invoiceMeta['residency_status'] ?? ''),
             ]);
         }
 

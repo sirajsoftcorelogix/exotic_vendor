@@ -217,8 +217,22 @@ $downloadConsolidatedUrl = base_url("?page=busy_accounting&action=download_xml_b
                                 <td class="px-4 py-3 whitespace-nowrap font-mono text-xs text-slate-500">
                                     <?= htmlspecialchars($v['ref_order_no']) ?>
                                 </td>
-                                <td class="px-4 py-3 font-medium text-slate-900">
-                                    <?= htmlspecialchars($v['customer_name']) ?>
+                                <td class="px-4 py-3 text-slate-900">
+                                    <div class="flex flex-col gap-0.5">
+                                        <div class="flex items-center gap-1.5 font-semibold text-slate-900">
+                                            <?php if (!empty($v['payment_type'])): ?>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                                    <i class="fas fa-wallet text-[9px] mr-1 text-indigo-500"></i>
+                                                    <?= htmlspecialchars($v['payment_type']) ?>
+                                                </span>
+                                            <?php else: ?>
+                                                <span><?= htmlspecialchars($v['party_name'] ?? $v['customer_name']) ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="text-xs text-slate-500 font-normal">
+                                            <?= htmlspecialchars($v['customer_name']) ?>
+                                        </div>
+                                    </div>
                                 </td>
                                 <td class="px-4 py-3 font-mono text-xs text-slate-500">
                                     <?= htmlspecialchars($v['gstin']) ?>

@@ -914,6 +914,12 @@ class OrdersController
 
         exit;
     }
+    public function searchOrdersAjax(): void
+    {
+        require_once __DIR__ . '/PosOrdersController.php';
+        $posController = new PosOrdersController();
+        $posController->searchOrdersAjax();
+    }
     public function getOrderDetailsHTML()
     {
         global $conn;
@@ -1913,6 +1919,14 @@ class OrdersController
         } else {
             $existingOrderInfo = $ordersModel->getRemarksByOrderNumber($orderNumber);
             $customReduce = (float)($existingOrderInfo['custom_reduce'] ?? 0);
+            if ($customReduce <= 0.001) {
+                $existingLines = $ordersModel->getOrderLineItemsByRef($orderNumber);
+                if (is_array($existingLines)) {
+                    foreach ($existingLines as $line) {
+                        $customReduce = max($customReduce, round((float)($line['custom_reduce'] ?? 0), 2));
+                    }
+                }
+            }
         }
 
         if (is_string($itemsInput)) {
@@ -2019,14 +2033,13 @@ class OrdersController
         $shipping_first_name = trim($_POST['shipping_first_name'] ?? '');
         $shipping_last_name = trim($_POST['shipping_last_name'] ?? '');
         $customer_name  = trim($_POST['customer_name']  ?? '');
-        if ($customer_name === '') {
-            $customer_name = trim($first_name . ' ' . $last_name);
-        }
+
         $address_line1 = trim($_POST['address_line1'] ?? '');
         $address_line2 = trim($_POST['address_line2'] ?? '');
         $city = trim($_POST['city'] ?? '');
         $zipcode = trim($_POST['zipcode'] ?? '');
         $country = trim($_POST['country'] ?? '');
+
         $billing_address_line1 = trim($_POST['billing_address_line1'] ?? '');
         $billing_address_line2 = trim($_POST['billing_address_line2'] ?? '');
         $billing_city = trim($_POST['billing_city'] ?? '');
@@ -2036,10 +2049,71 @@ class OrdersController
         $shipping_gstin = strtoupper(trim($_POST['shipping_gstin'] ?? ''));
         $state = trim($_POST['state'] ?? '');
         $shipping_state = trim($_POST['shipping_state'] ?? '');
-        if (empty($order_number) || empty($first_name) || empty($last_name) || empty($customer_phone)) {
+
+        if ($first_name === '' && $shipping_first_name !== '') {
+            $first_name = $shipping_first_name;
+        }
+        if ($shipping_first_name === '' && $first_name !== '') {
+            $shipping_first_name = $first_name;
+        }
+        if ($last_name === '' && $shipping_last_name !== '') {
+            $last_name = $shipping_last_name;
+        }
+        if ($shipping_last_name === '' && $last_name !== '') {
+            $shipping_last_name = $last_name;
+        }
+        if ($first_name === '' && $customer_name !== '') {
+            $nameParts = preg_split('/\s+/', $customer_name, 2);
+            $first_name = trim($nameParts[0] ?? '');
+            if ($last_name === '') {
+                $last_name = trim($nameParts[1] ?? '');
+            }
+        }
+        if ($customer_name === '') {
+            $customer_name = trim($first_name . ' ' . $last_name);
+        }
+
+        if ($address_line1 === '' && $billing_address_line1 !== '') {
+            $address_line1 = $billing_address_line1;
+        }
+        if ($billing_address_line1 === '' && $address_line1 !== '') {
+            $billing_address_line1 = $address_line1;
+        }
+        if ($address_line2 === '' && $billing_address_line2 !== '') {
+            $address_line2 = $billing_address_line2;
+        }
+        if ($billing_address_line2 === '' && $address_line2 !== '') {
+            $billing_address_line2 = $address_line2;
+        }
+        if ($city === '' && $billing_city !== '') {
+            $city = $billing_city;
+        }
+        if ($billing_city === '' && $city !== '') {
+            $billing_city = $city;
+        }
+        if ($state === '' && $shipping_state !== '') {
+            $state = $shipping_state;
+        }
+        if ($shipping_state === '' && $state !== '') {
+            $shipping_state = $state;
+        }
+        if ($zipcode === '' && $billing_zipcode !== '') {
+            $zipcode = $billing_zipcode;
+        }
+        if ($billing_zipcode === '' && $zipcode !== '') {
+            $billing_zipcode = $zipcode;
+        }
+        if ($country === '' && $billing_country !== '') {
+            $country = $billing_country;
+        }
+        if ($billing_country === '' && $country !== '') {
+            $billing_country = $country;
+        }
+
+        if (empty($order_number) || empty($first_name) || empty($customer_phone) || empty($address_line1)) {
             echo json_encode([
                 'success' => false,
-                'message' => 'Order number, billing first name, last name and phone are required'
+                'message' => 'Order number, billing first name, phone and Address Line 1 are required'
             ]);
             exit;
         }
@@ -2727,11 +2801,25 @@ class OrdersController
         return in_array(strtolower(trim((string)$raw)), ['1', 'true', 'yes', 'on'], true);
     }
 
-    private static function vendorOrderLineMatchKey(string $itemCode, string $sku = ''): string
-    {
-        unset($sku);
+    private static function vendorOrderLineMatchKey(
+        string $itemCode,
+        string $sku = '',
+        string $size = '',
+        string $color = ''
+    ): string {
+        $itemCode = strtolower(trim($itemCode));
+        $sku = strtolower(trim($sku));
+        $size = strtolower(trim($size));
+        $color = strtolower(trim($color));
 
-        return strtolower(trim($itemCode));
+        if ($sku !== '') {
+            return $itemCode . '|' . $sku;
+        }
+        if ($size !== '' || $color !== '') {
+            return $itemCode . '|' . $size . '|' . $color;
+        }
+
+        return $itemCode;
     }
 
     /**
@@ -2906,7 +2994,12 @@ class OrdersController
         $dbLines = $ordersModel->getOrderLinesByOrderNumber($orderNumber);
         $dbByKey = [];
         foreach ($dbLines as $row) {
-            $key = self::vendorOrderLineMatchKey((string)($row['item_code'] ?? ''), (string)($row['sku'] ?? ''));
+            $key = self::vendorOrderLineMatchKey(
+                (string)($row['item_code'] ?? ''),
+                (string)($row['sku'] ?? ''),
+                (string)($row['size'] ?? ''),
+                (string)($row['color'] ?? '')
+            );
             $dbByKey[$key] = $row;
         }
 
@@ -2918,7 +3011,9 @@ class OrdersController
             }
             $itemCode = trim((string)($item['itemcode'] ?? ''));
             $sku = trim((string)($item['sku'] ?? ''));
-            $key = self::vendorOrderLineMatchKey($itemCode, $sku);
+            $size = trim((string)($item['size'] ?? ''));
+            $color = trim((string)($item['color'] ?? ''));
+            $key = self::vendorOrderLineMatchKey($itemCode, $sku, $size, $color);
             $apiStatus = $this->resolveVendorImportStatus($vendorOrder, $item, $statusList);
             $dbRow = $dbByKey[$key] ?? null;
             $dbStatus = $dbRow ? trim((string)($dbRow['status'] ?? '')) : '';
