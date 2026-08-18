@@ -116,7 +116,6 @@ class POSRegisterController
             'customer_pan' => "ALTER TABLE vp_customers ADD COLUMN customer_pan VARCHAR(10) NOT NULL DEFAULT '' AFTER customer_residency_status",
             'passport_number' => "ALTER TABLE vp_customers ADD COLUMN passport_number VARCHAR(32) NOT NULL DEFAULT '' AFTER customer_pan",
             'country_of_residence' => "ALTER TABLE vp_customers ADD COLUMN country_of_residence VARCHAR(128) NOT NULL DEFAULT '' AFTER passport_number",
-            'gstin' => "ALTER TABLE vp_customers ADD COLUMN gstin VARCHAR(20) NULL DEFAULT NULL AFTER country_of_residence",
         ];
         foreach ($customerColumns as $column => $sql) {
             if (!$this->columnExists($conn, 'vp_customers', $column)) {
