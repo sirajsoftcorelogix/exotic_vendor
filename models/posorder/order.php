@@ -1679,13 +1679,13 @@ class POSOrder
             $sql_addr = "
                 UPDATE vp_order_info 
                 SET first_name = ?, last_name = ?, address_line1 = ?, address_line2 = ?, city = ?, state = ?, zipcode = ?, country = ?, gstin = ?,
-                    shipping_first_name = ?, shipping_last_name = ?, shipping_address_line1 = ?, shipping_address_line2 = ?, shipping_city = ?, shipping_state = ?, shipping_zipcode = ?, shipping_country = ?, shipping_gstin = ?, mobile = ?
+                    shipping_first_name = ?, shipping_last_name = ?, shipping_address_line1 = ?, shipping_address_line2 = ?, shipping_city = ?, shipping_state = ?, shipping_zipcode = ?, shipping_country = ?, shipping_gstin = ?, mobile = ?, shipping_mobile = ?
                 WHERE order_number = ?
             ";
             $stmt_addr = $this->db->prepare($sql_addr);
             if ($stmt_addr) {
                 $stmt_addr->bind_param(
-                    'ssssssssssssssssssss',
+                    'sssssssssssssssssssss',
                     $first_name,
                     $last_name,
                     $address_line1,
@@ -1705,6 +1705,7 @@ class POSOrder
                     $billing_country,
                     $shipping_gstin,
                     $phone,
+                    $phone,
                     $order_number
                 );
                 $stmt_addr->execute();
@@ -1713,13 +1714,13 @@ class POSOrder
             $sql_addr = "
                 INSERT INTO vp_order_info 
                 (order_number, first_name, last_name, address_line1, address_line2, city, state, zipcode, country, gstin,
-                 shipping_first_name, shipping_last_name, shipping_address_line1, shipping_address_line2, shipping_city, shipping_state, shipping_zipcode, shipping_country, shipping_gstin, mobile)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 shipping_first_name, shipping_last_name, shipping_address_line1, shipping_address_line2, shipping_city, shipping_state, shipping_zipcode, shipping_country, shipping_gstin, mobile, shipping_mobile)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ";
             $stmt_addr = $this->db->prepare($sql_addr);
             if ($stmt_addr) {
                 $stmt_addr->bind_param(
-                    'ssssssssssssssssssss',
+                    'sssssssssssssssssssss',
                     $order_number,
                     $first_name,
                     $last_name,
@@ -1739,6 +1740,7 @@ class POSOrder
                     $billing_zipcode,
                     $billing_country,
                     $shipping_gstin,
+                    $phone,
                     $phone
                 );
                 $stmt_addr->execute();
