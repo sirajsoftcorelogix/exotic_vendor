@@ -37,7 +37,7 @@ class DomesticEwbIrnService {
      */
     public function generateIrnAndEwb($invoiceId, $invoice, $items, $customer, $firm, $ewbData = []) {
         try {
-            //echo "Domestic EWB: Starting IRN and EWB generation for invoice #$invoiceId\n";
+            echo "Domestic EWB: Starting IRN and EWB generation for invoice #$invoiceId\n";
             $this->ensureInfoDtlsColumn();
             // Validate required data
             if (!$invoice || empty($items) || !$customer || !$firm) {
@@ -62,7 +62,7 @@ class DomesticEwbIrnService {
                 error_log("Alankit IRN: " . $this->lastError);
                 return ['status' => false, 'message' => $this->lastError];
             }
-            //echo "Domestic EWB: Alankit API credentials loaded successfully.\n";
+            echo "Domestic EWB: Alankit API credentials loaded successfully.\n";
             $alankitClient = new AlankitIrnNew(
                 $this->alankitConfig['username'],
                 $this->alankitConfig['password'],
@@ -93,7 +93,7 @@ class DomesticEwbIrnService {
             $data = [
                 "Data" => $authreq
             ];
-            //echo "Alankit IRN: Sending authentication request for invoice #$invoiceId\n";
+            echo "Alankit IRN: Sending authentication request for invoice #$invoiceId\n";
             $authResponse = $alankitClient->sendRequest('AUTH_ENDPOINT', $data, false);
             
             if (!$authResponse || !isset($authResponse['Data']['AuthToken'])) {
@@ -136,11 +136,11 @@ class DomesticEwbIrnService {
                 error_log("Alankit IRN: Payload encryption failed for invoice #$invoiceId");
                 return false;
             }
-            //echo '<br><br>'.$encryptedPayload.'<br><br>';
+            echo '<br><br>'.$encryptedPayload.'<br><br>';
             // Send IRN generation request with encrypted payload
             //$irnResponse = $alankitClient->sendRequest('IRN_GENERATE_ENDPOINT', ['Data' => $encryptedPayload], true, $accessToken);
             $irnResponse = $alankitClient->generateIrn(['Data' => $encryptedPayload], $accessToken);   
-            //print_r($irnResponse);
+            print_r($irnResponse);
                   
             if ($irnResponse && isset($irnResponse['Data'])) {
                 $decryptedResponse = $alankitClient->decrypt_irn($irnResponse['Data'], $decryptedSek);
