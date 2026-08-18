@@ -4710,25 +4710,16 @@
 
       // Check if product is unpublished (vp_products.published = 0)
       var isUnpublished =
-        p.published === 0 ||
-        p.published === '0' ||
-        p.published === false ||
-        p.is_published === false ||
-        p.status === 0 ||
-        p.status === '0' ||
-        String(p.status_label || '').toLowerCase() === 'unpublished' ||
-        String(p.status || '').toLowerCase() === 'unpublished';
+        (p.published === 0 || p.published === '0' || p.published === false) &&
+        (p.is_published === false || p.is_published === 0 || p.is_published === '0') &&
+        String(p.status_label || '').toLowerCase() === 'unpublished';
 
       if (!isUnpublished && window.productApiCache) {
         var cached = window.productApiCache[body.code] || window.productApiCache[body.item_code];
         if (
           cached &&
-          (cached.published === 0 ||
-            cached.published === '0' ||
-            cached.published === false ||
-            cached.is_published === false ||
-            cached.status === 0 ||
-            cached.status === '0')
+          (cached.published === 0 || cached.published === '0' || cached.published === false) &&
+          (cached.is_published === false || cached.is_published === 0 || cached.is_published === '0')
         ) {
           isUnpublished = true;
           if (!p.product_id && cached.id) p.product_id = cached.id;
