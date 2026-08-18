@@ -1272,6 +1272,19 @@ function pos_payment_resolve_order_payment_mode(mysqli $conn, string $orderNumbe
                 $stmt->close();
             }
 
+            // Check if any payment split is cod
+            $stmt = $conn->prepare("SELECT payment_mode FROM pos_payments WHERE order_number = ? AND LOWER(TRIM(payment_mode)) = 'cod' LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param('s', $orderNumber);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($res && $res->num_rows > 0) {
+                    $stmt->close();
+                    return 'COD';
+                }
+                $stmt->close();
+            }
+
             // Otherwise fetch the latest payment mode
             $stmt = $conn->prepare('SELECT payment_mode FROM pos_payments WHERE order_number = ? ORDER BY id DESC LIMIT 1');
             if ($stmt) {
@@ -1284,6 +1297,9 @@ function pos_payment_resolve_order_payment_mode(mysqli $conn, string $orderNumbe
                     $stmt->close();
                     if ($posMode === 'bank_transfer' || $posMode === 'upi') {
                         return 'YES2971';
+                    }
+                    if ($posMode === 'cod') {
+                        return 'COD';
                     }
                     if ($rawMode !== '') {
                         return $rawMode;
