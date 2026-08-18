@@ -697,10 +697,10 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       
       <!-- E-way bill section (shown when collected_from_showroom is selected) -->
       <div id="ewayBillSection" class="space-y-3 border-t pt-4">
-        <!-- <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2">
           <input type="checkbox" id="generate_ewb_for_delivery" class="rounded border-slate-300">
           <label for="generate_ewb_for_delivery" class="text-xs text-slate-600 cursor-pointer font-medium">Generate IRN and E-way bill for this shipment</label>
-        </div> -->
+        </div>
         <div id="ewayBillFields" class="hidden space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
           <!-- Transport Mode Selection -->
           <div>
@@ -711,7 +711,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
               <option value="2">(2) Rail</option>
               <option value="3">(3) Air</option>
               <option value="4">(4) Ship</option>
-              <option value="5">(5) Road cum Ship</option>
+              <!-- <option value="5">(5) Road cum Ship</option> -->
             </select>
           </div>
           

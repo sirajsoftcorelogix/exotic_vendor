@@ -1630,6 +1630,12 @@ switch ($page) {
             case 'checkout-receipt':
                 $controller->checkout_receipt();
                 break;
+            case 'regenerate-irn-ewb':
+                $controller->regenerate_irn_ewb();
+                break;
+            case 'regenerate-ewb-with-irn':
+                $controller->regenerate_ewb_with_irn();
+                break;
             case 'create-invoice-from-receipt':
                 $controller->create_invoice_from_receipt();
                 break;
