@@ -3,6 +3,10 @@
  * Common Dispatch Details Modal Partial
  * Included in views/posinvoice/index.php and views/dispatch/index.php
  */
+global $commanModel;
+$exoticAddresses = (isset($commanModel) && method_exists($commanModel, 'get_exotic_address')) 
+    ? $commanModel->get_exotic_address() 
+    : [];
 ?>
 <div id="commonDispatchModal" class="fixed inset-0 z-[150] hidden items-center justify-center bg-black/50 p-4 backdrop-blur-sm overflow-y-auto">
     <div class="relative w-full max-w-2xl mx-auto my-auto rounded-2xl bg-white shadow-2xl border border-gray-100 overflow-hidden text-gray-800 animate-in fade-in zoom-in duration-200">
@@ -54,36 +58,32 @@
             <input type="hidden" name="invoice_id" id="cdmInputInvoiceId" value="0">
             <input type="hidden" name="dispatch_id" id="cdmInputDispatchId" value="0">
             <input type="hidden" name="order_number" id="cdmInputOrderNumber" value="">
+            <input type="hidden" name="exotic_shipment_id" id="cdmInputExoticShipmentId" value="">
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <!-- Courier Name -->
                 <div>
                     <label for="cdmInputCourierName" class="block text-xs font-semibold text-gray-700 mb-1">Courier Name <span class="text-red-500">*</span></label>
-                    <input type="text" name="courier_name" id="cdmInputCourierName" list="cdmCourierList" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" placeholder="e.g. Shiprocket, BlueDart, Delhivery" required>
-                    <datalist id="cdmCourierList">
-                        <option value="Shiprocket">
-                        <option value="BlueDart">
-                        <option value="Delhivery">
-                        <option value="Aramex">
-                        <option value="DTDC">
-                        <option value="FedEx">
-                        <option value="India Post">
-                        <option value="DHL">
-                        <option value="Trackon">
-                        <option value="Professional Couriers">
-                    </datalist>
+                    <select name="courier_name" id="cdmInputCourierName" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" required>
+                        <option value="">Select Courier</option>
+                        <option value="Shiprocket">Shiprocket</option>
+                        <option value="BlueDart">BlueDart</option>
+                        <option value="Delhivery">Delhivery</option>
+                        <option value="Aramex">Aramex</option>
+                        <option value="DHL">DHL Express</option>
+                        <option value="FedEx">FedEx</option>
+                        <option value="UPS">UPS</option>
+                        <option value="DTDC">DTDC</option>
+                        <option value="India Post">India Post</option>
+                        <option value="Trackon">Trackon</option>
+                        <option value="Professional Couriers">Professional Couriers</option>
+                    </select>
                 </div>
 
                 <!-- AWB / Tracking Code -->
                 <div>
                     <label for="cdmInputAwbCode" class="block text-xs font-semibold text-gray-700 mb-1">AWB / Waybill Code</label>
                     <input type="text" name="awb_code" id="cdmInputAwbCode" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" placeholder="e.g. 143256789">
-                </div>
-
-                <!-- Exotic Shipment ID -->
-                <div>
-                    <label for="cdmInputExoticShipmentId" class="block text-xs font-semibold text-gray-700 mb-1">Exotic Shipment ID</label>
-                    <input type="text" name="exotic_shipment_id" id="cdmInputExoticShipmentId" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" placeholder="e.g. EI-100234">
                 </div>
 
                 <!-- Tracking URL -->
@@ -111,7 +111,13 @@
                 <!-- Pickup Location -->
                 <div>
                     <label for="cdmInputPickupLocation" class="block text-xs font-semibold text-gray-700 mb-1">Pickup Location</label>
-                    <input type="text" name="pickup_location" id="cdmInputPickupLocation" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" placeholder="e.g. Delhi Main Warehouse">
+                    <select name="pickup_location" id="cdmInputPickupLocation" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none">
+                        <option value="">Select Pickup Location</option>
+                        <?php foreach ($exoticAddresses as $address): ?>
+                            <?php $addrTitle = htmlspecialchars($address['address_title'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+                            <option value="<?= $addrTitle ?>"><?= $addrTitle ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
 
                 <!-- Dispatch Date -->
@@ -143,16 +149,43 @@
                 <!-- Box Size -->
                 <div>
                     <label for="cdmInputBoxSize" class="block text-xs font-semibold text-gray-700 mb-1">Box Size</label>
-                    <input type="text" name="box_size" id="cdmInputBoxSize" list="cdmBoxSizeList" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" placeholder="e.g. R-1 (22x17x5 inch)">
-                    <datalist id="cdmBoxSizeList">
-                        <option value="R-1">R-1 (22x17x5 inch)</option>
-                        <option value="R-2">R-2 (16x13x13 inch)</option>
-                        <option value="R-3">R-3 (16x11x7 inch)</option>
-                        <option value="R-4">R-4 (13x10x7 inch)</option>
-                        <option value="R-5">R-5 (21x11x7 inch)</option>
-                        <option value="R-6">R-6 (11x10x8 inch)</option>
-                        <option value="R-7">R-7 (8x6x5 inch)</option>
-                    </datalist>
+                    <select name="box_size" id="cdmInputBoxSize" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none">
+                        <option value="">Select Size</option>
+                        <option value="R-1" data-length="22" data-width="17" data-height="5">R-1 (22x17x5 inch)</option>
+                        <option value="R-2" data-length="16" data-width="13" data-height="13">R-2 (16x13x13 inch)</option>
+                        <option value="R-3" data-length="16" data-width="11" data-height="7">R-3 (16x11x7 inch)</option>
+                        <option value="R-4" data-length="13" data-width="10" data-height="7">R-4 (13x10x7 inch)</option>
+                        <option value="R-5" data-length="21" data-width="11" data-height="7">R-5 (21x11x7 inch)</option>
+                        <option value="R-6" data-length="11" data-width="10" data-height="8">R-6 (11x10x8 inch)</option>
+                        <option value="R-7" data-length="8" data-width="6" data-height="5">R-7 (8x6x5 inch)</option>
+                        <option value="R-8" data-length="12" data-width="12" data-height="1.5">R-8 (12x12x1.5 inch)</option>
+                        <option value="R-9" data-length="17" data-width="12" data-height="2">R-9 (17x12x2 inch)</option>
+                        <option value="R-10" data-length="12" data-width="9" data-height="2">R-10 (12x9x2 inch)</option>
+                        <option value="R-11" data-length="10" data-width="10" data-height="2">R-11 (10x10x2 inch)</option>
+                        <option value="R-12" data-length="13" data-width="9" data-height="5">R-12 (13x9x5 inch)</option>
+                        <option value="R-13" data-length="11" data-width="8" data-height="5">R-13 (11x8x5 inch)</option>
+                        <option value="R-14" data-length="14" data-width="12" data-height="10">R-14 (14x12x10 inch)</option>
+                        <option value="CUSTOM">Custom Size</option>
+                    </select>
+                </div>
+
+                <!-- Custom Dimensions (shown when Box Size is CUSTOM) -->
+                <div id="cdmCustomDimensionsWrap" class="hidden sm:col-span-2 bg-orange-50/60 p-3 rounded-xl border border-orange-200">
+                    <p class="text-xs font-semibold text-orange-900 mb-2">Custom Dimensions (Inches)</p>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label for="cdmInputLength" class="block text-[11px] font-medium text-gray-700 mb-1">Length</label>
+                            <input type="number" step="0.1" min="0" name="length" id="cdmInputLength" class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs text-gray-900 bg-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" placeholder="22">
+                        </div>
+                        <div>
+                            <label for="cdmInputWidth" class="block text-[11px] font-medium text-gray-700 mb-1">Width</label>
+                            <input type="number" step="0.1" min="0" name="width" id="cdmInputWidth" class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs text-gray-900 bg-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" placeholder="17">
+                        </div>
+                        <div>
+                            <label for="cdmInputHeight" class="block text-[11px] font-medium text-gray-700 mb-1">Height</label>
+                            <input type="number" step="0.1" min="0" name="height" id="cdmInputHeight" class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs text-gray-900 bg-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" placeholder="5">
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Weight (Kg) -->

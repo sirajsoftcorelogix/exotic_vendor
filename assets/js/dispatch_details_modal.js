@@ -78,6 +78,9 @@
 
         const inputBoxNo = getElement('cdmInputBoxNo');
         if (inputBoxNo) inputBoxNo.value = '1';
+
+        const customDimensionsWrap = getElement('cdmCustomDimensionsWrap');
+        if (customDimensionsWrap) customDimensionsWrap.classList.add('hidden');
     }
 
     function cdmPopulateForm(d) {
@@ -138,7 +141,22 @@
         if (inputBoxNo) inputBoxNo.value = d.box_no || '1';
 
         const inputBoxSize = getElement('cdmInputBoxSize');
-        if (inputBoxSize) inputBoxSize.value = d.box_size || '';
+        if (inputBoxSize) {
+            inputBoxSize.value = d.box_size || '';
+            if (inputBoxSize.value === 'CUSTOM') {
+                const customDimensionsWrap = getElement('cdmCustomDimensionsWrap');
+                if (customDimensionsWrap) customDimensionsWrap.classList.remove('hidden');
+            }
+        }
+
+        const inputLength = getElement('cdmInputLength');
+        if (inputLength) inputLength.value = d.length !== null && d.length !== undefined ? d.length : '';
+
+        const inputWidth = getElement('cdmInputWidth');
+        if (inputWidth) inputWidth.value = d.width !== null && d.width !== undefined ? d.width : '';
+
+        const inputHeight = getElement('cdmInputHeight');
+        if (inputHeight) inputHeight.value = d.height !== null && d.height !== undefined ? d.height : '';
 
         const inputWeight = getElement('cdmInputWeight');
         if (inputWeight) inputWeight.value = d.weight !== null && d.weight !== undefined ? d.weight : '';
@@ -293,6 +311,28 @@
     };
 
     document.addEventListener('DOMContentLoaded', () => {
+        const boxSizeSelect = getElement('cdmInputBoxSize');
+        if (boxSizeSelect) {
+            boxSizeSelect.addEventListener('change', function () {
+                const customDimensionsWrap = getElement('cdmCustomDimensionsWrap');
+                if (!customDimensionsWrap) return;
+                if (this.value === 'CUSTOM') {
+                    customDimensionsWrap.classList.remove('hidden');
+                } else {
+                    customDimensionsWrap.classList.add('hidden');
+                    const selectedOption = this.options[this.selectedIndex];
+                    if (selectedOption) {
+                        const lengthInput = getElement('cdmInputLength');
+                        const widthInput = getElement('cdmInputWidth');
+                        const heightInput = getElement('cdmInputHeight');
+                        if (lengthInput) lengthInput.value = selectedOption.getAttribute('data-length') || '';
+                        if (widthInput) widthInput.value = selectedOption.getAttribute('data-width') || '';
+                        if (heightInput) heightInput.value = selectedOption.getAttribute('data-height') || '';
+                    }
+                }
+            });
+        }
+
         const trackingInput = getElement('cdmInputTrackingUrl');
         if (trackingInput) {
             trackingInput.addEventListener('input', function () {
