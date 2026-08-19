@@ -1316,12 +1316,13 @@ function pos_payment_ensure_order_info_payment_mode_column(mysqli $conn): void
  * Else:
  *   Set payment_type value
  */
-function pos_payment_resolve_order_payment_mode(mysqli $conn, string $orderNumber, ?string $paymentType = null): string
+function pos_payment_resolve_order_payment_mode(mysqli $conn, string $orderNumber, ?string $paymentType = null, ?string $givenPaymentMode = null): string
 {
     pos_payment_ensure_order_info_payment_mode_column($conn);
 
     $orderNumber = trim($orderNumber);
     $payType = trim((string)$paymentType);
+    $givenMode = trim((string)$givenPaymentMode);
 
     if ($payType === '' && $orderNumber !== '') {
         $stmt = $conn->prepare('SELECT payment_type FROM vp_order_info WHERE order_number = ? LIMIT 1');
@@ -1336,14 +1337,20 @@ function pos_payment_resolve_order_payment_mode(mysqli $conn, string $orderNumbe
         }
     }
 
-    $lowerPayType = strtolower($payType);
-    if ($lowerPayType === 'pos_machine' || $lowerPayType === 'pos') {
-        return 'pos';
+    $candidates = array_unique(array_filter([strtolower($payType), strtolower($givenMode)]));
+
+    foreach ($candidates as $cand) {
+        if (in_array($cand, ['upi', 'bank_transfer', 'bank-transfer', 'banktransfer', 'cheque'], true)) {
+            return 'YES2971';
+        }
+        if (in_array($cand, ['pos_machine', 'pos'], true)) {
+            return 'pos';
+        }
     }
 
-    $isCod = ($lowerPayType === 'cod');
+    $isCod = in_array('cod', $candidates, true);
 
-    if ($lowerPayType === 'offline' && $orderNumber !== '') {
+    if (in_array('offline', $candidates, true) && $orderNumber !== '') {
         // Check if any payment split is cod
         $stmt = $conn->prepare("SELECT payment_mode FROM pos_payments WHERE order_number = ? AND LOWER(TRIM(payment_mode)) = 'cod' LIMIT 1");
         if ($stmt) {
@@ -1378,7 +1385,7 @@ function pos_payment_resolve_order_payment_mode(mysqli $conn, string $orderNumbe
         return 'COD';
     }
 
-    if ($lowerPayType === 'offline') {
+    if (in_array('offline', $candidates, true)) {
         if ($orderNumber !== '') {
             // Check if any payment split is bank_transfer, upi, or cheque
             $stmt = $conn->prepare("SELECT payment_mode FROM pos_payments WHERE order_number = ? AND (LOWER(TRIM(payment_mode)) = 'bank_transfer' OR LOWER(TRIM(payment_mode)) = 'upi' OR LOWER(TRIM(payment_mode)) = 'cheque') LIMIT 1");
@@ -1418,6 +1425,10 @@ function pos_payment_resolve_order_payment_mode(mysqli $conn, string $orderNumbe
             }
         }
         return 'offline';
+    }
+
+    if ($givenMode !== '') {
+        return $givenMode;
     }
 
     return $payType !== '' ? $payType : 'offline';
