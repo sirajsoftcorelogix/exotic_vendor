@@ -225,6 +225,7 @@
         if (!modal) return;
 
         modal.classList.remove('hidden');
+        modal.classList.add('flex');
 
         const elInv = getElement('cdmInvoiceNum');
         if (elInv) elInv.textContent = cdmCurrentInvoiceNumber || cdmCurrentInvoiceId || '-';
@@ -284,7 +285,10 @@
 
     window.closeCommonDispatchModal = function () {
         const modal = getElement('commonDispatchModal');
-        if (modal) modal.classList.add('hidden');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
         cdmResetForm();
     };
 
