@@ -149,16 +149,43 @@ $exoticAddresses = (isset($commanModel) && method_exists($commanModel, 'get_exot
                 <!-- Box Size -->
                 <div>
                     <label for="cdmInputBoxSize" class="block text-xs font-semibold text-gray-700 mb-1">Box Size</label>
-                    <input type="text" name="box_size" id="cdmInputBoxSize" list="cdmBoxSizeList" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" placeholder="e.g. R-1 (22x17x5 inch)">
-                    <datalist id="cdmBoxSizeList">
-                        <option value="R-1">R-1 (22x17x5 inch)</option>
-                        <option value="R-2">R-2 (16x13x13 inch)</option>
-                        <option value="R-3">R-3 (16x11x7 inch)</option>
-                        <option value="R-4">R-4 (13x10x7 inch)</option>
-                        <option value="R-5">R-5 (21x11x7 inch)</option>
-                        <option value="R-6">R-6 (11x10x8 inch)</option>
-                        <option value="R-7">R-7 (8x6x5 inch)</option>
-                    </datalist>
+                    <select name="box_size" id="cdmInputBoxSize" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none">
+                        <option value="">Select Size</option>
+                        <option value="R-1" data-length="22" data-width="17" data-height="5">R-1 (22x17x5 inch)</option>
+                        <option value="R-2" data-length="16" data-width="13" data-height="13">R-2 (16x13x13 inch)</option>
+                        <option value="R-3" data-length="16" data-width="11" data-height="7">R-3 (16x11x7 inch)</option>
+                        <option value="R-4" data-length="13" data-width="10" data-height="7">R-4 (13x10x7 inch)</option>
+                        <option value="R-5" data-length="21" data-width="11" data-height="7">R-5 (21x11x7 inch)</option>
+                        <option value="R-6" data-length="11" data-width="10" data-height="8">R-6 (11x10x8 inch)</option>
+                        <option value="R-7" data-length="8" data-width="6" data-height="5">R-7 (8x6x5 inch)</option>
+                        <option value="R-8" data-length="12" data-width="12" data-height="1.5">R-8 (12x12x1.5 inch)</option>
+                        <option value="R-9" data-length="17" data-width="12" data-height="2">R-9 (17x12x2 inch)</option>
+                        <option value="R-10" data-length="12" data-width="9" data-height="2">R-10 (12x9x2 inch)</option>
+                        <option value="R-11" data-length="10" data-width="10" data-height="2">R-11 (10x10x2 inch)</option>
+                        <option value="R-12" data-length="13" data-width="9" data-height="5">R-12 (13x9x5 inch)</option>
+                        <option value="R-13" data-length="11" data-width="8" data-height="5">R-13 (11x8x5 inch)</option>
+                        <option value="R-14" data-length="14" data-width="12" data-height="10">R-14 (14x12x10 inch)</option>
+                        <option value="CUSTOM">Custom Size</option>
+                    </select>
+                </div>
+
+                <!-- Custom Dimensions (shown when Box Size is CUSTOM) -->
+                <div id="cdmCustomDimensionsWrap" class="hidden sm:col-span-2 bg-orange-50/60 p-3 rounded-xl border border-orange-200">
+                    <p class="text-xs font-semibold text-orange-900 mb-2">Custom Dimensions (Inches)</p>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label for="cdmInputLength" class="block text-[11px] font-medium text-gray-700 mb-1">Length</label>
+                            <input type="number" step="0.1" min="0" name="length" id="cdmInputLength" class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs text-gray-900 bg-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" placeholder="22">
+                        </div>
+                        <div>
+                            <label for="cdmInputWidth" class="block text-[11px] font-medium text-gray-700 mb-1">Width</label>
+                            <input type="number" step="0.1" min="0" name="width" id="cdmInputWidth" class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs text-gray-900 bg-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" placeholder="17">
+                        </div>
+                        <div>
+                            <label for="cdmInputHeight" class="block text-[11px] font-medium text-gray-700 mb-1">Height</label>
+                            <input type="number" step="0.1" min="0" name="height" id="cdmInputHeight" class="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs text-gray-900 bg-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" placeholder="5">
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Weight (Kg) -->
