@@ -5712,6 +5712,7 @@ class POSRegisterController
             'upi' => 'upi',
             'bank_transfer' => 'bank_transfer',
             'pos_machine' => 'pos_machine',
+            'pos' => 'pos_machine',
             'cheque' => 'cheque',
             'razorpay' => 'razorpay',
             'adminorder' => 'adminorder',
