@@ -57,6 +57,30 @@
             <input type="hidden" name="exotic_shipment_id" id="cdmInputExoticShipmentId" value="">
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Courier Name -->
+                <div>
+                    <label for="cdmInputCourierName" class="block text-xs font-semibold text-gray-700 mb-1">Courier Name <span class="text-red-500">*</span></label>
+                    <select name="courier_name" id="cdmInputCourierName" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" required>
+                        <option value="">Select Courier</option>
+                        <option value="Shiprocket">Shiprocket</option>
+                        <option value="BlueDart">BlueDart</option>
+                        <option value="Delhivery">Delhivery</option>
+                        <option value="Aramex">Aramex</option>
+                        <option value="DHL">DHL Express</option>
+                        <option value="FedEx">FedEx</option>
+                        <option value="UPS">UPS</option>
+                        <option value="DTDC">DTDC</option>
+                        <option value="India Post">India Post</option>
+                        <option value="Trackon">Trackon</option>
+                        <option value="Professional Couriers">Professional Couriers</option>
+                    </select>
+                </div>
+
+                <!-- AWB / Tracking Code -->
+                <div>
+                    <label for="cdmInputAwbCode" class="block text-xs font-semibold text-gray-700 mb-1">AWB / Waybill Code</label>
+                    <input type="text" name="awb_code" id="cdmInputAwbCode" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" placeholder="e.g. 143256789">
+                </div>
 
                 <!-- Tracking URL -->
                 <div class="sm:col-span-2">
