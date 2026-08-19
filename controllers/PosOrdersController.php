@@ -384,9 +384,14 @@ class PosOrdersController
                 //print_array($maped);             
             }
             //add address info
-            if (!isset($order['payment_mode']) && function_exists('pos_payment_resolve_order_payment_mode')) {
+            if (function_exists('pos_payment_resolve_order_payment_mode')) {
                 global $conn;
-                $order['payment_mode'] = pos_payment_resolve_order_payment_mode($conn, (string)($order['orderid'] ?? ''), (string)($order['payment_type'] ?? ''));
+                $order['payment_mode'] = pos_payment_resolve_order_payment_mode(
+                    $conn,
+                    (string)($order['orderid'] ?? ''),
+                    (string)($order['payment_type'] ?? ''),
+                    (string)($order['payment_mode'] ?? '')
+                );
             }
             $addressdata[] = $ordersModel->insertAddressInfo($order, $customerdata['customer_id'] ?? 0);
             //print_array($addressdata);

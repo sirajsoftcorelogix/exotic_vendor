@@ -502,8 +502,13 @@ class OrdersController
             try {
                 $orderForAddress = $order;
                 $orderForAddress['orderid'] = $storeOrderNumber;
-                if (!isset($orderForAddress['payment_mode']) && function_exists('pos_payment_resolve_order_payment_mode')) {
-                    $orderForAddress['payment_mode'] = pos_payment_resolve_order_payment_mode($conn, $storeOrderNumber, (string)($order['payment_type'] ?? ''));
+                if (function_exists('pos_payment_resolve_order_payment_mode')) {
+                    $orderForAddress['payment_mode'] = pos_payment_resolve_order_payment_mode(
+                        $conn,
+                        $storeOrderNumber,
+                        (string)($order['payment_type'] ?? ''),
+                        (string)($order['payment_mode'] ?? '')
+                    );
                 }
                 $addressdata[] = $ordersModel->insertAddressInfo($orderForAddress, $customerdata['customer_id'] ?? 0);
             } catch (\Throwable $e) {
@@ -3196,8 +3201,13 @@ class OrdersController
         }
 
         try {
-            if (!isset($vendorOrder['payment_mode']) && function_exists('pos_payment_resolve_order_payment_mode')) {
-                $vendorOrder['payment_mode'] = pos_payment_resolve_order_payment_mode($conn, $orderNumber, (string)($vendorOrder['payment_type'] ?? ''));
+            if (function_exists('pos_payment_resolve_order_payment_mode')) {
+                $vendorOrder['payment_mode'] = pos_payment_resolve_order_payment_mode(
+                    $conn,
+                    $orderNumber,
+                    (string)($vendorOrder['payment_type'] ?? ''),
+                    (string)($vendorOrder['payment_mode'] ?? '')
+                );
             }
             $ordersModel->insertAddressInfo($vendorOrder, $customerId);
         } catch (\Throwable $e) {

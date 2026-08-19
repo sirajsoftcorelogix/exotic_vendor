@@ -5651,8 +5651,7 @@ class POSRegisterController
         $txnField = $this->resolveStorePaymentTransactionId($txn);
 
         $out = [
-            // Exotic order/create requires payment_type=offline for counter sales; POS mode goes in store_payment_details.
-            'payment_type' => 'offline',
+            'payment_type' => $storePaymentMode,
             'buynow' => '0',
             'checkoutdata' => $checkoutdata,
             'cod' => $codAmount > 0.001 ? '1' : '0',
