@@ -79,6 +79,12 @@
         const inputBoxNo = getElement('cdmInputBoxNo');
         if (inputBoxNo) inputBoxNo.value = '1';
 
+        const inputPickupLocation = getElement('cdmInputPickupLocation');
+        if (inputPickupLocation) {
+            let defaultOption = Array.from(inputPickupLocation.options).find(opt => opt.getAttribute('data-is-default') === '1');
+            inputPickupLocation.value = defaultOption ? defaultOption.value : '';
+        }
+
         const customDimensionsWrap = getElement('cdmCustomDimensionsWrap');
         if (customDimensionsWrap) customDimensionsWrap.classList.add('hidden');
     }
@@ -127,7 +133,14 @@
         }
 
         const inputPickupLocation = getElement('cdmInputPickupLocation');
-        if (inputPickupLocation) inputPickupLocation.value = d.pickup_location || '';
+        if (inputPickupLocation) {
+            if (d.pickup_location) {
+                inputPickupLocation.value = d.pickup_location;
+            } else {
+                let defaultOption = Array.from(inputPickupLocation.options).find(opt => opt.getAttribute('data-is-default') === '1');
+                inputPickupLocation.value = defaultOption ? defaultOption.value : '';
+            }
+        }
 
         const inputDispatchDate = getElement('cdmInputDispatchDate');
         if (inputDispatchDate) inputDispatchDate.value = formatDatetimeForInput(d.dispatch_date);
@@ -371,6 +384,18 @@
                 const courierNameInput = getElement('cdmInputCourierName');
                 if (!courierNameInput || !courierNameInput.value.trim()) {
                     cdmShowAlert('Courier Name is required.', 'error');
+                    return;
+                }
+
+                const awbCodeInput = getElement('cdmInputAwbCode');
+                if (!awbCodeInput || !awbCodeInput.value.trim()) {
+                    cdmShowAlert('AWB / Waybill Code is required to generate Exotic Shipment ID.', 'error');
+                    return;
+                }
+
+                const dispatchDateInput = getElement('cdmInputDispatchDate');
+                if (!dispatchDateInput || !dispatchDateInput.value.trim()) {
+                    cdmShowAlert('Dispatch Date is required to generate Exotic Shipment ID.', 'error');
                     return;
                 }
 
