@@ -387,6 +387,18 @@
                     return;
                 }
 
+                const awbCodeInput = getElement('cdmInputAwbCode');
+                if (!awbCodeInput || !awbCodeInput.value.trim()) {
+                    cdmShowAlert('AWB / Waybill Code is required to generate Exotic Shipment ID.', 'error');
+                    return;
+                }
+
+                const dispatchDateInput = getElement('cdmInputDispatchDate');
+                if (!dispatchDateInput || !dispatchDateInput.value.trim()) {
+                    cdmShowAlert('Dispatch Date is required to generate Exotic Shipment ID.', 'error');
+                    return;
+                }
+
                 cdmHideAlert();
 
                 const saveBtn = getElement('cdmSaveBtn');

@@ -82,8 +82,8 @@ $exoticAddresses = (isset($commanModel) && method_exists($commanModel, 'get_exot
 
                 <!-- AWB / Tracking Code -->
                 <div>
-                    <label for="cdmInputAwbCode" class="block text-xs font-semibold text-gray-700 mb-1">AWB / Waybill Code</label>
-                    <input type="text" name="awb_code" id="cdmInputAwbCode" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" placeholder="e.g. 143256789">
+                    <label for="cdmInputAwbCode" class="block text-xs font-semibold text-gray-700 mb-1">AWB / Waybill Code <span class="text-red-500">*</span></label>
+                    <input type="text" name="awb_code" id="cdmInputAwbCode" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" placeholder="e.g. 143256789" required>
                 </div>
 
                 <!-- Tracking URL -->
@@ -125,8 +125,8 @@ $exoticAddresses = (isset($commanModel) && method_exists($commanModel, 'get_exot
 
                 <!-- Dispatch Date -->
                 <div>
-                    <label for="cdmInputDispatchDate" class="block text-xs font-semibold text-gray-700 mb-1">Dispatch Date</label>
-                    <input type="datetime-local" name="dispatch_date" id="cdmInputDispatchDate" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none">
+                    <label for="cdmInputDispatchDate" class="block text-xs font-semibold text-gray-700 mb-1">Dispatch Date <span class="text-red-500">*</span></label>
+                    <input type="datetime-local" name="dispatch_date" id="cdmInputDispatchDate" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" required>
                 </div>
 
                 <!-- Shipment Status -->
