@@ -114,8 +114,11 @@ $exoticAddresses = (isset($commanModel) && method_exists($commanModel, 'get_exot
                     <select name="pickup_location" id="cdmInputPickupLocation" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none">
                         <option value="">Select Pickup Location</option>
                         <?php foreach ($exoticAddresses as $address): ?>
-                            <?php $addrTitle = htmlspecialchars($address['address_title'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
-                            <option value="<?= $addrTitle ?>"><?= $addrTitle ?></option>
+                            <?php 
+                            $addrTitle = htmlspecialchars($address['address_title'] ?? '', ENT_QUOTES, 'UTF-8'); 
+                            $isDefault = !empty($address['is_default']);
+                            ?>
+                            <option value="<?= $addrTitle ?>" <?= $isDefault ? 'data-is-default="1"' : '' ?>><?= $addrTitle ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>

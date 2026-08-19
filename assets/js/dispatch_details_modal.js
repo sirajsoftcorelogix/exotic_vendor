@@ -79,6 +79,12 @@
         const inputBoxNo = getElement('cdmInputBoxNo');
         if (inputBoxNo) inputBoxNo.value = '1';
 
+        const inputPickupLocation = getElement('cdmInputPickupLocation');
+        if (inputPickupLocation) {
+            let defaultOption = Array.from(inputPickupLocation.options).find(opt => opt.getAttribute('data-is-default') === '1');
+            inputPickupLocation.value = defaultOption ? defaultOption.value : '';
+        }
+
         const customDimensionsWrap = getElement('cdmCustomDimensionsWrap');
         if (customDimensionsWrap) customDimensionsWrap.classList.add('hidden');
     }
@@ -127,7 +133,14 @@
         }
 
         const inputPickupLocation = getElement('cdmInputPickupLocation');
-        if (inputPickupLocation) inputPickupLocation.value = d.pickup_location || '';
+        if (inputPickupLocation) {
+            if (d.pickup_location) {
+                inputPickupLocation.value = d.pickup_location;
+            } else {
+                let defaultOption = Array.from(inputPickupLocation.options).find(opt => opt.getAttribute('data-is-default') === '1');
+                inputPickupLocation.value = defaultOption ? defaultOption.value : '';
+            }
+        }
 
         const inputDispatchDate = getElement('cdmInputDispatchDate');
         if (inputDispatchDate) inputDispatchDate.value = formatDatetimeForInput(d.dispatch_date);
