@@ -597,24 +597,16 @@ No invoices
                     const pdfLink = isCancelled ? '' : `
 <a href="/?page=posinvoice&action=generate_pdf&invoice_id=${i.id}"
 target="_blank"
-class="inline-flex items-center text-blue-600 hover:text-blue-800 font-semibold text-xs"
+class="block px-4 py-2 text-gray-700 hover:bg-gray-100 font-medium text-xs flex items-center gap-2"
 title="Download PDF">
-
-<svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-<path d="M2.62925 10.3889C1.64271 9.68768 1 8.54159 1 7.24672C1 5.47783 2.3 3.84375 4.25 3.52778C4.86168 2.07349 6.30934 1 7.99783 1C10.1607 1 11.9284 2.67737 12.05 4.79167C13.1978 5.29352 14 6.52522 14 7.85887C14 8.98648 13.4266 9.98004 12.5556 10.5634M7.5 14V6.77778M7.5 14L5.33333 11.8333M7.5 14L9.66667 11.8333"
-stroke="currentColor"
-stroke-width="1.5"
-stroke-linecap="round"
-stroke-linejoin="round"/>
-</svg>
-
+    <i class="fa-solid fa-file-pdf text-blue-600"></i> Download PDF
 </a>`;
 
                     const cancelBtn = isCancelled ? '' : `
 <button type="button" onclick="cancelPosInvoice(${i.id})"
-        class="inline-flex items-center text-amber-700 hover:text-amber-900 text-xs font-semibold"
+        class="block w-full text-left px-4 py-2 text-amber-700 hover:bg-amber-50 text-xs font-medium border-0 bg-transparent cursor-pointer flex items-center gap-2"
         title="Cancel invoice">
-    Cancel
+    <i class="fa-solid fa-ban text-amber-600"></i> Cancel Invoice
 </button>`;
 
                     const orderNum = (i.order_number || '').trim();
@@ -623,23 +615,23 @@ stroke-linejoin="round"/>
    data-sales-return-create
    data-sales-return-url="?page=sales_returns&action=create&order_number=${encodeURIComponent(orderNum)}&invoice_id=${i.id}"
    data-order-number="${escapeHtml(orderNum)}"
-   class="inline-flex items-center text-orange-700 hover:text-orange-900 text-xs font-semibold border-0 bg-transparent cursor-pointer p-0">
-    Return
+   class="block w-full text-left px-4 py-2 text-orange-700 hover:bg-orange-50 text-xs font-medium border-0 bg-transparent cursor-pointer flex items-center gap-2">
+    <i class="fa-solid fa-rotate-left text-orange-600"></i> Sales Return
 </button>` : '';
 
                     const deleteBtn = isCancelled ? '' : `
-  <button onclick="openDeleteModal(${i.id}, '?page=posinvoice&action=delete', 'Delete this invoice?')"
-        class="flex items-center gap-1 text-red-600 hover:text-red-800 text-xs font-semibold"
+<button onclick="openDeleteModal(${i.id}, '?page=posinvoice&action=delete', 'Delete this invoice?')"
+        class="block w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 text-xs font-medium border-0 bg-transparent cursor-pointer flex items-center gap-2"
         title="Delete invoice">
-        <i class="fa-solid fa-trash"></i>
-    </button>`;
+    <i class="fa-solid fa-trash text-red-600"></i> Delete Invoice
+</button>`;
 
                     const dispatchBtn = isCancelled ? '' : `
 <button type="button"
    onclick="openCommonDispatchModal({ invoice_id: ${i.id}, invoice_number: '${escapeHtml(i.invoice_number || '')}', order_number: '${escapeHtml(i.order_number || '')}' })"
-   class="inline-flex items-center gap-1 text-purple-700 hover:text-purple-900 text-xs font-semibold border-0 bg-transparent cursor-pointer p-0"
+   class="block w-full text-left px-4 py-2 text-purple-700 hover:bg-purple-50 text-xs font-medium border-0 bg-transparent cursor-pointer flex items-center gap-2"
    title="Add or edit dispatch details">
-    <i class="fa-solid fa-truck text-[11px]" aria-hidden="true"></i> Dispatch
+    <i class="fa-solid fa-truck text-purple-600"></i> Dispatch Details
 </button>`;
 
                     html += `
@@ -660,12 +652,19 @@ stroke-linejoin="round"/>
 
 <td class="p-3">${badge}</td>
 
- <td class="p-3 flex flex-wrap gap-3 items-center">
-${pdfLink}
-${dispatchBtn}
-${returnBtn}
-${cancelBtn}
-${deleteBtn}
+<td class="p-3">
+    <div class="relative inline-block text-left">
+        <button type="button" class="text-gray-600 hover:bg-gray-100 rounded-full px-2 text-lg font-bold outline-none" onclick="toggleMenu(this)" aria-label="Action menu">
+            ⋮
+        </button>
+        <div class="dropdown-menu hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
+            ${pdfLink}
+            ${dispatchBtn}
+            ${returnBtn}
+            ${cancelBtn}
+            ${deleteBtn}
+        </div>
+    </div>
 </td>
 
 </tr>`;
@@ -687,6 +686,22 @@ Could not load invoices. Please try again.
                 }
             });
     }
+
+    function toggleMenu(button) {
+        const menu = button.nextElementSibling;
+        document.querySelectorAll('.dropdown-menu').forEach(m => {
+            if (m !== menu) m.classList.add('hidden');
+        });
+        menu.classList.toggle('hidden');
+    }
+
+    document.addEventListener("click", function(e) {
+        if (!e.target.closest(".relative")) {
+            document.querySelectorAll(".dropdown-menu").forEach(menu => {
+                menu.classList.add("hidden");
+            });
+        }
+    });
 
     function cancelPosInvoice(invoiceId) {
         const confirmFn = (typeof customConfirm === 'function')
