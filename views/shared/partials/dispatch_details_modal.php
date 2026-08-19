@@ -5,7 +5,7 @@
  */
 ?>
 <div id="commonDispatchModal" class="fixed inset-0 z-[150] hidden items-center justify-center bg-black/50 p-4 backdrop-blur-sm overflow-y-auto">
-    <div class="relative w-full max-w-2xl my-auto rounded-2xl bg-white shadow-2xl border border-gray-100 overflow-hidden text-gray-800 animate-in fade-in zoom-in duration-200">
+    <div class="relative w-full max-w-2xl mx-auto my-auto rounded-2xl bg-white shadow-2xl border border-gray-100 overflow-hidden text-gray-800 animate-in fade-in zoom-in duration-200">
         
         <!-- Modal Header -->
         <div class="flex items-center justify-between bg-gradient-to-r from-orange-50 via-orange-100/50 to-white px-6 py-4 border-b border-orange-200/60">
