@@ -889,7 +889,7 @@ class OrdersAPIController
                         'VchDate'             => $formattedDate,
                         'VchNo.'              => $voucherNo,
                         'Sales Type'          => 'Sales',
-                        'Party Name'          => $invoice['payment_type'] == 'offline' ? $invoice['payment_mode'] ?? '' : ($invoice['payment_type'] ?? ''),
+                        'Party Name'          => $invoice['payment_mode'] ?? '',
                         'GSTIN'               => $firmDetail['gstin'] ?? '',
                         'Material Centre'     => $invoice['address_title'] ?? 'Main Location',
                         'Narration'           => '',
