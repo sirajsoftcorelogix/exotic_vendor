@@ -641,6 +641,8 @@ class BusyAccounting
                 $payTypeFormatted = 'YES2971';
             } elseif (strtolower($payType) === 'cod') {
                 $payTypeFormatted = 'COD';
+            } elseif (strtolower($payType) === 'pos' || strtolower($payType) === 'pos_machine' || strtolower($payType) === 'pos machine') {
+                $payTypeFormatted = 'POS';
             } else {
                 $payTypeFormatted = ucwords(str_replace('_', ' ', $payType));
             }
@@ -742,6 +744,8 @@ class BusyAccounting
                 $payTypeFormatted = 'YES2971';
             } elseif (strtolower($payType) === 'cod') {
                 $payTypeFormatted = 'COD';
+            } elseif (strtolower($payType) === 'pos' || strtolower($payType) === 'pos_machine' || strtolower($payType) === 'pos machine') {
+                $payTypeFormatted = 'POS';
             } else {
                 $payTypeFormatted = ucwords(str_replace('_', ' ', $payType));
             }

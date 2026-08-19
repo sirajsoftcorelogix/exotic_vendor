@@ -1336,9 +1336,14 @@ function pos_payment_resolve_order_payment_mode(mysqli $conn, string $orderNumbe
         }
     }
 
-    $isCod = (strtolower($payType) === 'cod');
+    $lowerPayType = strtolower($payType);
+    if ($lowerPayType === 'pos_machine' || $lowerPayType === 'pos') {
+        return 'pos';
+    }
 
-    if (strtolower($payType) === 'offline' && $orderNumber !== '') {
+    $isCod = ($lowerPayType === 'cod');
+
+    if ($lowerPayType === 'offline' && $orderNumber !== '') {
         // Check if any payment split is cod
         $stmt = $conn->prepare("SELECT payment_mode FROM pos_payments WHERE order_number = ? AND LOWER(TRIM(payment_mode)) = 'cod' LIMIT 1");
         if ($stmt) {
@@ -1373,7 +1378,7 @@ function pos_payment_resolve_order_payment_mode(mysqli $conn, string $orderNumbe
         return 'COD';
     }
 
-    if (strtolower($payType) === 'offline') {
+    if ($lowerPayType === 'offline') {
         if ($orderNumber !== '') {
             // Check if any payment split is bank_transfer, upi, or cheque
             $stmt = $conn->prepare("SELECT payment_mode FROM pos_payments WHERE order_number = ? AND (LOWER(TRIM(payment_mode)) = 'bank_transfer' OR LOWER(TRIM(payment_mode)) = 'upi' OR LOWER(TRIM(payment_mode)) = 'cheque') LIMIT 1");
@@ -1400,6 +1405,9 @@ function pos_payment_resolve_order_payment_mode(mysqli $conn, string $orderNumbe
                     $stmt->close();
                     if ($posMode === 'bank_transfer' || $posMode === 'upi' || $posMode === 'cheque') {
                         return 'YES2971';
+                    }
+                    if ($posMode === 'pos_machine' || $posMode === 'pos') {
+                        return 'pos';
                     }
                     if ($rawMode !== '') {
                         return $rawMode;
