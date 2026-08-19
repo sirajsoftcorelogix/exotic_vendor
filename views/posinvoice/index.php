@@ -652,12 +652,12 @@ title="Download PDF">
 
 <td class="p-3">${badge}</td>
 
-<td class="p-3">
+<td class="p-3 pos-invoice-action-cell">
     <div class="relative inline-block text-left">
-        <button type="button" class="text-gray-600 hover:bg-gray-100 rounded-full px-2 text-lg font-bold outline-none" onclick="toggleMenu(this)" aria-label="Action menu">
+        <button type="button" class="text-gray-600 hover:bg-gray-100 rounded-full px-2 text-lg font-bold outline-none" onclick="togglePosInvoiceMenu(this, event)" aria-label="Action menu">
             ⋮
         </button>
-        <div class="dropdown-menu hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
+        <div class="pos-invoice-menu hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
             ${pdfLink}
             ${dispatchBtn}
             ${returnBtn}
@@ -687,17 +687,22 @@ Could not load invoices. Please try again.
             });
     }
 
-    function toggleMenu(button) {
+    function togglePosInvoiceMenu(button, event) {
+        if (event) {
+            event.stopPropagation();
+        }
+        if (!button) return;
         const menu = button.nextElementSibling;
-        document.querySelectorAll('.dropdown-menu').forEach(m => {
+        if (!menu) return;
+        document.querySelectorAll('.pos-invoice-menu').forEach(m => {
             if (m !== menu) m.classList.add('hidden');
         });
         menu.classList.toggle('hidden');
     }
 
     document.addEventListener("click", function(e) {
-        if (!e.target.closest(".relative")) {
-            document.querySelectorAll(".dropdown-menu").forEach(menu => {
+        if (!e.target.closest(".pos-invoice-action-cell")) {
+            document.querySelectorAll(".pos-invoice-menu").forEach(menu => {
                 menu.classList.add("hidden");
             });
         }
