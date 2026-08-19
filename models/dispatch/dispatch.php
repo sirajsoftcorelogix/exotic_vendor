@@ -751,4 +751,111 @@ class Dispatch {
         // }
         return [];
     }
+
+    public function saveOrUpdateDispatchDetails(array $payload): array
+    {
+        $invoiceId = isset($payload['invoice_id']) ? (int) $payload['invoice_id'] : 0;
+        $dispatchId = isset($payload['dispatch_id']) ? (int) $payload['dispatch_id'] : 0;
+
+        if ($invoiceId <= 0 && $dispatchId <= 0) {
+            return ['success' => false, 'message' => 'Invoice ID or Dispatch ID is required.'];
+        }
+
+        // If dispatch_id is not given, check if a dispatch record already exists for this invoice_id
+        if ($dispatchId <= 0 && $invoiceId > 0 && empty($payload['create_new'])) {
+            $existing = $this->getDispatchByInvoiceId($invoiceId);
+            if (is_array($existing) && !empty($existing['id'])) {
+                $dispatchId = (int) $existing['id'];
+            }
+        }
+
+        $orderNumber = trim((string) ($payload['order_number'] ?? ''));
+        if ($orderNumber === '' && $invoiceId > 0) {
+            $invStmt = $this->db->prepare("SELECT i.invoice_number, ii.order_number FROM vp_invoices i LEFT JOIN vp_invoice_items ii ON ii.invoice_id = i.id WHERE i.id = ? LIMIT 1");
+            if ($invStmt) {
+                $invStmt->bind_param('i', $invoiceId);
+                if ($invStmt->execute()) {
+                    $res = $invStmt->get_result();
+                    if ($row = $res->fetch_assoc()) {
+                        $orderNumber = trim((string) ($row['order_number'] ?? ''));
+                    }
+                }
+                $invStmt->close();
+            }
+        }
+
+        $courierName = trim((string) ($payload['courier_name'] ?? ''));
+        $trackingUrl = trim((string) ($payload['tracking_url'] ?? ''));
+        $exoticShipmentId = trim((string) ($payload['exotic_shipment_id'] ?? ''));
+        $awbCode = trim((string) ($payload['awb_code'] ?? ''));
+        $labelUrl = trim((string) ($payload['label_url'] ?? ''));
+        $pickupLocation = trim((string) ($payload['pickup_location'] ?? ''));
+        $dispatchDate = trim((string) ($payload['dispatch_date'] ?? ''));
+        if ($dispatchDate === '') {
+            $dispatchDate = date('Y-m-d H:i:s');
+        } else if (strlen($dispatchDate) === 10) {
+            $dispatchDate .= ' ' . date('H:i:s');
+        }
+        $shipmentStatus = trim((string) ($payload['shipment_status'] ?? ''));
+        if ($shipmentStatus === '') {
+            $shipmentStatus = 'Ready to Ship';
+        }
+        $boxNo = trim((string) ($payload['box_no'] ?? '1'));
+        if ($boxNo === '') $boxNo = '1';
+        $boxSize = trim((string) ($payload['box_size'] ?? ''));
+        $weight = isset($payload['weight']) && $payload['weight'] !== '' ? (float) $payload['weight'] : 0.0;
+        $billingWeight = isset($payload['billing_weight']) && $payload['billing_weight'] !== '' ? (float) $payload['billing_weight'] : $weight;
+        $shippingCharges = isset($payload['shipping_charges']) && $payload['shipping_charges'] !== '' ? (float) $payload['shipping_charges'] : 0.0;
+        $batchNo = trim((string) ($payload['batch_no'] ?? ''));
+        $createdBy = isset($_SESSION['user']['id']) ? (int) $_SESSION['user']['id'] : null;
+
+        $fields = [
+            'invoice_id' => $invoiceId,
+            'order_number' => $orderNumber,
+            'courier_name' => $courierName,
+            'tracking_url' => $trackingUrl,
+            'exotic_shipment_id' => $exoticShipmentId,
+            'awb_code' => $awbCode,
+            'label_url' => $labelUrl,
+            'pickup_location' => $pickupLocation,
+            'dispatch_date' => $dispatchDate,
+            'shipment_status' => $shipmentStatus,
+            'box_no' => $boxNo,
+            'box_size' => $boxSize,
+            'weight' => $weight,
+            'billing_weight' => $billingWeight,
+            'shipping_charges' => $shippingCharges,
+            'batch_no' => $batchNo,
+        ];
+
+        if ($dispatchId > 0) {
+            $updated = $this->updateDispatch($dispatchId, $fields);
+            if ($updated) {
+                return [
+                    'success' => true,
+                    'message' => 'Dispatch details updated successfully.',
+                    'dispatch_id' => $dispatchId,
+                    'invoice_id' => $invoiceId
+                ];
+            }
+            return ['success' => false, 'message' => 'Failed to update dispatch details.'];
+        } else {
+            if ($createdBy !== null) {
+                $fields['created_by'] = $createdBy;
+            }
+            $newId = $this->createDispatch($fields);
+            if ($newId) {
+                if ($exoticShipmentId !== '') {
+                    $this->updateDispatch($newId, ['exotic_shipment_id' => $exoticShipmentId]);
+                }
+                return [
+                    'success' => true,
+                    'message' => 'Dispatch details added successfully.',
+                    'dispatch_id' => $newId,
+                    'invoice_id' => $invoiceId
+                ];
+            }
+            return ['success' => false, 'message' => 'Failed to add dispatch details.'];
+        }
+    }
 }

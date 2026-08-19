@@ -472,12 +472,21 @@
                 </div>
               </div>
               <!-- RIGHT -->
-              <div class="flex flex-col sm:items-end gap-3">
+              <div class="flex flex-col sm:items-end gap-2">
+                <button type="button"
+                        onclick="openCommonDispatchModal({ invoice_id: <?php echo (int) $invoice['id']; ?>, invoice_number: '<?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id'], ENT_QUOTES, 'UTF-8'); ?>', order_number: '<?php echo htmlspecialchars((string) array_key_first($orderNumbers ?? []), ENT_QUOTES, 'UTF-8'); ?>' })"
+                        class="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg px-2.5 py-1.5 transition shadow-sm"
+                        title="Add or edit dispatch details for this invoice">
+                    <i class="fas fa-truck text-xs" aria-hidden="true"></i> Dispatch Details
+                </button>
                 <div class="relative ">
                   <button class="text-gray-600 hover:bg-gray-100 rounded-full px-2 text-lg" onclick="toggleMenu(this)">
                     ⋮
                   </button>
                   <div class="dropdown-menu hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    <button type="button" class="block w-full text-left px-4 py-2 text-purple-700 hover:bg-purple-50 font-semibold border-none bg-transparent cursor-pointer" onclick="openCommonDispatchModal({ invoice_id: <?php echo (int) $invoice['id']; ?>, invoice_number: '<?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id'], ENT_QUOTES, 'UTF-8'); ?>', order_number: '<?php echo htmlspecialchars((string) array_key_first($orderNumbers ?? []), ENT_QUOTES, 'UTF-8'); ?>' })" style="padding: 0.5rem 1rem;">
+                        <i class="fas fa-truck text-xs mr-1" aria-hidden="true"></i> Dispatch Details
+                    </button>
                     <?php if (strtolower(trim((string)($invoice['status'] ?? ''))) !== 'cancelled'): ?>
                     <a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Download invoice</a>
                     <?php endif; ?>
@@ -1364,3 +1373,5 @@ if (bulkPrintBtn) {
   }
     
 </script>
+
+<?php require_once __DIR__ . '/../shared/partials/dispatch_details_modal.php'; ?>
