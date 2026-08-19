@@ -831,11 +831,21 @@ class Dispatch {
         if ($dispatchId > 0) {
             $updated = $this->updateDispatch($dispatchId, $fields);
             if ($updated) {
+                $shipmentResult = null;
+                $updatedRecord = $this->getDispatchById($dispatchId);
+                if (
+                    is_array($updatedRecord)
+                    && trim((string) ($updatedRecord['exotic_shipment_id'] ?? '')) === ''
+                    && function_exists('exotic_india_log_dispatch_shipment')
+                ) {
+                    $shipmentResult = exotic_india_log_dispatch_shipment($this->db, $dispatchId, []);
+                }
                 return [
                     'success' => true,
                     'message' => 'Dispatch details updated successfully.',
                     'dispatch_id' => $dispatchId,
-                    'invoice_id' => $invoiceId
+                    'invoice_id' => $invoiceId,
+                    'shipment_result' => $shipmentResult
                 ];
             }
             return ['success' => false, 'message' => 'Failed to update dispatch details.'];
@@ -847,6 +857,8 @@ class Dispatch {
             if ($newId) {
                 if ($exoticShipmentId !== '') {
                     $this->updateDispatch($newId, ['exotic_shipment_id' => $exoticShipmentId]);
+                } else if (function_exists('exotic_india_log_dispatch_shipment')) {
+                    exotic_india_log_dispatch_shipment($this->db, $newId, []);
                 }
                 return [
                     'success' => true,
