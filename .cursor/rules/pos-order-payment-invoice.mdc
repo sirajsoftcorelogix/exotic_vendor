@@ -90,22 +90,24 @@ Phone numbers must use a dial code consistent with the selected **billing** and 
 | `store_payment_details` | `{warehouse_id}\|{POS payment mode label}\|{txn}` — **actual counter payment mode lives here** |
 | Razorpay | Optional `razorpay_payment_id`, `razorpay_order_id`, `razorpay_signature` |
 
-#### `payment_type` & `store_payment_details`
+#### `payment_type` vs `store_payment_details` (required)
 
-Exotic **`POST /order/create`** receives the mapped POS payment mode:
+Exotic **`POST /order/create`** expects counter/POS sales to use a fixed top-level payment type:
 
 | Form field | Value | Purpose |
 |------------|-------|---------|
-| `payment_type` | e.g. `offline`, `upi`, `bank_transfer`, `cod`, `pos_machine`, `cheque`, `razorpay`, `adminorder` | Mapped payment mode for Exotic API order header |
-| `store_payment_details` | e.g. `1\|upi\|store.20260725212330` | Records warehouse id, **real POS mode**, and transaction reference |
-| `cod` | `1` when COD split present | COD flag |
+| `payment_type` | **`offline`** always | Tells Exotic this is an offline/counter order (sending `upi` / `cash` / etc. returns `Invalid payment type selected`) |
+| `store_payment_details` | e.g. `1\|upi\|store.20260725212330` | Records warehouse id, **real POS mode** (`upi`, `cash`, `cod`, `pos_machine`, …), and transaction reference |
+| `cod` | `1` when COD split present | COD flag; still use `payment_type=offline` |
 
-**Implementation:** `POSRegisterController::buildOrderCreatePostFromPayload()` and `pos_local_checkout_build_order_create_post()` map `$posMode` via `mapPosPaymentModeToExoticPaymentType()` / `pos_local_checkout_map_pos_payment_mode_to_exotic()`.
+**Implementation:** `POSRegisterController::buildOrderCreatePostFromPayload()` and `pos_local_checkout_build_order_create_post()` (temp-order publish) set `'payment_type' => 'offline'`. POS mode mapping via `mapPosPaymentModeToExoticPaymentType()` / `pos_local_checkout_map_pos_payment_mode_to_exotic()` applies **only** to the middle segment of `store_payment_details`, not to `payment_type`.
+
+**Local DB:** `vp_orders.payment_type` is stored as `offline`, and `vp_order_info.payment_mode` is auto-filled as **`YES2971`** (for `upi`, `bank_transfer`, `cheque`), **`cash`**, **`pos`**, or **`<Courier Name>`** / **`"COD"`**.
 
 **Example (UPI checkout):**
 
 ```
-payment_type=upi
+payment_type=offline
 store_payment_details=1|upi|store.20260725212330
 cod=0
 ```
