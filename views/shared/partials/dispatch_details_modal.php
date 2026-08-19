@@ -3,6 +3,10 @@
  * Common Dispatch Details Modal Partial
  * Included in views/posinvoice/index.php and views/dispatch/index.php
  */
+global $commanModel;
+$exoticAddresses = (isset($commanModel) && method_exists($commanModel, 'get_exotic_address')) 
+    ? $commanModel->get_exotic_address() 
+    : [];
 ?>
 <div id="commonDispatchModal" class="fixed inset-0 z-[150] hidden items-center justify-center bg-black/50 p-4 backdrop-blur-sm overflow-y-auto">
     <div class="relative w-full max-w-2xl mx-auto my-auto rounded-2xl bg-white shadow-2xl border border-gray-100 overflow-hidden text-gray-800 animate-in fade-in zoom-in duration-200">
@@ -107,7 +111,13 @@
                 <!-- Pickup Location -->
                 <div>
                     <label for="cdmInputPickupLocation" class="block text-xs font-semibold text-gray-700 mb-1">Pickup Location</label>
-                    <input type="text" name="pickup_location" id="cdmInputPickupLocation" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none" placeholder="e.g. Delhi Main Warehouse">
+                    <select name="pickup_location" id="cdmInputPickupLocation" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none">
+                        <option value="">Select Pickup Location</option>
+                        <?php foreach ($exoticAddresses as $address): ?>
+                            <?php $addrTitle = htmlspecialchars($address['address_title'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+                            <option value="<?= $addrTitle ?>"><?= $addrTitle ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
 
                 <!-- Dispatch Date -->
