@@ -472,7 +472,7 @@
                 </div>
               </div>
               <!-- RIGHT -->
-              <div class="flex flex-col sm:items-end justify-center">
+              <div class="flex items-center justify-end shrink-0">
                 <div class="relative">
                   <button type="button" class="text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-full w-9 h-9 flex items-center justify-center text-xl font-bold transition outline-none" onclick="toggleMenu(this)" aria-label="Action menu">
                     ⋮
@@ -569,10 +569,6 @@
                     </div>
                   </div>
                 </div>
-              </div>
-                <div></div>
-                <div></div>
-                
               </div>
             </div>
           </div>
