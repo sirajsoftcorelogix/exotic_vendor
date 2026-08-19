@@ -1218,6 +1218,8 @@ function pos_payment_insert_row(
         $newId = (int)$conn->insert_id;
         $stmt->close();
 
+        pos_payment_update_order_info_payment_mode($conn, $orderNumber);
+
         return [
             'success' => true,
             'payment_id' => $newId,
@@ -1274,6 +1276,8 @@ function pos_payment_insert_row(
     $newId = (int)$conn->insert_id;
     $stmt->close();
 
+    pos_payment_update_order_info_payment_mode($conn, $orderNumber);
+
     return [
         'success' => true,
         'payment_id' => $newId,
@@ -1282,4 +1286,170 @@ function pos_payment_insert_row(
         'order_amount' => $orderAmtSnap,
         'pending_amount' => $pendingAmtSnap,
     ];
+}
+
+/**
+ * Ensure vp_order_info table has payment_mode column.
+ */
+function pos_payment_ensure_order_info_payment_mode_column(mysqli $conn): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $check = $conn->query("SHOW COLUMNS FROM vp_order_info LIKE 'payment_mode'");
+    if ($check && $check->num_rows === 0) {
+        @$conn->query("ALTER TABLE vp_order_info ADD COLUMN payment_mode VARCHAR(100) NULL DEFAULT NULL AFTER payment_type");
+    }
+    $done = true;
+}
+
+/**
+ * Auto fill vp_order_info.payment_mode on the basis of payment_type and pos_payments.payment_mode.
+ * 
+ * Rules:
+ * If payment_type = 'offline':
+ *   Check pos_payments for order_number.
+ *   If any pos_payments.payment_mode is 'bank_transfer' or 'upi': set value 'YES2971'
+ *   Else if pos_payments.payment_mode exists: set value pos_payments.payment_mode
+ *   Else: set 'offline'
+ * Else:
+ *   Set payment_type value
+ */
+function pos_payment_resolve_order_payment_mode(mysqli $conn, string $orderNumber, ?string $paymentType = null, ?string $givenPaymentMode = null): string
+{
+    pos_payment_ensure_order_info_payment_mode_column($conn);
+
+    $orderNumber = trim($orderNumber);
+    $payType = trim((string)$paymentType);
+    $givenMode = trim((string)$givenPaymentMode);
+
+    if ($payType === '' && $orderNumber !== '') {
+        $stmt = $conn->prepare('SELECT payment_type FROM vp_order_info WHERE order_number = ? LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('s', $orderNumber);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res && $row = $res->fetch_assoc()) {
+                $payType = trim((string)($row['payment_type'] ?? ''));
+            }
+            $stmt->close();
+        }
+    }
+
+    $candidates = array_unique(array_filter([strtolower($payType), strtolower($givenMode)]));
+
+    foreach ($candidates as $cand) {
+        if (in_array($cand, ['upi', 'bank_transfer', 'bank-transfer', 'banktransfer', 'cheque'], true)) {
+            return 'YES2971';
+        }
+        if (in_array($cand, ['pos_machine', 'pos'], true)) {
+            return 'pos';
+        }
+    }
+
+    $isCod = in_array('cod', $candidates, true);
+
+    if (in_array('offline', $candidates, true) && $orderNumber !== '') {
+        // Check if any payment split is cod
+        $stmt = $conn->prepare("SELECT payment_mode FROM pos_payments WHERE order_number = ? AND LOWER(TRIM(payment_mode)) = 'cod' LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('s', $orderNumber);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res && $res->num_rows > 0) {
+                $isCod = true;
+            }
+            $stmt->close();
+        }
+    }
+
+    if ($isCod) {
+        if ($orderNumber !== '') {
+            $stmt = $conn->prepare("SELECT courier_name FROM vp_dispatch_details WHERE order_number = ? AND courier_name IS NOT NULL AND TRIM(courier_name) <> '' ORDER BY id DESC LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param('s', $orderNumber);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($res && $row = $res->fetch_assoc()) {
+                    $courierName = trim((string)($row['courier_name'] ?? ''));
+                    $stmt->close();
+                    if ($courierName !== '') {
+                        return $courierName;
+                    }
+                } else {
+                    $stmt->close();
+                }
+            }
+        }
+        return 'COD';
+    }
+
+    if (in_array('offline', $candidates, true)) {
+        if ($orderNumber !== '') {
+            // Check if any payment split is bank_transfer, upi, or cheque
+            $stmt = $conn->prepare("SELECT payment_mode FROM pos_payments WHERE order_number = ? AND (LOWER(TRIM(payment_mode)) = 'bank_transfer' OR LOWER(TRIM(payment_mode)) = 'upi' OR LOWER(TRIM(payment_mode)) = 'cheque') LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param('s', $orderNumber);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($res && $res->num_rows > 0) {
+                    $stmt->close();
+                    return 'YES2971';
+                }
+                $stmt->close();
+            }
+
+            // Otherwise fetch the latest payment mode
+            $stmt = $conn->prepare('SELECT payment_mode FROM pos_payments WHERE order_number = ? ORDER BY id DESC LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('s', $orderNumber);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($res && $row = $res->fetch_assoc()) {
+                    $posMode = strtolower(trim((string)($row['payment_mode'] ?? '')));
+                    $rawMode = trim((string)($row['payment_mode'] ?? ''));
+                    $stmt->close();
+                    if ($posMode === 'bank_transfer' || $posMode === 'upi' || $posMode === 'cheque') {
+                        return 'YES2971';
+                    }
+                    if ($posMode === 'pos_machine' || $posMode === 'pos') {
+                        return 'pos';
+                    }
+                    if ($rawMode !== '') {
+                        return $rawMode;
+                    }
+                } else {
+                    $stmt->close();
+                }
+            }
+        }
+        return 'offline';
+    }
+
+    if ($givenMode !== '') {
+        return $givenMode;
+    }
+
+    return $payType !== '' ? $payType : 'offline';
+}
+
+/**
+ * Update vp_order_info.payment_mode for given order_number.
+ */
+function pos_payment_update_order_info_payment_mode(mysqli $conn, string $orderNumber): void
+{
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '') {
+        return;
+    }
+
+    $resolvedMode = pos_payment_resolve_order_payment_mode($conn, $orderNumber);
+
+    $stmt = $conn->prepare('UPDATE vp_order_info SET payment_mode = ? WHERE order_number = ?');
+    if ($stmt) {
+        $stmt->bind_param('ss', $resolvedMode, $orderNumber);
+        $stmt->execute();
+        $stmt->close();
+    }
 }

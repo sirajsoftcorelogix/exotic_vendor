@@ -502,6 +502,14 @@ class OrdersController
             try {
                 $orderForAddress = $order;
                 $orderForAddress['orderid'] = $storeOrderNumber;
+                if (function_exists('pos_payment_resolve_order_payment_mode')) {
+                    $orderForAddress['payment_mode'] = pos_payment_resolve_order_payment_mode(
+                        $conn,
+                        $storeOrderNumber,
+                        (string)($order['payment_type'] ?? ''),
+                        (string)($order['payment_mode'] ?? '')
+                    );
+                }
                 $addressdata[] = $ordersModel->insertAddressInfo($orderForAddress, $customerdata['customer_id'] ?? 0);
             } catch (\Throwable $e) {
                 error_log('[order import insertAddressInfo] ' . $e->getMessage());
@@ -3193,6 +3201,14 @@ class OrdersController
         }
 
         try {
+            if (function_exists('pos_payment_resolve_order_payment_mode')) {
+                $vendorOrder['payment_mode'] = pos_payment_resolve_order_payment_mode(
+                    $conn,
+                    $orderNumber,
+                    (string)($vendorOrder['payment_type'] ?? ''),
+                    (string)($vendorOrder['payment_mode'] ?? '')
+                );
+            }
             $ordersModel->insertAddressInfo($vendorOrder, $customerId);
         } catch (\Throwable $e) {
             error_log('[order refresh insertAddressInfo] ' . $e->getMessage());

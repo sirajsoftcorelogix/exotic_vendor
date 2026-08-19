@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../../helpers/order_filter_autocomplete.php';
 require_once __DIR__ . '/../../helpers/order_list_filters.php';
+require_once __DIR__ . '/../../helpers/pos_payment_receipt.php';
 
 class Order
 {
@@ -2285,6 +2286,7 @@ class Order
             'transid',
             'currency',
             'payment_type',
+            'payment_mode',
             'coupon',
             'coupon_reduce',
             'credit',
@@ -2363,6 +2365,32 @@ class Order
             $placeholders[] = '?';
             $values[]       = $data['payment_type'];
             $types         .= 's'; // string
+        }
+        //payment_mode add / auto-fill
+        $payTypeForMode = $data['payment_type'] ?? ($addressInfo['payment_type'] ?? null);
+        $givenModeForMode = $data['payment_mode'] ?? ($addressInfo['payment_mode'] ?? null);
+        $orderNoForMode = (string)($data['orderid'] ?? '');
+
+        if ($this->db instanceof mysqli && function_exists('pos_payment_resolve_order_payment_mode')) {
+            $resolvedMode = pos_payment_resolve_order_payment_mode(
+                $this->db,
+                $orderNoForMode,
+                (string)$payTypeForMode,
+                (string)$givenModeForMode
+            );
+            if ($resolvedMode !== null && $resolvedMode !== '') {
+                if (in_array('payment_mode', $insertCols, true)) {
+                    $pmKey = array_search('payment_mode', $insertCols, true);
+                    if ($pmKey !== false) {
+                        $values[$pmKey] = $resolvedMode;
+                    }
+                } else {
+                    $insertCols[]   = 'payment_mode';
+                    $placeholders[] = '?';
+                    $values[]       = $resolvedMode;
+                    $types         .= 's';
+                }
+            }
         }
         //coupon add
         if (isset($data['coupon']) && !in_array('coupon', $insertCols, true)) {
