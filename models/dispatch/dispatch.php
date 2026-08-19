@@ -456,6 +456,10 @@ class Dispatch {
 
         if ($result && !empty($beforeDispatch['id'])) {
             $this->maybeLogExoticIndiaShipment((int) $beforeDispatch['id'], $beforeDispatch);
+            $orderNo = (string)($beforeDispatch['order_number'] ?? '');
+            if ($orderNo !== '' && function_exists('pos_payment_update_order_info_payment_mode')) {
+                pos_payment_update_order_info_payment_mode($this->db, $orderNo);
+            }
         }
 
         return $result;
