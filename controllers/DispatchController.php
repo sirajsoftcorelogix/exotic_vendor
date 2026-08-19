@@ -1474,6 +1474,68 @@ class DispatchController {
             echo json_encode(['success' => false, 'message' => 'Dispatch not found']);
         }
     }
+
+    public function getDispatchDetailsAjax(): void
+    {
+        global $dispatchModel;
+
+        $invoiceId = isset($_GET['invoice_id']) ? (int) $_GET['invoice_id'] : 0;
+        $dispatchId = isset($_GET['dispatch_id']) ? (int) $_GET['dispatch_id'] : 0;
+
+        if ($dispatchId > 0) {
+            $dispatch = $dispatchModel->getDispatchById($dispatchId);
+            if ($dispatch) {
+                $this->emitJsonResponse(['success' => true, 'data' => $dispatch, 'dispatches' => [$dispatch]]);
+            }
+            $this->emitJsonResponse(['success' => false, 'message' => 'Dispatch record not found.'], 404);
+        }
+
+        if ($invoiceId > 0) {
+            $records = $dispatchModel->getDispatchRecordsByInvoiceId($invoiceId);
+            if (!empty($records)) {
+                $this->emitJsonResponse([
+                    'success' => true,
+                    'data' => $records[0],
+                    'dispatches' => $records
+                ]);
+            }
+            $this->emitJsonResponse([
+                'success' => true,
+                'data' => null,
+                'dispatches' => [],
+                'message' => 'No dispatch details recorded yet.'
+            ]);
+        }
+
+        $this->emitJsonResponse(['success' => false, 'message' => 'Missing invoice_id or dispatch_id.'], 400);
+    }
+
+    public function saveDispatchDetailsAjax(): void
+    {
+        global $dispatchModel;
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->emitJsonResponse(['success' => false, 'message' => 'Method not allowed.'], 405);
+        }
+
+        $rawBody = file_get_contents('php://input');
+        $input = json_decode($rawBody, true);
+        if (!is_array($input) || empty($input)) {
+            $input = $_POST;
+        }
+
+        $invoiceId = isset($input['invoice_id']) ? (int) $input['invoice_id'] : 0;
+        if ($invoiceId <= 0) {
+            $this->emitJsonResponse(['success' => false, 'message' => 'Invoice ID is required.'], 400);
+        }
+
+        $result = $dispatchModel->saveOrUpdateDispatchDetails($input);
+        if (!empty($result['success'])) {
+            $this->emitJsonResponse($result, 200);
+        } else {
+            $this->emitJsonResponse($result, 400);
+        }
+    }
     public function reDispatchInvoice() {
         header('Content-Type: application/json');
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

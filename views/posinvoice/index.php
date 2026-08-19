@@ -634,6 +634,14 @@ stroke-linejoin="round"/>
         <i class="fa-solid fa-trash"></i>
     </button>`;
 
+                    const dispatchBtn = isCancelled ? '' : `
+<button type="button"
+   onclick="openCommonDispatchModal({ invoice_id: ${i.id}, invoice_number: '${escapeHtml(i.invoice_number || '')}', order_number: '${escapeHtml(i.order_number || '')}' })"
+   class="inline-flex items-center gap-1 text-purple-700 hover:text-purple-900 text-xs font-semibold border-0 bg-transparent cursor-pointer p-0"
+   title="Add or edit dispatch details">
+    <i class="fa-solid fa-truck text-[11px]" aria-hidden="true"></i> Dispatch
+</button>`;
+
                     html += `
 <tr class="border-t hover:bg-gray-50">
 
@@ -654,6 +662,7 @@ stroke-linejoin="round"/>
 
  <td class="p-3 flex flex-wrap gap-3 items-center">
 ${pdfLink}
+${dispatchBtn}
 ${returnBtn}
 ${cancelBtn}
 ${deleteBtn}
@@ -812,3 +821,5 @@ Could not load invoices. Please try again.
             });
     }
 </script>
+
+<?php require_once __DIR__ . '/../shared/partials/dispatch_details_modal.php'; ?>

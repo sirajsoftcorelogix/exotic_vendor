@@ -1820,6 +1820,12 @@ switch ($page) {
             case 'shipment_add_execute':
                 $controller->shipmentAddExecute();
                 break;
+            case 'get_dispatch_details_ajax':
+                $controller->getDispatchDetailsAjax();
+                break;
+            case 'save_dispatch_details_ajax':
+                $controller->saveDispatchDetailsAjax();
+                break;
             default:
                 $controller->create();
                 break;
@@ -1998,6 +2004,14 @@ switch ($page) {
 
             case 'user_guide':
                 $controller->userGuide();
+                break;
+
+            case 'get_dispatch_details_ajax':
+                $controller->getDispatchDetailsAjax();
+                break;
+
+            case 'save_dispatch_details_ajax':
+                $controller->saveDispatchDetailsAjax();
                 break;
 
             default:
