@@ -442,6 +442,17 @@
         <?php
           $accountsGroupDisplay = trim((string)($products['accounts_group'] ?? ''));
           $accountGroupOptions = is_array($products['account_group_options'] ?? null) ? $products['account_group_options'] : [];
+
+          $groupedAccountOptions = [];
+          foreach ($accountGroupOptions as $agOpt) {
+              $groupKey = trim((string)($agOpt['item_group'] ?? ''));
+              if ($groupKey === '') {
+                  $groupLabel = 'General / Uncategorized';
+              } else {
+                  $groupLabel = ucwords(str_replace(['_', '-'], ' ', $groupKey));
+              }
+              $groupedAccountOptions[$groupLabel][] = $agOpt;
+          }
         ?>
         <p id="productAccountsGroupDisplay" class="text-sm text-gray-500 mt-1 flex items-center gap-1.5 flex-wrap">
           <span>Accounts Group:</span>
@@ -1150,19 +1161,20 @@
             <label for="select_accounts_group" class="block text-sm font-medium text-gray-600 mb-1">Accounts Group</label>
             <select id="select_accounts_group" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
                 <option value="">-- Select Accounts Group --</option>
-                <?php foreach ($accountGroupOptions as $agOpt): ?>
-                    <?php 
-                        $agName = (string)($agOpt['account_group_name'] ?? ''); 
-                        $isSelected = (strcasecmp($agName, $accountsGroupDisplay) === 0);
-                    ?>
-                    <option value="<?php echo htmlspecialchars($agName, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $isSelected ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars($agName, ENT_QUOTES, 'UTF-8'); ?>
-                    </option>
+                <?php foreach ($groupedAccountOptions as $groupLabel => $options): ?>
+                    <optgroup label="<?php echo htmlspecialchars($groupLabel, ENT_QUOTES, 'UTF-8'); ?>">
+                        <?php foreach ($options as $agOpt): ?>
+                            <?php 
+                                $agName = (string)($agOpt['account_group_name'] ?? ''); 
+                                $isSelected = (strcasecmp($agName, $accountsGroupDisplay) === 0);
+                            ?>
+                            <option value="<?php echo htmlspecialchars($agName, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $isSelected ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($agName, ENT_QUOTES, 'UTF-8'); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </optgroup>
                 <?php endforeach; ?>
             </select>
-            <?php if ($groupRaw !== ''): ?>
-                <p class="text-xs text-gray-400 mt-1.5">Filtered for item group: <span class="font-medium text-gray-600"><?php echo htmlspecialchars($groupRaw, ENT_QUOTES, 'UTF-8'); ?></span></p>
-            <?php endif; ?>
         </div>
         <div class="flex justify-end gap-3 mt-6">
             <button type="button" onclick="closeAccountsGroupModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
