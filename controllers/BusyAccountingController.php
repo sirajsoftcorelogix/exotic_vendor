@@ -157,7 +157,8 @@ class BusyAccountingController
                 'Material Centre' => 'Main Location',
                 'Currency' => $details['currency'] ?? 'INR',
                 'Shipping Details' => [
-                    'Party Name' => $customerName,
+                    //'Party Name' => $customerName,
+                    'Party Name' => $partyName,
                     'Address' => trim(($details['address_line1'] ?? '') . ' ' . ($details['address_line2'] ?? '')),
                     'PinCode' => $details['zipcode'] ?? '',
                     'State' => $details['state'] ?? '',
