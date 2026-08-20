@@ -693,13 +693,12 @@ class OrdersAPIController
             $sql = "SELECT DISTINCT i.id, i.invoice_number, i.invoice_date, i.updated_at, i.customer_id, i.total_amount, 
                            i.subtotal, i.tax_amount, i.discount_amount, i.status, i.currency,
                            c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, c.city, c.zipcode, c.state, c.country, c.gstin, c.payment_type, c.payment_mode, 
-                           ea.address_title,                           
-                           ea.address                          
+                           ea.address_title, ea.address                          
                     FROM vp_invoices i
                     LEFT JOIN vp_order_info c ON i.customer_id = c.customer_id AND c.id = (SELECT MAX(id) FROM vp_order_info WHERE customer_id = i.customer_id)
                     left join exotic_address as ea on i.warehouse_id = ea.id
                     $whereSql
-                    ORDER BY i.invoice_date DESC
+                    ORDER BY i.invoice_date ASC
                     LIMIT ? OFFSET ?";
             $stmt = $GLOBALS['conn']->prepare($sql);
             //echo $sql;
@@ -821,7 +820,12 @@ class OrdersAPIController
             if ($result && $result->num_rows > 0) {
                 while ($invoice = $result->fetch_assoc()) {
                     // Fetch invoice items
-                    $itemsSql = "SELECT it.*, ag.account_group_name FROM vp_invoice_items it LEFT JOIN account_group ag ON it.groupname = ag.item_group WHERE invoice_id = ?";
+                    $itemsSql = "SELECT it.*, 
+                                        (SELECT CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci 
+                                         FROM vp_products p 
+                                         WHERE p.id = it.product_id LIMIT 1) AS account_group_name 
+                                 FROM vp_invoice_items it 
+                                 WHERE invoice_id = ?";
                     $itemsStmt = $GLOBALS['conn']->prepare($itemsSql);
                     if (!$itemsStmt) {
                         throw new Exception('Database error: Unable to fetch invoice items');
