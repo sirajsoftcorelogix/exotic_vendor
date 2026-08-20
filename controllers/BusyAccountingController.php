@@ -173,6 +173,7 @@ class BusyAccountingController
                     $amt = (float)($item['line_total'] ?? ($qty * $price));
                     return [
                         'Item Name' => $item['item_name'] ?? '',
+                        'SKU' => $item['sku'] ?? $item['item_code'] ?? '',
                         'HSN Code' => $item['hsn'] ?? '',
                         'Qty' => $qty,
                         'Unit' => 'PCS',
