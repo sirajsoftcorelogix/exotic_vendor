@@ -6406,6 +6406,7 @@ class product
             'length_unit' => 'length_unit',
             'size' => 'size',
             'color' => 'color',
+            'accounts_group' => 'accounts_group',
             'updated_at' => 'updated_at',
         ];
 
@@ -6771,9 +6772,37 @@ class product
         }
         $stmt->close();
         return array_values(array_unique($products));
-        // if ($result && $result->num_rows > 0) {
-        //     return ['success' => true, 'data' => $result->fetch_all(MYSQLI_ASSOC)];
-        // }
-        //return ['success' => false, 'message' => 'No products found'];
+    }
+
+    /**
+     * Update accounts_group on product (and all variants sharing the same item_code).
+     */
+    public function updateProductAccountsGroup(int $productId, string $accountsGroup): array
+    {
+        $product = $this->getProduct($productId);
+        if (!$product) {
+            return ['success' => false, 'message' => 'Product not found.'];
+        }
+
+        $itemCode = trim((string) ($product['item_code'] ?? ''));
+        $now = date('Y-m-d H:i:s');
+
+        if ($itemCode !== '') {
+            $stmt = $this->db->prepare('UPDATE vp_products SET accounts_group = ?, updated_at = ? WHERE item_code = ?');
+            if ($stmt) {
+                $stmt->bind_param('sss', $accountsGroup, $now, $itemCode);
+                $stmt->execute();
+                $stmt->close();
+            }
+        } else {
+            $stmt = $this->db->prepare('UPDATE vp_products SET accounts_group = ?, updated_at = ? WHERE id = ?');
+            if ($stmt) {
+                $stmt->bind_param('ssi', $accountsGroup, $now, $productId);
+                $stmt->execute();
+                $stmt->close();
+            }
+        }
+
+        return ['success' => true, 'message' => 'Accounts group updated successfully.'];
     }
 }

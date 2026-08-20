@@ -441,10 +441,19 @@
         </div>
         <?php
           $accountsGroupDisplay = trim((string)($products['accounts_group'] ?? ''));
+          $accountGroupOptions = is_array($products['account_group_options'] ?? null) ? $products['account_group_options'] : [];
         ?>
-        <p id="productAccountsGroupDisplay" class="text-sm text-gray-500 mt-1">
-          Accounts Group:
-          <span class="font-medium text-gray-700"><?php echo htmlspecialchars($accountsGroupDisplay !== '' ? $accountsGroupDisplay : '—', ENT_QUOTES, 'UTF-8'); ?></span>
+        <p id="productAccountsGroupDisplay" class="text-sm text-gray-500 mt-1 flex items-center gap-1.5 flex-wrap">
+          <span>Accounts Group:</span>
+          <span id="accountsGroupValue" class="font-medium text-gray-700"><?php echo htmlspecialchars($accountsGroupDisplay !== '' ? $accountsGroupDisplay : '—', ENT_QUOTES, 'UTF-8'); ?></span>
+          <button
+            type="button"
+            class="inline-flex h-5 w-5 items-center justify-center rounded border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            onclick="openAccountsGroupModal()"
+            title="Edit Accounts Group"
+            aria-label="Edit Accounts Group">
+            <i class="fas fa-pencil-alt text-[9px]"></i>
+          </button>
         </p>
         <?php if (!$isBookProduct && $authorRaw !== ''): ?>
           <p class="text-sm text-gray-600 mt-1">Artist: <span class="font-medium text-gray-800"><?php echo htmlspecialchars($authorRaw, ENT_QUOTES, 'UTF-8'); ?></span></p>
@@ -1131,6 +1140,36 @@
     <button onclick="document.getElementById('imagePopup').classList.add('hidden')" class="mt-2 px-4 py-2 bg-red-600 text-white rounded">Close</button>
   </div>
 </div> -->
+<div id="accountsGroupModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 relative">
+        <button type="button" onclick="closeAccountsGroupModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
+        <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <i class="fas fa-layer-group text-emerald-600"></i> Edit Accounts Group
+        </h2>
+        <div>
+            <label for="select_accounts_group" class="block text-sm font-medium text-gray-600 mb-1">Accounts Group</label>
+            <select id="select_accounts_group" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+                <option value="">-- Select Accounts Group --</option>
+                <?php foreach ($accountGroupOptions as $agOpt): ?>
+                    <?php 
+                        $agName = (string)($agOpt['account_group_name'] ?? ''); 
+                        $isSelected = (strcasecmp($agName, $accountsGroupDisplay) === 0);
+                    ?>
+                    <option value="<?php echo htmlspecialchars($agName, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $isSelected ? 'selected' : ''; ?>>
+                        <?php echo htmlspecialchars($agName, ENT_QUOTES, 'UTF-8'); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <?php if ($groupRaw !== ''): ?>
+                <p class="text-xs text-gray-400 mt-1.5">Filtered for item group: <span class="font-medium text-gray-600"><?php echo htmlspecialchars($groupRaw, ENT_QUOTES, 'UTF-8'); ?></span></p>
+            <?php endif; ?>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+            <button type="button" onclick="closeAccountsGroupModal()" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button type="button" onclick="submitAccountsGroupUpdate()" class="px-4 py-2 text-sm bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700">Save</button>
+        </div>
+    </div>
+</div>
 <div id="productTitleModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
     <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-6 relative">
         <button type="button" onclick="closeProductTitleModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700">✕</button>
@@ -2974,6 +3013,39 @@ function postProductDetailSection(scope, payload) {
         body: JSON.stringify(payload)
     }).then(function (r) {
         return r.json();
+    });
+}
+
+function openAccountsGroupModal() {
+    var modal = document.getElementById('accountsGroupModal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeAccountsGroupModal() {
+    var modal = document.getElementById('accountsGroupModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function submitAccountsGroupUpdate() {
+    var select = document.getElementById('select_accounts_group');
+    var accountsGroup = select ? String(select.value || '').trim() : '';
+
+    postProductDetailSection('accounts_group_section', {
+        product_id: <?php echo json_encode((int)($products['id'] ?? 0)); ?>,
+        accounts_group: accountsGroup
+    }).then(function (res) {
+        if (res && res.success) {
+            closeAccountsGroupModal();
+            var valEl = document.getElementById('accountsGroupValue');
+            if (valEl) {
+                valEl.textContent = accountsGroup !== '' ? accountsGroup : '—';
+            }
+            showProfileStatusModal(res.message || 'Accounts group updated successfully.', 'success', true);
+        } else {
+            showProfileStatusModal((res && res.message) ? res.message : 'Could not update accounts group.', 'error', false);
+        }
+    }).catch(function () {
+        showProfileStatusModal('An error occurred while updating accounts group.', 'error', false);
     });
 }
 
