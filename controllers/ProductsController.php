@@ -4982,7 +4982,7 @@ class ProductsController
 
             require_once dirname(__DIR__) . '/models/account_group/AccountGroup.php';
             $accountGroupModel = new AccountGroup($conn);
-            $order['account_group_options'] = $accountGroupModel->getActiveAccountGroupsForItemGroup((string)($order['groupname'] ?? ''));
+            $order['account_group_options'] = $accountGroupModel->getAllActiveAccountGroups();
 
             if (!headers_sent()) {
                 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
