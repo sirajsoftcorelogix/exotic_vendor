@@ -602,6 +602,7 @@ class BusyAccounting
 
         // Fetch line items with fast indexed subqueries
         $itemsSql = "SELECT it.*, 
+                            COALESCE(NULLIF((SELECT CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM vp_products p WHERE p.id = it.product_id LIMIT 1), ''), it.item_code) AS sku,
                             (SELECT CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci 
                              FROM vp_products p 
                              WHERE p.id = it.product_id LIMIT 1) AS account_group_name 
@@ -693,6 +694,7 @@ class BusyAccounting
 
         // Fetch return line items with fast indexed subqueries
         $itemsSql = "SELECT sri.*, ii.item_name, ii.hsn, ii.unit_price, ii.tax_rate, ii.groupname,
+                            COALESCE(NULLIF((SELECT CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM vp_products p WHERE p.id = COALESCE(sri.product_id, ii.product_id) LIMIT 1), ''), sri.item_code, ii.item_code) AS sku,
                             (SELECT CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci 
                              FROM vp_products p 
                              WHERE p.id = COALESCE(sri.product_id, ii.product_id) LIMIT 1) AS account_group_name 

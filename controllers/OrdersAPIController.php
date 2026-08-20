@@ -785,6 +785,7 @@ class OrdersAPIController
                                 'order_row_id' => isset($salesReturnItem['order_row_id']) ? (int)$salesReturnItem['order_row_id'] : null,
                                 'product_id' => isset($salesReturnItem['product_id']) ? (int)$salesReturnItem['product_id'] : null,
                                 'item_code' => (string)($salesReturnItem['item_code'] ?? ''),
+                                'sku' => (string)($salesReturnItem['sku'] ?? $salesReturnItem['item_code'] ?? ''),
                                 'size' => (string)($salesReturnItem['size'] ?? ''),
                                 'color' => (string)($salesReturnItem['color'] ?? ''),
                                 'return_qty' => (float)($salesReturnItem['return_qty'] ?? 0),
@@ -821,6 +822,7 @@ class OrdersAPIController
                 while ($invoice = $result->fetch_assoc()) {
                     // Fetch invoice items
                     $itemsSql = "SELECT it.*, 
+                                        COALESCE(NULLIF((SELECT CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM vp_products p WHERE p.id = it.product_id LIMIT 1), ''), it.item_code) AS sku,
                                         (SELECT CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci 
                                          FROM vp_products p 
                                          WHERE p.id = it.product_id LIMIT 1) AS account_group_name 
@@ -843,15 +845,16 @@ class OrdersAPIController
                         $totalAmount += $itemAmount;
 
                         $itemDetails[] = [
-                            'Item Name'   => $item['item_name'] ?? '',
-                            'HSN Code'    => $item['hsn'] ?? '',
-                            'Qty'         => floatval($item['quantity'] ?? 0),
-                            'Unit'        => 'PCS', // Default unit if not present
-                            'MRP'         => floatval($item['unit_price'] ?? 0),
-                            'Sales Price' => floatval($item['unit_price'] ?? 0),
-                            'Amount'      => round($itemAmount, 2),
-                            'GST Rate'    => floatval($item['tax_rate'] ?? 0),
-                            'Discount'    => 0.0,
+                            'Item Name'     => $item['item_name'] ?? '',
+                            'SKU'           => $item['sku'] ?? $item['item_code'] ?? '',
+                            'HSN Code'      => $item['hsn'] ?? '',
+                            'Qty'           => floatval($item['quantity'] ?? 0),
+                            'Unit'          => 'PCS', // Default unit if not present
+                            'MRP'           => floatval($item['unit_price'] ?? 0),
+                            'Sales Price'   => floatval($item['unit_price'] ?? 0),
+                            'Amount'        => round($itemAmount, 2),
+                            'GST Rate'      => floatval($item['tax_rate'] ?? 0),
+                            'Discount'      => 0.0,
                             'account_group' => $item['account_group_name'] ?? ''
                         ];
                     }
