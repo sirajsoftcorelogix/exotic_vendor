@@ -4980,6 +4980,10 @@ class ProductsController
                 $order['book_replenishment'] = $bookReplenishment->evaluate($order, 0, $physicalStock);
             }
 
+            require_once dirname(__DIR__) . '/models/account_group/AccountGroup.php';
+            $accountGroupModel = new AccountGroup($conn);
+            $order['account_group_options'] = $accountGroupModel->getActiveAccountGroupsForItemGroup((string)($order['groupname'] ?? ''));
+
             if (!headers_sent()) {
                 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
                 header('Pragma: no-cache');
@@ -6395,6 +6399,28 @@ class ProductsController
             echo json_encode(['success' => false, 'message' => $e->getMessage()]);
         }
         exit;
+    }
+
+    public function updateProductAccountsGroupSection()
+    {
+        is_login();
+        $this->runProductDetailJsonAction(function () {
+            global $productModel;
+            $data = $this->readJsonRequestBody();
+            $productId = (int) ($data['product_id'] ?? 0);
+            $accountsGroup = trim((string) ($data['accounts_group'] ?? ''));
+
+            if ($productId <= 0) {
+                throw new Exception('Invalid product ID.');
+            }
+
+            $res = $productModel->updateProductAccountsGroup($productId, $accountsGroup);
+            if (empty($res['success'])) {
+                throw new Exception($res['message'] ?? 'Could not update accounts group.');
+            }
+
+            return $res;
+        });
     }
 
     public function updateProductBookDetailsSection()
@@ -8944,6 +8970,10 @@ class ProductsController
                         return;
                     case 'book_details_section':
                         $this->updateProductBookDetailsSection();
+                        return;
+                    case 'accounts_group_section':
+                    case 'accounts_group':
+                        $this->updateProductAccountsGroupSection();
                         return;
                     default:
                         $this->prepareProductDetailJsonResponse();
