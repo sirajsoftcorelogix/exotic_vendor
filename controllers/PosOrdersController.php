@@ -384,6 +384,15 @@ class PosOrdersController
                 //print_array($maped);             
             }
             //add address info
+            if (function_exists('pos_payment_resolve_order_payment_mode')) {
+                global $conn;
+                $order['payment_mode'] = pos_payment_resolve_order_payment_mode(
+                    $conn,
+                    (string)($order['orderid'] ?? ''),
+                    (string)($order['payment_type'] ?? ''),
+                    (string)($order['payment_mode'] ?? '')
+                );
+            }
             $addressdata[] = $ordersModel->insertAddressInfo($order, $customerdata['customer_id'] ?? 0);
             //print_array($addressdata);
             //print_array($order);exit;
@@ -2260,14 +2269,13 @@ class PosOrdersController
         $shipping_first_name = trim($_POST['shipping_first_name'] ?? '');
         $shipping_last_name = trim($_POST['shipping_last_name'] ?? '');
         $customer_name  = trim($_POST['customer_name']  ?? '');
-        if ($customer_name === '') {
-            $customer_name = trim($first_name . ' ' . $last_name);
-        }
+
         $address_line1 = trim($_POST['address_line1'] ?? '');
         $address_line2 = trim($_POST['address_line2'] ?? '');
         $city = trim($_POST['city'] ?? '');
         $zipcode = trim($_POST['zipcode'] ?? '');
         $country = trim($_POST['country'] ?? '');
+
         $billing_address_line1 = trim($_POST['billing_address_line1'] ?? '');
         $billing_address_line2 = trim($_POST['billing_address_line2'] ?? '');
         $billing_city = trim($_POST['billing_city'] ?? '');
@@ -2277,6 +2285,67 @@ class PosOrdersController
         $shipping_gstin = strtoupper(trim($_POST['shipping_gstin'] ?? ''));
         $state = trim($_POST['state'] ?? '');
         $shipping_state = trim($_POST['shipping_state'] ?? '');
+
+        if ($first_name === '' && $shipping_first_name !== '') {
+            $first_name = $shipping_first_name;
+        }
+        if ($shipping_first_name === '' && $first_name !== '') {
+            $shipping_first_name = $first_name;
+        }
+        if ($last_name === '' && $shipping_last_name !== '') {
+            $last_name = $shipping_last_name;
+        }
+        if ($shipping_last_name === '' && $last_name !== '') {
+            $shipping_last_name = $last_name;
+        }
+        if ($first_name === '' && $customer_name !== '') {
+            $nameParts = preg_split('/\s+/', $customer_name, 2);
+            $first_name = trim($nameParts[0] ?? '');
+            if ($last_name === '') {
+                $last_name = trim($nameParts[1] ?? '');
+            }
+        }
+        if ($customer_name === '') {
+            $customer_name = trim($first_name . ' ' . $last_name);
+        }
+
+        if ($address_line1 === '' && $billing_address_line1 !== '') {
+            $address_line1 = $billing_address_line1;
+        }
+        if ($billing_address_line1 === '' && $address_line1 !== '') {
+            $billing_address_line1 = $address_line1;
+        }
+        if ($address_line2 === '' && $billing_address_line2 !== '') {
+            $address_line2 = $billing_address_line2;
+        }
+        if ($billing_address_line2 === '' && $address_line2 !== '') {
+            $billing_address_line2 = $address_line2;
+        }
+        if ($city === '' && $billing_city !== '') {
+            $city = $billing_city;
+        }
+        if ($billing_city === '' && $city !== '') {
+            $billing_city = $city;
+        }
+        if ($state === '' && $shipping_state !== '') {
+            $state = $shipping_state;
+        }
+        if ($shipping_state === '' && $state !== '') {
+            $shipping_state = $state;
+        }
+        if ($zipcode === '' && $billing_zipcode !== '') {
+            $zipcode = $billing_zipcode;
+        }
+        if ($billing_zipcode === '' && $zipcode !== '') {
+            $billing_zipcode = $zipcode;
+        }
+        if ($country === '' && $billing_country !== '') {
+            $country = $billing_country;
+        }
+        if ($billing_country === '' && $country !== '') {
+            $billing_country = $country;
+        }
+
         if (empty($order_number) || empty($first_name) || empty($customer_phone) || empty($address_line1)) {
             echo json_encode([
                 'success' => false,

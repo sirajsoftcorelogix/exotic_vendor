@@ -6,6 +6,38 @@ $h = static function ($s): string {
     return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
 };
 $lines = isset($receipt_lines) && is_array($receipt_lines) ? $receipt_lines : [];
+$showIrnEwbPopup = !empty($show_irn_ewb_popup);
+$irnStatusDisplay = trim((string)($irn_status ?? ''));
+$ewbStatusDisplay = trim((string)($ewb_status ?? ''));
+$irnErrorDisplay = trim((string)($irn_error ?? ''));
+$ewbErrorDisplay = trim((string)($ewb_error ?? ''));
+$irnEwbPopupInvoiceId = (int)($irn_ewb_popup_invoice_id ?? 0);
+$irnEwbPopupOrderNo = trim((string)($order_id ?? ''));
+$showRegenEwbWithIrn = !empty($ewb_regen_with_irn_allowed);
+$irnDisplay = trim((string)($irn ?? ''));
+$ewbNoDisplay = trim((string)($ewb_no ?? ''));
+$irnResponseRaw = trim((string)($irn_response ?? ''));
+$irnResponsePretty = $irnResponseRaw;
+if ($irnResponseRaw !== '') {
+  $decodedResponse = json_decode($irnResponseRaw, true);
+  if (json_last_error() === JSON_ERROR_NONE) {
+    $pretty = json_encode($decodedResponse, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    if (is_string($pretty) && $pretty !== '') {
+      $irnResponsePretty = $pretty;
+    }
+  }
+}
+$ewbResponseRaw = trim((string)($ewb_response ?? ''));
+$ewbResponsePretty = $ewbResponseRaw;
+if ($ewbResponseRaw !== '') {
+  $decodedEwbResponse = json_decode($ewbResponseRaw, true);
+  if (json_last_error() === JSON_ERROR_NONE) {
+    $pretty = json_encode($decodedEwbResponse, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    if (is_string($pretty) && $pretty !== '') {
+      $ewbResponsePretty = $pretty;
+    }
+  }
+}
 $rn = trim((string)($receipt_number ?? ''));
 $receipt_download_filename_base = $rn !== '' ? preg_replace('/[^A-Za-z0-9_.-]+/u', '-', $rn) : 'payment-receipt';
 $receipt_download_filename_base = trim((string)preg_replace('/-+/', '-', $receipt_download_filename_base), '-_.');
@@ -68,6 +100,12 @@ if ($receipt_download_filename_base === '') {
                 <div><span class="font-semibold">Receipt No. :</span> <?= $h($receipt_number ?? '') ?></div>
                 <?php if (trim((string)($order_id ?? '')) !== ''): ?>
                 <div><span class="font-semibold">Order No. :</span> <?= $h((string)$order_id) ?></div>
+                <?php endif; ?>
+                <?php if ($irnDisplay !== ''): ?>
+                <div class="whitespace-nowrap"><span class="font-semibold">IRN :</span> <?= $h($irnDisplay) ?></div>
+                <?php endif; ?>
+                <?php if ($ewbNoDisplay !== ''): ?>
+                <div class="whitespace-nowrap"><span class="font-semibold">EWB No. :</span> <?= $h($ewbNoDisplay) ?></div>
                 <?php endif; ?>
                 <div><span class="font-semibold">Dated :</span> <?= $h($receipt_date_formatted ?? '') ?></div>
                 <div><span class="font-semibold">Place of Supply :</span> <?= $h($receipt_place_of_supply ?? '') ?></div>
@@ -354,9 +392,91 @@ if ($receipt_download_filename_base === '') {
               <span class="min-h-[14px] text-[11px] leading-none text-slate-500 invisible select-none" aria-hidden="true">&nbsp;</span>
               <a href="index.php?page=pos_register&action=list" class="<?= $actionBtnClass ?> border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">Back to POS</a>
             </div>
+            <?php if ($showIrnEwbPopup): ?>
+            <div class="inline-flex flex-col gap-1">
+              <span class="min-h-[14px] text-[11px] leading-none text-slate-500 invisible select-none" aria-hidden="true">&nbsp;</span>
+              <button type="button" onclick="openIrnEwbStatusModal()" class="<?= $actionBtnClass ?> border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100">IRN / E-way bill status</button>
+            </div>
+            <?php endif; ?>
           </div>
           <p class="text-xs text-slate-500">Use the left control for the <strong class="font-medium text-slate-600">payment receipt</strong>.<?php if (!empty($show_invoice_pdf_button)): ?> Use <strong class="font-medium text-slate-600">Download Invoice</strong> for the <?php if ($hasCodPending && empty($is_payment_in_full)): ?>tax invoice (COD balance still to collect on delivery)<?php else: ?>tax invoice PDF<?php endif; ?>.<?php elseif ($hasCodPending): ?> Invoice is available once the order is imported into the system.<?php else: ?> When payment receipts total at least the order amount, use <strong class="font-medium text-slate-600">Download Invoice</strong> for the tax invoice PDF.<?php endif; ?></p>
         </div>
+
+        <?php if ($showIrnEwbPopup): ?>
+          <div id="irnEwbStatusModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-4" role="dialog" aria-modal="true" aria-labelledby="irnEwbStatusTitle">
+            <div class="w-full max-w-3xl rounded-xl bg-white shadow-2xl">
+              <div class="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+                <h2 id="irnEwbStatusTitle" class="text-base font-semibold text-slate-900"><?= $h($irn_ewb_popup_title ?? 'IRN / E-way Bill Status') ?></h2>
+                <div class="flex items-center gap-2">
+                  <?php if ($showRegenEwbWithIrn): ?>
+                    <button
+                      type="button"
+                      id="regenEwbWithIrnBtn"
+                      class="rounded-md border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-medium text-orange-700 hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      data-invoice-id="<?= $h((string)$irnEwbPopupInvoiceId) ?>"
+                      data-order-number="<?= $h($irnEwbPopupOrderNo) ?>"
+                      onclick="regenerateEwbWithIrn(this)"
+                    >
+                      Regenerate EWB with IRN
+                    </button>
+                  <?php else: ?>
+                    <button
+                      type="button"
+                      id="regenIrnEwbBtn"
+                      class="rounded-md border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-medium text-orange-700 hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      data-invoice-id="<?= $h((string)$irnEwbPopupInvoiceId) ?>"
+                      data-order-number="<?= $h($irnEwbPopupOrderNo) ?>"
+                      onclick="regenerateIrnEwb(this)"
+                    >
+                      Regenerate IRN / EWB
+                    </button>
+                  <?php endif; ?>
+                  <button type="button" onclick="closeIrnEwbStatusModal()" class="rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700">Close</button>
+                </div>
+              </div>
+              <div class="max-h-[75vh] space-y-4 overflow-y-auto px-5 py-4 text-sm text-slate-800">
+                <div id="regenIrnEwbMessage" class="hidden rounded-lg border px-3 py-2 text-sm"></div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Invoice ID</div>
+                    <div class="mt-1 text-sm font-semibold text-slate-900"><?= $h((string)($irn_ewb_popup_invoice_id ?? '')) ?></div>
+                  </div>
+                  <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Status</div>
+                    <div class="mt-1 text-sm text-slate-900">IRN: <strong><?= $h($irnStatusDisplay !== '' ? $irnStatusDisplay : 'N/A') ?></strong> | EWB: <strong><?= $h($ewbStatusDisplay !== '' ? $ewbStatusDisplay : 'N/A') ?></strong></div>
+                  </div>
+                </div>
+
+                <?php if (trim((string)($irn_ewb_status_note ?? '')) !== ''): ?>
+                  <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+                    <?= $h((string)($irn_ewb_status_note ?? '')) ?>
+                  </div>
+                <?php endif; ?>
+
+                <div class="space-y-2">
+                  <div class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+                    <div class="text-xs font-semibold uppercase tracking-wide text-rose-700">IRN Error</div>
+                    <div class="mt-1 whitespace-pre-wrap break-words text-sm text-rose-900"><?= $h($irnErrorDisplay !== '' ? $irnErrorDisplay : 'No IRN error message found.') ?></div>
+                  </div>
+                  <div class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+                    <div class="text-xs font-semibold uppercase tracking-wide text-rose-700">E-way Bill Error</div>
+                    <div class="mt-1 whitespace-pre-wrap break-words text-sm text-rose-900"><?= $h($ewbErrorDisplay !== '' ? $ewbErrorDisplay : 'No E-way bill error message found.') ?></div>
+                  </div>
+                </div>
+
+                <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div class="text-xs font-semibold uppercase tracking-wide text-slate-600">IRN Response</div>
+                  <pre class="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded bg-white p-3 text-xs leading-relaxed text-slate-800"><?= $h($irnResponsePretty !== '' ? $irnResponsePretty : 'No IRN response payload found.') ?></pre>
+                </div>
+
+                <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div class="text-xs font-semibold uppercase tracking-wide text-slate-600">E-way Bill Response</div>
+                  <pre class="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded bg-white p-3 text-xs leading-relaxed text-slate-800"><?= $h($ewbResponsePretty !== '' ? $ewbResponsePretty : 'No E-way bill response payload found.') ?></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        <?php endif; ?>
       </div>
     </div>
   </div>
@@ -472,4 +592,164 @@ if ($receipt_download_filename_base === '') {
     window.print();
   };
 })();
+
+function openIrnEwbStatusModal() {
+  var modal = document.getElementById('irnEwbStatusModal');
+  if (!modal) {
+    return;
+  }
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function closeIrnEwbStatusModal() {
+  var modal = document.getElementById('irnEwbStatusModal');
+  if (!modal) {
+    return;
+  }
+  modal.classList.remove('flex');
+  modal.classList.add('hidden');
+}
+
+document.addEventListener('keydown', function (event) {
+  if (event.key === 'Escape') {
+    closeIrnEwbStatusModal();
+  }
+});
+
+document.addEventListener('click', function (event) {
+  var modal = document.getElementById('irnEwbStatusModal');
+  if (!modal || modal.classList.contains('hidden')) {
+    return;
+  }
+  if (event.target === modal) {
+    closeIrnEwbStatusModal();
+  }
+});
+
+function setRegenIrnEwbMessage(message, type) {
+  var box = document.getElementById('regenIrnEwbMessage');
+  if (!box) {
+    return;
+  }
+  box.classList.remove('hidden', 'border-emerald-200', 'bg-emerald-50', 'text-emerald-800', 'border-rose-200', 'bg-rose-50', 'text-rose-800', 'border-slate-200', 'bg-slate-50', 'text-slate-700');
+  if (type === 'success') {
+    box.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-800');
+  } else if (type === 'error') {
+    box.classList.add('border-rose-200', 'bg-rose-50', 'text-rose-800');
+  } else {
+    box.classList.add('border-slate-200', 'bg-slate-50', 'text-slate-700');
+  }
+  box.textContent = message;
+}
+
+function regenerateIrnEwb(button) {
+  if (!button) {
+    return;
+  }
+
+  var invoiceId = parseInt(button.getAttribute('data-invoice-id') || '0', 10);
+  var orderNumber = (button.getAttribute('data-order-number') || '').trim();
+  if (!invoiceId || !orderNumber) {
+    setRegenIrnEwbMessage('Missing invoice/order details for regeneration.', 'error');
+    return;
+  }
+
+  var originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Regenerating...';
+  setRegenIrnEwbMessage('Regeneration started. Please wait...', 'info');
+
+  fetch('index.php?page=pos_register&action=regenerate-irn-ewb', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest'
+    },
+    body: JSON.stringify({
+      invoice_id: invoiceId,
+      order_number: orderNumber
+    })
+  })
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      var msg = (data && data.message) ? String(data.message) : 'Regeneration request completed.';
+      if (data && data.success) {
+        setRegenIrnEwbMessage(msg + ' Refreshing receipt status...', 'success');
+        window.setTimeout(function () {
+          window.location.reload();
+        }, 900);
+        return;
+      }
+      setRegenIrnEwbMessage(msg, 'error');
+      button.disabled = false;
+      button.textContent = originalText;
+    })
+    .catch(function () {
+      setRegenIrnEwbMessage('Unable to regenerate IRN/EWB right now. Please try again.', 'error');
+      button.disabled = false;
+      button.textContent = originalText;
+    });
+}
+
+function regenerateEwbWithIrn(button) {
+  if (!button) {
+    return;
+  }
+
+  var invoiceId = parseInt(button.getAttribute('data-invoice-id') || '0', 10);
+  var orderNumber = (button.getAttribute('data-order-number') || '').trim();
+  if (!invoiceId || !orderNumber) {
+    setRegenIrnEwbMessage('Missing invoice/order details for EWB regeneration.', 'error');
+    return;
+  }
+
+  var originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Regenerating EWB...';
+  setRegenIrnEwbMessage('Regenerating E-way bill with existing IRN...', 'info');
+
+  fetch('index.php?page=pos_register&action=regenerate-ewb-with-irn', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest'
+    },
+    body: JSON.stringify({
+      invoice_id: invoiceId,
+      order_number: orderNumber
+    })
+  })
+    .then(function (res) {
+      return res.json();
+    })
+    .then(function (data) {
+      var msg = (data && data.message) ? String(data.message) : 'EWB regeneration request completed.';
+      if (data && data.success) {
+        setRegenIrnEwbMessage(msg + ' Refreshing receipt status...', 'success');
+        window.setTimeout(function () {
+          window.location.reload();
+        }, 900);
+        return;
+      }
+      setRegenIrnEwbMessage(msg, 'error');
+      button.disabled = false;
+      button.textContent = originalText;
+    })
+    .catch(function () {
+      setRegenIrnEwbMessage('Unable to regenerate E-way bill right now. Please try again.', 'error');
+      button.disabled = false;
+      button.textContent = originalText;
+    });
+}
+
+function updatePopupResponseBlock(id, text) {
+  var el = document.getElementById(id);
+  if (!el) {
+    return;
+  }
+  el.textContent = text;
+}
 </script>

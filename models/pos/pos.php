@@ -90,8 +90,9 @@ class pos
         $types  = "";
 
         // CATEGORY
+        $isVirtualCode = !empty($category) && in_array(strtolower($category), ['virtual_codes', 'virtualcodes', 'virtual_code', 'virtual codes'], true);
         if (!empty($category) && $category != 'allProducts') {
-            if (in_array(strtolower($category), ['virtual_codes', 'virtualcodes', 'virtual_code', 'virtual codes'], true)) {
+            if ($isVirtualCode) {
                 $where .= " AND p.title LIKE ? ";
                 $params[] = "%Virtual Code%";
                 $types .= "s";
@@ -143,13 +144,16 @@ class pos
             || ($searchValue !== '' || $productCode !== '');
 
         // Stock scope: align with stock report (getStockReport) — default is "all" rows with a movement row.
-        $stockFilter = strtolower(trim((string)$stockFilter));
-        if ($stockFilter === 'out') {
-            $where .= ' AND sm.running_stock = 0 ';
-        } elseif ($stockFilter === 'low') {
-            $where .= ' AND sm.running_stock BETWEEN 1 AND 5 ';
-        } elseif ($stockFilter === 'in') {
-            $where .= ' AND sm.running_stock > 0 ';
+        // Virtual codes are non-physical items without warehouse stock movements, so bypass physical stock filters for them.
+        if (!$isVirtualCode) {
+            $stockFilter = strtolower(trim((string)$stockFilter));
+            if ($stockFilter === 'out') {
+                $where .= ' AND sm.running_stock = 0 ';
+            } elseif ($stockFilter === 'low') {
+                $where .= ' AND sm.running_stock BETWEEN 1 AND 5 ';
+            } elseif ($stockFilter === 'in') {
+                $where .= ' AND sm.running_stock > 0 ';
+            }
         }
 
         /* ================= ORDER ================= */
@@ -189,9 +193,9 @@ class pos
             $orderExpr = $baseSell;
         }
 
-        // When searching, LEFT JOIN so products with no movements in this warehouse still appear with 0 stock.
+        // When searching or browsing virtual codes, LEFT JOIN so products with no movements in this warehouse still appear.
         // When not searching (default browse), INNER JOIN drives from the small sm stock table (~2k rows) for high performance.
-        $joinType = $hasSearch ? 'LEFT' : 'INNER';
+        $joinType = ($hasSearch || $isVirtualCode) ? 'LEFT' : 'INNER';
         $stockFrom = "
     FROM vp_products p
     {$joinType} JOIN (

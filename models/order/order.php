@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../../helpers/order_filter_autocomplete.php';
 require_once __DIR__ . '/../../helpers/order_list_filters.php';
+require_once __DIR__ . '/../../helpers/pos_payment_receipt.php';
 
 class Order
 {
@@ -1610,38 +1611,88 @@ class Order
             return ['success' => false, 'message' => $stmt->error];
         }
 
-        // Update address – don't fail the whole operation if this fails
-        $sql_addr = "
-            UPDATE vp_order_info 
-            SET first_name = ?, last_name = ?, address_line1 = ?, address_line2 = ?, city = ?, state = ?, zipcode = ?, country = ?, gstin = ?,
-                shipping_first_name = ?, shipping_last_name = ?, shipping_address_line1 = ?, shipping_address_line2 = ?, shipping_city = ?, shipping_state = ?, shipping_zipcode = ?, shipping_country = ?, shipping_gstin = ?
-            WHERE order_number = ?
-        ";
-        $stmt_addr = $this->db->prepare($sql_addr);
-        if ($stmt_addr) {
-            $stmt_addr->bind_param(
-                'sssssssssssssssssss',
-                $first_name,
-                $last_name,
-                $address_line1,
-                $address_line2,
-                $city,
-                $state,
-                $zipcode,
-                $country,
-                $gstin,
-                $shipping_first_name,
-                $shipping_last_name,
-                $billing_address_line1,
-                $billing_address_line2,
-                $billing_city,
-                $shipping_state,
-                $billing_zipcode,
-                $billing_country,
-                $shipping_gstin,
-                $order_number
-            );
-            $stmt_addr->execute();  // ← ignore result
+        // Check if vp_order_info row exists for this order
+        $check_stmt = $this->db->prepare("SELECT id FROM vp_order_info WHERE order_number = ? LIMIT 1");
+        $has_info = false;
+        if ($check_stmt) {
+            $check_stmt->bind_param('s', $order_number);
+            $check_stmt->execute();
+            $check_res = $check_stmt->get_result();
+            if ($check_res && $check_res->num_rows > 0) {
+                $has_info = true;
+            }
+        }
+
+        if ($has_info) {
+            $sql_addr = "
+                UPDATE vp_order_info 
+                SET first_name = ?, last_name = ?, address_line1 = ?, address_line2 = ?, city = ?, state = ?, zipcode = ?, country = ?, gstin = ?,
+                    shipping_first_name = ?, shipping_last_name = ?, shipping_address_line1 = ?, shipping_address_line2 = ?, shipping_city = ?, shipping_state = ?, shipping_zipcode = ?, shipping_country = ?, shipping_gstin = ?, mobile = ?, shipping_mobile = ?
+                WHERE order_number = ?
+            ";
+            $stmt_addr = $this->db->prepare($sql_addr);
+            if ($stmt_addr) {
+                $stmt_addr->bind_param(
+                    'sssssssssssssssssssss',
+                    $first_name,
+                    $last_name,
+                    $address_line1,
+                    $address_line2,
+                    $city,
+                    $state,
+                    $zipcode,
+                    $country,
+                    $gstin,
+                    $shipping_first_name,
+                    $shipping_last_name,
+                    $billing_address_line1,
+                    $billing_address_line2,
+                    $billing_city,
+                    $shipping_state,
+                    $billing_zipcode,
+                    $billing_country,
+                    $shipping_gstin,
+                    $phone,
+                    $phone,
+                    $order_number
+                );
+                $stmt_addr->execute();
+            }
+        } else {
+            $sql_addr = "
+                INSERT INTO vp_order_info 
+                (order_number, first_name, last_name, address_line1, address_line2, city, state, zipcode, country, gstin,
+                 shipping_first_name, shipping_last_name, shipping_address_line1, shipping_address_line2, shipping_city, shipping_state, shipping_zipcode, shipping_country, shipping_gstin, mobile, shipping_mobile)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ";
+            $stmt_addr = $this->db->prepare($sql_addr);
+            if ($stmt_addr) {
+                $stmt_addr->bind_param(
+                    'sssssssssssssssssssss',
+                    $order_number,
+                    $first_name,
+                    $last_name,
+                    $address_line1,
+                    $address_line2,
+                    $city,
+                    $state,
+                    $zipcode,
+                    $country,
+                    $gstin,
+                    $shipping_first_name,
+                    $shipping_last_name,
+                    $billing_address_line1,
+                    $billing_address_line2,
+                    $billing_city,
+                    $shipping_state,
+                    $billing_zipcode,
+                    $billing_country,
+                    $shipping_gstin,
+                    $phone,
+                    $phone
+                );
+                $stmt_addr->execute();
+            }
         }
 
         return [
@@ -2235,6 +2286,7 @@ class Order
             'transid',
             'currency',
             'payment_type',
+            'payment_mode',
             'coupon',
             'coupon_reduce',
             'credit',
@@ -2313,6 +2365,32 @@ class Order
             $placeholders[] = '?';
             $values[]       = $data['payment_type'];
             $types         .= 's'; // string
+        }
+        //payment_mode add / auto-fill
+        $payTypeForMode = $data['payment_type'] ?? ($addressInfo['payment_type'] ?? null);
+        $givenModeForMode = $data['payment_mode'] ?? ($addressInfo['payment_mode'] ?? null);
+        $orderNoForMode = (string)($data['orderid'] ?? '');
+
+        if ($this->db instanceof mysqli && function_exists('pos_payment_resolve_order_payment_mode')) {
+            $resolvedMode = pos_payment_resolve_order_payment_mode(
+                $this->db,
+                $orderNoForMode,
+                (string)$payTypeForMode,
+                (string)$givenModeForMode
+            );
+            if ($resolvedMode !== null && $resolvedMode !== '') {
+                if (in_array('payment_mode', $insertCols, true)) {
+                    $pmKey = array_search('payment_mode', $insertCols, true);
+                    if ($pmKey !== false) {
+                        $values[$pmKey] = $resolvedMode;
+                    }
+                } else {
+                    $insertCols[]   = 'payment_mode';
+                    $placeholders[] = '?';
+                    $values[]       = $resolvedMode;
+                    $types         .= 's';
+                }
+            }
         }
         //coupon add
         if (isset($data['coupon']) && !in_array('coupon', $insertCols, true)) {

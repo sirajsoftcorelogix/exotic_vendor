@@ -615,28 +615,37 @@ No invoices
     <span>Export Docs</span>
 </a>`);
 
+                    const cancelBtn = isCancelled ? '' : `
+<button type="button" onclick="cancelPosInvoice(${i.id})"
+        class="block w-full text-left px-4 py-2 text-amber-700 hover:bg-amber-50 text-xs font-medium border-0 bg-transparent cursor-pointer flex items-center gap-2"
+        title="Cancel invoice">
+    <i class="fa-solid fa-ban text-amber-600"></i> Cancel Invoice
+</button>`;
+
                         const orderNum = (i.order_number || '').trim();
-                        if (orderNum) {
-                            menuItems.push(`
+                        const returnBtn = (!isCancelled && orderNum) ? `
 <button type="button"
    data-sales-return-create
    data-sales-return-url="?page=sales_returns&action=create&order_number=${encodeURIComponent(orderNum)}&invoice_id=${i.id}"
    data-order-number="${escapeHtml(orderNum)}"
-   class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 hover:text-orange-600 text-left transition border-0 bg-transparent cursor-pointer rounded-md"
-   title="Create Sales Return">
-    <i class="fas fa-rotate-left text-orange-500 w-4 text-center" aria-hidden="true"></i>
-    <span>Return</span>
-</button>`);
-                        }
+   class="block w-full text-left px-4 py-2 text-orange-700 hover:bg-orange-50 text-xs font-medium border-0 bg-transparent cursor-pointer flex items-center gap-2">
+    <i class="fa-solid fa-rotate-left text-orange-600"></i> Sales Return
+</button>` : '';
 
-                        menuItems.push(`
+                    const deleteBtn = isCancelled ? '' : `
+<button onclick="openDeleteModal(${i.id}, '?page=posinvoice&action=delete', 'Delete this invoice?')"
+        class="block w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 text-xs font-medium border-0 bg-transparent cursor-pointer flex items-center gap-2"
+        title="Delete invoice">
+    <i class="fa-solid fa-trash text-red-600"></i> Delete Invoice
+</button>`;
+
+                    const dispatchBtn = isCancelled ? '' : `
 <button type="button"
-   onclick="cancelPosInvoice(${i.id})"
-   class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-50 text-left transition border-0 bg-transparent cursor-pointer rounded-md"
-   title="Cancel invoice">
-    <i class="fas fa-ban text-amber-600 w-4 text-center" aria-hidden="true"></i>
-    <span>Cancel</span>
-</button>`);
+   onclick="openCommonDispatchModal({ invoice_id: ${i.id}, invoice_number: '${escapeHtml(i.invoice_number || '')}', order_number: '${escapeHtml(i.order_number || '')}' })"
+   class="block w-full text-left px-4 py-2 text-purple-700 hover:bg-purple-50 text-xs font-medium border-0 bg-transparent cursor-pointer flex items-center gap-2"
+   title="Add or edit dispatch details">
+    <i class="fa-solid fa-truck text-purple-600"></i> Dispatch Details
+</button>`;
 
                         menuItems.push(`
 <button type="button"
@@ -706,6 +715,27 @@ Could not load invoices. Please try again.
                 }
             });
     }
+
+    function togglePosInvoiceMenu(button, event) {
+        if (event) {
+            event.stopPropagation();
+        }
+        if (!button) return;
+        const menu = button.nextElementSibling;
+        if (!menu) return;
+        document.querySelectorAll('.pos-invoice-menu').forEach(m => {
+            if (m !== menu) m.classList.add('hidden');
+        });
+        menu.classList.toggle('hidden');
+    }
+
+    document.addEventListener("click", function(e) {
+        if (!e.target.closest(".pos-invoice-action-cell")) {
+            document.querySelectorAll(".pos-invoice-menu").forEach(menu => {
+                menu.classList.add("hidden");
+            });
+        }
+    });
 
     function cancelPosInvoice(invoiceId) {
         const confirmFn = (typeof customConfirm === 'function')
@@ -839,7 +869,7 @@ Could not load invoices. Please try again.
 
             });
     }
-
+    
     (function() {
         function closeAllPosInvoiceRowMenus(except) {
             document.querySelectorAll('.posinvoice-row-menu-panel').forEach(function(panel) {
@@ -885,3 +915,5 @@ Could not load invoices. Please try again.
         });
     })();
 </script>
+
+<?php require_once __DIR__ . '/../shared/partials/dispatch_details_modal.php'; ?>

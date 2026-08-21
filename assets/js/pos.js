@@ -203,7 +203,10 @@ $(function () {
     $('#modal_size').val(normalizeFacet(p.size));
     $('#modal_color').val(normalizeFacet(p.color));
     $('#modal_product_id').val(p.id || p.product_id || '');
-    const isUnpub = (p.published === 0 || p.published === '0' || p.published === false || p.is_published === false || p.status === 0 || p.status === '0' || String(p.status_label || '').toLowerCase() === 'unpublished' || String(p.status || '').toLowerCase() === 'unpublished');
+    const isUnpub =
+      (p.published === 0 || p.published === '0' || p.published === false) &&
+      (p.is_published === false || p.is_published === 0 || p.is_published === '0') &&
+      String(p.status_label || '').toLowerCase() === 'unpublished';
     $('#modal_published').val(isUnpub ? '0' : '1');
   }
 
@@ -1009,14 +1012,9 @@ $(function () {
     }
 
     const isUnpublished =
-      p.published === 0 ||
-      p.published === '0' ||
-      p.published === false ||
-      p.is_published === false ||
-      p.status === 0 ||
-      p.status === '0' ||
-      String(p.status_label || '').toLowerCase() === 'unpublished' ||
-      String(p.status || '').toLowerCase() === 'unpublished';
+      (p.published === 0 || p.published === '0' || p.published === false) &&
+      (p.is_published === false || p.is_published === 0 || p.is_published === '0') &&
+      String(p.status_label || '').toLowerCase() === 'unpublished';
 
     if (isUnpublished) {
       badges.push(`<span class="rounded-md bg-red-100 px-2 py-1 text-[10px] font-semibold text-red-700">Status: Unpublished</span>`);
@@ -1379,14 +1377,9 @@ data-code="${lookupCode}">
   function renderModalData(p) {
     activeModalProduct = p;
     const isUnpublished =
-      p.published === 0 ||
-      p.published === '0' ||
-      p.published === false ||
-      p.is_published === false ||
-      p.status === 0 ||
-      p.status === '0' ||
-      String(p.status_label || '').toLowerCase() === 'unpublished' ||
-      String(p.status || '').toLowerCase() === 'unpublished';
+      (p.published === 0 || p.published === '0' || p.published === false) &&
+      (p.is_published === false || p.is_published === 0 || p.is_published === '0') &&
+      String(p.status_label || '').toLowerCase() === 'unpublished';
 
     const statusRow = isUnpublished
       ? `<div>Status</div><div>:</div><div class="font-semibold text-red-600">Unpublished</div>`
