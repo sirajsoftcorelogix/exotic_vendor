@@ -157,7 +157,8 @@ class BusyAccountingController
                 'Material Centre' => 'Main Location',
                 'Currency' => $details['currency'] ?? 'INR',
                 'Shipping Details' => [
-                    'Party Name' => $customerName,
+                    //'Party Name' => $customerName,
+                    'Party Name' => $partyName,
                     'Address' => trim(($details['address_line1'] ?? '') . ' ' . ($details['address_line2'] ?? '')),
                     'PinCode' => $details['zipcode'] ?? '',
                     'State' => $details['state'] ?? '',
@@ -172,6 +173,7 @@ class BusyAccountingController
                     $amt = (float)($item['line_total'] ?? ($qty * $price));
                     return [
                         'Item Name' => $item['item_name'] ?? '',
+                        'SKU' => $item['sku'] ?? $item['item_code'] ?? '',
                         'HSN Code' => $item['hsn'] ?? '',
                         'Qty' => $qty,
                         'Unit' => 'PCS',

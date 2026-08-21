@@ -84,6 +84,25 @@ class POSRegisterController
         return null;
     }
 
+    private function tableExists(mysqli $conn, string $table): bool
+    {
+        $stmt = $conn->prepare(
+            'SELECT 1
+             FROM INFORMATION_SCHEMA.TABLES
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = ?
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('s', $table);
+        $stmt->execute();
+        $exists = (bool)$stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        return $exists;
+    }
+
     private function columnExists(mysqli $conn, string $table, string $column): bool
     {
         $stmt = $conn->prepare(
@@ -679,10 +698,10 @@ class POSRegisterController
      * Handle E-way bill and IRN generation for POS checkout
      * Calls DomesticEwbIrnService after invoice is created
      */
-    private function handlePosEwbGeneration(mysqli $conn, int $invoiceId, array $payload, int $orderNumber): void
+    private function handlePosEwbGeneration(mysqli $conn, int $invoiceId, array $payload, string $orderNumber): void
     {
         try {
-            //echo "POS EWB: Starting E-way bill generation for invoice $invoiceId\n";
+            // echo "POS EWB: Starting E-way bill generation for invoice $invoiceId\n";
             // Get invoice details from database
             $invStmt = $conn->prepare("SELECT * FROM vp_invoices WHERE id = ?");
             if (!$invStmt) {
@@ -733,7 +752,7 @@ class POSRegisterController
                 error_log("POS EWB: Failed to prepare customer query: " . $conn->error);
                 return;
             }            
-            $custStmt->bind_param("ii", $custId, $orderNumber);
+            $custStmt->bind_param("is", $custId, $orderNumber);
             $custStmt->execute();
             $customer = $custStmt->get_result()->fetch_assoc();
             $custStmt->close();
@@ -3563,36 +3582,41 @@ class POSRegisterController
 
         $publishedVal = 1;
 
-        // Check if Exotic API response indicates item is unpublished / status = 0
-        $apiIsUnpublished = false;
-        if (isset($data['published'])) {
-            $s = strtolower(trim((string)$data['published']));
-            if ($s === '0' || $s === 'false' || $s === 'unpublished') {
-                $apiIsUnpublished = true;
+        // Trust local DB published status if available and active (published = 1 or is_active = 1)
+        if (array_key_exists('published', $dbRow) && $dbRow['published'] !== null && $dbRow['published'] !== '' && (int)$dbRow['published'] === 1) {
+            $publishedVal = 1;
+        } else {
+            // Check if Exotic API response indicates item is unpublished / status = 0
+            $apiIsUnpublished = false;
+            if (isset($data['published'])) {
+                $s = strtolower(trim((string)$data['published']));
+                if ($s === '0' || $s === 'false' || $s === 'unpublished') {
+                    $apiIsUnpublished = true;
+                }
             }
-        }
-        if (!$apiIsUnpublished && isset($data['status'])) {
-            $s = strtolower(trim((string)$data['status']));
-            if ($s === '0' || $s === 'false' || $s === 'unpublished') {
-                $apiIsUnpublished = true;
+            if (!$apiIsUnpublished && isset($data['status'])) {
+                $s = strtolower(trim((string)$data['status']));
+                if ($s === '0' || $s === 'false' || $s === 'unpublished') {
+                    $apiIsUnpublished = true;
+                }
             }
-        }
-        if (!$apiIsUnpublished && isset($data['is_published'])) {
-            if ($data['is_published'] === false || $data['is_published'] === 0 || $data['is_published'] === '0') {
-                $apiIsUnpublished = true;
+            if (!$apiIsUnpublished && isset($data['is_published'])) {
+                if ($data['is_published'] === false || $data['is_published'] === 0 || $data['is_published'] === '0') {
+                    $apiIsUnpublished = true;
+                }
             }
-        }
 
-        if ($apiIsUnpublished) {
-            $publishedVal = 0;
-            // Sync status from API to local DB if local DB is currently published = 1
-            if ($vpId > 0) {
-                require_once 'models/product/product.php';
-                $productModel = new \Product($conn);
-                $productModel->setProductPublished($vpId, 0);
+            if ($apiIsUnpublished) {
+                $publishedVal = 0;
+                // Sync status from API to local DB if local DB is currently published = 1
+                if ($vpId > 0) {
+                    require_once 'models/product/product.php';
+                    $productModel = new \Product($conn);
+                    $productModel->setProductPublished($vpId, 0);
+                }
+            } elseif (array_key_exists('published', $dbRow) && $dbRow['published'] !== null && $dbRow['published'] !== '') {
+                $publishedVal = (int)$dbRow['published'];
             }
-        } elseif (array_key_exists('published', $dbRow) && $dbRow['published'] !== null && $dbRow['published'] !== '') {
-            $publishedVal = (int)$dbRow['published'];
         }
 
         $product = [
@@ -4781,9 +4805,9 @@ class POSRegisterController
         );
         
         // Generate IRN and E-way bill if requested
-        // if (!empty($payload['generate_ewb']) && $payload['generate_ewb'] === '1' && !empty($invoiceMeta['invoice_id'])) {
-        //     $this->handlePosEwbGeneration($conn, (int)$invoiceMeta['invoice_id'], $payload, $orderNumber);
-        // }
+        if (!empty($payload['generate_ewb']) && $payload['generate_ewb'] === '1' && !empty($invoiceMeta['invoice_id'])) {
+            $this->handlePosEwbGeneration($conn, (int)$invoiceMeta['invoice_id'], $payload, (string)$orderNumber);
+        }
         
         $fulfillmentStatusMeta = $this->syncPosCheckoutOrderFulfillmentStatus(
             $conn,
@@ -4979,487 +5003,314 @@ class POSRegisterController
         if (empty($row['invoice_poitem_ids']) || !is_array($row['invoice_poitem_ids'])) {
             $row['invoice_poitem_ids'] = $this->resolveInvoicePoitemIdsForOrderNumber($conn, $row['order_id'] ?? '');
         }
+        $row = $this->attachIrnEwbStatusToReceiptRow($conn, $row);
         $row = $this->applyPosReceiptCompanyHeader($row, $conn);
-        $row['einvoice_eligibility'] = $this->resolveReceiptEinvoiceEwaybillEligibility(
-            $conn,
-            (string)($row['order_id'] ?? ''),
-            (float)($row['receipt_grand_total'] ?? $row['receipt_subtotal_goods'] ?? 0)
-        );
         renderTemplateClean('views/pos_register/order_confirmation.php', $row, 'Order confirmation');
     }
 
     /**
-     * Resolve E-Invoice (IRN) and E-Way Bill (EWB) eligibility for Payment Receipt
-     *
-     * Rules:
-     * | Scenario                | IRN  | EWB  |
-     * | Domestic B2B ₹1,00,000  | Yes  | Yes  |
-     * | B2C ₹1,20,000           | No   | Yes  |
-     * | Export ₹5,00,000        | Yes  | Yes  |
+     * Regenerate IRN / E-way bill from checkout receipt popup.
+     * POST JSON: { invoice_id: int, order_number: string }
      */
-    public function resolveReceiptEinvoiceEwaybillEligibility(mysqli $conn, string $orderNumber, float $grandTotal, ?array $orderInfo = null): array
+    public function regenerate_irn_ewb(): void
     {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+        global $conn;
+
+        $raw = (string)file_get_contents('php://input');
+        $data = json_decode($raw, true);
+        if (!is_array($data)) {
+            $data = $_POST;
+        }
+
+        $invoiceId = (int)($data['invoice_id'] ?? 0);
+        $orderNumber = trim((string)($data['order_number'] ?? ''));
+
+        if ($invoiceId <= 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invoice ID is required.',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
         if ($orderNumber === '') {
-            return [
-                'show_irn' => false,
-                'show_ewb' => false,
-                'scenario' => '',
-                'existing_irn' => null,
-                'existing_ewb' => null,
-                'irn_status' => 'pending',
-                'ewb_status' => 'pending',
-                'einvoice_url' => '',
-                'ewaybill_url' => '',
-            ];
+            echo json_encode([
+                'success' => false,
+                'message' => 'Order number is required for IRN/EWB regeneration.',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
         }
 
-        if ($orderInfo === null) {
-            $this->bootstrapOrderImportGlobals();
-            global $ordersModel;
-            if (isset($ordersModel) && is_object($ordersModel)) {
-                $orderInfo = $ordersModel->getAddressInfoByOrderNumber($orderNumber);
+        $regenPayload = [];
+
+        $tradeStmt = $conn->prepare('SELECT trade_name FROM vp_order_info WHERE order_number = ? ORDER BY id DESC LIMIT 1');
+        if ($tradeStmt) {
+            $tradeStmt->bind_param('s', $orderNumber);
+            $tradeStmt->execute();
+            $tradeRow = $tradeStmt->get_result()->fetch_assoc();
+            $tradeStmt->close();
+            if (is_array($tradeRow)) {
+                $tradeName = trim((string)($tradeRow['trade_name'] ?? ''));
+                if ($tradeName !== '') {
+                    $regenPayload['confirm_trade_name'] = $tradeName;
+                }
             }
         }
 
-        $country = strtoupper(trim((string)($orderInfo['country'] ?? 'IN')));
-        if ($country === '') {
-            $country = 'IN';
-        }
-        $gstin = strtoupper(trim((string)($orderInfo['gstin'] ?? '')));
-        if ($gstin === 'URP') {
-            $gstin = '';
-        }
-        $buyerType = strtolower(trim((string)($orderInfo['buyer_type'] ?? '')));
+        $trackingRow = $this->fetchIrnEwbTrackingRowByInvoiceId($conn, $invoiceId);
+        if (is_array($trackingRow)) {
+            $vehNo = trim((string)($trackingRow['veh_no'] ?? ''));
+            $vehType = strtoupper(trim((string)($trackingRow['veh_type'] ?? '')));
 
-        $isExport = ($country !== 'IN' && $country !== 'INDIA') || $buyerType === 'export' || $buyerType === 'sez';
-        $isB2b = !$isExport && ($gstin !== '' || $buyerType === 'business');
-        $isB2c = !$isExport && !$isB2b;
-
-        $showIrn = false;
-        $showEwb = false;
-        $scenarioLabel = '';
-
-        if ($isExport) {
-            $scenarioLabel = 'Export';
-            if ($grandTotal >= 500000.0) { // ₹5,00,000
-                $showIrn = true;
-                $showEwb = true;
-            }
-        } elseif ($isB2b) {
-            $scenarioLabel = 'Domestic B2B';
-            if ($grandTotal >= 100000.0) { // ₹1,00,000
-                $showIrn = true;
-                $showEwb = true;
-            }
-        } else { // B2C
-            $scenarioLabel = 'B2C';
-            if ($grandTotal >= 120000.0) { // ₹1,20,000
-                $showIrn = false;
-                $showEwb = true;
+            if ($vehNo !== '') {
+                $regenPayload['ewb_veh_no'] = $vehNo;
+                if ($vehType === 'ODC') {
+                    $regenPayload['ewb_veh_type'] = '4';
+                    $regenPayload['ewb_ship_veh_no'] = $vehNo;
+                } else {
+                    $regenPayload['ewb_veh_type'] = '1';
+                }
             }
         }
 
-        // Check existing IRN and EWB status in database
-        $existingIrn = null;
-        $existingEwb = null;
-        $irnStatus = 'pending';
-        $ewbStatus = 'pending';
+        $this->handlePosEwbGeneration($conn, $invoiceId, $regenPayload, $orderNumber);
 
-        require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
-        $row = DomesticEwbIrnService::getEwbIrnStatusByOrderNumber($conn, $orderNumber);
-        if ($row) {
-            $existingIrn = !empty($row['irn']) ? $row['irn'] : (!empty($row['inv_irn']) ? $row['inv_irn'] : null);
-            $existingEwb = !empty($row['ewb_no']) ? $row['ewb_no'] : (!empty($row['ewb']) ? $row['ewb'] : (!empty($row['inv_ewb']) ? $row['inv_ewb'] : null));
-            $irnStatus = !empty($row['irn_status']) ? $row['irn_status'] : (!empty($existingIrn) ? 'generated' : 'pending');
-            $ewbStatus = !empty($row['ewb_status']) ? $row['ewb_status'] : (!empty($existingEwb) ? 'generated' : 'pending');
-        }
+        $latest = $this->fetchIrnEwbTrackingRowByInvoiceId($conn, $invoiceId);
+        $irnStatus = strtolower(trim((string)($latest['irn_status'] ?? '')));
+        $ewbStatus = strtolower(trim((string)($latest['ewb_status'] ?? '')));
+        $generated = ($irnStatus === 'generated' && $ewbStatus === 'generated');
 
-        return [
-            'scenario' => $scenarioLabel,
-            'show_irn' => $showIrn,
-            'show_ewb' => $showEwb,
-            'grand_total' => $grandTotal,
-            'country' => $country,
-            'gstin' => $gstin,
-            'is_export' => $isExport,
-            'is_b2b' => $isB2b,
-            'is_b2c' => $isB2c,
-            'existing_irn' => $existingIrn,
-            'existing_ewb' => $existingEwb,
-            'irn_status' => $irnStatus,
-            'ewb_status' => $ewbStatus,
-            'einvoice_url' => 'index.php?page=pos_register&action=einvoice-input&order_number=' . rawurlencode($orderNumber),
-            'ewaybill_url' => 'index.php?page=pos_register&action=ewaybill-input&order_number=' . rawurlencode($orderNumber),
-        ];
+        echo json_encode([
+            'success' => $generated,
+            'triggered' => true,
+            'message' => $generated
+                ? 'IRN and E-way bill generated successfully.'
+                : 'Regeneration completed but IRN/E-way bill is still pending or failed. Check status details.',
+            'invoice_id' => $invoiceId,
+            'order_number' => $orderNumber,
+            'status' => [
+                'irn_status' => (string)($latest['irn_status'] ?? ''),
+                'ewb_status' => (string)($latest['ewb_status'] ?? ''),
+                'irn_error' => trim((string)($latest['irn_error'] ?? '')),
+                'ewb_error' => trim((string)($latest['ewb_error'] ?? '')),
+                'irn_response' => trim((string)($latest['irn_response'] ?? '')),
+                'ewb_response' => trim((string)($latest['ewb_response'] ?? '')),
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
     }
 
-    private function findInvoiceByOrderNumber(mysqli $conn, string $orderNumber): ?array
+    /**
+     * Regenerate only E-way bill when IRN is already generated and EWB is pending.
+     * POST JSON: { invoice_id: int, order_number: string }
+     */
+    public function regenerate_ewb_with_irn(): void
     {
-        if ($orderNumber === '') {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+        global $conn;
+
+        $raw = (string)file_get_contents('php://input');
+        $data = json_decode($raw, true);
+        if (!is_array($data)) {
+            $data = $_POST;
+        }
+
+        $invoiceId = (int)($data['invoice_id'] ?? 0);
+        $orderNumber = trim((string)($data['order_number'] ?? ''));
+
+        if ($invoiceId <= 0 || $orderNumber === '') {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invoice ID and order number are required.',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $tracking = $this->fetchIrnEwbTrackingRowByInvoiceId($conn, $invoiceId);
+        if (!is_array($tracking)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'No IRN/EWB tracking record found for this invoice.',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $irnStatus = strtolower(trim((string)($tracking['irn_status'] ?? '')));
+        $ewbStatus = strtolower(trim((string)($tracking['ewb_status'] ?? '')));
+        $irn = trim((string)($tracking['irn'] ?? ''));
+
+        if ($irnStatus !== 'generated' || $ewbStatus !== 'pending' || $irn === '') {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Regenerate EWB with IRN is allowed only when IRN is generated and EWB is pending.',
+                'status' => [
+                    'irn_status' => (string)($tracking['irn_status'] ?? ''),
+                    'ewb_status' => (string)($tracking['ewb_status'] ?? ''),
+                ],
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $invStmt = $conn->prepare('SELECT * FROM vp_invoices WHERE id = ? LIMIT 1');
+        $invoice = null;
+        if ($invStmt) {
+            $invStmt->bind_param('i', $invoiceId);
+            $invStmt->execute();
+            $invoice = $invStmt->get_result()->fetch_assoc();
+            $invStmt->close();
+        }
+        if (!is_array($invoice)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invoice not found for EWB regeneration.',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $custStmt = $conn->prepare('SELECT * FROM vp_order_info WHERE customer_id = ? AND order_number = ? ORDER BY id DESC LIMIT 1');
+        $customer = null;
+        if ($custStmt) {
+            $custId = (int)($invoice['customer_id'] ?? 0);
+            $custStmt->bind_param('is', $custId, $orderNumber);
+            $custStmt->execute();
+            $customer = $custStmt->get_result()->fetch_assoc();
+            $custStmt->close();
+        }
+        if (!is_array($customer)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Customer/order info not found for EWB regeneration.',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $config = include __DIR__ . '/../config.php';
+        $alankitConfig = $config['alankit'] ?? [];
+        require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
+        $ewbService = new DomesticEwbIrnService($conn, $alankitConfig);
+        $invoiceNumberParts = explode('-', $invoice['invoice_number'] ?? '');
+        $invoiceNumber = end($invoiceNumberParts);        
+        $ewbData = [
+            'distance' => 100,
+            'trans_mode' => '1',
+            'veh_no' => trim((string)($tracking['veh_no'] ?? '')),
+            'veh_type' => trim((string)($tracking['veh_type'] ?? 'R')),
+            'trans_doc_no' => trim((string)($invoiceNumber ?? $invoiceId)),
+            'trn_doc_dt' => date('d/m/Y')
+        ];
+
+        $regenResult = $ewbService->regenerateEwbWithIrn($invoiceId, $irn, $invoice, $customer, $ewbData);
+        $latest = $this->fetchIrnEwbTrackingRowByInvoiceId($conn, $invoiceId);
+
+        echo json_encode([
+            'success' => !empty($regenResult['status']),
+            'triggered' => true,
+            'message' => (string)($regenResult['message'] ?? 'EWB regeneration completed.'),
+            'invoice_id' => $invoiceId,
+            'order_number' => $orderNumber,
+            'status' => [
+                'irn_status' => (string)($latest['irn_status'] ?? ''),
+                'ewb_status' => (string)($latest['ewb_status'] ?? ''),
+                'irn_error' => trim((string)($latest['irn_error'] ?? '')),
+                'ewb_error' => trim((string)($latest['ewb_error'] ?? '')),
+                'irn_response' => trim((string)($latest['irn_response'] ?? '')),
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    /**
+     * Fetch saved IRN/EWB tracking row by vp_invoices_id.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function fetchIrnEwbTrackingRowByInvoiceId(mysqli $conn, int $invoiceId): ?array
+    {
+        if ($invoiceId <= 0) {
             return null;
         }
 
-        // 1. Attempt direct order_number column lookup
-        $stmt = @$conn->prepare("SELECT * FROM vp_invoices WHERE order_number = ? LIMIT 1");
-        if ($stmt) {
-            $stmt->bind_param("s", $orderNumber);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            if ($res && $row = $res->fetch_assoc()) {
-                $stmt->close();
-                return $row;
-            }
-            $stmt->close();
+        $stmt = $conn->prepare(
+            'SELECT irn, ewb_no, irn_status, ewb_status, irn_error, ewb_error, irn_response, ewb_response, veh_no, veh_type
+             FROM vp_domestic_ewb_irn
+             WHERE vp_invoices_id = ?
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return null;
         }
 
-        // 2. Fallback via vp_order_info_id or vp_invoice_items
-        $stmt = @$conn->prepare("
-            SELECT i.* FROM vp_invoices i
-            LEFT JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
-            LEFT JOIN vp_invoice_items ii ON ii.invoice_id = i.id
-            WHERE oi.order_number = ? OR ii.order_number = ?
-            ORDER BY i.id DESC
-            LIMIT 1
-        ");
-        if ($stmt) {
-            $stmt->bind_param("ss", $orderNumber, $orderNumber);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            if ($res && $row = $res->fetch_assoc()) {
-                $stmt->close();
-                return $row;
-            }
-            $stmt->close();
-        }
+        $stmt->bind_param('i', $invoiceId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
 
-        return null;
+        return is_array($row) ? $row : null;
     }
 
     /**
-     * Input collection screen for E-Invoice (IRN) generation
+     * Attach IRN/EWB generation status to receipt row for popup diagnostics.
+     * Shows popup only when IRN or EWB is not generated for the resolved invoice.
+     *
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
      */
-    public function einvoiceInput(): void
+    private function attachIrnEwbStatusToReceiptRow(mysqli $conn, array $row): array
     {
-        is_login();
-        global $conn;
+        $row['show_irn_ewb_popup'] = false;
+        $row['irn_ewb_popup_title'] = 'IRN / E-way Bill Status';
+        $row['irn_ewb_popup_invoice_id'] = (int)($row['invoice_id'] ?? 0);
+        $row['irn_status'] = '';
+        $row['ewb_status'] = '';
+        $row['irn_error'] = '';
+        $row['ewb_error'] = '';
+        $row['irn_response'] = '';
+        $row['ewb_response'] = '';
+        $row['irn_ewb_status_note'] = '';
+        $row['ewb_regen_with_irn_allowed'] = false;
 
-        $orderNumber = trim((string)($_GET['order_number'] ?? ''));
-        if ($orderNumber === '') {
-            header('Location: index.php?page=pos_register&action=list');
-            exit;
+        $invoiceId = (int)($row['invoice_id'] ?? 0);
+        if ($invoiceId <= 0) {
+            return $row;
         }
 
-        $this->bootstrapOrderImportGlobals();
-        global $ordersModel;
-        $orderInfo = $ordersModel->getAddressInfoByOrderNumber($orderNumber) ?? [];
+        $statusRow = $this->fetchIrnEwbTrackingRowByInvoiceId($conn, $invoiceId);
 
-        // Fetch invoice
-        $invoice = $this->findInvoiceByOrderNumber($conn, $orderNumber);
-
-        if (!$invoice) {
-            $invoice = [
-                'id' => 0,
-                'invoice_number' => $orderNumber,
-                'currency' => 'INR',
-                'subtotal' => (float)($orderInfo['custom_total'] ?? 0),
-                'total_amount' => (float)($orderInfo['custom_total'] ?? 0),
-            ];
+        if (!is_array($statusRow)) {
+            $row['show_irn_ewb_popup'] = true;
+            $row['irn_ewb_status_note'] = 'No IRN/E-way bill tracking record found for this invoice.';
+            return $row;
         }
 
-        // Fetch items
-        $items = [];
-        $stmt = $conn->prepare("SELECT * FROM vp_orders WHERE order_number = ?");
-        if ($stmt) {
-            $stmt->bind_param("s", $orderNumber);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            if ($res) {
-                while ($row = $res->fetch_assoc()) {
-                    $items[] = $row;
-                }
-            }
-            $stmt->close();
-        }
+        $irnStatus = strtolower(trim((string)($statusRow['irn_status'] ?? '')));
+        $ewbStatus = strtolower(trim((string)($statusRow['ewb_status'] ?? '')));
 
-        $firm = app_setting_firm_details();
+        $row['irn_status'] = (string)($statusRow['irn_status'] ?? '');
+        $row['ewb_status'] = (string)($statusRow['ewb_status'] ?? '');
+        $row['irn'] = trim((string)($statusRow['irn'] ?? ''));
+        $row['ewb_no'] = trim((string)($statusRow['ewb_no'] ?? ''));
+        $row['irn_error'] = trim((string)($statusRow['irn_error'] ?? ''));
+        $row['ewb_error'] = trim((string)($statusRow['ewb_error'] ?? ''));
+        $row['irn_response'] = trim((string)($statusRow['irn_response'] ?? ''));
+        $row['ewb_response'] = trim((string)($statusRow['ewb_response'] ?? ''));
 
-        // Existing record
-        $existingRecord = null;
-        $invoiceId = (int)($invoice['id'] ?? 0);
-        if ($invoiceId > 0) {
-            require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
-            $existingRecord = DomesticEwbIrnService::findRecordByInvoiceId($conn, $invoiceId);
-        }
+        $irnGenerated = ($irnStatus === 'generated');
+        $ewbGenerated = ($ewbStatus === 'generated');
+        $row['ewb_regen_with_irn_allowed'] = ($irnGenerated && $ewbStatus === 'pending' && trim((string)($statusRow['irn'] ?? '')) !== '');
 
-        $grandTotal = (float)($invoice['total_amount'] ?? $orderInfo['custom_total'] ?? 0);
-        $eligibility = $this->resolveReceiptEinvoiceEwaybillEligibility($conn, $orderNumber, $grandTotal, $orderInfo);
-
-        $data = [
-            'order_number' => $orderNumber,
-            'order_info' => $orderInfo,
-            'invoice' => $invoice,
-            'items' => $items,
-            'firm' => $firm,
-            'existing_record' => $existingRecord,
-            'eligibility' => $eligibility,
-        ];
-
-        renderTemplateClean('views/pos_register/einvoice_input.php', $data, 'Generate E-Invoice');
-    }
-
-    /**
-     * Handle E-Invoice (IRN) generation POST submit
-     */
-    public function einvoiceSubmit(): void
-    {
-        is_login();
-        global $conn;
-
-        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? '')) !== 'POST') {
-            vendorJsonResponse(['success' => false, 'message' => 'POST request required.']);
-            return;
-        }
-
-        $orderNumber = trim((string)($_POST['order_number'] ?? ''));
-        $invoiceId = (int)($_POST['invoice_id'] ?? 0);
-
-        if ($orderNumber === '') {
-            vendorJsonResponse(['success' => false, 'message' => 'Order number is required.']);
-            return;
-        }
-
-        require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
-        require_once __DIR__ . '/../models/invoice/AlankitIrnNew.php';
-
-        $this->bootstrapOrderImportGlobals();
-        global $ordersModel;
-        $orderInfo = $ordersModel->getAddressInfoByOrderNumber($orderNumber) ?? [];
-
-        // Fetch invoice or construct virtual invoice
-        $invoice = null;
-        if ($invoiceId > 0) {
-            $stmt = $conn->prepare("SELECT * FROM vp_invoices WHERE id = ? LIMIT 1");
-            if ($stmt) {
-                $stmt->bind_param("i", $invoiceId);
-                $stmt->execute();
-                $res = $stmt->get_result();
-                if ($res && $res->num_rows > 0) {
-                    $invoice = $res->fetch_assoc();
-                }
-                $stmt->close();
-            }
-        }
-        if (!$invoice) {
-            $invoice = $this->findInvoiceByOrderNumber($conn, $orderNumber);
-            if ($invoice) {
-                $invoiceId = (int)($invoice['id'] ?? 0);
+        if (!$irnGenerated || !$ewbGenerated) {
+            $row['show_irn_ewb_popup'] = true;
+            if ($row['irn_error'] === '' && $row['ewb_error'] === '' && $row['irn_response'] === '') {
+                $row['irn_ewb_status_note'] = 'IRN/E-way bill is not generated yet, and no error payload is available.';
             }
         }
 
-        if (!$invoice) {
-            vendorJsonResponse(['success' => false, 'message' => 'Tax invoice not found for order #' . $orderNumber . '. Please generate invoice first.']);
-            return;
-        }
-
-        // Fetch items
-        $items = [];
-        $stmt = $conn->prepare("SELECT * FROM vp_orders WHERE order_number = ?");
-        if ($stmt) {
-            $stmt->bind_param("s", $orderNumber);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            if ($res) {
-                while ($row = $res->fetch_assoc()) {
-                    $items[] = $row;
-                }
-            }
-            $stmt->close();
-        }
-
-        $firm = app_setting_firm_details();
-        $alankitConfig = getAlankitConfig();
-
-        $ewbService = new DomesticEwbIrnService($conn, $alankitConfig);
-        $result = $ewbService->generateIrnAndEwb($invoiceId, $invoice, $items, $orderInfo, $firm, []);
-
-        if (!empty($result['status']) && !empty($result['irn'])) {
-            vendorJsonResponse([
-                'success' => true,
-                'message' => 'E-Invoice (IRN) generated successfully!',
-                'irn' => $result['irn'],
-                'ack_number' => $result['ack_number'] ?? '',
-                'ack_date' => $result['ack_date'] ?? '',
-                'ewaybill_url' => 'index.php?page=pos_register&action=ewaybill-input&order_number=' . rawurlencode($orderNumber),
-            ]);
-        } else {
-            $err = $result['message'] ?? $ewbService->getLastError() ?? 'Failed to generate E-Invoice.';
-            vendorJsonResponse([
-                'success' => false,
-                'message' => $err,
-                'errors' => $result['errors'] ?? [$err],
-            ]);
-        }
-    }
-
-    /**
-     * Input collection screen for E-Way Bill (EWB) generation
-     */
-    public function ewaybillInput(): void
-    {
-        is_login();
-        global $conn;
-
-        $orderNumber = trim((string)($_GET['order_number'] ?? ''));
-        if ($orderNumber === '') {
-            header('Location: index.php?page=pos_register&action=list');
-            exit;
-        }
-
-        $this->bootstrapOrderImportGlobals();
-        global $ordersModel;
-        $orderInfo = $ordersModel->getAddressInfoByOrderNumber($orderNumber) ?? [];
-
-        // Fetch invoice
-        $invoice = $this->findInvoiceByOrderNumber($conn, $orderNumber);
-
-        if (!$invoice) {
-            $invoice = [
-                'id' => 0,
-                'invoice_number' => $orderNumber,
-                'currency' => 'INR',
-                'subtotal' => (float)($orderInfo['custom_total'] ?? 0),
-                'total_amount' => (float)($orderInfo['custom_total'] ?? 0),
-            ];
-        }
-
-        $firm = app_setting_firm_details();
-
-        // Existing record
-        $existingRecord = null;
-        $invoiceId = (int)($invoice['id'] ?? 0);
-        if ($invoiceId > 0) {
-            require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
-            $existingRecord = DomesticEwbIrnService::findRecordByInvoiceId($conn, $invoiceId);
-        }
-
-        $grandTotal = (float)($invoice['total_amount'] ?? $orderInfo['custom_total'] ?? 0);
-        $eligibility = $this->resolveReceiptEinvoiceEwaybillEligibility($conn, $orderNumber, $grandTotal, $orderInfo);
-
-        $data = [
-            'order_number' => $orderNumber,
-            'order_info' => $orderInfo,
-            'invoice' => $invoice,
-            'firm' => $firm,
-            'existing_record' => $existingRecord,
-            'eligibility' => $eligibility,
-        ];
-
-        renderTemplateClean('views/pos_register/ewaybill_input.php', $data, 'Generate E-Way Bill');
-    }
-
-    /**
-     * Handle E-Way Bill POST submit
-     */
-    public function ewaybillSubmit(): void
-    {
-        is_login();
-        global $conn;
-
-        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? '')) !== 'POST') {
-            vendorJsonResponse(['success' => false, 'message' => 'POST request required.']);
-            return;
-        }
-
-        $orderNumber = trim((string)($_POST['order_number'] ?? ''));
-        $invoiceId = (int)($_POST['invoice_id'] ?? 0);
-
-        if ($orderNumber === '') {
-            vendorJsonResponse(['success' => false, 'message' => 'Order number is required.']);
-            return;
-        }
-
-        require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
-        require_once __DIR__ . '/../models/invoice/AlankitIrnNew.php';
-
-        $this->bootstrapOrderImportGlobals();
-        global $ordersModel;
-        $orderInfo = $ordersModel->getAddressInfoByOrderNumber($orderNumber) ?? [];
-
-        // Fetch invoice
-        $invoice = null;
-        if ($invoiceId > 0) {
-            $stmt = $conn->prepare("SELECT * FROM vp_invoices WHERE id = ? LIMIT 1");
-            if ($stmt) {
-                $stmt->bind_param("i", $invoiceId);
-                $stmt->execute();
-                $res = $stmt->get_result();
-                if ($res && $res->num_rows > 0) {
-                    $invoice = $res->fetch_assoc();
-                }
-                $stmt->close();
-            }
-        }
-        if (!$invoice) {
-            $invoice = $this->findInvoiceByOrderNumber($conn, $orderNumber);
-            if ($invoice) {
-                $invoiceId = (int)($invoice['id'] ?? 0);
-            }
-        }
-
-        if (!$invoice) {
-            vendorJsonResponse(['success' => false, 'message' => 'Tax invoice not found for order #' . $orderNumber . '. Please generate invoice first.']);
-            return;
-        }
-
-        // Collect transport parameters from POST
-        $ewbData = [
-            'trans_mode' => trim((string)($_POST['trans_mode'] ?? '1')),
-            'veh_no' => trim((string)($_POST['veh_no'] ?? 'DL01AB1234')),
-            'veh_type' => trim((string)($_POST['veh_type'] ?? 'R')),
-            'distance' => (int)($_POST['distance'] ?? 100),
-            'trans_doc_no' => trim((string)($_POST['trans_doc_no'] ?? '')),
-            'trans_doc_dt' => trim((string)($_POST['trans_doc_dt'] ?? '')),
-            'trans_id' => trim((string)($_POST['trans_id'] ?? '')),
-            'trans_name' => trim((string)($_POST['trans_name'] ?? '')),
-        ];
-
-        // Fetch items
-        $items = [];
-        $stmt = $conn->prepare("SELECT * FROM vp_orders WHERE order_number = ?");
-        if ($stmt) {
-            $stmt->bind_param("s", $orderNumber);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            if ($res) {
-                while ($row = $res->fetch_assoc()) {
-                    $items[] = $row;
-                }
-            }
-            $stmt->close();
-        }
-
-        $firm = app_setting_firm_details();
-        $alankitConfig = getAlankitConfig();
-
-        $ewbService = new DomesticEwbIrnService($conn, $alankitConfig);
-        $result = $ewbService->generateIrnAndEwb($invoiceId, $invoice, $items, $orderInfo, $firm, $ewbData);
-
-        if (!empty($result['ewb']) || (!empty($result['status']) && !empty($result['ewb_message']))) {
-            vendorJsonResponse([
-                'success' => true,
-                'message' => 'E-Way Bill generated successfully!',
-                'ewb_number' => $result['ewb'] ?? '',
-                'ewb_date' => date('Y-m-d H:i:s'),
-                'ewb_valid_till' => '',
-            ]);
-        } else {
-            $err = $result['message'] ?? $ewbService->getLastError() ?? 'Failed to generate E-Way Bill.';
-            vendorJsonResponse([
-                'success' => false,
-                'message' => $err,
-                'errors' => $result['errors'] ?? [$err],
-            ]);
-        }
+        return $row;
     }
 
     /**
@@ -5861,6 +5712,7 @@ class POSRegisterController
             'upi' => 'upi',
             'bank_transfer' => 'bank_transfer',
             'pos_machine' => 'pos_machine',
+            'pos' => 'pos_machine',
             'cheque' => 'cheque',
             'razorpay' => 'razorpay',
             'adminorder' => 'adminorder',
@@ -6451,6 +6303,8 @@ class POSRegisterController
             $userId = (int)($_SESSION['user']['id'] ?? 0);
             $storeId = (int)($_SESSION['warehouse_id'] ?? 0);
 
+            $wasUnpublishedInDb = (int)($product['published'] ?? 0) === 0;
+
             $activeCountBefore = 0;
             $conn->begin_transaction();
             try {
@@ -6467,8 +6321,9 @@ class POSRegisterController
                     $productModel->setProductPublished($resolvedProductId, 1);
                 }
 
-                $stmtIns = $conn->prepare("INSERT INTO `vp_pos_unpublished_locks` (product_id, token, user_id, store_id, expires_at) VALUES (?, ?, ?, ?, NOW() + INTERVAL 30 MINUTE)");
-                $stmtIns->bind_param('isii', $resolvedProductId, $lockToken, $userId, $storeId);
+                $wasUnpubVal = $wasUnpublishedInDb ? 1 : 0;
+                $stmtIns = $conn->prepare("INSERT INTO `vp_pos_unpublished_locks` (product_id, token, user_id, store_id, was_unpublished, expires_at) VALUES (?, ?, ?, ?, ?, NOW() + INTERVAL 30 MINUTE)");
+                $stmtIns->bind_param('isiii', $resolvedProductId, $lockToken, $userId, $storeId, $wasUnpubVal);
                 $stmtIns->execute();
                 $stmtIns->close();
 
@@ -6502,8 +6357,20 @@ class POSRegisterController
         } else {
             // RELEASE ROW LOCK (newVal === 0)
             $remainingLocks = 0;
+            $wasUnpublishedFlag = false;
             $conn->begin_transaction();
             try {
+                $chkLockStmt = $conn->prepare("SELECT was_unpublished FROM `vp_pos_unpublished_locks` WHERE product_id = ? AND was_unpublished = 1 LIMIT 1");
+                if ($chkLockStmt) {
+                    $chkLockStmt->bind_param('i', $resolvedProductId);
+                    $chkLockStmt->execute();
+                    $lockRes = $chkLockStmt->get_result();
+                    if ($lockRes && $lockRes->num_rows > 0) {
+                        $wasUnpublishedFlag = true;
+                    }
+                    $chkLockStmt->close();
+                }
+
                 if ($token !== '') {
                     $stmtDel = $conn->prepare("DELETE FROM `vp_pos_unpublished_locks` WHERE token = ?");
                     $stmtDel->bind_param('s', $token);
@@ -6524,7 +6391,7 @@ class POSRegisterController
 
                 $remainingLocks = (int)($resCnt['cnt'] ?? 0);
 
-                if ($remainingLocks === 0) {
+                if ($remainingLocks === 0 && $wasUnpublishedFlag) {
                     $productModel->setProductPublished($resolvedProductId, 0);
                 }
 
@@ -6538,11 +6405,11 @@ class POSRegisterController
             $this->cleanupExpiredUnpublishedLocks($conn, $productModel);
 
             $vendorSyncResult = null;
-            if ($remainingLocks === 0) {
+            if ($remainingLocks === 0 && $wasUnpublishedFlag) {
                 $vendorSyncResult = $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 0);
                 $msg = 'Product row lock released and published status set back to 0.';
             } else {
-                $msg = 'Row lock released. Product remains published = 1 because ' . $remainingLocks . ' other store row lock(s) are active.';
+                $msg = 'Row lock released.';
             }
 
             vendorJsonResponse([
@@ -6607,26 +6474,33 @@ class POSRegisterController
             $syncSize     = trim((string)($product['size'] ?? ($item['size'] ?? '')));
             $syncColor    = trim((string)($product['color'] ?? ($item['color'] ?? '')));
 
-            // Delete lease locks for this product
-            $stmtDel = $conn->prepare("DELETE FROM `vp_pos_unpublished_locks` WHERE product_id = ?");
-            if ($stmtDel) {
-                $stmtDel->bind_param('i', $resolvedPid);
-                $stmtDel->execute();
-                $stmtDel->close();
-            }
+            // Check if this lock was created for an originally unpublished product BEFORE deleting
+            $wasUnpublishedLockExists = false;
+            if ($this->tableExists($conn, 'vp_pos_unpublished_locks')) {
+                $chkLock = $conn->query("SELECT was_unpublished FROM `vp_pos_unpublished_locks` WHERE product_id = {$resolvedPid} AND was_unpublished = 1 LIMIT 1");
+                $wasUnpublishedLockExists = ($chkLock && $chkLock->num_rows > 0);
 
-            // Check remaining locks
-            $stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM `vp_pos_unpublished_locks` WHERE product_id = ? AND expires_at >= NOW()");
-            if ($stmt) {
-                $stmt->bind_param('i', $resolvedPid);
-                $stmt->execute();
-                $cntRow = $stmt->get_result()->fetch_assoc();
-                $stmt->close();
+                // Delete lease locks for this product
+                $stmtDel = $conn->prepare("DELETE FROM `vp_pos_unpublished_locks` WHERE product_id = ?");
+                if ($stmtDel) {
+                    $stmtDel->bind_param('i', $resolvedPid);
+                    $stmtDel->execute();
+                    $stmtDel->close();
+                }
 
-                $remaining = (int)($cntRow['cnt'] ?? 0);
-                if ($remaining === 0) {
-                    $productModel->setProductPublished($resolvedPid, 0);
-                    $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 0);
+                // Check remaining locks
+                $stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM `vp_pos_unpublished_locks` WHERE product_id = ? AND expires_at >= NOW()");
+                if ($stmt) {
+                    $stmt->bind_param('i', $resolvedPid);
+                    $stmt->execute();
+                    $cntRow = $stmt->get_result()->fetch_assoc();
+                    $stmt->close();
+
+                    $remaining = (int)($cntRow['cnt'] ?? 0);
+                    if ($remaining === 0 && $wasUnpublishedLockExists) {
+                        $productModel->setProductPublished($resolvedPid, 0);
+                        $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 0);
+                    }
                 }
             }
         }
@@ -6645,12 +6519,16 @@ class POSRegisterController
             `token` VARCHAR(64) NOT NULL,
             `user_id` INT DEFAULT 0,
             `store_id` INT DEFAULT 0,
+            `was_unpublished` TINYINT(1) DEFAULT 1,
             `expires_at` DATETIME NOT NULL,
             `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX `idx_product_expires` (`product_id`, `expires_at`),
             INDEX `idx_token` (`token`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
         $conn->query($sql);
+        if (!$this->columnExists($conn, 'vp_pos_unpublished_locks', 'was_unpublished')) {
+            @$conn->query("ALTER TABLE `vp_pos_unpublished_locks` ADD COLUMN `was_unpublished` TINYINT(1) DEFAULT 1 AFTER `store_id`");
+        }
         $checked = true;
     }
 
@@ -6658,7 +6536,7 @@ class POSRegisterController
     {
         $this->ensureUnpublishedLockTableExists($conn);
 
-        $resExpired = $conn->query("SELECT DISTINCT product_id FROM `vp_pos_unpublished_locks` WHERE expires_at < NOW()");
+        $resExpired = $conn->query("SELECT DISTINCT product_id FROM `vp_pos_unpublished_locks` WHERE expires_at < NOW() AND was_unpublished = 1");
         $candidateProductIds = [];
         if ($resExpired && $resExpired->num_rows > 0) {
             while ($row = $resExpired->fetch_assoc()) {

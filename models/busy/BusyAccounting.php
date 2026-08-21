@@ -581,17 +581,7 @@ class BusyAccounting
     {
         $sql = "SELECT i.*, 
                        c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, 
-                       c.city, c.state, c.state_code, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type, c.order_number,
-                       (SELECT pp.payment_mode 
-                        FROM pos_payments pp 
-                        WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(c.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci 
-                        ORDER BY pp.payment_amount DESC, pp.id DESC 
-                        LIMIT 1) AS pos_payment_mode,
-                       (SELECT dd.courier_name 
-                        FROM vp_dispatch_details dd 
-                        WHERE dd.invoice_id = i.id AND dd.courier_name IS NOT NULL AND TRIM(dd.courier_name) <> '' 
-                        ORDER BY dd.id DESC 
-                        LIMIT 1) AS dispatch_courier_name
+                       c.city, c.state, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type, c.payment_mode AS order_payment_mode
                 FROM vp_invoices i
                 LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id
                 WHERE i.id = ? AND LOWER(TRIM(COALESCE(i.status, ''))) <> 'cancelled' LIMIT 1";
@@ -612,19 +602,10 @@ class BusyAccounting
 
         // Fetch line items with fast indexed subqueries
         $itemsSql = "SELECT it.*, 
-                            COALESCE(
-                                (SELECT CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                 FROM vp_products p 
-                                 INNER JOIN account_group ag_p ON (
-                                     ag_p.id = p.accounts_group 
-                                     OR CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                 ) 
-                                 WHERE p.id = it.product_id AND ag_p.account_group_name IS NOT NULL AND ag_p.account_group_name <> '' LIMIT 1),
-                                (SELECT CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM vp_products p WHERE p.id = it.product_id AND p.accounts_group IS NOT NULL AND p.accounts_group <> '' LIMIT 1),
-                                (SELECT CONVERT(ag.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM account_group ag WHERE CONVERT(ag.item_group USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(it.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci AND ag.account_group_name IS NOT NULL AND ag.account_group_name <> '' LIMIT 1),
-                                NULLIF(CONVERT(it.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
-                                CONVERT(it.item_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                            ) AS account_group_name 
+                            COALESCE(NULLIF((SELECT CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM vp_products p WHERE p.id = it.product_id LIMIT 1), ''), it.item_code) AS sku,
+                            (SELECT CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci 
+                             FROM vp_products p 
+                             WHERE p.id = it.product_id LIMIT 1) AS account_group_name 
                      FROM vp_invoice_items it 
                      WHERE it.invoice_id = ?";
 
@@ -645,12 +626,17 @@ class BusyAccounting
             $custName = 'Walk-in Customer';
         }
 
-        $payType = trim($invoice['order_payment_type'] ?? '');
-        if (strtolower($payType) === 'offline' && !empty($invoice['pos_payment_mode'])) {
-            $payType = trim($invoice['pos_payment_mode']);
-        }
+        $payType = trim($invoice['order_payment_mode'] ?? $invoice['order_payment_type'] ?? $invoice['payment_type'] ?? $invoice['payment_mode'] ?? '');
         if ($payType !== '') {
-            $payTypeFormatted = (strtolower($payType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $payType));
+            if (strtoupper($payType) === 'YES2971') {
+                $payTypeFormatted = 'YES2971';
+            } elseif (strtolower($payType) === 'cod') {
+                $payTypeFormatted = 'COD';
+            } elseif (strtolower($payType) === 'pos' || strtolower($payType) === 'pos_machine' || strtolower($payType) === 'pos machine') {
+                $payTypeFormatted = 'POS';
+            } else {
+                $payTypeFormatted = ucwords(str_replace('_', ' ', $payType));
+            }
             $invoice['payment_type'] = $payTypeFormatted;
             $invoice['party_name']   = $payTypeFormatted;
             $invoice['master_name1'] = $payTypeFormatted;
@@ -686,17 +672,7 @@ class BusyAccounting
     {
         $sql = "SELECT sr.*, i.invoice_number, i.invoice_date, i.currency,
                        c.first_name, c.last_name, c.email, c.mobile, c.address_line1, c.address_line2, 
-                       c.city, c.state, c.state_code, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type,
-                       (SELECT pp.payment_mode 
-                        FROM pos_payments pp 
-                        WHERE CONVERT(pp.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(sr.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci 
-                        ORDER BY pp.payment_amount DESC, pp.id DESC 
-                        LIMIT 1) AS pos_payment_mode,
-                       (SELECT dd.courier_name 
-                        FROM vp_dispatch_details dd 
-                        WHERE dd.invoice_id = sr.invoice_id AND dd.courier_name IS NOT NULL AND TRIM(dd.courier_name) <> '' 
-                        ORDER BY dd.id DESC 
-                        LIMIT 1) AS dispatch_courier_name
+                       c.city, c.state, c.zipcode, c.country, c.gstin, c.payment_type AS order_payment_type, c.payment_mode AS order_payment_mode
                 FROM vp_sales_returns sr
                 LEFT JOIN vp_invoices i ON sr.invoice_id = i.id
                 LEFT JOIN vp_order_info c ON c.id = i.vp_order_info_id
@@ -718,20 +694,10 @@ class BusyAccounting
 
         // Fetch return line items with fast indexed subqueries
         $itemsSql = "SELECT sri.*, ii.item_name, ii.hsn, ii.unit_price, ii.tax_rate, ii.groupname,
-                            COALESCE(
-                                (SELECT CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci 
-                                 FROM vp_products p 
-                                 INNER JOIN account_group ag_p ON (
-                                     ag_p.id = p.accounts_group 
-                                     OR CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                 ) 
-                                 WHERE p.id = COALESCE(sri.product_id, ii.product_id) AND ag_p.account_group_name IS NOT NULL AND ag_p.account_group_name <> '' LIMIT 1),
-                                (SELECT CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM vp_products p WHERE p.id = COALESCE(sri.product_id, ii.product_id) AND p.accounts_group IS NOT NULL AND p.accounts_group <> '' LIMIT 1),
-                                (SELECT CONVERT(ag.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM account_group ag WHERE CONVERT(ag.item_group USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(ii.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci AND ag.account_group_name IS NOT NULL AND ag.account_group_name <> '' LIMIT 1),
-                                NULLIF(CONVERT(ii.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
-                                NULLIF(CONVERT(sri.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
-                                CONVERT(ii.item_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                            ) AS account_group_name 
+                            COALESCE(NULLIF((SELECT CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM vp_products p WHERE p.id = COALESCE(sri.product_id, ii.product_id) LIMIT 1), ''), sri.item_code, ii.item_code) AS sku,
+                            (SELECT CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci 
+                             FROM vp_products p 
+                             WHERE p.id = COALESCE(sri.product_id, ii.product_id) LIMIT 1) AS account_group_name 
                      FROM vp_sales_return_items sri 
                      LEFT JOIN vp_invoice_items ii ON sri.invoice_item_id = ii.id 
                      WHERE sri.sales_return_id = ?";
@@ -753,12 +719,17 @@ class BusyAccounting
             $custName = 'Customer (' . ($return['order_number'] ?? '—') . ')';
         }
 
-        $payType = trim($return['order_payment_type'] ?? '');
-        if (strtolower($payType) === 'offline' && !empty($return['pos_payment_mode'])) {
-            $payType = trim($return['pos_payment_mode']);
-        }
+        $payType = trim($return['order_payment_mode'] ?? $return['order_payment_type'] ?? $return['payment_type'] ?? $return['payment_mode'] ?? '');
         if ($payType !== '') {
-            $payTypeFormatted = (strtolower($payType) === 'cod') ? 'COD' : ucwords(str_replace('_', ' ', $payType));
+            if (strtoupper($payType) === 'YES2971') {
+                $payTypeFormatted = 'YES2971';
+            } elseif (strtolower($payType) === 'cod') {
+                $payTypeFormatted = 'COD';
+            } elseif (strtolower($payType) === 'pos' || strtolower($payType) === 'pos_machine' || strtolower($payType) === 'pos machine') {
+                $payTypeFormatted = 'POS';
+            } else {
+                $payTypeFormatted = ucwords(str_replace('_', ' ', $payType));
+            }
             $return['payment_type'] = $payTypeFormatted;
             $return['party_name']   = $payTypeFormatted;
             $return['master_name1'] = $payTypeFormatted;

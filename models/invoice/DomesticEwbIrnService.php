@@ -96,7 +96,7 @@ class DomesticEwbIrnService {
      */
     public function generateIrnAndEwb($invoiceId, $invoice, $items, $customer, $firm, $ewbData = []) {
         try {
-            //echo "Domestic EWB: Starting IRN and EWB generation for invoice #$invoiceId\n";
+            echo "Domestic EWB: Starting IRN and EWB generation for invoice #$invoiceId\n";
             $this->ensureInfoDtlsColumn();
             // Validate required data
             if (!$invoice || empty($items) || !$customer || !$firm) {
@@ -121,7 +121,7 @@ class DomesticEwbIrnService {
                 error_log("Alankit IRN: " . $this->lastError);
                 return ['status' => false, 'message' => $this->lastError];
             }
-            //echo "Domestic EWB: Alankit API credentials loaded successfully.\n";
+            echo "Domestic EWB: Alankit API credentials loaded successfully.\n";
             $alankitClient = new AlankitIrnNew(
                 $this->alankitConfig['username'],
                 $this->alankitConfig['password'],
@@ -152,7 +152,7 @@ class DomesticEwbIrnService {
             $data = [
                 "Data" => $authreq
             ];
-            //echo "Alankit IRN: Sending authentication request for invoice #$invoiceId\n";
+            echo "Alankit IRN: Sending authentication request for invoice #$invoiceId\n";
             $authResponse = $alankitClient->sendRequest('AUTH_ENDPOINT', $data, false);
             
             if (!$authResponse || !isset($authResponse['Data']['AuthToken'])) {
@@ -195,11 +195,11 @@ class DomesticEwbIrnService {
                 error_log("Alankit IRN: Payload encryption failed for invoice #$invoiceId");
                 return false;
             }
-            //echo '<br><br>'.$encryptedPayload.'<br><br>';
+            echo '<br><br>'.$encryptedPayload.'<br><br>';
             // Send IRN generation request with encrypted payload
             //$irnResponse = $alankitClient->sendRequest('IRN_GENERATE_ENDPOINT', ['Data' => $encryptedPayload], true, $accessToken);
             $irnResponse = $alankitClient->generateIrn(['Data' => $encryptedPayload], $accessToken);   
-            //print_r($irnResponse);
+            print_r($irnResponse);
                   
             if ($irnResponse && isset($irnResponse['Data'])) {
                 $decryptedResponse = $alankitClient->decrypt_irn($irnResponse['Data'], $decryptedSek);
@@ -214,6 +214,34 @@ class DomesticEwbIrnService {
             $infoDtls = null;
             if (is_array($irnResponse) && array_key_exists('InfoDtls', $irnResponse)) {
                 $infoDtls = is_array($irnResponse['InfoDtls']) ? json_encode($irnResponse['InfoDtls']) : (string)$irnResponse['InfoDtls'];
+            }
+
+            $isDupIrn = false;
+            if (
+                is_array($irnResponse)
+                && isset($irnResponse['InfoDtls'])
+                && is_array($irnResponse['InfoDtls'])
+                && isset($irnResponse['InfoDtls']['InfCd'])
+            ) {
+                $isDupIrn = (strtoupper(trim((string)$irnResponse['InfoDtls']['InfCd'])) === 'DUPIRN');
+            }
+
+            // For DUPIRN response, preserve existing IRN/EWB fields and only store InfoDtls.
+            if ($isDupIrn) {
+                $this->updateInfoDtlsOnly($invoiceId, $infoDtls);
+
+                $dupMessage = trim((string)($irnResponse['InfoDtls']['Desc'] ?? 'Duplicate IRN (DUPIRN)'));
+                if ($dupMessage === '') {
+                    $dupMessage = 'Duplicate IRN (DUPIRN)';
+                }
+
+                $result['status'] = false;
+                $result['errors'][] = $dupMessage;
+                if (!empty($irnResponse['Irn'])) {
+                    $result['irn'] = (string)$irnResponse['Irn'];
+                }
+                $this->lastError = $dupMessage;
+                return $result;
             }
 
             if (!$irnResponse || !isset($irnResponse['Irn'])) {
@@ -305,6 +333,156 @@ class DomesticEwbIrnService {
                 'status' => false,
                 'message' => $this->lastError,
                 'errors' => [$this->lastError]
+            ];
+        }
+    }
+
+    /**
+     * Regenerate only E-way bill using an existing generated IRN.
+     *
+     * @param int $invoiceId
+     * @param string $irn
+     * @param array $invoice
+     * @param array $customer
+     * @param array $ewbData
+     * @return array{status:bool,message:string,ewb?:string,response?:array<string,mixed>}
+     */
+    public function regenerateEwbWithIrn($invoiceId, $irn, $invoice, $customer, $ewbData = []) {
+        try {
+            $this->ensureInfoDtlsColumn();
+
+            $irn = trim((string)$irn);
+            if ($invoiceId <= 0 || $irn === '') {
+                $msg = 'Invoice ID and generated IRN are required for EWB regeneration.';
+                $this->lastError = $msg;
+                return ['status' => false, 'message' => $msg];
+            }
+
+            require_once __DIR__ . '/AlankitIrnNew.php';
+            if (empty($this->alankitConfig['username']) || empty($this->alankitConfig['password'])
+                || empty($this->alankitConfig['subscription_key']) || empty($this->alankitConfig['app_key'])
+                || empty($this->alankitConfig['gstin'])) {
+                $msg = 'Missing Alankit API credentials in configuration';
+                $this->lastError = $msg;
+                return ['status' => false, 'message' => $msg];
+            }
+
+            $alankitClient = new AlankitIrnNew(
+                $this->alankitConfig['username'],
+                $this->alankitConfig['password'],
+                $this->alankitConfig['subscription_key'],
+                $this->alankitConfig['app_key'],
+                $this->alankitConfig['gstin'],
+                $this->alankitConfig['force_refresh_access_token'] ?? true
+            );
+
+            $authReq = $alankitClient->authRequest();
+            $authResponse = $alankitClient->sendRequest('AUTH_ENDPOINT', ['Data' => $authReq], false);
+            if (!$authResponse || !isset($authResponse['Data']['AuthToken'])) {
+                $msg = 'Authentication failed: ' . ($authResponse['message'] ?? 'Unknown error');
+                $this->updateEwbStatus($invoiceId, 'failed', $msg, null, $authResponse, null, null, null, null, null, null, null, null);
+                $this->lastError = $msg;
+                return ['status' => false, 'message' => $msg];
+            }
+
+            $accessToken = (string)$authResponse['Data']['AuthToken'];
+            $encryptedSek = $authResponse['Data']['Sek'] ?? null;
+            if (!$encryptedSek) {
+                $msg = 'No encrypted SEK received from authentication';
+                $this->updateEwbStatus($invoiceId, 'failed', $msg, null, $authResponse, null, null, null, null, null, null, null, null);
+                $this->lastError = $msg;
+                return ['status' => false, 'message' => $msg];
+            }
+
+            $decryptedSek = $alankitClient->decryptSek($encryptedSek, $this->alankitConfig['app_key']);
+            if (!$decryptedSek) {
+                $msg = 'SEK decryption failed';
+                $this->updateEwbStatus($invoiceId, 'failed', $msg, null, $authResponse, null, null, null, null, null, null, null, null);
+                $this->lastError = $msg;
+                return ['status' => false, 'message' => $msg];
+            }
+
+            $distance = isset($ewbData['distance']) ? (int)$ewbData['distance'] : 100;
+            if ($distance <= 0) {
+                $distance = 100;
+            }
+            $transMode = trim((string)($ewbData['trans_mode'] ?? '1'));
+            if ($transMode === '') {
+                $transMode = '1';
+            }
+
+            $invoiceNo = trim((string)($invoice['invoice_number'] ?? ''));
+            if ($invoiceNo === '') {
+                $invoiceNo = (string)$invoiceId;
+            }
+
+            $ewbPayload = [
+                'Irn' => $irn,
+                //'Distance' => $distance,
+                'Distance' => 0,
+                'TransMode' => $transMode,
+                'VehNo' => 'ka123456',// Hardcoded for testing; replace with actual logic as needed
+                'VehType' => 'R',// Hardcoded for testing; replace with actual logic as needed
+                //'VehNo' => trim((string)($ewbData['veh_no'] ?? '')),
+                //'VehType' => trim((string)($ewbData['veh_type'] ?? '')),
+                'TransDocNo' => trim((string)($ewbData['trans_doc_no'] ?? $invoiceNo)),
+                'TransDocDt' => trim((string)($ewbData['trn_doc_dt'] ?? date('d/m/Y'))),
+            ];
+
+            $ewbResponse = $alankitClient->generateEwb($ewbPayload, $accessToken, $decryptedSek);
+            $infoDtls = null;
+            if (is_array($ewbResponse) && array_key_exists('InfoDtls', $ewbResponse)) {
+                $infoDtls = is_array($ewbResponse['InfoDtls']) ? json_encode($ewbResponse['InfoDtls']) : (string)$ewbResponse['InfoDtls'];
+            }
+
+            $ewbNo = isset($ewbResponse['EwbNo']) ? (string)$ewbResponse['EwbNo'] : null;
+            $genGstin = isset($ewbResponse['GenGstin']) ? (string)$ewbResponse['GenGstin'] : null;
+            $ewbDate = $this->normalizeDbDateTime($ewbResponse['EwbDt'] ?? null);
+            $ewbValidTill = $this->normalizeDbDateTime($ewbResponse['EwbValidTill'] ?? null);
+            $ewbStatus = !empty($ewbNo) ? 'generated' : 'failed';
+
+            $errorMessage = null;
+            if ($ewbStatus !== 'generated') {
+                $errorMessage = trim((string)($ewbResponse['message'] ?? $ewbResponse['ErrorMessage'] ?? 'EWB regeneration failed'));
+            }
+
+            $this->updateEwbStatus(
+                $invoiceId,
+                $ewbStatus,
+                $errorMessage,
+                $ewbPayload,
+                $ewbResponse,
+                $ewbNo,
+                trim((string)($ewbData['veh_no'] ?? '')),
+                trim((string)($ewbData['veh_type'] ?? '')),
+                $ewbNo,
+                $ewbDate,
+                $ewbValidTill,
+                $genGstin,
+                $infoDtls
+            );
+
+            if ($ewbStatus === 'generated') {
+                return [
+                    'status' => true,
+                    'message' => 'E-way bill regenerated successfully',
+                    'ewb' => (string)$ewbNo,
+                    'response' => is_array($ewbResponse) ? $ewbResponse : [],
+                ];
+            }
+
+            $this->lastError = $errorMessage ?: 'E-way bill regeneration failed';
+            return [
+                'status' => false,
+                'message' => $this->lastError,
+                'response' => is_array($ewbResponse) ? $ewbResponse : [],
+            ];
+        } catch (\Throwable $e) {
+            $this->lastError = 'Exception: ' . $e->getMessage();
+            error_log("Domestic EWB regenerate exception for invoice #$invoiceId: " . $this->lastError);
+            return [
+                'status' => false,
+                'message' => $this->lastError,
             ];
         }
     }
@@ -548,6 +726,20 @@ class DomesticEwbIrnService {
         if (!$this->db->query($alter)) {
             error_log("Domestic EWB: Failed to add info_dtls column: " . $this->db->error);
         }
+    }
+
+    /**
+     * Persist only InfoDtls for special responses like DUPIRN without touching IRN/EWB status fields.
+     */
+    private function updateInfoDtlsOnly($invoiceId, $infoDtls) {
+        $query = "UPDATE vp_domestic_ewb_irn SET info_dtls = ? WHERE vp_invoices_id = ?";
+        $stmt = $this->db->prepare($query);
+        if (!$stmt) {
+            error_log("Failed to prepare info_dtls update: " . $this->db->error);
+            return false;
+        }
+        $stmt->bind_param("si", $infoDtls, $invoiceId);
+        return $stmt->execute();
     }
 
     /**

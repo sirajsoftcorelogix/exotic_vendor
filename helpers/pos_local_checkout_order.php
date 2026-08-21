@@ -554,6 +554,7 @@ function pos_local_checkout_map_pos_payment_mode_to_exotic(string $posMode): str
         'upi' => 'upi',
         'bank_transfer' => 'bank_transfer',
         'pos_machine' => 'pos_machine',
+        'pos' => 'pos_machine',
         'cheque' => 'cheque',
         'razorpay' => 'razorpay',
         'adminorder' => 'adminorder',

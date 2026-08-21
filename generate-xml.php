@@ -135,8 +135,16 @@ class BusyXmlGenerator
         $xml->addChild('STPTName', htmlspecialchars($stptName));
         
         // Resolve Payment Type / Party Name / MasterName1
-        $rawPaymentType = trim($invoice['payment_type'] ?? $invoice['payment_mode'] ?? '');
-        $translated = $this->translatePaymentType($rawPaymentType, $invoice);
+        $paymentType = trim($invoice['order_payment_mode'] ?? $invoice['payment_type'] ?? $invoice['payment_mode'] ?? '');
+        if ($paymentType !== '') {
+            if (strtoupper($paymentType) === 'YES2971') {
+                $paymentType = 'YES2971';
+            } elseif (strtolower($paymentType) === 'cod') {
+                $paymentType = 'COD';
+            } else {
+                $paymentType = ucwords(str_replace('_', ' ', $paymentType));
+            }
+        }
 
         $partyName = !empty($invoice['party_name']) && $invoice['party_name'] !== $rawPaymentType
             ? $this->translatePaymentType($invoice['party_name'], $invoice)
@@ -325,12 +333,16 @@ class BusyXmlGenerator
         $xml->addChild('STPTName', htmlspecialchars($stptName));
         
         // Resolve Payment Type / Party Name / MasterName1
-        $rawPaymentType = trim($salesReturn['payment_type'] ?? $salesReturn['payment_mode'] ?? '');
-        $translated = $this->translatePaymentType($rawPaymentType, $salesReturn);
-
-        $partyName = !empty($salesReturn['party_name']) && $salesReturn['party_name'] !== $rawPaymentType
-            ? $this->translatePaymentType($salesReturn['party_name'], $salesReturn)
-            : ($translated !== '' ? $translated : ($salesReturn['customer_name'] ?? 'Walk-in Customer'));
+        $paymentType = trim($salesReturn['order_payment_mode'] ?? $salesReturn['payment_type'] ?? $salesReturn['payment_mode'] ?? '');
+        if ($paymentType !== '') {
+            if (strtoupper($paymentType) === 'YES2971') {
+                $paymentType = 'YES2971';
+            } elseif (strtolower($paymentType) === 'cod') {
+                $paymentType = 'COD';
+            } else {
+                $paymentType = ucwords(str_replace('_', ' ', $paymentType));
+            }
+        }
 
         $masterName1 = !empty($salesReturn['master_name1']) && $salesReturn['master_name1'] !== $rawPaymentType
             ? $this->translatePaymentType($salesReturn['master_name1'], $salesReturn)
