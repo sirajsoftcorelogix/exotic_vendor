@@ -50,6 +50,7 @@
                        data-sales-return-url="<?php echo htmlspecialchars(base_url('?page=sales_returns&action=create&invoice_id=' . (int) $invoice['id']), ENT_QUOTES, 'UTF-8'); ?>"
                        class="text-orange-700 hover:text-orange-900 font-medium">Return</a>
                     <a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>" target="_blank" class="text-indigo-600 hover:text-indigo-900">Download</a>
+                    <a href="<?php echo base_url('index.php?page=export_documents&query=' . rawurlencode($invoice['invoice_number'])); ?>" target="_blank" class="text-blue-600 hover:text-blue-900 font-medium">Export Docs</a>
                     <?php endif; ?>
                 </td>
             </tr>

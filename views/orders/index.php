@@ -1103,6 +1103,12 @@
                                                         <hr class="my-1 mx-2"></hr>
                                                         <a href="<?= base_url('index.php?daterange=&order_from=&order_till=&status_op=in&payment_type_op=in&order_number=' . rawurlencode(trim((string)($order['order_number'] ?? ''))) . '&stock_available=&priority=&country=&vendor=&item_code=&po_no=&item_name=&author=&publisher=&page=orders&action=list&options=unshipped') ?>" target="_blank" rel="noopener noreferrer" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Customer Orders</a>
                                                         <hr class="my-1 mx-2"></hr>
+                                                        <?php $expQueryVal = trim((string)($order['invoice_number'] ?? $order['order_number'] ?? '')); ?>
+                                                        <?php if (!empty($expQueryVal)): ?>
+                                                        <a href="<?= base_url('index.php?page=export_documents&query=' . rawurlencode($expQueryVal)) ?>" target="_blank" class="block px-4 py-2 text-sm text-blue-700 hover:bg-blue-50 font-medium">Export Documents</a>
+                                                        <hr class="my-1 mx-2"></hr>
+                                                        <?php endif; ?>
+                                                        <hr class="my-1 mx-2"></hr>
                                                         <?php
                                                         $picklistStatuses = ['added_to_picklist', 'item_picked'];
                                                         $onPicklist = (int) ($order['picklist_item_id'] ?? 0) > 0

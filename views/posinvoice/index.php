@@ -634,6 +634,13 @@ title="Download PDF">
     <i class="fa-solid fa-truck text-purple-600"></i> Dispatch Details
 </button>`;
 
+                    const exportDocBtn = isCancelled ? '' : `
+<a href="index.php?page=export_documents&query=${encodeURIComponent(i.invoice_number || i.id)}" target="_blank"
+   class="inline-flex items-center text-blue-600 hover:text-blue-800 text-xs font-semibold"
+   title="Generate Export Documents">
+    Export Docs
+</a>`;
+
                     html += `
 <tr class="border-t hover:bg-gray-50">
 
@@ -652,19 +659,12 @@ title="Download PDF">
 
 <td class="p-3">${badge}</td>
 
-<td class="p-3 pos-invoice-action-cell">
-    <div class="relative inline-block text-left">
-        <button type="button" class="text-gray-600 hover:bg-gray-100 rounded-full px-2 text-lg font-bold outline-none" onclick="togglePosInvoiceMenu(this, event)" aria-label="Action menu">
-            ⋮
-        </button>
-        <div class="pos-invoice-menu hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
-            ${pdfLink}
-            ${dispatchBtn}
-            ${returnBtn}
-            ${cancelBtn}
-            ${deleteBtn}
-        </div>
-    </div>
+ <td class="p-3 flex flex-wrap gap-3 items-center">
+${pdfLink}
+${exportDocBtn}
+${returnBtn}
+${cancelBtn}
+${deleteBtn}
 </td>
 
 </tr>`;
