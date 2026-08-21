@@ -96,7 +96,7 @@ class DomesticEwbIrnService {
      */
     public function generateIrnAndEwb($invoiceId, $invoice, $items, $customer, $firm, $ewbData = []) {
         try {
-            echo "Domestic EWB: Starting IRN and EWB generation for invoice #$invoiceId\n";
+            //echo "Domestic EWB: Starting IRN and EWB generation for invoice #$invoiceId\n";
             $this->ensureInfoDtlsColumn();
             // Validate required data
             if (!$invoice || empty($items) || !$customer || !$firm) {
@@ -121,7 +121,7 @@ class DomesticEwbIrnService {
                 error_log("Alankit IRN: " . $this->lastError);
                 return ['status' => false, 'message' => $this->lastError];
             }
-            echo "Domestic EWB: Alankit API credentials loaded successfully.\n";
+            //echo "Domestic EWB: Alankit API credentials loaded successfully.\n";
             $alankitClient = new AlankitIrnNew(
                 $this->alankitConfig['username'],
                 $this->alankitConfig['password'],
@@ -152,7 +152,7 @@ class DomesticEwbIrnService {
             $data = [
                 "Data" => $authreq
             ];
-            echo "Alankit IRN: Sending authentication request for invoice #$invoiceId\n";
+            //echo "Alankit IRN: Sending authentication request for invoice #$invoiceId\n";
             $authResponse = $alankitClient->sendRequest('AUTH_ENDPOINT', $data, false);
             
             if (!$authResponse || !isset($authResponse['Data']['AuthToken'])) {
@@ -185,7 +185,8 @@ class DomesticEwbIrnService {
             }
             
             //error_log("Domestic EWB: SEK decrypted successfully");
-            
+            //echo 'encryptedSek <br>'.$encryptedSek.'<br><br>app_key:'.$this->alankitConfig['app_key'].'<br><br>decryptedSek:'.$decryptedSek.'<br><br>';
+
             // Step 4: Generate IRN
             //error_log("Domestic EWB: Generating IRN for invoice #$invoiceId");
             //$irnResponse = $alankitClient->generateIrn($irnPayload, $accessToken);
@@ -195,7 +196,7 @@ class DomesticEwbIrnService {
                 error_log("Alankit IRN: Payload encryption failed for invoice #$invoiceId");
                 return false;
             }
-            echo '<br><br>'.$encryptedPayload.'<br><br>';
+            //echo '<br><br>'.$encryptedPayload.'<br><br>';
             // Send IRN generation request with encrypted payload
             //$irnResponse = $alankitClient->sendRequest('IRN_GENERATE_ENDPOINT', ['Data' => $encryptedPayload], true, $accessToken);
             $irnResponse = $alankitClient->generateIrn(['Data' => $encryptedPayload], $accessToken);   
@@ -499,7 +500,9 @@ class DomesticEwbIrnService {
                 'SlNo' => (string)($idx + 1),
                 'PrdDesc' => $item['item_name'] ?? '',
                 'IsServc' => 'N',
-                'HsnCd' => substr($item['hsn'] ?? '', 0, 8),
+                'HsnCd' => strlen((string)($item['hsn'] ?? '')) === 6
+                    ? substr((string)($item['hsn'] ?? ''), 0, 4)
+                    : substr((string)($item['hsn'] ?? ''), 0, 8),
                 'Qty' => (float)($item['quantity'] ?? 0),
                 'Unit' => $item['unit'] ?? 'NOS',
                 'UnitPrice' => (float)($item['unit_price'] ?? 0),
