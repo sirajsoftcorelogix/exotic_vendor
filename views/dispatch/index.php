@@ -486,6 +486,9 @@
                       <a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>" class="block px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition flex items-center gap-2.5">
                           <i class="fas fa-file-pdf text-xs text-blue-600" aria-hidden="true"></i> Download Invoice
                       </a>
+                      <a href="<?php echo base_url('index.php?page=export_documents&query=' . rawurlencode((string) (!empty($invoice['invoice_number']) ? $invoice['invoice_number'] : $invoice['id']))); ?>" target="_blank" class="block px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition flex items-center gap-2.5" title="Generate Export Documents">
+                          <i class="fas fa-file-export text-xs text-blue-600" aria-hidden="true"></i> Export Docs
+                      </a>
                       <?php endif; ?>
                     </div>
 
