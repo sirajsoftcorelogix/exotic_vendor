@@ -615,37 +615,37 @@ No invoices
     <span>Export Docs</span>
 </a>`);
 
-                    const cancelBtn = isCancelled ? '' : `
-<button type="button" onclick="cancelPosInvoice(${i.id})"
-        class="block w-full text-left px-4 py-2 text-amber-700 hover:bg-amber-50 text-xs font-medium border-0 bg-transparent cursor-pointer flex items-center gap-2"
-        title="Cancel invoice">
-    <i class="fa-solid fa-ban text-amber-600"></i> Cancel Invoice
-</button>`;
+                        menuItems.push(`
+<button type="button"
+   onclick="openCommonDispatchModal({ invoice_id: ${i.id}, invoice_number: '${escapeHtml(i.invoice_number || '')}', order_number: '${escapeHtml(i.order_number || '')}' })"
+   class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 hover:text-purple-600 text-left transition border-0 bg-transparent cursor-pointer rounded-md"
+   title="Add or edit dispatch details">
+    <i class="fas fa-truck text-purple-600 w-4 text-center" aria-hidden="true"></i>
+    <span>Dispatch Details</span>
+</button>`);
 
                         const orderNum = (i.order_number || '').trim();
-                        const returnBtn = (!isCancelled && orderNum) ? `
+                        if (orderNum) {
+                            menuItems.push(`
 <button type="button"
    data-sales-return-create
    data-sales-return-url="?page=sales_returns&action=create&order_number=${encodeURIComponent(orderNum)}&invoice_id=${i.id}"
    data-order-number="${escapeHtml(orderNum)}"
-   class="block w-full text-left px-4 py-2 text-orange-700 hover:bg-orange-50 text-xs font-medium border-0 bg-transparent cursor-pointer flex items-center gap-2">
-    <i class="fa-solid fa-rotate-left text-orange-600"></i> Sales Return
-</button>` : '';
+   class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 hover:text-orange-600 text-left transition border-0 bg-transparent cursor-pointer rounded-md"
+   title="Create Sales Return">
+    <i class="fas fa-rotate-left text-orange-500 w-4 text-center" aria-hidden="true"></i>
+    <span>Return</span>
+</button>`);
+                        }
 
-                    const deleteBtn = isCancelled ? '' : `
-<button onclick="openDeleteModal(${i.id}, '?page=posinvoice&action=delete', 'Delete this invoice?')"
-        class="block w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 text-xs font-medium border-0 bg-transparent cursor-pointer flex items-center gap-2"
-        title="Delete invoice">
-    <i class="fa-solid fa-trash text-red-600"></i> Delete Invoice
-</button>`;
-
-                    const dispatchBtn = isCancelled ? '' : `
+                        menuItems.push(`
 <button type="button"
-   onclick="openCommonDispatchModal({ invoice_id: ${i.id}, invoice_number: '${escapeHtml(i.invoice_number || '')}', order_number: '${escapeHtml(i.order_number || '')}' })"
-   class="block w-full text-left px-4 py-2 text-purple-700 hover:bg-purple-50 text-xs font-medium border-0 bg-transparent cursor-pointer flex items-center gap-2"
-   title="Add or edit dispatch details">
-    <i class="fa-solid fa-truck text-purple-600"></i> Dispatch Details
-</button>`;
+   onclick="cancelPosInvoice(${i.id})"
+   class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-50 text-left transition border-0 bg-transparent cursor-pointer rounded-md"
+   title="Cancel invoice">
+    <i class="fas fa-ban text-amber-600 w-4 text-center" aria-hidden="true"></i>
+    <span>Cancel</span>
+</button>`);
 
                         menuItems.push(`
 <button type="button"
@@ -668,7 +668,7 @@ No invoices
             title="Invoice actions">
         <i class="fas fa-ellipsis-v text-xs" aria-hidden="true"></i>
     </button>
-    <div class="posinvoice-row-menu-panel hidden absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-30 p-1 text-left">
+    <div class="posinvoice-row-menu-panel hidden absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-30 p-1 text-left">
         ${menuItems.join('')}
     </div>
 </div>`;
