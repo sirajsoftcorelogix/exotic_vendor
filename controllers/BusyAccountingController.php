@@ -133,7 +133,7 @@ class BusyAccountingController
                 }, $details['items'] ?? [])
             ];
         } else {
-            $details = $this->busyModel->getInvoiceDetails($id);
+            $details = $this->busyModel->($id);
             if (!$details) {
                 vendorJsonResponse(['success' => false, 'message' => 'Invoice not found'], 404);
             }
@@ -241,7 +241,7 @@ class BusyAccountingController
                         ];
                     }
                 } else {
-                    $details = $this->busyModel->getInvoiceDetails($v['id']);
+                    $details = $this->busyModel->($v['id']);
                     if ($details) {
                         $preparedVouchers[] = [
                             'type' => 'invoice',
@@ -287,7 +287,7 @@ class BusyAccountingController
                         }
                     }
                 } else {
-                    $details = $this->busyModel->getInvoiceDetails($v['id']);
+                    $details = $this->busyModel->($v['id']);
                     if ($details) {
                         $xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" . $generator->generate($details, $details['items'] ?? []);
                         $filename = 'INV_' . preg_replace('/[\/\\:*?"<>|]/', '_', $v['voucher_no']) . '.xml';
