@@ -5009,6 +5009,124 @@ class POSRegisterController
     }
 
     /**
+     * Resolve IRN/EWB action visibility and existing-status badges for receipt actions.
+     *
+     * @return array{
+     *   show_irn:bool,
+     *   show_ewb:bool,
+     *   scenario:string,
+     *   existing_irn:?string,
+     *   existing_ewb:?string,
+     *   irn_status:string,
+     *   ewb_status:string,
+     *   einvoice_url:string,
+     *   ewaybill_url:string,
+     *   grand_total:float,
+     *   is_export:bool,
+     *   is_b2b:bool
+     * }
+     */
+    private function resolveReceiptEinvoiceEwaybillEligibility(mysqli $conn, string $orderNumber, float $grandTotal): array
+    {
+        $orderNumber = trim($orderNumber);
+        $encodedOrder = rawurlencode($orderNumber);
+
+        $out = [
+            'show_irn' => false,
+            'show_ewb' => false,
+            'scenario' => 'B2C',
+            'existing_irn' => null,
+            'existing_ewb' => null,
+            'irn_status' => 'pending',
+            'ewb_status' => 'pending',
+            'einvoice_url' => 'index.php?page=pos_register&action=einvoice-input&order_number=' . $encodedOrder,
+            'ewaybill_url' => 'index.php?page=pos_register&action=ewaybill-input&order_number=' . $encodedOrder,
+            'grand_total' => round($grandTotal, 2),
+            'is_export' => false,
+            'is_b2b' => false,
+        ];
+
+        if ($orderNumber === '') {
+            return $out;
+        }
+
+        $invoiceId = (int) ($this->findInvoiceIdForOrderNumber($conn, $orderNumber) ?? 0);
+        if ($invoiceId <= 0) {
+            return $out;
+        }
+
+        $buyerGstin = '';
+        $oiStmt = $conn->prepare('SELECT gstin FROM vp_order_info WHERE order_number = ? ORDER BY id DESC LIMIT 1');
+        if ($oiStmt) {
+            $oiStmt->bind_param('s', $orderNumber);
+            $oiStmt->execute();
+            $oiRow = $oiStmt->get_result()->fetch_assoc();
+            $oiStmt->close();
+            if (is_array($oiRow)) {
+                $buyerGstin = strtoupper(trim((string) ($oiRow['gstin'] ?? '')));
+            }
+        }
+
+        $isB2b = ($buyerGstin !== '' && $buyerGstin !== 'URP');
+        $out['is_b2b'] = $isB2b;
+        $out['scenario'] = $isB2b ? 'Domestic B2B' : 'B2C';
+
+        $tracking = $this->fetchIrnEwbTrackingRowByInvoiceId($conn, $invoiceId);
+        if (is_array($tracking)) {
+            $irn = trim((string) ($tracking['irn'] ?? ''));
+            $ewb = trim((string) ($tracking['ewb_no'] ?? ''));
+
+            if ($irn !== '') {
+                $out['existing_irn'] = $irn;
+            }
+            if ($ewb !== '') {
+                $out['existing_ewb'] = $ewb;
+            }
+
+            $irnStatus = strtolower(trim((string) ($tracking['irn_status'] ?? '')));
+            $ewbStatus = strtolower(trim((string) ($tracking['ewb_status'] ?? '')));
+            if ($irnStatus !== '') {
+                $out['irn_status'] = $irnStatus;
+            }
+            if ($ewbStatus !== '') {
+                $out['ewb_status'] = $ewbStatus;
+            }
+        }
+
+        $invStmt = $conn->prepare('SELECT irn, ewb_number FROM vp_invoices WHERE id = ? LIMIT 1');
+        if ($invStmt) {
+            $invStmt->bind_param('i', $invoiceId);
+            $invStmt->execute();
+            $invRow = $invStmt->get_result()->fetch_assoc();
+            $invStmt->close();
+
+            if (is_array($invRow)) {
+                if ($out['existing_irn'] === null) {
+                    $invIrn = trim((string) ($invRow['irn'] ?? ''));
+                    if ($invIrn !== '') {
+                        $out['existing_irn'] = $invIrn;
+                    }
+                }
+                if ($out['existing_ewb'] === null) {
+                    $invEwb = trim((string) ($invRow['ewb_number'] ?? ''));
+                    if ($invEwb !== '') {
+                        $out['existing_ewb'] = $invEwb;
+                    }
+                }
+            }
+        }
+
+        $hasIrn = $out['existing_irn'] !== null && $out['existing_irn'] !== '';
+        $hasEwb = $out['existing_ewb'] !== null && $out['existing_ewb'] !== '';
+        $ewbByValue = $out['grand_total'] >= 50000.0;
+
+        $out['show_irn'] = $isB2b || $hasIrn;
+        $out['show_ewb'] = $ewbByValue || $hasEwb || $hasIrn;
+
+        return $out;
+    }
+
+    /**
      * Regenerate IRN / E-way bill from checkout receipt popup.
      * POST JSON: { invoice_id: int, order_number: string }
      */
