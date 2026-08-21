@@ -6,8 +6,12 @@
 class User
 {
     private $db;
-    public function __construct($db)
+    public function __construct($db = null)
     {
+        if (!$db) {
+            global $conn;
+            $db = $conn;
+        }
         $this->db = $db;
     }
 

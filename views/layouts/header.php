@@ -1,8 +1,10 @@
 <?php
 //is_login();
+global $conn;
 require_once 'models/user/user.php';
 $usersModel = new User($conn);
-$userDetails = $usersModel->getUserById($_SESSION['user']['id']);
+$userId = (int)($_SESSION['user']['id'] ?? 0);
+$userDetails = $userId > 0 ? $usersModel->getUserById($userId) : null;
 unset($usersModel);
 require_once 'controllers/NotificationController.php';
 $notificationController = new NotificationController();

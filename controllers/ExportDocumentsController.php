@@ -73,9 +73,17 @@ class ExportDocumentsController
 
         $initialQuery = trim($_GET['query'] ?? $_GET['invoice_number'] ?? '');
 
-        require __DIR__ . '/../views/layouts/header.php';
-        require __DIR__ . '/../views/export_documents/index.php';
-        require __DIR__ . '/../views/layouts/footer.php';
+        renderTemplate('views/export_documents/index.php', [
+            'shipmentTypes' => $shipmentTypes,
+            'categories' => $categories,
+            'courierPartners' => $courierPartners,
+            'recentSessions' => $recentSessions,
+            'totalSessions' => $totalSessions,
+            'totalPages' => $totalPages,
+            'page' => $page,
+            'filters' => $filters,
+            'initialQuery' => $initialQuery,
+        ], 'Export Documents');
     }
 
     /**
@@ -245,9 +253,12 @@ class ExportDocumentsController
             $activeTab = array_key_first($requiredDocs) ?? 'csb5_invoice';
         }
 
-        require __DIR__ . '/../views/layouts/header.php';
-        require __DIR__ . '/../views/export_documents/generate.php';
-        require __DIR__ . '/../views/layouts/footer.php';
+        renderTemplate('views/export_documents/generate.php', [
+            'session' => $session,
+            'forms' => $forms,
+            'requiredDocs' => $requiredDocs,
+            'activeTab' => $activeTab,
+        ], 'Generate Export Documents');
     }
 
     /**
