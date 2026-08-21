@@ -634,6 +634,13 @@ stroke-linejoin="round"/>
         <i class="fa-solid fa-trash"></i>
     </button>`;
 
+                    const exportDocBtn = isCancelled ? '' : `
+<a href="index.php?page=export_documents&query=${encodeURIComponent(i.invoice_number || i.id)}" target="_blank"
+   class="inline-flex items-center text-blue-600 hover:text-blue-800 text-xs font-semibold"
+   title="Generate Export Documents">
+    Export Docs
+</a>`;
+
                     html += `
 <tr class="border-t hover:bg-gray-50">
 
@@ -654,6 +661,7 @@ stroke-linejoin="round"/>
 
  <td class="p-3 flex flex-wrap gap-3 items-center">
 ${pdfLink}
+${exportDocBtn}
 ${returnBtn}
 ${cancelBtn}
 ${deleteBtn}
