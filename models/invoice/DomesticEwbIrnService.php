@@ -185,7 +185,7 @@ class DomesticEwbIrnService {
             }
             
             //error_log("Domestic EWB: SEK decrypted successfully");
-            //echo 'encryptedSek <br>'.$encryptedSek.'<br><br>app_key:'.$this->alankitConfig['app_key'].'<br><br>decryptedSek:'.$decryptedSek.'<br><br>';
+            echo 'encryptedSek <br>'.$encryptedSek.'<br><br>app_key:'.$this->alankitConfig['app_key'].'<br><br>decryptedSek:'.$decryptedSek.'<br><br>';
 
             // Step 4: Generate IRN
             //error_log("Domestic EWB: Generating IRN for invoice #$invoiceId");
@@ -196,11 +196,13 @@ class DomesticEwbIrnService {
                 error_log("Alankit IRN: Payload encryption failed for invoice #$invoiceId");
                 return false;
             }
-            //echo '<br><br>'.$encryptedPayload.'<br><br>';
+            echo '<br><br>'.$encryptedPayload.'<br><br>';
             // Send IRN generation request with encrypted payload
             //$irnResponse = $alankitClient->sendRequest('IRN_GENERATE_ENDPOINT', ['Data' => $encryptedPayload], true, $accessToken);
             $irnResponse = $alankitClient->generateIrn(['Data' => $encryptedPayload], $accessToken);   
             print_r($irnResponse);
+            echo '<br><br>';
+            
                   
             if ($irnResponse && isset($irnResponse['Data'])) {
                 $decryptedResponse = $alankitClient->decrypt_irn($irnResponse['Data'], $decryptedSek);
