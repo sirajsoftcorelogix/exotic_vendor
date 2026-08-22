@@ -133,6 +133,23 @@ function resolveRequiredExportDocuments(
 }
 
 /**
+ * Helper to return first non-empty string value.
+ */
+function export_first_non_empty(...$values): string
+{
+    foreach ($values as $val) {
+        if ($val === null) {
+            continue;
+        }
+        $str = trim((string)$val);
+        if ($str !== '' && strtolower($str) !== 'null' && strtolower($str) !== 'n/a') {
+            return $str;
+        }
+    }
+    return '';
+}
+
+/**
  * Build common session data array from auto-pulled invoice details.
  *
  * @param array<string, mixed> $autoPulledData
@@ -145,28 +162,68 @@ function buildCommonExportSessionData(array $autoPulledData): array
     $firm = $autoPulledData['firm'] ?? [];
     $items = $autoPulledData['items'] ?? [];
 
-    $destCountry = trim((string)($inv['shipping_country'] ?: ($inv['country'] ?: ($inv['shipping_country_code'] ?: ''))));
-    $destCity = trim((string)($inv['shipping_city'] ?: ($inv['city'] ?: '')));
+    $destCountry = export_first_non_empty(
+        $inv['shipping_country'] ?? '',
+        $inv['country'] ?? '',
+        $inv['shipping_country_code'] ?? '',
+        $inv['country_code'] ?? ''
+    );
+
+    $destCity = export_first_non_empty(
+        $inv['shipping_city'] ?? '',
+        $inv['city'] ?? ''
+    );
+
     $finalDest = $destCity ? $destCity . ($destCountry ? ', ' . $destCountry : '') : $destCountry;
 
-    $consigneeName = trim(($inv['shipping_first_name'] ?? '') . ' ' . ($inv['shipping_last_name'] ?? ''));
-    if ($consigneeName === '') {
-        $consigneeName = trim(($inv['first_name'] ?? '') . ' ' . ($inv['last_name'] ?? ''));
-    }
-    if ($consigneeName === '') {
-        $consigneeName = trim((string)($inv['shipping_company'] ?? $inv['company'] ?? ''));
-    }
-    if ($consigneeName === '') {
-        $consigneeName = trim((string)($inv['customer_master_name'] ?? $inv['customer_name'] ?? ''));
-    }
+    $sName = trim(($inv['shipping_first_name'] ?? '') . ' ' . ($inv['shipping_last_name'] ?? ''));
+    $bName = trim(($inv['first_name'] ?? '') . ' ' . ($inv['last_name'] ?? ''));
+    $consigneeName = export_first_non_empty(
+        $sName,
+        $bName,
+        $inv['shipping_company'] ?? '',
+        $inv['company'] ?? '',
+        $inv['customer_master_name'] ?? '',
+        $inv['customer_name'] ?? '',
+        $inv['name'] ?? ''
+    );
 
-    $consigneeAddr1 = trim((string)($inv['shipping_address_line1'] ?: ($inv['address_line1'] ?: ($inv['shipping_address'] ?: ($inv['address'] ?: '')))));
-    $consigneeAddr2 = trim((string)($inv['shipping_address_line2'] ?: ($inv['address_line2'] ?: '')));
-    $consigneeZip = trim((string)($inv['shipping_zipcode'] ?: ($inv['zipcode'] ?: ($inv['shipping_zip'] ?: ($inv['zip'] ?: '')))));
-    $consigneeState = trim((string)($inv['shipping_state'] ?: ($inv['state'] ?: '')));
+    $consigneeAddr1 = export_first_non_empty(
+        $inv['shipping_address_line1'] ?? '',
+        $inv['address_line1'] ?? '',
+        $inv['shipping_address'] ?? '',
+        $inv['address'] ?? ''
+    );
 
-    $consigneePhone = trim((string)($inv['shipping_mobile'] ?: ($inv['mobile'] ?: ($inv['customer_master_phone'] ?: ($inv['phone'] ?: '')))));
-    $consigneeEmail = trim((string)($inv['shipping_email'] ?: ($inv['email'] ?: ($inv['customer_master_email'] ?: ''))));
+    $consigneeAddr2 = export_first_non_empty(
+        $inv['shipping_address_line2'] ?? '',
+        $inv['address_line2'] ?? ''
+    );
+
+    $consigneeZip = export_first_non_empty(
+        $inv['shipping_zipcode'] ?? '',
+        $inv['zipcode'] ?? '',
+        $inv['shipping_zip'] ?? '',
+        $inv['zip'] ?? ''
+    );
+
+    $consigneeState = export_first_non_empty(
+        $inv['shipping_state'] ?? '',
+        $inv['state'] ?? ''
+    );
+
+    $consigneePhone = export_first_non_empty(
+        $inv['shipping_mobile'] ?? '',
+        $inv['mobile'] ?? '',
+        $inv['customer_master_phone'] ?? '',
+        $inv['phone'] ?? ''
+    );
+
+    $consigneeEmail = export_first_non_empty(
+        $inv['shipping_email'] ?? '',
+        $inv['email'] ?? '',
+        $inv['customer_master_email'] ?? ''
+    );
 
     $currency = strtoupper(trim((string)($inv['currency'] ?? 'USD')));
     if ($currency === '' || $currency === 'INR') {

@@ -73,6 +73,12 @@ class ExportDocument
      * @param string $query Invoice number or Order number
      * @return array<string, mixed>|null
      */
+    /**
+     * Auto-pull invoice, order, customer, line items, and international defaults for document generation.
+     *
+     * @param string $query Invoice number or Order number
+     * @return array<string, mixed>|null
+     */
     public function findInvoiceAndOrderDetails(string $query): ?array
     {
         $query = trim($query);
@@ -83,10 +89,10 @@ class ExportDocument
         $invoiceHeader = null;
         $orderInfo = null;
 
-        // 1. Try to find invoice in vp_invoices by invoice_number or order_number
-        $stmt = $this->conn->prepare("SELECT * FROM vp_invoices WHERE invoice_number = ? OR order_number = ? LIMIT 1");
+        // 1. Try to find invoice in vp_invoices by invoice_number
+        $stmt = $this->conn->prepare("SELECT * FROM vp_invoices WHERE invoice_number = ? LIMIT 1");
         if ($stmt) {
-            $stmt->bind_param('ss', $query, $query);
+            $stmt->bind_param('s', $query);
             $stmt->execute();
             $res = $stmt->get_result();
             if ($row = $res->fetch_assoc()) {
@@ -95,8 +101,25 @@ class ExportDocument
             $stmt->close();
         }
 
-        // 2. Locate vp_order_info record
-        $orderNumToSearch = '';
+        // 2. If no invoice found by invoice_number, try to find invoice by order_number via vp_order_info or vp_invoice_items
+        if (!$invoiceHeader) {
+            $stmt = $this->conn->prepare("SELECT i.* FROM vp_invoices i 
+                                          LEFT JOIN vp_order_info oi ON oi.id = i.vp_order_info_id 
+                                          LEFT JOIN vp_invoice_items ii ON ii.invoice_id = i.id 
+                                          WHERE oi.order_number = ? OR ii.order_number = ? 
+                                          ORDER BY i.id DESC LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param('ss', $query, $query);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($row = $res->fetch_assoc()) {
+                    $invoiceHeader = $row;
+                }
+                $stmt->close();
+            }
+        }
+
+        // 3. Locate vp_order_info record
         if ($invoiceHeader) {
             $vpOrderInfoId = (int)($invoiceHeader['vp_order_info_id'] ?? 0);
             if ($vpOrderInfoId > 0) {
@@ -112,17 +135,40 @@ class ExportDocument
                 }
             }
 
-            if (!$orderInfo && !empty($invoiceHeader['order_number'])) {
-                $orderNumToSearch = trim((string)$invoiceHeader['order_number']);
+            // If not found by vp_order_info_id, find order_number from invoice items or query and search vp_order_info
+            if (!$orderInfo) {
+                $invOrderNum = '';
+                $itemOrdStmt = $this->conn->prepare("SELECT order_number FROM vp_invoice_items WHERE invoice_id = ? AND order_number IS NOT NULL AND TRIM(order_number) != '' LIMIT 1");
+                if ($itemOrdStmt) {
+                    $itemOrdStmt->bind_param('i', $invoiceHeader['id']);
+                    $itemOrdStmt->execute();
+                    $itemRes = $itemOrdStmt->get_result();
+                    if ($itemRow = $itemRes->fetch_assoc()) {
+                        $invOrderNum = trim((string)$itemRow['order_number']);
+                    }
+                    $itemOrdStmt->close();
+                }
+
+                if ($invOrderNum !== '') {
+                    $oiStmt = $this->conn->prepare("SELECT * FROM vp_order_info WHERE order_number = ? ORDER BY id DESC LIMIT 1");
+                    if ($oiStmt) {
+                        $oiStmt->bind_param('s', $invOrderNum);
+                        $oiStmt->execute();
+                        $oiRes = $oiStmt->get_result();
+                        if ($oiRow = $oiRes->fetch_assoc()) {
+                            $orderInfo = $oiRow;
+                        }
+                        $oiStmt->close();
+                    }
+                }
             }
-        } else {
-            $orderNumToSearch = $query;
         }
 
-        if (!$orderInfo && $orderNumToSearch !== '') {
+        // If orderInfo still not found, try searching vp_order_info directly by $query
+        if (!$orderInfo) {
             $oiStmt = $this->conn->prepare("SELECT * FROM vp_order_info WHERE order_number = ? ORDER BY id DESC LIMIT 1");
             if ($oiStmt) {
-                $oiStmt->bind_param('s', $orderNumToSearch);
+                $oiStmt->bind_param('s', $query);
                 $oiStmt->execute();
                 $oiRes = $oiStmt->get_result();
                 if ($oiRow = $oiRes->fetch_assoc()) {
@@ -132,12 +178,12 @@ class ExportDocument
             }
         }
 
-        // 3. If neither invoiceHeader nor orderInfo was found, return null
+        // 4. If neither invoiceHeader nor orderInfo was found, return null
         if (!$invoiceHeader && !$orderInfo) {
             return null;
         }
 
-        // 4. Construct unified header array (orderInfo merged with invoiceHeader)
+        // 5. Merge orderInfo and invoiceHeader (orderInfo first, invoiceHeader second)
         $header = array_merge($orderInfo ?? [], $invoiceHeader ?? []);
 
         if (empty($header['order_number']) && !empty($orderInfo['order_number'])) {
@@ -147,7 +193,7 @@ class ExportDocument
             $header['invoice_number'] = $invoiceHeader['invoice_number'];
         }
 
-        // Merge vp_customers details if customer_id is present
+        // 6. Merge vp_customers details if customer_id is present
         $customerId = (int)($header['customer_id'] ?? 0);
         if ($customerId > 0) {
             $cStmt = $this->conn->prepare("SELECT name AS customer_master_name, email AS customer_master_email, phone AS customer_master_phone FROM vp_customers WHERE id = ? LIMIT 1");
@@ -160,11 +206,29 @@ class ExportDocument
                 }
                 $cStmt->close();
             }
+
+            // Also check if vp_order_info has any record for this customer_id if orderInfo was missing address
+            if (empty($header['shipping_address_line1']) && empty($header['address_line1'])) {
+                $custOrdStmt = $this->conn->prepare("SELECT * FROM vp_order_info WHERE customer_id = ? ORDER BY id DESC LIMIT 1");
+                if ($custOrdStmt) {
+                    $custOrdStmt->bind_param('i', $customerId);
+                    $custOrdStmt->execute();
+                    $coRes = $custOrdStmt->get_result();
+                    if ($coRow = $coRes->fetch_assoc()) {
+                        foreach ($coRow as $k => $v) {
+                            if (empty($header[$k]) && !empty($v)) {
+                                $header[$k] = $v;
+                            }
+                        }
+                    }
+                    $custOrdStmt->close();
+                }
+            }
         }
 
         $invoiceId = (int)($invoiceHeader['id'] ?? 0);
 
-        // 5. Fetch international invoice extension if present
+        // 7. Fetch international invoice extension if present
         $intlDetails = [];
         if ($invoiceId > 0) {
             $intlStmt = $this->conn->prepare("SELECT * FROM vp_invoices_international WHERE invoice_id = ? LIMIT 1");
@@ -179,7 +243,7 @@ class ExportDocument
             }
         }
 
-        // 6. Fetch line items
+        // 8. Fetch line items
         $lineItems = [];
         if ($invoiceId > 0) {
             $itemSql = "SELECT ii.*, p.hsn_code, p.weight AS product_weight, p.net_weight, o.sku AS order_sku, o.item_code AS order_item_code, o.title AS order_title
