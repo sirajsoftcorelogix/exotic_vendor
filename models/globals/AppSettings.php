@@ -261,23 +261,45 @@ class AppSettings
     {
         $gstin = (string) $this->get('gstin', '');
         if ($gstin === '') {
+            $gstin = (string) $this->get('firm_gstin', '');
+        }
+        if ($gstin === '') {
             $gstin = (string) $this->get('firm_gst', '');
         }
+
+        $address = (string) $this->get('firm_address', $this->get('exporter_address', ''));
+        $city = (string) $this->get('firm_city', $this->get('exporter_city', ''));
+        $pin = (string) $this->get('firm_pin', $this->get('firm_pincode', $this->get('exporter_pincode', '')));
+        $country = (string) $this->get('firm_country', $this->get('exporter_country', 'India'));
+        $pan = (string) $this->get('firm_pan', $this->get('exporter_pan', ''));
+        $iec = (string) $this->get('firm_iec', $this->get('exporter_iec', ''));
 
         return [
             'id' => 1,
             'firm_name' => (string) $this->get('firm_name', ''),
-            'pan' => (string) $this->get('firm_pan', ''),
+            'pan' => $pan,
+            'firm_pan' => $pan,
             'gst' => $gstin,
             'gstin' => $gstin,
-            'address' => (string) $this->get('firm_address', ''),
+            'firm_gstin' => $gstin,
+            'address' => $address,
+            'firm_address' => $address,
             'phone' => (string) $this->get('firm_phone', ''),
-            'city' => (string) $this->get('firm_city', ''),
+            'city' => $city,
+            'firm_city' => $city,
             'state' => (string) $this->get('firm_state', ''),
-            'country' => (string) $this->get('firm_country', ''),
-            'pin' => (string) $this->get('firm_pin', ''),
+            'country' => $country,
+            'firm_country' => $country,
+            'pin' => $pin,
+            'firm_pin' => $pin,
+            'pincode' => $pin,
+            'firm_pincode' => $pin,
+            'iec' => $iec,
+            'iec_code' => $iec,
+            'firm_iec' => $iec,
             'state_code' => $this->get('firm_state_code', null),
             'email' => (string) $this->get('firm_email', ''),
+            'authorized_signatory' => (string) $this->get('authorized_signatory', 'Authorized Signatory'),
         ];
     }
 

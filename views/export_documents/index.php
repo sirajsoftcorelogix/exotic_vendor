@@ -181,29 +181,34 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Exporter / Shipper Card -->
                 <div class="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-3">
-                    <h3 class="text-sm font-bold text-gray-800 flex items-center gap-1.5">
-                        <i class="fas fa-building text-blue-600"></i> Exporter (Shipper) Details
-                    </h3>
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+                            <i class="fas fa-building text-blue-600"></i> Exporter (Shipper) Details
+                        </h3>
+                        <a href="<?= base_url('?page=globals&action=settings') ?>" target="_blank" class="text-[11px] text-blue-600 hover:text-blue-800 hover:underline font-normal inline-flex items-center gap-1" title="Edit master exporter details in Global Settings">
+                            <i class="fas fa-cog text-[10px]"></i> Edit in Settings
+                        </a>
+                    </div>
                     <div class="space-y-2 text-xs">
                         <div>
                             <label class="block text-gray-600 font-medium mb-0.5">Exporter Name</label>
-                            <input type="text" name="common[exporter_name]" id="field_exporter_name" value="EXOTIC INDIA ART PRIVATE LIMITED"
+                            <input type="text" name="common[exporter_name]" id="field_exporter_name" value="<?= htmlspecialchars($exporterDefaults['exporter_name'] ?? 'EXOTIC INDIA ART PVT LTD') ?>"
                                    class="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-900">
                         </div>
                         <div>
                             <label class="block text-gray-600 font-medium mb-0.5">Exporter Address</label>
-                            <input type="text" name="common[exporter_address]" id="field_exporter_address" value="101, Plaza A-1, Paschim Vihar"
+                            <input type="text" name="common[exporter_address]" id="field_exporter_address" value="<?= htmlspecialchars($exporterDefaults['exporter_address'] ?? '101, Plaza A-1, Paschim Vihar') ?>"
                                    class="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-900">
                         </div>
                         <div class="grid grid-cols-2 gap-2">
                             <div>
                                 <label class="block text-gray-600 font-medium mb-0.5">City / State</label>
-                                <input type="text" name="common[exporter_city]" id="field_exporter_city" value="New Delhi"
+                                <input type="text" name="common[exporter_city]" id="field_exporter_city" value="<?= htmlspecialchars($exporterDefaults['exporter_city'] ?? 'New Delhi') ?>"
                                        class="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-900">
                             </div>
                             <div>
                                 <label class="block text-gray-600 font-medium mb-0.5">IEC Number</label>
-                                <input type="text" name="common[exporter_iec]" id="field_exporter_iec" value="0505012345"
+                                <input type="text" name="common[exporter_iec]" id="field_exporter_iec" value="<?= htmlspecialchars($exporterDefaults['exporter_iec'] ?? '0505012345') ?>"
                                        class="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-900">
                             </div>
                         </div>
@@ -505,9 +510,13 @@ document.addEventListener('DOMContentLoaded', function () {
             // Populate common form fields
             const setVal = (id, val) => {
                 const el = document.getElementById(id);
-                if (el && val !== undefined && val !== null) el.value = val;
+                if (el && val !== undefined && val !== null && val !== '') el.value = val;
             };
 
+            setVal('field_exporter_name', data.common_data.exporter_name);
+            setVal('field_exporter_address', data.common_data.exporter_address);
+            setVal('field_exporter_city', data.common_data.exporter_city);
+            setVal('field_exporter_iec', data.common_data.exporter_iec);
             setVal('field_consignee_name', data.common_data.consignee_name);
             setVal('field_consignee_address_line1', data.common_data.consignee_address_line1);
             setVal('field_consignee_city', data.common_data.consignee_city);

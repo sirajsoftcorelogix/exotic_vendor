@@ -175,11 +175,15 @@ class ExportDocument
             }
         }
 
-        // 4. Fetch firm details for exporter address
+        // 4. Fetch firm & exporter details from app_settings
         $firmDetails = [];
-        $firmRes = $this->conn->query("SELECT * FROM app_settings LIMIT 1");
-        if ($firmRes && $row = $firmRes->fetch_assoc()) {
-            $firmDetails = $row;
+        $firmRes = $this->conn->query("SELECT setting_key, setting_value FROM app_settings");
+        if ($firmRes) {
+            while ($row = $firmRes->fetch_assoc()) {
+                if (!empty($row['setting_key'])) {
+                    $firmDetails[$row['setting_key']] = $row['setting_value'];
+                }
+            }
         }
 
         return [
