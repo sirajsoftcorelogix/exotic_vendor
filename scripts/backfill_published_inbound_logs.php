@@ -111,7 +111,7 @@ WHERE TRIM(COALESCE(vi.Item_code, '')) <> ''
   AND NOT EXISTS (
     SELECT 1 FROM inbound_logs il
     WHERE il.i_id = vi.id
-      AND LOWER(TRIM(il.stat)) = 'published'
+      AND LOWER(TRIM(il.stat)) IN ('published', 'published (live)', 'published (local)')
   )
 ORDER BY vi.id
 ";

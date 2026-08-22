@@ -200,13 +200,16 @@
 $record_id = $_GET['id'] ?? '';
 $is_inbound_live_published = !empty($data['is_inbound_live_published']);
 $sizeOptions = [
-    'XS'   => 'Extra Small (XS)(34)',
-    'S'    => 'Small (S)(36)',
-    'M'    => 'Medium (M)(38)',
-    'L'    => 'Large (L)(40)',
-    'XL'   => 'Extra Large (XL)(42)',
-    'XXL'  => 'Extra Extra Large (XXL)(44)',
-    'XXXL' => 'Extra Extra Extra Large (XXXL)(46)',
+    'XS'      => 'Extra Small (XS)(34)',
+    'S'       => 'Small (S)(36)',
+    'M'       => 'Medium (M)(38)',
+    'L'       => 'Large (L)(40)',
+    'XL'      => 'Extra Large (XL)(42)',
+    'XXL'     => 'Extra Extra Large (XXL)(44)',
+    'XXXL'    => 'Extra Extra Extra Large (XXXL)(46)',
+    'XXXXL'   => 'Extra Extra Extra Large (4xL)(48)',
+    'XXXXXL'  => 'Extra Extra Extra Large (5xL)(50)',
+    'XXXXXXL' => 'Extra Extra Extra Large (6xL)(52)',
 ];
 $gecolormapsRef = $data['form2']['gecolormaps'] ?? [];
 $colorMapData = (is_array($gecolormapsRef) && isset($gecolormapsRef['colormaps'])) ? $gecolormapsRef['colormaps'] : [];
