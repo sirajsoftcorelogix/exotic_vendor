@@ -510,7 +510,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Populate common form fields
             const setVal = (id, val) => {
                 const el = document.getElementById(id);
-                if (el && val !== undefined && val !== null && val !== '') el.value = val;
+                if (el) el.value = (val !== undefined && val !== null) ? val : '';
             };
 
             setVal('field_exporter_name', data.common_data.exporter_name);

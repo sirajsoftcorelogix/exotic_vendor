@@ -145,7 +145,7 @@ function buildCommonExportSessionData(array $autoPulledData): array
     $firm = $autoPulledData['firm'] ?? [];
     $items = $autoPulledData['items'] ?? [];
 
-    $destCountry = trim((string)($inv['shipping_country'] ?: ($inv['country'] ?: '')));
+    $destCountry = trim((string)($inv['shipping_country'] ?: ($inv['country'] ?: ($inv['shipping_country_code'] ?: ''))));
     $destCity = trim((string)($inv['shipping_city'] ?: ($inv['city'] ?: '')));
     $finalDest = $destCity ? $destCity . ($destCountry ? ', ' . $destCountry : '') : $destCountry;
 
@@ -154,13 +154,19 @@ function buildCommonExportSessionData(array $autoPulledData): array
         $consigneeName = trim(($inv['first_name'] ?? '') . ' ' . ($inv['last_name'] ?? ''));
     }
     if ($consigneeName === '') {
-        $consigneeName = trim((string)($inv['customer_master_name'] ?? ''));
+        $consigneeName = trim((string)($inv['shipping_company'] ?? $inv['company'] ?? ''));
+    }
+    if ($consigneeName === '') {
+        $consigneeName = trim((string)($inv['customer_master_name'] ?? $inv['customer_name'] ?? ''));
     }
 
-    $consigneeAddr1 = $inv['shipping_address_line1'] ?: ($inv['address_line1'] ?: '');
-    $consigneeAddr2 = $inv['shipping_address_line2'] ?: ($inv['address_line2'] ?: '');
-    $consigneeZip = $inv['shipping_zipcode'] ?: ($inv['zipcode'] ?: '');
-    $consigneeState = $inv['shipping_state'] ?: ($inv['state'] ?: '');
+    $consigneeAddr1 = trim((string)($inv['shipping_address_line1'] ?: ($inv['address_line1'] ?: ($inv['shipping_address'] ?: ($inv['address'] ?: '')))));
+    $consigneeAddr2 = trim((string)($inv['shipping_address_line2'] ?: ($inv['address_line2'] ?: '')));
+    $consigneeZip = trim((string)($inv['shipping_zipcode'] ?: ($inv['zipcode'] ?: ($inv['shipping_zip'] ?: ($inv['zip'] ?: '')))));
+    $consigneeState = trim((string)($inv['shipping_state'] ?: ($inv['state'] ?: '')));
+
+    $consigneePhone = trim((string)($inv['shipping_mobile'] ?: ($inv['mobile'] ?: ($inv['customer_master_phone'] ?: ($inv['phone'] ?: '')))));
+    $consigneeEmail = trim((string)($inv['shipping_email'] ?: ($inv['email'] ?: ($inv['customer_master_email'] ?: ''))));
 
     $currency = strtoupper(trim((string)($inv['currency'] ?? 'USD')));
     if ($currency === '' || $currency === 'INR') {
@@ -198,8 +204,8 @@ function buildCommonExportSessionData(array $autoPulledData): array
         'consignee_state' => $consigneeState,
         'consignee_zipcode' => $consigneeZip,
         'consignee_country' => $destCountry,
-        'consignee_phone' => $inv['mobile'] ?: ($inv['customer_master_phone'] ?: ''),
-        'consignee_email' => $inv['email'] ?: ($inv['customer_master_email'] ?: ''),
+        'consignee_phone' => $consigneePhone,
+        'consignee_email' => $consigneeEmail,
         'port_of_loading' => $intl['port_of_loading'] ?? 'New Delhi (INABG1)',
         'port_of_discharge' => $intl['port_of_discharge'] ?? $destCity,
         'country_of_origin' => 'India',
