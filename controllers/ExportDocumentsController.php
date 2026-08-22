@@ -73,6 +73,22 @@ class ExportDocumentsController
 
         $initialQuery = trim($_GET['query'] ?? $_GET['invoice_number'] ?? '');
 
+        require_once __DIR__ . '/../models/globals/AppSettings.php';
+        global $conn;
+        $appSettingsModel = new AppSettings($conn);
+
+        $exporterDefaults = [
+            'exporter_name' => (string)$appSettingsModel->get('firm_name', 'EXOTIC INDIA ART PVT LTD'),
+            'exporter_address' => (string)$appSettingsModel->get('firm_address', $appSettingsModel->get('exporter_address', '101, Plaza A-1, Paschim Vihar')),
+            'exporter_city' => (string)$appSettingsModel->get('firm_city', $appSettingsModel->get('exporter_city', 'New Delhi')),
+            'exporter_pincode' => (string)$appSettingsModel->get('firm_pin', $appSettingsModel->get('firm_pincode', $appSettingsModel->get('exporter_pincode', '110063'))),
+            'exporter_country' => (string)$appSettingsModel->get('firm_country', $appSettingsModel->get('exporter_country', 'India')),
+            'exporter_iec' => (string)$appSettingsModel->get('firm_iec', $appSettingsModel->get('exporter_iec', '0505012345')),
+            'exporter_gstin' => (string)$appSettingsModel->get('gstin', $appSettingsModel->get('firm_gstin', '07AADCE1400C1ZJ')),
+            'exporter_pan' => (string)$appSettingsModel->get('firm_pan', $appSettingsModel->get('exporter_pan', 'AADCE1400C')),
+            'authorized_signatory' => (string)$appSettingsModel->get('authorized_signatory', 'Authorized Signatory'),
+        ];
+
         renderTemplate('views/export_documents/index.php', [
             'shipmentTypes' => $shipmentTypes,
             'categories' => $categories,
@@ -83,6 +99,7 @@ class ExportDocumentsController
             'page' => $page,
             'filters' => $filters,
             'initialQuery' => $initialQuery,
+            'exporterDefaults' => $exporterDefaults,
         ], 'Export Documents');
     }
 
