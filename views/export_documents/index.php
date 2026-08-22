@@ -193,23 +193,23 @@
                         <div>
                             <label class="block text-gray-600 font-medium mb-0.5">Exporter Name</label>
                             <input type="text" name="common[exporter_name]" id="field_exporter_name" value="<?= htmlspecialchars($exporterDefaults['exporter_name'] ?? 'EXOTIC INDIA ART PVT LTD') ?>"
-                                   class="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-900">
+                                   class="w-full bg-gray-100 text-gray-600 border border-gray-200 rounded px-2.5 py-1.5 text-xs cursor-not-allowed" readonly>
                         </div>
                         <div>
                             <label class="block text-gray-600 font-medium mb-0.5">Exporter Address</label>
                             <input type="text" name="common[exporter_address]" id="field_exporter_address" value="<?= htmlspecialchars($exporterDefaults['exporter_address'] ?? '101, Plaza A-1, Paschim Vihar') ?>"
-                                   class="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-900">
+                                   class="w-full bg-gray-100 text-gray-600 border border-gray-200 rounded px-2.5 py-1.5 text-xs cursor-not-allowed" readonly>
                         </div>
                         <div class="grid grid-cols-2 gap-2">
                             <div>
                                 <label class="block text-gray-600 font-medium mb-0.5">City / State</label>
                                 <input type="text" name="common[exporter_city]" id="field_exporter_city" value="<?= htmlspecialchars($exporterDefaults['exporter_city'] ?? 'New Delhi') ?>"
-                                       class="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-900">
+                                       class="w-full bg-gray-100 text-gray-600 border border-gray-200 rounded px-2.5 py-1.5 text-xs cursor-not-allowed" readonly>
                             </div>
                             <div>
                                 <label class="block text-gray-600 font-medium mb-0.5">IEC Number</label>
                                 <input type="text" name="common[exporter_iec]" id="field_exporter_iec" value="<?= htmlspecialchars($exporterDefaults['exporter_iec'] ?? '0505012345') ?>"
-                                       class="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-900">
+                                       class="w-full bg-gray-100 text-gray-600 border border-gray-200 rounded px-2.5 py-1.5 text-xs cursor-not-allowed" readonly>
                             </div>
                         </div>
                     </div>
