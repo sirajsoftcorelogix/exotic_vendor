@@ -28,10 +28,11 @@ class ExportDocument
         }
 
         $like = '%' . $term . '%';
-        $sql = "SELECT DISTINCT i.id AS invoice_id, i.invoice_number, oi.order_number, oi.first_name, oi.last_name, oi.shipping_first_name, oi.shipping_last_name, oi.country, oi.shipping_country
+        $sql = "SELECT DISTINCT i.id AS invoice_id, i.invoice_number, COALESCE(i.order_number, oi.order_number) AS order_number,
+                       oi.first_name, oi.last_name, oi.shipping_first_name, oi.shipping_last_name, oi.country, oi.shipping_country
                 FROM vp_invoices i
-                LEFT JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
-                WHERE i.invoice_number LIKE ? OR oi.order_number LIKE ?
+                LEFT JOIN vp_order_info oi ON (oi.id = i.vp_order_info_id OR (i.vp_order_info_id IS NULL OR i.vp_order_info_id = 0) AND oi.order_number = i.order_number)
+                WHERE i.invoice_number LIKE ? OR i.order_number LIKE ? OR oi.order_number LIKE ?
                 ORDER BY i.id DESC
                 LIMIT ?";
 
@@ -40,7 +41,7 @@ class ExportDocument
             return [];
         }
 
-        $stmt->bind_param('ssi', $like, $like, $limit);
+        $stmt->bind_param('sssi', $like, $like, $like, $limit);
         $stmt->execute();
         $res = $stmt->get_result();
 
@@ -79,80 +80,137 @@ class ExportDocument
             return null;
         }
 
-        // 1. Fetch header from vp_invoices & vp_order_info
-        $sql = "SELECT i.*, 
-                       oi.order_number, oi.first_name, oi.last_name, oi.email, oi.mobile,
-                       oi.address_line1, oi.address_line2, oi.city, oi.state, oi.zipcode, oi.country,
-                       oi.shipping_first_name, oi.shipping_last_name, oi.shipping_address_line1, oi.shipping_address_line2,
-                       oi.shipping_city, oi.shipping_state, oi.shipping_zipcode, oi.shipping_country,
-                       oi.gstin, oi.shipping_gstin,
-                       c.name AS customer_master_name, c.email AS customer_master_email, c.phone AS customer_master_phone
-                FROM vp_invoices i
-                LEFT JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
-                LEFT JOIN vp_customers c ON c.id = i.customer_id
-                WHERE i.invoice_number = ? OR oi.order_number = ?
-                LIMIT 1";
+        $invoiceHeader = null;
+        $orderInfo = null;
 
-        $stmt = $this->conn->prepare($sql);
-        if (!$stmt) {
+        // 1. Try to find invoice in vp_invoices by invoice_number or order_number
+        $stmt = $this->conn->prepare("SELECT * FROM vp_invoices WHERE invoice_number = ? OR order_number = ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('ss', $query, $query);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($row = $res->fetch_assoc()) {
+                $invoiceHeader = $row;
+            }
+            $stmt->close();
+        }
+
+        // 2. Locate vp_order_info record
+        $orderNumToSearch = '';
+        if ($invoiceHeader) {
+            $vpOrderInfoId = (int)($invoiceHeader['vp_order_info_id'] ?? 0);
+            if ($vpOrderInfoId > 0) {
+                $oiStmt = $this->conn->prepare("SELECT * FROM vp_order_info WHERE id = ? LIMIT 1");
+                if ($oiStmt) {
+                    $oiStmt->bind_param('i', $vpOrderInfoId);
+                    $oiStmt->execute();
+                    $oiRes = $oiStmt->get_result();
+                    if ($oiRow = $oiRes->fetch_assoc()) {
+                        $orderInfo = $oiRow;
+                    }
+                    $oiStmt->close();
+                }
+            }
+
+            if (!$orderInfo && !empty($invoiceHeader['order_number'])) {
+                $orderNumToSearch = trim((string)$invoiceHeader['order_number']);
+            }
+        } else {
+            $orderNumToSearch = $query;
+        }
+
+        if (!$orderInfo && $orderNumToSearch !== '') {
+            $oiStmt = $this->conn->prepare("SELECT * FROM vp_order_info WHERE order_number = ? ORDER BY id DESC LIMIT 1");
+            if ($oiStmt) {
+                $oiStmt->bind_param('s', $orderNumToSearch);
+                $oiStmt->execute();
+                $oiRes = $oiStmt->get_result();
+                if ($oiRow = $oiRes->fetch_assoc()) {
+                    $orderInfo = $oiRow;
+                }
+                $oiStmt->close();
+            }
+        }
+
+        // 3. If neither invoiceHeader nor orderInfo was found, return null
+        if (!$invoiceHeader && !$orderInfo) {
             return null;
         }
 
-        $stmt->bind_param('ss', $query, $query);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        $invoiceHeader = $res->fetch_assoc();
-        $stmt->close();
+        // 4. Construct unified header array (orderInfo merged with invoiceHeader)
+        $header = array_merge($orderInfo ?? [], $invoiceHeader ?? []);
 
-        if (!$invoiceHeader) {
-            return null;
+        if (empty($header['order_number']) && !empty($orderInfo['order_number'])) {
+            $header['order_number'] = $orderInfo['order_number'];
+        }
+        if (empty($header['invoice_number']) && !empty($invoiceHeader['invoice_number'])) {
+            $header['invoice_number'] = $invoiceHeader['invoice_number'];
         }
 
-        $invoiceId = (int)$invoiceHeader['id'];
+        // Merge vp_customers details if customer_id is present
+        $customerId = (int)($header['customer_id'] ?? 0);
+        if ($customerId > 0) {
+            $cStmt = $this->conn->prepare("SELECT name AS customer_master_name, email AS customer_master_email, phone AS customer_master_phone FROM vp_customers WHERE id = ? LIMIT 1");
+            if ($cStmt) {
+                $cStmt->bind_param('i', $customerId);
+                $cStmt->execute();
+                $cRes = $cStmt->get_result();
+                if ($cRow = $cRes->fetch_assoc()) {
+                    $header = array_merge($cRow, $header);
+                }
+                $cStmt->close();
+            }
+        }
 
-        // 2. Fetch international invoice extension if present
+        $invoiceId = (int)($invoiceHeader['id'] ?? 0);
+
+        // 5. Fetch international invoice extension if present
         $intlDetails = [];
-        $intlStmt = $this->conn->prepare("SELECT * FROM vp_invoices_international WHERE invoice_id = ? LIMIT 1");
-        if ($intlStmt) {
-            $intlStmt->bind_param('i', $invoiceId);
-            $intlStmt->execute();
-            $intlRes = $intlStmt->get_result();
-            if ($row = $intlRes->fetch_assoc()) {
-                $intlDetails = $row;
+        if ($invoiceId > 0) {
+            $intlStmt = $this->conn->prepare("SELECT * FROM vp_invoices_international WHERE invoice_id = ? LIMIT 1");
+            if ($intlStmt) {
+                $intlStmt->bind_param('i', $invoiceId);
+                $intlStmt->execute();
+                $intlRes = $intlStmt->get_result();
+                if ($row = $intlRes->fetch_assoc()) {
+                    $intlDetails = $row;
+                }
+                $intlStmt->close();
             }
-            $intlStmt->close();
         }
 
-        // 3. Fetch line items from vp_invoice_items and vp_orders / vp_products
+        // 6. Fetch line items
         $lineItems = [];
-        $itemSql = "SELECT ii.*, p.hsn_code, p.weight AS product_weight, p.net_weight, o.sku AS order_sku, o.item_code AS order_item_code, o.title AS order_title
-                    FROM vp_invoice_items ii
-                    LEFT JOIN vp_products p ON p.id = ii.product_id
-                    LEFT JOIN vp_orders o ON (o.order_number = ii.order_number AND o.item_code = ii.item_code)
-                    WHERE ii.invoice_id = ?
-                    ORDER BY ii.id ASC";
+        if ($invoiceId > 0) {
+            $itemSql = "SELECT ii.*, p.hsn_code, p.weight AS product_weight, p.net_weight, o.sku AS order_sku, o.item_code AS order_item_code, o.title AS order_title
+                        FROM vp_invoice_items ii
+                        LEFT JOIN vp_products p ON p.id = ii.product_id
+                        LEFT JOIN vp_orders o ON (o.order_number = ii.order_number AND o.item_code = ii.item_code)
+                        WHERE ii.invoice_id = ?
+                        ORDER BY ii.id ASC";
 
-        $itemStmt = $this->conn->prepare($itemSql);
-        if ($itemStmt) {
-            $itemStmt->bind_param('i', $invoiceId);
-            $itemStmt->execute();
-            $itemRes = $itemStmt->get_result();
-            while ($item = $itemRes->fetch_assoc()) {
-                $lineItems[] = $item;
+            $itemStmt = $this->conn->prepare($itemSql);
+            if ($itemStmt) {
+                $itemStmt->bind_param('i', $invoiceId);
+                $itemStmt->execute();
+                $itemRes = $itemStmt->get_result();
+                while ($item = $itemRes->fetch_assoc()) {
+                    $lineItems[] = $item;
+                }
+                $itemStmt->close();
             }
-            $itemStmt->close();
         }
 
         // Fallback to vp_orders if no vp_invoice_items exist
-        if (empty($lineItems) && !empty($invoiceHeader['order_number'])) {
-            $orderNum = $invoiceHeader['order_number'];
+        $targetOrderNum = $header['order_number'] ?? '';
+        if (empty($lineItems) && $targetOrderNum !== '') {
             $ordStmt = $this->conn->prepare("SELECT o.*, p.hsn_code, p.weight AS product_weight, p.net_weight 
                                              FROM vp_orders o 
                                              LEFT JOIN vp_products p ON p.sku = o.sku 
                                              WHERE o.order_number = ? AND o.status != 'cancelled'
                                              ORDER BY o.id ASC");
             if ($ordStmt) {
-                $ordStmt->bind_param('s', $orderNum);
+                $ordStmt->bind_param('s', $targetOrderNum);
                 $ordStmt->execute();
                 $ordRes = $ordStmt->get_result();
                 while ($item = $ordRes->fetch_assoc()) {
@@ -175,7 +233,7 @@ class ExportDocument
             }
         }
 
-        // 4. Fetch firm & exporter details from app_settings
+        // Fetch firm details from app_settings
         $firmDetails = [];
         $firmRes = $this->conn->query("SELECT setting_key, setting_value FROM app_settings");
         if ($firmRes) {
@@ -187,7 +245,7 @@ class ExportDocument
         }
 
         return [
-            'invoice' => $invoiceHeader,
+            'invoice' => $header,
             'international' => $intlDetails,
             'items' => $lineItems,
             'firm' => $firmDetails
