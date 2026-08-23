@@ -70,7 +70,7 @@ function resolve_invoice_number(mysqli $conn, string $customInvoiceNumber = '', 
 
 function format_auto_invoice_number(string $prefix, int $series): string
 {
-    return $prefix . str_pad((string) $series, 4, '0', STR_PAD_LEFT);
+    return $prefix . str_pad((string) $series, 7, '0', STR_PAD_LEFT);
 }
 
 function infer_invoice_series_from_invoices(mysqli $conn, string $prefix): int
