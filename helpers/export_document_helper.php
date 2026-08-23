@@ -164,14 +164,19 @@ function buildCommonExportSessionData(array $autoPulledData): array
 
     $destCountry = export_first_non_empty(
         $inv['shipping_country'] ?? '',
-        $inv['country'] ?? '',
+        $inv['ship_country'] ?? '',
         $inv['shipping_country_code'] ?? '',
-        $inv['country_code'] ?? ''
+        $inv['country'] ?? '',
+        $inv['country_code'] ?? '',
+        $inv['bill_country'] ?? '',
+        $inv['country_of_residence'] ?? ''
     );
 
     $destCity = export_first_non_empty(
         $inv['shipping_city'] ?? '',
-        $inv['city'] ?? ''
+        $inv['ship_city'] ?? '',
+        $inv['city'] ?? '',
+        $inv['bill_city'] ?? ''
     );
 
     $finalDest = $destCity ? $destCity . ($destCountry ? ', ' . $destCountry : '') : $destCountry;
@@ -181,48 +186,70 @@ function buildCommonExportSessionData(array $autoPulledData): array
     $consigneeName = export_first_non_empty(
         $sName,
         $bName,
+        $inv['shipping_name'] ?? '',
+        $inv['shipping_display_name'] ?? '',
         $inv['shipping_company'] ?? '',
-        $inv['company'] ?? '',
+        $inv['trade_name'] ?? '',
         $inv['customer_master_name'] ?? '',
         $inv['customer_name'] ?? '',
-        $inv['name'] ?? ''
+        $inv['name'] ?? '',
+        $inv['company'] ?? ''
     );
 
     $consigneeAddr1 = export_first_non_empty(
         $inv['shipping_address_line1'] ?? '',
-        $inv['address_line1'] ?? '',
+        $inv['shipping_address1'] ?? '',
         $inv['shipping_address'] ?? '',
-        $inv['address'] ?? ''
+        $inv['ship_address1'] ?? '',
+        $inv['address_line1'] ?? '',
+        $inv['address1'] ?? '',
+        $inv['address'] ?? '',
+        $inv['bill_address1'] ?? '',
+        $inv['customer_address1'] ?? ''
     );
 
     $consigneeAddr2 = export_first_non_empty(
         $inv['shipping_address_line2'] ?? '',
-        $inv['address_line2'] ?? ''
+        $inv['shipping_address2'] ?? '',
+        $inv['ship_address2'] ?? '',
+        $inv['address_line2'] ?? '',
+        $inv['address2'] ?? '',
+        $inv['bill_address2'] ?? '',
+        $inv['customer_address2'] ?? ''
     );
 
     $consigneeZip = export_first_non_empty(
         $inv['shipping_zipcode'] ?? '',
-        $inv['zipcode'] ?? '',
         $inv['shipping_zip'] ?? '',
-        $inv['zip'] ?? ''
+        $inv['ship_zip'] ?? '',
+        $inv['zipcode'] ?? '',
+        $inv['zip'] ?? '',
+        $inv['bill_zip'] ?? '',
+        $inv['customer_zipcode'] ?? ''
     );
 
     $consigneeState = export_first_non_empty(
         $inv['shipping_state'] ?? '',
-        $inv['state'] ?? ''
+        $inv['ship_state'] ?? '',
+        $inv['state'] ?? '',
+        $inv['bill_state'] ?? '',
+        $inv['customer_state'] ?? ''
     );
 
     $consigneePhone = export_first_non_empty(
         $inv['shipping_mobile'] ?? '',
+        $inv['shipping_phone'] ?? '',
         $inv['mobile'] ?? '',
+        $inv['phone'] ?? '',
         $inv['customer_master_phone'] ?? '',
-        $inv['phone'] ?? ''
+        $inv['customer_phone'] ?? ''
     );
 
     $consigneeEmail = export_first_non_empty(
         $inv['shipping_email'] ?? '',
         $inv['email'] ?? '',
-        $inv['customer_master_email'] ?? ''
+        $inv['customer_master_email'] ?? '',
+        $inv['customer_email'] ?? ''
     );
 
     $currency = strtoupper(trim((string)($inv['currency'] ?? 'USD')));
