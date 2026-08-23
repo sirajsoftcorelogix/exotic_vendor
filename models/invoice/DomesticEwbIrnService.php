@@ -96,7 +96,7 @@ class DomesticEwbIrnService {
      */
     public function generateIrnAndEwb($invoiceId, $invoice, $items, $customer, $firm, $ewbData = []) {
         try {
-            //echo "Domestic EWB: Starting IRN and EWB generation for invoice #$invoiceId\n";
+            echo "Domestic EWB: Starting IRN and EWB generation for invoice #$invoiceId\n";
             $this->ensureInfoDtlsColumn();
             // Validate required data
             if (!$invoice || empty($items) || !$customer || !$firm) {
@@ -202,7 +202,7 @@ class DomesticEwbIrnService {
             // Send IRN generation request with encrypted payload
             //$irnResponse = $alankitClient->sendRequest('IRN_GENERATE_ENDPOINT', ['Data' => $encryptedPayload], true, $accessToken);
             $irnResponse = $alankitClient->generateIrn(['Data' => $encryptedPayload], $accessToken);   
-            //print_r($irnResponse);
+            print_r($irnResponse);
             //echo '<br><br>irnResponseEnd<br><br>';
             
                   
