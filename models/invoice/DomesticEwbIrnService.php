@@ -535,8 +535,11 @@ class DomesticEwbIrnService {
             ];
         }
         
-        $invoiceNumberParts = explode('-', $invoice['invoice_number'] ?? '');
-        $invoiceNumber = end($invoiceNumberParts);
+        $invoiceNumber = trim((string)($invoice['invoice_number'] ?? ''));
+        if (strlen($invoiceNumber) > 10) {
+            $invoiceNumberParts = explode('-', $invoiceNumber);
+            $invoiceNumber = (string)end($invoiceNumberParts);
+        }
         $buyerAddress = ($customer['address_line1'] ?? '') . ' ' . ($customer['address_line2'] ?? '');
         $shippingAddress = ($customer['shipping_address_line1'] ?? '') . ' ' . ($customer['shipping_address_line2'] ?? '');
         $buyerDisplayName = trim((string)($customer['first_name'] ?? ''));
