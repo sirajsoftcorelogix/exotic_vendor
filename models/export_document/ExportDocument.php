@@ -246,7 +246,10 @@ class ExportDocument
         // 8. Fetch line items
         $lineItems = [];
         if ($invoiceId > 0) {
-            $itemSql = "SELECT ii.*, p.hsn_code, p.weight AS product_weight, p.net_weight, o.sku AS order_sku, o.item_code AS order_item_code, o.title AS order_title
+            $itemSql = "SELECT ii.*, 
+                               COALESCE(NULLIF(ii.hsn, ''), NULLIF(p.hsn, ''), NULLIF(p.hscode, ''), NULLIF(o.hsn, ''), '') AS hsn_code, 
+                               COALESCE(NULLIF(p.product_weight, 0), NULLIF(o.product_weight, 0), 0.25) AS product_weight, 
+                               o.sku AS order_sku, o.item_code AS order_item_code, o.title AS order_title
                         FROM vp_invoice_items ii
                         LEFT JOIN vp_products p ON p.id = ii.product_id
                         LEFT JOIN vp_orders o ON (o.order_number = ii.order_number AND o.item_code = ii.item_code)
@@ -268,7 +271,9 @@ class ExportDocument
         // Fallback to vp_orders if no vp_invoice_items exist
         $targetOrderNum = $header['order_number'] ?? '';
         if (empty($lineItems) && $targetOrderNum !== '') {
-            $ordStmt = $this->conn->prepare("SELECT o.*, p.hsn_code, p.weight AS product_weight, p.net_weight 
+            $ordStmt = $this->conn->prepare("SELECT o.*, 
+                                             COALESCE(NULLIF(o.hsn, ''), NULLIF(p.hsn, ''), NULLIF(p.hscode, ''), '') AS hsn_code, 
+                                             COALESCE(NULLIF(o.product_weight, 0), NULLIF(p.product_weight, 0), 0.25) AS product_weight 
                                              FROM vp_orders o 
                                              LEFT JOIN vp_products p ON p.sku = o.sku 
                                              WHERE o.order_number = ? AND o.status != 'cancelled'
@@ -287,9 +292,8 @@ class ExportDocument
                         'quantity' => (int)($item['quantity'] ?? 1),
                         'unit_price' => (float)($item['price'] ?? $item['total_price'] ?? 0),
                         'total_price' => (float)($item['total_price'] ?? 0),
-                        'hsn_code' => $item['hsn_code'] ?? '',
-                        'product_weight' => $item['product_weight'] ?? 0,
-                        'net_weight' => $item['net_weight'] ?? 0,
+                        'hsn_code' => $item['hsn_code'] ?? $item['hsn'] ?? '',
+                        'product_weight' => (float)($item['product_weight'] ?? 0),
                         'order_sku' => $item['sku'] ?? ''
                     ];
                 }

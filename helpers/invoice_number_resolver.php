@@ -70,11 +70,7 @@ function resolve_invoice_number(mysqli $conn, string $customInvoiceNumber = '', 
 
 function format_auto_invoice_number(string $prefix, int $series): string
 {
-    if ($prefix !== '' && preg_match('/[\/_]$/', $prefix)) {
-        return $prefix . (string) $series;
-    }
-
-    return $prefix . '-' . str_pad((string) $series, 6, '0', STR_PAD_LEFT);
+    return $prefix . str_pad((string) $series, 4, '0', STR_PAD_LEFT);
 }
 
 function infer_invoice_series_from_invoices(mysqli $conn, string $prefix): int
@@ -101,8 +97,9 @@ function infer_invoice_series_from_invoices(mysqli $conn, string $prefix): int
                     continue;
                 }
                 $suffix = substr($number, $prefixLen);
-                if ($suffix !== '' && ctype_digit($suffix)) {
-                    $maxSeries = max($maxSeries, (int) $suffix);
+                $cleanSuffix = ltrim($suffix, '-/_');
+                if ($cleanSuffix !== '' && ctype_digit($cleanSuffix)) {
+                    $maxSeries = max($maxSeries, (int) $cleanSuffix);
                 }
             }
             $stmt->close();
@@ -116,14 +113,14 @@ function infer_invoice_series_from_invoices(mysqli $conn, string $prefix): int
     $result = $conn->query(
         "SELECT invoice_number
          FROM vp_invoices
-         WHERE invoice_number REGEXP '^INV-[0-9]+$'
+         WHERE invoice_number REGEXP '^[A-Za-z]+[-/_]?[0-9]+$'
          ORDER BY id DESC
          LIMIT 300"
     );
     if ($result) {
         while ($row = $result->fetch_assoc()) {
             $number = (string) ($row['invoice_number'] ?? '');
-            if (preg_match('/^INV-(\d+)$/', $number, $matches)) {
+            if (preg_match('/^[A-Za-z]+[-/_]?(\d+)$/', $number, $matches)) {
                 $maxSeries = max($maxSeries, (int) $matches[1]);
             }
         }
