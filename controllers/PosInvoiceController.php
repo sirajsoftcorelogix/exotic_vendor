@@ -439,6 +439,7 @@ class PosInvoiceController
 
         $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
         $ok = !empty($result['status']) || strtolower(trim((string) ($latest['irn_status'] ?? ''))) === 'generated';
+        $errorDetails = trim((string) ($result['error_details'] ?? $latest['irn_error'] ?? ''));
 
         echo json_encode([
             'success' => $ok,
@@ -448,6 +449,9 @@ class PosInvoiceController
             'irn' => (string) ($latest['irn'] ?? $result['irn'] ?? ''),
             'ack_number' => (string) ($latest['ack_number'] ?? ''),
             'ack_date' => (string) ($latest['ack_date'] ?? ''),
+            'error_details' => $errorDetails,
+            'irn_error' => $errorDetails,
+            'irn_response' => (string) ($latest['irn_response'] ?? ''),
             'ewaybill_url' => $this->resolveEwaybillInputUrl($invoiceId, $orderNumber),
         ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;

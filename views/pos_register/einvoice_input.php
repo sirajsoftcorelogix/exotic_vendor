@@ -367,6 +367,14 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
       const submitBtn = document.getElementById('submitBtn');
       const submitBtnText = document.getElementById('submitBtnText');
       const resultContainer = document.getElementById('resultContainer');
+      const escapeResultHtml = function(value) {
+        return String(value ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      };
 
       submitBtn.disabled = true;
       submitBtnText.textContent = 'Generating E-Invoice via Alankit API...';
@@ -418,7 +426,8 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
               </div>
               <div>
                 <h3 class="text-base font-bold text-rose-900">E-Invoice Generation Failed</h3>
-                <p class="text-xs text-rose-700 mt-1">${data.message || 'Error occurred while contacting Alankit API.'}</p>
+                <p class="text-xs text-rose-700 mt-1">${escapeResultHtml(data.message || 'Error occurred while contacting Alankit API.')}</p>
+                ${data.error_details ? `<div class="mt-3 rounded-lg border border-rose-200 bg-white/70 p-3"><div class="text-xs font-semibold text-rose-800">Alankit ErrorDetails</div><pre class="mt-1 whitespace-pre-wrap break-words text-xs text-rose-900">${escapeResultHtml(data.error_details)}</pre></div>` : ''}
               </div>
             </div>
           `;

@@ -96,7 +96,7 @@ class DomesticEwbIrnService {
      */
     public function generateIrnAndEwb($invoiceId, $invoice, $items, $customer, $firm, $ewbData = []) {
         try {
-            echo "Domestic EWB: Starting IRN and EWB generation for invoice #$invoiceId\n";
+            //echo "Domestic EWB: Starting IRN and EWB generation for invoice #$invoiceId\n";
             $this->ensureInfoDtlsColumn();
             // Validate required data
             if (!$invoice || empty($items) || !$customer || !$firm) {
@@ -137,6 +137,7 @@ class DomesticEwbIrnService {
                 'ewb' => null,
                 'irn_message' => null,
                 'ewb_message' => null,
+                'error_details' => '',
                 'errors' => []
             ];
             
@@ -202,7 +203,7 @@ class DomesticEwbIrnService {
             // Send IRN generation request with encrypted payload
             //$irnResponse = $alankitClient->sendRequest('IRN_GENERATE_ENDPOINT', ['Data' => $encryptedPayload], true, $accessToken);
             $irnResponse = $alankitClient->generateIrn(['Data' => $encryptedPayload], $accessToken);   
-            print_r($irnResponse);
+            //print_r($irnResponse);
             //echo '<br><br>irnResponseEnd<br><br>';
             
                   
@@ -241,13 +242,18 @@ class DomesticEwbIrnService {
                     $this->updateIrnStatus($invoiceId, 'generated', null, $irnPayload, $irnResponse, $irn);
                 }
 
-                $dupMessage = trim((string)($irnResponse['InfoDtls'][0]['Desc'] ?? 'Duplicate IRN (DUPIRN)'));
+                $dupMessage = $this->resolveIrnErrorDetails($irnResponse);
+                if ($dupMessage === '') {
+                    $dupMessage = trim((string)($irnResponse['InfoDtls'][0]['Desc'] ?? 'Duplicate IRN (DUPIRN)'));
+                }
                 if ($dupMessage === '') {
                     $dupMessage = 'Duplicate IRN (DUPIRN)';
                 }
 
                 $result['status'] = false;
                 $result['errors'][] = $dupMessage;
+                $result['error_details'] = $dupMessage;
+                $this->updateIrnStatus($invoiceId, 'failed', $dupMessage, $irnPayload, $irnResponse, $irn);
                 if (!empty($irnResponse['Irn'])) {
                     $result['irn'] = (string)$irnResponse['Irn'];
                 }
@@ -256,12 +262,15 @@ class DomesticEwbIrnService {
             }
 
             if (!$irnResponse || !isset($irnResponse['Irn'])) {
+                $errorDetails = $this->resolveIrnErrorDetails(is_array($irnResponse) ? $irnResponse : []);
+                $errorMessage = 'IRN generation failed' . ($errorDetails !== '' ? ': ' . $errorDetails : ': Unknown error');
                 $result['status'] = false;
-                $result['errors'][] = 'IRN generation failed: ' . ($irnResponse['message'] ?? 'Unknown error');
-                $this->updateIrnStatus($invoiceId, 'failed', $result['errors'][0], $irnPayload, $irnResponse);
-                $this->updateEwbStatus($invoiceId, 'failed', $result['errors'][0], $irnPayload, $irnResponse, null, null, null, null, null, null, null, $infoDtls);
-                $this->lastError = $result['errors'][0];
-                error_log("Domestic EWB: " . $result['errors'][0]);
+                $result['errors'][] = $errorMessage;
+                $result['error_details'] = $errorDetails !== '' ? $errorDetails : $errorMessage;
+                $this->updateIrnStatus($invoiceId, 'failed', $result['error_details'], $irnPayload, $irnResponse);
+                $this->updateEwbStatus($invoiceId, 'failed', $result['error_details'], $irnPayload, $irnResponse, null, null, null, null, null, null, null, $infoDtls);
+                $this->lastError = $errorMessage;
+                error_log("Domestic EWB: " . $errorMessage);
                 return $result;
             }
             
@@ -673,6 +682,21 @@ class DomesticEwbIrnService {
      */
     public function getEwbIrnRecord($invoiceId) {
         return self::findRecordByInvoiceId($this->db, (int)$invoiceId);
+    }
+
+    /** Convert Alankit's scalar or structured ErrorDetails value to readable text. */
+    private function resolveIrnErrorDetails(array $response): string
+    {
+        $details = $response['ErrorDetails'] ?? null;
+        if ($details === null || $details === '') {
+            $details = $response['message'] ?? $response['Message'] ?? $response['error'] ?? '';
+        }
+        if (is_array($details) || is_object($details)) {
+            $encoded = json_encode($details, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            return is_string($encoded) ? trim($encoded) : '';
+        }
+
+        return trim((string)$details);
     }
     
     /**
