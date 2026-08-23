@@ -205,7 +205,7 @@ class ExportDocument
         );
 
         if ($targetOrderNum !== '') {
-            $voStmt = $this->conn->prepare("SELECT shipping_country, country, payment_type, customer_id FROM vp_orders WHERE CONVERT(order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci ORDER BY id DESC LIMIT 1");
+            $voStmt = $this->conn->prepare("SELECT shipping_country, country, payment_type, customer_id, currency FROM vp_orders WHERE CONVERT(order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci ORDER BY id DESC LIMIT 1");
             if ($voStmt) {
                 $voStmt->bind_param('s', $targetOrderNum);
                 $voStmt->execute();
@@ -286,6 +286,53 @@ class ExportDocument
                     $intlDetails = $row;
                 }
                 $intlStmt->close();
+            }
+        }
+
+        // 7b. Resolve currency and master export exchange rate from currency_master
+        $currCode = export_first_non_empty(
+            $intlDetails['shipping_currency'] ?? '',
+            $header['currency'] ?? '',
+            $header['shipping_currency'] ?? ''
+        );
+        $currCode = strtoupper(trim($currCode));
+        if ($currCode === '' || $currCode === 'INR') {
+            $currCode = 'USD';
+        }
+
+        $masterRate = 0.0;
+        $resolvedCode = $currCode;
+
+        // Try direct currency code lookup in currency_master
+        $currStmt = $this->conn->prepare("SELECT currency_code, rate_export FROM currency_master WHERE UPPER(TRIM(currency_code)) = ? LIMIT 1");
+        if ($currStmt) {
+            $currStmt->bind_param('s', $currCode);
+            $currStmt->execute();
+            $currRes = $currStmt->get_result();
+            if ($currRow = $currRes->fetch_assoc()) {
+                $resolvedCode = strtoupper(trim($currRow['currency_code']));
+                $masterRate = (float)($currRow['rate_export'] ?? 0);
+            }
+            $currStmt->close();
+        }
+
+        // If not found directly, try CurrencyModel mapping
+        if ($masterRate <= 0) {
+            require_once __DIR__ . '/../currency/CurrencyModel.php';
+            $currencyModel = new CurrencyModel($this->conn);
+            $currRecord = $currencyModel->getCurrencyByCountryCode($currCode) ?: $currencyModel->getCurrencyByCode($currCode);
+            if ($currRecord) {
+                $resolvedCode = strtoupper(trim($currRecord['currency_code'] ?? $currCode));
+                $masterRate = (float)($currRecord['rate_export'] ?? 0);
+            }
+        }
+
+        $header['currency'] = $resolvedCode;
+        $header['master_rate_export'] = $masterRate;
+
+        if ($resolvedCode !== 'USD' || empty($intlDetails['usd_export_rate']) || (float)$intlDetails['usd_export_rate'] <= 0) {
+            if ($masterRate > 0) {
+                $intlDetails['usd_export_rate'] = $masterRate;
             }
         }
 

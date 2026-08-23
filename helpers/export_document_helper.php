@@ -252,7 +252,12 @@ function buildCommonExportSessionData(array $autoPulledData): array
         $inv['customer_email'] ?? ''
     );
 
-    $currency = strtoupper(trim((string)($inv['currency'] ?? 'USD')));
+    $currency = export_first_non_empty(
+        $intl['shipping_currency'] ?? '',
+        $inv['currency'] ?? '',
+        $inv['shipping_currency'] ?? ''
+    );
+    $currency = strtoupper(trim($currency));
     if ($currency === '' || $currency === 'INR') {
         $currency = 'USD';
     }
@@ -268,6 +273,16 @@ function buildCommonExportSessionData(array $autoPulledData): array
         $totalNetWeight = 0.50; // default 500g
     }
     $totalGrossWeight = round($totalNetWeight * 1.15, 2); // 10-15% tare buffer
+
+    if ($currency === 'USD') {
+        $exchangeRate = (float)($intl['usd_export_rate'] ?? ($inv['usd_export_rate'] ?? ($inv['master_rate_export'] ?? 83.50)));
+    } else {
+        // For non-USD currencies (EUR, GBP, CAD, AUD, DKK, etc.), prioritize the rate_export from currency_master
+        $exchangeRate = (float)($inv['master_rate_export'] ?? ($intl['usd_export_rate'] ?? 83.50));
+    }
+    if ($exchangeRate <= 0) {
+        $exchangeRate = 83.50;
+    }
 
     return [
         'invoice_number' => $inv['invoice_number'] ?? '',
@@ -296,7 +311,7 @@ function buildCommonExportSessionData(array $autoPulledData): array
         'country_of_destination' => $destCountry,
         'final_destination' => $finalDest,
         'currency' => $currency,
-        'exchange_rate' => (float)($intl['usd_export_rate'] ?? 83.50),
+        'exchange_rate' => $exchangeRate,
         'total_amount' => (float)($inv['total_amount'] ?? 0),
         'gross_weight' => $totalGrossWeight,
         'net_weight' => round($totalNetWeight, 2),

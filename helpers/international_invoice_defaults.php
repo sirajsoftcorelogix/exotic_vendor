@@ -49,7 +49,7 @@ function buildInternationalInvoiceDefaults(
 
     $usdExportRate = 0.0;
     if ($commanModel && method_exists($commanModel, 'getRecordByField')) {
-        $usdRecord = $commanModel->getRecordByField('currency_master', 'currency_code', 'USD');
+        $usdRecord = $commanModel->getRecordByField('currency_master', 'currency_code', $currency);
         if (is_array($usdRecord)) {
             $usdExportRate = (float) ($usdRecord['rate_export'] ?? 0);
         }
