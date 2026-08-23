@@ -13,6 +13,14 @@ $record = $existing_record ?? [];
 $elig = $eligibility ?? [];
 
 $orderNumber = $order_number ?? '';
+$submitUrl = trim((string)($submit_url ?? ''));
+if ($submitUrl === '') {
+  $submitUrl = 'index.php?page=pos_register&action=ewaybill-submit';
+}
+$backUrl = trim((string)($back_url ?? ''));
+if ($backUrl === '') {
+  $backUrl = 'index.php?page=pos_register&action=checkout-receipt&order_number=' . rawurlencode($orderNumber);
+}
 $isExport = !empty($elig['is_export']);
 $isB2b = !empty($elig['is_b2b']);
 $scenario = $elig['scenario'] ?? ($isExport ? 'Export' : ($isB2b ? 'Domestic B2B' : 'B2C'));
@@ -22,26 +30,12 @@ $existingEwb = $record['ewb_no'] ?? $record['ewb'] ?? $invoiceData['ewb_number']
 $existingEwbDate = $record['ewb_date'] ?? $invoiceData['ewb_date'] ?? '';
 $existingEwbValid = $record['ewb_valid_till'] ?? '';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Generate E-Way Bill - Order #<?= $h($orderNumber) ?></title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <style>
-    body { font-family: 'Inter', system-ui, sans-serif; }
-  </style>
-</head>
-<body class="bg-slate-50 text-slate-800 min-h-screen pb-12">
+
   <div class="max-w-5xl mx-auto px-4 py-8">
     
     <!-- Top Nav / Back -->
     <div class="mb-6 flex items-center justify-between">
-      <a href="index.php?page=pos_register&action=checkout-receipt&order_number=<?= rawurlencode($orderNumber) ?>" class="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition">
+      <a href="<?= $h($backUrl) ?>" class="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
         <span>Back to Payment Receipt</span>
       </a>
@@ -86,7 +80,7 @@ $existingEwbValid = $record['ewb_valid_till'] ?? '';
               <?php if (!empty($existingEwbValid)): ?><div><span class="font-sans font-semibold text-emerald-700">Valid Till:</span> <?= $h($existingEwbValid) ?></div><?php endif; ?>
             </div>
             <div class="mt-4 flex flex-wrap gap-3">
-              <a href="index.php?page=pos_register&action=checkout-receipt&order_number=<?= rawurlencode($orderNumber) ?>" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-700 text-white font-semibold text-xs hover:bg-emerald-800 transition">
+              <a href="<?= $h($backUrl) ?>" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-700 text-white font-semibold text-xs hover:bg-emerald-800 transition">
                 <span>Return to Payment Receipt</span>
               </a>
             </div>
@@ -99,7 +93,7 @@ $existingEwbValid = $record['ewb_valid_till'] ?? '';
     <div id="resultContainer" class="hidden mb-6"></div>
 
     <!-- Main Form -->
-    <form id="ewaybillForm" action="index.php?page=pos_register&action=ewaybill-submit" method="POST" class="space-y-6">
+    <form id="ewaybillForm" action="<?= $h($submitUrl) ?>" method="POST" class="space-y-6">
       <input type="hidden" name="order_number" value="<?= $h($orderNumber) ?>" />
       <input type="hidden" name="invoice_id" value="<?= (int)($invoiceData['id'] ?? 0) ?>" />
 
@@ -245,7 +239,7 @@ $existingEwbValid = $record['ewb_valid_till'] ?? '';
 
       <!-- Action Footer -->
       <div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-200">
-        <a href="index.php?page=pos_register&action=checkout-receipt&order_number=<?= rawurlencode($orderNumber) ?>" class="px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold text-xs hover:bg-slate-100 transition">
+        <a href="<?= $h($backUrl) ?>" class="px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold text-xs hover:bg-slate-100 transition">
           Cancel &amp; Return to Receipt
         </a>
         <button type="submit" id="submitBtn" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 text-white font-bold text-sm shadow-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition">
@@ -293,7 +287,7 @@ $existingEwbValid = $record['ewb_valid_till'] ?? '';
                   <div><span class="font-sans font-semibold text-emerald-700">Valid Till:</span> ${data.ewb_valid_till || 'N/A'}</div>
                 </div>
                 <div class="mt-4 flex flex-wrap gap-3">
-                  <a href="index.php?page=pos_register&action=checkout-receipt&order_number=${encodeURIComponent(form.order_number.value)}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-700 text-white font-semibold text-xs hover:bg-emerald-800 transition">
+                  <a href="<?= $h($backUrl) ?>" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-700 text-white font-semibold text-xs hover:bg-emerald-800 transition">
                     <span>Return to Payment Receipt</span>
                   </a>
                 </div>
@@ -330,5 +324,4 @@ $existingEwbValid = $record['ewb_valid_till'] ?? '';
       }
     });
   </script>
-</body>
-</html>
+

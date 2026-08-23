@@ -96,7 +96,7 @@ class DomesticEwbIrnService {
      */
     public function generateIrnAndEwb($invoiceId, $invoice, $items, $customer, $firm, $ewbData = []) {
         try {
-            echo "Domestic EWB: Starting IRN and EWB generation for invoice #$invoiceId\n";
+            //echo "Domestic EWB: Starting IRN and EWB generation for invoice #$invoiceId\n";
             $this->ensureInfoDtlsColumn();
             // Validate required data
             if (!$invoice || empty($items) || !$customer || !$firm) {
@@ -153,8 +153,10 @@ class DomesticEwbIrnService {
                 "Data" => $authreq
             ];
             //echo "Alankit IRN: Sending authentication request for invoice #$invoiceId\n";
+            //echo "Domestic EWB: Auth request payload: " . json_encode($data) . "\n";
+            //echo "Domestic EWB: Auth request raw data: " . $authreq . "\n";
             $authResponse = $alankitClient->sendRequest('AUTH_ENDPOINT', $data, false);
-            
+            //print_r($authResponse);
             if (!$authResponse || !isset($authResponse['Data']['AuthToken'])) {
                 $result['status'] = false;
                 $result['errors'][] = 'Authentication failed: ' . ($authResponse['message'] ?? 'Unknown error');
@@ -185,7 +187,7 @@ class DomesticEwbIrnService {
             }
             
             //error_log("Domestic EWB: SEK decrypted successfully");
-            echo 'encryptedSek <br>'.$encryptedSek.'<br><br>app_key:'.$this->alankitConfig['app_key'].'<br><br>decryptedSek:'.$decryptedSek.'<br><br>';
+            //echo 'encryptedSek <br>'.$encryptedSek.'<br><br>app_key:'.$this->alankitConfig['app_key'].'<br><br>decryptedSek:'.$decryptedSek.'<br><br>';
 
             // Step 4: Generate IRN
             //error_log("Domestic EWB: Generating IRN for invoice #$invoiceId");
@@ -196,13 +198,13 @@ class DomesticEwbIrnService {
                 error_log("Alankit IRN: Payload encryption failed for invoice #$invoiceId");
                 return false;
             }
-            echo '<br><br>'.$encryptedPayload.'<br><br>';
+           // echo '<br><br>'.$encryptedPayload.'<br><br>';
             // Send IRN generation request with encrypted payload
             //$irnResponse = $alankitClient->sendRequest('IRN_GENERATE_ENDPOINT', ['Data' => $encryptedPayload], true, $accessToken);
             $irnResponse = $alankitClient->generateIrn(['Data' => $encryptedPayload], $accessToken);   
-            print_r($irnResponse);
-            echo '<br><br>';
-            exit;
+            //print_r($irnResponse);
+            //echo '<br><br>irnResponseEnd<br><br>';
+            
                   
             if ($irnResponse && isset($irnResponse['Data'])) {
                 $decryptedResponse = $alankitClient->decrypt_irn($irnResponse['Data'], $decryptedSek);
@@ -224,16 +226,22 @@ class DomesticEwbIrnService {
                 is_array($irnResponse)
                 && isset($irnResponse['InfoDtls'])
                 && is_array($irnResponse['InfoDtls'])
-                && isset($irnResponse['InfoDtls']['InfCd'])
+                && isset($irnResponse['InfoDtls'][0]['InfCd'])
             ) {
-                $isDupIrn = (strtoupper(trim((string)$irnResponse['InfoDtls']['InfCd'])) === 'DUPIRN');
+                $isDupIrn = (strtoupper(trim((string)$irnResponse['InfoDtls'][0]['InfCd'])) === 'DUPIRN');
             }
-
+            
             // For DUPIRN response, preserve existing IRN/EWB fields and only store InfoDtls.
             if ($isDupIrn) {
+                //echo "Duplicate IRN detected for invoice #$invoiceId. Preserving existing IRN/EWB fields and updating InfoDtls.\n";
+                $irn = $irnResponse['InfoDtls'][0]['Desc']['Irn'] ?? null;
                 $this->updateInfoDtlsOnly($invoiceId, $infoDtls);
+                //update irn if available in response
+                if (!empty($irn)) {
+                    $this->updateIrnStatus($invoiceId, 'generated', null, $irnPayload, $irnResponse, $irn);
+                }
 
-                $dupMessage = trim((string)($irnResponse['InfoDtls']['Desc'] ?? 'Duplicate IRN (DUPIRN)'));
+                $dupMessage = trim((string)($irnResponse['InfoDtls'][0]['Desc'] ?? 'Duplicate IRN (DUPIRN)'));
                 if ($dupMessage === '') {
                     $dupMessage = 'Duplicate IRN (DUPIRN)';
                 }

@@ -682,7 +682,7 @@ class POSRegisterController
     private function handlePosEwbGeneration(mysqli $conn, int $invoiceId, array $payload, string $orderNumber): void
     {
         try {
-             echo "POS EWB: Starting E-way bill generation for invoice $invoiceId\n";
+            // echo "POS EWB: Starting E-way bill generation for invoice $invoiceId\n";
             // Get invoice details from database
             $invStmt = $conn->prepare("SELECT * FROM vp_invoices WHERE id = ?");
             if (!$invStmt) {
@@ -4987,6 +4987,50 @@ class POSRegisterController
             (float)($row['receipt_grand_total'] ?? $row['receipt_subtotal_goods'] ?? 0)
         );
         renderTemplateClean('views/pos_register/order_confirmation.php', $row, 'Order confirmation');
+    }
+
+    /**
+     * POS receipt E-Invoice input page.
+     * Delegates to the shared PosInvoiceController implementation.
+     */
+    public function einvoiceInput(): void
+    {
+        require_once __DIR__ . '/PosInvoiceController.php';
+        $ctrl = new PosInvoiceController();
+        $ctrl->einvoiceInput();
+    }
+
+    /**
+     * POS receipt E-Invoice submit endpoint.
+     * Delegates to the shared PosInvoiceController implementation.
+     */
+    public function einvoiceSubmit(): void
+    {
+        require_once __DIR__ . '/PosInvoiceController.php';
+        $ctrl = new PosInvoiceController();
+        $ctrl->einvoiceSubmit();
+    }
+
+    /**
+     * POS receipt E-Way bill input page.
+     * Delegates to the shared PosInvoiceController implementation.
+     */
+    public function ewaybillInput(): void
+    {
+        require_once __DIR__ . '/PosInvoiceController.php';
+        $ctrl = new PosInvoiceController();
+        $ctrl->ewaybillInput();
+    }
+
+    /**
+     * POS receipt E-Way bill submit endpoint.
+     * Delegates to the shared PosInvoiceController implementation.
+     */
+    public function ewaybillSubmit(): void
+    {
+        require_once __DIR__ . '/PosInvoiceController.php';
+        $ctrl = new PosInvoiceController();
+        $ctrl->ewaybillSubmit();
     }
 
     /**

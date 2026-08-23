@@ -22,6 +22,73 @@ $paymentModel = $GLOBALS['paymentModel'];
 class PosInvoiceController
 {
 
+    private function resolveOrderNumberForInvoiceId(int $invoiceId): string
+    {
+        global $conn;
+
+        if ($invoiceId <= 0 || !($conn instanceof mysqli)) {
+            return '';
+        }
+
+        $stmt = $conn->prepare(
+            'SELECT oi.order_number
+             FROM vp_invoices i
+             LEFT JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
+             WHERE i.id = ?
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return '';
+        }
+
+        $stmt->bind_param('i', $invoiceId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return trim((string) ($row['order_number'] ?? ''));
+    }
+
+    private function delegateToPosRegisterController(string $method): void
+    {
+        global $conn;
+
+        require_once __DIR__ . '/POSRegisterController.php';
+        $controller = new POSRegisterController($conn);
+
+        if (!method_exists($controller, $method)) {
+            throw new RuntimeException('Unsupported POS register delegate action: ' . $method);
+        }
+
+        $controller->{$method}();
+    }
+
+    private function hydrateOrderNumberFromInvoiceRequest(): void
+    {
+        $orderNumber = trim((string) ($_REQUEST['order_number'] ?? ''));
+        if ($orderNumber !== '') {
+            return;
+        }
+
+        $invoiceId = (int) ($_REQUEST['invoice_id'] ?? 0);
+        if ($invoiceId <= 0) {
+            return;
+        }
+
+        $resolvedOrder = $this->resolveOrderNumberForInvoiceId($invoiceId);
+        if ($resolvedOrder === '') {
+            return;
+        }
+
+        $_REQUEST['order_number'] = $resolvedOrder;
+        if (!isset($_GET['order_number'])) {
+            $_GET['order_number'] = $resolvedOrder;
+        }
+        if (!isset($_POST['order_number'])) {
+            $_POST['order_number'] = $resolvedOrder;
+        }
+    }
+
     private function isPosInvoiceAdminUser(): bool
     {
         return isset($_SESSION['user']['role_id']) && (int) $_SESSION['user']['role_id'] === 1;
@@ -60,6 +127,408 @@ class PosInvoiceController
     {
         is_login();
         renderTemplate('views/posinvoice/user_guide.php', [], 'Invoice Module — User Guide');
+    }
+
+    /** @return array<string, mixed>|null */
+    private function fetchOrderInfoByOrderNumber(string $orderNumber): ?array
+    {
+        global $conn;
+
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '' || !($conn instanceof mysqli)) {
+            return null;
+        }
+
+        $stmt = $conn->prepare('SELECT * FROM vp_order_info WHERE order_number = ? ORDER BY id DESC LIMIT 1');
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return is_array($row) ? $row : null;
+    }
+
+    /** @return array<string, mixed>|null */
+    private function fetchEwbIrnTrackingByInvoiceId(int $invoiceId): ?array
+    {
+        global $conn;
+
+        if ($invoiceId <= 0 || !($conn instanceof mysqli)) {
+            return null;
+        }
+
+        $stmt = $conn->prepare('SELECT * FROM vp_domestic_ewb_irn WHERE vp_invoices_id = ? LIMIT 1');
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('i', $invoiceId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return is_array($row) ? $row : null;
+    }
+
+    /** @return array{invoice:array<string,mixed>,order_number:string,order_info:?array<string,mixed>}|null */
+    private function resolvePosInvoiceOrderContext(): ?array
+    {
+        global $invoiceModel;
+
+        $invoiceId = (int) ($_REQUEST['invoice_id'] ?? 0);
+        $orderNumber = trim((string) ($_REQUEST['order_number'] ?? ''));
+
+        $invoice = null;
+        if ($invoiceId > 0) {
+            $invoice = $invoiceModel->getInvoiceById($invoiceId);
+        }
+        if (!is_array($invoice) && $orderNumber !== '') {
+            $invoice = $invoiceModel->getInvoiceByOrderNumber($orderNumber);
+        }
+        if (!is_array($invoice)) {
+            return null;
+        }
+
+        if ($orderNumber === '') {
+            $vpOrderInfoId = (int) ($invoice['vp_order_info_id'] ?? 0);
+            if ($vpOrderInfoId > 0) {
+                global $conn;
+                if ($conn instanceof mysqli) {
+                    $stmt = $conn->prepare('SELECT order_number FROM vp_order_info WHERE id = ? LIMIT 1');
+                    if ($stmt) {
+                        $stmt->bind_param('i', $vpOrderInfoId);
+                        $stmt->execute();
+                        $row = $stmt->get_result()->fetch_assoc();
+                        $stmt->close();
+                        $orderNumber = trim((string) ($row['order_number'] ?? ''));
+                    }
+                }
+            }
+        }
+
+        if ($orderNumber === '') {
+            $orderNumber = trim((string) ($invoice['order_number'] ?? ''));
+        }
+
+        $orderInfo = $this->fetchOrderInfoByOrderNumber($orderNumber);
+
+        return [
+            'invoice' => $invoice,
+            'order_number' => $orderNumber,
+            'order_info' => $orderInfo,
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function resolvePosInvoiceEinvoiceEligibility(array $invoice, ?array $orderInfo): array
+    {
+        $country = strtoupper(trim((string) (($orderInfo['country'] ?? '') ?: 'IN')));
+        $isExport = ($country !== '' && $country !== 'IN' && $country !== 'INDIA');
+        $gstin = strtoupper(trim((string) ($orderInfo['gstin'] ?? '')));
+        $isB2b = (!$isExport && $gstin !== '' && $gstin !== 'URP');
+
+        return [
+            'is_export' => $isExport,
+            'is_b2b' => $isB2b,
+            'scenario' => $isExport ? 'Export' : ($isB2b ? 'Domestic B2B' : 'B2C'),
+            'grand_total' => round((float) ($invoice['total_amount'] ?? 0), 2),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function buildPosInvoiceEwbDataFromPayload(array $payload, int $invoiceId): array
+    {
+        $invoiceRef = trim((string) ($payload['doc_no'] ?? ''));
+        if ($invoiceRef === '') {
+            $invoiceRef = (string) $invoiceId;
+        }
+
+        $mode = trim((string) ($payload['trans_mode'] ?? '1'));
+        if (!in_array($mode, ['1', '2', '3', '4'], true)) {
+            $mode = '1';
+        }
+
+        $vehNo = trim((string) ($payload['veh_no'] ?? ''));
+        $vehTypeRaw = strtoupper(trim((string) ($payload['veh_type'] ?? 'R')));
+        $vehType = ($vehTypeRaw === 'O' || $vehTypeRaw === 'ODC') ? 'ODC' : 'R';
+
+        return [
+            'distance' => max(1, (int) ($payload['distance'] ?? 100)),
+            'trans_mode' => $mode,
+            'veh_no' => $vehNo,
+            'veh_type' => $vehType,
+            'trans_doc_no' => trim((string) ($payload['trans_doc_no'] ?? $invoiceRef)),
+            'trn_doc_dt' => trim((string) ($payload['trans_doc_dt'] ?? date('d/m/Y'))),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function resolvePosInvoiceIrnEwbRuntimeData(array $invoice, string $orderNumber): array
+    {
+        global $invoiceModel, $conn;
+
+        $invoiceId = (int) ($invoice['id'] ?? 0);
+        $items = $invoiceModel->getInvoiceItems($invoiceId);
+        $orderInfo = $this->fetchOrderInfoByOrderNumber($orderNumber);
+
+        require_once __DIR__ . '/../models/comman/tables.php';
+        $comman = new Tables($conn);
+        $firm = $comman->getRecordById('firm_details', 1);
+
+        return [
+            'items' => is_array($items) ? $items : [],
+            'order_info' => $orderInfo,
+            'firm' => is_array($firm) ? $firm : [],
+        ];
+    }
+
+    private function isPosRegisterInvocation(): bool
+    {
+        return trim((string) ($_GET['page'] ?? $_REQUEST['page'] ?? '')) === 'pos_register';
+    }
+
+    private function resolveEinvoiceSubmitUrl(int $invoiceId, string $orderNumber): string
+    {
+        if ($this->isPosRegisterInvocation()) {
+            return 'index.php?page=pos_register&action=einvoice-submit&invoice_id=' . $invoiceId . '&order_number=' . rawurlencode($orderNumber);
+        }
+
+        return 'index.php?page=posinvoice&action=einvoice-submit';
+    }
+
+    private function resolveEwaybillSubmitUrl(int $invoiceId, string $orderNumber): string
+    {
+        if ($this->isPosRegisterInvocation()) {
+            return 'index.php?page=pos_register&action=ewaybill-submit&invoice_id=' . $invoiceId . '&order_number=' . rawurlencode($orderNumber);
+        }
+
+        return 'index.php?page=posinvoice&action=ewaybill-submit';
+    }
+
+    private function resolveBackUrl(string $orderNumber): string
+    {
+        if ($this->isPosRegisterInvocation()) {
+            return 'index.php?page=pos_register&action=checkout-receipt&order_number=' . rawurlencode($orderNumber);
+        }
+
+        return 'index.php?page=posinvoice&action=list';
+    }
+
+    private function resolveEwaybillInputUrl(int $invoiceId, string $orderNumber): string
+    {
+        if ($this->isPosRegisterInvocation()) {
+            return 'index.php?page=pos_register&action=ewaybill-input&invoice_id=' . $invoiceId . '&order_number=' . rawurlencode($orderNumber);
+        }
+
+        return 'index.php?page=posinvoice&action=ewaybill-input&invoice_id=' . $invoiceId . '&order_number=' . rawurlencode($orderNumber);
+    }
+
+    public function einvoiceInput(): void
+    {
+        global $conn;
+        is_login();
+
+        $ctx = $this->resolvePosInvoiceOrderContext();
+        if ($ctx === null) {
+            renderTemplate('views/errors/not_found.php', ['message' => 'Invoice not found for E-Invoice generation.'], 'Not found');
+            return;
+        }
+
+        $invoice = $ctx['invoice'];
+        $orderNumber = (string) $ctx['order_number'];
+        $runtime = $this->resolvePosInvoiceIrnEwbRuntimeData($invoice, $orderNumber);
+        $elig = $this->resolvePosInvoiceEinvoiceEligibility($invoice, $runtime['order_info']);
+        $tracking = $this->fetchEwbIrnTrackingByInvoiceId((int) ($invoice['id'] ?? 0));
+        $invoiceId = (int) ($invoice['id'] ?? 0);
+
+        renderTemplate('views/pos_register/einvoice_input.php', [
+            'order_info' => $runtime['order_info'] ?? [],
+            'invoice' => $invoice,
+            'items' => $runtime['items'] ?? [],
+            'firm' => $runtime['firm'] ?? [],
+            'existing_record' => $tracking ?? [],
+            'eligibility' => $elig,
+            'order_number' => $orderNumber,
+            'submit_url' => $this->resolveEinvoiceSubmitUrl($invoiceId, $orderNumber),
+            'back_url' => $this->resolveBackUrl($orderNumber),
+            'ewaybill_input_url' => $this->resolveEwaybillInputUrl($invoiceId, $orderNumber),
+        ], 'Generate E-Invoice');
+        exit;
+    }
+
+    public function ewaybillInput(): void
+    {
+        global $conn;
+        is_login();
+
+        $ctx = $this->resolvePosInvoiceOrderContext();
+        if ($ctx === null) {
+            renderTemplate('views/errors/not_found.php', ['message' => 'Invoice not found for E-Way bill generation.'], 'Not found');
+            return;
+        }
+
+        $invoice = $ctx['invoice'];
+        $orderNumber = (string) $ctx['order_number'];
+        $runtime = $this->resolvePosInvoiceIrnEwbRuntimeData($invoice, $orderNumber);
+        $elig = $this->resolvePosInvoiceEinvoiceEligibility($invoice, $runtime['order_info']);
+        $tracking = $this->fetchEwbIrnTrackingByInvoiceId((int) ($invoice['id'] ?? 0));
+        $invoiceId = (int) ($invoice['id'] ?? 0);
+
+        renderTemplate('views/pos_register/ewaybill_input.php', [
+            'order_info' => $runtime['order_info'] ?? [],
+            'invoice' => $invoice,
+            'firm' => $runtime['firm'] ?? [],
+            'existing_record' => $tracking ?? [],
+            'eligibility' => $elig,
+            'order_number' => $orderNumber,
+            'submit_url' => $this->resolveEwaybillSubmitUrl($invoiceId, $orderNumber),
+            'back_url' => $this->resolveBackUrl($orderNumber),
+        ], 'Generate E-Way bill');
+    }
+
+    public function einvoiceSubmit(): void
+    {
+        global $conn;
+        is_login();
+
+        header('Content-Type: application/json; charset=utf-8');
+
+        $ctx = $this->resolvePosInvoiceOrderContext();
+        if ($ctx === null) {
+            echo json_encode(['success' => false, 'message' => 'Invoice context not found.']);
+            exit;
+        }
+
+        $invoice = $ctx['invoice'];
+        $orderNumber = (string) $ctx['order_number'];
+        $invoiceId = (int) ($invoice['id'] ?? 0);
+        $tracking = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId);
+        if (is_array($tracking) && strtolower(trim((string) ($tracking['irn_status'] ?? ''))) === 'generated' && trim((string) ($tracking['irn'] ?? '')) !== '') {
+            echo json_encode([
+                'success' => true,
+                'message' => 'IRN is already generated for this invoice.',
+                'irn' => (string) ($tracking['irn'] ?? ''),
+                'ack_number' => (string) ($tracking['ack_number'] ?? ''),
+                'ack_date' => (string) ($tracking['ack_date'] ?? ''),
+                'ewaybill_url' => $this->resolveEwaybillInputUrl($invoiceId, $orderNumber),
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $runtime = $this->resolvePosInvoiceIrnEwbRuntimeData($invoice, $orderNumber);
+        if (($runtime['items'] ?? []) === [] || empty($runtime['order_info']) || empty($runtime['firm'])) {
+            echo json_encode(['success' => false, 'message' => 'Invoice, item, customer, or firm data is incomplete.']);
+            exit;
+        }
+
+        $config = include __DIR__ . '/../config.php';
+        $alankitConfig = $config['alankit'] ?? [];
+        require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
+        $service = new DomesticEwbIrnService($conn, $alankitConfig);
+
+        $result = $service->generateIrnAndEwb(
+            $invoiceId,
+            $invoice,
+            $runtime['items'],
+            $runtime['order_info'],
+            $runtime['firm'],
+            []
+        );
+
+        $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
+        $ok = !empty($result['status']) || strtolower(trim((string) ($latest['irn_status'] ?? ''))) === 'generated';
+
+        echo json_encode([
+            'success' => $ok,
+            'message' => $ok
+                ? ((string) ($result['irn_message'] ?? 'E-Invoice generated successfully.'))
+                : ((string) ($result['message'] ?? $service->getLastError() ?? 'Failed to generate E-Invoice.')),
+            'irn' => (string) ($latest['irn'] ?? $result['irn'] ?? ''),
+            'ack_number' => (string) ($latest['ack_number'] ?? ''),
+            'ack_date' => (string) ($latest['ack_date'] ?? ''),
+            'ewaybill_url' => $this->resolveEwaybillInputUrl($invoiceId, $orderNumber),
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    public function ewaybillSubmit(): void
+    {
+        global $conn;
+        is_login();
+
+        header('Content-Type: application/json; charset=utf-8');
+
+        $ctx = $this->resolvePosInvoiceOrderContext();
+        if ($ctx === null) {
+            echo json_encode(['success' => false, 'message' => 'Invoice context not found.']);
+            exit;
+        }
+
+        $invoice = $ctx['invoice'];
+        $orderNumber = (string) $ctx['order_number'];
+        $invoiceId = (int) ($invoice['id'] ?? 0);
+
+        $runtime = $this->resolvePosInvoiceIrnEwbRuntimeData($invoice, $orderNumber);
+        if (($runtime['items'] ?? []) === [] || empty($runtime['order_info']) || empty($runtime['firm'])) {
+            echo json_encode(['success' => false, 'message' => 'Invoice, item, customer, or firm data is incomplete.']);
+            exit;
+        }
+
+        $payload = $_POST;
+        $ewbData = $this->buildPosInvoiceEwbDataFromPayload($payload, $invoiceId);
+
+        $config = include __DIR__ . '/../config.php';
+        $alankitConfig = $config['alankit'] ?? [];
+        require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
+        $service = new DomesticEwbIrnService($conn, $alankitConfig);
+
+        $tracking = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId);
+        $irn = is_array($tracking) ? trim((string) ($tracking['irn'] ?? '')) : '';
+        $irnStatus = is_array($tracking) ? strtolower(trim((string) ($tracking['irn_status'] ?? ''))) : '';
+
+        if ($irn !== '' && $irnStatus === 'generated') {
+            $result = $service->regenerateEwbWithIrn($invoiceId, $irn, $invoice, $runtime['order_info'], $ewbData);
+            $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
+            $ok = !empty($result['status']) || strtolower(trim((string) ($latest['ewb_status'] ?? ''))) === 'generated';
+
+            echo json_encode([
+                'success' => $ok,
+                'message' => (string) ($result['message'] ?? ($ok ? 'E-Way bill generated successfully.' : 'Failed to generate E-Way bill.')),
+                'ewb_no' => (string) ($latest['ewb_no'] ?? $latest['ewb'] ?? $result['ewb'] ?? ''),
+                'ewb_number' => (string) ($latest['ewb_no'] ?? $latest['ewb'] ?? $result['ewb'] ?? ''),
+                'ewb_date' => (string) ($latest['ewb_date'] ?? ''),
+                'ewb_valid_till' => (string) ($latest['ewb_valid_till'] ?? ''),
+                'ewb_status' => (string) ($latest['ewb_status'] ?? ''),
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $result = $service->generateIrnAndEwb(
+            $invoiceId,
+            $invoice,
+            $runtime['items'],
+            $runtime['order_info'],
+            $runtime['firm'],
+            $ewbData
+        );
+        $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
+        $ok = !empty($result['status']) || strtolower(trim((string) ($latest['ewb_status'] ?? ''))) === 'generated';
+
+        echo json_encode([
+            'success' => $ok,
+            'message' => $ok
+                ? ((string) ($result['ewb_message'] ?? 'E-Way bill generated successfully.'))
+                : ((string) ($result['message'] ?? $service->getLastError() ?? 'Failed to generate E-Way bill.')),
+            'irn' => (string) ($latest['irn'] ?? $result['irn'] ?? ''),
+            'ewb_no' => (string) ($latest['ewb_no'] ?? $latest['ewb'] ?? $result['ewb'] ?? ''),
+            'ewb_number' => (string) ($latest['ewb_no'] ?? $latest['ewb'] ?? $result['ewb'] ?? ''),
+            'ewb_date' => (string) ($latest['ewb_date'] ?? ''),
+            'ewb_valid_till' => (string) ($latest['ewb_valid_till'] ?? ''),
+            'ewb_status' => (string) ($latest['ewb_status'] ?? ''),
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
     }
 
     /* ===============================

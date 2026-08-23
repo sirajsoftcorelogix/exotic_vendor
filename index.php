@@ -1968,6 +1968,22 @@ switch ($page) {
                 $controller->preview();
                 break;
 
+            case 'einvoice-input':
+                $controller->einvoiceInput();
+                break;
+
+            case 'einvoice-submit':
+                $controller->einvoiceSubmit();
+                break;
+
+            case 'ewaybill-input':
+                $controller->ewaybillInput();
+                break;
+
+            case 'ewaybill-submit':
+                $controller->ewaybillSubmit();
+                break;
+
 
             case 'CreateAutoFromOrder':
                 $controller->create_auto_from_order();

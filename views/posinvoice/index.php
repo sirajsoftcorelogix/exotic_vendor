@@ -618,6 +618,28 @@ stroke-linejoin="round"/>
 </button>`;
 
                     const orderNum = (i.order_number || '').trim();
+                          const irnStatus = String(i.irn_status || '').trim().toLowerCase();
+                          const ewbStatus = String(i.ewb_status || '').trim().toLowerCase();
+                          const irnVal = String(i.irn || '').trim();
+                          const ewbVal = String(i.ewb || '').trim();
+
+                          const irnGenerated = irnStatus === 'generated' || irnVal !== '';
+                          const ewbGenerated = ewbStatus === 'generated' || ewbVal !== '';
+
+                        const einvoiceBtn = (!isCancelled && orderNum && !irnGenerated) ? `
+    <a href="?page=posinvoice&action=einvoice-input&invoice_id=${i.id}&order_number=${encodeURIComponent(orderNum)}"
+    class="inline-flex items-center text-blue-700 hover:text-blue-900 text-xs font-semibold"
+    title="Generate E-Invoice">
+     E-Invoice
+</a>` : '';
+
+                          const ewaybillBtn = (!isCancelled && orderNum && irnGenerated && !ewbGenerated) ? `
+    <a href="?page=posinvoice&action=ewaybill-input&invoice_id=${i.id}&order_number=${encodeURIComponent(orderNum)}"
+    class="inline-flex items-center text-emerald-700 hover:text-emerald-900 text-xs font-semibold"
+    title="Generate E-Way bill">
+     E-Way bill
+</a>` : '';
+
                     const returnBtn = (!isCancelled && orderNum) ? `
 <button type="button"
    data-sales-return-create
@@ -654,6 +676,8 @@ stroke-linejoin="round"/>
 
  <td class="p-3 flex flex-wrap gap-3 items-center">
 ${pdfLink}
+${einvoiceBtn}
+${ewaybillBtn}
 ${returnBtn}
 ${cancelBtn}
 ${deleteBtn}

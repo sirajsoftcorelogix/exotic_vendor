@@ -577,6 +577,10 @@ class POSInvoice
                 c.name AS customer_name,
                 o.state AS customer_billing_state,
                 COALESCE(cnt.name, o.country) AS customer_billing_country,
+                COALESCE(NULLIF(TRIM(dei.irn_status), ''), 'pending') AS irn_status,
+                COALESCE(NULLIF(TRIM(dei.ewb_status), ''), 'pending') AS ewb_status,
+                NULLIF(TRIM(COALESCE(dei.irn, '')), '') AS irn,
+                NULLIF(TRIM(COALESCE(dei.ewb_no, dei.ewb, '')), '') AS ewb,
                 COALESCE(ea.address_title, CONCAT('Warehouse #', i.warehouse_id)) AS warehouse_name,
                 ROUND({$payableSql}, 2) AS payable_amount,
                 {$discountSql} AS discount_amount,
@@ -587,6 +591,7 @@ class POSInvoice
             LEFT JOIN vp_customers c ON c.id = i.customer_id
             LEFT JOIN countries cnt ON CONVERT(UPPER(cnt.country_code) USING utf8mb4) COLLATE utf8mb4_unicode_ci
                 = CONVERT(UPPER(o.country) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+            LEFT JOIN vp_domestic_ewb_irn dei ON dei.vp_invoices_id = i.id
             LEFT JOIN exotic_address ea ON ea.id = i.warehouse_id
             WHERE i.pos_flag = 1
         ";
