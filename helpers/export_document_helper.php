@@ -306,7 +306,7 @@ function buildDefaultDocumentFormData(string $docCode, array $commonData, array 
             'sno' => $idx + 1,
             'item_code' => $it['item_code'] ?? $it['order_sku'] ?? '',
             'description' => $it['title'] ?? $it['order_title'] ?? 'Art & Craft Item',
-            'hsn_code' => $it['hsn_code'] ?? '',
+            'hsn_code' => $it['hsn_code'] ?? $it['hsn'] ?? $it['hscode'] ?? '',
             'quantity' => $qty,
             'unit_price' => $rate,
             'amount' => $amount
