@@ -181,14 +181,9 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Exporter / Shipper Card -->
                 <div class="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-3">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-sm font-bold text-gray-800 flex items-center gap-1.5">
-                            <i class="fas fa-building text-blue-600"></i> Exporter (Shipper) Details
-                        </h3>
-                        <a href="<?= base_url('?page=globals&action=settings') ?>" target="_blank" class="text-[11px] text-blue-600 hover:text-blue-800 hover:underline font-normal inline-flex items-center gap-1" title="Edit master exporter details in Global Settings">
-                            <i class="fas fa-cog text-[10px]"></i> Edit in Settings
-                        </a>
-                    </div>
+                    <h3 class="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+                        <i class="fas fa-building text-blue-600"></i> Exporter (Shipper) Details
+                    </h3>
                     <div class="space-y-2 text-xs">
                         <div>
                             <label class="block text-gray-600 font-medium mb-0.5">Exporter Name</label>
