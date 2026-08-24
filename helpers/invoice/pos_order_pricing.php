@@ -7,19 +7,7 @@
 
 function pos_order_inclusive_unit_price(array $row, string $kind = 'disc'): float
 {
-    if ($kind === 'list') {
-        $unit = (float)($row['itemprice'] ?? 0);
-        if ($unit <= 0) {
-            $unit = (float)($row['finalprice'] ?? 0);
-        }
-
-        return max(0.0, $unit);
-    }
-
-    $unit = (float)($row['finalprice'] ?? 0);
-    if ($unit <= 0) {
-        $unit = (float)($row['itemprice'] ?? 0);
-    }
+    $unit = (float)($row['itemprice'] ?? 0);
 
     return max(0.0, $unit);
 }
