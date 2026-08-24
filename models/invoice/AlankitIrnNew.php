@@ -229,52 +229,81 @@ return base64_encode($encryptedData);
      * create seperate function for sending irn generation curl request to alankit api
      */
     function generateIrn($data, $accessToken){
-        $url = $this->baseUrl . self::IRN_GENERATE_ENDPOINT;
-        $ch = curl_init();
+        // $url = $this->baseUrl . self::IRN_GENERATE_ENDPOINT;
+        // $ch = curl_init();
         
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-        $headers = [
-            'Content-Type: application/json',
-            'Accept: application/json',
+        // curl_setopt($ch, CURLOPT_URL, $url);
+        // curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        // curl_setopt($ch, CURLOPT_ENCODING, '');
+        // curl_setopt($ch, CURLOPT_MAXREDIRS, 10);
+        // curl_setopt($ch, CURLOPT_TIMEOUT, 0);
+        // curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        // //curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        // //curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        // curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        // curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+       
+        // $headers = [
+        //     'Content-Type: application/json',
+        //     'Accept: application/json',
+        //     'Gstin: 07AGAPA5363L002',
+        //     'user_name: AL001',
+        //     'Ocp-Apim-Subscription-Key: AL6x9c9S1b7g8h9S7C',
+        //     'AuthToken :' . $accessToken
+        // ];
+        // curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        
+        // // Set request method and data
+        // //curl_setopt($ch, CURLOPT_POST, true);
+        // curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+        // curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        
+        // $response = curl_exec($ch);
+        // $curlError = curl_error($ch);
+        // $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        // curl_close($ch);
+        
+        // if ($curlError) {
+        //     error_log("Alankit API cURL Error ($httpCode): $curlError for URL: $url");
+        //     return [
+        //         'status' => false,
+        //         'message' => 'cURL Error: ' . $curlError,
+        //         'http_code' => $httpCode
+        //     ];
+        // }
+
+        $curl = curl_init();
+        curl_setopt_array($curl, array(
+        CURLOPT_URL => $this->baseUrl . self::IRN_GENERATE_ENDPOINT,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => '',
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 0,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => 'POST',
+        CURLOPT_POSTFIELDS => json_encode($data),
+        CURLOPT_HTTPHEADER => array(
+            'Ocp-Apim-Subscription-Key: AL6x9c9S1b7g8h9S7C',
             'Gstin: 07AGAPA5363L002',
             'user_name: AL001',
-            'Ocp-Apim-Subscription-Key: AL6x9c9S1b7g8h9S7C',
-            'AuthToken :' . $accessToken
-        ];
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        
-        // Set request method and data
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        
-        $response = curl_exec($ch);
-        $curlError = curl_error($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        
-        if ($curlError) {
-            error_log("Alankit API cURL Error ($httpCode): $curlError for URL: $url");
-            return [
-                'status' => false,
-                'message' => 'cURL Error: ' . $curlError,
-                'http_code' => $httpCode
-            ];
-        }
+            'AuthToken: '.$accessToken,
+            'Content-Type: application/json'
+            //'Cookie: sess_map=fqcuxerztqqzbryduezaywetarayrduvcaebxuzfaubacufxccubxurxbdttrwqvrxbzcfrszstsquwezbeswaueqvbtzzxsueufyzdsqyacfefubucaqeqaeduuvyuaydbvbrsryxqubruvydafdrsxveqecbdcdyaxvawuuwaayadq'
+        ),
+        ));
+
+        $response = curl_exec($curl);
         $decoded = json_decode($response, true);
         
-        if ($httpCode >= 400) {
-            error_log("Alankit API HTTP Error ($httpCode) for URL: $url. Response: " . substr($response, 0, 500));
-            return [
-                'status' => false,
-                'message' => 'HTTP Error ' . $httpCode,
-                'data' => $decoded
-            ];
-        }
+        // if ($httpCode >= 400) {
+        //     error_log("Alankit API HTTP Error ($httpCode) for URL: $url. Response: " . substr($response, 0, 500));
+        //     return [
+        //         'status' => false,
+        //         'message' => 'HTTP Error ' . $httpCode,
+        //         'data' => $decoded
+        //     ];
+        // }
         
         return $decoded;
 

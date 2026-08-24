@@ -14,6 +14,18 @@ $record = $existing_record ?? [];
 $elig = $eligibility ?? [];
 
 $orderNumber = $order_number ?? '';
+$submitUrl = trim((string)($submit_url ?? ''));
+if ($submitUrl === '') {
+  $submitUrl = 'index.php?page=pos_register&action=einvoice-submit';
+}
+$backUrl = trim((string)($back_url ?? ''));
+if ($backUrl === '') {
+  $backUrl = 'index.php?page=pos_register&action=checkout-receipt&order_number=' . rawurlencode($orderNumber);
+}
+$ewaybillInputUrl = trim((string)($ewaybill_input_url ?? ''));
+if ($ewaybillInputUrl === '') {
+  $ewaybillInputUrl = 'index.php?page=pos_register&action=ewaybill-input&order_number=' . rawurlencode($orderNumber);
+}
 $isExport = !empty($elig['is_export']);
 $isB2b = !empty($elig['is_b2b']);
 $scenario = $elig['scenario'] ?? ($isExport ? 'Export' : ($isB2b ? 'Domestic B2B' : 'B2C'));
@@ -33,15 +45,21 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    body { font-family: 'Inter', system-ui, sans-serif; }
+    html, body { min-height: 100%; height: auto; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen pb-12">
-  <div class="max-w-5xl mx-auto px-4 py-8">
+  <div class="max-w-5xl mx-auto px-4 pt-8 pb-28 overflow-y-auto">
     
     <!-- Top Nav / Back -->
     <div class="mb-6 flex items-center justify-between">
-      <a href="index.php?page=pos_register&action=checkout-receipt&order_number=<?= rawurlencode($orderNumber) ?>" class="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition">
+      <a href="<?= $h($backUrl) ?>" class="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
         <span>Back to Payment Receipt</span>
       </a>
@@ -86,11 +104,11 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
               <?php if (!empty($existingAckDate)): ?><div><span class="font-sans font-semibold text-emerald-700">Ack Date:</span> <?= $h($existingAckDate) ?></div><?php endif; ?>
             </div>
             <div class="mt-4 flex flex-wrap gap-3">
-              <a href="index.php?page=pos_register&action=ewaybill-input&order_number=<?= rawurlencode($orderNumber) ?>" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-700 text-white font-semibold text-xs hover:bg-emerald-800 transition">
+              <a href="<?= $h($ewaybillInputUrl) ?>" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-700 text-white font-semibold text-xs hover:bg-emerald-800 transition">
                 <span>Proceed to Generate E-Way Bill</span>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
               </a>
-              <a href="index.php?page=pos_register&action=checkout-receipt&order_number=<?= rawurlencode($orderNumber) ?>" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-emerald-300 text-emerald-800 font-semibold text-xs hover:bg-emerald-50 transition">
+              <a href="<?= $h($backUrl) ?>" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-emerald-300 text-emerald-800 font-semibold text-xs hover:bg-emerald-50 transition">
                 <span>Back to Payment Receipt</span>
               </a>
             </div>
@@ -103,7 +121,7 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
     <div id="resultContainer" class="hidden mb-6"></div>
 
     <!-- Main Form -->
-    <form id="einvoiceForm" action="index.php?page=pos_register&action=einvoice-submit" method="POST" class="space-y-6">
+    <form id="einvoiceForm" action="<?= $h($submitUrl) ?>" method="POST" class="space-y-6">
       <input type="hidden" name="order_number" value="<?= $h($orderNumber) ?>" />
       <input type="hidden" name="invoice_id" value="<?= (int)($invoiceData['id'] ?? 0) ?>" />
 
@@ -325,7 +343,7 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
 
       <!-- Action Footer -->
       <div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-200">
-        <a href="index.php?page=pos_register&action=checkout-receipt&order_number=<?= rawurlencode($orderNumber) ?>" class="px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold text-xs hover:bg-slate-100 transition">
+        <a href="<?= $h($backUrl) ?>" class="px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold text-xs hover:bg-slate-100 transition">
           Cancel &amp; Return to Receipt
         </a>
         <button type="submit" id="submitBtn" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-600 text-white font-bold text-sm shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition">
@@ -337,6 +355,11 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
     </form>
   </div>
 
+  <!-- <div class="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur-sm">
+    <!-- floating submit removed -->
+    <!--  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+  </div> -->
+
   <script>
     document.getElementById('einvoiceForm').addEventListener('submit', async function(e) {
       e.preventDefault();
@@ -344,6 +367,14 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
       const submitBtn = document.getElementById('submitBtn');
       const submitBtnText = document.getElementById('submitBtnText');
       const resultContainer = document.getElementById('resultContainer');
+      const escapeResultHtml = function(value) {
+        return String(value ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      };
 
       submitBtn.disabled = true;
       submitBtnText.textContent = 'Generating E-Invoice via Alankit API...';
@@ -377,7 +408,7 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
                     <span>Proceed to Generate E-Way Bill</span>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                   </a>
-                  <a href="index.php?page=pos_register&action=checkout-receipt&order_number=${encodeURIComponent(form.order_number.value)}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-emerald-300 text-emerald-800 font-semibold text-xs hover:bg-emerald-50 transition">
+                  <a href="<?= $h($backUrl) ?>" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-emerald-300 text-emerald-800 font-semibold text-xs hover:bg-emerald-50 transition">
                     <span>Return to Payment Receipt</span>
                   </a>
                 </div>
@@ -395,7 +426,8 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
               </div>
               <div>
                 <h3 class="text-base font-bold text-rose-900">E-Invoice Generation Failed</h3>
-                <p class="text-xs text-rose-700 mt-1">${data.message || 'Error occurred while contacting Alankit API.'}</p>
+                <p class="text-xs text-rose-700 mt-1">${escapeResultHtml(data.message || 'Error occurred while contacting Alankit API.')}</p>
+                ${data.error_details ? `<div class="mt-3 rounded-lg border border-rose-200 bg-white/70 p-3"><div class="text-xs font-semibold text-rose-800">Alankit ErrorDetails</div><pre class="mt-1 whitespace-pre-wrap break-words text-xs text-rose-900">${escapeResultHtml(data.error_details)}</pre></div>` : ''}
               </div>
             </div>
           `;
