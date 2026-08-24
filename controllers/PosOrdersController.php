@@ -416,6 +416,10 @@ class PosOrdersController
                 );
             }
             $addressdata[] = $ordersModel->insertAddressInfo($order, $customerdata['customer_id'] ?? 0);
+            $storeOrderNum = (string)($order['orderid'] ?? '');
+            if ($storeOrderNum !== '' && !$ordersModel->hasOrderInfo($storeOrderNum)) {
+                $ordersModel->autoCreateOrderInfoFromVpOrders($storeOrderNum);
+            }
             //print_array($addressdata);
             //print_array($order);exit;
         }

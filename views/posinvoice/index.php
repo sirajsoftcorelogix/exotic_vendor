@@ -594,9 +594,38 @@ No invoices
                         ? `<span class="line-through text-gray-500">${i.invoice_number ?? ''}</span>`
                         : `<span class="font-semibold">${i.invoice_number ?? ''}</span>`;
 
+                    const orderNum = (i.order_number || '').trim();
+                    const irnStatus = String(i.irn_status || '').trim().toLowerCase();
+                    const ewbStatus = String(i.ewb_status || '').trim().toLowerCase();
+                    const irnVal = String(i.irn || '').trim();
+                    const ewbVal = String(i.ewb || '').trim();
+
+                    const irnGenerated = irnStatus === 'generated' || irnVal !== '';
+                    const ewbGenerated = ewbStatus === 'generated' || ewbVal !== '';
+
                     const menuItems = [];
 
                     if (!isCancelled) {
+                        if (orderNum && !irnGenerated) {
+                            menuItems.push(`
+<a href="?page=posinvoice&action=einvoice-input&invoice_id=${i.id}&order_number=${encodeURIComponent(orderNum)}"
+   class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 hover:text-blue-900 rounded-md transition"
+   title="Generate E-Invoice">
+    <i class="fas fa-file-invoice text-blue-600 w-4 text-center" aria-hidden="true"></i>
+    <span>E-Invoice</span>
+</a>`);
+                        }
+
+                        if (orderNum && irnGenerated && !ewbGenerated) {
+                            menuItems.push(`
+<a href="?page=posinvoice&action=ewaybill-input&invoice_id=${i.id}&order_number=${encodeURIComponent(orderNum)}"
+   class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 rounded-md transition"
+   title="Generate E-Way bill">
+    <i class="fas fa-truck-loading text-emerald-600 w-4 text-center" aria-hidden="true"></i>
+    <span>E-Way bill</span>
+</a>`);
+                        }
+
                         menuItems.push(`
 <a href="/?page=posinvoice&action=generate_pdf&invoice_id=${i.id}"
    target="_blank"
@@ -624,7 +653,6 @@ No invoices
     <span>Dispatch Details</span>
 </button>`);
 
-                        const orderNum = (i.order_number || '').trim();
                         if (orderNum) {
                             menuItems.push(`
 <button type="button"
