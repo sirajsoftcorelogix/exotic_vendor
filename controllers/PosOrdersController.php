@@ -144,9 +144,9 @@ class PosOrdersController
         }        // Set your date range (example: last 7 days)
 
         $from_date = strtotime('-1 days');
-        //echo "<br>";
         if ($lastLog && !empty($lastLog['max_ordered_time'])) {
-            $from_date = $lastLog['max_ordered_time'];
+            // 1-hour rolling lookback buffer (3600 seconds) to prevent skipping orders
+            $from_date = max(strtotime('-7 days'), (int)$lastLog['max_ordered_time'] - 3600);
         }
         $to_date = time();
         //$from_date = strtotime(date('12-08-2025 00:00:00')); // Example fixed date
@@ -394,11 +394,26 @@ class PosOrdersController
                 );
             }
             $addressdata[] = $ordersModel->insertAddressInfo($order, $customerdata['customer_id'] ?? 0);
+            $storeOrderNum = (string)($order['orderid'] ?? '');
+            if ($storeOrderNum !== '' && !$ordersModel->hasOrderInfo($storeOrderNum)) {
+                $ordersModel->autoCreateOrderInfoFromVpOrders($storeOrderNum);
+            }
             //print_array($addressdata);
             //print_array($order);exit;
         }
         //print_array($pdata);
         //print_r($result);
+        $isSingleOrderImport = !empty($_GET['orderid']);
+        $maxOrderedTimeForLog = (int)($lastLog['max_ordered_time'] ?? $from_date);
+        if (!$isSingleOrderImport) {
+            foreach ($orders['orders'] ?? [] as $ord) {
+                $pt = (int)($ord['processed_time'] ?? 0);
+                if ($pt > $maxOrderedTimeForLog) {
+                    $maxOrderedTimeForLog = $pt;
+                }
+            }
+        }
+
         //update log end time and imported count
         if ($log_id > 0) {
             $log_update_data = [
@@ -407,7 +422,7 @@ class PosOrdersController
                 'total_orders' => $totalorder,
                 'error' => isset($error) ? $error : '',
                 'log_details' => NULL, //json_encode($result),
-                'max_ordered_time' => $order['processed_time'] ?? '',
+                'max_ordered_time' => $maxOrderedTimeForLog,
                 'from_date' => $from_date,
                 'to_date' => $to_date,
                 'add_product_log' => NULL, //json_encode($pdata)

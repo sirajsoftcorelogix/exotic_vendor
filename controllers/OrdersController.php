@@ -194,9 +194,9 @@ class OrdersController
         }        // Set your date range (example: last 7 days)
 
         $from_date = strtotime('-1 days');
-        //echo "<br>";
         if ($lastLog && !empty($lastLog['max_ordered_time'])) {
-            $from_date = $lastLog['max_ordered_time'];
+            // 1-hour rolling lookback buffer (3600 seconds) to prevent skipping orders
+            $from_date = max(strtotime('-7 days'), (int)$lastLog['max_ordered_time'] - 3600);
         }
         $to_date = time();
         //$from_date = strtotime(date('12-08-2025 00:00:00')); // Example fixed date
@@ -287,11 +287,14 @@ class OrdersController
         $pdata = $batch['pdata'];
         $addressdata = $batch['addressdata'];
 
-        $maxOrderedTimeForLog = (int)$to_date;
-        foreach ($orders['orders'] ?? [] as $ord) {
-            $pt = (int)($ord['processed_time'] ?? 0);
-            if ($pt > $maxOrderedTimeForLog) {
-                $maxOrderedTimeForLog = $pt;
+        $isSingleOrderImport = !empty($_GET['orderid']);
+        $maxOrderedTimeForLog = (int)($lastLog['max_ordered_time'] ?? $from_date);
+        if (!$isSingleOrderImport) {
+            foreach ($orders['orders'] ?? [] as $ord) {
+                $pt = (int)($ord['processed_time'] ?? 0);
+                if ($pt > $maxOrderedTimeForLog) {
+                    $maxOrderedTimeForLog = $pt;
+                }
             }
         }
         //print_array($pdata);
@@ -514,6 +517,10 @@ class OrdersController
             } catch (\Throwable $e) {
                 error_log('[order import insertAddressInfo] ' . $e->getMessage());
                 $addressdata[] = ['success' => false, 'message' => $e->getMessage()];
+            }
+
+            if (!$ordersModel->hasOrderInfo($storeOrderNumber)) {
+                $ordersModel->autoCreateOrderInfoFromVpOrders($storeOrderNumber);
             }
         }
 
