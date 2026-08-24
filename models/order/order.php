@@ -2367,24 +2367,29 @@ class Order
             $types         .= 's'; // string
         }
         //payment_mode add / auto-fill
-        if (!in_array('payment_mode', $insertCols, true)) {
-            $payTypeForMode = $data['payment_type'] ?? ($addressInfo['payment_type'] ?? null);
-            $orderNoForMode = (string)($data['orderid'] ?? '');
-            $resolvedMode = null;
+        $payTypeForMode = $data['payment_type'] ?? ($addressInfo['payment_type'] ?? null);
+        $givenModeForMode = $data['payment_mode'] ?? ($addressInfo['payment_mode'] ?? null);
+        $orderNoForMode = (string)($data['orderid'] ?? '');
 
-            if (isset($data['payment_mode'])) {
-                $resolvedMode = $data['payment_mode'];
-            } elseif (isset($addressInfo['payment_mode'])) {
-                $resolvedMode = $addressInfo['payment_mode'];
-            } elseif ($payTypeForMode !== null && $this->db instanceof mysqli) {
-                $resolvedMode = pos_payment_resolve_order_payment_mode($this->db, $orderNoForMode, (string)$payTypeForMode);
-            }
-
-            if ($resolvedMode !== null) {
-                $insertCols[]   = 'payment_mode';
-                $placeholders[] = '?';
-                $values[]       = $resolvedMode;
-                $types         .= 's';
+        if ($this->db instanceof mysqli && function_exists('pos_payment_resolve_order_payment_mode')) {
+            $resolvedMode = pos_payment_resolve_order_payment_mode(
+                $this->db,
+                $orderNoForMode,
+                (string)$payTypeForMode,
+                (string)$givenModeForMode
+            );
+            if ($resolvedMode !== null && $resolvedMode !== '') {
+                if (in_array('payment_mode', $insertCols, true)) {
+                    $pmKey = array_search('payment_mode', $insertCols, true);
+                    if ($pmKey !== false) {
+                        $values[$pmKey] = $resolvedMode;
+                    }
+                } else {
+                    $insertCols[]   = 'payment_mode';
+                    $placeholders[] = '?';
+                    $values[]       = $resolvedMode;
+                    $types         .= 's';
+                }
             }
         }
         //coupon add

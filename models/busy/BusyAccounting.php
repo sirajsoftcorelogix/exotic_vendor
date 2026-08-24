@@ -602,19 +602,10 @@ class BusyAccounting
 
         // Fetch line items with fast indexed subqueries
         $itemsSql = "SELECT it.*, 
-                            COALESCE(
-                                (SELECT CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                 FROM vp_products p 
-                                 INNER JOIN account_group ag_p ON (
-                                     ag_p.id = p.accounts_group 
-                                     OR CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                 ) 
-                                 WHERE p.id = it.product_id AND ag_p.account_group_name IS NOT NULL AND ag_p.account_group_name <> '' LIMIT 1),
-                                (SELECT CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM vp_products p WHERE p.id = it.product_id AND p.accounts_group IS NOT NULL AND p.accounts_group <> '' LIMIT 1),
-                                (SELECT CONVERT(ag.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM account_group ag WHERE CONVERT(ag.item_group USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(it.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci AND ag.account_group_name IS NOT NULL AND ag.account_group_name <> '' LIMIT 1),
-                                NULLIF(CONVERT(it.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
-                                CONVERT(it.item_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                            ) AS account_group_name 
+                            COALESCE(NULLIF((SELECT CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM vp_products p WHERE p.id = it.product_id LIMIT 1), ''), it.item_code) AS sku,
+                            (SELECT CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci 
+                             FROM vp_products p 
+                             WHERE p.id = it.product_id LIMIT 1) AS account_group_name 
                      FROM vp_invoice_items it 
                      WHERE it.invoice_id = ?";
 
@@ -641,6 +632,8 @@ class BusyAccounting
                 $payTypeFormatted = 'YES2971';
             } elseif (strtolower($payType) === 'cod') {
                 $payTypeFormatted = 'COD';
+            } elseif (strtolower($payType) === 'pos' || strtolower($payType) === 'pos_machine' || strtolower($payType) === 'pos machine') {
+                $payTypeFormatted = 'POS';
             } else {
                 $payTypeFormatted = ucwords(str_replace('_', ' ', $payType));
             }
@@ -701,20 +694,10 @@ class BusyAccounting
 
         // Fetch return line items with fast indexed subqueries
         $itemsSql = "SELECT sri.*, ii.item_name, ii.hsn, ii.unit_price, ii.tax_rate, ii.groupname,
-                            COALESCE(
-                                (SELECT CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci 
-                                 FROM vp_products p 
-                                 INNER JOIN account_group ag_p ON (
-                                     ag_p.id = p.accounts_group 
-                                     OR CONVERT(ag_p.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                                 ) 
-                                 WHERE p.id = COALESCE(sri.product_id, ii.product_id) AND ag_p.account_group_name IS NOT NULL AND ag_p.account_group_name <> '' LIMIT 1),
-                                (SELECT CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM vp_products p WHERE p.id = COALESCE(sri.product_id, ii.product_id) AND p.accounts_group IS NOT NULL AND p.accounts_group <> '' LIMIT 1),
-                                (SELECT CONVERT(ag.account_group_name USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM account_group ag WHERE CONVERT(ag.item_group USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(ii.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci AND ag.account_group_name IS NOT NULL AND ag.account_group_name <> '' LIMIT 1),
-                                NULLIF(CONVERT(ii.groupname USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
-                                NULLIF(CONVERT(sri.item_code USING utf8mb4) COLLATE utf8mb4_unicode_ci, ''),
-                                CONVERT(ii.item_name USING utf8mb4) COLLATE utf8mb4_unicode_ci
-                            ) AS account_group_name 
+                            COALESCE(NULLIF((SELECT CONVERT(p.sku USING utf8mb4) COLLATE utf8mb4_unicode_ci FROM vp_products p WHERE p.id = COALESCE(sri.product_id, ii.product_id) LIMIT 1), ''), sri.item_code, ii.item_code) AS sku,
+                            (SELECT CONVERT(p.accounts_group USING utf8mb4) COLLATE utf8mb4_unicode_ci 
+                             FROM vp_products p 
+                             WHERE p.id = COALESCE(sri.product_id, ii.product_id) LIMIT 1) AS account_group_name 
                      FROM vp_sales_return_items sri 
                      LEFT JOIN vp_invoice_items ii ON sri.invoice_item_id = ii.id 
                      WHERE sri.sales_return_id = ?";
@@ -742,6 +725,8 @@ class BusyAccounting
                 $payTypeFormatted = 'YES2971';
             } elseif (strtolower($payType) === 'cod') {
                 $payTypeFormatted = 'COD';
+            } elseif (strtolower($payType) === 'pos' || strtolower($payType) === 'pos_machine' || strtolower($payType) === 'pos machine') {
+                $payTypeFormatted = 'POS';
             } else {
                 $payTypeFormatted = ucwords(str_replace('_', ' ', $payType));
             }

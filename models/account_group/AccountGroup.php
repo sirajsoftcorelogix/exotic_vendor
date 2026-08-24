@@ -209,6 +209,39 @@ class AccountGroup
     }
 
     /**
+     * Get all active account groups without item_group filtering.
+     *
+     * @return list<array{id:int,account_group_name:string,item_group:string,is_active:int}>
+     */
+    public function getAllActiveAccountGroups(): array
+    {
+        $stmt = $this->conn->prepare(
+            'SELECT id, account_group_name, item_group, is_active 
+             FROM account_group 
+             WHERE is_active = 1 
+             ORDER BY COALESCE(NULLIF(TRIM(item_group), \'\'), \'ZZZZ\') ASC, account_group_name ASC'
+        );
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+
+        return $rows;
+    }
+
+    /**
+     * Active account groups matching an item group string (case-insensitive).
+     *
+     * @return list<array{id:int,account_group_name:string,item_group:string,is_active:int}>
+     */
+    public function getActiveAccountGroupsForItemGroup(string $itemGroup): array
+    {
+        return $this->getAllActiveAccountGroups();
+    }
+
+    /**
      * Active account groups for an inbound group code (category.category, e.g. -4).
      *
      * @return list<array{id:int,account_group_name:string}>

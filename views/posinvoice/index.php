@@ -208,7 +208,7 @@
             </button>
         </div>
 
-        <div class="bg-white rounded-xl border overflow-hidden">
+        <div class="bg-white rounded-xl border overflow-x-auto min-h-[320px]">
 
             <table class="w-full text-sm">
 
@@ -226,7 +226,7 @@
                         <th class="p-3 text-left">Paid</th>
                         <th class="p-3 text-left">Pending</th>
                         <th class="p-3 text-left">Status</th>
-                        <th class="p-3 text-left">Action</th>
+                        <th class="p-3 text-center">Action</th>
                     </tr>
                 </thead>
 
@@ -594,67 +594,87 @@ No invoices
                         ? `<span class="line-through text-gray-500">${i.invoice_number ?? ''}</span>`
                         : `<span class="font-semibold">${i.invoice_number ?? ''}</span>`;
 
-                    const pdfLink = isCancelled ? '' : `
+                    const menuItems = [];
+
+                    if (!isCancelled) {
+                        menuItems.push(`
 <a href="/?page=posinvoice&action=generate_pdf&invoice_id=${i.id}"
-target="_blank"
-class="inline-flex items-center text-blue-600 hover:text-blue-800 font-semibold text-xs"
-title="Download PDF">
+   target="_blank"
+   class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 rounded-md transition"
+   title="Download PDF">
+    <i class="fas fa-file-pdf text-red-500 w-4 text-center" aria-hidden="true"></i>
+    <span>Download PDF</span>
+</a>`);
 
-<svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-<path d="M2.62925 10.3889C1.64271 9.68768 1 8.54159 1 7.24672C1 5.47783 2.3 3.84375 4.25 3.52778C4.86168 2.07349 6.30934 1 7.99783 1C10.1607 1 11.9284 2.67737 12.05 4.79167C13.1978 5.29352 14 6.52522 14 7.85887C14 8.98648 13.4266 9.98004 12.5556 10.5634M7.5 14V6.77778M7.5 14L5.33333 11.8333M7.5 14L9.66667 11.8333"
-stroke="currentColor"
-stroke-width="1.5"
-stroke-linecap="round"
-stroke-linejoin="round"/>
-</svg>
+                        menuItems.push(`
+<a href="index.php?page=export_documents&query=${encodeURIComponent(i.invoice_number || i.id)}"
+   target="_blank"
+   class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-600 rounded-md transition"
+   title="Generate Export Documents">
+    <i class="fas fa-file-export text-blue-500 w-4 text-center" aria-hidden="true"></i>
+    <span>Export Docs</span>
+</a>`);
 
-</a>`;
+                        menuItems.push(`
+<button type="button"
+   onclick="openCommonDispatchModal({ invoice_id: ${i.id}, invoice_number: '${escapeHtml(i.invoice_number || '')}', order_number: '${escapeHtml(i.order_number || '')}' })"
+   class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 hover:text-purple-600 text-left transition border-0 bg-transparent cursor-pointer rounded-md"
+   title="Add or edit dispatch details">
+    <i class="fas fa-truck text-purple-600 w-4 text-center" aria-hidden="true"></i>
+    <span>Dispatch Details</span>
+</button>`);
 
-                    const cancelBtn = isCancelled ? '' : `
-<button type="button" onclick="cancelPosInvoice(${i.id})"
-        class="inline-flex items-center text-amber-700 hover:text-amber-900 text-xs font-semibold"
-        title="Cancel invoice">
-    Cancel
-</button>`;
-
-                    const orderNum = (i.order_number || '').trim();
-                          const irnStatus = String(i.irn_status || '').trim().toLowerCase();
-                          const ewbStatus = String(i.ewb_status || '').trim().toLowerCase();
-                          const irnVal = String(i.irn || '').trim();
-                          const ewbVal = String(i.ewb || '').trim();
-
-                          const irnGenerated = irnStatus === 'generated' || irnVal !== '';
-                          const ewbGenerated = ewbStatus === 'generated' || ewbVal !== '';
-
-                        const einvoiceBtn = (!isCancelled && orderNum && !irnGenerated) ? `
-    <a href="?page=posinvoice&action=einvoice-input&invoice_id=${i.id}&order_number=${encodeURIComponent(orderNum)}"
-    class="inline-flex items-center text-blue-700 hover:text-blue-900 text-xs font-semibold"
-    title="Generate E-Invoice">
-     E-Invoice
-</a>` : '';
-
-                          const ewaybillBtn = (!isCancelled && orderNum && irnGenerated && !ewbGenerated) ? `
-    <a href="?page=posinvoice&action=ewaybill-input&invoice_id=${i.id}&order_number=${encodeURIComponent(orderNum)}"
-    class="inline-flex items-center text-emerald-700 hover:text-emerald-900 text-xs font-semibold"
-    title="Generate E-Way bill">
-     E-Way bill
-</a>` : '';
-
-                    const returnBtn = (!isCancelled && orderNum) ? `
+                        const orderNum = (i.order_number || '').trim();
+                        if (orderNum) {
+                            menuItems.push(`
 <button type="button"
    data-sales-return-create
    data-sales-return-url="?page=sales_returns&action=create&order_number=${encodeURIComponent(orderNum)}&invoice_id=${i.id}"
    data-order-number="${escapeHtml(orderNum)}"
-   class="inline-flex items-center text-orange-700 hover:text-orange-900 text-xs font-semibold border-0 bg-transparent cursor-pointer p-0">
-    Return
-</button>` : '';
+   class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 hover:text-orange-600 text-left transition border-0 bg-transparent cursor-pointer rounded-md"
+   title="Create Sales Return">
+    <i class="fas fa-rotate-left text-orange-500 w-4 text-center" aria-hidden="true"></i>
+    <span>Return</span>
+</button>`);
+                        }
 
-                    const deleteBtn = isCancelled ? '' : `
-  <button onclick="openDeleteModal(${i.id}, '?page=posinvoice&action=delete', 'Delete this invoice?')"
-        class="flex items-center gap-1 text-red-600 hover:text-red-800 text-xs font-semibold"
-        title="Delete invoice">
-        <i class="fa-solid fa-trash"></i>
-    </button>`;
+                        menuItems.push(`
+<button type="button"
+   onclick="cancelPosInvoice(${i.id})"
+   class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-50 text-left transition border-0 bg-transparent cursor-pointer rounded-md"
+   title="Cancel invoice">
+    <i class="fas fa-ban text-amber-600 w-4 text-center" aria-hidden="true"></i>
+    <span>Cancel</span>
+</button>`);
+
+                        menuItems.push(`
+<button type="button"
+   onclick="openDeleteModal(${i.id}, '?page=posinvoice&action=delete', 'Delete this invoice?')"
+   class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 text-left transition border-0 bg-transparent cursor-pointer rounded-md"
+   title="Delete invoice">
+    <i class="fas fa-trash-alt text-red-500 w-4 text-center" aria-hidden="true"></i>
+    <span>Delete</span>
+</button>`);
+                    }
+
+                    let actionCell = '';
+                    if (menuItems.length > 0) {
+                        actionCell = `
+<div class="relative inline-block text-left posinvoice-row-menu">
+    <button type="button"
+            class="posinvoice-row-menu-btn inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition focus:outline-none focus:ring-2 focus:ring-orange-500"
+            aria-haspopup="true"
+            aria-expanded="false"
+            title="Invoice actions">
+        <i class="fas fa-ellipsis-v text-xs" aria-hidden="true"></i>
+    </button>
+    <div class="posinvoice-row-menu-panel hidden absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-30 p-1 text-left">
+        ${menuItems.join('')}
+    </div>
+</div>`;
+                    } else {
+                        actionCell = `<span class="text-gray-400 text-xs">—</span>`;
+                    }
 
                     html += `
 <tr class="border-t hover:bg-gray-50">
@@ -674,14 +694,7 @@ stroke-linejoin="round"/>
 
 <td class="p-3">${badge}</td>
 
- <td class="p-3 flex flex-wrap gap-3 items-center">
-${pdfLink}
-${einvoiceBtn}
-${ewaybillBtn}
-${returnBtn}
-${cancelBtn}
-${deleteBtn}
-</td>
+<td class="p-3 text-center align-middle whitespace-nowrap">${actionCell}</td>
 
 </tr>`;
                 });
@@ -702,6 +715,27 @@ Could not load invoices. Please try again.
                 }
             });
     }
+
+    function togglePosInvoiceMenu(button, event) {
+        if (event) {
+            event.stopPropagation();
+        }
+        if (!button) return;
+        const menu = button.nextElementSibling;
+        if (!menu) return;
+        document.querySelectorAll('.pos-invoice-menu').forEach(m => {
+            if (m !== menu) m.classList.add('hidden');
+        });
+        menu.classList.toggle('hidden');
+    }
+
+    document.addEventListener("click", function(e) {
+        if (!e.target.closest(".pos-invoice-action-cell")) {
+            document.querySelectorAll(".pos-invoice-menu").forEach(menu => {
+                menu.classList.add("hidden");
+            });
+        }
+    });
 
     function cancelPosInvoice(invoiceId) {
         const confirmFn = (typeof customConfirm === 'function')
@@ -835,4 +869,51 @@ Could not load invoices. Please try again.
 
             });
     }
+    
+    (function() {
+        function closeAllPosInvoiceRowMenus(except) {
+            document.querySelectorAll('.posinvoice-row-menu-panel').forEach(function(panel) {
+                if (panel !== except) {
+                    panel.classList.add('hidden');
+                    var btn = panel.parentElement && panel.parentElement.querySelector('.posinvoice-row-menu-btn');
+                    if (btn) {
+                        btn.setAttribute('aria-expanded', 'false');
+                    }
+                }
+            });
+        }
+
+        document.addEventListener('click', function(e) {
+            var menuBtn = e.target.closest('.posinvoice-row-menu-btn');
+            if (menuBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                var panel = menuBtn.parentElement && menuBtn.parentElement.querySelector('.posinvoice-row-menu-panel');
+                if (!panel) return;
+                var willOpen = panel.classList.contains('hidden');
+                closeAllPosInvoiceRowMenus(willOpen ? panel : null);
+                panel.classList.toggle('hidden', !willOpen);
+                menuBtn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                return;
+            }
+
+            var menuItem = e.target.closest('.posinvoice-row-menu-panel a, .posinvoice-row-menu-panel button');
+            if (menuItem) {
+                closeAllPosInvoiceRowMenus(null);
+                return;
+            }
+
+            if (!e.target.closest('.posinvoice-row-menu')) {
+                closeAllPosInvoiceRowMenus(null);
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeAllPosInvoiceRowMenus(null);
+            }
+        });
+    })();
 </script>
+
+<?php require_once __DIR__ . '/../shared/partials/dispatch_details_modal.php'; ?>

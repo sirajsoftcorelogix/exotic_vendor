@@ -647,6 +647,38 @@ switch ($page) {
         }
         break;
 
+    case 'export_documents':
+        require_once 'controllers/ExportDocumentsController.php';
+        $controller = new ExportDocumentsController($conn);
+        switch ($action) {
+            case 'list':
+            case 'index':
+                $controller->index();
+                break;
+            case 'autocomplete':
+                $controller->autocomplete();
+                break;
+            case 'fetch_invoice':
+                $controller->fetch_invoice();
+                break;
+            case 'start_session':
+                $controller->start_session();
+                break;
+            case 'generate':
+                $controller->generate();
+                break;
+            case 'save_form':
+                $controller->save_form();
+                break;
+            case 'preview':
+                $controller->preview();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
+
     case 'invoices':
         require_once 'controllers/InvoicesController.php';
         $controller = new InvoicesController();
@@ -1820,6 +1852,12 @@ switch ($page) {
             case 'shipment_add_execute':
                 $controller->shipmentAddExecute();
                 break;
+            case 'get_dispatch_details_ajax':
+                $controller->getDispatchDetailsAjax();
+                break;
+            case 'save_dispatch_details_ajax':
+                $controller->saveDispatchDetailsAjax();
+                break;
             default:
                 $controller->create();
                 break;
@@ -2014,6 +2052,14 @@ switch ($page) {
 
             case 'user_guide':
                 $controller->userGuide();
+                break;
+
+            case 'get_dispatch_details_ajax':
+                $controller->getDispatchDetailsAjax();
+                break;
+
+            case 'save_dispatch_details_ajax':
+                $controller->saveDispatchDetailsAjax();
                 break;
 
             default:

@@ -3426,4 +3426,20 @@ class PosInvoiceController
         global $commanModel;
         return $commanModel->getRecordByField('currency_master', 'currency_code', strtoupper($code));
     }
+
+    public function getDispatchDetailsAjax(): void
+    {
+        require_once __DIR__ . '/DispatchController.php';
+        global $conn;
+        $dispatchCtrl = new DispatchController($conn);
+        $dispatchCtrl->getDispatchDetailsAjax();
+    }
+
+    public function saveDispatchDetailsAjax(): void
+    {
+        require_once __DIR__ . '/DispatchController.php';
+        global $conn;
+        $dispatchCtrl = new DispatchController($conn);
+        $dispatchCtrl->saveDispatchDetailsAjax();
+    }
 }

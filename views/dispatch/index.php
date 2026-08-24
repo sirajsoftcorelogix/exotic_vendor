@@ -472,20 +472,26 @@
                 </div>
               </div>
               <!-- RIGHT -->
-              <div class="flex flex-col sm:items-end gap-3">
-                <div class="relative ">
-                  <button class="text-gray-600 hover:bg-gray-100 rounded-full px-2 text-lg" onclick="toggleMenu(this)">
+              <div class="flex items-center justify-end shrink-0">
+                <div class="relative">
+                  <button type="button" class="text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-full w-9 h-9 flex items-center justify-center text-xl font-bold transition outline-none" onclick="toggleMenu(this)" aria-label="Action menu">
                     ⋮
                   </button>
-                  <div class="dropdown-menu hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                    <?php if (strtolower(trim((string)($invoice['status'] ?? ''))) !== 'cancelled'): ?>
-                    <a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Download invoice</a>
-                    <?php endif; ?>
-                    <?php /*if (!empty($invoice_dispatch[$invoice['id']])): ?>
-                      <?php foreach ($invoice_dispatch[$invoice['id']] as $dispatch): ?>
-                        <a href="<?php echo $dispatch['label_url']; ?>" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">Download <Label><?php echo htmlspecialchars($dispatch['awb_code']); ?></Label></a>
-                      <?php endforeach; ?>
-                    <?php endif; */?>
+                  <div class="dropdown-menu hidden absolute right-0 mt-2 w-52 bg-white border border-gray-100 rounded-2xl shadow-xl z-20 py-1.5 overflow-hidden divide-y divide-gray-100/60">
+                    <div class="py-1">
+                      <button type="button" class="w-full text-left px-4 py-2 text-xs font-semibold text-purple-700 hover:bg-purple-50 transition border-none bg-transparent cursor-pointer flex items-center gap-2.5" onclick="openCommonDispatchModal({ invoice_id: <?php echo (int) $invoice['id']; ?>, invoice_number: '<?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id'], ENT_QUOTES, 'UTF-8'); ?>', order_number: '<?php echo htmlspecialchars((string) array_key_first($orderNumbers ?? []), ENT_QUOTES, 'UTF-8'); ?>' })">
+                          <i class="fas fa-truck text-xs text-purple-600" aria-hidden="true"></i> Dispatch Details
+                      </button>
+                      <?php if (strtolower(trim((string)($invoice['status'] ?? ''))) !== 'cancelled'): ?>
+                      <a href="<?php echo base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invoice['id']); ?>" class="block px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition flex items-center gap-2.5">
+                          <i class="fas fa-file-pdf text-xs text-blue-600" aria-hidden="true"></i> Download Invoice
+                      </a>
+                      <a href="<?php echo base_url('index.php?page=export_documents&query=' . rawurlencode((string) (!empty($invoice['invoice_number']) ? $invoice['invoice_number'] : $invoice['id']))); ?>" target="_blank" class="block px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition flex items-center gap-2.5" title="Generate Export Documents">
+                          <i class="fas fa-file-export text-xs text-blue-600" aria-hidden="true"></i> Export Docs
+                      </a>
+                      <?php endif; ?>
+                    </div>
+
                     <?php
                       $needsRetry = false;
                       $reDispatch = false;
@@ -512,44 +518,60 @@
                         }
                       }
                     ?>
-                    <?php if ($needsRetry): ?>
-                      <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="retryDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">AWB Generate</button>
-                      
+
+                    <?php if ($needsRetry || $reDispatch || $canCancelDispatch): ?>
+                    <div class="py-1">
+                      <?php if ($needsRetry): ?>
+                        <button type="button" class="w-full text-left px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition border-none bg-transparent cursor-pointer flex items-center gap-2.5" onclick="retryDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)">
+                            <i class="fas fa-barcode text-xs text-indigo-600" aria-hidden="true"></i> AWB Generate
+                        </button>
+                      <?php endif; ?>
+                      <?php if ($reDispatch): ?>
+                        <button type="button" class="w-full text-left px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition border-none bg-transparent cursor-pointer flex items-center gap-2.5" onclick="reDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)">
+                            <i class="fas fa-redo text-xs text-orange-600" aria-hidden="true"></i> Re-Dispatch
+                        </button>
+                      <?php endif; ?>
+                      <?php if ($canCancelDispatch): ?>
+                        <button type="button" class="w-full text-left px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 transition border-none bg-transparent cursor-pointer flex items-center gap-2.5" onclick="cancelDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)">
+                            <i class="fas fa-times-circle text-xs text-red-500" aria-hidden="true"></i> Cancel Dispatch
+                        </button>
+                      <?php endif; ?>
+                    </div>
                     <?php endif; ?>
-                    <?php if ($reDispatch): ?>
-                      <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="reDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Re-Dispatch</button>
-                    <?php endif; ?>
-                    <?php if ($canCancelDispatch): ?>
-                    <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelDispatchAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Dispatch</button>
-                    <?php endif; ?>
-                    <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="updateStatusAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Update Status</button>
-                    <?php if (strtolower(trim((string)($invoice['status'] ?? ''))) !== 'cancelled'): ?>
-                    <?php
-                      $salesReturnHref = base_url('?page=sales_returns&action=create&invoice_id=' . (int) $invoice['id']);
-                      if (!empty($orderNumbers)) {
-                          $firstOrderNum = (string) array_key_first($orderNumbers);
-                          if ($firstOrderNum !== '') {
-                              $salesReturnHref = base_url(
-                                  '?page=sales_returns&action=create&order_number=' . rawurlencode($firstOrderNum)
-                                  . '&invoice_id=' . (int) $invoice['id']
-                              );
-                          }
-                      }
-                    ?>
-                    <a href="<?php echo htmlspecialchars($salesReturnHref, ENT_QUOTES, 'UTF-8'); ?>"
-                       data-sales-return-create
-                       data-sales-return-url="<?php echo htmlspecialchars($salesReturnHref, ENT_QUOTES, 'UTF-8'); ?>"
-                       <?php if (!empty($orderNumbers)): ?>
-                       data-order-number="<?php echo htmlspecialchars((string) array_key_first($orderNumbers), ENT_QUOTES, 'UTF-8'); ?>"
-                       <?php endif; ?>
-                       class="block px-4 py-2 text-orange-700 hover:bg-orange-50 font-medium">Sales return</a>
-                    <button class="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 border-none bg-transparent cursor-pointer" onclick="cancelInvoiceAjax(<?php echo htmlspecialchars($invoice['id']); ?>)" style="padding: 0.5rem 1rem;">Cancel Invoice</button>
-                    <?php endif; ?>
+
+                    <div class="py-1">
+                      <button type="button" class="w-full text-left px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition border-none bg-transparent cursor-pointer flex items-center gap-2.5" onclick="updateStatusAjax(<?php echo htmlspecialchars($invoice['id']); ?>)">
+                          <i class="fas fa-sync text-xs text-teal-600" aria-hidden="true"></i> Update Status
+                      </button>
+                      <?php if (strtolower(trim((string)($invoice['status'] ?? ''))) !== 'cancelled'): ?>
+                      <?php
+                        $salesReturnHref = base_url('?page=sales_returns&action=create&invoice_id=' . (int) $invoice['id']);
+                        if (!empty($orderNumbers)) {
+                            $firstOrderNum = (string) array_key_first($orderNumbers);
+                            if ($firstOrderNum !== '') {
+                                $salesReturnHref = base_url(
+                                    '?page=sales_returns&action=create&order_number=' . rawurlencode($firstOrderNum)
+                                    . '&invoice_id=' . (int) $invoice['id']
+                                );
+                            }
+                        }
+                      ?>
+                      <a href="<?php echo htmlspecialchars($salesReturnHref, ENT_QUOTES, 'UTF-8'); ?>"
+                         data-sales-return-create
+                         data-sales-return-url="<?php echo htmlspecialchars($salesReturnHref, ENT_QUOTES, 'UTF-8'); ?>"
+                         <?php if (!empty($orderNumbers)): ?>
+                         data-order-number="<?php echo htmlspecialchars((string) array_key_first($orderNumbers), ENT_QUOTES, 'UTF-8'); ?>"
+                         <?php endif; ?>
+                         class="block px-4 py-2 text-xs font-medium text-orange-700 hover:bg-orange-50 transition flex items-center gap-2.5">
+                          <i class="fas fa-undo text-xs text-orange-600" aria-hidden="true"></i> Sales Return
+                      </a>
+                      <button type="button" class="w-full text-left px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 transition border-none bg-transparent cursor-pointer flex items-center gap-2.5" onclick="cancelInvoiceAjax(<?php echo htmlspecialchars($invoice['id']); ?>)">
+                          <i class="fas fa-ban text-xs text-red-500" aria-hidden="true"></i> Cancel Invoice
+                      </button>
+                      <?php endif; ?>
+                    </div>
                   </div>
                 </div>
-                <div></div>
-                <div></div>
-                
               </div>
             </div>
           </div>
@@ -1364,3 +1386,5 @@ if (bulkPrintBtn) {
   }
     
 </script>
+
+<?php require_once __DIR__ . '/../shared/partials/dispatch_details_modal.php'; ?>

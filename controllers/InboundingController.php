@@ -3130,13 +3130,17 @@ class InboundingController {
             // publish log
             $publishUserId = (int)($_SESSION['user']['id'] ?? 0);
             if ($publishUserId <= 0) {
-                $publishUserId = (int)($_POST['userid_log'] ?? 0);
+                $publishUserId = (int)($_REQUEST['userid_log'] ?? $_GET['userid_log'] ?? $_POST['userid_log'] ?? 0);
             }
-            if ($publishUserId > 0) {
-                $publishStat = ($publish_status_req === 1) ? 'Published (Live)' : 'Published (Local)';
-                $logData1 = ['userid_log' => $publishUserId, 'i_id' => $id, 'stat' => $publishStat];
-                $inboundingModel->stat_logs($logData1);
+            if ($publishUserId <= 0) {
+                $publishUserId = (int)($data1['data']['updated_by_user_id'] ?? 0);
             }
+            if ($publishUserId <= 0) {
+                $publishUserId = 1;
+            }
+            $publishStat = ($publish_status_req === 1) ? 'Published (Live)' : 'Published (Local)';
+            $logData1 = ['userid_log' => $publishUserId, 'i_id' => $id, 'stat' => $publishStat];
+            $inboundingModel->stat_logs($logData1);
 
             $itemCode = $data['data']['Item_code'];
 
