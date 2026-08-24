@@ -603,20 +603,6 @@ No invoices
                     const irnGenerated = irnStatus === 'generated' || irnVal !== '';
                     const ewbGenerated = ewbStatus === 'generated' || ewbVal !== '';
 
-                    const einvoiceBtn = (!isCancelled && orderNum && !irnGenerated) ? `
-    <a href="?page=posinvoice&action=einvoice-input&invoice_id=${i.id}&order_number=${encodeURIComponent(orderNum)}"
-    class="inline-flex items-center text-blue-700 hover:text-blue-900 text-xs font-semibold"
-    title="Generate E-Invoice">
-     E-Invoice
-</a>` : '';
-
-                    const ewaybillBtn = (!isCancelled && orderNum && irnGenerated && !ewbGenerated) ? `
-    <a href="?page=posinvoice&action=ewaybill-input&invoice_id=${i.id}&order_number=${encodeURIComponent(orderNum)}"
-    class="inline-flex items-center text-emerald-700 hover:text-emerald-900 text-xs font-semibold"
-    title="Generate E-Way bill">
-     E-Way bill
-</a>` : '';
-
                     const menuItems = [];
 
                     if (!isCancelled) {
@@ -699,15 +685,9 @@ No invoices
 </button>`);
                     }
 
-                    let actionCell = '<div class="inline-flex items-center gap-2.5">';
-                    if (einvoiceBtn) {
-                        actionCell += einvoiceBtn;
-                    }
-                    if (ewaybillBtn) {
-                        actionCell += ewaybillBtn;
-                    }
+                    let actionCell = '';
                     if (menuItems.length > 0) {
-                        actionCell += `
+                        actionCell = `
 <div class="relative inline-block text-left posinvoice-row-menu">
     <button type="button"
             class="posinvoice-row-menu-btn inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -720,10 +700,9 @@ No invoices
         ${menuItems.join('')}
     </div>
 </div>`;
-                    } else if (!einvoiceBtn && !ewaybillBtn) {
-                        actionCell += `<span class="text-gray-400 text-xs">—</span>`;
+                    } else {
+                        actionCell = `<span class="text-gray-400 text-xs">—</span>`;
                     }
-                    actionCell += '</div>';
 
                     html += `
 <tr class="border-t hover:bg-gray-50">
