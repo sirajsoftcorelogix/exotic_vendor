@@ -845,7 +845,7 @@ class OrdersAPIController
                         $totalAmount += $itemAmount;
 
                         $itemDetails[] = [
-                            'Item Name'     => $item['item_name'] ?? '',
+                            'Item Name'     => $item['account_group_name'] ?? '',
                             'SKU'           => $item['sku'] ?? $item['item_code'] ?? '',
                             'HSN Code'      => $item['hsn'] ?? '',
                             'Qty'           => floatval($item['quantity'] ?? 0),
