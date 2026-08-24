@@ -2322,9 +2322,15 @@ class POSOrder
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result && $result->num_rows > 0) {
-            return $result->fetch_assoc();
+            $row = $result->fetch_assoc();
+            $stmt->close();
+            return $row;
         }
-        return null;
+        $stmt->close();
+
+        require_once __DIR__ . '/../order/order.php';
+        $orderModel = new Order($this->db);
+        return $orderModel->autoCreateOrderInfoFromVpOrders($order_number);
     }
     public function addCustomerIfNotExists($data)
     {
