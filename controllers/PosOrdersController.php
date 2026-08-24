@@ -144,11 +144,33 @@ class PosOrdersController
         }        // Set your date range (example: last 7 days)
 
         $from_date = strtotime('-1 days');
-        if ($lastLog && !empty($lastLog['max_ordered_time'])) {
+        $hasCustomRange = false;
+
+        if (!empty($_GET['from_date']) || !empty($_POST['from_date'])) {
+            $rawFrom = trim((string)($_GET['from_date'] ?? $_POST['from_date'] ?? ''));
+            $parsedFrom = is_numeric($rawFrom) ? (int)$rawFrom : strtotime($rawFrom);
+            if ($parsedFrom && $parsedFrom > 0) {
+                $from_date = $parsedFrom;
+                $hasCustomRange = true;
+            }
+        } elseif (!empty($_GET['days']) || !empty($_POST['days'])) {
+            $daysInt = max(1, min(365, (int)($_GET['days'] ?? $_POST['days'] ?? 1)));
+            $from_date = strtotime("-{$daysInt} days");
+            $hasCustomRange = true;
+        } elseif ($lastLog && !empty($lastLog['max_ordered_time'])) {
             // 1-hour rolling lookback buffer (3600 seconds) to prevent skipping orders
             $from_date = max(strtotime('-7 days'), (int)$lastLog['max_ordered_time'] - 3600);
         }
+
         $to_date = time();
+        if (!empty($_GET['to_date']) || !empty($_POST['to_date'])) {
+            $rawTo = trim((string)($_GET['to_date'] ?? $_POST['to_date'] ?? ''));
+            $parsedTo = is_numeric($rawTo) ? (int)$rawTo : strtotime($rawTo);
+            if ($parsedTo && $parsedTo > 0) {
+                $to_date = $parsedTo;
+                $hasCustomRange = true;
+            }
+        }
         //$from_date = strtotime(date('12-08-2025 00:00:00')); // Example fixed date
         //$to_date = strtotime(date('13-08-2025 00:00:00'));
         //$from_date = 1755101792; // Example fixed date 12-08-2025 00:00:00
@@ -403,9 +425,11 @@ class PosOrdersController
         }
         //print_array($pdata);
         //print_r($result);
-        $isSingleOrderImport = !empty($_GET['orderid']);
+        $isSingleOrderImport = !empty($_GET['orderid']) || !empty($_POST['orderid']);
+        $isCustomRangeImport = $hasCustomRange;
+
         $maxOrderedTimeForLog = (int)($lastLog['max_ordered_time'] ?? $from_date);
-        if (!$isSingleOrderImport) {
+        if (!$isSingleOrderImport && !$isCustomRangeImport) {
             foreach ($orders['orders'] ?? [] as $ord) {
                 $pt = (int)($ord['processed_time'] ?? 0);
                 if ($pt > $maxOrderedTimeForLog) {

@@ -2995,7 +2995,7 @@ class Order
 
             $calcStmt = $this->db->prepare(
                 "SELECT
-                    IFNULL(SUM(CASE WHEN o.status IS NULL OR o.status != 'cancelled' THEN IF(IFNULL(o.itemprice, 0) > 0, o.itemprice, o.finalprice) * o.quantity ELSE 0 END), 0) AS gross_total,
+                    IFNULL(SUM(CASE WHEN o.status IS NULL OR o.status != 'cancelled' THEN o.itemprice * o.quantity ELSE 0 END), 0) AS gross_total,
                     IFNULL(MAX(oi.coupon_reduce), 0) AS coupon_reduce,
                     IFNULL(MAX(oi.giftvoucher_reduce), 0) AS giftvoucher_reduce,
                     IFNULL(MAX(oi.credit), 0) AS credit
