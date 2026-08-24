@@ -594,9 +594,52 @@ No invoices
                         ? `<span class="line-through text-gray-500">${i.invoice_number ?? ''}</span>`
                         : `<span class="font-semibold">${i.invoice_number ?? ''}</span>`;
 
+                    const orderNum = (i.order_number || '').trim();
+                    const irnStatus = String(i.irn_status || '').trim().toLowerCase();
+                    const ewbStatus = String(i.ewb_status || '').trim().toLowerCase();
+                    const irnVal = String(i.irn || '').trim();
+                    const ewbVal = String(i.ewb || '').trim();
+
+                    const irnGenerated = irnStatus === 'generated' || irnVal !== '';
+                    const ewbGenerated = ewbStatus === 'generated' || ewbVal !== '';
+
+                    const einvoiceBtn = (!isCancelled && orderNum && !irnGenerated) ? `
+    <a href="?page=posinvoice&action=einvoice-input&invoice_id=${i.id}&order_number=${encodeURIComponent(orderNum)}"
+    class="inline-flex items-center text-blue-700 hover:text-blue-900 text-xs font-semibold"
+    title="Generate E-Invoice">
+     E-Invoice
+</a>` : '';
+
+                    const ewaybillBtn = (!isCancelled && orderNum && irnGenerated && !ewbGenerated) ? `
+    <a href="?page=posinvoice&action=ewaybill-input&invoice_id=${i.id}&order_number=${encodeURIComponent(orderNum)}"
+    class="inline-flex items-center text-emerald-700 hover:text-emerald-900 text-xs font-semibold"
+    title="Generate E-Way bill">
+     E-Way bill
+</a>` : '';
+
                     const menuItems = [];
 
                     if (!isCancelled) {
+                        if (orderNum && !irnGenerated) {
+                            menuItems.push(`
+<a href="?page=posinvoice&action=einvoice-input&invoice_id=${i.id}&order_number=${encodeURIComponent(orderNum)}"
+   class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 hover:text-blue-900 rounded-md transition"
+   title="Generate E-Invoice">
+    <i class="fas fa-file-invoice text-blue-600 w-4 text-center" aria-hidden="true"></i>
+    <span>E-Invoice</span>
+</a>`);
+                        }
+
+                        if (orderNum && irnGenerated && !ewbGenerated) {
+                            menuItems.push(`
+<a href="?page=posinvoice&action=ewaybill-input&invoice_id=${i.id}&order_number=${encodeURIComponent(orderNum)}"
+   class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 rounded-md transition"
+   title="Generate E-Way bill">
+    <i class="fas fa-truck-loading text-emerald-600 w-4 text-center" aria-hidden="true"></i>
+    <span>E-Way bill</span>
+</a>`);
+                        }
+
                         menuItems.push(`
 <a href="/?page=posinvoice&action=generate_pdf&invoice_id=${i.id}"
    target="_blank"
@@ -624,7 +667,6 @@ No invoices
     <span>Dispatch Details</span>
 </button>`);
 
-                        const orderNum = (i.order_number || '').trim();
                         if (orderNum) {
                             menuItems.push(`
 <button type="button"
@@ -657,9 +699,15 @@ No invoices
 </button>`);
                     }
 
-                    let actionCell = '';
+                    let actionCell = '<div class="inline-flex items-center gap-2.5">';
+                    if (einvoiceBtn) {
+                        actionCell += einvoiceBtn;
+                    }
+                    if (ewaybillBtn) {
+                        actionCell += ewaybillBtn;
+                    }
                     if (menuItems.length > 0) {
-                        actionCell = `
+                        actionCell += `
 <div class="relative inline-block text-left posinvoice-row-menu">
     <button type="button"
             class="posinvoice-row-menu-btn inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -672,9 +720,10 @@ No invoices
         ${menuItems.join('')}
     </div>
 </div>`;
-                    } else {
-                        actionCell = `<span class="text-gray-400 text-xs">—</span>`;
+                    } else if (!einvoiceBtn && !ewaybillBtn) {
+                        actionCell += `<span class="text-gray-400 text-xs">—</span>`;
                     }
+                    actionCell += '</div>';
 
                     html += `
 <tr class="border-t hover:bg-gray-50">
