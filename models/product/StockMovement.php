@@ -219,9 +219,13 @@ final class StockMovement
             INNER JOIN vp_stock_transfer st
                 ON st.transfer_order_no COLLATE utf8mb4_unicode_ci = ist.transfer_order_no COLLATE utf8mb4_unicode_ci
             LEFT JOIN (
-                SELECT transfer_id, sku, SUM(qty_received) AS received_qty
-                FROM vp_stock_transfer_grns
-                GROUP BY transfer_id, sku
+                SELECT grn.transfer_id, grn.sku, SUM(grn.qty_received) AS received_qty
+                FROM vp_stock_transfer_grns grn
+                INNER JOIN vp_stock_transfer st2 ON st2.id = grn.transfer_id
+                INNER JOIN vp_item_stock_transfer ist2
+                    ON ist2.transfer_order_no COLLATE utf8mb4_unicode_ci = st2.transfer_order_no COLLATE utf8mb4_unicode_ci
+                WHERE ist2.product_id = ?
+                GROUP BY grn.transfer_id, grn.sku
             ) gr ON gr.transfer_id = st.id
                 AND gr.sku COLLATE utf8mb4_unicode_ci = ist.sku COLLATE utf8mb4_unicode_ci
             WHERE ist.product_id = ?
@@ -230,7 +234,7 @@ final class StockMovement
         if (!$stmt) {
             return 0;
         }
-        $stmt->bind_param('i', $productId);
+        $stmt->bind_param('ii', $productId, $productId);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
