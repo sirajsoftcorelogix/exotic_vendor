@@ -306,6 +306,12 @@ switch ($page) {
             case 'import_orders':
                 $controller->importOrders();
                 break;
+            case 'scan_missing_orders':
+                $controller->scanMissingOrdersAjax();
+                break;
+            case 'import_missing_batch':
+                $controller->importMissingBatchAjax();
+                break;
             case 'refresh_order_preview':
                 $controller->refreshOrderPreviewAjax();
                 break;

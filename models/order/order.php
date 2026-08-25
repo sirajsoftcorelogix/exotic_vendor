@@ -1017,6 +1017,55 @@ class Order
     }
 
     /**
+     * Check existence of multiple order numbers in vp_orders and vp_order_info in batches.
+     *
+     * @param list<string> $orderNumbers
+     * @return array{orders: array<string, bool>, order_info: array<string, bool>}
+     */
+    public function getExistingOrderNumberMaps(array $orderNumbers): array
+    {
+        $orderNumbers = array_values(array_unique(array_filter(array_map('strval', $orderNumbers), static fn($s) => trim($s) !== '')));
+        if ($orderNumbers === []) {
+            return ['orders' => [], 'order_info' => []];
+        }
+
+        $ordersMap = [];
+        $orderInfoMap = [];
+
+        foreach (array_chunk($orderNumbers, 200) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $types = str_repeat('s', count($chunk));
+
+            $stmt = $this->db->prepare("SELECT DISTINCT order_number FROM vp_orders WHERE order_number IN ({$placeholders})");
+            if ($stmt) {
+                $stmt->bind_param($types, ...$chunk);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                while ($row = $res->fetch_assoc()) {
+                    $ordersMap[(string)$row['order_number']] = true;
+                }
+                $stmt->close();
+            }
+
+            $stmtInfo = $this->db->prepare("SELECT DISTINCT order_number FROM vp_order_info WHERE order_number IN ({$placeholders})");
+            if ($stmtInfo) {
+                $stmtInfo->bind_param($types, ...$chunk);
+                $stmtInfo->execute();
+                $resInfo = $stmtInfo->get_result();
+                while ($row = $resInfo->fetch_assoc()) {
+                    $orderInfoMap[(string)$row['order_number']] = true;
+                }
+                $stmtInfo->close();
+            }
+        }
+
+        return [
+            'orders' => $ordersMap,
+            'order_info' => $orderInfoMap,
+        ];
+    }
+
+    /**
      * Resolve vp_orders line items by order_number or numeric vp_orders.id.
      *
      * @return array<int, array<string, mixed>>|null
