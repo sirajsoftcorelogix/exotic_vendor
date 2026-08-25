@@ -225,10 +225,12 @@ final class StockMovement
                 INNER JOIN vp_item_stock_transfer ist2
                     ON ist2.transfer_order_no COLLATE utf8mb4_unicode_ci = st2.transfer_order_no COLLATE utf8mb4_unicode_ci
                 WHERE ist2.product_id = ?
+                  AND LOWER(IFNULL(st2.status, "")) NOT IN ("received", "completed", "complete", "cancelled")
                 GROUP BY grn.transfer_id, grn.sku
             ) gr ON gr.transfer_id = st.id
                 AND gr.sku COLLATE utf8mb4_unicode_ci = ist.sku COLLATE utf8mb4_unicode_ci
             WHERE ist.product_id = ?
+              AND LOWER(IFNULL(st.status, "")) NOT IN ("received", "completed", "complete", "cancelled")
               AND ist.transfer_qty > COALESCE(gr.received_qty, 0)';
         $stmt = $conn->prepare($sql);
         if (!$stmt) {
