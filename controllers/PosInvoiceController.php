@@ -2164,6 +2164,7 @@ class PosInvoiceController
         $totalSgstAmt = 0;
         $totalCgstAmt = 0;
         $totalIgstAmt = 0;
+        $totalTaxableAmt = 0;
         $sumLineTotals = 0.0;
         $sumListLineTotals = 0.0;
         $lineItemsMeta = $this->parsePosInvoiceLineItemsMeta($invoice['notes'] ?? null);
@@ -2299,6 +2300,7 @@ class PosInvoiceController
                 }
                 $listPriceCell = '<td class="right">' . number_format($listUnitDisplay, 2) . '</td>';
                 $taxableUnitDisplay = round($this->posInvoiceInclToPretax($discUnitDisplay, $taxRate), 2);
+                $totalTaxableAmt += round($taxableUnitDisplay * $qtyInt, 2);
                 $taxableValueCell = $showDiscPriceColumn
                     ? '<td class="right">' . number_format($taxableUnitDisplay, 2) . '</td>'
                     : '';
@@ -2323,6 +2325,7 @@ class PosInvoiceController
             if ($isProformaInvoice && !empty($invoice['pos_flag']) && $discUnitDisplay > 0) {
                 $unitPriceDisplay = $discUnitDisplay;
             }
+            $totalTaxableAmt += round($unitPriceDisplay * $qtyInt, 2);
             $itemsrows .= '
                     <tr>
                         <td>' . ($idx + 1) . '</td>
@@ -2439,16 +2442,13 @@ class PosInvoiceController
             : round((float)$totalAmount, 2);
 
         // Add row for tax amount totals (below each SGST/CGST/IGST Amount column)
-        $posTotalDiscEmpty = ($usePosItemRowLayout && $showDiscPriceColumn)
-            ? '<td></td>'
-            : '';
-        $posTotalPriceEmpty = $usePosItemRowLayout ? '' : '<td></td>';
-        $summaryrows .= '
+        if ($usePosItemRowLayout) {
+            if ($showDiscPriceColumn) {
+                $summaryrows .= '
                     <tr style="background: #e8e8e8; border-top: 2px solid #000;">
                         <td colspan="4" class="right bold">Total:</td>
-                        ' . $posTotalDiscEmpty . '
+                        <td class="right bold">' . number_format($totalTaxableAmt, 2) . '</td>
                         <td class="right bold">' . $totalQuantity . '</td>
-                        ' . $posTotalPriceEmpty . '
                         <td class="right bold"></td>
                         <td class="right bold">' . number_format($totalSgstAmt, 2) . '</td>
                         <td class="right bold"></td>
@@ -2457,7 +2457,39 @@ class PosInvoiceController
                         <td class="right bold">' . number_format($totalIgstAmt, 2) . '</td>
                         <td class="right bold">' . number_format($tableLineTotal, 2) . '</td>
                     </tr>
-        ';
+                ';
+            } else {
+                $summaryrows .= '
+                    <tr style="background: #e8e8e8; border-top: 2px solid #000;">
+                        <td colspan="3" class="right bold">Total:</td>
+                        <td class="right bold">' . number_format($totalTaxableAmt, 2) . '</td>
+                        <td class="right bold">' . $totalQuantity . '</td>
+                        <td class="right bold"></td>
+                        <td class="right bold">' . number_format($totalSgstAmt, 2) . '</td>
+                        <td class="right bold"></td>
+                        <td class="right bold">' . number_format($totalCgstAmt, 2) . '</td>
+                        <td class="right bold"></td>
+                        <td class="right bold">' . number_format($totalIgstAmt, 2) . '</td>
+                        <td class="right bold">' . number_format($tableLineTotal, 2) . '</td>
+                    </tr>
+                ';
+            }
+        } else {
+            $summaryrows .= '
+                    <tr style="background: #e8e8e8; border-top: 2px solid #000;">
+                        <td colspan="4" class="right bold">Total:</td>
+                        <td class="right bold">' . $totalQuantity . '</td>
+                        <td class="right bold">' . number_format($totalTaxableAmt, 2) . '</td>
+                        <td class="right bold"></td>
+                        <td class="right bold">' . number_format($totalSgstAmt, 2) . '</td>
+                        <td class="right bold"></td>
+                        <td class="right bold">' . number_format($totalCgstAmt, 2) . '</td>
+                        <td class="right bold"></td>
+                        <td class="right bold">' . number_format($totalIgstAmt, 2) . '</td>
+                        <td class="right bold">' . number_format($tableLineTotal, 2) . '</td>
+                    </tr>
+            ';
+        }
 
 
         $amountSummary = $this->buildPosInvoiceAmountSummaryRows(
