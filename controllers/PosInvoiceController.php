@@ -151,6 +151,68 @@ class PosInvoiceController
         return is_array($row) ? $row : null;
     }
 
+    /**
+     * Persist buyer (recipient) fields submitted from the E-Invoice input form
+     * back onto vp_order_info, so the IRN payload built from the order record
+     * reflects the reviewed/edited values.
+     */
+    private function persistBuyerInfoFromRequest(string $orderNumber): void
+    {
+        global $conn;
+
+        $orderNumber = trim($orderNumber);
+        if ($orderNumber === '' || !($conn instanceof mysqli)) {
+            return;
+        }
+
+        // Only run when the E-Invoice form actually submitted buyer fields.
+        if (!isset($_POST['buyer_name']) && !isset($_POST['buyer_gstin'])) {
+            return;
+        }
+
+        $buyerGstin = strtoupper(trim((string) ($_POST['buyer_gstin'] ?? '')));
+        $buyerName = trim((string) ($_POST['buyer_name'] ?? ''));
+        $buyerAddress = trim((string) ($_POST['buyer_address'] ?? ''));
+        $buyerCity = trim((string) ($_POST['buyer_city'] ?? ''));
+        $buyerPincode = trim((string) ($_POST['buyer_pincode'] ?? ''));
+        $buyerStateCode = trim((string) ($_POST['buyer_state_code'] ?? ''));
+        if ($buyerStateCode === '') {
+            $buyerStateCode = trim((string) ($_POST['pos'] ?? ''));
+        }
+        $stateCode = (int) preg_replace('/[^0-9]/', '', $buyerStateCode);
+
+        // The IRN payload builds BuyerDtls.LglNm from first_name and Addr1 from
+        // address_line1 + ' ' + address_line2, so keep the full reviewed values
+        // in the primary columns and clear the secondary ones to avoid
+        // duplicated fragments when the form is re-opened.
+        $empty = '';
+
+        $stmt = $conn->prepare(
+            'UPDATE vp_order_info
+             SET gstin = ?, first_name = ?, last_name = ?, address_line1 = ?, address_line2 = ?, city = ?, zipcode = ?, state_code = ?
+             WHERE order_number = ?
+             ORDER BY id DESC
+             LIMIT 1'
+        );
+        if (!$stmt) {
+            return;
+        }
+        $stmt->bind_param(
+            'sssssssis',
+            $buyerGstin,
+            $buyerName,
+            $empty,
+            $buyerAddress,
+            $empty,
+            $buyerCity,
+            $buyerPincode,
+            $stateCode,
+            $orderNumber
+        );
+        $stmt->execute();
+        $stmt->close();
+    }
+
     /** @return array<string, mixed>|null */
     private function fetchEwbIrnTrackingByInvoiceId(int $invoiceId): ?array
     {
@@ -416,6 +478,10 @@ class PosInvoiceController
             ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
         }
+
+        // Save the reviewed buyer info to the order record first, so the IRN
+        // payload below (built from vp_order_info) reflects the form values.
+        $this->persistBuyerInfoFromRequest($orderNumber);
 
         $runtime = $this->resolvePosInvoiceIrnEwbRuntimeData($invoice, $orderNumber);
         if (($runtime['items'] ?? []) === [] || empty($runtime['order_info']) || empty($runtime['firm'])) {

@@ -258,6 +258,25 @@ $existingEwbValid = $record['ewb_valid_till'] ?? '';
       const submitBtn = document.getElementById('submitBtn');
       const submitBtnText = document.getElementById('submitBtnText');
       const resultContainer = document.getElementById('resultContainer');
+      const scrollToResult = function() {
+        // Wait a frame so the banner is rendered and offsets are measurable.
+        requestAnimationFrame(function() {
+          try {
+            resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          } catch (e) {
+            resultContainer.scrollIntoView();
+          }
+          // When this page is embedded in an iframe, also scroll the parent
+          // window so the banner at the top becomes visible.
+          try {
+            if (window.parent && window.parent !== window) {
+              const rect = resultContainer.getBoundingClientRect();
+              const frameTop = window.frameElement ? window.frameElement.getBoundingClientRect().top : 0;
+              window.parent.scrollTo({ top: window.parent.scrollY + rect.top + frameTop - 20, behavior: 'smooth' });
+            }
+          } catch (e) { /* cross-origin parent: ignore */ }
+        });
+      };
 
       submitBtn.disabled = true;
       submitBtnText.textContent = 'Generating E-Way Bill via Alankit API...';
@@ -295,7 +314,7 @@ $existingEwbValid = $record['ewb_valid_till'] ?? '';
             </div>
           `;
           resultContainer.classList.remove('hidden');
-          window.scrollTo({ top: resultContainer.offsetTop - 20, behavior: 'smooth' });
+          scrollToResult();
         } else {
           resultContainer.className = 'bg-rose-50 border border-rose-300 rounded-2xl p-6 mb-6';
           resultContainer.innerHTML = `
@@ -310,7 +329,7 @@ $existingEwbValid = $record['ewb_valid_till'] ?? '';
             </div>
           `;
           resultContainer.classList.remove('hidden');
-          window.scrollTo({ top: resultContainer.offsetTop - 20, behavior: 'smooth' });
+          scrollToResult();
         }
       } catch (err) {
         resultContainer.className = 'bg-rose-50 border border-rose-300 rounded-2xl p-6 mb-6';
@@ -318,6 +337,7 @@ $existingEwbValid = $record['ewb_valid_till'] ?? '';
           <div class="text-xs text-rose-800 font-semibold">Network error during E-Way Bill generation. Please check server logs and try again.</div>
         `;
         resultContainer.classList.remove('hidden');
+        scrollToResult();
       } finally {
         submitBtn.disabled = false;
         submitBtnText.textContent = 'Submit & Generate E-Way Bill';
