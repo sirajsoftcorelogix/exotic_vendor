@@ -669,9 +669,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <label class="text-xs font-bold text-[#333] mb-1.5">Variant:</label>
                         <select id="variant_select" name="is_variant" 
                                 class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999]">
-                            <option value="" disabled <?php echo empty($data['form2']['is_variant']) ? 'selected' : ''; ?>>Select...</option>
-                            <option value="N" <?php echo (empty($data['form2']['is_variant']) || $data['form2']['is_variant'] === 'N') ? 'selected' : ''; ?>>No</option>
-                            <option value="Y" <?php echo (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'Y') ? 'selected' : ''; ?>>Yes</option>
+                            <option value="N" <?php echo (empty($data['form2']['is_variant']) || strtoupper(trim((string) $data['form2']['is_variant'])) !== 'Y') ? 'selected' : ''; ?>>No</option>
+                            <option value="Y" <?php echo (isset($data['form2']['is_variant']) && strtoupper(trim((string) $data['form2']['is_variant'])) === 'Y') ? 'selected' : ''; ?>>Yes</option>
                         </select>
                     </div>
                     <div class="flex flex-col">
@@ -2158,18 +2157,24 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         </div>
         <div class="my-[25px] md:mx-5 mb-4">
         <div class="flex justify-end gap-4">
-            <?php if (isset($data['form2']['Item_code']) && !empty($data['form2']['Item_code'])) { ?>
-                <?php if (!$is_inbound_live_published): ?>
+            <?php 
+                $isVariantProduct = ($data['form2']['is_variant'] ?? 'N') === 'Y';
+                $hasItemCode = !empty($data['form2']['Item_code']);
+                $canShowPublishBtn = ($hasItemCode || $isVariantProduct) && (!$is_inbound_live_published || $isVariantProduct);
+                $canShowPrintJsonBtn = ($hasItemCode || $isVariantProduct);
+            ?>
+            <?php if ($canShowPublishBtn): ?>
                 <button type="button" onclick="handlePublishClick()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                     Publish Product
                 </button>
-                <?php endif; ?>
+            <?php endif; ?>
+            <?php if ($canShowPrintJsonBtn): ?>
                 <button type="button" onclick="handlePrintJsonClick()" class="bg-[#17a2b8] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#138496] transition flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
                     Print JSON
                 </button>
-            <?php } ?>
+            <?php endif; ?>
 
             <button type="button" onclick="validateAndSubmit('draft')" class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#db8235] transition">
                 Save as Draft

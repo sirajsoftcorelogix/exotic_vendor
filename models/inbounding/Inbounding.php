@@ -2515,6 +2515,30 @@ class Inbounding {
 
         if ($inbounding) {
             $inbounding['author_name'] = $this->resolveInboundAuthorNames($inbounding['author'] ?? '');
+
+            if (strtoupper(trim((string) ($inbounding['is_variant'] ?? 'N'))) === 'Y' && !empty($inbounding['Item_code'])) {
+                $parentDetails = $this->getParentProductDetails($inbounding['Item_code']);
+                if ($parentDetails) {
+                    if (empty($inbounding['groupname']) && !empty($parentDetails['group_name_raw'])) {
+                        $inbounding['groupname'] = $parentDetails['group_name_raw'];
+                    }
+                    if (empty($inbounding['material_name']) && !empty($parentDetails['material_code'])) {
+                        $inbounding['material_name'] = $parentDetails['material_code'];
+                    }
+                    if (empty($inbounding['product_title']) && !empty($parentDetails['title'])) {
+                        $inbounding['product_title'] = $parentDetails['title'];
+                    }
+                    if (empty($inbounding['vendor_code']) && !empty($parentDetails['vendor_code'])) {
+                        $inbounding['vendor_code'] = $parentDetails['vendor_code'];
+                    }
+                    if (empty($inbounding['hsn_code']) && !empty($parentDetails['hsn_code'])) {
+                        $inbounding['hsn_code'] = $parentDetails['hsn_code'];
+                    }
+                    if (empty($inbounding['gst_rate']) && !empty($parentDetails['gst_rate'])) {
+                        $inbounding['gst_rate'] = $parentDetails['gst_rate'];
+                    }
+                }
+            }
         }
 
         // 3. Process the loop to create the string
