@@ -2563,8 +2563,54 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
     }
+    function cleanDesktopformParentProductFields() {
+        // 1. Vendor
+        const vendorEl = document.getElementById('vendor_code');
+        if (vendorEl) {
+            if (vendorEl.tomselect) vendorEl.tomselect.clear(true);
+            else vendorEl.value = '';
+        }
+
+        // 2. Group / Category
+        const groupSelect = document.querySelector('select[name="group_name"]');
+        if (groupSelect) groupSelect.value = '';
+
+        // 3. Material
+        const matSelect = document.querySelector('select[name="material_code"]');
+        if (matSelect) matSelect.value = '';
+
+        // 4. HSN & GST
+        document.querySelectorAll('input[name="hsn_code"], input[name*="[hsn_code]"]').forEach(function(el) { el.value = ''; });
+        document.querySelectorAll('input[name="gst_rate"], input[name*="[gst_rate]"]').forEach(function(el) { el.value = ''; });
+
+        // 5. Dimensions, Weight & Price
+        ['height', 'width', 'depth', 'weight', 'dimensions', 'cp', 'cost_price', 'price_india_mrp', 'mrp_india'].forEach(function(field) {
+            document.querySelectorAll('input[name="' + field + '"], input[name*="[' + field + ']"]').forEach(function(el) { el.value = ''; });
+        });
+
+        // 6. Book Fields
+        ['pages', 'isbn', 'cover_type', 'edition', 'publication_date', 'language'].forEach(function(fieldName) {
+            const fieldEl = document.querySelector('[name="' + fieldName + '"]');
+            if (fieldEl) fieldEl.value = '';
+        });
+
+        // 7. Photos
+        const mainPreview = document.getElementById('main_photo_preview');
+        if (mainPreview) {
+            mainPreview.src = '#';
+            mainPreview.style.display = 'none';
+        }
+        document.querySelectorAll('.preview-img').forEach(function(imgEl) {
+            imgEl.src = '#';
+            imgEl.style.display = 'none';
+            imgEl.classList.add('hidden');
+        });
+    }
+
     function loadDesktopformParentProductInfo(parentCode) {
         if (!parentCode) return;
+        cleanDesktopformParentProductFields();
+
         const parentDetailsUrl = '<?php echo base_url('?page=inbounding&action=getParentProductDetails&item_code='); ?>' + encodeURIComponent(parentCode);
         fetch(parentDetailsUrl)
             .then(function(res) { return res.json(); })
@@ -2575,50 +2621,81 @@ document.addEventListener('DOMContentLoaded', function() {
                 // 1. Group / Category
                 if (data.group_name) {
                     const groupSelect = document.querySelector('select[name="group_name"]');
-                    if (groupSelect && !groupSelect.value) {
+                    if (groupSelect) {
                         groupSelect.value = data.group_name;
                         groupSelect.dispatchEvent(new Event('change', { bubbles: true }));
                     }
                 }
 
-                // 2. Material
-                if (data.material_code) {
-                    const matSelect = document.querySelector('select[name="material_code"]');
-                    if (matSelect && !matSelect.value) {
-                        matSelect.value = data.material_code;
+                // 2. Vendor
+                if (data.vendor_code) {
+                    const vendorEl = document.getElementById('vendor_code');
+                    if (vendorEl) {
+                        if (vendorEl.tomselect) {
+                            vendorEl.tomselect.setValue(String(data.vendor_code));
+                        } else {
+                            vendorEl.value = String(data.vendor_code);
+                        }
                     }
                 }
 
-                // 3. HSN & GST
+                // 3. Material
+                if (data.material_code) {
+                    const matSelect = document.querySelector('select[name="material_code"]');
+                    if (matSelect) {
+                        matSelect.value = String(data.material_code);
+                    }
+                }
+
+                // 4. HSN & GST
                 if (data.hsn_code) {
                     document.querySelectorAll('input[name="hsn_code"], input[name*="[hsn_code]"]').forEach(function(el) {
-                        if (!el.value) el.value = data.hsn_code;
+                        el.value = data.hsn_code;
                     });
                 }
                 if (data.gst_rate !== undefined && data.gst_rate !== null) {
                     document.querySelectorAll('input[name="gst_rate"], input[name*="[gst_rate]"]').forEach(function(el) {
-                        if (!el.value || el.value === '0') el.value = data.gst_rate;
+                        el.value = data.gst_rate;
                     });
                 }
 
-                // 4. Dimensions & Weight
-                ['height', 'width', 'depth', 'weight', 'dimensions'].forEach(function(field) {
+                // 5. Dimensions, Weight & Price
+                ['height', 'width', 'depth', 'weight', 'dimensions', 'cp', 'cost_price', 'price_india_mrp', 'mrp_india'].forEach(function(field) {
                     if (data[field]) {
                         document.querySelectorAll('input[name="' + field + '"], input[name*="[' + field + ']"]').forEach(function(el) {
-                            if (!el.value || el.value === '0') el.value = data[field];
+                            el.value = data[field];
                         });
                     }
                 });
 
-                // 5. Book Fields
+                // 6. Book Fields
                 ['pages', 'isbn', 'cover_type', 'edition', 'publication_date', 'language'].forEach(function(fieldName) {
                     if (data[fieldName]) {
                         const fieldEl = document.querySelector('[name="' + fieldName + '"]');
-                        if (fieldEl && !fieldEl.value) {
+                        if (fieldEl) {
                             fieldEl.value = data[fieldName];
                         }
                     }
                 });
+
+                // 7. Product Image
+                if (data.image_url) {
+                    const mainPreview = document.getElementById('main_photo_preview');
+                    if (mainPreview) {
+                        mainPreview.src = data.image_url;
+                        mainPreview.style.display = 'block';
+                    }
+                    const oldPhotoMain = document.querySelector('input[name="old_product_photo_main"]');
+                    if (oldPhotoMain && data.image) {
+                        oldPhotoMain.value = data.image;
+                    }
+
+                    document.querySelectorAll('.preview-img').forEach(function(imgEl) {
+                        imgEl.src = data.image_url;
+                        imgEl.style.display = 'block';
+                        imgEl.classList.remove('hidden');
+                    });
+                }
             })
             .catch(function(err) {
                 console.error('Error fetching parent product details in desktopform:', err);

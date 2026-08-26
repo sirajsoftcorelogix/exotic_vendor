@@ -470,9 +470,10 @@ class Inbounding {
         $materialCode = '';
         $materialRaw = trim((string) ($p['material'] ?? ''));
         if ($materialRaw !== '') {
-            $mStmt = $this->conn->prepare("SELECT id FROM material WHERE id = ? OR material_name = ? LIMIT 1");
+            $mStmt = $this->conn->prepare("SELECT id FROM material WHERE CAST(id AS CHAR) = ? OR LOWER(TRIM(material_name)) = LOWER(TRIM(?)) OR LOWER(material_name) LIKE ? LIMIT 1");
             if ($mStmt) {
-                $mStmt->bind_param("ss", $materialRaw, $materialRaw);
+                $likeMat = '%' . strtolower($materialRaw) . '%';
+                $mStmt->bind_param("sss", $materialRaw, $materialRaw, $likeMat);
                 $mStmt->execute();
                 $mRes = $mStmt->get_result();
                 if ($mRow = ($mRes ? $mRes->fetch_assoc() : null)) {
@@ -482,7 +483,64 @@ class Inbounding {
             }
         }
 
-        // 3. Extract HSN, GST, Dimensions, Weight, Location, Price
+        // 3. Resolve Vendor Code (matches vp_vendors.vendor_id or vp_vendors.id)
+        $vendorCode = '';
+        $chkPvm = $this->conn->query("SHOW TABLES LIKE 'product_vendor_map'");
+        if ($chkPvm && $chkPvm->num_rows > 0) {
+            $pvmStmt = $this->conn->prepare("SELECT pvm.vendor_code, pvm.vendor_id, v.vendor_id AS v_vendor_id FROM product_vendor_map pvm LEFT JOIN vp_vendors v ON pvm.vendor_id = v.id WHERE pvm.item_code = ? ORDER BY pvm.priority ASC LIMIT 1");
+            if ($pvmStmt) {
+                $pvmStmt->bind_param("s", $itemCode);
+                $pvmStmt->execute();
+                $pvmRes = $pvmStmt->get_result();
+                if ($pvmRow = ($pvmRes ? $pvmRes->fetch_assoc() : null)) {
+                    $vendorCode = trim((string)($pvmRow['v_vendor_id'] ?? $pvmRow['vendor_code'] ?? $pvmRow['vendor_id'] ?? ''));
+                }
+                $pvmStmt->close();
+            }
+        }
+
+        $vendorRaw = trim((string)($p['vendor'] ?? $p['marketplace_vendor'] ?? $p['vendor_us'] ?? ''));
+        if ($vendorCode === '' && $vendorRaw !== '') {
+            $vStmt = $this->conn->prepare("SELECT vendor_id, id FROM vp_vendors WHERE vendor_id = ? OR CAST(id AS CHAR) = ? OR LOWER(TRIM(vendor_name)) = LOWER(TRIM(?)) LIMIT 1");
+            if ($vStmt) {
+                $vStmt->bind_param("sss", $vendorRaw, $vendorRaw, $vendorRaw);
+                $vStmt->execute();
+                $vRes = $vStmt->get_result();
+                if ($vRow = ($vRes ? $vRes->fetch_assoc() : null)) {
+                    $vendorCode = trim((string)($vRow['vendor_id'] ?? $vRow['id'] ?? ''));
+                }
+                $vStmt->close();
+            }
+            if ($vendorCode === '') {
+                $vendorCode = $vendorRaw;
+            }
+        }
+
+        // 4. Resolve Product Image
+        $productImage = trim((string)($p['image'] ?? $p['product_photo'] ?? ''));
+        if ($productImage === '') {
+            $imgStmt = $this->conn->prepare("SELECT file_name FROM item_images ii INNER JOIN vp_inbound vi ON ii.item_id = vi.id WHERE vi.Item_code = ? ORDER BY ii.display_order ASC, ii.id ASC LIMIT 1");
+            if ($imgStmt) {
+                $imgStmt->bind_param("s", $itemCode);
+                $imgStmt->execute();
+                $imgRes = $imgStmt->get_result();
+                if ($imgRow = ($imgRes ? $imgRes->fetch_assoc() : null)) {
+                    $productImage = trim((string)($imgRow['file_name'] ?? ''));
+                }
+                $imgStmt->close();
+            }
+        }
+
+        $productImageUrl = '';
+        if ($productImage !== '') {
+            if (preg_match('/^https?:\/\//i', $productImage)) {
+                $productImageUrl = $productImage;
+            } else {
+                $productImageUrl = base_url($productImage);
+            }
+        }
+
+        // 5. Extract HSN, GST, Dimensions, Weight, Location, Price
         $hsnCode = trim((string) ($p['hsn'] ?? $p['hscode'] ?? ''));
         $gstRate = (float) ($p['gst'] ?? 0);
         $height = $p['prod_height'] ?? '';
@@ -494,7 +552,7 @@ class Inbounding {
         $cp = $p['cost_price'] ?? $p['cp'] ?? '';
         $priceIndiaMrp = $p['mrp_india'] ?? $p['finalprice'] ?? $p['price_india'] ?? '';
 
-        // 4. Extract Book Attributes
+        // 6. Extract Book Attributes
         $pages = $p['pages'] ?? '';
         $isbn = $p['isbn'] ?? '';
         $coverType = $p['cover_type'] ?? '';
@@ -502,7 +560,7 @@ class Inbounding {
         $publicationDate = $p['publication_date'] ?? '';
         $language = $p['language'] ?? '';
 
-        // 5. Parse and resolve Authors
+        // 7. Parse and resolve Authors
         $authorRaw = trim((string) ($p['author'] ?? ''));
         $authorIds = $this->parseInboundAuthorIds($authorRaw);
         $authorsList = [];
@@ -528,7 +586,7 @@ class Inbounding {
             }
         }
 
-        // 6. Parse and resolve Edited By
+        // 8. Parse and resolve Edited By
         $editedByRaw = trim((string) ($p['edited_by'] ?? ''));
         $editedByIds = $this->parseInboundAuthorIds($editedByRaw);
         $editorsList = [];
@@ -554,7 +612,7 @@ class Inbounding {
             }
         }
 
-        // 7. Parse and resolve Publisher
+        // 9. Parse and resolve Publisher
         $publisherRaw = trim((string) ($p['publisher'] ?? ''));
         $publisherIds = $this->parseInboundAuthorIds($publisherRaw);
         $publishersList = [];
@@ -585,7 +643,10 @@ class Inbounding {
             'title' => $p['title'] ?? '',
             'group_name' => $groupCode !== '' ? $groupCode : $groupNameRaw,
             'group_name_raw' => $groupNameRaw,
+            'vendor_code' => $vendorCode,
             'material_code' => $materialCode !== '' ? $materialCode : $materialRaw,
+            'image' => $productImage,
+            'image_url' => $productImageUrl,
             'hsn_code' => $hsnCode,
             'gst_rate' => $gstRate,
             'height' => $height,
@@ -1148,8 +1209,14 @@ class Inbounding {
                     if (empty($inbounding['group_name']) && !empty($parentDetails['group_name'])) {
                         $inbounding['group_name'] = $parentDetails['group_name'];
                     }
+                    if (empty($inbounding['vendor_code']) && !empty($parentDetails['vendor_code'])) {
+                        $inbounding['vendor_code'] = $parentDetails['vendor_code'];
+                    }
                     if (empty($inbounding['material_code']) && !empty($parentDetails['material_code'])) {
                         $inbounding['material_code'] = $parentDetails['material_code'];
+                    }
+                    if (empty($inbounding['product_photo']) && !empty($parentDetails['image'])) {
+                        $inbounding['product_photo'] = $parentDetails['image'];
                     }
                     if (empty($inbounding['hsn_code']) && !empty($parentDetails['hsn_code'])) {
                         $inbounding['hsn_code'] = $parentDetails['hsn_code'];
