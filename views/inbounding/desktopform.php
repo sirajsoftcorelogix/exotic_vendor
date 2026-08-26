@@ -1665,7 +1665,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
             $search_sel_sub     = array_filter(explode(',', $search_sub_raw));
             $search_sel_cat     = array_filter(explode(',', $search_cat_raw));
         ?>
-        <div class="mt-[15px] md:mx-5">
+        <div class="mt-[15px] md:mx-5" id="inbound-section-search-category">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-gray-50">
                 <?php if ($is_inbound_live_published): ?>
                 <div class="flex justify-end mb-3">
@@ -1739,7 +1739,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </fieldset>
         </div>
-        <div class="mt-[15px] md:mx-5">
+        <div class="mt-[15px] md:mx-5" id="inbound-section-search-terms">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
                 <?php if ($is_inbound_live_published): ?>
                 <div class="flex justify-end mb-3">
@@ -1762,7 +1762,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </fieldset>
         </div>
-        <div class="mt-[15px] md:mx-5">
+        <div class="mt-[15px] md:mx-5" id="inbound-section-item-identification">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] pb-5 bg-white">
                 <?php if ($is_inbound_live_published): ?>
                 <div class="flex justify-end mb-3">
@@ -1998,7 +1998,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </fieldset>
         </div>
-        <div class="mt-[15px] md:mx-5">
+        <div class="mt-[15px] md:mx-5" id="inbound-section-stock">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <?php if ($is_inbound_live_published): ?>
                 <div class="flex justify-end mb-3">
@@ -2619,8 +2619,32 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    function toggleVariantSectionsVisibility(val) {
+        const isVariantYes = (val === 'Y');
+        const sectionsToHide = [
+            'inbound-section-item-grouping',
+            'inbound-section-search-category',
+            'inbound-section-search-terms',
+            'inbound-section-item-identification',
+            'inbound-section-stock'
+        ];
+
+        sectionsToHide.forEach(function(sectionId) {
+            const el = document.getElementById(sectionId);
+            if (el) {
+                if (isVariantYes) {
+                    el.style.display = 'none';
+                } else {
+                    el.style.display = '';
+                }
+            }
+        });
+    }
+
     // --- VARIANT TOGGLE ---
     function toggleVariantFields(val) {
+        toggleVariantSectionsVisibility(val);
+
         if (val === 'Y') {
             wrapperSelect.style.display = 'block';
             wrapperInput.style.display  = 'none';
@@ -4597,19 +4621,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // --- 1. GENERAL FIELDS ---
         const isBookGroup = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
+        const isVariant = getVal('is_variant') === 'Y';
+
         if (!getVal('added_date')) errors.push("Field 'Added On' is required.");
         if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
         if (!getVal('updated_by_user_id')) errors.push("Field 'Feeded By' is required.");
-        if (!isBookGroup && !getVal('material_code')) errors.push("Field 'Material' is required.");
-        if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
-        if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
-        if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
-        if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
-        if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");
 
-        // Category Check (Checkboxes)
-        const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
-        if (catChecked === 0) errors.push("Please select at least one 'Category'.");
+        if (!isVariant) {
+            if (!isBookGroup && !getVal('material_code')) errors.push("Field 'Material' is required.");
+            if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
+            if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
+            if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
+            if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
+            if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");
+
+            // Category Check (Checkboxes)
+            const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
+            if (catChecked === 0) errors.push("Please select at least one 'Category'.");
+        }
 
         // Marketplace sourcing: no local stock — skip main quantity_received check
         const hasMarketplaceVendor = getVal('marketplace') !== '';
@@ -6082,23 +6111,24 @@ function validateAndSubmit(actionType) {
 
     // --- 1. GENERAL FIELDS VALIDATION ---
     const isBookGroupSave = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
+    const isVariant = getVal('is_variant') === 'Y'; // Get current Variant status (Y or N)
+
     if (!getVal('added_date')) errors.push("Field 'Added On' is required.");
     if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
     if (!getVal('updated_by_user_id')) errors.push("Field 'Feeded By' is required.");
-    if (!isBookGroupSave && !getVal('material_code')) errors.push("Field 'Material' is required.");
-    if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
-    if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
-    if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
-    if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
-    if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");
-    const isVariant = getVal('is_variant'); // Get current Variant status (Y or N)
 
-    // Only validate Image Directory if this is NOT a variant (i.e., it is a Parent/Main item)
-    
+    if (!isVariant) {
+        if (!isBookGroupSave && !getVal('material_code')) errors.push("Field 'Material' is required.");
+        if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
+        if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
+        if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
+        if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
+        if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");
 
-    // Category Check (Checkboxes)
-    const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
-    if (catChecked === 0) errors.push("Please select at least one 'Category'.");
+        // Category Check (Checkboxes)
+        const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
+        if (catChecked === 0) errors.push("Please select at least one 'Category'.");
+    }
 
     // --- 2. MAIN ITEM VALIDATION ---
      // Marketplace sourcing: no local stock — skip main quantity_received check
