@@ -2712,17 +2712,12 @@ document.addEventListener('DOMContentLoaded', function() {
             if (fieldEl) fieldEl.value = '';
         });
 
-        // 7. Photos
+        // 7. Main Photo
         const mainPreview = document.getElementById('main_photo_preview');
         if (mainPreview) {
             mainPreview.src = '#';
             mainPreview.style.display = 'none';
         }
-        document.querySelectorAll('.preview-img').forEach(function(imgEl) {
-            imgEl.src = '#';
-            imgEl.style.display = 'none';
-            imgEl.classList.add('hidden');
-        });
     }
 
     function loadDesktopformParentProductInfo(parentCode) {
@@ -2796,7 +2791,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
 
-                // 7. Product Image
+                // 7. Product Image (Main)
                 if (data.image_url) {
                     const mainPreview = document.getElementById('main_photo_preview');
                     if (mainPreview) {
@@ -2807,12 +2802,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (oldPhotoMain && data.image) {
                         oldPhotoMain.value = data.image;
                     }
-
-                    document.querySelectorAll('.preview-img').forEach(function(imgEl) {
-                        imgEl.src = data.image_url;
-                        imgEl.style.display = 'block';
-                        imgEl.classList.remove('hidden');
-                    });
                 }
             })
             .catch(function(err) {
@@ -2826,9 +2815,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 loadDesktopformParentProductInfo(val);
             }
         });
-        if (variantSelect && variantSelect.value === 'Y' && tomSelectInstance.getValue()) {
-            loadDesktopformParentProductInfo(tomSelectInstance.getValue());
-        }
     }
 
     if (variantSelect) {

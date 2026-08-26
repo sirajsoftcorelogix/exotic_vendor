@@ -1233,12 +1233,15 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
                 if (fieldEl) fieldEl.value = '';
             });
 
-            // 8. Photos
-            document.querySelectorAll('input[name*="[old_photo]"]').forEach(function(el) { el.value = ''; });
-            document.querySelectorAll('.preview-img').forEach(function(imgEl) {
-                imgEl.src = '#';
-                imgEl.classList.add('hidden');
-            });
+            // 8. Main Photo
+            const mainCard = document.querySelector('.variation-card[data-index="0"]');
+            if (mainCard) {
+                const mainImg = mainCard.querySelector('.preview-img');
+                if (mainImg) {
+                    mainImg.src = '#';
+                    mainImg.classList.add('hidden');
+                }
+            }
         }
 
         function loadParentProductInfo(parentCode) {
@@ -1300,15 +1303,20 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
                         }
                     });
 
-                    // 6. Product Image
+                    // 6. Product Image (Main variant)
                     if (data.image_url) {
-                        document.querySelectorAll('input[name*="[old_photo]"]').forEach(function(el) {
-                            if (!el.value && data.image) el.value = data.image;
-                        });
-                        document.querySelectorAll('.preview-img').forEach(function(imgEl) {
-                            imgEl.src = data.image_url;
-                            imgEl.classList.remove('hidden');
-                        });
+                        const mainCard = document.querySelector('.variation-card[data-index="0"]');
+                        if (mainCard) {
+                            const mainImg = mainCard.querySelector('.preview-img');
+                            if (mainImg) {
+                                mainImg.src = data.image_url;
+                                mainImg.classList.remove('hidden');
+                            }
+                            const oldPhoto = mainCard.querySelector('input[name*="[old_photo]"]');
+                            if (oldPhoto && data.image) {
+                                oldPhoto.value = data.image;
+                            }
+                        }
                     }
 
                     // 7. Authors
@@ -1361,9 +1369,6 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
 
         // Initialize state based on PHP value
         toggleVariantFields(variantSelect.value);
-        if (variantSelect.value === 'Y' && tomSelectInstance.getValue()) {
-            loadParentProductInfo(tomSelectInstance.getValue());
-        }
         // --- END: VARIANT / PARENT ITEM CODE LOGIC ---
 
 
