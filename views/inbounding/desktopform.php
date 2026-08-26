@@ -1182,6 +1182,9 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <span class="bg-[#d97824] text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
                                 Variation: <?= htmlspecialchars($var['color'] ?? '') ?> - <?= htmlspecialchars($var['size'] ?? '') ?>
                             </span>
+                            <span class="desktopform-main-var-badge hidden bg-gray-200 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded border border-gray-300">
+                                🔒 Read Only (Parent)
+                            </span>
                         </div>
                         
                         <div class="flex gap-3">
@@ -2534,6 +2537,63 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     }
+    function lockDesktopformMainVariantCard(isLocked) {
+        const mainCard = document.querySelector('#variations-container .variation-card');
+        if (!mainCard) return;
+
+        const lockBadge = mainCard.querySelector('.desktopform-main-var-badge');
+        if (lockBadge) {
+            if (isLocked) {
+                lockBadge.classList.remove('hidden');
+            } else {
+                lockBadge.classList.add('hidden');
+            }
+        }
+
+        if (isLocked) {
+            mainCard.classList.add('bg-gray-100/70');
+        } else {
+            mainCard.classList.remove('bg-gray-100/70');
+        }
+
+        const inputs = mainCard.querySelectorAll('input:not([type="hidden"]):not([type="file"])');
+        inputs.forEach(function(input) {
+            if (isLocked) {
+                input.readOnly = true;
+                input.classList.add('bg-gray-200', 'cursor-not-allowed', 'text-gray-600');
+            } else {
+                input.readOnly = false;
+                input.classList.remove('bg-gray-200', 'cursor-not-allowed', 'text-gray-600');
+            }
+        });
+
+        const selects = mainCard.querySelectorAll('select');
+        selects.forEach(function(select) {
+            if (isLocked) {
+                select.style.pointerEvents = 'none';
+                select.style.backgroundColor = '#e5e7eb';
+                select.tabIndex = -1;
+                select.classList.add('cursor-not-allowed', 'text-gray-600');
+            } else {
+                select.style.pointerEvents = '';
+                select.style.backgroundColor = '';
+                select.removeAttribute('tabindex');
+                select.classList.remove('cursor-not-allowed', 'text-gray-600');
+            }
+        });
+
+        const photoLabels = mainCard.querySelectorAll('label.cursor-pointer');
+        photoLabels.forEach(function(label) {
+            if (isLocked) {
+                label.style.pointerEvents = 'none';
+                label.classList.add('opacity-75', 'cursor-not-allowed');
+            } else {
+                label.style.pointerEvents = '';
+                label.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
+        });
+    }
+
     // --- VARIANT TOGGLE ---
     function toggleVariantFields(val) {
         if (val === 'Y') {
@@ -2542,6 +2602,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (tomSelectInstance) tomSelectInstance.enable();
             if (selectElement) selectElement.disabled = false;
             fixedInput.disabled = true;
+            lockDesktopformMainVariantCard(true);
         } else if (val === 'N') {
             wrapperSelect.style.display = 'none';
             wrapperInput.style.display  = 'block';
@@ -2552,6 +2613,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 fixedInput.value = ""; 
                 fixedInput.placeholder = "Auto-generated on Save";
             }
+            lockDesktopformMainVariantCard(false);
         }
         const imgDirSelect = document.getElementById('image_directory_select');
             if (imgDirSelect && imgDirSelect.tomselect) {

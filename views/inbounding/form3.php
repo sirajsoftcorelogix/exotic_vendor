@@ -491,8 +491,13 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
                     <div class="variation-card border border-gray-300 rounded-lg p-3 bg-gray-50/50" data-index="<?php echo $index; ?>">
                         
                         <div class="flex justify-between items-center border-b border-gray-300 pb-2 mb-4">
-                            <h3 class="font-bold text-black text-sm">
-                                <?php echo ($index === 0) ? 'Main Variant' : 'Variant ' . ($index + 1); ?>
+                            <h3 class="font-bold text-black text-sm flex items-center gap-2">
+                                <span><?php echo ($index === 0) ? 'Main Variant' : 'Variant ' . ($index + 1); ?></span>
+                                <?php if ($index === 0): ?>
+                                    <span class="main-variant-lock-badge hidden bg-gray-200 text-gray-700 text-xs font-semibold px-2 py-0.5 rounded border border-gray-300">
+                                        <i class="fa-solid fa-lock text-gray-500 mr-1"></i> Read Only (Parent)
+                                    </span>
+                                <?php endif; ?>
                             </h3>
                             <div class="flex gap-3">
                                 <button type="button" class="clone-variation-btn text-blue-600 hover:text-blue-800 font-bold text-xs uppercase flex items-center gap-1">
@@ -1075,15 +1080,76 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
             });
         }
 
+        function lockMainVariantCard(isLocked) {
+            const mainCard = document.querySelector('.variation-card[data-index="0"]');
+            if (!mainCard) return;
+
+            const lockBadge = mainCard.querySelector('.main-variant-lock-badge');
+            if (lockBadge) {
+                if (isLocked) {
+                    lockBadge.classList.remove('hidden');
+                } else {
+                    lockBadge.classList.add('hidden');
+                }
+            }
+
+            if (isLocked) {
+                mainCard.classList.add('bg-gray-100', 'border-gray-400');
+            } else {
+                mainCard.classList.remove('bg-gray-100', 'border-gray-400');
+            }
+
+            const inputs = mainCard.querySelectorAll('input:not([type="hidden"]):not([type="file"])');
+            inputs.forEach(function(input) {
+                if (isLocked) {
+                    input.readOnly = true;
+                    input.classList.add('bg-gray-200', 'cursor-not-allowed', 'text-gray-600');
+                    input.classList.remove('focus:border-black');
+                } else {
+                    input.readOnly = false;
+                    input.classList.remove('bg-gray-200', 'cursor-not-allowed', 'text-gray-600');
+                    input.classList.add('focus:border-black');
+                }
+            });
+
+            const selects = mainCard.querySelectorAll('select');
+            selects.forEach(function(select) {
+                if (isLocked) {
+                    select.style.pointerEvents = 'none';
+                    select.style.backgroundColor = '#e5e7eb';
+                    select.tabIndex = -1;
+                    select.classList.add('cursor-not-allowed', 'text-gray-600');
+                } else {
+                    select.style.pointerEvents = '';
+                    select.style.backgroundColor = '';
+                    select.removeAttribute('tabindex');
+                    select.classList.remove('cursor-not-allowed', 'text-gray-600');
+                }
+            });
+
+            const photoLabel = mainCard.querySelector('label.cursor-pointer');
+            if (photoLabel) {
+                if (isLocked) {
+                    photoLabel.style.pointerEvents = 'none';
+                    photoLabel.classList.add('opacity-75', 'cursor-not-allowed');
+                } else {
+                    photoLabel.style.pointerEvents = '';
+                    photoLabel.classList.remove('opacity-75', 'cursor-not-allowed');
+                }
+            }
+        }
+
         function toggleVariantFields(val) {
             if (val === 'Y') {
                 wrapperSelect.classList.remove('hidden');
                 wrapperInput.classList.add('hidden');
                 tomSelectInstance.enable();
+                lockMainVariantCard(true);
             } else {
                 wrapperSelect.classList.add('hidden');
                 wrapperInput.classList.remove('hidden');
                 tomSelectInstance.disable();
+                lockMainVariantCard(false);
             }
         }
 
