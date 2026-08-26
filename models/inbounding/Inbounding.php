@@ -425,6 +425,192 @@ class Inbounding {
         return $ItamcodeData;
     }
 
+    /**
+     * Fetch parent product information from vp_products and related tables
+     * (category, material, vp_author, vp_publishers) when is_variant is 'Y'.
+     */
+    public function getParentProductDetails($itemCode): ?array
+    {
+        $itemCode = trim((string) $itemCode);
+        if ($itemCode === '') {
+            return null;
+        }
+
+        $stmt = $this->conn->prepare("SELECT * FROM vp_products WHERE item_code = ? LIMIT 1");
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param("s", $itemCode);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $p = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+
+        if (!$p) {
+            return null;
+        }
+
+        // 1. Resolve Category Code (matches category.category column)
+        $groupCode = '';
+        $groupNameRaw = trim((string) ($p['groupname'] ?? $p['category'] ?? ''));
+        if ($groupNameRaw !== '') {
+            $cStmt = $this->conn->prepare("SELECT category FROM category WHERE category = ? OR name = ? OR display_name = ? LIMIT 1");
+            if ($cStmt) {
+                $cStmt->bind_param("sss", $groupNameRaw, $groupNameRaw, $groupNameRaw);
+                $cStmt->execute();
+                $cRes = $cStmt->get_result();
+                if ($cRow = ($cRes ? $cRes->fetch_assoc() : null)) {
+                    $groupCode = (string) $cRow['category'];
+                }
+                $cStmt->close();
+            }
+        }
+
+        // 2. Resolve Material Code (matches material.id column)
+        $materialCode = '';
+        $materialRaw = trim((string) ($p['material'] ?? ''));
+        if ($materialRaw !== '') {
+            $mStmt = $this->conn->prepare("SELECT id FROM material WHERE id = ? OR material_name = ? LIMIT 1");
+            if ($mStmt) {
+                $mStmt->bind_param("ss", $materialRaw, $materialRaw);
+                $mStmt->execute();
+                $mRes = $mStmt->get_result();
+                if ($mRow = ($mRes ? $mRes->fetch_assoc() : null)) {
+                    $materialCode = (string) $mRow['id'];
+                }
+                $mStmt->close();
+            }
+        }
+
+        // 3. Extract HSN, GST, Dimensions, Weight, Location, Price
+        $hsnCode = trim((string) ($p['hsn'] ?? $p['hscode'] ?? ''));
+        $gstRate = (float) ($p['gst'] ?? 0);
+        $height = $p['prod_height'] ?? '';
+        $width = $p['prod_width'] ?? '';
+        $depth = $p['prod_length'] ?? '';
+        $weight = $p['product_weight'] ?? '';
+        $dimensions = $p['dimensions'] ?? '';
+        $storeLocation = $p['location'] ?? '';
+        $cp = $p['cost_price'] ?? $p['cp'] ?? '';
+        $priceIndiaMrp = $p['mrp_india'] ?? $p['finalprice'] ?? $p['price_india'] ?? '';
+
+        // 4. Extract Book Attributes
+        $pages = $p['pages'] ?? '';
+        $isbn = $p['isbn'] ?? '';
+        $coverType = $p['cover_type'] ?? '';
+        $edition = $p['edition'] ?? '';
+        $publicationDate = $p['publication_date'] ?? '';
+        $language = $p['language'] ?? '';
+
+        // 5. Parse and resolve Authors
+        $authorRaw = trim((string) ($p['author'] ?? ''));
+        $authorIds = $this->parseInboundAuthorIds($authorRaw);
+        $authorsList = [];
+        if ($authorIds !== []) {
+            foreach ($authorIds as $aId) {
+                $aRow = $this->getAuthorById($aId);
+                if (!empty($aRow['id'])) {
+                    $authorsList[] = $aRow;
+                }
+            }
+        } elseif ($authorRaw !== '') {
+            $aStmt = $this->conn->prepare("SELECT author_id AS id, author AS name FROM vp_author WHERE author = ? OR author LIKE ? LIMIT 5");
+            if ($aStmt) {
+                $like = '%' . $authorRaw . '%';
+                $aStmt->bind_param("ss", $authorRaw, $like);
+                $aStmt->execute();
+                $aRes = $aStmt->get_result();
+                while ($aRow = ($aRes ? $aRes->fetch_assoc() : null)) {
+                    $authorsList[] = $aRow;
+                    $authorIds[] = (int) $aRow['id'];
+                }
+                $aStmt->close();
+            }
+        }
+
+        // 6. Parse and resolve Edited By
+        $editedByRaw = trim((string) ($p['edited_by'] ?? ''));
+        $editedByIds = $this->parseInboundAuthorIds($editedByRaw);
+        $editorsList = [];
+        if ($editedByIds !== []) {
+            foreach ($editedByIds as $eId) {
+                $eRow = $this->getAuthorById($eId);
+                if (!empty($eRow['id'])) {
+                    $editorsList[] = $eRow;
+                }
+            }
+        } elseif ($editedByRaw !== '') {
+            $eStmt = $this->conn->prepare("SELECT author_id AS id, author AS name FROM vp_author WHERE author = ? OR author LIKE ? LIMIT 5");
+            if ($eStmt) {
+                $like = '%' . $editedByRaw . '%';
+                $eStmt->bind_param("ss", $editedByRaw, $like);
+                $eStmt->execute();
+                $eRes = $eStmt->get_result();
+                while ($eRow = ($eRes ? $eRes->fetch_assoc() : null)) {
+                    $editorsList[] = $eRow;
+                    $editedByIds[] = (int) $eRow['id'];
+                }
+                $eStmt->close();
+            }
+        }
+
+        // 7. Parse and resolve Publisher
+        $publisherRaw = trim((string) ($p['publisher'] ?? ''));
+        $publisherIds = $this->parseInboundAuthorIds($publisherRaw);
+        $publishersList = [];
+        if ($publisherIds !== []) {
+            foreach ($publisherIds as $pubId) {
+                $pubRow = $this->getPublisherById($pubId);
+                if (!empty($pubRow['id'])) {
+                    $publishersList[] = $pubRow;
+                }
+            }
+        } elseif ($publisherRaw !== '') {
+            $pubStmt = $this->conn->prepare("SELECT publishers_id AS id, publishers AS name FROM vp_publishers WHERE publishers = ? OR publishers LIKE ? LIMIT 5");
+            if ($pubStmt) {
+                $like = '%' . $publisherRaw . '%';
+                $pubStmt->bind_param("ss", $publisherRaw, $like);
+                $pubStmt->execute();
+                $pubRes = $pubStmt->get_result();
+                while ($pubRow = ($pubRes ? $pubRes->fetch_assoc() : null)) {
+                    $publishersList[] = $pubRow;
+                    $publisherIds[] = (int) $pubRow['id'];
+                }
+                $pubStmt->close();
+            }
+        }
+
+        return [
+            'item_code' => $p['item_code'] ?? $itemCode,
+            'title' => $p['title'] ?? '',
+            'group_name' => $groupCode !== '' ? $groupCode : $groupNameRaw,
+            'group_name_raw' => $groupNameRaw,
+            'material_code' => $materialCode !== '' ? $materialCode : $materialRaw,
+            'hsn_code' => $hsnCode,
+            'gst_rate' => $gstRate,
+            'height' => $height,
+            'width' => $width,
+            'depth' => $depth,
+            'weight' => $weight,
+            'dimensions' => $dimensions,
+            'store_location' => $storeLocation,
+            'cp' => $cp,
+            'price_india_mrp' => $priceIndiaMrp,
+            'pages' => $pages,
+            'isbn' => $isbn,
+            'cover_type' => $coverType,
+            'edition' => $edition,
+            'publication_date' => $publicationDate,
+            'language' => $language,
+            'author_ids' => implode(',', array_unique($authorIds)),
+            'authors_list' => $authorsList,
+            'edited_by_ids' => implode(',', array_unique($editedByIds)),
+            'editors_list' => $editorsList,
+            'publisher_ids' => implode(',', array_unique($publisherIds)),
+            'publishers_list' => $publishersList,
+        ];
+    }
+
     // 1. Fetch all images for a specific item (UPDATED: Now sorts by Display Order)
     public function getitem_imgs($item_id) {
         $item_id = intval($item_id);
@@ -954,6 +1140,52 @@ class Inbounding {
         }
         if ($inbounding !== []) {
             $inbounding['variations'] = $variations;
+            if (strtoupper(trim((string) ($inbounding['is_variant'] ?? 'N'))) === 'Y' && !empty($inbounding['Item_code'])) {
+                $parentDetails = $this->getParentProductDetails($inbounding['Item_code']);
+                if ($parentDetails) {
+                    $inbounding['parent_item_title'] = $parentDetails['title'];
+                    $inbounding['parent_details'] = $parentDetails;
+                    if (empty($inbounding['group_name']) && !empty($parentDetails['group_name'])) {
+                        $inbounding['group_name'] = $parentDetails['group_name'];
+                    }
+                    if (empty($inbounding['material_code']) && !empty($parentDetails['material_code'])) {
+                        $inbounding['material_code'] = $parentDetails['material_code'];
+                    }
+                    if (empty($inbounding['hsn_code']) && !empty($parentDetails['hsn_code'])) {
+                        $inbounding['hsn_code'] = $parentDetails['hsn_code'];
+                    }
+                    if ((empty($inbounding['gst_rate']) || (float)$inbounding['gst_rate'] === 0.0) && !empty($parentDetails['gst_rate'])) {
+                        $inbounding['gst_rate'] = $parentDetails['gst_rate'];
+                    }
+                    if (empty($inbounding['author']) && !empty($parentDetails['author_ids'])) {
+                        $inbounding['author'] = $parentDetails['author_ids'];
+                    }
+                    if (empty($inbounding['edited_by']) && !empty($parentDetails['edited_by_ids'])) {
+                        $inbounding['edited_by'] = $parentDetails['edited_by_ids'];
+                    }
+                    if (empty($inbounding['publisher']) && !empty($parentDetails['publisher_ids'])) {
+                        $inbounding['publisher'] = $parentDetails['publisher_ids'];
+                    }
+                    if (empty($inbounding['pages']) && !empty($parentDetails['pages'])) {
+                        $inbounding['pages'] = $parentDetails['pages'];
+                    }
+                    if (empty($inbounding['isbn']) && !empty($parentDetails['isbn'])) {
+                        $inbounding['isbn'] = $parentDetails['isbn'];
+                    }
+                    if (empty($inbounding['cover_type']) && !empty($parentDetails['cover_type'])) {
+                        $inbounding['cover_type'] = $parentDetails['cover_type'];
+                    }
+                    if (empty($inbounding['edition']) && !empty($parentDetails['edition'])) {
+                        $inbounding['edition'] = $parentDetails['edition'];
+                    }
+                    if (empty($inbounding['publication_date']) && !empty($parentDetails['publication_date'])) {
+                        $inbounding['publication_date'] = $parentDetails['publication_date'];
+                    }
+                    if (empty($inbounding['language']) && !empty($parentDetails['language'])) {
+                        $inbounding['language'] = $parentDetails['language'];
+                    }
+                }
+            }
         }
 
         return [

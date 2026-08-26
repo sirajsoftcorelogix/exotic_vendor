@@ -1356,6 +1356,30 @@ switch ($page) {
                 break;
         }
         break;
+    case 'support':
+        require_once 'controllers/SupportController.php';
+        $controller = new SupportController($conn);
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'view':
+                $controller->view();
+                break;
+            case 'save':
+                $controller->save();
+                break;
+            case 'add_comment':
+                $controller->add_comment();
+                break;
+            case 'update_status':
+                $controller->update_status();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
     case 'inbounding':
         require_once 'controllers/InboundingController.php';
         $controller = new InboundingController();
@@ -1459,6 +1483,9 @@ switch ($page) {
                 break;
             case 'getItamcode':
                 $controller->getItamcode();
+                break;
+            case 'getParentProductDetails':
+                $controller->getParentProductDetailsAjax();
                 break;
             case 'searchAuthors':
                 $controller->searchAuthors();

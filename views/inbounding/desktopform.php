@@ -2563,11 +2563,86 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
     }
+    function loadDesktopformParentProductInfo(parentCode) {
+        if (!parentCode) return;
+        const parentDetailsUrl = '<?php echo base_url('?page=inbounding&action=getParentProductDetails&item_code='); ?>' + encodeURIComponent(parentCode);
+        fetch(parentDetailsUrl)
+            .then(function(res) { return res.json(); })
+            .then(function(json) {
+                if (!json || !json.success || !json.data) return;
+                const data = json.data;
+
+                // 1. Group / Category
+                if (data.group_name) {
+                    const groupSelect = document.querySelector('select[name="group_name"]');
+                    if (groupSelect && !groupSelect.value) {
+                        groupSelect.value = data.group_name;
+                        groupSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+
+                // 2. Material
+                if (data.material_code) {
+                    const matSelect = document.querySelector('select[name="material_code"]');
+                    if (matSelect && !matSelect.value) {
+                        matSelect.value = data.material_code;
+                    }
+                }
+
+                // 3. HSN & GST
+                if (data.hsn_code) {
+                    document.querySelectorAll('input[name="hsn_code"], input[name*="[hsn_code]"]').forEach(function(el) {
+                        if (!el.value) el.value = data.hsn_code;
+                    });
+                }
+                if (data.gst_rate !== undefined && data.gst_rate !== null) {
+                    document.querySelectorAll('input[name="gst_rate"], input[name*="[gst_rate]"]').forEach(function(el) {
+                        if (!el.value || el.value === '0') el.value = data.gst_rate;
+                    });
+                }
+
+                // 4. Dimensions & Weight
+                ['height', 'width', 'depth', 'weight', 'dimensions'].forEach(function(field) {
+                    if (data[field]) {
+                        document.querySelectorAll('input[name="' + field + '"], input[name*="[' + field + ']"]').forEach(function(el) {
+                            if (!el.value || el.value === '0') el.value = data[field];
+                        });
+                    }
+                });
+
+                // 5. Book Fields
+                ['pages', 'isbn', 'cover_type', 'edition', 'publication_date', 'language'].forEach(function(fieldName) {
+                    if (data[fieldName]) {
+                        const fieldEl = document.querySelector('[name="' + fieldName + '"]');
+                        if (fieldEl && !fieldEl.value) {
+                            fieldEl.value = data[fieldName];
+                        }
+                    }
+                });
+            })
+            .catch(function(err) {
+                console.error('Error fetching parent product details in desktopform:', err);
+            });
+    }
+
+    if (tomSelectInstance) {
+        tomSelectInstance.on('change', function(val) {
+            if (variantSelect && variantSelect.value === 'Y' && val) {
+                loadDesktopformParentProductInfo(val);
+            }
+        });
+        if (variantSelect && variantSelect.value === 'Y' && tomSelectInstance.getValue()) {
+            loadDesktopformParentProductInfo(tomSelectInstance.getValue());
+        }
+    }
+
     if (variantSelect) {
         variantSelect.addEventListener('change', function() {
             toggleVariantFields(this.value);
             if(this.value === 'N' && tomSelectInstance) {
                 tomSelectInstance.clear();
+            } else if(this.value === 'Y' && tomSelectInstance && tomSelectInstance.getValue()) {
+                loadDesktopformParentProductInfo(tomSelectInstance.getValue());
             }
         });
     }

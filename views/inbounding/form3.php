@@ -1090,11 +1090,113 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
         // Listener
         variantSelect.addEventListener('change', function() {
             toggleVariantFields(this.value);
-            if(this.value === 'N') tomSelectInstance.clear(); 
+            if(this.value === 'N') {
+                tomSelectInstance.clear();
+            } else if(this.value === 'Y' && tomSelectInstance.getValue()) {
+                loadParentProductInfo(tomSelectInstance.getValue());
+            }
+        });
+
+        function loadParentProductInfo(parentCode) {
+            if (!parentCode) return;
+            const parentDetailsUrl = '<?php echo base_url('?page=inbounding&action=getParentProductDetails&item_code='); ?>' + encodeURIComponent(parentCode);
+            fetch(parentDetailsUrl)
+                .then(function(res) { return res.json(); })
+                .then(function(json) {
+                    if (!json || !json.success || !json.data) return;
+                    const data = json.data;
+
+                    // 1. Category
+                    if (data.group_name) {
+                        const catRadio = document.querySelector('input[name="category"][value="' + data.group_name + '"]');
+                        if (catRadio) {
+                            catRadio.checked = true;
+                            catRadio.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    }
+
+                    // 2. Material
+                    if (data.material_code) {
+                        const matSelect = document.querySelector('select[name="material_code"]');
+                        if (matSelect) {
+                            matSelect.value = data.material_code;
+                        }
+                    }
+
+                    // 3. HSN & GST
+                    if (data.hsn_code) {
+                        document.querySelectorAll('input[name*="[hsn_code]"]').forEach(function(el) {
+                            if (!el.value) el.value = data.hsn_code;
+                        });
+                    }
+                    if (data.gst_rate !== undefined && data.gst_rate !== null) {
+                        document.querySelectorAll('input[name*="[gst_rate]"]').forEach(function(el) {
+                            if (!el.value || el.value === '0') el.value = data.gst_rate;
+                        });
+                    }
+
+                    // 4. Dimensions & Weight
+                    ['height', 'width', 'depth', 'weight', 'dimensions'].forEach(function(field) {
+                        if (data[field]) {
+                            document.querySelectorAll('input[name*="[' + field + ']"]').forEach(function(el) {
+                                if (!el.value || el.value === '0') el.value = data[field];
+                            });
+                        }
+                    });
+
+                    // 5. Authors
+                    if (authorTomSelect && Array.isArray(data.authors_list) && data.authors_list.length > 0) {
+                        authorTomSelect.clear(true);
+                        data.authors_list.forEach(function(opt) {
+                            authorTomSelect.addOption({ id: String(opt.id), name: opt.name });
+                        });
+                        authorTomSelect.setValue(data.authors_list.map(function(opt) { return String(opt.id); }));
+                    }
+
+                    // 6. Editors
+                    if (editedByTomSelect && Array.isArray(data.editors_list) && data.editors_list.length > 0) {
+                        editedByTomSelect.clear(true);
+                        data.editors_list.forEach(function(opt) {
+                            editedByTomSelect.addOption({ id: String(opt.id), name: opt.name });
+                        });
+                        editedByTomSelect.setValue(data.editors_list.map(function(opt) { return String(opt.id); }));
+                    }
+
+                    // 7. Publishers
+                    if (publisherSelect && Array.isArray(data.publishers_list) && data.publishers_list.length > 0) {
+                        publisherSelect.clear(true);
+                        data.publishers_list.forEach(function(opt) {
+                            publisherSelect.addOption({ id: String(opt.id), name: opt.name });
+                        });
+                        publisherSelect.setValue(data.publishers_list.map(function(opt) { return String(opt.id); }));
+                    }
+
+                    // 8. Book Attributes
+                    ['pages', 'isbn', 'cover_type', 'edition', 'publication_date', 'language'].forEach(function(fieldName) {
+                        if (data[fieldName]) {
+                            const fieldEl = document.querySelector('[name="' + fieldName + '"]');
+                            if (fieldEl && !fieldEl.value) {
+                                fieldEl.value = data[fieldName];
+                            }
+                        }
+                    });
+                })
+                .catch(function(err) {
+                    console.error('Error fetching parent product details:', err);
+                });
+        }
+
+        tomSelectInstance.on('change', function(val) {
+            if (variantSelect.value === 'Y' && val) {
+                loadParentProductInfo(val);
+            }
         });
 
         // Initialize state based on PHP value
         toggleVariantFields(variantSelect.value);
+        if (variantSelect.value === 'Y' && tomSelectInstance.getValue()) {
+            loadParentProductInfo(tomSelectInstance.getValue());
+        }
         // --- END: VARIANT / PARENT ITEM CODE LOGIC ---
 
 

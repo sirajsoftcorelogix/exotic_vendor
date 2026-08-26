@@ -305,6 +305,22 @@ class InboundingController {
         $data = $inboundingModel->getItamcode();
         echo json_encode($data);exit;
     }
+    public function getParentProductDetailsAjax(){
+        global $inboundingModel;
+        header('Content-Type: application/json');
+        $itemCode = trim((string) ($_GET['item_code'] ?? $_POST['item_code'] ?? ''));
+        if ($itemCode === '') {
+            echo json_encode(['success' => false, 'message' => 'Parent item code required.']);
+            exit;
+        }
+        $data = $inboundingModel->getParentProductDetails($itemCode);
+        if ($data !== null) {
+            echo json_encode(['success' => true, 'data' => $data]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Parent product not found.']);
+        }
+        exit;
+    }
     public function label($value=''){
         is_login();
         global $inboundingModel;
