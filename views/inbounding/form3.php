@@ -1139,17 +1139,47 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
             }
         }
 
+        function unlockForm3VariationCard(card) {
+            if (!card) return;
+            const lockBadge = card.querySelector('.main-variant-lock-badge');
+            if (lockBadge) lockBadge.classList.add('hidden');
+            card.classList.remove('bg-gray-100', 'border-gray-400');
+
+            const inputs = card.querySelectorAll('input:not([type="hidden"]):not([type="file"])');
+            inputs.forEach(function(input) {
+                input.readOnly = false;
+                input.classList.remove('bg-gray-200', 'cursor-not-allowed', 'text-gray-600');
+                input.classList.add('focus:border-black');
+            });
+
+            const selects = card.querySelectorAll('select');
+            selects.forEach(function(select) {
+                select.style.pointerEvents = '';
+                select.style.backgroundColor = '';
+                select.removeAttribute('tabindex');
+                select.classList.remove('cursor-not-allowed', 'text-gray-600');
+            });
+
+            const photoLabel = card.querySelector('label.cursor-pointer');
+            if (photoLabel) {
+                photoLabel.style.pointerEvents = '';
+                photoLabel.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
+        }
+
         function toggleVariantFields(val) {
             if (val === 'Y') {
                 wrapperSelect.classList.remove('hidden');
                 wrapperInput.classList.add('hidden');
                 tomSelectInstance.enable();
                 lockMainVariantCard(true);
+                document.querySelectorAll('.variation-card:not([data-index="0"])').forEach(unlockForm3VariationCard);
             } else {
                 wrapperSelect.classList.add('hidden');
                 wrapperInput.classList.remove('hidden');
                 tomSelectInstance.disable();
                 lockMainVariantCard(false);
+                document.querySelectorAll('.variation-card:not([data-index="0"])').forEach(unlockForm3VariationCard);
             }
         }
 
@@ -1682,6 +1712,7 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
             variationCount++;
             const html = createVariationCardHTML(variationCount - 1, variationCount);
             container.insertAdjacentHTML('beforeend', html);
+            unlockForm3VariationCard(container.lastElementChild);
             setTimeout(updateAllFields, 50);
         });
 
@@ -1723,6 +1754,7 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
                 container.insertAdjacentHTML('beforeend', html);
 
                 const newCard = container.lastElementChild;
+                unlockForm3VariationCard(newCard);
                 
                 // IMPORTANT: Populate options THEN select value
                 setTimeout(() => {

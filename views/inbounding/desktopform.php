@@ -802,6 +802,9 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 <h4 class="text-sm font-bold text-[#333] uppercase">
                     (<?= htmlspecialchars($data['form2']['color'] ?? '') ?> - <?= htmlspecialchars($data['form2']['size'] ?? '') ?>)
                 </h4>
+                <span class="desktopform-main-var-badge hidden bg-gray-200 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded border border-gray-300">
+                    🔒 Read Only (Parent)
+                </span>
             </div>
             <div class="w-full mb-5 min-w-0">
                 <label class="block text-xs font-bold text-[#555] mb-1">Gallery photos:<?php echo $desktopform_req_star; ?></label>
@@ -1181,9 +1184,6 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <?php endif; ?>
                             <span class="bg-[#d97824] text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
                                 Variation: <?= htmlspecialchars($var['color'] ?? '') ?> - <?= htmlspecialchars($var['size'] ?? '') ?>
-                            </span>
-                            <span class="desktopform-main-var-badge hidden bg-gray-200 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded border border-gray-300">
-                                🔒 Read Only (Parent)
                             </span>
                         </div>
                         
@@ -2538,10 +2538,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     }
     function lockDesktopformMainVariantCard(isLocked) {
-        const mainCard = document.querySelector('#variations-container .variation-card');
-        if (!mainCard) return;
+        const mainSection = document.getElementById('inbound-section-item-details') || document.getElementById('main-item-details-grid');
+        if (!mainSection) return;
 
-        const lockBadge = mainCard.querySelector('.desktopform-main-var-badge');
+        const lockBadge = document.querySelector('.desktopform-main-var-badge');
         if (lockBadge) {
             if (isLocked) {
                 lockBadge.classList.remove('hidden');
@@ -2551,12 +2551,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (isLocked) {
-            mainCard.classList.add('bg-gray-100/70');
+            mainSection.classList.add('bg-gray-100/70');
         } else {
-            mainCard.classList.remove('bg-gray-100/70');
+            mainSection.classList.remove('bg-gray-100/70');
         }
 
-        const inputs = mainCard.querySelectorAll('input:not([type="hidden"]):not([type="file"])');
+        const inputs = mainSection.querySelectorAll('input:not([type="hidden"]):not([type="file"])');
         inputs.forEach(function(input) {
             if (isLocked) {
                 input.readOnly = true;
@@ -2567,7 +2567,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        const selects = mainCard.querySelectorAll('select');
+        const selects = mainSection.querySelectorAll('select');
         selects.forEach(function(select) {
             if (isLocked) {
                 select.style.pointerEvents = 'none';
@@ -2582,7 +2582,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        const photoLabels = mainCard.querySelectorAll('label.cursor-pointer');
+        const photoLabels = mainSection.querySelectorAll('label.cursor-pointer');
         photoLabels.forEach(function(label) {
             if (isLocked) {
                 label.style.pointerEvents = 'none';
@@ -2591,6 +2591,31 @@ document.addEventListener('DOMContentLoaded', function() {
                 label.style.pointerEvents = '';
                 label.classList.remove('opacity-75', 'cursor-not-allowed');
             }
+        });
+    }
+
+    function unlockDesktopformVariationCard(card) {
+        if (!card) return;
+        card.classList.remove('bg-gray-100/70');
+
+        const inputs = card.querySelectorAll('input:not([type="hidden"]):not([type="file"])');
+        inputs.forEach(function(input) {
+            input.readOnly = false;
+            input.classList.remove('bg-gray-200', 'cursor-not-allowed', 'text-gray-600');
+        });
+
+        const selects = card.querySelectorAll('select');
+        selects.forEach(function(select) {
+            select.style.pointerEvents = '';
+            select.style.backgroundColor = '';
+            select.removeAttribute('tabindex');
+            select.classList.remove('cursor-not-allowed', 'text-gray-600');
+        });
+
+        const photoLabels = card.querySelectorAll('label.cursor-pointer');
+        photoLabels.forEach(function(label) {
+            label.style.pointerEvents = '';
+            label.classList.remove('opacity-75', 'cursor-not-allowed');
         });
     }
 
@@ -2603,6 +2628,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (selectElement) selectElement.disabled = false;
             fixedInput.disabled = true;
             lockDesktopformMainVariantCard(true);
+            document.querySelectorAll('#variations-container .variation-card').forEach(unlockDesktopformVariationCard);
         } else if (val === 'N') {
             wrapperSelect.style.display = 'none';
             wrapperInput.style.display  = 'block';
@@ -2614,6 +2640,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 fixedInput.placeholder = "Auto-generated on Save";
             }
             lockDesktopformMainVariantCard(false);
+            document.querySelectorAll('#variations-container .variation-card').forEach(unlockDesktopformVariationCard);
         }
         const imgDirSelect = document.getElementById('image_directory_select');
             if (imgDirSelect && imgDirSelect.tomselect) {
@@ -5063,6 +5090,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // END FIX
             // ---------------------------------------------------------
             container.appendChild(newCard);
+            unlockDesktopformVariationCard(newCard);
             
             // Scroll to new item
             newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
