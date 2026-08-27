@@ -4630,31 +4630,31 @@ document.addEventListener('DOMContentLoaded', function() {
             // Category Check (Checkboxes)
             const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
             if (catChecked === 0) errors.push("Please select at least one 'Category'.");
-        }
 
-        // Marketplace sourcing: no local stock — skip main quantity_received check
-        const hasMarketplaceVendor = getVal('marketplace') !== '';
+            // Marketplace sourcing: no local stock — skip main quantity_received check
+            const hasMarketplaceVendor = getVal('marketplace') !== '';
 
-        if (!hasMarketplaceVendor) {
-            const mainQty = parseFloat(getVal('quantity_received')) || 0;
-            // Ensure at least 1
-            if (mainQty < 1) {
-                errors.push("Main Item: 'Quantity' must be at least 1.");
+            if (!hasMarketplaceVendor) {
+                const mainQty = parseFloat(getVal('quantity_received')) || 0;
+                // Ensure at least 1
+                if (mainQty < 1) {
+                    errors.push("Main Item: 'Quantity' must be at least 1.");
+                }
             }
-        }
 
-        if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
-        if (!isBookGroup) {
-            if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
-            if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
-        }
-        if (isInvalidPrice(getVal('usd_price'))) errors.push("Main Item: 'USD Price' must be greater than 0.");
-        if (!getVal('hsn_code')) errors.push("Main Item: 'HSN Code' is required.");
+            if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
+            if (!isBookGroup) {
+                if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
+                if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
+            }
+            if (isInvalidPrice(getVal('usd_price'))) errors.push("Main Item: 'USD Price' must be greater than 0.");
+            if (!getVal('hsn_code')) errors.push("Main Item: 'HSN Code' is required.");
 
-        // Gallery Check (Main)
-        const mainGrid = document.querySelector('.photo-group-grid[data-var-id="-1"]');
-        if (!mainGrid || mainGrid.querySelectorAll('.draggable-item').length < 1) {
-            errors.push("Main Item: Please add at least 1 photo to the Gallery.");
+            // Gallery Check (Main)
+            const mainGrid = document.querySelector('.photo-group-grid[data-var-id="-1"]');
+            if (!mainGrid || mainGrid.querySelectorAll('.draggable-item').length < 1) {
+                errors.push("Main Item: Please add at least 1 photo to the Gallery.");
+            }
         }
 
         // --- 3. VARIATIONS LOOP ---
@@ -4669,10 +4669,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const hasMarketplaceVendor = getVal('marketplace') !== '';
 
             if (!hasMarketplaceVendor) {
-                const mainQty = parseFloat(getVal('quantity_received')) || 0;
-                // Ensure at least 1
-                if (mainQty < 1) {
-                    errors.push("Main Item: 'Quantity' must be at least 1.");
+                const varQty = parseFloat(getCardVal('quantity')) || parseFloat(getCardVal('quantity_received')) || 0;
+                if (varQty < 1) {
+                    errors.push(`${cardTitle}: 'Quantity' must be at least 1.`);
                 }
             }
 
@@ -6120,37 +6119,36 @@ function validateAndSubmit(actionType) {
         // Category Check (Checkboxes)
         const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
         if (catChecked === 0) errors.push("Please select at least one 'Category'.");
-    }
 
-    // --- 2. MAIN ITEM VALIDATION ---
-     // Marketplace sourcing: no local stock — skip main quantity_received check
-    const hasMarketplaceVendor = getVal('marketplace') !== '';
+        // --- 2. MAIN ITEM VALIDATION ---
+        // Marketplace sourcing: no local stock — skip main quantity_received check
+        const hasMarketplaceVendor = getVal('marketplace') !== '';
 
-    if (!hasMarketplaceVendor) {
-        const mainQty = parseFloat(getVal('quantity_received')) || 0;
-        // Ensure at least 1
-        if (mainQty < 1) {
-            errors.push("Main Item: 'Quantity' must be at least 1.");
+        if (!hasMarketplaceVendor) {
+            const mainQty = parseFloat(getVal('quantity_received')) || 0;
+            // Ensure at least 1
+            if (mainQty < 1) {
+                errors.push("Main Item: 'Quantity' must be at least 1.");
+            }
         }
+        // UPDATED: Check for 0.00
+        if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
+        if (!isBookGroupSave) {
+            if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
+            if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
+        }
+        if (isInvalidPrice(getVal('usd_price'))) errors.push("Main Item: 'USD Price' must be greater than 0.");
+        
+        if (!getVal('hsn_code')) errors.push("Main Item: 'HSN Code' is required.");
+
+        const mainGst = parseFloat(getVal('gst_rate'));
+        if (isNaN(mainGst) || mainGst < 0) errors.push("Main Item: 'GST' must be 0 or greater.");
+
+        // Main Gallery Check (ID -1)
+        const mainGrid = document.querySelector('.photo-group-grid[data-var-id="-1"]');
+        const mainImgCount = mainGrid ? mainGrid.querySelectorAll('.draggable-item').length : 0;
+        if (mainImgCount < 1) errors.push("Main Item: Please add at least 1 photo to the Gallery.");
     }
-    // UPDATED: Check for 0.00
-    if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
-    if (!isBookGroupSave) {
-        if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
-        if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
-    }
-    if (isInvalidPrice(getVal('usd_price'))) errors.push("Main Item: 'USD Price' must be greater than 0.");
-    
-    if (!getVal('hsn_code')) errors.push("Main Item: 'HSN Code' is required.");
-
-    const mainGst = parseFloat(getVal('gst_rate'));
-    if (isNaN(mainGst) || mainGst < 0) errors.push("Main Item: 'GST' must be 0 or greater.");
-
-    // Main Gallery Check (ID -1)
-    const mainGrid = document.querySelector('.photo-group-grid[data-var-id="-1"]');
-    const mainImgCount = mainGrid ? mainGrid.querySelectorAll('.draggable-item').length : 0;
-    if (mainImgCount < 1) errors.push("Main Item: Please add at least 1 photo to the Gallery.");
-
 
     // --- 3. VARIATIONS VALIDATION ---
     const variations = document.querySelectorAll('.variation-card');
@@ -6166,10 +6164,9 @@ function validateAndSubmit(actionType) {
 
         const hasMarketplaceVendor = getVal('marketplace') !== '';
         if (!hasMarketplaceVendor) {
-            const mainQty = parseFloat(getVal('quantity_received')) || 0;
-            // Ensure at least 1
-            if (mainQty < 1) {
-                errors.push("Main Item: 'Quantity' must be at least 1.");
+            const varQty = parseFloat(getCardVal('quantity')) || parseFloat(getCardVal('quantity_received')) || 0;
+            if (varQty < 1) {
+                errors.push(`${cardTitle}: 'Quantity' must be at least 1.`);
             }
         }
         // UPDATED: Check for 0.00 inside variations
