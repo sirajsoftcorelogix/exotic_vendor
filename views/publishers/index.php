@@ -810,7 +810,7 @@ function openPublisherModal(publisher) {
     const alsoCreateWrap = document.getElementById('publisher_also_create_vendor_wrap');
     const alsoCreateCheckbox = document.getElementById('publisher_also_create_vendor');
     if (alsoCreateWrap) {
-        alsoCreateWrap.classList.toggle('hidden', !!publisher.id);
+        alsoCreateWrap.classList.remove('hidden');
     }
     if (alsoCreateCheckbox) {
         alsoCreateCheckbox.checked = false;
@@ -900,8 +900,7 @@ document.getElementById('publisherForm')?.addEventListener('submit', function (e
         return;
     }
     const alsoCreateVendor = document.getElementById('publisher_also_create_vendor');
-    const isAddPublisher = !String(document.getElementById('publisher_id')?.value || '').trim();
-    if (isAddPublisher && alsoCreateVendor && alsoCreateVendor.checked) {
+    if (alsoCreateVendor && alsoCreateVendor.checked) {
         const phone = String(document.getElementById('publisher_phone')?.value || '').replace(/\D+/g, '');
         if (phone.length < 10) {
             showPublisherAlert('Primary phone (10 digits) is required when "Also create vendor" is checked.', false);
