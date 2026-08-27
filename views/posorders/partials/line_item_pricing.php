@@ -61,7 +61,7 @@ $showComponentBreakdown = count($pricingComponents) > 0 && ($customReduce > 0.00
             </div>
             <?php if (((float)($linePricing['discount_amount'] ?? 0)) > 0.001): ?>
                 <div class="flex w-full items-center justify-between gap-4 py-1">
-                    <span class="text-gray-600">List discount</span>
+                    <span class="text-gray-600">Discount</span>
                     <span class="shrink-0 text-right tabular-nums font-semibold text-emerald-700">- <?php echo $formatAmount((float)($linePricing['discount_amount'] ?? 0)); ?></span>
                 </div>
             <?php endif; ?>

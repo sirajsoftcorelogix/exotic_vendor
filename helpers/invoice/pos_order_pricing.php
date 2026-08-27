@@ -7,9 +7,21 @@
 
 function pos_order_inclusive_unit_price(array $row, string $kind = 'disc'): float
 {
-    $unit = (float)($row['itemprice'] ?? 0);
+    if ($kind === 'disc') {
+        $final = (float)($row['finalprice'] ?? 0);
+        if ($final > 0) {
+            return max(0.0, $final);
+        }
+    }
 
-    return max(0.0, $unit);
+    $unit = (float)($row['itemprice'] ?? 0);
+    if ($unit > 0) {
+        return max(0.0, $unit);
+    }
+
+    $final = (float)($row['finalprice'] ?? 0);
+
+    return max(0.0, $final);
 }
 
 function pos_order_inclusive_line_total(array $row, string $kind = 'disc'): float
@@ -505,7 +517,7 @@ function pos_order_build_order_wide_pricing_components(array $pendingLines, bool
         $orderRow = $pendingLine['order_row'];
         $pricing = $pendingLine['pricing'] ?? [];
         $baseListIncl = pos_order_line_list_price_incl($orderRow);
-        $baseDiscIncl = $baseListIncl;
+        $baseDiscIncl = pos_order_inclusive_line_total($orderRow, 'disc');
         $gstRate = $applyGst ? (float)($orderRow['gst'] ?? 0) : 0.0;
         foreach (pos_order_build_pricing_components($orderRow, $baseListIncl, $baseDiscIncl) as $component) {
             $component['line_id'] = (int)$lineId;
