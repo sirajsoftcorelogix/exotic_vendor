@@ -55,9 +55,24 @@ assertEq(
 );
 
 assertEq(
-    'Original multiple',
-    'Sanskrit and Hindi Texts',
+    'Original single alone',
+    'Sanskrit',
+    BookLanguageFormatter::formatFromRoleIdCsv(['original_languages' => '1'], $nameById)
+);
+
+assertEq(
+    'Original multiple alone',
+    'Sanskrit and Hindi',
     BookLanguageFormatter::formatFromRoleIdCsv(['original_languages' => '1,2'], $nameById)
+);
+
+assertEq(
+    'Original multiple with translation',
+    'Sanskrit and Hindi Texts with English Translation',
+    BookLanguageFormatter::formatFromRoleIdCsv([
+        'original_languages' => '1,2',
+        'translation_languages' => '3',
+    ], $nameById)
 );
 
 assertEq(

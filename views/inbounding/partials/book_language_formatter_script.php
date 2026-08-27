@@ -58,15 +58,45 @@ window.BookLanguageFormatter = (function () {
     }
 
     function formatFromRoleSelections(roleIdLists, nameById) {
-        const segments = [];
+        const roleNamesByKey = {};
+        let hasOriginal = false;
+        let hasOtherRoles = false;
+
         roleDefinitions.forEach(function (role) {
             const ids = Array.isArray(roleIdLists[role.key]) ? roleIdLists[role.key] : [];
             const names = ids.map(function (id) {
                 return nameById[id] || nameById[String(id)] || '';
             }).filter(Boolean);
-            const segment = formatRoleSegment(names, role.single_template, role.multiple_template);
+            roleNamesByKey[role.key] = names;
+
+            if (names.length > 0) {
+                if (role.key === 'original_languages') {
+                    hasOriginal = true;
+                } else {
+                    hasOtherRoles = true;
+                }
+            }
+        });
+
+        const onlyOriginal = hasOriginal && !hasOtherRoles;
+        const segments = [];
+
+        roleDefinitions.forEach(function (role) {
+            const names = roleNamesByKey[role.key] || [];
+            if (!names.length) return;
+
+            let singleTemplate = role.single_template;
+            let multipleTemplate = role.multiple_template;
+
+            if (role.key === 'original_languages' && onlyOriginal) {
+                singleTemplate = '{languages}';
+                multipleTemplate = '{languages}';
+            }
+
+            const segment = formatRoleSegment(names, singleTemplate, multipleTemplate);
             if (segment) segments.push(segment);
         });
+
         return joinRoleSegments(segments);
     }
 
