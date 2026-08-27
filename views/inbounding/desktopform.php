@@ -199,6 +199,7 @@
 <?php
 $record_id = $_GET['id'] ?? '';
 $is_inbound_live_published = !empty($data['is_inbound_live_published']);
+$isVariantProduct = (isset($data['form2']['is_variant']) && strtoupper(trim((string) $data['form2']['is_variant'])) === 'Y');
 $sizeOptions = [
     'XS'      => 'Extra Small (XS)(34)',
     'S'       => 'Small (S)(36)',
@@ -1535,7 +1536,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 }
             }
         ?>
-        <div class="mt-[15px] md:mx-5" id="inbound-section-item-grouping">
+        <div class="mt-[15px] md:mx-5" id="inbound-section-item-grouping" style="<?= $isVariantProduct ? 'display: none;' : '' ?>">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
                 <?php if ($is_inbound_live_published): ?>
                 <div class="flex justify-end mb-3">
@@ -1664,7 +1665,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
             $search_sel_sub     = array_filter(explode(',', $search_sub_raw));
             $search_sel_cat     = array_filter(explode(',', $search_cat_raw));
         ?>
-        <div class="mt-[15px] md:mx-5" id="inbound-section-search-category">
+        <div class="mt-[15px] md:mx-5" id="inbound-section-search-category" style="<?= $isVariantProduct ? 'display: none;' : '' ?>">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-gray-50">
                 <?php if ($is_inbound_live_published): ?>
                 <div class="flex justify-end mb-3">
