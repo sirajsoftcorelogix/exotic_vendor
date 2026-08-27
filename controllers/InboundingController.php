@@ -1605,7 +1605,7 @@ class InboundingController {
         if (($oldData['form1']['is_variant'] ?? '') == 'Y') {
             if ($is_variant !== ($oldData['form1']['is_variant'] ?? '')) {
                 $group_real_name = trim($inboundingModel->getGroupNameByCode($_POST['group_name'] ?? ''));
-                $item_code = $this->generateItemcode($group_real_name);
+                $item_code = $this->generateItemcode($group_real_name, $id);
             } else {
                 $item_code = trim((string) ($_POST['Item_code'] ?? ''));
                 if ($item_code === '' && !empty($oldData['form1']['Item_code'])) {
@@ -1616,6 +1616,10 @@ class InboundingController {
             $item_code = trim((string) ($_POST['Item_code'] ?? ''));
             if ($item_code === '' && !empty($oldData['form1']['Item_code'])) {
                 $item_code = trim((string) $oldData['form1']['Item_code']);
+            }
+            if ($item_code === '') {
+                $group_real_name = trim($inboundingModel->getGroupNameByCode($_POST['group_name'] ?? ''));
+                $item_code = $this->generateItemcode($group_real_name, $id);
             }
         }
 
@@ -1628,16 +1632,7 @@ class InboundingController {
             $shouldRename = true;
         }
 
-        $generated_sku = '';
-        if ($is_variant === 'N') {
-            $generated_sku = $item_code;
-        } elseif ($is_variant === 'Y') {
-            if(!empty($item_code)) {
-                $generated_sku = generateItemSku($item_code, $size, $color);
-            } else {
-                echo "Error: Parent Item Code is missing."; exit;
-            }
-        }
+        $generated_sku = !empty($item_code) ? generateItemSku($item_code, $size, $color) : '';
 
         // --- SKU VALIDATION AGAINST vp_products, vp_variations & vp_inbound ---
         $skusToCheck = [];
@@ -1658,7 +1653,7 @@ class InboundingController {
             }
         }
 
-        $skuCheck = $this->validateInboundSkusAgainstCatalog($skusToCheck, $item_code, $id);
+        $skuCheck = $this->validateInboundSkusAgainstCatalog($skusToCheck, $item_code, $id, $is_variant);
         if ($skuCheck['has_duplicates']) {
             $action_clicked = $_POST['save_action'] ?? '';
             $wantsJson = (
@@ -1995,12 +1990,19 @@ class InboundingController {
         }
     }
 
-    private function generateItemcode($group_real_name) {
+    private function generateItemcode($group_real_name, int $excludeInboundId = 0) {
         global $inboundingModel;
         $code = $inboundingModel->generateItemCodeAfterGroupName((string) $group_real_name);
         if ($code === null || $code === '') {
             die('Error: Could not generate item code.');
         }
+
+        $attempts = 0;
+        while ($inboundingModel->isItemCodeUsedByOtherInbound($code, $excludeInboundId) && $attempts < 100) {
+            $code = Inbounding::getNextItemCodeInSeries($code);
+            $attempts++;
+        }
+
         return $code;
     }
     public function submitStep3() {
@@ -2067,7 +2069,7 @@ class InboundingController {
         } else {
             // Get group name to determine the first letter
             $group_real_name = trim($inboundingModel->getGroupNameByCode($_POST['category']));
-            $item_code = $this->generateItemcode($group_real_name);
+            $item_code = $this->generateItemcode($group_real_name, $record_id);
         }
 
         // i want to genrate item_code here
@@ -2115,7 +2117,7 @@ class InboundingController {
                 }
             }
         }
-        $skuCheck = $this->validateInboundSkusAgainstCatalog($skusToCheck, $item_code, $record_id);
+        $skuCheck = $this->validateInboundSkusAgainstCatalog($skusToCheck, $item_code, $record_id, $is_variant_submitted);
         if ($skuCheck['has_duplicates']) {
             $this->redirectForm3WithError($skuCheck['message'], $record_id);
             exit;
@@ -2136,6 +2138,7 @@ class InboundingController {
           'group_name'     => $_POST['category'] ?? '',
           'received_by_user_id' => $_POST['received_by_user_id'] ?? '',
           'Item_code'      => $item_code ?? '',
+          'sku'            => generateItemSku($item_code ?? '', $mainVariant['size'] ?? '', $mainVariant['color'] ?? ''),
           'is_variant'      => $is_variant_submitted,
           'feedback'      => $_POST['feedback'] ?? '',
          
@@ -2274,8 +2277,12 @@ class InboundingController {
      * Validate an array of generated SKUs against vp_products, vp_variations, and vp_inbound.
      * Returns an array with boolean 'has_duplicates', array of 'duplicates', and a human-readable 'message'.
      */
-    private function validateInboundSkusAgainstCatalog(array $skusToCheck, string $currentItemCode = '', int $excludeInboundId = 0): array
-    {
+    private function validateInboundSkusAgainstCatalog(
+        array $skusToCheck,
+        string $currentItemCode = '',
+        int $excludeInboundId = 0,
+        string $isVariant = 'N'
+    ): array {
         global $inboundingModel;
         if (!$inboundingModel) {
             $inboundingModel = new Inbounding();
@@ -2283,7 +2290,26 @@ class InboundingController {
 
         $duplicates = [];
         $seen = [];
+        $isVariantUpper = strtoupper(trim($isVariant)) === 'Y';
 
+        // 1. For standalone items (is_variant = 'N'), check if Item Code is already used by another inbound item
+        if (!$isVariantUpper && $currentItemCode !== '') {
+            $otherInbound = $inboundingModel->getOtherInboundByItemCode($currentItemCode, $excludeInboundId);
+            if ($otherInbound !== null) {
+                $otherId = (int) ($otherInbound['id'] ?? 0);
+                $duplicates[] = [
+                    'sku' => $currentItemCode,
+                    'source' => 'vp_inbound',
+                    'source_name' => 'vp_inbound (Inbound Catalog)',
+                    'existing_item_code' => $currentItemCode,
+                    'existing_title' => $otherInbound['title'] ?? '',
+                    'existing_id' => $otherId,
+                    'message' => "Item Code '{$currentItemCode}' is already used by another inbound item (Inbound ID: {$otherId}). Standalone items cannot share the same Item Code.",
+                ];
+            }
+        }
+
+        // 2. Validate all SKUs against catalog
         foreach ($skusToCheck as $sku) {
             $sku = trim((string) $sku);
             if ($sku === '') {
@@ -2303,7 +2329,7 @@ class InboundingController {
             }
             $seen[$upperSku] = true;
 
-            $existing = $inboundingModel->checkSkuExistsInDb($sku, $currentItemCode, $excludeInboundId);
+            $existing = $inboundingModel->checkSkuExistsInDb($sku, '', $excludeInboundId);
             if (!empty($existing)) {
                 $sourceLabel = $existing['source'] ?? 'database';
                 if ($sourceLabel === 'vp_products') {
@@ -2323,7 +2349,7 @@ class InboundingController {
                     'existing_item_code' => $existing['item_code'] ?? '',
                     'existing_title' => $existing['title'] ?? '',
                     'existing_id' => $existing['id'] ?? 0,
-                    'message' => "SKU '{$sku}' already exists in {$sourceName}" . (!empty($existing['item_code']) ? " (Item Code: {$existing['item_code']})" : '') . '.',
+                    'message' => "SKU '{$sku}' already exists in {$sourceName}" . (!empty($existing['item_code']) ? " (Item Code: {$existing['item_code']})" : '') . (!empty($existing['id']) ? " (ID: {$existing['id']})" : '') . '.',
                 ];
             }
         }
@@ -2394,7 +2420,8 @@ class InboundingController {
             }
         }
 
-        $check = $this->validateInboundSkusAgainstCatalog($skusToCheck, $itemCode, $inboundId);
+        $isVariant = trim((string) ($_REQUEST['is_variant'] ?? 'N'));
+        $check = $this->validateInboundSkusAgainstCatalog($skusToCheck, $itemCode, $inboundId, $isVariant);
 
         echo json_encode([
             'success' => true,

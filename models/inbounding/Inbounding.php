@@ -1176,6 +1176,16 @@ class Inbounding {
         WHERE vi.id = $id";
         $result = $this->conn->query($sql);
         $inbounding = ($result && $result->num_rows > 0) ? $result->fetch_assoc() : [];
+        if (!empty($inbounding['Item_code']) && (empty($inbounding['sku']) || trim((string) $inbounding['sku']) === '')) {
+            $computedSku = generateItemSku($inbounding['Item_code'], (string) ($inbounding['size'] ?? ''), (string) ($inbounding['color'] ?? ''));
+            $inbounding['sku'] = $computedSku;
+            $stmtSku = $this->conn->prepare('UPDATE vp_inbound SET sku = ? WHERE id = ? AND (sku IS NULL OR TRIM(sku) = "")');
+            if ($stmtSku) {
+                $stmtSku->bind_param('si', $computedSku, $id);
+                $stmtSku->execute();
+                $stmtSku->close();
+            }
+        }
 
         // 2. Helper lists: only columns used by desktopform (smaller rows / less mysqld work than SELECT *)
         $r = $this->conn->query("SELECT id, name FROM `vp_users` ORDER BY name ASC");
@@ -1411,6 +1421,15 @@ class Inbounding {
 
         // Prevent ID from being in the update list
         if (isset($data['id'])) unset($data['id']);
+
+        // Ensure sku is always set when Item_code is present
+        $itemCodeVal = trim((string) ($data['Item_code'] ?? ''));
+        $skuVal = trim((string) ($data['sku'] ?? ''));
+        if ($skuVal === '' && $itemCodeVal !== '') {
+            $sizeVal = (string) ($data['size'] ?? '');
+            $colorVal = (string) ($data['color'] ?? '');
+            $data['sku'] = generateItemSku($itemCodeVal, $sizeVal, $colorVal);
+        }
         
         $cols = []; 
         $values = []; 
@@ -1650,26 +1669,31 @@ class Inbounding {
         return ($result->num_rows > 0);
     }
 
-    public function isItemCodeUsedByOtherInbound(string $code, int $excludeInboundId = 0): bool
+    public function getOtherInboundByItemCode(string $code, int $excludeInboundId = 0): ?array
     {
         $code = strtoupper(trim($code));
         $excludeInboundId = (int) $excludeInboundId;
         if ($code === '') {
-            return false;
+            return null;
         }
 
         $stmt = $this->conn->prepare(
-            'SELECT id FROM vp_inbound WHERE UPPER(TRIM(Item_code)) = ? AND id != ? LIMIT 1'
+            'SELECT id, Item_code AS item_code, product_title AS title, is_variant FROM vp_inbound WHERE UPPER(TRIM(Item_code)) = ? AND id != ? LIMIT 1'
         );
         if (!$stmt) {
-            return false;
+            return null;
         }
         $stmt->bind_param('si', $code, $excludeInboundId);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
-        return !empty($row);
+        return $row ?: null;
+    }
+
+    public function isItemCodeUsedByOtherInbound(string $code, int $excludeInboundId = 0): bool
+    {
+        return $this->getOtherInboundByItemCode($code, $excludeInboundId) !== null;
     }
 
     /**
@@ -2204,6 +2228,10 @@ class Inbounding {
         $size   = $data['size'] ?? '';
         $is_variant = $data['is_variant'] ?? 'N'; // Default to 'N' if missing
         $Item_code = $data['Item_code'] ?? '';
+        $sku = trim((string) ($data['sku'] ?? ''));
+        if ($sku === '' && $Item_code !== '') {
+            $sku = generateItemSku($Item_code, $size, $color);
+        }
         $feedback = $data['feedback'] ?? '';
         $hsn_code = $data['hsn_code'] ?? '';
         $dimensions = $data['dimensions'] ?? '';
@@ -2249,7 +2277,7 @@ class Inbounding {
 
         // 2. Correct SQL Syntax (Use column names, not PHP variables)
         $sql = "UPDATE vp_inbound
-            SET dimensions=?,gst_rate=?,hsn_code=?,feedback = ?, Item_code = ?, is_variant = ?, gate_entry_date_time = ?, material_code = ?, group_name = ?,
+            SET dimensions=?,gst_rate=?,hsn_code=?,feedback = ?, Item_code = ?, sku = ?, is_variant = ?, gate_entry_date_time = ?, material_code = ?, group_name = ?,
               height = ?, width = ?, depth = ?, weight = ?,
               color = ?, size = ?, cp = ?, quantity_received = ?,
               received_by_user_id = ?, product_photo = ?,
@@ -2261,7 +2289,7 @@ class Inbounding {
           return ['success' => false, 'message' => $this->conn->error];
         }
 
-        $types = "sisssssisddddssdiissddsssssssssssssi";
+        $types = "sissssssisddddssdiissddsssssssssssssi";
 
         $stmt->bind_param(
             $types,
@@ -2270,37 +2298,38 @@ class Inbounding {
             $hsn_code,
             $feedback,            // 1
             $Item_code,           // 2
-            $is_variant,          // 3
-            $gate_entry_date_time, // 4
-            $material_code,       // 5
-            $group_name,          // 6
-            $height,              // 7
-            $width,               // 8
-            $depth,               // 9
-            $weight,              // 10
-            $color,               // 11
-            $size,                // 12
-            $cp,                  // 13
-            $qty,                 // 14
-            $received_by_user_id, // 15
-            $photo,               // 16
-            $wh,                  // 17
-            $p_ind,               // 18
-            $p_mrp,               // 19
-            $colormaps,           // 20
-            $author,              // 21
-            $edited_by,           // 22
-            $compiled_by,         // 23
-            $translated_by,       // 24
-            $commentary_by,       // 25
-            $publisher,           // 26
-            $isbn,                // 27
-            $cover_type,          // 28
-            $edition,             // 29
-            $publication_date,    // 30
-            $language,            // 31
-            $pages,               // 32
-            $id                   // 33
+            $sku,                 // 3
+            $is_variant,          // 4
+            $gate_entry_date_time, // 5
+            $material_code,       // 6
+            $group_name,          // 7
+            $height,              // 8
+            $width,               // 9
+            $depth,               // 10
+            $weight,              // 11
+            $color,               // 12
+            $size,                // 13
+            $cp,                  // 14
+            $qty,                 // 15
+            $received_by_user_id, // 16
+            $photo,               // 17
+            $wh,                  // 18
+            $p_ind,               // 19
+            $p_mrp,               // 20
+            $colormaps,           // 21
+            $author,              // 22
+            $edited_by,           // 23
+            $compiled_by,         // 24
+            $translated_by,       // 25
+            $commentary_by,       // 26
+            $publisher,           // 27
+            $isbn,                // 28
+            $cover_type,          // 29
+            $edition,             // 30
+            $publication_date,    // 31
+            $language,            // 32
+            $pages,               // 33
+            $id                   // 34
         );
 
         if ($stmt->execute()) {
@@ -2522,6 +2551,16 @@ class Inbounding {
         
         // Check if data was found
         $inbounding = ($result && $result->num_rows > 0) ? $result->fetch_assoc() : [];
+        if (!empty($inbounding['Item_code']) && (empty($inbounding['sku']) || trim((string) $inbounding['sku']) === '')) {
+            $computedSku = generateItemSku($inbounding['Item_code'], (string) ($inbounding['size'] ?? ''), (string) ($inbounding['color'] ?? ''));
+            $inbounding['sku'] = $computedSku;
+            $stmtSku = $this->conn->prepare('UPDATE vp_inbound SET sku = ? WHERE id = ? AND (sku IS NULL OR TRIM(sku) = "")');
+            if ($stmtSku) {
+                $stmtSku->bind_param('si', $computedSku, $id);
+                $stmtSku->execute();
+                $stmtSku->close();
+            }
+        }
 
         // 3. Process the loop to create the string
         $cat_parts = array_values(array_filter([
@@ -3008,29 +3047,15 @@ class Inbounding {
         $excludeItemCode = strtoupper(trim($excludeItemCode));
 
         // 1. Check vp_products (Published catalog)
-        if ($excludeItemCode !== '') {
-            $stmt = $this->conn->prepare("SELECT id, sku, item_code, title, 'vp_products' AS source FROM vp_products WHERE CONVERT(UPPER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ? AND CONVERT(UPPER(TRIM(COALESCE(item_code, ''))) USING utf8mb4) COLLATE utf8mb4_general_ci != ? LIMIT 1");
-            if ($stmt) {
-                $stmt->bind_param('ss', $sku, $excludeItemCode);
-                $stmt->execute();
-                $res = $stmt->get_result();
-                $row = $res ? $res->fetch_assoc() : null;
-                $stmt->close();
-                if ($row) {
-                    return $row;
-                }
-            }
-        } else {
-            $stmt = $this->conn->prepare("SELECT id, sku, item_code, title, 'vp_products' AS source FROM vp_products WHERE CONVERT(UPPER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ? LIMIT 1");
-            if ($stmt) {
-                $stmt->bind_param('s', $sku);
-                $stmt->execute();
-                $res = $stmt->get_result();
-                $row = $res ? $res->fetch_assoc() : null;
-                $stmt->close();
-                if ($row) {
-                    return $row;
-                }
+        $stmt = $this->conn->prepare("SELECT id, sku, item_code, title, 'vp_products' AS source FROM vp_products WHERE CONVERT(UPPER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('s', $sku);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $row = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
+            if ($row) {
+                return $row;
             }
         }
 
@@ -3046,11 +3071,6 @@ class Inbounding {
             $varSql .= " AND v.it_id != ?";
             $params[] = $excludeInboundId;
             $types .= 'i';
-        }
-        if ($excludeItemCode !== '') {
-            $varSql .= " AND CONVERT(UPPER(TRIM(COALESCE(i.Item_code, ''))) USING utf8mb4) COLLATE utf8mb4_general_ci != ?";
-            $params[] = $excludeItemCode;
-            $types .= 's';
         }
         $varSql .= " LIMIT 1";
 
@@ -3075,11 +3095,6 @@ class Inbounding {
             $inbSql .= " AND id != ?";
             $inbParams[] = $excludeInboundId;
             $inbTypes .= 'i';
-        }
-        if ($excludeItemCode !== '') {
-            $inbSql .= " AND CONVERT(UPPER(TRIM(COALESCE(Item_code, ''))) USING utf8mb4) COLLATE utf8mb4_general_ci != ?";
-            $inbParams[] = $excludeItemCode;
-            $inbTypes .= 's';
         }
         $inbSql .= " LIMIT 1";
 
