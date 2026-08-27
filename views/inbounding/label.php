@@ -1,21 +1,31 @@
 <?php
 // 1. PHP Logic & Data Fetching
-$label_data[0] = $form2 ?? $data['form2'] ?? [];
+$parent_info = $form2 ?? $data['form2'] ?? [];
 $variations = $variation ?? $data['variation'] ?? [];
-if (isset($variations) && !empty($variations)) {
-    foreach ($variations as $key => $value) {
-        $key++;
-        $label_data[$key] = $value;
-        $label_data[$key]['product_photo'] = $value['variation_image'];
-        $label_data[$key]['Item_code'] = $label_data[0]['Item_code'];
-        $label_data[$key]['material_name'] = $label_data[0]['material_name'];
-        $label_data[$key]['vendor_name'] = $label_data[0]['vendor_name'];
-        $label_data[$key]['gate_entry_date_time'] = $label_data[0]['gate_entry_date_time'];
-        foreach (['author_name', 'publishers_name', 'pages', 'cover_type', 'edition', 'isbn', 'language', 'group_name'] as $inheritField) {
-            if (($label_data[$key][$inheritField] ?? '') === '' && ($label_data[0][$inheritField] ?? '') !== '') {
-                $label_data[$key][$inheritField] = $label_data[0][$inheritField];
+$is_variant = strtoupper(trim((string) ($parent_info['is_variant'] ?? 'N'))) === 'Y';
+
+$label_data = [];
+
+if ($is_variant && !empty($variations)) {
+    // When is_variant is 'Y' and variations exist, generate labels ONLY for variations (exclude parent)
+    foreach ($variations as $value) {
+        $item = $value;
+        $item['product_photo'] = !empty($value['variation_image']) ? $value['variation_image'] : ($value['photo'] ?? '');
+        $item['Item_code'] = $parent_info['Item_code'] ?? ($value['Item_code'] ?? '');
+        $item['material_name'] = $parent_info['material_name'] ?? '';
+        $item['vendor_name'] = $parent_info['vendor_name'] ?? '';
+        $item['gate_entry_date_time'] = $parent_info['gate_entry_date_time'] ?? '';
+        foreach (['author_name', 'publishers_name', 'pages', 'cover_type', 'edition', 'isbn', 'language', 'group_name', 'received_by_user_id', 'id'] as $inheritField) {
+            if (($item[$inheritField] ?? '') === '' && ($parent_info[$inheritField] ?? '') !== '') {
+                $item[$inheritField] = $parent_info[$inheritField];
             }
         }
+        $label_data[] = $item;
+    }
+} else {
+    // When is_variant is 'N' (or if no variations exist), generate label for the main inbound record
+    if (!empty($parent_info)) {
+        $label_data[] = $parent_info;
     }
 }
 
@@ -29,7 +39,7 @@ if (!isset($userDetails)) {
     require_once 'models/user/user.php';
     if (!isset($conn)) $conn = Database::getConnection();
     $usersModel = new User($conn);
-    $user_id = $label_data['received_by_user_id'] ?? $_SESSION['user']['id'] ?? 0;
+    $user_id = $parent_info['received_by_user_id'] ?? ($label_data[0]['received_by_user_id'] ?? ($_SESSION['user']['id'] ?? 0));
     $userDetails = $usersModel->getUserById($user_id);
     unset($usersModel);
 }
@@ -39,7 +49,8 @@ function safe($value)
     return htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8');
 }
 $categoryName = '';
-if (!empty($label_data[0]['group_name'])) {
+$groupNameForLabel = $parent_info['group_name'] ?? ($label_data[0]['group_name'] ?? '');
+if (!empty($groupNameForLabel)) {
     if (!isset($inboundingModel)) {
         require_once 'models/inbounding/Inbounding.php';
         if (!isset($conn)) {
@@ -48,10 +59,10 @@ if (!empty($label_data[0]['group_name'])) {
         }
         $inboundingModel = new Inbounding($conn);
     }
-    $categoryName = $inboundingModel->resolveInboundLabelCategorySlug($label_data[0]['group_name']);
+    $categoryName = $inboundingModel->resolveInboundLabelCategorySlug($groupNameForLabel);
 }
 
-$inboundRecordId = (int) ($_GET['id'] ?? ($label_data[0]['id'] ?? 0));
+$inboundRecordId = (int) ($_GET['id'] ?? ($parent_info['id'] ?? ($label_data[0]['id'] ?? 0)));
 $showVendorOnLabel = true;
 if ($inboundRecordId > 0) {
     if (!isset($inboundingModel)) {
@@ -320,7 +331,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
                     </div>
                     <div class="flex-1 w-full flex flex-col justify-center pl-8">
                         <span class="text-[32px] font-bold uppercase text-black mb-1 leading-none">Location</span>
-                        <span class="text-[48px] font-black text-black tracking-tight leading-tight block w-full pr-4 pb-2"><?php echo safe(labelLocationText($current_label, $label_data[0] ?? [])); ?></span>
+                        <span class="text-[48px] font-black text-black tracking-tight leading-tight block w-full pr-4 pb-2"><?php echo safe(labelLocationText($current_label, $parent_info ?? ($label_data[0] ?? []))); ?></span>
                     </div>
 
                 <?php  } elseif ($categoryName == 'sculptures' || $categoryName == 'homeandliving' || $categoryName == 'paintings') { ?>
@@ -602,7 +613,7 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
 
 <?php
 $labelPdfBaseName = 'Label_Labels_Print_Batch';
-$itemCodeForPdf = trim((string) ($label_data[0]['Item_code'] ?? ''));
+$itemCodeForPdf = trim((string) ($parent_info['Item_code'] ?? ($label_data[0]['Item_code'] ?? '')));
 if ($itemCodeForPdf !== '') {
     $sanitizedItemCode = preg_replace('/[\\\\\/:*?"<>|]+/', '_', $itemCodeForPdf);
     $sanitizedItemCode = trim((string) $sanitizedItemCode, " \t\n\r\0\x0B._");

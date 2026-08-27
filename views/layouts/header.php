@@ -104,6 +104,11 @@ $msgCnt = $notificationController->getUnreadCount();
                     </div>
                 </div>
                     <div class="relative flex-shrink-0">
+                        <a href="index.php?page=support&amp;action=list" title="Support & Bug Tracker" class="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 transition-colors duration-200">
+                            <span class="font-medium text-gray-700 text-sm"><i class="fas fa-headset text-[#d97824]"></i> Support</span>
+                        </a>
+                    </div>
+                    <div class="relative flex-shrink-0">
                         <a href="chat.php" title="Chat" class="flex items-center space-x-3 p-3 rounded-md hover:bg-gray-100 transition-colors duration-200" target="_blank">
                             <span class="font-medium text-gray-700" style="font-size: 15px; font-family: 'Canva Sans', sans-serif;"><i class="fas fa-comments"></i></span>
                         </a>

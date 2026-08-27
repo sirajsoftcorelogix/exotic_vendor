@@ -246,6 +246,19 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
 
     return 0.0;
 }
+    // if ($stmt) {
+    //     $stmt->bind_param('s', $orderNumber);
+    //     $stmt->execute();
+    //     $row = $stmt->get_result()->fetch_assoc();
+    //     $stmt->close();
+    //     $total = round((float)($row['total_amount'] ?? 0), 2);
+    //     if ($total > 0) {
+    //         return $total;
+    //     }
+    // }
+
+    // return 0.0;
+
 
 /**
  * Align imported vp_orders / vp_order_info with POS checkout payable (vendor import often stores net API total).
