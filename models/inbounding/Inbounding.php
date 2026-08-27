@@ -436,17 +436,27 @@ class Inbounding {
             return null;
         }
 
+        $p = null;
         $stmt = $this->conn->prepare("SELECT * FROM vp_products WHERE item_code = ? LIMIT 1");
-        if (!$stmt) {
-            return null;
+        if ($stmt) {
+            $stmt->bind_param("s", $itemCode);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $p = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
         }
-        $stmt->bind_param("s", $itemCode);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        $p = $res ? $res->fetch_assoc() : null;
-        $stmt->close();
 
-        if (!$p) {
+        $inboundParent = null;
+        $inbStmt = $this->conn->prepare("SELECT vi.*, m.material_name FROM vp_inbound vi LEFT JOIN material m ON vi.material_code = m.id WHERE vi.Item_code = ? AND (vi.is_variant = 'N' OR vi.is_variant IS NULL OR TRIM(vi.is_variant) = '' OR vi.is_variant = '0') ORDER BY vi.id ASC LIMIT 1");
+        if ($inbStmt) {
+            $inbStmt->bind_param("s", $itemCode);
+            $inbStmt->execute();
+            $inbRes = $inbStmt->get_result();
+            $inboundParent = $inbRes ? $inbRes->fetch_assoc() : null;
+            $inbStmt->close();
+        }
+
+        if (!$p && !$inboundParent) {
             return null;
         }
 
@@ -2566,6 +2576,30 @@ class Inbounding {
                     if (empty($inbounding['long_description_india']) && !empty($parentDetails['long_description_india'])) {
                         $inbounding['long_description_india'] = $parentDetails['long_description_india'];
                     }
+                }
+            }
+        }
+
+        if ($final_cat_ids === '' || $final_cat_ids === ',') {
+            if (!empty($inbounding['group_name'])) {
+                $final_cat_ids = $inbounding['group_name'];
+            } elseif (!empty($parentDetails['group_name'])) {
+                $final_cat_ids = $parentDetails['group_name'];
+            }
+        }
+
+        if ($final_cat_ids === '' || $final_cat_ids === ',') {
+            $groupNameForCat = $inbounding['groupname'] ?? ($parentDetails['group_name_raw'] ?? '');
+            if ($groupNameForCat !== '') {
+                $cStmt = $this->conn->prepare("SELECT category FROM category WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) OR LOWER(TRIM(display_name)) = LOWER(TRIM(?)) OR LOWER(TRIM(category)) = LOWER(TRIM(?)) LIMIT 1");
+                if ($cStmt) {
+                    $cStmt->bind_param("sss", $groupNameForCat, $groupNameForCat, $groupNameForCat);
+                    $cStmt->execute();
+                    $cRes = $cStmt->get_result();
+                    if ($cRow = ($cRes ? $cRes->fetch_assoc() : null)) {
+                        $final_cat_ids = (string) $cRow['category'];
+                    }
+                    $cStmt->close();
                 }
             }
         }
