@@ -2513,6 +2513,14 @@ class Inbounding {
         // Check if data was found
         $inbounding = ($result && $result->num_rows > 0) ? $result->fetch_assoc() : [];
 
+        // 3. Process the loop to create the string
+        $cat_parts = array_values(array_filter([
+            trim((string)($inbounding['category_code'] ?? '')),
+            trim((string)($inbounding['sub_category_code'] ?? '')),
+            trim((string)($inbounding['sub_sub_category_code'] ?? '')),
+        ], function($val) { return $val !== ''; }));
+        $final_cat_ids = implode(',', $cat_parts);
+
         if ($inbounding) {
             $inbounding['author_name'] = $this->resolveInboundAuthorNames($inbounding['author'] ?? '');
 
@@ -2522,8 +2530,8 @@ class Inbounding {
                     if (empty($inbounding['groupname']) && !empty($parentDetails['group_name_raw'])) {
                         $inbounding['groupname'] = $parentDetails['group_name_raw'];
                     }
-                    if (empty($inbounding['material_name']) && !empty($parentDetails['material_code'])) {
-                        $inbounding['material_name'] = $parentDetails['material_code'];
+                    if (empty($inbounding['material_name']) && !empty($parentDetails['material_name'])) {
+                        $inbounding['material_name'] = $parentDetails['material_name'];
                     }
                     if (empty($inbounding['product_title']) && !empty($parentDetails['title'])) {
                         $inbounding['product_title'] = $parentDetails['title'];
@@ -2537,25 +2545,33 @@ class Inbounding {
                     if (empty($inbounding['gst_rate']) && !empty($parentDetails['gst_rate'])) {
                         $inbounding['gst_rate'] = $parentDetails['gst_rate'];
                     }
+                    if (($final_cat_ids === '' || $final_cat_ids === ',') && !empty($parentDetails['category_ids'])) {
+                        $final_cat_ids = $parentDetails['category_ids'];
+                    }
+                    if (empty($inbounding['search_term']) && !empty($parentDetails['search_term'])) {
+                        $inbounding['search_term'] = $parentDetails['search_term'];
+                    }
+                    if (empty($inbounding['search_category_string']) && !empty($parentDetails['search_category'])) {
+                        $inbounding['search_category_string'] = $parentDetails['search_category'];
+                    }
+                    if (empty($inbounding['key_words']) && !empty($parentDetails['keywords'])) {
+                        $inbounding['key_words'] = $parentDetails['keywords'];
+                    }
+                    if (empty($inbounding['snippet_description']) && !empty($parentDetails['snippet_description'])) {
+                        $inbounding['snippet_description'] = $parentDetails['snippet_description'];
+                    }
+                    if (empty($inbounding['long_description']) && !empty($parentDetails['long_description'])) {
+                        $inbounding['long_description'] = $parentDetails['long_description'];
+                    }
+                    if (empty($inbounding['long_description_india']) && !empty($parentDetails['long_description_india'])) {
+                        $inbounding['long_description_india'] = $parentDetails['long_description_india'];
+                    }
                 }
             }
         }
 
-        // 3. Process the loop to create the string
-        $cat_id_string = '';
-
-        if ($inbounding) {
-            // Correct concatenation using dots (.) outside of quotes
-            $cat_id_string = $inbounding['category_code'] . ',' . 
-                             $inbounding['sub_category_code'] . ',' . 
-                             $inbounding['sub_sub_category_code']. ',';
-        }
-        
-        // Trim the trailing comma
-        $final_cat_ids = rtrim($cat_id_string, ',') ;
         $inbounding['final_cat_ids'] = $final_cat_ids;
-        // Add to main array
-        $inbounding['cat_ids'] = $final_cat_ids; // Added missing semicolon here
+        $inbounding['cat_ids'] = $final_cat_ids;
         $var_result = $this->conn->query("SELECT * FROM `vp_variations` WHERE it_id = $id");
         $var_rows = $var_result->fetch_all(MYSQLI_ASSOC);
         if (isset($var_rows) && !empty($var_rows)) {
