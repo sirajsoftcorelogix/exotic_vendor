@@ -199,6 +199,7 @@
 <?php
 $record_id = $_GET['id'] ?? '';
 $is_inbound_live_published = !empty($data['is_inbound_live_published']);
+$isVariantProduct = (isset($data['form2']['is_variant']) && strtoupper(trim((string) $data['form2']['is_variant'])) === 'Y');
 $sizeOptions = [
     'XS'      => 'Extra Small (XS)(34)',
     'S'       => 'Small (S)(36)',
@@ -669,9 +670,8 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                         <label class="text-xs font-bold text-[#333] mb-1.5">Variant:</label>
                         <select id="variant_select" name="is_variant" 
                                 class="h-[36px] text-[13px] border border-[#ccc] rounded px-2.5 text-[#333] w-full focus:outline-none focus:border-[#999]">
-                            <option value="" disabled <?php echo empty($data['form2']['is_variant']) ? 'selected' : ''; ?>>Select...</option>
-                            <option value="N" <?php echo (empty($data['form2']['is_variant']) || $data['form2']['is_variant'] === 'N') ? 'selected' : ''; ?>>No</option>
-                            <option value="Y" <?php echo (isset($data['form2']['is_variant']) && $data['form2']['is_variant'] === 'Y') ? 'selected' : ''; ?>>Yes</option>
+                            <option value="N" <?php echo (empty($data['form2']['is_variant']) || strtoupper(trim((string) $data['form2']['is_variant'])) !== 'Y') ? 'selected' : ''; ?>>No</option>
+                            <option value="Y" <?php echo (isset($data['form2']['is_variant']) && strtoupper(trim((string) $data['form2']['is_variant'])) === 'Y') ? 'selected' : ''; ?>>Yes</option>
                         </select>
                     </div>
                     <div class="flex flex-col">
@@ -802,6 +802,9 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 <h4 class="text-sm font-bold text-[#333] uppercase">
                     (<?= htmlspecialchars($data['form2']['color'] ?? '') ?> - <?= htmlspecialchars($data['form2']['size'] ?? '') ?>)
                 </h4>
+                <span class="desktopform-main-var-badge hidden bg-gray-200 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded border border-gray-300">
+                    🔒 Read Only (Parent)
+                </span>
             </div>
             <div class="w-full mb-5 min-w-0">
                 <label class="block text-xs font-bold text-[#555] mb-1">Gallery photos:<?php echo $desktopform_req_star; ?></label>
@@ -1533,7 +1536,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 }
             }
         ?>
-        <div class="mt-[15px] md:mx-5" id="inbound-section-item-grouping">
+        <div class="mt-[15px] md:mx-5" id="inbound-section-item-grouping" style="<?= $isVariantProduct ? 'display: none;' : '' ?>">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
                 <?php if ($is_inbound_live_published): ?>
                 <div class="flex justify-end mb-3">
@@ -1662,7 +1665,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
             $search_sel_sub     = array_filter(explode(',', $search_sub_raw));
             $search_sel_cat     = array_filter(explode(',', $search_cat_raw));
         ?>
-        <div class="mt-[15px] md:mx-5">
+        <div class="mt-[15px] md:mx-5" id="inbound-section-search-category" style="<?= $isVariantProduct ? 'display: none;' : '' ?>">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-gray-50">
                 <?php if ($is_inbound_live_published): ?>
                 <div class="flex justify-end mb-3">
@@ -1736,7 +1739,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </fieldset>
         </div>
-        <div class="mt-[15px] md:mx-5">
+        <div class="mt-[15px] md:mx-5" id="inbound-section-search-terms">
             <fieldset class="border border-[#ccc] rounded-[5px] px-[15px] py-4 bg-white">
                 <?php if ($is_inbound_live_published): ?>
                 <div class="flex justify-end mb-3">
@@ -1759,7 +1762,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </fieldset>
         </div>
-        <div class="mt-[15px] md:mx-5">
+        <div class="mt-[15px] md:mx-5" id="inbound-section-item-identification">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] pb-5 bg-white">
                 <?php if ($is_inbound_live_published): ?>
                 <div class="flex justify-end mb-3">
@@ -1995,7 +1998,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </fieldset>
         </div>
-        <div class="mt-[15px] md:mx-5">
+        <div class="mt-[15px] md:mx-5" id="inbound-section-stock">
             <fieldset class="border border-[#ccc] rounded-[5px] px-5 py-[15px] bg-white">
                 <?php if ($is_inbound_live_published): ?>
                 <div class="flex justify-end mb-3">
@@ -2155,18 +2158,24 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
         </div>
         <div class="my-[25px] md:mx-5 mb-4">
         <div class="flex justify-end gap-4">
-            <?php if (isset($data['form2']['Item_code']) && !empty($data['form2']['Item_code'])) { ?>
-                <?php if (!$is_inbound_live_published): ?>
+            <?php 
+                $isVariantProduct = ($data['form2']['is_variant'] ?? 'N') === 'Y';
+                $hasItemCode = !empty($data['form2']['Item_code']);
+                $canShowPublishBtn = ($hasItemCode || $isVariantProduct) && (!$is_inbound_live_published || $isVariantProduct);
+                $canShowPrintJsonBtn = ($hasItemCode || $isVariantProduct);
+            ?>
+            <?php if ($canShowPublishBtn): ?>
                 <button type="button" onclick="handlePublishClick()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                     Publish Product
                 </button>
-                <?php endif; ?>
+            <?php endif; ?>
+            <?php if ($canShowPrintJsonBtn): ?>
                 <button type="button" onclick="handlePrintJsonClick()" class="bg-[#17a2b8] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#138496] transition flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
                     Print JSON
                 </button>
-            <?php } ?>
+            <?php endif; ?>
 
             <button type="button" onclick="validateAndSubmit('draft')" class="bg-[#d97824] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#db8235] transition">
                 Save as Draft
@@ -2534,14 +2543,122 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     }
+    function lockDesktopformMainVariantCard(isLocked) {
+        const mainSection = document.getElementById('inbound-section-item-details') || document.getElementById('main-item-details-grid');
+        if (!mainSection) return;
+
+        const lockBadge = document.querySelector('.desktopform-main-var-badge');
+        if (lockBadge) {
+            if (isLocked) {
+                lockBadge.classList.remove('hidden');
+            } else {
+                lockBadge.classList.add('hidden');
+            }
+        }
+
+        if (isLocked) {
+            mainSection.classList.add('bg-gray-100/70');
+        } else {
+            mainSection.classList.remove('bg-gray-100/70');
+        }
+
+        const inputs = mainSection.querySelectorAll('input:not([type="hidden"]):not([type="file"])');
+        inputs.forEach(function(input) {
+            if (isLocked) {
+                input.readOnly = true;
+                input.classList.add('bg-gray-200', 'cursor-not-allowed', 'text-gray-600');
+            } else {
+                input.readOnly = false;
+                input.classList.remove('bg-gray-200', 'cursor-not-allowed', 'text-gray-600');
+            }
+        });
+
+        const selects = mainSection.querySelectorAll('select');
+        selects.forEach(function(select) {
+            if (isLocked) {
+                select.style.pointerEvents = 'none';
+                select.style.backgroundColor = '#e5e7eb';
+                select.tabIndex = -1;
+                select.classList.add('cursor-not-allowed', 'text-gray-600');
+            } else {
+                select.style.pointerEvents = '';
+                select.style.backgroundColor = '';
+                select.removeAttribute('tabindex');
+                select.classList.remove('cursor-not-allowed', 'text-gray-600');
+            }
+        });
+
+        const photoLabels = mainSection.querySelectorAll('label.cursor-pointer');
+        photoLabels.forEach(function(label) {
+            if (isLocked) {
+                label.style.pointerEvents = 'none';
+                label.classList.add('opacity-75', 'cursor-not-allowed');
+            } else {
+                label.style.pointerEvents = '';
+                label.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
+        });
+    }
+
+    function unlockDesktopformVariationCard(card) {
+        if (!card) return;
+        card.classList.remove('bg-gray-100/70');
+
+        const inputs = card.querySelectorAll('input:not([type="hidden"]):not([type="file"])');
+        inputs.forEach(function(input) {
+            input.readOnly = false;
+            input.classList.remove('bg-gray-200', 'cursor-not-allowed', 'text-gray-600');
+        });
+
+        const selects = card.querySelectorAll('select');
+        selects.forEach(function(select) {
+            select.style.pointerEvents = '';
+            select.style.backgroundColor = '';
+            select.removeAttribute('tabindex');
+            select.classList.remove('cursor-not-allowed', 'text-gray-600');
+        });
+
+        const photoLabels = card.querySelectorAll('label.cursor-pointer');
+        photoLabels.forEach(function(label) {
+            label.style.pointerEvents = '';
+            label.classList.remove('opacity-75', 'cursor-not-allowed');
+        });
+    }
+
+    function toggleVariantSectionsVisibility(val) {
+        const isVariantYes = (val === 'Y');
+        const sectionsToHide = [
+            'inbound-section-item-grouping',
+            'inbound-section-search-category',
+            'inbound-section-search-terms',
+            'inbound-section-item-identification',
+            'inbound-section-stock'
+        ];
+
+        sectionsToHide.forEach(function(sectionId) {
+            const el = document.getElementById(sectionId);
+            if (el) {
+                if (isVariantYes) {
+                    el.style.display = 'none';
+                } else {
+                    el.style.display = '';
+                }
+            }
+        });
+    }
+
     // --- VARIANT TOGGLE ---
     function toggleVariantFields(val) {
+        toggleVariantSectionsVisibility(val);
+
         if (val === 'Y') {
             wrapperSelect.style.display = 'block';
             wrapperInput.style.display  = 'none';
             if (tomSelectInstance) tomSelectInstance.enable();
             if (selectElement) selectElement.disabled = false;
             fixedInput.disabled = true;
+            lockDesktopformMainVariantCard(true);
+            document.querySelectorAll('#variations-container .variation-card').forEach(unlockDesktopformVariationCard);
         } else if (val === 'N') {
             wrapperSelect.style.display = 'none';
             wrapperInput.style.display  = 'block';
@@ -2552,6 +2669,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 fixedInput.value = ""; 
                 fixedInput.placeholder = "Auto-generated on Save";
             }
+            lockDesktopformMainVariantCard(false);
+            document.querySelectorAll('#variations-container .variation-card').forEach(unlockDesktopformVariationCard);
         }
         const imgDirSelect = document.getElementById('image_directory_select');
             if (imgDirSelect && imgDirSelect.tomselect) {
@@ -2563,11 +2682,149 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
     }
+    function cleanDesktopformParentProductFields() {
+        // 1. Vendor
+        const vendorEl = document.getElementById('vendor_code');
+        if (vendorEl) {
+            if (vendorEl.tomselect) vendorEl.tomselect.clear(true);
+            else vendorEl.value = '';
+        }
+
+        // 2. Group / Category
+        const groupSelect = document.querySelector('select[name="group_name"]');
+        if (groupSelect) groupSelect.value = '';
+
+        // 3. Material
+        const matSelect = document.querySelector('select[name="material_code"]');
+        if (matSelect) matSelect.value = '';
+
+        // 4. HSN & GST
+        document.querySelectorAll('input[name="hsn_code"], input[name*="[hsn_code]"]').forEach(function(el) { el.value = ''; });
+        document.querySelectorAll('input[name="gst_rate"], input[name*="[gst_rate]"]').forEach(function(el) { el.value = ''; });
+
+        // 5. Dimensions, Weight & Price
+        ['height', 'width', 'depth', 'weight', 'dimensions', 'cp', 'cost_price', 'price_india_mrp', 'mrp_india'].forEach(function(field) {
+            document.querySelectorAll('input[name="' + field + '"], input[name*="[' + field + ']"]').forEach(function(el) { el.value = ''; });
+        });
+
+        // 6. Book Fields
+        ['pages', 'isbn', 'cover_type', 'edition', 'publication_date', 'language'].forEach(function(fieldName) {
+            const fieldEl = document.querySelector('[name="' + fieldName + '"]');
+            if (fieldEl) fieldEl.value = '';
+        });
+
+        // 7. Main Photo
+        const mainPreview = document.getElementById('main_photo_preview');
+        if (mainPreview) {
+            mainPreview.src = '#';
+            mainPreview.style.display = 'none';
+        }
+    }
+
+    function loadDesktopformParentProductInfo(parentCode) {
+        if (!parentCode) return;
+        cleanDesktopformParentProductFields();
+
+        const parentDetailsUrl = '<?php echo base_url('?page=inbounding&action=getParentProductDetails&item_code='); ?>' + encodeURIComponent(parentCode);
+        fetch(parentDetailsUrl)
+            .then(function(res) { return res.json(); })
+            .then(function(json) {
+                if (!json || !json.success || !json.data) return;
+                const data = json.data;
+
+                // 1. Group / Category
+                if (data.group_name) {
+                    const groupSelect = document.querySelector('select[name="group_name"]');
+                    if (groupSelect) {
+                        groupSelect.value = data.group_name;
+                        groupSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+
+                // 2. Vendor
+                if (data.vendor_code) {
+                    const vendorEl = document.getElementById('vendor_code');
+                    if (vendorEl) {
+                        if (vendorEl.tomselect) {
+                            vendorEl.tomselect.setValue(String(data.vendor_code));
+                        } else {
+                            vendorEl.value = String(data.vendor_code);
+                        }
+                    }
+                }
+
+                // 3. Material
+                if (data.material_code) {
+                    const matSelect = document.querySelector('select[name="material_code"]');
+                    if (matSelect) {
+                        matSelect.value = String(data.material_code);
+                    }
+                }
+
+                // 4. HSN & GST
+                if (data.hsn_code) {
+                    document.querySelectorAll('input[name="hsn_code"], input[name*="[hsn_code]"]').forEach(function(el) {
+                        el.value = data.hsn_code;
+                    });
+                }
+                if (data.gst_rate !== undefined && data.gst_rate !== null) {
+                    document.querySelectorAll('input[name="gst_rate"], input[name*="[gst_rate]"]').forEach(function(el) {
+                        el.value = data.gst_rate;
+                    });
+                }
+
+                // 5. Dimensions, Weight & Price
+                ['height', 'width', 'depth', 'weight', 'dimensions', 'cp', 'cost_price', 'price_india_mrp', 'mrp_india'].forEach(function(field) {
+                    if (data[field]) {
+                        document.querySelectorAll('input[name="' + field + '"], input[name*="[' + field + ']"]').forEach(function(el) {
+                            el.value = data[field];
+                        });
+                    }
+                });
+
+                // 6. Book Fields
+                ['pages', 'isbn', 'cover_type', 'edition', 'publication_date', 'language'].forEach(function(fieldName) {
+                    if (data[fieldName]) {
+                        const fieldEl = document.querySelector('[name="' + fieldName + '"]');
+                        if (fieldEl) {
+                            fieldEl.value = data[fieldName];
+                        }
+                    }
+                });
+
+                // 7. Product Image (Main)
+                if (data.image_url) {
+                    const mainPreview = document.getElementById('main_photo_preview');
+                    if (mainPreview) {
+                        mainPreview.src = data.image_url;
+                        mainPreview.style.display = 'block';
+                    }
+                    const oldPhotoMain = document.querySelector('input[name="old_product_photo_main"]');
+                    if (oldPhotoMain && data.image) {
+                        oldPhotoMain.value = data.image;
+                    }
+                }
+            })
+            .catch(function(err) {
+                console.error('Error fetching parent product details in desktopform:', err);
+            });
+    }
+
+    if (tomSelectInstance) {
+        tomSelectInstance.on('change', function(val) {
+            if (variantSelect && variantSelect.value === 'Y' && val) {
+                loadDesktopformParentProductInfo(val);
+            }
+        });
+    }
+
     if (variantSelect) {
         variantSelect.addEventListener('change', function() {
             toggleVariantFields(this.value);
             if(this.value === 'N' && tomSelectInstance) {
                 tomSelectInstance.clear();
+            } else if(this.value === 'Y' && tomSelectInstance && tomSelectInstance.getValue()) {
+                loadDesktopformParentProductInfo(tomSelectInstance.getValue());
             }
         });
     }
@@ -4356,43 +4613,48 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // --- 1. GENERAL FIELDS ---
         const isBookGroup = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
+        const isVariant = getVal('is_variant') === 'Y';
+
         if (!getVal('added_date')) errors.push("Field 'Added On' is required.");
         if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
         if (!getVal('updated_by_user_id')) errors.push("Field 'Feeded By' is required.");
-        if (!isBookGroup && !getVal('material_code')) errors.push("Field 'Material' is required.");
-        if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
-        if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
-        if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
-        if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
-        if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");
 
-        // Category Check (Checkboxes)
-        const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
-        if (catChecked === 0) errors.push("Please select at least one 'Category'.");
+        if (!isVariant) {
+            if (!isBookGroup && !getVal('material_code')) errors.push("Field 'Material' is required.");
+            if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
+            if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
+            if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
+            if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
+            if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");
 
-        // Marketplace sourcing: no local stock — skip main quantity_received check
-        const hasMarketplaceVendor = getVal('marketplace') !== '';
+            // Category Check (Checkboxes)
+            const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
+            if (catChecked === 0) errors.push("Please select at least one 'Category'.");
 
-        if (!hasMarketplaceVendor) {
-            const mainQty = parseFloat(getVal('quantity_received')) || 0;
-            // Ensure at least 1
-            if (mainQty < 1) {
-                errors.push("Main Item: 'Quantity' must be at least 1.");
+            // Marketplace sourcing: no local stock — skip main quantity_received check
+            const hasMarketplaceVendor = getVal('marketplace') !== '';
+
+            if (!hasMarketplaceVendor) {
+                const mainQty = parseFloat(getVal('quantity_received')) || 0;
+                // Ensure at least 1
+                if (mainQty < 1) {
+                    errors.push("Main Item: 'Quantity' must be at least 1.");
+                }
             }
-        }
 
-        if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
-        if (!isBookGroup) {
-            if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
-            if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
-        }
-        if (isInvalidPrice(getVal('usd_price'))) errors.push("Main Item: 'USD Price' must be greater than 0.");
-        if (!getVal('hsn_code')) errors.push("Main Item: 'HSN Code' is required.");
+            if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
+            if (!isBookGroup) {
+                if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
+                if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
+            }
+            if (isInvalidPrice(getVal('usd_price'))) errors.push("Main Item: 'USD Price' must be greater than 0.");
+            if (!getVal('hsn_code')) errors.push("Main Item: 'HSN Code' is required.");
 
-        // Gallery Check (Main)
-        const mainGrid = document.querySelector('.photo-group-grid[data-var-id="-1"]');
-        if (!mainGrid || mainGrid.querySelectorAll('.draggable-item').length < 1) {
-            errors.push("Main Item: Please add at least 1 photo to the Gallery.");
+            // Gallery Check (Main)
+            const mainGrid = document.querySelector('.photo-group-grid[data-var-id="-1"]');
+            if (!mainGrid || mainGrid.querySelectorAll('.draggable-item').length < 1) {
+                errors.push("Main Item: Please add at least 1 photo to the Gallery.");
+            }
         }
 
         // --- 3. VARIATIONS LOOP ---
@@ -4407,10 +4669,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const hasMarketplaceVendor = getVal('marketplace') !== '';
 
             if (!hasMarketplaceVendor) {
-                const mainQty = parseFloat(getVal('quantity_received')) || 0;
-                // Ensure at least 1
-                if (mainQty < 1) {
-                    errors.push("Main Item: 'Quantity' must be at least 1.");
+                const varQty = parseFloat(getCardVal('quantity')) || parseFloat(getCardVal('quantity_received')) || 0;
+                if (varQty < 1) {
+                    errors.push(`${cardTitle}: 'Quantity' must be at least 1.`);
                 }
             }
 
@@ -4849,6 +5110,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // END FIX
             // ---------------------------------------------------------
             container.appendChild(newCard);
+            unlockDesktopformVariationCard(newCard);
             
             // Scroll to new item
             newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -5840,53 +6102,53 @@ function validateAndSubmit(actionType) {
 
     // --- 1. GENERAL FIELDS VALIDATION ---
     const isBookGroupSave = typeof window.desktopFormIsBookGroup === 'function' && window.desktopFormIsBookGroup();
+    const isVariant = getVal('is_variant') === 'Y'; // Get current Variant status (Y or N)
+
     if (!getVal('added_date')) errors.push("Field 'Added On' is required.");
     if (!getVal('received_by_user_id')) errors.push("Field 'Received By' is required.");
     if (!getVal('updated_by_user_id')) errors.push("Field 'Feeded By' is required.");
-    if (!isBookGroupSave && !getVal('material_code')) errors.push("Field 'Material' is required.");
-    if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
-    if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
-    if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
-    if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
-    if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");
-    const isVariant = getVal('is_variant'); // Get current Variant status (Y or N)
 
-    // Only validate Image Directory if this is NOT a variant (i.e., it is a Parent/Main item)
-    
+    if (!isVariant) {
+        if (!isBookGroupSave && !getVal('material_code')) errors.push("Field 'Material' is required.");
+        if (!getVal('group_name')) errors.push("Field 'Group (groupname)' is required.");
+        if (!getVal('accounts_group')) errors.push("Field 'Accounts Group (account_group)' is required.");
+        if (!getVal('search_term')) errors.push("Field 'Search Terms' is required.");
+        if (!getVal('key_words')) errors.push("Please enter at least one 'Keyword'.");
+        if (!getVal('marketplace')) errors.push("Field 'Marketplace Vendor' is required.");
 
-    // Category Check (Checkboxes)
-    const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
-    if (catChecked === 0) errors.push("Please select at least one 'Category'.");
+        // Category Check (Checkboxes)
+        const catChecked = document.querySelectorAll('input[name="category_code[]"]:checked').length;
+        if (catChecked === 0) errors.push("Please select at least one 'Category'.");
 
-    // --- 2. MAIN ITEM VALIDATION ---
-     // Marketplace sourcing: no local stock — skip main quantity_received check
-    const hasMarketplaceVendor = getVal('marketplace') !== '';
+        // --- 2. MAIN ITEM VALIDATION ---
+        // Marketplace sourcing: no local stock — skip main quantity_received check
+        const hasMarketplaceVendor = getVal('marketplace') !== '';
 
-    if (!hasMarketplaceVendor) {
-        const mainQty = parseFloat(getVal('quantity_received')) || 0;
-        // Ensure at least 1
-        if (mainQty < 1) {
-            errors.push("Main Item: 'Quantity' must be at least 1.");
+        if (!hasMarketplaceVendor) {
+            const mainQty = parseFloat(getVal('quantity_received')) || 0;
+            // Ensure at least 1
+            if (mainQty < 1) {
+                errors.push("Main Item: 'Quantity' must be at least 1.");
+            }
         }
+        // UPDATED: Check for 0.00
+        if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
+        if (!isBookGroupSave) {
+            if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
+            if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
+        }
+        if (isInvalidPrice(getVal('usd_price'))) errors.push("Main Item: 'USD Price' must be greater than 0.");
+        
+        if (!getVal('hsn_code')) errors.push("Main Item: 'HSN Code' is required.");
+
+        const mainGst = parseFloat(getVal('gst_rate'));
+        if (isNaN(mainGst) || mainGst < 0) errors.push("Main Item: 'GST' must be 0 or greater.");
+
+        // Main Gallery Check (ID -1)
+        const mainGrid = document.querySelector('.photo-group-grid[data-var-id="-1"]');
+        const mainImgCount = mainGrid ? mainGrid.querySelectorAll('.draggable-item').length : 0;
+        if (mainImgCount < 1) errors.push("Main Item: Please add at least 1 photo to the Gallery.");
     }
-    // UPDATED: Check for 0.00
-    if (isInvalidPrice(getVal('price_india'))) errors.push("Main Item: 'Price India' must be greater than 0.");
-    if (!isBookGroupSave) {
-        if (isInvalidPrice(getVal('cp'))) errors.push("Main Item: 'CP' must be greater than 0.");
-        if (isInvalidPrice(getVal('price_india_mrp'))) errors.push("Main Item: 'Price India MRP' must be greater than 0.");
-    }
-    if (isInvalidPrice(getVal('usd_price'))) errors.push("Main Item: 'USD Price' must be greater than 0.");
-    
-    if (!getVal('hsn_code')) errors.push("Main Item: 'HSN Code' is required.");
-
-    const mainGst = parseFloat(getVal('gst_rate'));
-    if (isNaN(mainGst) || mainGst < 0) errors.push("Main Item: 'GST' must be 0 or greater.");
-
-    // Main Gallery Check (ID -1)
-    const mainGrid = document.querySelector('.photo-group-grid[data-var-id="-1"]');
-    const mainImgCount = mainGrid ? mainGrid.querySelectorAll('.draggable-item').length : 0;
-    if (mainImgCount < 1) errors.push("Main Item: Please add at least 1 photo to the Gallery.");
-
 
     // --- 3. VARIATIONS VALIDATION ---
     const variations = document.querySelectorAll('.variation-card');
@@ -5902,10 +6164,9 @@ function validateAndSubmit(actionType) {
 
         const hasMarketplaceVendor = getVal('marketplace') !== '';
         if (!hasMarketplaceVendor) {
-            const mainQty = parseFloat(getVal('quantity_received')) || 0;
-            // Ensure at least 1
-            if (mainQty < 1) {
-                errors.push("Main Item: 'Quantity' must be at least 1.");
+            const varQty = parseFloat(getCardVal('quantity')) || parseFloat(getCardVal('quantity_received')) || 0;
+            if (varQty < 1) {
+                errors.push(`${cardTitle}: 'Quantity' must be at least 1.`);
             }
         }
         // UPDATED: Check for 0.00 inside variations

@@ -305,6 +305,22 @@ class InboundingController {
         $data = $inboundingModel->getItamcode();
         echo json_encode($data);exit;
     }
+    public function getParentProductDetailsAjax(){
+        global $inboundingModel;
+        header('Content-Type: application/json');
+        $itemCode = trim((string) ($_GET['item_code'] ?? $_POST['item_code'] ?? ''));
+        if ($itemCode === '') {
+            echo json_encode(['success' => false, 'message' => 'Parent item code required.']);
+            exit;
+        }
+        $data = $inboundingModel->getParentProductDetails($itemCode);
+        if ($data !== null) {
+            echo json_encode(['success' => true, 'data' => $data]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Parent product not found.']);
+        }
+        exit;
+    }
     public function label($value=''){
         is_login();
         global $inboundingModel;
@@ -1017,6 +1033,22 @@ class InboundingController {
             return;
         }
 
+        // 1. Rename base item images (-1) using main item color/size suffix
+        $baseImages = $imagesByVariation[-1] ?? [];
+        if ($baseImages !== []) {
+            $baseSuffix = $this->getNamingSuffix($inboundCtx['color'] ?? '', $inboundCtx['size'] ?? '');
+            $baseName = $itemCode . ($baseSuffix ? '-' . $baseSuffix : '');
+            $this->renameGalleryImagesByDisplayOrder(
+                $baseImages,
+                $altPhotoDir,
+                $baseName,
+                $inboundingModel,
+                $isBook,
+                false
+            );
+        }
+
+        // 2. Rename extra variations' images (> 0) with their color/size suffix
         foreach ($variations as $var) {
             $varId = (int) ($var['id'] ?? 0);
             if ($varId <= 0) {
@@ -1341,12 +1373,6 @@ class InboundingController {
             return [];
         }
 
-        $varRows = $d['var_rows'] ?? [];
-        $hasVariations = is_array($varRows) && $varRows !== [];
-        $isVariant = strtoupper(trim((string) ($d['is_variant'] ?? 'N'))) === 'Y';
-        $isBook = strtolower(trim((string) ($d['groupname'] ?? ''))) === 'book';
-        $skipParentGallery = $hasVariations && !$isVariant && !$isBook;
-
         $imgBase = rtrim($siteImageBase, '/') . '/uploads/itm_img/';
         $orderedFiles = [];
 
@@ -1371,14 +1397,6 @@ class InboundingController {
         });
 
         foreach ($galleryRows as $row) {
-            $varId = (int) ($row['variation_id'] ?? -1);
-            if ($varId === 0) {
-                $varId = -1;
-            }
-            if ($skipParentGallery && $varId === -1) {
-                continue;
-            }
-
             $fn = strtolower(basename((string) ($row['file_name'] ?? '')));
             if ($fn === '' || in_array($fn, $orderedFiles, true)) {
                 continue;
@@ -1420,6 +1438,22 @@ class InboundingController {
         $missing = [];
 
         if ($useVariationNaming) {
+            // Check main product (first variant)
+            $hasMainFile = false;
+            foreach ($imagesByVariation[-1] ?? [] as $row) {
+                if ($this->editedImageExistsOnDisk((string) ($row['file_name'] ?? ''))) {
+                    $hasMainFile = true;
+                    break;
+                }
+            }
+            if (!$hasMainFile) {
+                $color = trim((string) ($bundle['inbound']['color'] ?? $publishRow['color'] ?? ''));
+                $size = trim((string) ($bundle['inbound']['size'] ?? $publishRow['size'] ?? ''));
+                $label = trim($color . ($color !== '' && $size !== '' ? ' / ' : '') . $size);
+                $missing[] = $label !== '' ? $label : 'main product';
+            }
+
+            // Check extra variations
             foreach ($variations as $var) {
                 $varId = (int) ($var['id'] ?? 0);
                 if ($varId <= 0) {
@@ -1570,13 +1604,19 @@ class InboundingController {
 
         if (($oldData['form1']['is_variant'] ?? '') == 'Y') {
             if ($is_variant !== ($oldData['form1']['is_variant'] ?? '')) {
-                $group_real_name = trim($inboundingModel->getGroupNameByCode($_POST['group_name']));
+                $group_real_name = trim($inboundingModel->getGroupNameByCode($_POST['group_name'] ?? ''));
                 $item_code = $this->generateItemcode($group_real_name);
-            }else{
-                $item_code = $_POST['Item_code'] ?? '';
+            } else {
+                $item_code = trim((string) ($_POST['Item_code'] ?? ''));
+                if ($item_code === '' && !empty($oldData['form1']['Item_code'])) {
+                    $item_code = trim((string) $oldData['form1']['Item_code']);
+                }
             }
-        }else{
-            $item_code = $_POST['Item_code'] ?? '';         
+        } else {
+            $item_code = trim((string) ($_POST['Item_code'] ?? ''));
+            if ($item_code === '' && !empty($oldData['form1']['Item_code'])) {
+                $item_code = trim((string) $oldData['form1']['Item_code']);
+            }
         }
 
         // --- SKU GENERATION ---
@@ -2021,7 +2061,8 @@ class InboundingController {
         }
 
         // Use existing code if it's a variant, otherwise generate a new one
-        if ($_POST['is_variant']== 'Y') {
+        $is_variant_submitted = (isset($_POST['is_variant']) && strtoupper(trim((string)$_POST['is_variant'])) === 'Y') ? 'Y' : 'N';
+        if ($is_variant_submitted === 'Y') {
             $item_code = $_POST['Item_code'];
         } else {
             // Get group name to determine the first letter
@@ -2095,7 +2136,7 @@ class InboundingController {
           'group_name'     => $_POST['category'] ?? '',
           'received_by_user_id' => $_POST['received_by_user_id'] ?? '',
           'Item_code'      => $item_code ?? '',
-          'is_variant'      => $_POST['is_variant'] ?? '',
+          'is_variant'      => $is_variant_submitted,
           'feedback'      => $_POST['feedback'] ?? '',
          
           // Map Index 0 Data to DB Columns
@@ -2527,6 +2568,78 @@ class InboundingController {
         $data['variation'] = $inboundingModel->getVariations($id);
         include 'views/inbounding/label.php';
     }
+
+    /**
+     * Build standard item_stock_price node for API payload.
+     *
+     * @param array<string, mixed> $rowVal Row containing size, color, price, etc. (either main item or variation row)
+     * @param array<string, mixed> $d Main inbound data row for fallbacks
+     * @param string $itemLevel 'variation' or 'standalone'
+     * @param string $currentDateFormatted YYYY-MM-DD
+     * @return array<string, mixed>
+     */
+    private function buildStockPriceNode(array $rowVal, array $d, string $itemLevel, string $currentDateFormatted): array
+    {
+        $permAvailable = ((int) ($d['permanently_available'] ?? 0) === 1) ? 1 : 0;
+
+        $node = [
+            'size' => $rowVal['size'] ?? '',
+            'color' => $rowVal['color'] ?? '',
+            'marketplace_vendor' => $d['Marketplace'] ?? '',
+            'item_level' => $itemLevel,
+            'colormap' => $rowVal['colormaps'] ?? $d['colormaps'] ?? '',
+            'product_weight' => $rowVal['weight'] ?? $d['weight'] ?? '',
+            'product_weight_unit' => 'kg',
+            'prod_length' => $rowVal['depth'] ?? $d['depth'] ?? '',
+            'prod_width' => $rowVal['width'] ?? $d['width'] ?? '',
+            'prod_height' => $rowVal['height'] ?? $d['height'] ?? '',
+            'length_unit' => 'inch',
+            'date_added' => (!empty($d['added_date']) && $d['added_date'] !== '0000-00-00')
+                ? date('Y-m-d', strtotime($d['added_date']))
+                : date('Y-m-d'),
+            'stock_date_added' => date('Y-m-d', strtotime($currentDateFormatted)),
+            'local_stock' => $rowVal['quantity_received'] ?? $rowVal['quantity'] ?? $d['quantity_received'] ?? 0,
+            'flex_status' => '0',
+            'fba_in' => '0',
+            'fba_us' => '0',
+            'fba_eu' => '0',
+            'vendor_us' => '0',
+            'price' => (int) ($rowVal['usd_price'] ?? $d['usd_price'] ?? 0),
+            'price_india' => (int) ($rowVal['price_india'] ?? $d['price_india'] ?? 0),
+            'mrp_india' => (int) ($rowVal['price_india_mrp'] ?? $d['price_india_mrp'] ?? 0),
+            'gst' => $rowVal['gst_rate'] ?? $d['gst_rate'] ?? '',
+            'permanent_discount' => (string) ((int) ($d['permanent_discount'] ?? 0)),
+            'discount_global' => (string) ((int) ($d['discount_global'] ?? 0)),
+            'today_global' => '0',
+            'discount_india' => (string) ((int) ($d['discount_india'] ?? 0)),
+            'today_india' => '0',
+            'upc' => $rowVal['upc'] ?? '',
+            'asin' => '',
+            'location' => $rowVal['store_location'] ?? $d['store_location'] ?? '',
+            'topurchase' => '0',
+            'backorder_percent' => $d['backorder_percent'] ?? '',
+            'backorder_weeks' => $d['backorder_day'] ?? '',
+            'leadtime' => $d['lead_time_days'] ?? '',
+            'instock_leadtime' => $d['in_stock_leadtime_days'] ?? '',
+            'cp' => $rowVal['cp'] ?? $d['cp'] ?? 0,
+            'usd' => $rowVal['usd_price'] ?? $d['usd_price'] ?? 0,
+            'permanently_available' => $permAvailable,
+            'amazon_sold' => (string) ((int) ($d['amazon_sold'] ?? 0)),
+            'amazon_leadtime' => (string) ((int) ($d['amazon_leadtime'] ?? 0)),
+            'amazon_itemcode_alias' => '',
+            'youtube_links' => '',
+            'sketchfab_links' => '',
+            'dimensions' => $rowVal['dimensions'] ?? $d['dimensions'] ?? '',
+        ];
+
+        if (array_key_exists('price_india_suggested', $rowVal)) {
+            $node['price_india_suggested'] = (int) $rowVal['price_india_suggested'];
+        } elseif (array_key_exists('price_india_suggested', $d)) {
+            $node['price_india_suggested'] = (int) $d['price_india_suggested'];
+        }
+
+        return $node;
+    }
     public function inbound_product_publish(){
         is_login();
         @set_time_limit(300);
@@ -2785,146 +2898,36 @@ class InboundingController {
             $API_data['discrete_vendors'][0]['priority'] = 1;
         }
         $stock_price_temp = array();
-        if (($d['is_variant'] ?? 'N') == 'N') {
-            
-            if (!empty($d['var_rows'])) {
-                $stock_price_temp[0]['size'] = "";
-                $stock_price_temp[0]['color'] = "";
-                $stock_price_temp[0]['item_level'] = 'parent';
-            }else{
-                $stock_price_temp[0]['size'] = "";
-                $stock_price_temp[0]['color'] = "";
-                $stock_price_temp[0]['item_level'] = 'standalone';
-            }
-        }else{
-            $stock_price_temp[0]['size'] = $d['size'] ?? '';
-            $stock_price_temp[0]['color'] = $d['color'] ?? '';
-            if ($d['groupname'] == 'book') {
-                $stock_price_temp[0]['item_level'] = 'standalone';
-            }else{
-                $stock_price_temp[0]['item_level'] = 'variation';
-            }
-        }
-        $stock_price_temp[0]['marketplace_vendor'] = $d['Marketplace'] ?? '';
-        $stock_price_temp[0]['colormap'] = $d['colormaps'] ?? '';
-        $stock_price_temp[0]['product_weight'] = $d['weight'] ?? '';
-        $stock_price_temp[0]['product_weight_unit'] = 'kg';
-        $stock_price_temp[0]['prod_length'] = $d['depth'] ?? '';
-        $stock_price_temp[0]['prod_width'] = $d['width'] ?? '';
-        $stock_price_temp[0]['prod_height'] = $d['height'] ?? '';
-        $stock_price_temp[0]['length_unit'] = 'inch';
-        $input_date = $d['added_date'] ?? null;
-        if (!empty($input_date) && $input_date != '0000-00-00') {
-            $stock_price_temp[0]['date_added'] = date('Y-m-d', strtotime($input_date));
-        } else {
-            $stock_price_temp[0]['date_added'] = date('Y-m-d');
-        } 
-        $stock_price_temp[0]['stock_date_added'] =date("Y-m-d", strtotime($current_date_formatted)); 
-        $stock_price_temp[0]['local_stock'] = $d['quantity_received'] ?? 0;
-        $stock_price_temp[0]['flex_status'] = '0';
-        $stock_price_temp[0]['fba_in'] = '0';
-        $stock_price_temp[0]['fba_us'] = '0';
-        $stock_price_temp[0]['fba_eu'] = '0';
-        $stock_price_temp[0]['vendor_us'] = '0';
-        $stock_price_temp[0]['price'] = (int)($d['usd_price'] ?? 0);
-        $stock_price_temp[0]['price_india'] = (int)($d['price_india'] ?? 0);
-        if (array_key_exists('price_india_suggested', $d)) {
-            $stock_price_temp[0]['price_india_suggested'] = (int)$d['price_india_suggested'];
-        }
-        $stock_price_temp[0]['mrp_india'] = (int)($d['price_india_mrp'] ?? 0);
-        $stock_price_temp[0]['gst'] = $d['gst_rate'] ?? '';
-        $stock_price_temp[0]['permanent_discount'] = (string) ((int) ($d['permanent_discount'] ?? 0));
-        $stock_price_temp[0]['discount_global'] = (string) ((int) ($d['discount_global'] ?? 0));
-        $stock_price_temp[0]['today_global'] = '0';
-        $stock_price_temp[0]['discount_india'] = (string) ((int) ($d['discount_india'] ?? 0));
-        $stock_price_temp[0]['today_india'] = '0';
-        $stock_price_temp[0]['upc'] = '';
-        $stock_price_temp[0]['asin'] = '';
-        $stock_price_temp[0]['location'] = $d['store_location'] ?? '';
-        $stock_price_temp[0]['topurchase'] = '0';
-        $stock_price_temp[0]['backorder_percent'] = $d['backorder_percent'] ?? '';
-        $stock_price_temp[0]['backorder_weeks'] = $d['backorder_day'] ?? '';
-        $stock_price_temp[0]['leadtime'] = $d['lead_time_days'] ?? '';
-        $stock_price_temp[0]['instock_leadtime'] = $d['in_stock_leadtime_days'] ?? '';
-        $stock_price_temp[0]['cp'] = $d['cp'] ?? 0;
-        $stock_price_temp[0]['usd'] = $d['usd_price'] ?? 0;
-        $permAvailable = ((int) ($d['permanently_available'] ?? 0) === 1) ? 1 : 0;
-        $stock_price_temp[0]['permanently_available'] = $permAvailable;
-        $stock_price_temp[0]['amazon_sold'] = (string) ((int) ($d['amazon_sold'] ?? 0));
-        $stock_price_temp[0]['amazon_leadtime'] = (string) ((int) ($d['amazon_leadtime'] ?? 0));
-        $stock_price_temp[0]['amazon_itemcode_alias'] = '';
-        $stock_price_temp[0]['youtube_links'] = '';
-        $stock_price_temp[0]['sketchfab_links'] = '';
-        $stock_price_temp[0]['dimensions'] = $data['data']['dimensions'] ?? '';
+        $isVariantProduct = strtoupper(trim((string) ($d['is_variant'] ?? 'N'))) === 'Y';
+        $hasVarRows = !empty($d['var_rows']) && is_array($d['var_rows']);
 
-        // Variation Records [1..n]
-        if (!empty($d['var_rows'])) {
-            $i = 0;
-            foreach ($d['var_rows'] as $key => $value) {
-                $i++;
-                $stock_price_temp[$i]['size'] = $value['size'] ?? '';
-                $stock_price_temp[$i]['color'] = $value['color'] ?? '';
-                $stock_price_temp[$i]['marketplace_vendor'] = $d['Marketplace'] ?? '';
-                $stock_price_temp[$i]['item_level'] = 'variation';
-                $stock_price_temp[$i]['colormap'] = $value['colormaps'] ?? '';
-                $stock_price_temp[$i]['product_weight'] = $value['weight'] ?? '';
-                $stock_price_temp[$i]['product_weight_unit'] = 'kg';
-                $stock_price_temp[$i]['prod_length'] = $value['depth'] ?? '';
-                $stock_price_temp[$i]['prod_width'] = $value['width'] ?? '';
-                $stock_price_temp[$i]['prod_height'] = $value['height'] ?? '';
-                $stock_price_temp[$i]['length_unit'] = 'inch';
-                $stock_price_temp[$i]['date_added'] = $d['added_date'] ?? ''; 
-                $stock_price_temp[$i]['stock_date_added'] = date("Y-m-d", strtotime($current_date_formatted));
-                $stock_price_temp[$i]['local_stock'] = $value['quantity_received'] ?? 0;
-                $stock_price_temp[$i]['flex_status'] = '0';
-                $stock_price_temp[$i]['fba_in'] = '0';
-                $stock_price_temp[$i]['fba_us'] = '0';
-                $stock_price_temp[$i]['fba_eu'] = '0';
-                $stock_price_temp[$i]['vendor_us'] = '0';
-                $stock_price_temp[$i]['price'] = (int)($value['usd_price'] ?? 0);
-                $stock_price_temp[$i]['price_india'] = (int)($value['price_india'] ?? 0);
-                if (array_key_exists('price_india_suggested', $value)) {
-                    $stock_price_temp[$i]['price_india_suggested'] = (int)$value['price_india_suggested'];
-                } elseif (array_key_exists('price_india_suggested', $d)) {
-                    $stock_price_temp[$i]['price_india_suggested'] = (int)$d['price_india_suggested'];
+        if (!$isVariantProduct) {
+            if ($hasVarRows) {
+                // Example 1: Creating a new product with variations
+                // 1. Parent node at index 0 (item_level = 'parent', empty size & color)
+                $parentNode = $this->buildStockPriceNode($d, $d, 'parent', $current_date_formatted);
+                $parentNode['size'] = '';
+                $parentNode['color'] = '';
+                $stock_price_temp[] = $parentNode;
+
+                // 2. Main inbound product as first variation node (item_level = 'variation')
+                $stock_price_temp[] = $this->buildStockPriceNode($d, $d, 'variation', $current_date_formatted);
+
+                // 3. Extra variation rows from vp_variations (item_level = 'variation')
+                foreach ($d['var_rows'] as $varRow) {
+                    $stock_price_temp[] = $this->buildStockPriceNode($varRow, $d, 'variation', $current_date_formatted);
                 }
-                $stock_price_temp[$i]['mrp_india'] = (int)($value['price_india_mrp'] ?? 0);
-                $stock_price_temp[$i]['gst'] = $value['gst_rate'] ?? '';
-                $stock_price_temp[$i]['permanent_discount'] = (string) ((int) ($d['permanent_discount'] ?? 0));
-                $stock_price_temp[$i]['discount_global'] = (string) ((int) ($d['discount_global'] ?? 0));
-                $stock_price_temp[$i]['today_global'] = '0';
-                $stock_price_temp[$i]['discount_india'] = (string) ((int) ($d['discount_india'] ?? 0));
-                $stock_price_temp[$i]['today_india'] = '0';
-                $stock_price_temp[$i]['upc'] = '';
-                $stock_price_temp[$i]['asin'] = '';
-                $stock_price_temp[$i]['location'] = $value['store_location'] ?? '';
-                $stock_price_temp[$i]['topurchase'] = '0';
-                $stock_price_temp[$i]['backorder_percent'] = $d['backorder_percent'] ?? '';
-                $stock_price_temp[$i]['backorder_weeks'] = $d['backorder_day'] ?? '';
-                $stock_price_temp[$i]['leadtime'] = $d['lead_time_days'] ?? '';
-                $stock_price_temp[$i]['instock_leadtime'] = $d['in_stock_leadtime_days'] ?? '';
-                $stock_price_temp[$i]['cp'] = $value['cp'] ?? 0;
-                $stock_price_temp[$i]['usd'] = $value['usd_price'] ?? 0;
-                $stock_price_temp[$i]['permanently_available'] = $permAvailable;
-                $stock_price_temp[$i]['amazon_sold'] = (string) ((int) ($d['amazon_sold'] ?? 0));
-                $stock_price_temp[$i]['amazon_leadtime'] = (string) ((int) ($d['amazon_leadtime'] ?? 0));
-                $stock_price_temp[$i]['amazon_itemcode_alias'] = '';
-                $stock_price_temp[$i]['youtube_links'] = '';
-                $stock_price_temp[$i]['sketchfab_links'] = '';
-                $stock_price_temp[$i]['dimensions'] = $value['dimensions'] ?? '';
+            } else {
+                // Example 2: Standalone product (no variations)
+                $itemLevel = ($d['groupname'] === 'book') ? 'standalone' : 'standalone';
+                $stock_price_temp[] = $this->buildStockPriceNode($d, $d, $itemLevel, $current_date_formatted);
             }
-            
-            // ========================================================================
-            // LOGIC: When Parent is "N" and has variations, add main data as a copy
-            // ========================================================================
-            if (($d['is_variant'] ?? 'N') == 'N') {   // if parent is not a variant, add the parent as a variation
-                // Clone the base item (stock_price_temp[0]) and add it to the end as another variation
-                // This ensures the parent product data is also included in the variations array
-                $i++;
-                $stock_price_temp[$i] = $stock_price_temp[0];
-                $stock_price_temp[$i]['item_level'] = 'variation'; // Change item level from 'parent' to 'variation'
-                $stock_price_temp[$i]['size'] = $d['size'] ?? '';
-                $stock_price_temp[$i]['color'] = $d['color'] ?? '';
+        } else {
+            // Example 3: is_variant == 'Y' (adding ONLY variations to an existing product via ?new_variation=1)
+            $variantRows = $hasVarRows ? $d['var_rows'] : [$d];
+            foreach ($variantRows as $rowVal) {
+                $itemLevel = ($d['groupname'] === 'book') ? 'standalone' : 'variation';
+                $stock_price_temp[] = $this->buildStockPriceNode($rowVal, $d, $itemLevel, $current_date_formatted);
             }
         }
 
@@ -2953,17 +2956,15 @@ class InboundingController {
         $API_data['item_stock_price'] = array_values($stock_price_temp);
 
 
-        // 4. Handle Images (The major fix)
-       
-        $isVariant = $d['is_variant'] ?? 'N'; // <-- FIX: Define $isVariant here    
+        // 4. Handle Images
 
         $images_payload = array();
-        $img_directory = ($isVariant == 'N') ? ($data['data']['image_directory'] ?? '') : ''; 
+        $img_directory = ($isVariantProduct) ? '' : ($data['data']['image_directory'] ?? ''); 
         $images_payload['image_directory'] = $img_directory;
         $images_payload['images'] = array(); // Initialize as empty ARRAY, not string
 
         if (!empty($d['img'])) {
-            $images_payload['image_directory'] = $d['image_directory'] ?? '';
+            $images_payload['image_directory'] = ($isVariantProduct) ? '' : ($d['image_directory'] ?? '');
             
             $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
             $httpHost = $_SERVER['HTTP_HOST'] ?? '';
@@ -2986,12 +2987,9 @@ class InboundingController {
             'image_count' => count($d['img'] ?? []),
             'payload_bytes' => strlen($jsonString),
         ]);
-        $apiurl =  '';
         
-        $hasRows   = !empty($data['data']['var_rows']);
-        $baseUrl   = 'https://www.exoticindia.com/vendor-api/product/create';
-
-        $apiurl = ($isVariant == 'Y') 
+        $baseUrl = 'https://www.exoticindia.com/vendor-api/product/create';
+        $apiurl  = $isVariantProduct 
             ? $baseUrl . '?new_variation=1'
             : $baseUrl;
 

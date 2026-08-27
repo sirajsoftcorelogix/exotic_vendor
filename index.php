@@ -306,6 +306,12 @@ switch ($page) {
             case 'import_orders':
                 $controller->importOrders();
                 break;
+            case 'scan_missing_orders':
+                $controller->scanMissingOrdersAjax();
+                break;
+            case 'import_missing_batch':
+                $controller->importMissingBatchAjax();
+                break;
             case 'refresh_order_preview':
                 $controller->refreshOrderPreviewAjax();
                 break;
@@ -1356,6 +1362,30 @@ switch ($page) {
                 break;
         }
         break;
+    case 'support':
+        require_once 'controllers/SupportController.php';
+        $controller = new SupportController($conn);
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'view':
+                $controller->view();
+                break;
+            case 'save':
+                $controller->save();
+                break;
+            case 'add_comment':
+                $controller->add_comment();
+                break;
+            case 'update_status':
+                $controller->update_status();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
     case 'inbounding':
         require_once 'controllers/InboundingController.php';
         $controller = new InboundingController();
@@ -1459,6 +1489,9 @@ switch ($page) {
                 break;
             case 'getItamcode':
                 $controller->getItamcode();
+                break;
+            case 'getParentProductDetails':
+                $controller->getParentProductDetailsAjax();
                 break;
             case 'searchAuthors':
                 $controller->searchAuthors();
