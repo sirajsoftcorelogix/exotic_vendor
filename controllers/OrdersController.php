@@ -349,9 +349,340 @@ class OrdersController
     }
 
     /**
-     * Import vendor API order payload into vp_orders (shared by cron import and POS checkout).
+     * Helper to query Exotic India Vendor API (/vendor-api/order/fetch).
+     *
+     * @param array<string, mixed> $postData
+     * @return array<string, mixed>
      */
-    private function importVendorOrdersFromApiPayload(array $ordersList, ?string $onlyOrderNumber = null): array
+    private function fetchVendorApiOrders(array $postData): array
+    {
+        $url = 'https://www.exoticindia.com/vendor-api/order/fetch';
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => http_build_query($postData),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_CONNECTTIMEOUT => 15,
+            CURLOPT_TIMEOUT => 120,
+        ]);
+
+        $response = curl_exec($ch);
+        $errno = curl_errno($ch);
+        $errstr = curl_error($ch);
+        curl_close($ch);
+
+        if ($response === false || $errno !== 0) {
+            return ['error' => "cURL Error ({$errno}): {$errstr}"];
+        }
+
+        $json = json_decode((string)$response, true);
+        if (!is_array($json)) {
+            return ['error' => 'Invalid JSON response from Exotic Vendor API.'];
+        }
+
+        return $json;
+    }
+
+    /**
+     * AJAX action: Scan Vendor API for missing or incomplete orders in a date range or specific order IDs.
+     */
+    public function scanMissingOrdersAjax(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        global $ordersModel;
+
+        $input = json_decode((string)file_get_contents('php://input'), true);
+        if (!is_array($input)) {
+            $input = array_merge($_GET, $_POST);
+        }
+
+        $rawOrders = trim((string)($input['order_id'] ?? $input['orderid'] ?? $input['order'] ?? ''));
+        $orderIds = [];
+        if ($rawOrders !== '') {
+            foreach (explode(',', $rawOrders) as $part) {
+                $part = trim($part);
+                if ($part !== '') {
+                    $orderIds[] = $part;
+                }
+            }
+        }
+
+        $startDateStr = trim((string)($input['start_date'] ?? $input['from_date'] ?? $input['from'] ?? ''));
+        $endDateStr = trim((string)($input['end_date'] ?? $input['to_date'] ?? $input['to'] ?? ''));
+        $days = isset($input['days']) ? (int)$input['days'] : 0;
+
+        $fromTimestamp = 0;
+        $toTimestamp = time();
+
+        if ($startDateStr !== '') {
+            $parsedFrom = is_numeric($startDateStr) ? (int)$startDateStr : strtotime($startDateStr);
+            if ($parsedFrom && $parsedFrom > 0) {
+                $fromTimestamp = $parsedFrom;
+            }
+        }
+
+        if ($endDateStr !== '') {
+            $parsedTo = is_numeric($endDateStr) ? (int)$endDateStr : strtotime($endDateStr . ' 23:59:59');
+            if ($parsedTo && $parsedTo > 0) {
+                $toTimestamp = $parsedTo;
+            }
+        }
+
+        if ($fromTimestamp === 0) {
+            $daysInt = $days > 0 ? $days : 7;
+            $fromTimestamp = strtotime("-{$daysInt} days");
+        }
+
+        $allApiOrders = [];
+
+        if ($orderIds !== []) {
+            foreach ($orderIds as $id) {
+                $resp = $this->fetchVendorApiOrders([
+                    'makeRequestOf' => 'vendors-orderjson',
+                    'orderid' => $id,
+                ]);
+                if (!empty($resp['orders']) && is_array($resp['orders'])) {
+                    foreach ($resp['orders'] as $ord) {
+                        $allApiOrders[(string)($ord['orderid'] ?? $id)] = $ord;
+                    }
+                }
+            }
+        } else {
+            $firstPageResp = $this->fetchVendorApiOrders([
+                'makeRequestOf' => 'vendors-orderjson',
+                'from_date' => $fromTimestamp,
+                'to_date' => $toTimestamp,
+            ]);
+
+            if (!empty($firstPageResp['error'])) {
+                echo json_encode(['success' => false, 'message' => 'API Error: ' . $firstPageResp['error']]);
+                exit;
+            }
+
+            $totalPages = (int)($firstPageResp['total_pages'] ?? 1);
+            $firstPageOrders = (array)($firstPageResp['orders'] ?? []);
+
+            foreach ($firstPageOrders as $ord) {
+                $id = (string)($ord['orderid'] ?? '');
+                if ($id !== '') {
+                    $allApiOrders[$id] = $ord;
+                }
+            }
+
+            if ($totalPages > 1) {
+                for ($p = 2; $p <= $totalPages; $p++) {
+                    $pageResp = $this->fetchVendorApiOrders([
+                        'makeRequestOf' => 'vendors-orderjson',
+                        'from_date' => $fromTimestamp,
+                        'to_date' => $toTimestamp,
+                        'page' => $p,
+                    ]);
+                    $pOrders = (array)($pageResp['orders'] ?? []);
+                    foreach ($pOrders as $ord) {
+                        $id = (string)($ord['orderid'] ?? '');
+                        if ($id !== '') {
+                            $allApiOrders[$id] = $ord;
+                        }
+                    }
+                }
+            }
+        }
+
+        $totalScanned = count($allApiOrders);
+        if ($totalScanned === 0) {
+            echo json_encode([
+                'success' => true,
+                'total_scanned' => 0,
+                'already_imported' => 0,
+                'missing_count' => 0,
+                'missing_orders' => [],
+                'message' => 'No orders found in Exotic API for the specified criteria.',
+            ]);
+            exit;
+        }
+
+        $existingMaps = $ordersModel->getExistingOrderNumberMaps(array_keys($allApiOrders));
+        $existingOrders = $existingMaps['orders'];
+        $existingOrderInfo = $existingMaps['order_info'];
+
+        $missingList = [];
+        $alreadyImportedCount = 0;
+
+        foreach ($allApiOrders as $id => $ord) {
+            $hasVpOrders = isset($existingOrders[$id]);
+            $hasVpOrderInfo = isset($existingOrderInfo[$id]);
+
+            if ($hasVpOrders && $hasVpOrderInfo) {
+                $alreadyImportedCount++;
+                continue;
+            }
+
+            $cart = (array)($ord['cart'] ?? []);
+            $totalAmt = 0.0;
+            foreach ($cart as $item) {
+                $qty = (float)($item['qty'] ?? 1);
+                $price = (float)($item['finalprice'] ?? $item['itemprice'] ?? 0);
+                $totalAmt += ($qty * $price);
+            }
+
+            $fname = (string)($ord['address_info']['first_name'] ?? '');
+            $lname = (string)($ord['address_info']['last_name'] ?? '');
+            $custName = trim($fname . ' ' . $lname) ?: 'N/A';
+
+            $missingList[] = [
+                'orderid' => $id,
+                'processed_time' => (int)($ord['processed_time'] ?? 0),
+                'order_date_formatted' => !empty($ord['processed_time']) ? date('Y-m-d H:i', (int)$ord['processed_time']) : 'N/A',
+                'customer_name' => $custName,
+                'country' => (string)($ord['shipping_country'] ?? $ord['address_info']['country'] ?? 'N/A'),
+                'item_count' => count($cart),
+                'total_amount' => $totalAmt,
+                'payment_type' => (string)($ord['payment_type'] ?? 'N/A'),
+                'missing_type' => !$hasVpOrders ? 'completely_missing' : 'missing_info',
+                'type_label' => !$hasVpOrders ? 'Completely Missing' : 'Missing Address Info',
+                'payload' => $ord,
+            ];
+        }
+
+        echo json_encode([
+            'success' => true,
+            'total_scanned' => $totalScanned,
+            'already_imported' => $alreadyImportedCount,
+            'missing_count' => count($missingList),
+            'missing_orders' => $missingList,
+            'from_date' => date('Y-m-d', $fromTimestamp),
+            'to_date' => date('Y-m-d', $toTimestamp),
+        ]);
+        exit;
+    }
+
+    /**
+     * AJAX action: Batch import a set of missing/incomplete orders.
+     */
+    public function importMissingBatchAjax(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        global $ordersModel;
+
+        $input = json_decode((string)file_get_contents('php://input'), true);
+        if (!is_array($input)) {
+            $input = $_POST;
+        }
+
+        $ordersToImport = (array)($input['orders'] ?? []);
+        if ($ordersToImport === [] && !empty($input['order_ids'])) {
+            $ids = is_array($input['order_ids']) ? $input['order_ids'] : explode(',', (string)$input['order_ids']);
+            foreach ($ids as $id) {
+                $id = trim((string)$id);
+                if ($id !== '') {
+                    $resp = $this->fetchVendorApiOrders([
+                        'makeRequestOf' => 'vendors-orderjson',
+                        'orderid' => $id,
+                    ]);
+                    if (!empty($resp['orders']) && is_array($resp['orders'])) {
+                        foreach ($resp['orders'] as $ord) {
+                            $ordersToImport[] = $ord;
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($ordersToImport === []) {
+            echo json_encode(['success' => false, 'message' => 'No orders provided for batch import.']);
+            exit;
+        }
+
+        $batchResults = [];
+        $importedCount = 0;
+        $failedCount = 0;
+
+        foreach ($ordersToImport as $ordItem) {
+            $payload = $ordItem['payload'] ?? $ordItem;
+            $orderId = (string)($payload['orderid'] ?? '');
+            $missingType = (string)($ordItem['missing_type'] ?? 'completely_missing');
+
+            if ($orderId === '') {
+                continue;
+            }
+
+            try {
+                if ($missingType === 'missing_info') {
+                    $custRes = $ordersModel->addCustomerIfNotExists($payload);
+                    $cid = (int)($custRes['customer_id'] ?? 0);
+                    $addrRes = $ordersModel->insertAddressInfo($payload, $cid);
+
+                    if (!empty($addrRes['success'])) {
+                        $importedCount++;
+                        $batchResults[] = [
+                            'orderid' => $orderId,
+                            'status' => 'success',
+                            'message' => 'Address info backfilled',
+                        ];
+                    } else {
+                        $batchResults[] = [
+                            'orderid' => $orderId,
+                            'status' => 'skipped',
+                            'message' => $addrRes['message'] ?? 'Address info already exists',
+                        ];
+                    }
+                } else {
+                    $res = $this->importVendorOrdersFromApiPayload([$payload]);
+                    $numImported = (int)($res['imported'] ?? 0);
+
+                    if ($numImported > 0) {
+                        $importedCount++;
+                        $batchResults[] = [
+                            'orderid' => $orderId,
+                            'status' => 'success',
+                            'message' => "Imported {$numImported} line(s)",
+                        ];
+                    } else {
+                        $msg = $res['result'][0]['message'] ?? 'No lines inserted';
+                        $batchResults[] = [
+                            'orderid' => $orderId,
+                            'status' => 'skipped',
+                            'message' => $msg,
+                        ];
+                    }
+                }
+            } catch (\Throwable $e) {
+                $failedCount++;
+                $batchResults[] = [
+                    'orderid' => $orderId,
+                    'status' => 'error',
+                    'message' => $e->getMessage(),
+                ];
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'batch_count' => count($ordersToImport),
+            'imported_count' => $importedCount,
+            'failed_count' => $failedCount,
+            'results' => $batchResults,
+        ]);
+        exit;
+    }
+
+    /**
+     * Import vendor API order payload into vp_orders (shared by cron import, POS checkout, and recovery scripts).
+     */
+    public function importVendorOrdersFromApiPayload(array $ordersList, ?string $onlyOrderNumber = null): array
     {
         global $ordersModel, $productModel, $conn;
 

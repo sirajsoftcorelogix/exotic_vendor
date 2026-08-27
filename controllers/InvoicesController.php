@@ -932,6 +932,7 @@ class InvoicesController
         $totalSgstAmt = 0;
         $totalCgstAmt = 0;
         $totalIgstAmt = 0;
+        $totalTaxableAmt = 0;
 
         require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
         require_once __DIR__ . '/../helpers/invoice/invoice_box_variant.php';
@@ -985,6 +986,7 @@ class InvoicesController
             $totalSgstAmt += $sgstAmt;
             $totalCgstAmt += $cgstAmt;
             $totalIgstAmt += $igstAmt;
+            $totalTaxableAmt += ($qtyInt * $unitPrice);
             $itemsrows .= '
                     <tr>
                         <td>' . ($idx + 1) . '</td>
@@ -1034,7 +1036,7 @@ class InvoicesController
                     <tr style="background: #e8e8e8; border-top: 2px solid #000;">
                         <td colspan="4" class="right bold">Total:</td>
                         <td class="right bold">' . $totalQuantity . '</td>
-                        <td ></td>
+                        <td class="right bold">' . number_format($totalTaxableAmt, 2) . '</td>
                         <td class="right bold"></td>
                         <td class="right bold">' . number_format($totalSgstAmt, 2) . '</td>
                         <td class="right bold"></td>

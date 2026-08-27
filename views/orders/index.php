@@ -1503,39 +1503,138 @@
         <img id="popupImage" class="max-w-full max-h-[80vh] rounded" src="" alt="Image Preview">
     </div>
 </div>
-<div id="importPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50" onclick="closeImportPopup(event)">
-    <div class="bg-white p-4 rounded-md max-w-3xl max-h-3xl relative flex flex-col items-center " onclick="event.stopPropagation();">
-        <button onclick="closeImportPopup()" class="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm">✕</button>
-        <div class="p-6">
-            <h2 class="text-2xl font-bold mb-4">Import Orders</h2>
-            <?php //echo date('Y-m-d H:i:s',1761382018);          
-
-            ?>
-            <div class="w-full bg-gray-200 rounded-full dark:bg-gray-700 mb-2">
-                <div id="importProgress" class="bg-orange-600 text-xs font-medium text-orange-100 text-center p-0.5 leading-none rounded-full" style="width: 0%"> 0%</div>
-            </div>
-            <form id="importForm" enctype="multipart/form-data" method="post" action="?page=orders&action=import_orders">
-                <div class="mb-4 flex">
-                    <label for="importType" class="block text-gray-700 font-bold mb-2 ">Import Type:</label>
-                    <select id="importType" name="importType" class="border border-gray-300 rounded px-3 py-2 ml-12" onchange="toggleOrderNumberInput()">
-                        <option value="all">Import All Orders</option>
-                        <option value="specific">Import Specific Order</option>
-                    </select>
-                </div>
-                <div class="mb-4 flex hidden" id="orderNumberDiv">
-                    <label for="importOrderId" class="block text-gray-700 font-bold mb-2">Order Number:</label>
-                    <input type="text" id="importOrderId" name="importOrderId" class="border border-gray-300 rounded px-3 py-2 ml-8">
-                </div>
-                <div class="mb-4" style="max-height:200px; overflow-y:auto;" id="importStatus">
-                    <p class="text-gray-700 mb-2">Are you sure you want to import orders from Server?</p>
-                </div>
-                <div class="flex justify-end space-x-4">
-                    <div id="errorMessage" class=""></div>
-                    <button type="button" onclick="closeImportPopup()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Import</button>
-                </div>
-            </form>
+<div id="importPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50 p-4 overflow-y-auto" onclick="closeImportPopup(event)">
+    <div class="bg-white p-6 rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto relative shadow-2xl flex flex-col" onclick="event.stopPropagation();">
+        <button onclick="closeImportPopup()" class="absolute top-4 right-4 bg-gray-100 hover:bg-red-500 hover:text-white text-gray-600 px-3 py-1 rounded-full text-sm font-semibold transition">✕</button>
+        
+        <div class="border-b pb-3 mb-4">
+            <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                <i class="fa-solid fa-download text-orange-500"></i> Import Orders
+            </h2>
+            <p class="text-xs text-gray-500 mt-1">Audit, scan, and import missing orders from Exotic India server into local database.</p>
         </div>
+
+        <!-- Progress Bar Container -->
+        <div id="importProgressWrap" class="w-full bg-gray-200 rounded-full mb-2 hidden overflow-hidden shadow-inner">
+            <div id="importProgress" class="bg-gradient-to-r from-orange-500 to-amber-600 text-xs font-semibold text-white text-center py-1 leading-none transition-all duration-300 rounded-full" style="width: 0%">0%</div>
+        </div>
+        <p id="importProgressSubtext" class="text-xs text-gray-600 font-medium mb-3 hidden text-center"></p>
+
+        <form id="importForm" onsubmit="handleImportFormSubmit(event)">
+            <!-- Import Mode Select -->
+            <div class="mb-4">
+                <label for="importType" class="block text-sm font-bold text-gray-700 mb-1">Import Mode:</label>
+                <select id="importType" name="importType" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none" onchange="toggleImportModeFields()">
+                    <option value="missing" selected>Find & Import Missing Orders (Date Range / Batched)</option>
+                    <option value="all">Import Recent Orders (Last 24 Hours)</option>
+                    <option value="specific">Import Specific Order ID(s)</option>
+                </select>
+            </div>
+
+            <!-- Missing Orders Settings (for mode='missing') -->
+            <div id="missingOrderControls" class="bg-orange-50/70 border border-orange-200 rounded-xl p-4 mb-4 space-y-3 shadow-sm">
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-orange-200/60 pb-2">
+                    <span class="text-xs font-bold text-orange-900 uppercase tracking-wider flex items-center gap-1.5">
+                        <span class="w-5 h-5 bg-orange-600 text-white rounded-full flex items-center justify-center text-[10px]">1</span>
+                        Step 1: Find & List Missing Orders
+                    </span>
+                    <!-- Quick Presets -->
+                    <div class="flex flex-wrap items-center gap-1 text-xs">
+                        <span class="text-[11px] text-orange-800 font-medium mr-1">Presets:</span>
+                        <button type="button" onclick="setMissingPresetDays(3)" class="px-2 py-0.5 bg-white hover:bg-orange-100 border border-orange-300 rounded text-orange-800 font-medium transition text-xs">3 Days</button>
+                        <button type="button" onclick="setMissingPresetDays(7)" class="px-2 py-0.5 bg-white hover:bg-orange-100 border border-orange-300 rounded text-orange-800 font-medium transition text-xs">7 Days</button>
+                        <button type="button" onclick="setMissingPresetDays(15)" class="px-2 py-0.5 bg-white hover:bg-orange-100 border border-orange-300 rounded text-orange-800 font-medium transition text-xs">15 Days</button>
+                        <button type="button" onclick="setMissingPresetDays(30)" class="px-2 py-0.5 bg-white hover:bg-orange-100 border border-orange-300 rounded text-orange-800 font-medium transition text-xs">30 Days</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label for="importFromDate" class="block text-xs font-semibold text-gray-700 mb-1">From Date</label>
+                        <input type="date" id="importFromDate" class="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs bg-white">
+                    </div>
+                    <div>
+                        <label for="importToDate" class="block text-xs font-semibold text-gray-700 mb-1">To Date</label>
+                        <input type="date" id="importToDate" class="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs bg-white">
+                    </div>
+                    <div>
+                        <label for="importBatchSize" class="block text-xs font-semibold text-gray-700 mb-1">Import Batch Size</label>
+                        <select id="importBatchSize" class="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs bg-white">
+                            <option value="5">5 orders per batch</option>
+                            <option value="10" selected>10 orders per batch</option>
+                            <option value="20">20 orders per batch</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="pt-1 flex justify-end">
+                    <button type="button" id="scanMissingBtn" onclick="runMissingOrderScan()" class="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs rounded-lg shadow-sm flex items-center gap-2 transition">
+                        <i class="fa-solid fa-magnifying-glass"></i> Find & List Missing Orders
+                    </button>
+                </div>
+            </div>
+
+            <!-- Specific Order Settings (for mode='specific') -->
+            <div id="orderNumberDiv" class="mb-4 hidden">
+                <label for="importOrderId" class="block text-sm font-bold text-gray-700 mb-1">Order Number(s):</label>
+                <input type="text" id="importOrderId" name="importOrderId" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g., 3114463, 3114147">
+                <p class="text-xs text-gray-500 mt-1">Separate multiple order numbers with commas.</p>
+            </div>
+
+            <!-- Scan Results Table / Preview -->
+            <div id="scanResultsSection" class="hidden mb-4 space-y-3 bg-blue-50/40 border border-blue-200 rounded-xl p-4 shadow-sm">
+                <div class="flex items-center justify-between border-b border-blue-200/60 pb-2">
+                    <span class="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                        <span class="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-[10px]">2</span>
+                        Step 2: Review Found Missing Orders & Import
+                    </span>
+                    <span id="missingSelectedCountText" class="text-xs font-bold text-blue-900"></span>
+                </div>
+
+                <div id="scanSummaryBadges" class="flex flex-wrap gap-2 text-xs"></div>
+
+                <div id="missingOrdersTableWrap" class="max-h-60 overflow-y-auto border border-gray-200 rounded-lg bg-white">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead class="bg-gray-100 text-gray-700 sticky top-0 border-b border-gray-200">
+                            <tr>
+                                <th class="p-2 w-8 text-center"><input type="checkbox" id="selectAllMissing" onchange="toggleSelectAllMissing(this)" checked></th>
+                                <th class="p-2">Order ID</th>
+                                <th class="p-2">Type / Status</th>
+                                <th class="p-2">Date</th>
+                                <th class="p-2">Customer</th>
+                                <th class="p-2">Country</th>
+                                <th class="p-2 text-right">Items</th>
+                                <th class="p-2 text-right">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody id="missingOrdersTbody" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+
+                <div class="flex justify-end items-center pt-1">
+                    <button type="button" id="importBatchedBtn" onclick="runBatchedImportForSelected()" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-sm flex items-center gap-2 transition">
+                        <i class="fa-solid fa-cloud-arrow-down"></i> Import Selected Orders (In Batches)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Status / Log Console -->
+            <div id="importLogConsoleWrap" class="mb-4 hidden">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs font-bold text-gray-700 uppercase tracking-wider">Live Import Console</span>
+                    <button type="button" onclick="clearImportLogConsole()" class="text-[10px] text-gray-500 hover:underline">Clear Log</button>
+                </div>
+                <div id="importLogConsole" class="bg-gray-900 text-green-400 font-mono text-xs p-3 rounded-lg max-h-48 overflow-y-auto space-y-1"></div>
+            </div>
+
+            <div id="importStatus" class="mb-4 text-xs text-gray-700"></div>
+
+            <div class="flex justify-end space-x-3 pt-3 border-t">
+                <div id="errorMessage" class="text-xs flex items-center"></div>
+                <button type="button" onclick="closeImportPopup()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 text-xs font-semibold">Close</button>
+                <button type="submit" id="importSubmitBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs font-semibold hidden">Run Import</button>
+            </div>
+        </form>
     </div>
 </div>
 <!-- Import Update Popup -->
@@ -2030,105 +2129,334 @@
         localStorage.removeItem('selected_po_orders');
     });
 
-    //call import function
-    function callImport() {
-        //open import popup to display import status and call ajax to import
-        document.getElementById('importPopup').classList.remove('hidden');
+    // Call import popup
+    let hasImportedOrdersState = false;
+    let scannedMissingOrdersList = [];
 
+    function callImport() {
+        document.getElementById('importPopup').classList.remove('hidden');
+        if (!document.getElementById('importFromDate').value) {
+            setMissingPresetDays(7);
+        }
+        toggleImportModeFields();
     }
 
     function closeImportPopup(e) {
-        // If called from button or outside click
+        if (e && e.target && e.currentTarget !== e.target) {
+            return;
+        }
         document.getElementById('importPopup').classList.add('hidden');
-        location.reload();
+        if (hasImportedOrdersState) {
+            location.reload();
+        }
     }
-    //import calling through ajax
-    document.getElementById('importForm').addEventListener('submit', function(e) {
-        e.preventDefault(); // Prevent default form submission
-        //loading image and submit button disable
-        const orderId = document.getElementById('importOrderId').value;
-        const submitButton = document.querySelector('#importForm button[type="submit"]');
-        const loadingImage = document.createElement('img');
-        loadingImage.src = 'images/loading-crop.gif'; // Path to your loading image
-        loadingImage.alt = 'Loading...';
-        loadingImage.style.height = '50px';
-        loadingImage.classList.add('loading-image');
-        submitButton.parentNode.insertBefore(loadingImage, submitButton);
-        submitButton.disabled = true;
-        document.getElementById('errorMessage').textContent = 'Import in progress...';
-        let progress = 0;
-        const interval = setInterval(() => {
-            progress += 10;
-            document.getElementById('importProgress').style.width = `${progress}%`;
-            document.getElementById('importProgress').textContent = `${progress}%`;
-            if (progress >= 45) {
-                clearInterval(interval);
-            }
-        }, 100);
-        const form = this;
-        const formData = new FormData(form);
 
-        fetch('index.php?page=orders&action=import_orders&secret_key=b2d1127032446b78ce2b8911b72f6b155636f6898af2cf5d3aafdccf46778801&orderid=' + orderId, {
-            method: 'GET',
-        })
-        .then(response => response.text())
-        .then(text => {
-            // Try to parse JSON; if parsing fails, treat response as HTML/text
-            try {
-                return JSON.parse(text);
-            } catch (e) {
-                return {
-                    message: null,
-                    html: text
-                };
-            }
-        })
-        .then(data => {
-            // Remove loading image and enable submit button
-            loadingImage.remove();
-            submitButton.disabled = false;
-            //increment gradually to show activity
+    function toggleImportModeFields() {
+        const mode = document.getElementById('importType').value;
+        const missingCtrl = document.getElementById('missingOrderControls');
+        const specificCtrl = document.getElementById('orderNumberDiv');
+        const scanSection = document.getElementById('scanResultsSection');
+        const submitBtn = document.getElementById('importSubmitBtn');
 
-            const interval = setInterval(() => {
-                progress += 10;
-                document.getElementById('importProgress').style.width = `${progress}%`;
-                document.getElementById('importProgress').textContent = `${progress}%`;
-                if (progress >= 100) {
-                    clearInterval(interval);
-                }
-            }, 100);
-
-            document.getElementById('errorMessage').classList.add('text-green-500');
-            document.getElementById('errorMessage').textContent = 'Import completed successfully.';
-            if (data && data.message) {
-                alert(data.message || 'Import completed.');
-            } else if (data && data.html) {
-                // Server returned HTML; log it for debugging and show a generic success message
-                document.getElementById('importStatus').innerHTML = data.html;
-                //console.log('Server response (HTML):', data.html);
-                //alert('Import completed. Server returned HTML response.');
-            } else {
-                alert('Import completed.');
-            }
-            //closeImportPopup();
-            // Optionally, refresh the page or update the order list
-            //location.reload();
-        })
-        .catch(error => {
-            console.error('Error during import:', error);
-            alert('An error occurred during import.');
-            closeImportPopup();
-        });
-    });
-    //toggle order number input
-    function toggleOrderNumberInput() {
-        const importType = document.getElementById('importType').value;
-        const orderNumberDiv = document.getElementById('orderNumberDiv');
-        if (importType === 'specific') {
-            orderNumberDiv.classList.remove('hidden');
+        if (mode === 'missing') {
+            missingCtrl.classList.remove('hidden');
+            specificCtrl.classList.add('hidden');
+            submitBtn.classList.add('hidden');
+        } else if (mode === 'specific') {
+            missingCtrl.classList.add('hidden');
+            specificCtrl.classList.remove('hidden');
+            scanSection.classList.add('hidden');
+            submitBtn.classList.remove('hidden');
+            submitBtn.textContent = 'Import Order(s)';
         } else {
-            orderNumberDiv.classList.add('hidden');
-            document.getElementById('importOrderId').value = '';
+            missingCtrl.classList.add('hidden');
+            specificCtrl.classList.add('hidden');
+            scanSection.classList.add('hidden');
+            submitBtn.classList.remove('hidden');
+            submitBtn.textContent = 'Run Quick Import';
+        }
+    }
+
+    function setMissingPresetDays(days) {
+        const toDate = new Date();
+        const fromDate = new Date();
+        fromDate.setDate(toDate.getDate() - days);
+
+        document.getElementById('importToDate').value = toDate.toISOString().split('T')[0];
+        document.getElementById('importFromDate').value = fromDate.toISOString().split('T')[0];
+    }
+
+    function appendImportLogConsole(msg) {
+        const consoleEl = document.getElementById('importLogConsole');
+        const wrap = document.getElementById('importLogConsoleWrap');
+        wrap.classList.remove('hidden');
+
+        const now = new Date();
+        const timeStr = now.toTimeString().split(' ')[0];
+        const line = document.createElement('div');
+        line.innerHTML = `<span class="text-gray-500">[${timeStr}]</span> ${escapeHtmlImport(msg)}`;
+        consoleEl.appendChild(line);
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    function clearImportLogConsole() {
+        document.getElementById('importLogConsole').innerHTML = '';
+    }
+
+    function updateImportProgressBar(pct, labelText) {
+        const progressWrap = document.getElementById('importProgressWrap');
+        const progressBar = document.getElementById('importProgress');
+        const subtext = document.getElementById('importProgressSubtext');
+
+        progressWrap.classList.remove('hidden');
+        subtext.classList.remove('hidden');
+
+        const safePct = Math.min(100, Math.max(0, Math.round(pct)));
+        progressBar.style.width = safePct + '%';
+        progressBar.textContent = safePct + '%';
+
+        if (labelText) {
+            subtext.textContent = labelText;
+        }
+    }
+
+    function escapeHtmlImport(str) {
+        return String(str == null ? '' : str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    async function runMissingOrderScan() {
+        const fromDate = document.getElementById('importFromDate').value;
+        const toDate = document.getElementById('importToDate').value;
+
+        if (!fromDate || !toDate) {
+            alert('Please select From Date and To Date.');
+            return;
+        }
+
+        const scanBtn = document.getElementById('scanMissingBtn');
+        scanBtn.disabled = true;
+        scanBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Scanning...';
+
+        updateImportProgressBar(25, 'Querying Exotic India Vendor API...');
+        appendImportLogConsole(`🔍 Scanning Vendor API for orders between ${fromDate} and ${toDate}...`);
+
+        try {
+            const response = await fetch('index.php?page=orders&action=scan_missing_orders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ start_date: fromDate, end_date: toDate })
+            });
+
+            const data = await response.json();
+            if (!data.success) {
+                throw new Error(data.message || 'Scan failed.');
+            }
+
+            updateImportProgressBar(100, `Scan complete: ${data.missing_count} missing order(s) found out of ${data.total_scanned} scanned.`);
+            appendImportLogConsole(`📊 Total API Orders: ${data.total_scanned} | Fully in DB: ${data.already_imported} | Missing/Incomplete: ${data.missing_count}`);
+
+            scannedMissingOrdersList = data.missing_orders || [];
+            renderScanResults(data);
+        } catch (err) {
+            appendImportLogConsole(`❌ Scan Error: ${err.message}`);
+            alert('Scan error: ' + err.message);
+        } finally {
+            scanBtn.disabled = false;
+            scanBtn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Scan for Missing Orders';
+        }
+    }
+
+    function renderScanResults(data) {
+        const section = document.getElementById('scanResultsSection');
+        const badgesEl = document.getElementById('scanSummaryBadges');
+        const tbody = document.getElementById('missingOrdersTbody');
+        const importBtn = document.getElementById('importBatchedBtn');
+        const countText = document.getElementById('missingSelectedCountText');
+
+        section.classList.remove('hidden');
+
+        badgesEl.innerHTML = `
+            <span class="px-2.5 py-1 bg-gray-100 text-gray-700 font-semibold rounded-md border border-gray-200">Total API Scanned: ${data.total_scanned}</span>
+            <span class="px-2.5 py-1 bg-green-100 text-green-800 font-semibold rounded-md border border-green-200">✅ Already in Local DB: ${data.already_imported}</span>
+            <span class="px-2.5 py-1 ${data.missing_count > 0 ? 'bg-red-100 text-red-800 border-red-200' : 'bg-green-100 text-green-800 border-green-200'} font-semibold rounded-md border">⚠️ Missing / Incomplete: ${data.missing_count}</span>
+        `;
+
+        if (!data.missing_orders || data.missing_orders.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-green-700 font-medium">🎉 All scanned orders are already present in local database! No missing orders.</td></tr>`;
+            importBtn.disabled = true;
+            importBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            countText.textContent = '0 orders selected';
+            return;
+        }
+
+        importBtn.disabled = false;
+        importBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+        let rowsHtml = '';
+        data.missing_orders.forEach((ord, index) => {
+            const typeBadge = ord.missing_type === 'completely_missing'
+                ? '<span class="px-1.5 py-0.5 bg-red-100 text-red-700 font-bold rounded text-[10px]">Missing Order</span>'
+                : '<span class="px-1.5 py-0.5 bg-amber-100 text-amber-800 font-bold rounded text-[10px]">Missing Address</span>';
+
+            rowsHtml += `
+                <tr id="missingOrderRow_${escapeHtmlImport(ord.orderid)}" class="hover:bg-orange-50/50 transition">
+                    <td class="p-2 text-center">
+                        <input type="checkbox" class="missing-order-checkbox" value="${escapeHtmlImport(ord.orderid)}" data-index="${index}" checked onchange="updateSelectedMissingCount()">
+                    </td>
+                    <td class="p-2 font-mono font-bold text-gray-800">#${escapeHtmlImport(ord.orderid)}</td>
+                    <td class="p-2" id="orderTypeCell_${escapeHtmlImport(ord.orderid)}">${typeBadge}</td>
+                    <td class="p-2 text-gray-600">${escapeHtmlImport(ord.order_date_formatted)}</td>
+                    <td class="p-2 font-medium text-gray-800">${escapeHtmlImport(ord.customer_name)}</td>
+                    <td class="p-2 text-gray-600">${escapeHtmlImport(ord.country)}</td>
+                    <td class="p-2 text-right font-mono">${ord.item_count}</td>
+                    <td class="p-2 text-right font-mono font-bold text-gray-800">₹${Number(ord.total_amount || 0).toLocaleString('en-IN', {minimumFractionDigits:2})}</td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = rowsHtml;
+        updateSelectedMissingCount();
+    }
+
+    function toggleSelectAllMissing(masterCb) {
+        const checkboxes = document.querySelectorAll('.missing-order-checkbox');
+        checkboxes.forEach(cb => cb.checked = masterCb.checked);
+        updateSelectedMissingCount();
+    }
+
+    function updateSelectedMissingCount() {
+        const checkboxes = document.querySelectorAll('.missing-order-checkbox:checked');
+        const countText = document.getElementById('missingSelectedCountText');
+        const importBtn = document.getElementById('importBatchedBtn');
+
+        const count = checkboxes.length;
+        countText.textContent = `${count} order(s) selected for import`;
+        importBtn.disabled = (count === 0);
+        if (count === 0) {
+            importBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+            importBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+    }
+
+    async function runBatchedImportForSelected() {
+        const checkedBoxes = Array.from(document.querySelectorAll('.missing-order-checkbox:checked'));
+        if (checkedBoxes.length === 0) {
+            alert('Please select at least one missing order to import.');
+            return;
+        }
+
+        const selectedOrders = checkedBoxes.map(cb => {
+            const index = parseInt(cb.getAttribute('data-index'), 10);
+            return scannedMissingOrdersList[index];
+        }).filter(Boolean);
+
+        const batchSize = parseInt(document.getElementById('importBatchSize').value, 10) || 10;
+        const totalSelected = selectedOrders.length;
+        const totalBatches = Math.ceil(totalSelected / batchSize);
+
+        if (!confirm(`Are you sure you want to import ${totalSelected} order(s) in ${totalBatches} batch(es)?`)) {
+            return;
+        }
+
+        const importBtn = document.getElementById('importBatchedBtn');
+        const scanBtn = document.getElementById('scanMissingBtn');
+        importBtn.disabled = true;
+        scanBtn.disabled = true;
+
+        appendImportLogConsole(`🚀 Starting Batched Import: ${totalSelected} order(s) across ${totalBatches} batch(es) (${batchSize} per batch)...`);
+        updateImportProgressBar(0, `Starting batch 1 of ${totalBatches}...`);
+
+        let completedCount = 0;
+        let successCount = 0;
+
+        for (let b = 0; b < totalBatches; b++) {
+            const batchItems = selectedOrders.slice(b * batchSize, (b + 1) * batchSize);
+            const batchNum = b + 1;
+
+            appendImportLogConsole(`📦 Processing Batch ${batchNum}/${totalBatches} (${batchItems.length} orders)...`);
+
+            try {
+                const response = await fetch('index.php?page=orders&action=import_missing_batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ orders: batchItems })
+                });
+
+                const resData = await response.json();
+                if (!resData.success) {
+                    appendImportLogConsole(`❌ Batch ${batchNum} Error: ${resData.message || 'Failed'}`);
+                } else {
+                    (resData.results || []).forEach(r => {
+                        const cell = document.getElementById('orderTypeCell_' + r.orderid);
+                        if (r.status === 'success') {
+                            successCount++;
+                            appendImportLogConsole(`  ✓ Order #${r.orderid}: ${r.message}`);
+                            if (cell) {
+                                cell.innerHTML = '<span class="px-1.5 py-0.5 bg-green-100 text-green-800 font-bold rounded text-[10px]">✓ Imported</span>';
+                            }
+                        } else {
+                            appendImportLogConsole(`  ℹ Order #${r.orderid}: ${r.message}`);
+                            if (cell && r.message) {
+                                cell.innerHTML = `<span class="px-1.5 py-0.5 bg-gray-100 text-gray-700 font-bold rounded text-[10px]" title="${escapeHtmlImport(r.message)}">${escapeHtmlImport(r.message)}</span>`;
+                            }
+                        }
+                    });
+                }
+            } catch (err) {
+                appendImportLogConsole(`❌ Batch ${batchNum} Request Error: ${err.message}`);
+            }
+
+            completedCount += batchItems.length;
+            const pct = (completedCount / totalSelected) * 100;
+            updateImportProgressBar(pct, `Batch ${batchNum} of ${totalBatches} complete · ${completedCount} of ${totalSelected} orders processed`);
+        }
+
+        hasImportedOrdersState = true;
+        updateImportProgressBar(100, `🎉 Batched import completed! ${successCount} order(s) successfully imported.`);
+        appendImportLogConsole(`🎉 Finished! Successfully processed ${totalSelected} order(s). Close modal to refresh listing.`);
+
+        importBtn.disabled = false;
+        scanBtn.disabled = false;
+    }
+
+    async function handleImportFormSubmit(e) {
+        e.preventDefault();
+        const mode = document.getElementById('importType').value;
+
+        if (mode === 'missing') {
+            runMissingOrderScan();
+            return;
+        }
+
+        const submitBtn = document.getElementById('importSubmitBtn');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Importing...';
+
+        const orderId = document.getElementById('importOrderId').value.trim();
+
+        appendImportLogConsole(`🚀 Triggering Import (${mode === 'specific' ? 'Order #' + orderId : 'Recent Orders'})...`);
+        updateImportProgressBar(30, 'Sending import request to server...');
+
+        try {
+            const url = 'index.php?page=orders&action=import_orders&secret_key=b2d1127032446b78ce2b8911b72f6b155636f6898af2cf5d3aafdccf46778801&orderid=' + encodeURIComponent(orderId);
+            const response = await fetch(url, { method: 'GET' });
+            const text = await response.text();
+
+            updateImportProgressBar(100, 'Import completed successfully.');
+            hasImportedOrdersState = true;
+            appendImportLogConsole(`✓ Server Response: Import completed successfully.`);
+            document.getElementById('importStatus').innerHTML = text;
+        } catch (err) {
+            appendImportLogConsole(`❌ Import Error: ${err.message}`);
+            alert('Import failed: ' + err.message);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = mode === 'specific' ? 'Import Order(s)' : 'Run Quick Import';
         }
     }
 

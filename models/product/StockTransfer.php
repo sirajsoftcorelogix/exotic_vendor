@@ -4120,6 +4120,7 @@ class StockTransfer
         $params = [];
         $types = '';
 
+        $whereClauses[] = "LOWER(IFNULL({$transferAlias}.status, '')) NOT IN ('received', 'completed', 'complete', 'cancelled')";
         $receivedExpr = $this->inTransitReceivedQtyExpr($lineAlias, $transferAlias);
         $whereClauses[] = "GREATEST(0, {$lineAlias}.transfer_qty - ({$receivedExpr})) > 0";
 
@@ -4490,18 +4491,13 @@ class StockTransfer
                     WHEN t.dispatch_date IS NULL THEN 0
                     ELSE GREATEST(0, DATEDIFF(CURDATE(), t.dispatch_date))
                 END AS days_in_transit,
-                COALESCE(grn_agg.grn_count, 0) AS grn_count
+                (SELECT COUNT(*) FROM vp_stock_transfer_grns g_cnt WHERE g_cnt.transfer_id = t.id) AS grn_count
             FROM ({$pendingSubquery}) pending_t
             INNER JOIN vp_stock_transfer t ON t.id = pending_t.transfer_id
             LEFT JOIN exotic_address f ON f.id = t.from_warehouse
             LEFT JOIN exotic_address d ON d.id = t.to_warehouse
             LEFT JOIN vp_users ru ON ru.id = t.requested_by
             LEFT JOIN vp_users du ON du.id = t.dispatch_by
-            LEFT JOIN (
-                SELECT transfer_id, COUNT(*) AS grn_count
-                FROM vp_stock_transfer_grns
-                GROUP BY transfer_id
-            ) grn_agg ON grn_agg.transfer_id = t.id
             ORDER BY {$orderBy}
             LIMIT ? OFFSET ?";
 
