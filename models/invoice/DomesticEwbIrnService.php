@@ -519,9 +519,10 @@ class DomesticEwbIrnService {
                 'SlNo' => (string)($idx + 1),
                 'PrdDesc' => $item['item_name'] ?? '',
                 'IsServc' => 'N',
-                'HsnCd' => strlen((string)($item['hsn'] ?? '')) === 6
-                    ? substr((string)($item['hsn'] ?? ''), 0, 4)
-                    : substr((string)($item['hsn'] ?? ''), 0, 8),
+                //'HsnCd' => strlen((string)($item['hsn'] ?? '')) === 6
+                //    ? substr((string)($item['hsn'] ?? ''), 0, 4)
+                //    : substr((string)($item['hsn'] ?? ''), 0, 8),
+                'HsnCd' => (string)($item['hsn'] ?? ''),
                 'Qty' => (float)($item['quantity'] ?? 0),
                 'Unit' => $item['unit'] ?? 'NOS',
                 'UnitPrice' => (float)($item['unit_price'] ?? 0),
@@ -529,7 +530,7 @@ class DomesticEwbIrnService {
                 'AssAmt' => (float)(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0)),
                 'GstRt' => (int)($item['tax_rate'] ?? 0),
                 'IgstAmt' => (float)($item['tax_amount'] ?? 0),
-                'TotItemVal' => (float)(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0) + ($item['tax_amount'] ?? 0)),
+                'TotItemVal' => round((float)(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0) + ($item['tax_amount'] ?? 0)), 2),
                 'CgstAmt' => 0,
                 'SgstAmt' => 0
             ];
