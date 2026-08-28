@@ -679,6 +679,9 @@ switch ($page) {
             case 'preview':
                 $controller->preview();
                 break;
+            case 'delete_session':
+                $controller->delete_session();
+                break;
             default:
                 $controller->index();
                 break;

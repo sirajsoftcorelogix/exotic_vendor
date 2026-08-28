@@ -354,6 +354,12 @@
                                        class="text-emerald-600 hover:text-emerald-800 font-semibold text-xs inline-flex items-center gap-1">
                                         <i class="fas fa-print"></i> Preview
                                     </a>
+                                    <button type="button"
+                                            onclick="deleteExportSession(<?= (int)$sess['id'] ?>, '<?= htmlspecialchars($sess['session_code'], ENT_QUOTES, 'UTF-8') ?>')"
+                                            class="text-red-600 hover:text-red-800 font-semibold text-xs inline-flex items-center gap-1"
+                                            title="Delete Session">
+                                        <i class="fas fa-trash-alt"></i> Delete
+                                    </button>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -609,5 +615,56 @@ document.addEventListener('DOMContentLoaded', function () {
     } else {
         refreshMatrixChecklist();
     }
+
+    window.deleteExportSession = function (sessionId, sessionCode) {
+        const confirmFn = (typeof customConfirm === 'function')
+            ? customConfirm
+            : function (msg) { return Promise.resolve(window.confirm(msg)); };
+
+        confirmFn('Are you sure you want to delete session ' + sessionCode + '? All draft documents for this session will be permanently deleted.', {
+            title: 'Delete Export Session',
+            okText: 'Delete',
+            cancelText: 'Cancel'
+        }).then(function (confirmed) {
+            if (!confirmed) return;
+
+            const formData = new FormData();
+            formData.append('id', sessionId);
+
+            fetch('index.php?page=export_documents&action=delete_session', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    if (window.showPosMessageModal) {
+                        window.showPosMessageModal({
+                            title: 'Deleted',
+                            message: data.message || 'Session deleted successfully.',
+                            tone: 'success',
+                            onClose: function () { window.location.reload(); }
+                        });
+                    } else {
+                        window.location.reload();
+                    }
+                } else {
+                    if (window.showPosMessageModal) {
+                        window.showPosMessageModal({
+                            title: 'Error',
+                            message: data.message || 'Could not delete session.',
+                            tone: 'error'
+                        });
+                    } else {
+                        alert(data.message || 'Could not delete session.');
+                    }
+                }
+            })
+            .catch(err => {
+                console.error(err);
+            });
+        });
+    };
 });
 </script>
