@@ -923,17 +923,37 @@ function pos_order_build_summary_rows_from_line_pricing(array $aggregate, array 
     require_once __DIR__ . '/pos_invoice_amount_summary.php';
 
     $absorbedNote = '(included in line totals)';
+    $grossIncl = (float)$aggregate['gross_incl'];
+    $netChargeable = (float)$aggregate['net_chargeable'];
+
     $rows = [[
         'label' => 'Total Before Discount (incl. GST)',
-        'amount' => (float)$aggregate['gross_incl'],
+        'amount' => $grossIncl,
         'note' => '',
         'is_grand' => false,
     ]];
 
-    foreach (pos_order_build_order_level_discount_lines($posMeta, $orderInfo) as $discountLine) {
+    $definedDiscountLines = pos_order_build_order_level_discount_lines($posMeta, $orderInfo);
+    $definedDiscountSum = 0.0;
+
+    foreach ($definedDiscountLines as $discountLine) {
+        $amt = (float)($discountLine['amount'] ?? 0);
+        $definedDiscountSum += $amt;
         $rows[] = [
             'label' => (string)($discountLine['label'] ?? 'Custom Discount:'),
-            'amount' => (float)($discountLine['amount'] ?? 0),
+            'amount' => $amt,
+            'note' => '',
+            'is_grand' => false,
+        ];
+    }
+
+    $totalDiffDiscount = max(0.0, round($grossIncl - $netChargeable, 2));
+    $unallocatedDiscount = max(0.0, round($totalDiffDiscount - $definedDiscountSum, 2));
+
+    if ($unallocatedDiscount > 0.001) {
+        $rows[] = [
+            'label' => 'Discount',
+            'amount' => $unallocatedDiscount,
             'note' => '',
             'is_grand' => false,
         ];
@@ -951,7 +971,7 @@ function pos_order_build_summary_rows_from_line_pricing(array $aggregate, array 
 
     $rows[] = [
         'label' => 'GRAND Total',
-        'amount' => (float)$aggregate['net_chargeable'],
+        'amount' => $netChargeable,
         'note' => '',
         'is_grand' => true,
     ];

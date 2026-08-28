@@ -198,6 +198,17 @@ function pos_invoice_build_amount_summary_rows(
                 'is_grand' => false,
             ];
         }
+
+        $explicitDiscountTotal = round($cash + $coupon + $gift + $standaloneLineDisc, 2);
+        $unallocatedDiscount = max(0.0, round($subInclGst - $grandTotal - $explicitDiscountTotal, 2));
+        if ($unallocatedDiscount > 0.001) {
+            $rows[] = [
+                'label' => 'Discount',
+                'amount' => $unallocatedDiscount,
+                'note' => '',
+                'is_grand' => false,
+            ];
+        }
         if ($gst > 0.001) {
             $rows[] = [
                 'label' => 'Total GST',
@@ -252,6 +263,16 @@ function pos_invoice_build_amount_summary_rows(
             'label' => pos_order_gift_voucher_discount_label($giftName),
             'amount' => $gift,
             'note' => $absorbedNote,
+            'is_grand' => false,
+        ];
+    }
+    $explicitDiscountTotal = round($line + $cash + $coupon + $gift, 2);
+    $unallocatedDiscount = max(0.0, round($subInclGst - $grandTotal - $explicitDiscountTotal, 2));
+    if ($unallocatedDiscount > 0.001) {
+        $rows[] = [
+            'label' => 'Discount',
+            'amount' => $unallocatedDiscount,
+            'note' => '',
             'is_grand' => false,
         ];
     }
