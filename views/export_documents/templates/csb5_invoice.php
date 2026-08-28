@@ -27,7 +27,10 @@ $qrcodeString = $common['qrcode_string'] ?? $data['qrcode_string'] ?? '';
                     <div><strong>CSB Type:</strong> <?= htmlspecialchars($data['csb_type'] ?? 'CSB-V Express') ?></div>
                 </div>
                 <?php if (!empty($qrcodeString)): ?>
-                    <div id="csb5IrnQrContainer" class="border border-black p-1 bg-white" style="width: 80px; height: 80px;"></div>
+                    <div class="flex flex-col items-center">
+                        <div id="csb5IrnQrContainer" class="border border-black p-1.5 bg-white shadow-2xs" style="width: 145px; height: 145px;"></div>
+                        <span class="text-[9px] font-bold text-gray-700 mt-1 uppercase tracking-tight">e-Invoice GST QR</span>
+                    </div>
                 <?php endif; ?>
             </div>
         </div>
@@ -133,6 +136,15 @@ $qrcodeString = $common['qrcode_string'] ?? $data['qrcode_string'] ?? '';
 </div>
 
 <?php if (!empty($qrcodeString)): ?>
+<style>
+#csb5IrnQrContainer img, #csb5IrnQrContainer canvas {
+    width: 100% !important;
+    height: 100% !important;
+    image-rendering: pixelated !important;
+    image-rendering: crisp-edges !important;
+    display: block !important;
+}
+</style>
 <script>
 (function() {
     function renderCsb5InvoiceQr() {
@@ -141,11 +153,11 @@ $qrcodeString = $common['qrcode_string'] ?? $data['qrcode_string'] ?? '';
             container.innerHTML = '';
             new QRCode(container, {
                 text: <?= json_encode($qrcodeString) ?>,
-                width: 70,
-                height: 70,
+                width: 350,
+                height: 350,
                 colorDark: "#000000",
                 colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.M
+                correctLevel: QRCode.CorrectLevel.L
             });
         }
     }
