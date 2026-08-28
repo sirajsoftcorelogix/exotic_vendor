@@ -514,29 +514,44 @@ class DomesticEwbIrnService {
     private function prepareIrnPayload($invoice, $items, $customer, $firm, $ewbData = []) {
         // Format line items
         $itemList = [];
-        $totalCgst = 0.00;
-        $totalSgst = 0.00;
-        $totalIgst = 0.00;
+        $totalAssVal  = 0.00;
+        $totalCgstVal = 0.00;
+        $totalSgstVal = 0.00;
+        $totalIgstVal = 0.00;
         foreach ($items as $idx => $item) {
             $qty       = (float)($item['quantity'] ?? 0);
             $unitPrice = (float)($item['unit_price'] ?? 0);
-            $taxRate   = (float)($item['tax_rate'] ?? 0);
-            $taxAmount = (float)($item['tax_amount'] ?? 0);
+            $gstRate   = (float)($item['tax_rate'] ?? 0);
 
-            $totAmt = round($qty * $unitPrice, 2);
+            // Taxable amount
+            $assAmt = round($qty * $unitPrice, 2);
 
             /*
-            * For intra-state transaction:
-            * GST = CGST + SGST
+            * Calculate GST from taxable amount.
+            *
+            * Example:
+            * 9693.70 × 3% = 290.811
             */
-            $cgstAmt = round($taxAmount / 2, 2);
-            $sgstAmt = round($taxAmount - $cgstAmt, 2);
+            $totalTax = round($assAmt * $gstRate / 100, 2);
 
-            // For intra-state, IGST should be 0
-            $igstAmt = 0.00;
+            /*
+            * Intra-state:
+            * CGST = SGST
+            *
+            * Make sure the GST amount can be divided equally
+            * into two paisa amounts.
+            */
+            $halfTax = round($totalTax / 2, 2);
 
+            $cgstAmt = $halfTax;
+            $sgstAmt = $halfTax;
+
+            /*
+            * Calculate item total from the values actually
+            * being sent to the e-invoice API.
+            */
             $totItemVal = round(
-                $totAmt + $cgstAmt + $sgstAmt + $igstAmt,
+                $assAmt + $cgstAmt + $sgstAmt,
                 2
             );
             $itemList[] = [
@@ -546,20 +561,25 @@ class DomesticEwbIrnService {
                 'HsnCd'      => (string)($item['hsn'] ?? ''),
                 'Qty'        => $qty,
                 'Unit'       => $item['unit'] ?? 'NOS',
-                'UnitPrice'  => $unitPrice,
-                'TotAmt'     => $totAmt,
-                'AssAmt'     => $totAmt,
-                'GstRt'      => (int)$taxRate,
-                'IgstAmt'    => $igstAmt,
+                'UnitPrice'  => round($unitPrice, 2),
+
+                'TotAmt'     => $assAmt,
+                'AssAmt'     => $assAmt,
+
+                'GstRt'      => (int)$gstRate,
+
+                // Intra-state transaction
+                'IgstAmt'    => 0.00,
                 'CgstAmt'    => $cgstAmt,
                 'SgstAmt'    => $sgstAmt,
+
                 'TotItemVal' => $totItemVal
             ];
 
-            // IMPORTANT: add the rounded item values
-            $totalCgst += $cgstAmt;
-            $totalSgst += $sgstAmt;
-            $totalIgst += $igstAmt;
+            // Calculate invoice totals from item values
+            $totalAssVal  += $assAmt;
+            $totalCgstVal += $cgstAmt;
+            $totalSgstVal += $sgstAmt;
             /*
             $itemList[] = [
                 'SlNo' => (string)($idx + 1),
@@ -583,7 +603,22 @@ class DomesticEwbIrnService {
             ];
             */
         }
-        
+        $totalAssVal  = round($totalAssVal, 2);
+        $totalCgstVal = round($totalCgstVal, 2);
+        $totalSgstVal = round($totalSgstVal, 2);
+        $totalIgstVal = round($totalIgstVal, 2);
+
+
+        // Invoice total
+        $totInvVal = round(
+            $totalAssVal +
+            $totalCgstVal +
+            $totalSgstVal +
+            $totalIgstVal -
+            (float)($invoice['discount_amount'] ?? 0),
+            2
+        );
+
         $invoiceNumber = trim((string)($invoice['invoice_number'] ?? ''));
         if (strlen($invoiceNumber) > 10) {
             $invoiceNumberParts = explode('-', $invoiceNumber);
@@ -670,15 +705,18 @@ class DomesticEwbIrnService {
             //     'TotInvVal' => (float)($invoice['total_amount'] ?? 0)
             // ],
             'ValDtls' => [
-                'AssVal'     => round((float)($invoice['subtotal'] ?? 0), 2),
-                'CgstVal'    => round((float)($invoice['tax_amount'] ?? 0) / 2, 2),
-                'SgstVal'    => round((float)($invoice['tax_amount'] ?? 0) / 2, 2),
-                'IgstVal'    => 0.00,
-                'CesVal'     => 0.00,
-                'Discount'   => round((float)($invoice['discount_amount'] ?? 0), 2),
-                'OthChrg'    => 0.00,
-                'RndOffAmt'  => 0.00,
-                'TotInvVal'  => round((float)($invoice['total_amount'] ?? 0), 2)
+                'AssVal'    => $totalAssVal,
+                'CgstVal'   => $totalCgstVal,
+                'SgstVal'   => $totalSgstVal,
+                'IgstVal'   => $totalIgstVal,
+                'CesVal'    => 0.00,
+                'Discount'  => round(
+                    (float)($invoice['discount_amount'] ?? 0),
+                    2
+                ),
+                'OthChrg'   => 0.00,
+                'RndOffAmt' => 0.00,
+                'TotInvVal' => $totInvVal
             ],
             'PayDtls' => null,
             'RefDtls' => null,
