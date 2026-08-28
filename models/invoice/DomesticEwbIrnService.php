@@ -514,7 +514,53 @@ class DomesticEwbIrnService {
     private function prepareIrnPayload($invoice, $items, $customer, $firm, $ewbData = []) {
         // Format line items
         $itemList = [];
+        $totalCgst = 0.00;
+        $totalSgst = 0.00;
+        $totalIgst = 0.00;
         foreach ($items as $idx => $item) {
+            $qty       = (float)($item['quantity'] ?? 0);
+            $unitPrice = (float)($item['unit_price'] ?? 0);
+            $taxRate   = (float)($item['tax_rate'] ?? 0);
+            $taxAmount = (float)($item['tax_amount'] ?? 0);
+
+            $totAmt = round($qty * $unitPrice, 2);
+
+            /*
+            * For intra-state transaction:
+            * GST = CGST + SGST
+            */
+            $cgstAmt = round($taxAmount / 2, 2);
+            $sgstAmt = round($taxAmount - $cgstAmt, 2);
+
+            // For intra-state, IGST should be 0
+            $igstAmt = 0.00;
+
+            $totItemVal = round(
+                $totAmt + $cgstAmt + $sgstAmt + $igstAmt,
+                2
+            );
+            $itemList[] = [
+                'SlNo'       => (string)($idx + 1),
+                'PrdDesc'    => $item['item_name'] ?? '',
+                'IsServc'    => 'N',
+                'HsnCd'      => (string)($item['hsn'] ?? ''),
+                'Qty'        => $qty,
+                'Unit'       => $item['unit'] ?? 'NOS',
+                'UnitPrice'  => $unitPrice,
+                'TotAmt'     => $totAmt,
+                'AssAmt'     => $totAmt,
+                'GstRt'      => (int)$taxRate,
+                'IgstAmt'    => $igstAmt,
+                'CgstAmt'    => $cgstAmt,
+                'SgstAmt'    => $sgstAmt,
+                'TotItemVal' => $totItemVal
+            ];
+
+            // IMPORTANT: add the rounded item values
+            $totalCgst += $cgstAmt;
+            $totalSgst += $sgstAmt;
+            $totalIgst += $igstAmt;
+            /*
             $itemList[] = [
                 'SlNo' => (string)($idx + 1),
                 'PrdDesc' => $item['item_name'] ?? '',
@@ -535,6 +581,7 @@ class DomesticEwbIrnService {
                 'CgstAmt' => round((float)($item['tax_amount']/2 ?? 0), 2),
                 'SgstAmt' => round((float)($item['tax_amount']/2 ?? 0), 2)
             ];
+            */
         }
         
         $invoiceNumber = trim((string)($invoice['invoice_number'] ?? ''));
@@ -611,16 +658,27 @@ class DomesticEwbIrnService {
             //     'Stcd' => (string)$shippingStateCode
             // ],
             'ItemList' => $itemList,
+            // 'ValDtls' => [
+            //     'AssVal' => (float)($invoice['subtotal'] ?? 0),
+            //     'CgstVal' => 0,
+            //     'SgstVal' => 0,
+            //     'IgstVal' => (float)($invoice['tax_amount'] ?? 0),
+            //     'CesVal' => 0,
+            //     'Discount' => (float)($invoice['discount_amount'] ?? 0),
+            //     'OthChrg' => 0,
+            //     'RndOffAmt' => 0,
+            //     'TotInvVal' => (float)($invoice['total_amount'] ?? 0)
+            // ],
             'ValDtls' => [
-                'AssVal' => (float)($invoice['subtotal'] ?? 0),
-                'CgstVal' => 0,
-                'SgstVal' => 0,
-                'IgstVal' => (float)($invoice['tax_amount'] ?? 0),
-                'CesVal' => 0,
-                'Discount' => (float)($invoice['discount_amount'] ?? 0),
-                'OthChrg' => 0,
-                'RndOffAmt' => 0,
-                'TotInvVal' => (float)($invoice['total_amount'] ?? 0)
+                'AssVal'     => round((float)($invoice['subtotal'] ?? 0), 2),
+                'CgstVal'    => round((float)($invoice['tax_amount'] ?? 0) / 2, 2),
+                'SgstVal'    => round((float)($invoice['tax_amount'] ?? 0) / 2, 2),
+                'IgstVal'    => 0.00,
+                'CesVal'     => 0.00,
+                'Discount'   => round((float)($invoice['discount_amount'] ?? 0), 2),
+                'OthChrg'    => 0.00,
+                'RndOffAmt'  => 0.00,
+                'TotInvVal'  => round((float)($invoice['total_amount'] ?? 0), 2)
             ],
             'PayDtls' => null,
             'RefDtls' => null,
