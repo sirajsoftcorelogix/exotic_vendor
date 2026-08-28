@@ -25,22 +25,22 @@ $shipperName = $common['exporter_name'] ?? 'Exotic India Art Pvt. Ltd.';
     </div>
 
     <!-- Itemwise Information Table -->
-    <div class="mb-6">
+    <div class="mb-6 overflow-x-auto">
         <h2 class="text-sm font-bold uppercase tracking-wide border-b border-black pb-1 mb-2 text-black">Itemwise Information</h2>
         
-        <table class="w-full text-left border-collapse border border-black text-[11px]">
+        <table class="w-full text-left border-collapse border border-black text-[10px] table-fixed">
             <thead>
-                <tr class="bg-gray-100 border-b border-black font-bold text-[10px] text-black uppercase">
-                    <th class="border border-black p-2 text-center w-8">Sr. No.</th>
-                    <th class="border border-black p-2 min-w-[140px]">Item</th>
-                    <th class="border border-black p-2 text-center w-20">CTH</th>
-                    <th class="border border-black p-2 text-center w-20">State of Origin of goods</th>
-                    <th class="border border-black p-2 text-center w-20">District of Origin of goods</th>
-                    <th class="border border-black p-2 text-center w-28">Standard Unit Quantity Code (SQC)</th>
-                    <th class="border border-black p-2 text-center min-w-[120px]">Detail of Preferential Agreements</th>
-                    <th class="border border-black p-2 text-right w-24">Taxable Amt. (INR)</th>
-                    <th class="border border-black p-2 text-right w-20">Tax Amt. (INR)</th>
-                    <th class="border border-black p-2 text-right w-20">Cess Amount</th>
+                <tr class="bg-gray-100 border-b border-black font-bold text-[9px] text-black uppercase leading-tight">
+                    <th class="border border-black p-1 text-center w-[4%]">Sr. No.</th>
+                    <th class="border border-black p-1 w-[22%]">Item</th>
+                    <th class="border border-black p-1 text-center w-[9%]">CTH</th>
+                    <th class="border border-black p-1 text-center w-[10%]">State of Origin</th>
+                    <th class="border border-black p-1 text-center w-[10%]">District of Origin</th>
+                    <th class="border border-black p-1 text-center w-[10%]">SQC / Qty</th>
+                    <th class="border border-black p-1 text-center w-[13%]">Preferential Agreement</th>
+                    <th class="border border-black p-1 text-right w-[9%]">Taxable Amt (INR)</th>
+                    <th class="border border-black p-1 text-right w-[7%]">Tax Amt (INR)</th>
+                    <th class="border border-black p-1 text-right w-[6%]">Cess Amt</th>
                 </tr>
             </thead>
             <tbody>
@@ -61,43 +61,43 @@ $shipperName = $common['exporter_name'] ?? 'Exotic India Art Pvt. Ltd.';
                             $totalTaxInr += $taxInr;
                         ?>
                         <tr class="border-b border-gray-300">
-                            <td class="border border-black p-2 text-center font-bold"><?= $idx + 1 ?></td>
-                            <td class="border border-black p-2 font-medium text-gray-900">
+                            <td class="border border-black p-1 text-center font-bold break-words"><?= $idx + 1 ?></td>
+                            <td class="border border-black p-1 font-medium text-gray-900 break-words">
                                 <?= htmlspecialchars($it['description'] ?? 'Lady Apsara - Brass Statue') ?>
                                 <?php if (!empty($it['item_code'])): ?>
-                                    <div class="text-[9px] text-gray-500 font-mono"><?= htmlspecialchars($it['item_code']) ?></div>
+                                    <div class="text-[8px] text-gray-500 font-mono"><?= htmlspecialchars($it['item_code']) ?></div>
                                 <?php endif; ?>
                             </td>
-                            <td class="border border-black p-2 text-center font-mono"><?= htmlspecialchars($it['hsn_code'] ?? $it['cth'] ?? '83062900') ?></td>
-                            <td class="border border-black p-2 text-center uppercase font-semibold"><?= htmlspecialchars($it['state_of_origin'] ?? 'DELHI') ?></td>
-                            <td class="border border-black p-2 text-center uppercase"><?= htmlspecialchars($it['district_of_origin'] ?? 'DELHI') ?></td>
-                            <td class="border border-black p-2 text-center font-bold"><?= $qty ?> NOS</td>
-                            <td class="border border-black p-2 text-center text-[10px] italic text-gray-600"><?= htmlspecialchars($it['preferential_agreement'] ?? 'N/A') ?></td>
-                            <td class="border border-black p-2 text-right font-mono font-bold">₹<?= number_format($taxableInr, 2) ?></td>
-                            <td class="border border-black p-2 text-right font-mono">₹<?= number_format($taxInr, 2) ?></td>
-                            <td class="border border-black p-2 text-right font-mono">₹<?= number_format($cessAmt, 2) ?></td>
+                            <td class="border border-black p-1 text-center font-mono text-[9px] break-words"><?= htmlspecialchars($it['hsn_code'] ?? $it['cth'] ?? '83062900') ?></td>
+                            <td class="border border-black p-1 text-center uppercase font-semibold break-words"><?= htmlspecialchars($it['state_of_origin'] ?? 'DELHI') ?></td>
+                            <td class="border border-black p-1 text-center uppercase break-words"><?= htmlspecialchars($it['district_of_origin'] ?? 'DELHI') ?></td>
+                            <td class="border border-black p-1 text-center font-bold break-words"><?= $qty ?> NOS</td>
+                            <td class="border border-black p-1 text-center text-[9px] italic text-gray-600 break-words"><?= htmlspecialchars($it['preferential_agreement'] ?? 'N/A') ?></td>
+                            <td class="border border-black p-1 text-right font-mono font-bold break-words">₹<?= number_format($taxableInr, 2) ?></td>
+                            <td class="border border-black p-1 text-right font-mono break-words">₹<?= number_format($taxInr, 2) ?></td>
+                            <td class="border border-black p-1 text-right font-mono break-words">₹<?= number_format($cessAmt, 2) ?></td>
                         </tr>
                     <?php endforeach; ?>
-                    <tr class="font-bold bg-gray-100 border-t-2 border-black text-xs">
-                        <td colspan="5" class="border border-black p-2 text-right uppercase">Total:</td>
-                        <td class="border border-black p-2 text-center"><?= $totalQty ?> NOS</td>
-                        <td class="border border-black p-2"></td>
-                        <td class="border border-black p-2 text-right font-mono">₹<?= number_format($totalTaxableInr, 2) ?></td>
-                        <td class="border border-black p-2 text-right font-mono">₹<?= number_format($totalTaxInr, 2) ?></td>
-                        <td class="border border-black p-2 text-right font-mono">₹0.00</td>
+                    <tr class="font-bold bg-gray-100 border-t-2 border-black text-[9px]">
+                        <td colspan="5" class="border border-black p-1 text-right uppercase">Total:</td>
+                        <td class="border border-black p-1 text-center"><?= $totalQty ?> NOS</td>
+                        <td class="border border-black p-1"></td>
+                        <td class="border border-black p-1 text-right font-mono">₹<?= number_format($totalTaxableInr, 2) ?></td>
+                        <td class="border border-black p-1 text-right font-mono">₹<?= number_format($totalTaxInr, 2) ?></td>
+                        <td class="border border-black p-1 text-right font-mono">₹0.00</td>
                     </tr>
                 <?php else: ?>
                     <tr>
-                        <td class="border border-black p-2 text-center font-bold">1</td>
-                        <td class="border border-black p-2 font-medium text-gray-900">Lady Apsara - Brass Statue</td>
-                        <td class="border border-black p-2 text-center font-mono">83062900</td>
-                        <td class="border border-black p-2 text-center uppercase font-semibold">DELHI</td>
-                        <td class="border border-black p-2 text-center uppercase">DELHI</td>
-                        <td class="border border-black p-2 text-center font-bold">1 NOS</td>
-                        <td class="border border-black p-2 text-center text-[10px] italic text-gray-600">N/A</td>
-                        <td class="border border-black p-2 text-right font-mono font-bold">₹32,930.25</td>
-                        <td class="border border-black p-2 text-right font-mono">₹1,646.51</td>
-                        <td class="border border-black p-2 text-right font-mono">₹0.00</td>
+                        <td class="border border-black p-1 text-center font-bold break-words">1</td>
+                        <td class="border border-black p-1 font-medium text-gray-900 break-words">Lady Apsara - Brass Statue</td>
+                        <td class="border border-black p-1 text-center font-mono text-[9px] break-words">83062900</td>
+                        <td class="border border-black p-1 text-center uppercase font-semibold break-words">DELHI</td>
+                        <td class="border border-black p-1 text-center uppercase break-words">DELHI</td>
+                        <td class="border border-black p-1 text-center font-bold break-words">1 NOS</td>
+                        <td class="border border-black p-1 text-center text-[9px] italic text-gray-600 break-words">N/A</td>
+                        <td class="border border-black p-1 text-right font-mono font-bold break-words">₹32,930.25</td>
+                        <td class="border border-black p-1 text-right font-mono break-words">₹1,646.51</td>
+                        <td class="border border-black p-1 text-right font-mono break-words">₹0.00</td>
                     </tr>
                 <?php endif; ?>
             </tbody>
