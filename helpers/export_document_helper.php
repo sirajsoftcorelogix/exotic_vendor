@@ -322,8 +322,114 @@ function buildCommonExportSessionData(array $autoPulledData): array
         'total_packages' => 1,
         'terms_of_delivery' => 'DDP / Express Courier',
         'declaration_date' => date('Y-m-d'),
-        'authorized_signatory' => $firm['authorized_signatory'] ?? 'Authorized Signatory'
+        'authorized_signatory' => $firm['authorized_signatory'] ?? 'Authorized Signatory',
+        'irn' => export_first_non_empty($intl['irn'] ?? '', $inv['irn'] ?? ''),
+        'ack_number' => export_first_non_empty($intl['ack_number'] ?? '', $inv['ack_number'] ?? ''),
+        'ack_date' => export_first_non_empty($intl['ack_date'] ?? '', $inv['ack_date'] ?? ''),
+        'qrcode_string' => export_first_non_empty($intl['qrcode_string'] ?? '', $inv['qrcode_string'] ?? '')
     ];
+}
+
+/**
+ * Helper to dynamically resolve IRN details for an export session if missing in common_data.
+ *
+ * @param \mysqli $db
+ * @param array<string, mixed> $session
+ * @param array<string, mixed> $common
+ * @return array<string, mixed>
+ */
+function resolveExportSessionIrnDetails(\mysqli $db, array $session, array $common): array
+{
+    $irn = export_first_non_empty($common['irn'] ?? '', $common['inv_irn'] ?? '');
+    $qr = export_first_non_empty($common['qrcode_string'] ?? '');
+    $ackNum = export_first_non_empty($common['ack_number'] ?? '', $common['ack_no'] ?? '');
+    $ackDt = export_first_non_empty($common['ack_date'] ?? '');
+
+    if (!empty($irn) && !empty($qr)) {
+        return $common;
+    }
+
+    $invoiceId = (int)($session['invoice_id'] ?? $common['invoice_id'] ?? 0);
+    $invoiceNum = trim((string)($session['invoice_number'] ?? $common['invoice_number'] ?? ''));
+    $orderNum = trim((string)($session['order_number'] ?? $common['order_number'] ?? ''));
+
+    // 1. Check vp_invoices_international
+    if ($invoiceId > 0) {
+        $stmt = $db->prepare("SELECT irn, ack_number, ack_date, qrcode_string FROM vp_invoices_international WHERE invoice_id = ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('i', $invoiceId);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($row = $res->fetch_assoc()) {
+                if (empty($irn) && !empty($row['irn'])) $irn = trim((string)$row['irn']);
+                if (empty($qr) && !empty($row['qrcode_string'])) $qr = trim((string)$row['qrcode_string']);
+                if (empty($ackNum) && !empty($row['ack_number'])) $ackNum = trim((string)$row['ack_number']);
+                if (empty($ackDt) && !empty($row['ack_date'])) $ackDt = trim((string)$row['ack_date']);
+            }
+            $stmt->close();
+        }
+    }
+
+    // 2. Check vp_domestic_ewb_irn if still missing
+    if (empty($irn) || empty($qr)) {
+        $ewbRow = null;
+        if ($invoiceId > 0) {
+            $stmt = $db->prepare("SELECT irn, irn_response FROM vp_domestic_ewb_irn WHERE vp_invoices_id = ? LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param('i', $invoiceId);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($r = $res->fetch_assoc()) $ewbRow = $r;
+                $stmt->close();
+            }
+        }
+
+        if (!$ewbRow && ($orderNum !== '' || $invoiceNum !== '')) {
+            $searchVal = $orderNum !== '' ? $orderNum : $invoiceNum;
+            $stmt = $db->prepare("SELECT d.irn, d.irn_response FROM vp_domestic_ewb_irn d
+                                  JOIN vp_invoices i ON i.id = d.vp_invoices_id
+                                  LEFT JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
+                                  WHERE oi.order_number = ? OR i.invoice_number = ? OR i.order_number = ?
+                                  ORDER BY d.id DESC LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param('sss', $searchVal, $searchVal, $searchVal);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($r = $res->fetch_assoc()) $ewbRow = $r;
+                $stmt->close();
+            }
+        }
+
+        if ($ewbRow) {
+            if (empty($irn) && !empty($ewbRow['irn'])) {
+                $irn = trim((string)$ewbRow['irn']);
+            }
+            if (!empty($ewbRow['irn_response'])) {
+                $resp = json_decode($ewbRow['irn_response'], true);
+                if (is_array($resp)) {
+                    if (empty($irn)) {
+                        $irn = export_first_non_empty($resp['Irn'] ?? '', $resp['irn'] ?? '', $resp['InfoDtls'][0]['Desc']['Irn'] ?? '');
+                    }
+                    if (empty($qr)) {
+                        $qr = export_first_non_empty($resp['SignedQRCode'] ?? '', $resp['SignedQrCode'] ?? '', $resp['signed_qr_code'] ?? '', $resp['qr_code'] ?? '');
+                    }
+                    if (empty($ackNum)) {
+                        $ackNum = export_first_non_empty($resp['AckNo'] ?? '', $resp['ack_no'] ?? '', $resp['ack_number'] ?? '');
+                    }
+                    if (empty($ackDt)) {
+                        $ackDt = export_first_non_empty($resp['AckDt'] ?? '', $resp['ack_date'] ?? '');
+                    }
+                }
+            }
+        }
+    }
+
+    $common['irn'] = $irn;
+    $common['qrcode_string'] = $qr;
+    $common['ack_number'] = $ackNum;
+    $common['ack_date'] = $ackDt;
+
+    return $common;
 }
 
 /**

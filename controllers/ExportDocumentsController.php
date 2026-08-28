@@ -255,6 +255,7 @@ class ExportDocumentsController
 
         $sessionId = (int)$session['id'];
         $forms = $this->exportDocModel->getAllFormsForSession($sessionId);
+        $session['common_data'] = resolveExportSessionIrnDetails($this->conn, $session, $session['common_data'] ?? []);
 
         $requiredDocs = resolveRequiredExportDocuments(
             $session['shipment_type'],
@@ -335,6 +336,7 @@ class ExportDocumentsController
 
         $sessionId = (int)$session['id'];
         $forms = $this->exportDocModel->getAllFormsForSession($sessionId);
+        $session['common_data'] = resolveExportSessionIrnDetails($this->conn, $session, $session['common_data'] ?? []);
 
         $requiredDocs = resolveRequiredExportDocuments(
             $session['shipment_type'],

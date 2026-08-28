@@ -4,18 +4,43 @@
 $data = $form['form_data'] ?? [];
 $common = $common ?? ($data['common'] ?? []);
 $items = $data['items'] ?? [];
+
+$irn = $common['irn'] ?? $data['irn'] ?? ($common['inv_irn'] ?? '');
+$ackNumber = $common['ack_number'] ?? $data['ack_number'] ?? ($common['ack_no'] ?? '');
+$ackDate = $common['ack_date'] ?? $data['ack_date'] ?? '';
+$qrcodeString = $common['qrcode_string'] ?? $data['qrcode_string'] ?? '';
 ?>
+<!-- QRCode library for IRN QR rendering -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
 <div class="export-doc-page csb5-invoice">
-    <div class="doc-header flex justify-between items-start border-b-2 border-black pb-3 mb-4">
-        <div>
-            <h1 class="text-xl font-bold uppercase tracking-wider text-black"><?= htmlspecialchars($data['document_title'] ?? 'EXPRESS COURIER INVOICE (CSB-5)') ?></h1>
-            <p class="text-xs text-gray-700">Courier Shipping Bill - V Clearance Document</p>
+    <div class="doc-header border-b-2 border-black pb-3 mb-4">
+        <div class="flex justify-between items-start">
+            <div>
+                <h1 class="text-xl font-bold uppercase tracking-wider text-black"><?= htmlspecialchars($data['document_title'] ?? 'EXPRESS COURIER INVOICE (CSB-5)') ?></h1>
+                <p class="text-xs text-gray-700">Courier Shipping Bill - V Clearance Document</p>
+            </div>
+            <div class="flex items-center gap-3 text-right text-xs">
+                <div>
+                    <div><strong>Invoice No:</strong> <?= htmlspecialchars($common['invoice_number'] ?? 'N/A') ?></div>
+                    <div><strong>Date:</strong> <?= htmlspecialchars($data['declaration_date'] ?? date('Y-m-d')) ?></div>
+                    <div><strong>CSB Type:</strong> <?= htmlspecialchars($data['csb_type'] ?? 'CSB-V Express') ?></div>
+                </div>
+                <?php if (!empty($qrcodeString)): ?>
+                    <div id="csb5IrnQrContainer" class="border border-black p-1 bg-white" style="width: 80px; height: 80px;"></div>
+                <?php endif; ?>
+            </div>
         </div>
-        <div class="text-right text-xs">
-            <div><strong>Invoice No:</strong> <?= htmlspecialchars($common['invoice_number'] ?? 'N/A') ?></div>
-            <div><strong>Date:</strong> <?= htmlspecialchars($data['declaration_date'] ?? date('Y-m-d')) ?></div>
-            <div><strong>CSB Type:</strong> <?= htmlspecialchars($data['csb_type'] ?? 'CSB-V Express') ?></div>
-        </div>
+
+        <?php if (!empty($irn)): ?>
+            <div class="mt-2 p-1.5 bg-gray-50 border border-black text-[10px] space-y-0.5">
+                <div><strong>IRN:</strong> <span class="font-mono break-all"><?= htmlspecialchars($irn) ?></span></div>
+                <div class="flex gap-4">
+                    <div><strong>Ack No:</strong> <?= htmlspecialchars($ackNumber ?: 'N/A') ?></div>
+                    <div><strong>Ack Date:</strong> <?= htmlspecialchars($ackDate ? date('d-m-Y H:i', strtotime($ackDate)) : 'N/A') ?></div>
+                </div>
+            </div>
+        <?php endif; ?>
     </div>
 
     <!-- Parties Grid -->
@@ -106,3 +131,29 @@ $items = $data['items'] ?? [];
         </div>
     </div>
 </div>
+
+<?php if (!empty($qrcodeString)): ?>
+<script>
+(function() {
+    function renderCsb5InvoiceQr() {
+        const container = document.getElementById('csb5IrnQrContainer');
+        if (container && typeof QRCode !== 'undefined') {
+            container.innerHTML = '';
+            new QRCode(container, {
+                text: <?= json_encode($qrcodeString) ?>,
+                width: 70,
+                height: 70,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        }
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', renderCsb5InvoiceQr);
+    } else {
+        renderCsb5InvoiceQr();
+    }
+})();
+</script>
+<?php endif; ?>

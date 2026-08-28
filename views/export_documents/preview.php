@@ -139,6 +139,7 @@ $commonData = $session['common_data'] ?? [];
                 <?php foreach ($docsToRender as $docCode => $docTitle): ?>
                     <?php
                         $form = $forms[$docCode] ?? [];
+                        $common = $commonData;
                         $templatePath = __DIR__ . '/templates/' . $docCode . '.php';
                     ?>
                     <?php if (file_exists($templatePath)): ?>
