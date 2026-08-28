@@ -163,8 +163,19 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
         }
     }
 
-    // 2. Compute net payable directly from vp_orders lines
-    $stmt = $conn->prepare('SELECT status, itemprice, quantity, addons, custom_reduce FROM vp_orders WHERE order_number = ?');
+    // 2. Compute net payable directly from vp_orders lines (prefer vp_order_info.total / finalprice)
+    $stmt = $conn->prepare('SELECT total FROM vp_order_info WHERE order_number = ? LIMIT 1');
+    if ($stmt) {
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!empty($row['total']) && (float)$row['total'] > 0) {
+            return round((float)$row['total'], 2);
+        }
+    }
+
+    $stmt = $conn->prepare('SELECT status, itemprice, finalprice, quantity, addons, custom_reduce FROM vp_orders WHERE order_number = ?');
     if ($stmt) {
         $stmt->bind_param('s', $orderNumber);
         $stmt->execute();
@@ -184,7 +195,11 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
                 }
                 $activeCount++;
                 $qty = max(1, (int)($line['quantity'] ?? 1));
-                $gross += round((float)($line['itemprice'] ?? 0) * $qty, 2);
+                $unit = (float)($line['finalprice'] ?? 0);
+                if ($unit <= 0) {
+                    $unit = (float)($line['itemprice'] ?? 0);
+                }
+                $gross += round($unit * $qty, 2);
 
                 if (!empty($line['addons'])) {
                     foreach (Order::parseVendorOrderLineAddonsList($line['addons']) as $addonItem) {
