@@ -34,7 +34,7 @@ $exchangeRate = (float)($common['exchange_rate'] ?? 83.50);
             <div class="flex items-center gap-3">
                 <?php if (!empty($qrcodeString)): ?>
                     <div class="flex flex-col items-center">
-                        <div id="irnQrContainer" class="border border-black p-1.5 bg-white shadow-2xs" style="width: 145px; height: 145px;"></div>
+                        <div class="irn-qr-render-box border border-black p-1.5 bg-white shadow-2xs" data-qr-text="<?= htmlspecialchars($qrcodeString, ENT_QUOTES, 'UTF-8') ?>" style="width: 145px; height: 145px;"></div>
                         <span class="text-[9px] font-bold text-gray-700 mt-1 uppercase tracking-tight">e-Invoice GST QR</span>
                     </div>
                 <?php else: ?>
@@ -181,29 +181,37 @@ $exchangeRate = (float)($common['exchange_rate'] ?? 83.50);
 
 <?php if (!empty($qrcodeString)): ?>
 <style>
-#irnQrContainer img, #irnQrContainer canvas {
+.irn-qr-render-box img {
     width: 100% !important;
     height: 100% !important;
     image-rendering: pixelated !important;
     image-rendering: crisp-edges !important;
     display: block !important;
 }
+.irn-qr-render-box canvas {
+    display: none !important;
+}
 </style>
 <script>
 (function() {
     function renderCommercialInvoiceQr() {
-        const container = document.getElementById('irnQrContainer');
-        if (container && typeof QRCode !== 'undefined') {
-            container.innerHTML = '';
-            new QRCode(container, {
-                text: <?= json_encode($qrcodeString) ?>,
-                width: 350,
-                height: 350,
-                colorDark: "#000000",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.L
-            });
-        }
+        if (typeof QRCode === 'undefined') return;
+        const containers = document.querySelectorAll('.irn-qr-render-box');
+        containers.forEach(function(container) {
+            const qrText = container.getAttribute('data-qr-text');
+            if (qrText && !container.getAttribute('data-qr-done')) {
+                container.setAttribute('data-qr-done', 'true');
+                container.innerHTML = '';
+                new QRCode(container, {
+                    text: qrText,
+                    width: 350,
+                    height: 350,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.L
+                });
+            }
+        });
     }
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', renderCommercialInvoiceQr);
