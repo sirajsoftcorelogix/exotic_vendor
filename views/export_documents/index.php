@@ -290,7 +290,7 @@
             </form>
         </div>
 
-        <div class="overflow-x-auto">
+        <div class="overflow-visible">
             <table class="w-full text-left text-xs border-collapse">
                 <thead>
                     <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider">
