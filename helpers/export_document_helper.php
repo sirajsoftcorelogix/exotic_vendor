@@ -100,7 +100,7 @@ function resolveRequiredExportDocuments(
 
     } else {
         // Commercial Shipment
-        $docs['commercial_invoice'] = 'Commercial Invoice';
+        $docs['commercial_invoice'] = 'Commercial Invoice Cum Packing List';
 
         // SLI for DHL / FedEx / UPS
         $sliTitle = 'Shipper\'s Letter of Instruction (SLI) - ' . ($isDrawback ? 'Drawback' : 'Non-Drawback');
