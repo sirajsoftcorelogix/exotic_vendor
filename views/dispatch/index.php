@@ -479,6 +479,25 @@
                   </button>
                   <div class="dropdown-menu hidden absolute right-0 mt-2 w-52 bg-white border border-gray-100 rounded-2xl shadow-xl z-20 py-1.5 overflow-hidden divide-y divide-gray-100/60">
                     <div class="py-1">
+                      <?php
+                        $firstOrderNum = !empty($orderNumbers) ? (string) array_key_first($orderNumbers) : '';
+                        $ewbIrnStatus = !empty($firstOrderNum) ? DomesticEwbIrnService::getEwbIrnStatusByOrderNumber($GLOBALS['conn'], $firstOrderNum) : null;
+                        $irnStatus = strtolower(trim((string)($ewbIrnStatus['irn_status'] ?? '')));
+                        $ewbStatus = strtolower(trim((string)($ewbIrnStatus['ewb_status'] ?? '')));
+                        $hasIrn = ($irnStatus === 'generated') || !empty($ewbIrnStatus['irn']) || !empty($ewbIrnStatus['inv_irn']);
+                        $hasEwb = ($ewbStatus === 'generated') || !empty($ewbIrnStatus['ewb']) || !empty($ewbIrnStatus['ewb_no']) || !empty($ewbIrnStatus['inv_ewb']);
+                      ?>
+                      <?php if (!empty($firstOrderNum) && strtolower(trim((string)($invoice['status'] ?? ''))) !== 'cancelled'): ?>
+                        <?php if (!$hasIrn): ?>
+                          <a href="<?php echo base_url('?page=posinvoice&action=einvoice-input&invoice_id=' . (int)$invoice['id'] . '&order_number=' . rawurlencode($firstOrderNum)); ?>" class="block px-4 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 transition flex items-center gap-2.5" title="Generate E-Invoice">
+                              <i class="fas fa-file-invoice text-xs text-blue-600" aria-hidden="true"></i> E-Invoice
+                          </a>
+                        <?php elseif (!$hasEwb): ?>
+                          <a href="<?php echo base_url('?page=posinvoice&action=ewaybill-input&invoice_id=' . (int)$invoice['id'] . '&order_number=' . rawurlencode($firstOrderNum)); ?>" class="block px-4 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition flex items-center gap-2.5" title="Generate E-Way Bill">
+                              <i class="fas fa-truck-loading text-xs text-emerald-600" aria-hidden="true"></i> E-Way Bill
+                          </a>
+                        <?php endif; ?>
+                      <?php endif; ?>
                       <button type="button" class="w-full text-left px-4 py-2 text-xs font-semibold text-purple-700 hover:bg-purple-50 transition border-none bg-transparent cursor-pointer flex items-center gap-2.5" onclick="openCommonDispatchModal({ invoice_id: <?php echo (int) $invoice['id']; ?>, invoice_number: '<?php echo htmlspecialchars($invoice['invoice_number'] ?? $invoice['id'], ENT_QUOTES, 'UTF-8'); ?>', order_number: '<?php echo htmlspecialchars((string) array_key_first($orderNumbers ?? []), ENT_QUOTES, 'UTF-8'); ?>' })">
                           <i class="fas fa-truck text-xs text-purple-600" aria-hidden="true"></i> Dispatch Details
                       </button>
