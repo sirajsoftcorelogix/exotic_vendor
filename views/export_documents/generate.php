@@ -109,6 +109,14 @@ $activeTitle = $requiredDocs[$activeTab] ?? 'Export Document';
                     </div>
 
                     <!-- Category / Document specific clauses -->
+                    <?php if (isset($activeFormData['supply_type'])): ?>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Export Supply Type Statement</label>
+                            <input type="text" name="form_data[supply_type]" value="<?= htmlspecialchars($activeFormData['supply_type']) ?>"
+                                   class="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-900 font-semibold">
+                        </div>
+                    <?php endif; ?>
+
                     <?php if (isset($activeFormData['declaration_clause'])): ?>
                         <div>
                             <label class="block text-xs font-semibold text-gray-700 mb-1">Declaration & Legal Clause</label>
