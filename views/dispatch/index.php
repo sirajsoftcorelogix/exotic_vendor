@@ -1,3 +1,6 @@
+<?php
+require_once __DIR__ . '/../../models/invoice/DomesticEwbIrnService.php';
+?>
 <div class="container mx-auto px-4 py-8">
     <!-- include daterangepicker assets -->
     <script src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
