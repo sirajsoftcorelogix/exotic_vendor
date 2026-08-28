@@ -804,4 +804,37 @@ class ExportDocument
 
         return (int)($row['total'] ?? 0);
     }
+
+    /**
+     * Delete an export document session and its associated forms.
+     *
+     * @param int $id
+     * @return bool
+     */
+    public function deleteSession(int $id): bool
+    {
+        if ($id <= 0) {
+            return false;
+        }
+
+        // 1. Delete associated form records first
+        $stmtForms = $this->conn->prepare("DELETE FROM vp_export_document_forms WHERE session_id = ?");
+        if ($stmtForms) {
+            $stmtForms->bind_param('i', $id);
+            $stmtForms->execute();
+            $stmtForms->close();
+        }
+
+        // 2. Delete the session record
+        $stmtSess = $this->conn->prepare("DELETE FROM vp_export_document_sessions WHERE id = ?");
+        if (!$stmtSess) {
+            return false;
+        }
+
+        $stmtSess->bind_param('i', $id);
+        $ok = $stmtSess->execute();
+        $stmtSess->close();
+
+        return $ok;
+    }
 }
