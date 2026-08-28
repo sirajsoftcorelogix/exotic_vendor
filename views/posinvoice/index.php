@@ -696,6 +696,7 @@ No invoices
                         if (orderNum && !irnGenerated) {
                             menuItems.push(`
 <a href="?page=posinvoice&action=einvoice-input&invoice_id=${i.id}&order_number=${encodeURIComponent(orderNum)}"
+   target="_blank"
    class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 hover:text-blue-900 rounded-md transition"
    title="Generate E-Invoice">
     <i class="fas fa-file-invoice text-blue-600 w-4 text-center" aria-hidden="true"></i>
@@ -706,6 +707,7 @@ No invoices
                         if (orderNum && irnGenerated && !ewbGenerated) {
                             menuItems.push(`
 <a href="?page=posinvoice&action=ewaybill-input&invoice_id=${i.id}&order_number=${encodeURIComponent(orderNum)}"
+   target="_blank"
    class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 rounded-md transition"
    title="Generate E-Way bill">
     <i class="fas fa-truck-loading text-emerald-600 w-4 text-center" aria-hidden="true"></i>

@@ -492,11 +492,11 @@ require_once __DIR__ . '/../../models/invoice/DomesticEwbIrnService.php';
                       ?>
                       <?php if (!empty($firstOrderNum) && strtolower(trim((string)($invoice['status'] ?? ''))) !== 'cancelled'): ?>
                         <?php if (!$hasIrn): ?>
-                          <a href="<?php echo base_url('?page=posinvoice&action=einvoice-input&invoice_id=' . (int)$invoice['id'] . '&order_number=' . rawurlencode($firstOrderNum)); ?>" class="block px-4 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 transition flex items-center gap-2.5" title="Generate E-Invoice">
+                          <a href="<?php echo base_url('?page=posinvoice&action=einvoice-input&invoice_id=' . (int)$invoice['id'] . '&order_number=' . rawurlencode($firstOrderNum)); ?>" target="_blank" class="block px-4 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 transition flex items-center gap-2.5" title="Generate E-Invoice">
                               <i class="fas fa-file-invoice text-xs text-blue-600" aria-hidden="true"></i> E-Invoice
                           </a>
                         <?php elseif (!$hasEwb): ?>
-                          <a href="<?php echo base_url('?page=posinvoice&action=ewaybill-input&invoice_id=' . (int)$invoice['id'] . '&order_number=' . rawurlencode($firstOrderNum)); ?>" class="block px-4 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition flex items-center gap-2.5" title="Generate E-Way Bill">
+                          <a href="<?php echo base_url('?page=posinvoice&action=ewaybill-input&invoice_id=' . (int)$invoice['id'] . '&order_number=' . rawurlencode($firstOrderNum)); ?>" target="_blank" class="block px-4 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition flex items-center gap-2.5" title="Generate E-Way Bill">
                               <i class="fas fa-truck-loading text-xs text-emerald-600" aria-hidden="true"></i> E-Way Bill
                           </a>
                         <?php endif; ?>
