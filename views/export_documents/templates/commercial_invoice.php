@@ -33,9 +33,12 @@ $exchangeRate = (float)($common['exchange_rate'] ?? 83.50);
             <!-- IRN QR Code Section -->
             <div class="flex items-center gap-3">
                 <?php if (!empty($qrcodeString)): ?>
-                    <div id="irnQrContainer" class="border border-black p-1 bg-white" style="width: 90px; height: 90px;"></div>
+                    <div class="flex flex-col items-center">
+                        <div id="irnQrContainer" class="border border-black p-1.5 bg-white shadow-2xs" style="width: 145px; height: 145px;"></div>
+                        <span class="text-[9px] font-bold text-gray-700 mt-1 uppercase tracking-tight">e-Invoice GST QR</span>
+                    </div>
                 <?php else: ?>
-                    <div class="border border-dashed border-gray-400 p-2 text-[9px] text-gray-500 text-center flex items-center justify-center" style="width: 90px; height: 90px;">
+                    <div class="border border-dashed border-gray-400 p-2 text-[9px] text-gray-500 text-center flex items-center justify-center" style="width: 145px; height: 145px;">
                         [IRN QR Code]
                     </div>
                 <?php endif; ?>
@@ -177,6 +180,15 @@ $exchangeRate = (float)($common['exchange_rate'] ?? 83.50);
 </div>
 
 <?php if (!empty($qrcodeString)): ?>
+<style>
+#irnQrContainer img, #irnQrContainer canvas {
+    width: 100% !important;
+    height: 100% !important;
+    image-rendering: pixelated !important;
+    image-rendering: crisp-edges !important;
+    display: block !important;
+}
+</style>
 <script>
 (function() {
     function renderCommercialInvoiceQr() {
@@ -185,11 +197,11 @@ $exchangeRate = (float)($common['exchange_rate'] ?? 83.50);
             container.innerHTML = '';
             new QRCode(container, {
                 text: <?= json_encode($qrcodeString) ?>,
-                width: 80,
-                height: 80,
+                width: 350,
+                height: 350,
                 colorDark: "#000000",
                 colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.M
+                correctLevel: QRCode.CorrectLevel.L
             });
         }
     }
