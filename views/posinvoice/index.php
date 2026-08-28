@@ -221,7 +221,7 @@
                         <th class="p-3 text-left">Store / Warehouse</th>
                         <th class="p-3 text-left">Customer</th>
                         <th class="p-3 text-left">Amount</th>
-                        <th class="p-3 text-left">Disc.</th>
+                        <th class="p-3 text-left">IRN / E-Way Bill</th>
                         <th class="p-3 text-left">Discount</th>
                         <th class="p-3 text-left">Paid</th>
                         <th class="p-3 text-left">Pending</th>
@@ -237,6 +237,35 @@
         </div>
 
     </main>
+</div>
+<div id="irnEwbDetailsModal" class="fixed inset-0 z-[9999] hidden">
+
+    <div class="absolute inset-0 bg-black/40" onclick="closeIrnEwbModal()"></div>
+
+    <div class="relative mx-auto mt-40 w-[90%] max-w-md bg-white rounded-2xl shadow-xl">
+
+        <div class="p-6">
+            <div class="flex items-start justify-between gap-3 mb-4">
+                <h3 class="text-lg font-semibold" id="irnEwbDetailsTitle">IRN / E-Way Bill</h3>
+                <button type="button" onclick="closeIrnEwbModal()"
+                    class="text-gray-400 hover:text-gray-700 transition"
+                    title="Close">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <div id="irnEwbDetailsBody" class="space-y-3"></div>
+
+            <div class="mt-5 text-right">
+                <button type="button" onclick="closeIrnEwbModal()"
+                    class="px-5 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-medium transition">
+                    Close
+                </button>
+            </div>
+        </div>
+
+    </div>
+
 </div>
 <div id="deleteConfirmModal" class="fixed inset-0 z-[9999] hidden">
 
@@ -333,6 +362,64 @@
             return '<span class="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800">Yes</span>';
         }
         return '<span class="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">No</span>';
+    }
+
+    function formatIrnEwbStatusCell(invoice) {
+        const irnVal = String(invoice.irn || '').trim();
+        const ewbVal = String(invoice.ewb || '').trim();
+        const irnGenerated = String(invoice.irn_status || '').trim().toLowerCase() === 'generated'
+            || irnVal !== '';
+        const ewbGenerated = String(invoice.ewb_status || '').trim().toLowerCase() === 'generated'
+            || ewbVal !== '';
+        const invId = parseInt(invoice.id, 10) || 0;
+
+        const badge = function (generated) {
+            if (!generated) {
+                return '<span class="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">No</span>';
+            }
+            return '<button type="button"'
+                + ' class="inline-flex px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 hover:bg-emerald-200 cursor-pointer transition"'
+                + ' title="View IRN / E-Way Bill details"'
+                + ' onclick="openIrnEwbModal(' + invId + ', \'' + escapeHtml(irnVal) + '\', \'' + escapeHtml(ewbVal) + '\')">Yes</button>';
+        };
+
+        return '<div style="line-height:1.5">'
+            + '<div style="font-size:11px;color:#6b7280">' + badge(irnGenerated) + ' / </div>'
+            + '<div style="font-size:11px;color:#6b7280">' + badge(ewbGenerated) + '</div>'
+            + '</div>';
+    }
+
+    function openIrnEwbModal(invoiceId, irn, ewb) {
+        const modal = document.getElementById('irnEwbDetailsModal');
+        if (!modal) return;
+
+        const detailRow = function (label, value) {
+            const v = String(value || '').trim();
+            return '<div class="flex flex-col gap-0.5">'
+                + '<span class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">' + label + '</span>'
+                + '<span class="font-mono text-xs text-gray-900 break-all bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">'
+                + (v !== '' ? escapeHtml(v) : '<span class="text-gray-400 font-sans">Not generated</span>')
+                + '</span></div>';
+        };
+
+        const body = document.getElementById('irnEwbDetailsBody');
+        if (body) {
+            body.innerHTML = detailRow('IRN Number', irn) + detailRow('E-Way Bill Number', ewb);
+        }
+
+        const title = document.getElementById('irnEwbDetailsTitle');
+        if (title) {
+            title.textContent = 'IRN / E-Way Bill — Invoice #' + invoiceId;
+        }
+
+        modal.classList.remove('hidden');
+    }
+
+    function closeIrnEwbModal() {
+        const modal = document.getElementById('irnEwbDetailsModal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
     }
 
     function escapeHtml(value) {
@@ -594,9 +681,38 @@ No invoices
                         ? `<span class="line-through text-gray-500">${i.invoice_number ?? ''}</span>`
                         : `<span class="font-semibold">${i.invoice_number ?? ''}</span>`;
 
+                    const orderNum = (i.order_number || '').trim();
+                    const irnStatus = String(i.irn_status || '').trim().toLowerCase();
+                    const ewbStatus = String(i.ewb_status || '').trim().toLowerCase();
+                    const irnVal = String(i.irn || '').trim();
+                    const ewbVal = String(i.ewb || '').trim();
+
+                    const irnGenerated = irnStatus === 'generated' || irnVal !== '';
+                    const ewbGenerated = ewbStatus === 'generated' || ewbVal !== '';
+
                     const menuItems = [];
 
                     if (!isCancelled) {
+                        if (orderNum && !irnGenerated) {
+                            menuItems.push(`
+<a href="?page=posinvoice&action=einvoice-input&invoice_id=${i.id}&order_number=${encodeURIComponent(orderNum)}"
+   class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 hover:text-blue-900 rounded-md transition"
+   title="Generate E-Invoice">
+    <i class="fas fa-file-invoice text-blue-600 w-4 text-center" aria-hidden="true"></i>
+    <span>E-Invoice</span>
+</a>`);
+                        }
+
+                        if (orderNum && irnGenerated && !ewbGenerated) {
+                            menuItems.push(`
+<a href="?page=posinvoice&action=ewaybill-input&invoice_id=${i.id}&order_number=${encodeURIComponent(orderNum)}"
+   class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 rounded-md transition"
+   title="Generate E-Way bill">
+    <i class="fas fa-truck-loading text-emerald-600 w-4 text-center" aria-hidden="true"></i>
+    <span>E-Way bill</span>
+</a>`);
+                        }
+
                         menuItems.push(`
 <a href="/?page=posinvoice&action=generate_pdf&invoice_id=${i.id}"
    target="_blank"
@@ -624,7 +740,6 @@ No invoices
     <span>Dispatch Details</span>
 </button>`);
 
-                        const orderNum = (i.order_number || '').trim();
                         if (orderNum) {
                             menuItems.push(`
 <button type="button"
@@ -687,7 +802,7 @@ No invoices
 <td class="p-3">${formatCustomerCell(i)}</td>
 
 <td class="p-3 font-semibold tabular-nums">₹ ${formatInvoiceAmount(i.payable_amount)}</td>
-<td class="p-3">${formatDiscountAppliedFlag(i.discount_amount)}</td>
+<td class="p-3">${formatIrnEwbStatusCell(i)}</td>
 <td class="p-3 text-amber-700 tabular-nums">₹ ${formatInvoiceAmount(i.discount_amount)}</td>
 <td class="p-3 text-green-600 tabular-nums">₹ ${formatInvoiceAmount(i.paid_amount)}</td>
 <td class="p-3 text-red-600 tabular-nums">₹ ${formatInvoiceAmount(i.pending_amount)}</td>

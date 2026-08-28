@@ -96,7 +96,7 @@ class DomesticEwbIrnService {
      */
     public function generateIrnAndEwb($invoiceId, $invoice, $items, $customer, $firm, $ewbData = []) {
         try {
-            echo "Domestic EWB: Starting IRN and EWB generation for invoice #$invoiceId\n";
+            //echo "Domestic EWB: Starting IRN and EWB generation for invoice #$invoiceId\n";
             $this->ensureInfoDtlsColumn();
             // Validate required data
             if (!$invoice || empty($items) || !$customer || !$firm) {
@@ -121,7 +121,7 @@ class DomesticEwbIrnService {
                 error_log("Alankit IRN: " . $this->lastError);
                 return ['status' => false, 'message' => $this->lastError];
             }
-            echo "Domestic EWB: Alankit API credentials loaded successfully.\n";
+            //echo "Domestic EWB: Alankit API credentials loaded successfully.\n";
             $alankitClient = new AlankitIrnNew(
                 $this->alankitConfig['username'],
                 $this->alankitConfig['password'],
@@ -137,6 +137,7 @@ class DomesticEwbIrnService {
                 'ewb' => null,
                 'irn_message' => null,
                 'ewb_message' => null,
+                'error_details' => '',
                 'errors' => []
             ];
             
@@ -152,9 +153,11 @@ class DomesticEwbIrnService {
             $data = [
                 "Data" => $authreq
             ];
-            echo "Alankit IRN: Sending authentication request for invoice #$invoiceId\n";
+            //echo "Alankit IRN: Sending authentication request for invoice #$invoiceId\n";
+            //echo "Domestic EWB: Auth request payload: " . json_encode($data) . "\n";
+            //echo "Domestic EWB: Auth request raw data: " . $authreq . "\n";
             $authResponse = $alankitClient->sendRequest('AUTH_ENDPOINT', $data, false);
-            
+            //print_r($authResponse);
             if (!$authResponse || !isset($authResponse['Data']['AuthToken'])) {
                 $result['status'] = false;
                 $result['errors'][] = 'Authentication failed: ' . ($authResponse['message'] ?? 'Unknown error');
@@ -185,7 +188,8 @@ class DomesticEwbIrnService {
             }
             
             //error_log("Domestic EWB: SEK decrypted successfully");
-            
+            //echo 'encryptedSek <br>'.$encryptedSek.'<br><br>app_key:'.$this->alankitConfig['app_key'].'<br><br>decryptedSek:'.$decryptedSek.'<br><br>';
+
             // Step 4: Generate IRN
             //error_log("Domestic EWB: Generating IRN for invoice #$invoiceId");
             //$irnResponse = $alankitClient->generateIrn($irnPayload, $accessToken);
@@ -195,11 +199,13 @@ class DomesticEwbIrnService {
                 error_log("Alankit IRN: Payload encryption failed for invoice #$invoiceId");
                 return false;
             }
-            echo '<br><br>'.$encryptedPayload.'<br><br>';
+           // echo '<br><br>'.$encryptedPayload.'<br><br>';
             // Send IRN generation request with encrypted payload
             //$irnResponse = $alankitClient->sendRequest('IRN_GENERATE_ENDPOINT', ['Data' => $encryptedPayload], true, $accessToken);
             $irnResponse = $alankitClient->generateIrn(['Data' => $encryptedPayload], $accessToken);   
-            print_r($irnResponse);
+            //print_r($irnResponse);
+            //echo '<br><br>irnResponseEnd<br><br>';
+            
                   
             if ($irnResponse && isset($irnResponse['Data'])) {
                 $decryptedResponse = $alankitClient->decrypt_irn($irnResponse['Data'], $decryptedSek);
@@ -221,22 +227,33 @@ class DomesticEwbIrnService {
                 is_array($irnResponse)
                 && isset($irnResponse['InfoDtls'])
                 && is_array($irnResponse['InfoDtls'])
-                && isset($irnResponse['InfoDtls']['InfCd'])
+                && isset($irnResponse['InfoDtls'][0]['InfCd'])
             ) {
-                $isDupIrn = (strtoupper(trim((string)$irnResponse['InfoDtls']['InfCd'])) === 'DUPIRN');
+                $isDupIrn = (strtoupper(trim((string)$irnResponse['InfoDtls'][0]['InfCd'])) === 'DUPIRN');
             }
-
+            
             // For DUPIRN response, preserve existing IRN/EWB fields and only store InfoDtls.
             if ($isDupIrn) {
+                //echo "Duplicate IRN detected for invoice #$invoiceId. Preserving existing IRN/EWB fields and updating InfoDtls.\n";
+                $irn = $irnResponse['InfoDtls'][0]['Desc']['Irn'] ?? null;
                 $this->updateInfoDtlsOnly($invoiceId, $infoDtls);
+                //update irn if available in response
+                if (!empty($irn)) {
+                    $this->updateIrnStatus($invoiceId, 'generated', null, $irnPayload, $irnResponse, $irn);
+                }
 
-                $dupMessage = trim((string)($irnResponse['InfoDtls']['Desc'] ?? 'Duplicate IRN (DUPIRN)'));
+                $dupMessage = $this->resolveIrnErrorDetails($irnResponse);
+                if ($dupMessage === '') {
+                    $dupMessage = trim((string)($irnResponse['InfoDtls'][0]['Desc'] ?? 'Duplicate IRN (DUPIRN)'));
+                }
                 if ($dupMessage === '') {
                     $dupMessage = 'Duplicate IRN (DUPIRN)';
                 }
 
                 $result['status'] = false;
                 $result['errors'][] = $dupMessage;
+                $result['error_details'] = $dupMessage;
+                $this->updateIrnStatus($invoiceId, 'failed', $dupMessage, $irnPayload, $irnResponse, $irn);
                 if (!empty($irnResponse['Irn'])) {
                     $result['irn'] = (string)$irnResponse['Irn'];
                 }
@@ -245,12 +262,15 @@ class DomesticEwbIrnService {
             }
 
             if (!$irnResponse || !isset($irnResponse['Irn'])) {
+                $errorDetails = $this->resolveIrnErrorDetails(is_array($irnResponse) ? $irnResponse : []);
+                $errorMessage = 'IRN generation failed' . ($errorDetails !== '' ? ': ' . $errorDetails : ': Unknown error');
                 $result['status'] = false;
-                $result['errors'][] = 'IRN generation failed: ' . ($irnResponse['message'] ?? 'Unknown error');
-                $this->updateIrnStatus($invoiceId, 'failed', $result['errors'][0], $irnPayload, $irnResponse);
-                $this->updateEwbStatus($invoiceId, 'failed', $result['errors'][0], $irnPayload, $irnResponse, null, null, null, null, null, null, null, $infoDtls);
-                $this->lastError = $result['errors'][0];
-                error_log("Domestic EWB: " . $result['errors'][0]);
+                $result['errors'][] = $errorMessage;
+                $result['error_details'] = $errorDetails !== '' ? $errorDetails : $errorMessage;
+                $this->updateIrnStatus($invoiceId, 'failed', $result['error_details'], $irnPayload, $irnResponse);
+                $this->updateEwbStatus($invoiceId, 'failed', $result['error_details'], $irnPayload, $irnResponse, null, null, null, null, null, null, null, $infoDtls);
+                $this->lastError = $errorMessage;
+                error_log("Domestic EWB: " . $errorMessage);
                 return $result;
             }
             
@@ -499,7 +519,10 @@ class DomesticEwbIrnService {
                 'SlNo' => (string)($idx + 1),
                 'PrdDesc' => $item['item_name'] ?? '',
                 'IsServc' => 'N',
-                'HsnCd' => substr($item['hsn'] ?? '', 0, 8),
+                //'HsnCd' => strlen((string)($item['hsn'] ?? '')) === 6
+                //    ? substr((string)($item['hsn'] ?? ''), 0, 4)
+                //    : substr((string)($item['hsn'] ?? ''), 0, 8),
+                'HsnCd' => (string)($item['hsn'] ?? ''),
                 'Qty' => (float)($item['quantity'] ?? 0),
                 'Unit' => $item['unit'] ?? 'NOS',
                 'UnitPrice' => (float)($item['unit_price'] ?? 0),
@@ -507,14 +530,17 @@ class DomesticEwbIrnService {
                 'AssAmt' => (float)(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0)),
                 'GstRt' => (int)($item['tax_rate'] ?? 0),
                 'IgstAmt' => (float)($item['tax_amount'] ?? 0),
-                'TotItemVal' => (float)(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0) + ($item['tax_amount'] ?? 0)),
+                'TotItemVal' => round((float)(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0) + ($item['tax_amount'] ?? 0)), 2),
                 'CgstAmt' => 0,
                 'SgstAmt' => 0
             ];
         }
         
-        $invoiceNumberParts = explode('-', $invoice['invoice_number'] ?? '');
-        $invoiceNumber = end($invoiceNumberParts);
+        $invoiceNumber = trim((string)($invoice['invoice_number'] ?? ''));
+        if (strlen($invoiceNumber) > 10) {
+            $invoiceNumberParts = explode('-', $invoiceNumber);
+            $invoiceNumber = (string)end($invoiceNumberParts);
+        }
         $buyerAddress = ($customer['address_line1'] ?? '') . ' ' . ($customer['address_line2'] ?? '');
         $shippingAddress = ($customer['shipping_address_line1'] ?? '') . ' ' . ($customer['shipping_address_line2'] ?? '');
         $buyerDisplayName = trim((string)($customer['first_name'] ?? ''));
@@ -660,6 +686,21 @@ class DomesticEwbIrnService {
      */
     public function getEwbIrnRecord($invoiceId) {
         return self::findRecordByInvoiceId($this->db, (int)$invoiceId);
+    }
+
+    /** Convert Alankit's scalar or structured ErrorDetails value to readable text. */
+    private function resolveIrnErrorDetails(array $response): string
+    {
+        $details = $response['ErrorDetails'] ?? null;
+        if ($details === null || $details === '') {
+            $details = $response['message'] ?? $response['Message'] ?? $response['error'] ?? '';
+        }
+        if (is_array($details) || is_object($details)) {
+            $encoded = json_encode($details, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            return is_string($encoded) ? trim($encoded) : '';
+        }
+
+        return trim((string)$details);
     }
     
     /**

@@ -349,4 +349,53 @@ class ExportDocumentsController
 
         require __DIR__ . '/../views/export_documents/preview.php';
     }
+
+    /**
+     * Delete an export document session.
+     */
+    public function delete_session(): void
+    {
+        $this->checkAccess();
+
+        $id = (int)($_POST['id'] ?? $_GET['id'] ?? 0);
+        $sessionCode = trim($_POST['session_code'] ?? $_GET['session_code'] ?? '');
+
+        if ($id <= 0 && $sessionCode !== '') {
+            $session = $this->exportDocModel->getSessionByCode($sessionCode);
+            if ($session) {
+                $id = (int)$session['id'];
+            }
+        }
+
+        if ($id <= 0) {
+            if ($this->isAjaxRequest()) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Invalid session ID provided.']);
+                exit;
+            }
+            $_SESSION['error'] = 'Invalid session ID provided.';
+            header('Location: index.php?page=export_documents#history-section');
+            exit;
+        }
+
+        $ok = $this->exportDocModel->deleteSession($id);
+
+        if ($this->isAjaxRequest()) {
+            header('Content-Type: application/json');
+            if ($ok) {
+                echo json_encode(['success' => true, 'message' => 'Export document session deleted successfully.']);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Failed to delete export document session.']);
+            }
+            exit;
+        }
+
+        if ($ok) {
+            $_SESSION['success'] = 'Export document session deleted successfully.';
+        } else {
+            $_SESSION['error'] = 'Failed to delete export document session.';
+        }
+        header('Location: index.php?page=export_documents#history-section');
+        exit;
+    }
 }

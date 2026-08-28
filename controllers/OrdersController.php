@@ -873,6 +873,10 @@ class OrdersController
                 error_log('[order import insertAddressInfo] ' . $e->getMessage());
                 $addressdata[] = ['success' => false, 'message' => $e->getMessage()];
             }
+
+            if (!$ordersModel->hasOrderInfo($storeOrderNumber)) {
+                $ordersModel->autoCreateOrderInfoFromVpOrders($storeOrderNumber);
+            }
         }
 
         return [

@@ -425,6 +425,263 @@ class Inbounding {
         return $ItamcodeData;
     }
 
+    /**
+     * Fetch parent product information from vp_products and related tables
+     * (category, material, vp_author, vp_publishers) when is_variant is 'Y'.
+     */
+    public function getParentProductDetails($itemCode): ?array
+    {
+        $itemCode = trim((string) $itemCode);
+        if ($itemCode === '') {
+            return null;
+        }
+
+        $p = null;
+        $stmt = $this->conn->prepare("SELECT * FROM vp_products WHERE item_code = ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param("s", $itemCode);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $p = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
+        }
+
+        $inboundParent = null;
+        $inbStmt = $this->conn->prepare("SELECT vi.*, m.material_name FROM vp_inbound vi LEFT JOIN material m ON vi.material_code = m.id WHERE vi.Item_code = ? AND (vi.is_variant = 'N' OR vi.is_variant IS NULL OR TRIM(vi.is_variant) = '' OR vi.is_variant = '0') ORDER BY vi.id ASC LIMIT 1");
+        if ($inbStmt) {
+            $inbStmt->bind_param("s", $itemCode);
+            $inbStmt->execute();
+            $inbRes = $inbStmt->get_result();
+            $inboundParent = $inbRes ? $inbRes->fetch_assoc() : null;
+            $inbStmt->close();
+        }
+
+        if (!$p && !$inboundParent) {
+            return null;
+        }
+
+        // 1. Resolve Category Code (matches category.category column)
+        $groupCode = '';
+        $groupNameRaw = trim((string) ($p['groupname'] ?? $p['category'] ?? ''));
+        if ($groupNameRaw !== '') {
+            $cStmt = $this->conn->prepare("SELECT category FROM category WHERE category = ? OR name = ? OR display_name = ? LIMIT 1");
+            if ($cStmt) {
+                $cStmt->bind_param("sss", $groupNameRaw, $groupNameRaw, $groupNameRaw);
+                $cStmt->execute();
+                $cRes = $cStmt->get_result();
+                if ($cRow = ($cRes ? $cRes->fetch_assoc() : null)) {
+                    $groupCode = (string) $cRow['category'];
+                }
+                $cStmt->close();
+            }
+        }
+
+        // 2. Resolve Material Code (matches material.id column)
+        $materialCode = '';
+        $materialRaw = trim((string) ($p['material'] ?? ''));
+        if ($materialRaw !== '') {
+            $mStmt = $this->conn->prepare("SELECT id FROM material WHERE CAST(id AS CHAR) = ? OR LOWER(TRIM(material_name)) = LOWER(TRIM(?)) OR LOWER(material_name) LIKE ? LIMIT 1");
+            if ($mStmt) {
+                $likeMat = '%' . strtolower($materialRaw) . '%';
+                $mStmt->bind_param("sss", $materialRaw, $materialRaw, $likeMat);
+                $mStmt->execute();
+                $mRes = $mStmt->get_result();
+                if ($mRow = ($mRes ? $mRes->fetch_assoc() : null)) {
+                    $materialCode = (string) $mRow['id'];
+                }
+                $mStmt->close();
+            }
+        }
+
+        // 3. Resolve Vendor Code (matches vp_vendors.vendor_id or vp_vendors.id)
+        $vendorCode = '';
+        $chkPvm = $this->conn->query("SHOW TABLES LIKE 'product_vendor_map'");
+        if ($chkPvm && $chkPvm->num_rows > 0) {
+            $pvmStmt = $this->conn->prepare("SELECT pvm.vendor_code, pvm.vendor_id, v.vendor_id AS v_vendor_id FROM product_vendor_map pvm LEFT JOIN vp_vendors v ON pvm.vendor_id = v.id WHERE pvm.item_code = ? ORDER BY pvm.priority ASC LIMIT 1");
+            if ($pvmStmt) {
+                $pvmStmt->bind_param("s", $itemCode);
+                $pvmStmt->execute();
+                $pvmRes = $pvmStmt->get_result();
+                if ($pvmRow = ($pvmRes ? $pvmRes->fetch_assoc() : null)) {
+                    $vendorCode = trim((string)($pvmRow['v_vendor_id'] ?? $pvmRow['vendor_code'] ?? $pvmRow['vendor_id'] ?? ''));
+                }
+                $pvmStmt->close();
+            }
+        }
+
+        $vendorRaw = trim((string)($p['vendor'] ?? $p['marketplace_vendor'] ?? $p['vendor_us'] ?? ''));
+        if ($vendorCode === '' && $vendorRaw !== '') {
+            $vStmt = $this->conn->prepare("SELECT vendor_id, id FROM vp_vendors WHERE vendor_id = ? OR CAST(id AS CHAR) = ? OR LOWER(TRIM(vendor_name)) = LOWER(TRIM(?)) LIMIT 1");
+            if ($vStmt) {
+                $vStmt->bind_param("sss", $vendorRaw, $vendorRaw, $vendorRaw);
+                $vStmt->execute();
+                $vRes = $vStmt->get_result();
+                if ($vRow = ($vRes ? $vRes->fetch_assoc() : null)) {
+                    $vendorCode = trim((string)($vRow['vendor_id'] ?? $vRow['id'] ?? ''));
+                }
+                $vStmt->close();
+            }
+            if ($vendorCode === '') {
+                $vendorCode = $vendorRaw;
+            }
+        }
+
+        // 4. Resolve Product Image
+        $productImage = trim((string)($p['image'] ?? $p['product_photo'] ?? ''));
+        if ($productImage === '') {
+            $imgStmt = $this->conn->prepare("SELECT file_name FROM item_images ii INNER JOIN vp_inbound vi ON ii.item_id = vi.id WHERE vi.Item_code = ? ORDER BY ii.display_order ASC, ii.id ASC LIMIT 1");
+            if ($imgStmt) {
+                $imgStmt->bind_param("s", $itemCode);
+                $imgStmt->execute();
+                $imgRes = $imgStmt->get_result();
+                if ($imgRow = ($imgRes ? $imgRes->fetch_assoc() : null)) {
+                    $productImage = trim((string)($imgRow['file_name'] ?? ''));
+                }
+                $imgStmt->close();
+            }
+        }
+
+        $productImageUrl = '';
+        if ($productImage !== '') {
+            if (preg_match('/^https?:\/\//i', $productImage)) {
+                $productImageUrl = $productImage;
+            } else {
+                $productImageUrl = base_url($productImage);
+            }
+        }
+
+        // 5. Extract HSN, GST, Dimensions, Weight, Location, Price
+        $hsnCode = trim((string) ($p['hsn'] ?? $p['hscode'] ?? ''));
+        $gstRate = (float) ($p['gst'] ?? 0);
+        $height = $p['prod_height'] ?? '';
+        $width = $p['prod_width'] ?? '';
+        $depth = $p['prod_length'] ?? '';
+        $weight = $p['product_weight'] ?? '';
+        $dimensions = $p['dimensions'] ?? '';
+        $storeLocation = $p['location'] ?? '';
+        $cp = $p['cost_price'] ?? $p['cp'] ?? '';
+        $priceIndiaMrp = $p['mrp_india'] ?? $p['finalprice'] ?? $p['price_india'] ?? '';
+
+        // 6. Extract Book Attributes
+        $pages = $p['pages'] ?? '';
+        $isbn = $p['isbn'] ?? '';
+        $coverType = $p['cover_type'] ?? '';
+        $edition = $p['edition'] ?? '';
+        $publicationDate = $p['publication_date'] ?? '';
+        $language = $p['language'] ?? '';
+
+        // 7. Parse and resolve Authors
+        $authorRaw = trim((string) ($p['author'] ?? ''));
+        $authorIds = $this->parseInboundAuthorIds($authorRaw);
+        $authorsList = [];
+        if ($authorIds !== []) {
+            foreach ($authorIds as $aId) {
+                $aRow = $this->getAuthorById($aId);
+                if (!empty($aRow['id'])) {
+                    $authorsList[] = $aRow;
+                }
+            }
+        } elseif ($authorRaw !== '') {
+            $aStmt = $this->conn->prepare("SELECT author_id AS id, author AS name FROM vp_author WHERE author = ? OR author LIKE ? LIMIT 5");
+            if ($aStmt) {
+                $like = '%' . $authorRaw . '%';
+                $aStmt->bind_param("ss", $authorRaw, $like);
+                $aStmt->execute();
+                $aRes = $aStmt->get_result();
+                while ($aRow = ($aRes ? $aRes->fetch_assoc() : null)) {
+                    $authorsList[] = $aRow;
+                    $authorIds[] = (int) $aRow['id'];
+                }
+                $aStmt->close();
+            }
+        }
+
+        // 8. Parse and resolve Edited By
+        $editedByRaw = trim((string) ($p['edited_by'] ?? ''));
+        $editedByIds = $this->parseInboundAuthorIds($editedByRaw);
+        $editorsList = [];
+        if ($editedByIds !== []) {
+            foreach ($editedByIds as $eId) {
+                $eRow = $this->getAuthorById($eId);
+                if (!empty($eRow['id'])) {
+                    $editorsList[] = $eRow;
+                }
+            }
+        } elseif ($editedByRaw !== '') {
+            $eStmt = $this->conn->prepare("SELECT author_id AS id, author AS name FROM vp_author WHERE author = ? OR author LIKE ? LIMIT 5");
+            if ($eStmt) {
+                $like = '%' . $editedByRaw . '%';
+                $eStmt->bind_param("ss", $editedByRaw, $like);
+                $eStmt->execute();
+                $eRes = $eStmt->get_result();
+                while ($eRow = ($eRes ? $eRes->fetch_assoc() : null)) {
+                    $editorsList[] = $eRow;
+                    $editedByIds[] = (int) $eRow['id'];
+                }
+                $eStmt->close();
+            }
+        }
+
+        // 9. Parse and resolve Publisher
+        $publisherRaw = trim((string) ($p['publisher'] ?? ''));
+        $publisherIds = $this->parseInboundAuthorIds($publisherRaw);
+        $publishersList = [];
+        if ($publisherIds !== []) {
+            foreach ($publisherIds as $pubId) {
+                $pubRow = $this->getPublisherById($pubId);
+                if (!empty($pubRow['id'])) {
+                    $publishersList[] = $pubRow;
+                }
+            }
+        } elseif ($publisherRaw !== '') {
+            $pubStmt = $this->conn->prepare("SELECT publishers_id AS id, publishers AS name FROM vp_publishers WHERE publishers = ? OR publishers LIKE ? LIMIT 5");
+            if ($pubStmt) {
+                $like = '%' . $publisherRaw . '%';
+                $pubStmt->bind_param("ss", $publisherRaw, $like);
+                $pubStmt->execute();
+                $pubRes = $pubStmt->get_result();
+                while ($pubRow = ($pubRes ? $pubRes->fetch_assoc() : null)) {
+                    $publishersList[] = $pubRow;
+                    $publisherIds[] = (int) $pubRow['id'];
+                }
+                $pubStmt->close();
+            }
+        }
+
+        return [
+            'item_code' => $p['item_code'] ?? $itemCode,
+            'title' => $p['title'] ?? '',
+            'group_name' => $groupCode !== '' ? $groupCode : $groupNameRaw,
+            'group_name_raw' => $groupNameRaw,
+            'vendor_code' => $vendorCode,
+            'material_code' => $materialCode !== '' ? $materialCode : $materialRaw,
+            'image' => $productImage,
+            'image_url' => $productImageUrl,
+            'hsn_code' => $hsnCode,
+            'gst_rate' => $gstRate,
+            'height' => $height,
+            'width' => $width,
+            'depth' => $depth,
+            'weight' => $weight,
+            'dimensions' => $dimensions,
+            'store_location' => $storeLocation,
+            'cp' => $cp,
+            'price_india_mrp' => $priceIndiaMrp,
+            'pages' => $pages,
+            'isbn' => $isbn,
+            'cover_type' => $coverType,
+            'edition' => $edition,
+            'publication_date' => $publicationDate,
+            'language' => $language,
+            'author_ids' => implode(',', array_unique($authorIds)),
+            'authors_list' => $authorsList,
+            'edited_by_ids' => implode(',', array_unique($editedByIds)),
+            'editors_list' => $editorsList,
+            'publisher_ids' => implode(',', array_unique($publisherIds)),
+            'publishers_list' => $publishersList,
+        ];
+    }
+
     // 1. Fetch all images for a specific item (UPDATED: Now sorts by Display Order)
     public function getitem_imgs($item_id) {
         $item_id = intval($item_id);
@@ -919,6 +1176,16 @@ class Inbounding {
         WHERE vi.id = $id";
         $result = $this->conn->query($sql);
         $inbounding = ($result && $result->num_rows > 0) ? $result->fetch_assoc() : [];
+        if (!empty($inbounding['Item_code']) && (empty($inbounding['sku']) || trim((string) $inbounding['sku']) === '')) {
+            $computedSku = generateItemSku($inbounding['Item_code'], (string) ($inbounding['size'] ?? ''), (string) ($inbounding['color'] ?? ''));
+            $inbounding['sku'] = $computedSku;
+            $stmtSku = $this->conn->prepare('UPDATE vp_inbound SET sku = ? WHERE id = ? AND (sku IS NULL OR TRIM(sku) = "")');
+            if ($stmtSku) {
+                $stmtSku->bind_param('si', $computedSku, $id);
+                $stmtSku->execute();
+                $stmtSku->close();
+            }
+        }
 
         // 2. Helper lists: only columns used by desktopform (smaller rows / less mysqld work than SELECT *)
         $r = $this->conn->query("SELECT id, name FROM `vp_users` ORDER BY name ASC");
@@ -954,6 +1221,58 @@ class Inbounding {
         }
         if ($inbounding !== []) {
             $inbounding['variations'] = $variations;
+            if (strtoupper(trim((string) ($inbounding['is_variant'] ?? 'N'))) === 'Y' && !empty($inbounding['Item_code'])) {
+                $parentDetails = $this->getParentProductDetails($inbounding['Item_code']);
+                if ($parentDetails) {
+                    $inbounding['parent_item_title'] = $parentDetails['title'];
+                    $inbounding['parent_details'] = $parentDetails;
+                    if (empty($inbounding['group_name']) && !empty($parentDetails['group_name'])) {
+                        $inbounding['group_name'] = $parentDetails['group_name'];
+                    }
+                    if (empty($inbounding['vendor_code']) && !empty($parentDetails['vendor_code'])) {
+                        $inbounding['vendor_code'] = $parentDetails['vendor_code'];
+                    }
+                    if (empty($inbounding['material_code']) && !empty($parentDetails['material_code'])) {
+                        $inbounding['material_code'] = $parentDetails['material_code'];
+                    }
+                    if (empty($inbounding['product_photo']) && !empty($parentDetails['image'])) {
+                        $inbounding['product_photo'] = $parentDetails['image'];
+                    }
+                    if (empty($inbounding['hsn_code']) && !empty($parentDetails['hsn_code'])) {
+                        $inbounding['hsn_code'] = $parentDetails['hsn_code'];
+                    }
+                    if ((empty($inbounding['gst_rate']) || (float)$inbounding['gst_rate'] === 0.0) && !empty($parentDetails['gst_rate'])) {
+                        $inbounding['gst_rate'] = $parentDetails['gst_rate'];
+                    }
+                    if (empty($inbounding['author']) && !empty($parentDetails['author_ids'])) {
+                        $inbounding['author'] = $parentDetails['author_ids'];
+                    }
+                    if (empty($inbounding['edited_by']) && !empty($parentDetails['edited_by_ids'])) {
+                        $inbounding['edited_by'] = $parentDetails['edited_by_ids'];
+                    }
+                    if (empty($inbounding['publisher']) && !empty($parentDetails['publisher_ids'])) {
+                        $inbounding['publisher'] = $parentDetails['publisher_ids'];
+                    }
+                    if (empty($inbounding['pages']) && !empty($parentDetails['pages'])) {
+                        $inbounding['pages'] = $parentDetails['pages'];
+                    }
+                    if (empty($inbounding['isbn']) && !empty($parentDetails['isbn'])) {
+                        $inbounding['isbn'] = $parentDetails['isbn'];
+                    }
+                    if (empty($inbounding['cover_type']) && !empty($parentDetails['cover_type'])) {
+                        $inbounding['cover_type'] = $parentDetails['cover_type'];
+                    }
+                    if (empty($inbounding['edition']) && !empty($parentDetails['edition'])) {
+                        $inbounding['edition'] = $parentDetails['edition'];
+                    }
+                    if (empty($inbounding['publication_date']) && !empty($parentDetails['publication_date'])) {
+                        $inbounding['publication_date'] = $parentDetails['publication_date'];
+                    }
+                    if (empty($inbounding['language']) && !empty($parentDetails['language'])) {
+                        $inbounding['language'] = $parentDetails['language'];
+                    }
+                }
+            }
         }
 
         return [
@@ -1102,6 +1421,15 @@ class Inbounding {
 
         // Prevent ID from being in the update list
         if (isset($data['id'])) unset($data['id']);
+
+        // Ensure sku is always set when Item_code is present
+        $itemCodeVal = trim((string) ($data['Item_code'] ?? ''));
+        $skuVal = trim((string) ($data['sku'] ?? ''));
+        if ($skuVal === '' && $itemCodeVal !== '') {
+            $sizeVal = (string) ($data['size'] ?? '');
+            $colorVal = (string) ($data['color'] ?? '');
+            $data['sku'] = generateItemSku($itemCodeVal, $sizeVal, $colorVal);
+        }
         
         $cols = []; 
         $values = []; 
@@ -1341,26 +1669,31 @@ class Inbounding {
         return ($result->num_rows > 0);
     }
 
-    public function isItemCodeUsedByOtherInbound(string $code, int $excludeInboundId = 0): bool
+    public function getOtherInboundByItemCode(string $code, int $excludeInboundId = 0): ?array
     {
         $code = strtoupper(trim($code));
         $excludeInboundId = (int) $excludeInboundId;
         if ($code === '') {
-            return false;
+            return null;
         }
 
         $stmt = $this->conn->prepare(
-            'SELECT id FROM vp_inbound WHERE UPPER(TRIM(Item_code)) = ? AND id != ? LIMIT 1'
+            'SELECT id, Item_code AS item_code, product_title AS title, is_variant FROM vp_inbound WHERE UPPER(TRIM(Item_code)) = ? AND id != ? LIMIT 1'
         );
         if (!$stmt) {
-            return false;
+            return null;
         }
         $stmt->bind_param('si', $code, $excludeInboundId);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
-        return !empty($row);
+        return $row ?: null;
+    }
+
+    public function isItemCodeUsedByOtherInbound(string $code, int $excludeInboundId = 0): bool
+    {
+        return $this->getOtherInboundByItemCode($code, $excludeInboundId) !== null;
     }
 
     /**
@@ -1895,6 +2228,10 @@ class Inbounding {
         $size   = $data['size'] ?? '';
         $is_variant = $data['is_variant'] ?? 'N'; // Default to 'N' if missing
         $Item_code = $data['Item_code'] ?? '';
+        $sku = trim((string) ($data['sku'] ?? ''));
+        if ($sku === '' && $Item_code !== '') {
+            $sku = generateItemSku($Item_code, $size, $color);
+        }
         $feedback = $data['feedback'] ?? '';
         $hsn_code = $data['hsn_code'] ?? '';
         $dimensions = $data['dimensions'] ?? '';
@@ -1940,7 +2277,7 @@ class Inbounding {
 
         // 2. Correct SQL Syntax (Use column names, not PHP variables)
         $sql = "UPDATE vp_inbound
-            SET dimensions=?,gst_rate=?,hsn_code=?,feedback = ?, Item_code = ?, is_variant = ?, gate_entry_date_time = ?, material_code = ?, group_name = ?,
+            SET dimensions=?,gst_rate=?,hsn_code=?,feedback = ?, Item_code = ?, sku = ?, is_variant = ?, gate_entry_date_time = ?, material_code = ?, group_name = ?,
               height = ?, width = ?, depth = ?, weight = ?,
               color = ?, size = ?, cp = ?, quantity_received = ?,
               received_by_user_id = ?, product_photo = ?,
@@ -1952,7 +2289,7 @@ class Inbounding {
           return ['success' => false, 'message' => $this->conn->error];
         }
 
-        $types = "sisssssisddddssdiissddsssssssssssssi";
+        $types = "sissssssisddddssdiissddsssssssssssssi";
 
         $stmt->bind_param(
             $types,
@@ -1961,37 +2298,38 @@ class Inbounding {
             $hsn_code,
             $feedback,            // 1
             $Item_code,           // 2
-            $is_variant,          // 3
-            $gate_entry_date_time, // 4
-            $material_code,       // 5
-            $group_name,          // 6
-            $height,              // 7
-            $width,               // 8
-            $depth,               // 9
-            $weight,              // 10
-            $color,               // 11
-            $size,                // 12
-            $cp,                  // 13
-            $qty,                 // 14
-            $received_by_user_id, // 15
-            $photo,               // 16
-            $wh,                  // 17
-            $p_ind,               // 18
-            $p_mrp,               // 19
-            $colormaps,           // 20
-            $author,              // 21
-            $edited_by,           // 22
-            $compiled_by,         // 23
-            $translated_by,       // 24
-            $commentary_by,       // 25
-            $publisher,           // 26
-            $isbn,                // 27
-            $cover_type,          // 28
-            $edition,             // 29
-            $publication_date,    // 30
-            $language,            // 31
-            $pages,               // 32
-            $id                   // 33
+            $sku,                 // 3
+            $is_variant,          // 4
+            $gate_entry_date_time, // 5
+            $material_code,       // 6
+            $group_name,          // 7
+            $height,              // 8
+            $width,               // 9
+            $depth,               // 10
+            $weight,              // 11
+            $color,               // 12
+            $size,                // 13
+            $cp,                  // 14
+            $qty,                 // 15
+            $received_by_user_id, // 16
+            $photo,               // 17
+            $wh,                  // 18
+            $p_ind,               // 19
+            $p_mrp,               // 20
+            $colormaps,           // 21
+            $author,              // 22
+            $edited_by,           // 23
+            $compiled_by,         // 24
+            $translated_by,       // 25
+            $commentary_by,       // 26
+            $publisher,           // 27
+            $isbn,                // 28
+            $cover_type,          // 29
+            $edition,             // 30
+            $publication_date,    // 31
+            $language,            // 32
+            $pages,               // 33
+            $id                   // 34
         );
 
         if ($stmt->execute()) {
@@ -2213,26 +2551,100 @@ class Inbounding {
         
         // Check if data was found
         $inbounding = ($result && $result->num_rows > 0) ? $result->fetch_assoc() : [];
-
-        if ($inbounding) {
-            $inbounding['author_name'] = $this->resolveInboundAuthorNames($inbounding['author'] ?? '');
+        if (!empty($inbounding['Item_code']) && (empty($inbounding['sku']) || trim((string) $inbounding['sku']) === '')) {
+            $computedSku = generateItemSku($inbounding['Item_code'], (string) ($inbounding['size'] ?? ''), (string) ($inbounding['color'] ?? ''));
+            $inbounding['sku'] = $computedSku;
+            $stmtSku = $this->conn->prepare('UPDATE vp_inbound SET sku = ? WHERE id = ? AND (sku IS NULL OR TRIM(sku) = "")');
+            if ($stmtSku) {
+                $stmtSku->bind_param('si', $computedSku, $id);
+                $stmtSku->execute();
+                $stmtSku->close();
+            }
         }
 
         // 3. Process the loop to create the string
-        $cat_id_string = '';
+        $cat_parts = array_values(array_filter([
+            trim((string)($inbounding['category_code'] ?? '')),
+            trim((string)($inbounding['sub_category_code'] ?? '')),
+            trim((string)($inbounding['sub_sub_category_code'] ?? '')),
+        ], function($val) { return $val !== ''; }));
+        $final_cat_ids = implode(',', $cat_parts);
 
         if ($inbounding) {
-            // Correct concatenation using dots (.) outside of quotes
-            $cat_id_string = $inbounding['category_code'] . ',' . 
-                             $inbounding['sub_category_code'] . ',' . 
-                             $inbounding['sub_sub_category_code']. ',';
+            $inbounding['author_name'] = $this->resolveInboundAuthorNames($inbounding['author'] ?? '');
+
+            if (strtoupper(trim((string) ($inbounding['is_variant'] ?? 'N'))) === 'Y' && !empty($inbounding['Item_code'])) {
+                $parentDetails = $this->getParentProductDetails($inbounding['Item_code']);
+                if ($parentDetails) {
+                    if (empty($inbounding['groupname']) && !empty($parentDetails['group_name_raw'])) {
+                        $inbounding['groupname'] = $parentDetails['group_name_raw'];
+                    }
+                    if (empty($inbounding['material_name']) && !empty($parentDetails['material_name'])) {
+                        $inbounding['material_name'] = $parentDetails['material_name'];
+                    }
+                    if (empty($inbounding['product_title']) && !empty($parentDetails['title'])) {
+                        $inbounding['product_title'] = $parentDetails['title'];
+                    }
+                    if (empty($inbounding['vendor_code']) && !empty($parentDetails['vendor_code'])) {
+                        $inbounding['vendor_code'] = $parentDetails['vendor_code'];
+                    }
+                    if (empty($inbounding['hsn_code']) && !empty($parentDetails['hsn_code'])) {
+                        $inbounding['hsn_code'] = $parentDetails['hsn_code'];
+                    }
+                    if (empty($inbounding['gst_rate']) && !empty($parentDetails['gst_rate'])) {
+                        $inbounding['gst_rate'] = $parentDetails['gst_rate'];
+                    }
+                    if (($final_cat_ids === '' || $final_cat_ids === ',') && !empty($parentDetails['category_ids'])) {
+                        $final_cat_ids = $parentDetails['category_ids'];
+                    }
+                    if (empty($inbounding['search_term']) && !empty($parentDetails['search_term'])) {
+                        $inbounding['search_term'] = $parentDetails['search_term'];
+                    }
+                    if (empty($inbounding['search_category_string']) && !empty($parentDetails['search_category'])) {
+                        $inbounding['search_category_string'] = $parentDetails['search_category'];
+                    }
+                    if (empty($inbounding['key_words']) && !empty($parentDetails['keywords'])) {
+                        $inbounding['key_words'] = $parentDetails['keywords'];
+                    }
+                    if (empty($inbounding['snippet_description']) && !empty($parentDetails['snippet_description'])) {
+                        $inbounding['snippet_description'] = $parentDetails['snippet_description'];
+                    }
+                    if (empty($inbounding['long_description']) && !empty($parentDetails['long_description'])) {
+                        $inbounding['long_description'] = $parentDetails['long_description'];
+                    }
+                    if (empty($inbounding['long_description_india']) && !empty($parentDetails['long_description_india'])) {
+                        $inbounding['long_description_india'] = $parentDetails['long_description_india'];
+                    }
+                }
+            }
         }
-        
-        // Trim the trailing comma
-        $final_cat_ids = rtrim($cat_id_string, ',') ;
+
+        if ($final_cat_ids === '' || $final_cat_ids === ',') {
+            if (!empty($inbounding['group_name'])) {
+                $final_cat_ids = $inbounding['group_name'];
+            } elseif (!empty($parentDetails['group_name'])) {
+                $final_cat_ids = $parentDetails['group_name'];
+            }
+        }
+
+        if ($final_cat_ids === '' || $final_cat_ids === ',') {
+            $groupNameForCat = $inbounding['groupname'] ?? ($parentDetails['group_name_raw'] ?? '');
+            if ($groupNameForCat !== '') {
+                $cStmt = $this->conn->prepare("SELECT category FROM category WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) OR LOWER(TRIM(display_name)) = LOWER(TRIM(?)) OR LOWER(TRIM(category)) = LOWER(TRIM(?)) LIMIT 1");
+                if ($cStmt) {
+                    $cStmt->bind_param("sss", $groupNameForCat, $groupNameForCat, $groupNameForCat);
+                    $cStmt->execute();
+                    $cRes = $cStmt->get_result();
+                    if ($cRow = ($cRes ? $cRes->fetch_assoc() : null)) {
+                        $final_cat_ids = (string) $cRow['category'];
+                    }
+                    $cStmt->close();
+                }
+            }
+        }
+
         $inbounding['final_cat_ids'] = $final_cat_ids;
-        // Add to main array
-        $inbounding['cat_ids'] = $final_cat_ids; // Added missing semicolon here
+        $inbounding['cat_ids'] = $final_cat_ids;
         $var_result = $this->conn->query("SELECT * FROM `vp_variations` WHERE it_id = $id");
         $var_rows = $var_result->fetch_all(MYSQLI_ASSOC);
         if (isset($var_rows) && !empty($var_rows)) {
@@ -2635,29 +3047,15 @@ class Inbounding {
         $excludeItemCode = strtoupper(trim($excludeItemCode));
 
         // 1. Check vp_products (Published catalog)
-        if ($excludeItemCode !== '') {
-            $stmt = $this->conn->prepare("SELECT id, sku, item_code, title, 'vp_products' AS source FROM vp_products WHERE CONVERT(UPPER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ? AND CONVERT(UPPER(TRIM(COALESCE(item_code, ''))) USING utf8mb4) COLLATE utf8mb4_general_ci != ? LIMIT 1");
-            if ($stmt) {
-                $stmt->bind_param('ss', $sku, $excludeItemCode);
-                $stmt->execute();
-                $res = $stmt->get_result();
-                $row = $res ? $res->fetch_assoc() : null;
-                $stmt->close();
-                if ($row) {
-                    return $row;
-                }
-            }
-        } else {
-            $stmt = $this->conn->prepare("SELECT id, sku, item_code, title, 'vp_products' AS source FROM vp_products WHERE CONVERT(UPPER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ? LIMIT 1");
-            if ($stmt) {
-                $stmt->bind_param('s', $sku);
-                $stmt->execute();
-                $res = $stmt->get_result();
-                $row = $res ? $res->fetch_assoc() : null;
-                $stmt->close();
-                if ($row) {
-                    return $row;
-                }
+        $stmt = $this->conn->prepare("SELECT id, sku, item_code, title, 'vp_products' AS source FROM vp_products WHERE CONVERT(UPPER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('s', $sku);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $row = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
+            if ($row) {
+                return $row;
             }
         }
 
@@ -2673,11 +3071,6 @@ class Inbounding {
             $varSql .= " AND v.it_id != ?";
             $params[] = $excludeInboundId;
             $types .= 'i';
-        }
-        if ($excludeItemCode !== '') {
-            $varSql .= " AND CONVERT(UPPER(TRIM(COALESCE(i.Item_code, ''))) USING utf8mb4) COLLATE utf8mb4_general_ci != ?";
-            $params[] = $excludeItemCode;
-            $types .= 's';
         }
         $varSql .= " LIMIT 1";
 
@@ -2702,11 +3095,6 @@ class Inbounding {
             $inbSql .= " AND id != ?";
             $inbParams[] = $excludeInboundId;
             $inbTypes .= 'i';
-        }
-        if ($excludeItemCode !== '') {
-            $inbSql .= " AND CONVERT(UPPER(TRIM(COALESCE(Item_code, ''))) USING utf8mb4) COLLATE utf8mb4_general_ci != ?";
-            $inbParams[] = $excludeItemCode;
-            $inbTypes .= 's';
         }
         $inbSql .= " LIMIT 1";
 

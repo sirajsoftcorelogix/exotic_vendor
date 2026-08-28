@@ -100,7 +100,7 @@ function resolveRequiredExportDocuments(
 
     } else {
         // Commercial Shipment
-        $docs['commercial_invoice'] = 'Commercial Invoice';
+        $docs['commercial_invoice'] = 'Commercial Invoice Cum Packing List';
 
         // SLI for DHL / FedEx / UPS
         $sliTitle = 'Shipper\'s Letter of Instruction (SLI) - ' . ($isDrawback ? 'Drawback' : 'Non-Drawback');
@@ -374,12 +374,14 @@ function buildDefaultDocumentFormData(string $docCode, array $commonData, array 
 
         case 'commercial_invoice':
             return array_merge($base, [
-                'document_title' => 'COMMERCIAL INVOICE',
+                'document_title' => 'TAX INVOICE / COMMERCIAL INVOICE CUM PACKING LIST',
+                'supply_type' => 'SUPPLY MEANT FOR EXPORT WITH PAYMENT OF IGST',
                 'terms_of_payment' => 'Prepaid / Advance Payment',
                 'buyer_order_ref' => $commonData['order_number'] ?? '',
                 'buyer_order_date' => $commonData['invoice_date'] ?? date('Y-m-d'),
-                'lut_number' => 'AD070324001234X',
-                'declaration_clause' => 'We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct. Export under LUT without payment of Integrated Tax.'
+                'lut_number' => '',
+                'igst_rate' => 18.0,
+                'declaration_clause' => 'We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct. SUPPLY MEANT FOR EXPORT WITH PAYMENT OF INTEGRATED TAX (IGST).'
             ]);
 
         case 'sli_ups_csb5':

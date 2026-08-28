@@ -204,7 +204,9 @@ class BookLanguageFormatter
      */
     public static function formatFromRoleIdCsv(array $roleIdCsvByKey, array $nameById): string
     {
-        $segments = [];
+        $roleNamesByKey = [];
+        $hasOriginal = false;
+        $hasOtherRoles = false;
 
         foreach (self::roleDefinitions() as $role) {
             $ids = self::parseIdCsv($roleIdCsvByKey[$role['key']] ?? '');
@@ -214,11 +216,38 @@ class BookLanguageFormatter
                     $names[] = $nameById[$id];
                 }
             }
+            $roleNamesByKey[$role['key']] = $names;
+
+            if ($names !== []) {
+                if ($role['key'] === 'original_languages') {
+                    $hasOriginal = true;
+                } else {
+                    $hasOtherRoles = true;
+                }
+            }
+        }
+
+        $onlyOriginal = $hasOriginal && !$hasOtherRoles;
+        $segments = [];
+
+        foreach (self::roleDefinitions() as $role) {
+            $names = $roleNamesByKey[$role['key']] ?? [];
+            if ($names === []) {
+                continue;
+            }
+
+            if ($role['key'] === 'original_languages' && $onlyOriginal) {
+                $singleTemplate = '{languages}';
+                $multipleTemplate = '{languages}';
+            } else {
+                $singleTemplate = $role['single_template'];
+                $multipleTemplate = $role['multiple_template'];
+            }
 
             $segment = self::formatRoleSegment(
                 $names,
-                $role['single_template'],
-                $role['multiple_template']
+                $singleTemplate,
+                $multipleTemplate
             );
 
             if ($segment !== '') {

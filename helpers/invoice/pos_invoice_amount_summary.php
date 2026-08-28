@@ -198,6 +198,17 @@ function pos_invoice_build_amount_summary_rows(
                 'is_grand' => false,
             ];
         }
+
+        $explicitDiscountTotal = round($cash + $coupon + $gift + $standaloneLineDisc, 2);
+        $unallocatedDiscount = max(0.0, round($subInclGst - $grandTotal - $explicitDiscountTotal, 2));
+        if ($unallocatedDiscount > 0.001) {
+            $rows[] = [
+                'label' => 'Discount',
+                'amount' => $unallocatedDiscount,
+                'note' => '',
+                'is_grand' => false,
+            ];
+        }
         if ($gst > 0.001) {
             $rows[] = [
                 'label' => 'Total GST',
@@ -255,6 +266,16 @@ function pos_invoice_build_amount_summary_rows(
             'is_grand' => false,
         ];
     }
+    $explicitDiscountTotal = round($line + $cash + $coupon + $gift, 2);
+    $unallocatedDiscount = max(0.0, round($subInclGst - $grandTotal - $explicitDiscountTotal, 2));
+    if ($unallocatedDiscount > 0.001) {
+        $rows[] = [
+            'label' => 'Discount',
+            'amount' => $unallocatedDiscount,
+            'note' => '',
+            'is_grand' => false,
+        ];
+    }
     $rows[] = [
         'label' => 'Total GST',
         'amount' => $gst,
@@ -287,7 +308,7 @@ function pos_invoice_build_payment_collection_rows(mysqli $conn, string $orderNu
 
     $advance = pos_payment_sum_paid($conn, $orderNumber);
     $codRecorded = pos_payment_sum_cod_pending($conn, $orderNumber);
-    if ($advance <= 0.001 && $codRecorded <= 0.001) {
+    if ($codRecorded <= 0.001) {
         return [];
     }
 
@@ -295,19 +316,11 @@ function pos_invoice_build_payment_collection_rows(mysqli $conn, string $orderNu
     $codPending = $codRecorded > 0.001
         ? max(0.0, round($orderTotal - $advance, 2))
         : 0.0;
-    if ($advance <= 0.001 && $codPending <= 0.001) {
+    if ($codPending <= 0.001) {
         return [];
     }
 
     $rows = [];
-    if ($advance > 0.001) {
-        $rows[] = [
-            'label' => 'Advance Received',
-            'amount' => $advance,
-            'note' => '',
-            'is_grand' => false,
-        ];
-    }
     if ($codPending > 0.001) {
         $rows[] = [
             'label' => 'COD Pending',

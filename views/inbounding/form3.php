@@ -491,8 +491,13 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
                     <div class="variation-card border border-gray-300 rounded-lg p-3 bg-gray-50/50" data-index="<?php echo $index; ?>">
                         
                         <div class="flex justify-between items-center border-b border-gray-300 pb-2 mb-4">
-                            <h3 class="font-bold text-black text-sm">
-                                <?php echo ($index === 0) ? 'Main Variant' : 'Variant ' . ($index + 1); ?>
+                            <h3 class="font-bold text-black text-sm flex items-center gap-2">
+                                <span><?php echo ($index === 0) ? 'Main Variant' : 'Variant ' . ($index + 1); ?></span>
+                                <?php if ($index === 0): ?>
+                                    <span class="main-variant-lock-badge hidden bg-gray-200 text-gray-700 text-xs font-semibold px-2 py-0.5 rounded border border-gray-300">
+                                        <i class="fa-solid fa-lock text-gray-500 mr-1"></i> Read Only (Parent)
+                                    </span>
+                                <?php endif; ?>
                             </h3>
                             <div class="flex gap-3">
                                 <button type="button" class="clone-variation-btn text-blue-600 hover:text-blue-800 font-bold text-xs uppercase flex items-center gap-1">
@@ -1075,22 +1080,291 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
             });
         }
 
+        function lockMainVariantCard(isLocked) {
+            const mainCard = document.querySelector('.variation-card[data-index="0"]');
+            if (!mainCard) return;
+
+            const lockBadge = mainCard.querySelector('.main-variant-lock-badge');
+            if (lockBadge) {
+                if (isLocked) {
+                    lockBadge.classList.remove('hidden');
+                } else {
+                    lockBadge.classList.add('hidden');
+                }
+            }
+
+            if (isLocked) {
+                mainCard.classList.add('bg-gray-100', 'border-gray-400');
+            } else {
+                mainCard.classList.remove('bg-gray-100', 'border-gray-400');
+            }
+
+            const inputs = mainCard.querySelectorAll('input:not([type="hidden"]):not([type="file"])');
+            inputs.forEach(function(input) {
+                if (isLocked) {
+                    input.readOnly = true;
+                    input.classList.add('bg-gray-200', 'cursor-not-allowed', 'text-gray-600');
+                    input.classList.remove('focus:border-black');
+                } else {
+                    input.readOnly = false;
+                    input.classList.remove('bg-gray-200', 'cursor-not-allowed', 'text-gray-600');
+                    input.classList.add('focus:border-black');
+                }
+            });
+
+            const selects = mainCard.querySelectorAll('select');
+            selects.forEach(function(select) {
+                if (isLocked) {
+                    select.style.pointerEvents = 'none';
+                    select.style.backgroundColor = '#e5e7eb';
+                    select.tabIndex = -1;
+                    select.classList.add('cursor-not-allowed', 'text-gray-600');
+                } else {
+                    select.style.pointerEvents = '';
+                    select.style.backgroundColor = '';
+                    select.removeAttribute('tabindex');
+                    select.classList.remove('cursor-not-allowed', 'text-gray-600');
+                }
+            });
+
+            const photoLabel = mainCard.querySelector('label.cursor-pointer');
+            if (photoLabel) {
+                if (isLocked) {
+                    photoLabel.style.pointerEvents = 'none';
+                    photoLabel.classList.add('opacity-75', 'cursor-not-allowed');
+                } else {
+                    photoLabel.style.pointerEvents = '';
+                    photoLabel.classList.remove('opacity-75', 'cursor-not-allowed');
+                }
+            }
+        }
+
+        function unlockForm3VariationCard(card) {
+            if (!card) return;
+            const lockBadge = card.querySelector('.main-variant-lock-badge');
+            if (lockBadge) lockBadge.classList.add('hidden');
+            card.classList.remove('bg-gray-100', 'border-gray-400');
+
+            const inputs = card.querySelectorAll('input:not([type="hidden"]):not([type="file"])');
+            inputs.forEach(function(input) {
+                input.readOnly = false;
+                input.classList.remove('bg-gray-200', 'cursor-not-allowed', 'text-gray-600');
+                input.classList.add('focus:border-black');
+            });
+
+            const selects = card.querySelectorAll('select');
+            selects.forEach(function(select) {
+                select.style.pointerEvents = '';
+                select.style.backgroundColor = '';
+                select.removeAttribute('tabindex');
+                select.classList.remove('cursor-not-allowed', 'text-gray-600');
+            });
+
+            const photoLabel = card.querySelector('label.cursor-pointer');
+            if (photoLabel) {
+                photoLabel.style.pointerEvents = '';
+                photoLabel.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
+        }
+
         function toggleVariantFields(val) {
             if (val === 'Y') {
                 wrapperSelect.classList.remove('hidden');
                 wrapperInput.classList.add('hidden');
                 tomSelectInstance.enable();
+                lockMainVariantCard(true);
+                document.querySelectorAll('.variation-card:not([data-index="0"])').forEach(unlockForm3VariationCard);
             } else {
                 wrapperSelect.classList.add('hidden');
                 wrapperInput.classList.remove('hidden');
                 tomSelectInstance.disable();
+                lockMainVariantCard(false);
+                document.querySelectorAll('.variation-card:not([data-index="0"])').forEach(unlockForm3VariationCard);
             }
         }
 
         // Listener
         variantSelect.addEventListener('change', function() {
             toggleVariantFields(this.value);
-            if(this.value === 'N') tomSelectInstance.clear(); 
+            if(this.value === 'N') {
+                tomSelectInstance.clear();
+            } else if(this.value === 'Y' && tomSelectInstance.getValue()) {
+                loadParentProductInfo(tomSelectInstance.getValue());
+            }
+        });
+
+        function cleanForm3ParentProductFields() {
+            // 1. Category
+            document.querySelectorAll('input[name="category"]').forEach(function(r) {
+                r.checked = false;
+            });
+
+            // 2. Vendor
+            if (form3VendorTomSelect) {
+                form3VendorTomSelect.clear(true);
+            } else {
+                const vEl = document.getElementById('form3_vendor_code');
+                if (vEl) vEl.value = '';
+            }
+
+            // 3. Material
+            const matSelect = document.querySelector('select[name="material_code"]');
+            if (matSelect) matSelect.value = '';
+
+            // 4. HSN & GST
+            document.querySelectorAll('input[name*="[hsn_code]"]').forEach(function(el) { el.value = ''; });
+            document.querySelectorAll('input[name*="[gst_rate]"]').forEach(function(el) { el.value = ''; });
+
+            // 5. Dimensions, Weight & Price
+            ['height', 'width', 'depth', 'weight', 'dimensions', 'cp', 'price_india_mrp'].forEach(function(field) {
+                document.querySelectorAll('input[name*="[' + field + ']"]').forEach(function(el) {
+                    el.value = '';
+                });
+            });
+
+            // 6. Authors, Editors, Publishers
+            if (authorTomSelect) authorTomSelect.clear(true);
+            if (editedByTomSelect) editedByTomSelect.clear(true);
+            if (publisherSelect) publisherSelect.clear(true);
+
+            // 7. Book Attributes
+            ['pages', 'isbn', 'cover_type', 'edition', 'publication_date', 'language'].forEach(function(fieldName) {
+                const fieldEl = document.querySelector('[name="' + fieldName + '"]');
+                if (fieldEl) fieldEl.value = '';
+            });
+
+            // 8. Main Photo
+            const mainCard = document.querySelector('.variation-card[data-index="0"]');
+            if (mainCard) {
+                const mainImg = mainCard.querySelector('.preview-img');
+                if (mainImg) {
+                    mainImg.src = '#';
+                    mainImg.classList.add('hidden');
+                }
+            }
+        }
+
+        function loadParentProductInfo(parentCode) {
+            if (!parentCode) return;
+            cleanForm3ParentProductFields();
+
+            const parentDetailsUrl = '<?php echo base_url('?page=inbounding&action=getParentProductDetails&item_code='); ?>' + encodeURIComponent(parentCode);
+            fetch(parentDetailsUrl)
+                .then(function(res) { return res.json(); })
+                .then(function(json) {
+                    if (!json || !json.success || !json.data) return;
+                    const data = json.data;
+
+                    // 1. Category
+                    if (data.group_name) {
+                        const catRadio = document.querySelector('input[name="category"][value="' + data.group_name + '"]');
+                        if (catRadio) {
+                            catRadio.checked = true;
+                            catRadio.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    }
+
+                    // 2. Vendor
+                    if (data.vendor_code) {
+                        if (form3VendorTomSelect) {
+                            form3VendorTomSelect.setValue(String(data.vendor_code));
+                        } else {
+                            const vEl = document.getElementById('form3_vendor_code');
+                            if (vEl) vEl.value = String(data.vendor_code);
+                        }
+                    }
+
+                    // 3. Material
+                    if (data.material_code) {
+                        const matSelect = document.querySelector('select[name="material_code"]');
+                        if (matSelect) {
+                            matSelect.value = String(data.material_code);
+                        }
+                    }
+
+                    // 4. HSN & GST
+                    if (data.hsn_code) {
+                        document.querySelectorAll('input[name*="[hsn_code]"]').forEach(function(el) {
+                            el.value = data.hsn_code;
+                        });
+                    }
+                    if (data.gst_rate !== undefined && data.gst_rate !== null) {
+                        document.querySelectorAll('input[name*="[gst_rate]"]').forEach(function(el) {
+                            el.value = data.gst_rate;
+                        });
+                    }
+
+                    // 5. Dimensions, Weight & Price
+                    ['height', 'width', 'depth', 'weight', 'dimensions', 'cp', 'price_india_mrp'].forEach(function(field) {
+                        if (data[field]) {
+                            document.querySelectorAll('input[name*="[' + field + ']"]').forEach(function(el) {
+                                el.value = data[field];
+                            });
+                        }
+                    });
+
+                    // 6. Product Image (Main variant)
+                    if (data.image_url) {
+                        const mainCard = document.querySelector('.variation-card[data-index="0"]');
+                        if (mainCard) {
+                            const mainImg = mainCard.querySelector('.preview-img');
+                            if (mainImg) {
+                                mainImg.src = data.image_url;
+                                mainImg.classList.remove('hidden');
+                            }
+                            const oldPhoto = mainCard.querySelector('input[name*="[old_photo]"]');
+                            if (oldPhoto && data.image) {
+                                oldPhoto.value = data.image;
+                            }
+                        }
+                    }
+
+                    // 7. Authors
+                    if (authorTomSelect && Array.isArray(data.authors_list) && data.authors_list.length > 0) {
+                        authorTomSelect.clear(true);
+                        data.authors_list.forEach(function(opt) {
+                            authorTomSelect.addOption({ id: String(opt.id), name: opt.name });
+                        });
+                        authorTomSelect.setValue(data.authors_list.map(function(opt) { return String(opt.id); }));
+                    }
+
+                    // 8. Editors
+                    if (editedByTomSelect && Array.isArray(data.editors_list) && data.editors_list.length > 0) {
+                        editedByTomSelect.clear(true);
+                        data.editors_list.forEach(function(opt) {
+                            editedByTomSelect.addOption({ id: String(opt.id), name: opt.name });
+                        });
+                        editedByTomSelect.setValue(data.editors_list.map(function(opt) { return String(opt.id); }));
+                    }
+
+                    // 9. Publishers
+                    if (publisherSelect && Array.isArray(data.publishers_list) && data.publishers_list.length > 0) {
+                        publisherSelect.clear(true);
+                        data.publishers_list.forEach(function(opt) {
+                            publisherSelect.addOption({ id: String(opt.id), name: opt.name });
+                        });
+                        publisherSelect.setValue(data.publishers_list.map(function(opt) { return String(opt.id); }));
+                    }
+
+                    // 10. Book Attributes
+                    ['pages', 'isbn', 'cover_type', 'edition', 'publication_date', 'language'].forEach(function(fieldName) {
+                        if (data[fieldName]) {
+                            const fieldEl = document.querySelector('[name="' + fieldName + '"]');
+                            if (fieldEl) {
+                                fieldEl.value = data[fieldName];
+                            }
+                        }
+                    });
+                })
+                .catch(function(err) {
+                    console.error('Error fetching parent product details:', err);
+                });
+        }
+
+        tomSelectInstance.on('change', function(val) {
+            if (variantSelect.value === 'Y' && val) {
+                loadParentProductInfo(val);
+            }
         });
 
         // Initialize state based on PHP value
@@ -1443,6 +1717,7 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
             variationCount++;
             const html = createVariationCardHTML(variationCount - 1, variationCount);
             container.insertAdjacentHTML('beforeend', html);
+            unlockForm3VariationCard(container.lastElementChild);
             setTimeout(updateAllFields, 50);
         });
 
@@ -1484,6 +1759,7 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
                 container.insertAdjacentHTML('beforeend', html);
 
                 const newCard = container.lastElementChild;
+                unlockForm3VariationCard(newCard);
                 
                 // IMPORTANT: Populate options THEN select value
                 setTimeout(() => {

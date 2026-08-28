@@ -98,6 +98,19 @@ class PublishersController
             $result = $this->publisherModel->savePublisher($id, $name, $isActive, $extra);
             if ($result['success']) {
                 $result['message'] = 'Publisher saved on Exotic India and locally.';
+                $alsoCreateVendor = (string) ($_POST['also_create_vendor'] ?? '') === '1';
+                if ($alsoCreateVendor) {
+                    $vendorResult = $this->createLinkedVendorFromPublisher($id, $name, $isActive, $extra);
+                    if ($vendorResult['success']) {
+                        $result['message'] .= ' Linked vendor created and mapped as distributor (Manage Distributors).';
+                        if (!empty($vendorResult['vendor_api_warning'])) {
+                            $result['vendor_create_warning'] = true;
+                        }
+                    } else {
+                        $result['vendor_create_warning'] = true;
+                        $result['message'] .= ' Vendor was not created: ' . ($vendorResult['message'] ?? 'Unknown error.');
+                    }
+                }
             }
             echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;

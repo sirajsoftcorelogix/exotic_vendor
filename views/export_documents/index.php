@@ -290,7 +290,7 @@
             </form>
         </div>
 
-        <div class="overflow-x-auto">
+        <div class="overflow-visible">
             <table class="w-full text-left text-xs border-collapse">
                 <thead>
                     <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold uppercase tracking-wider">
@@ -345,15 +345,32 @@
                                 <td class="p-3 text-gray-500">
                                     <?= date('M d, Y', strtotime($sess['created_at'])) ?>
                                 </td>
-                                <td class="p-3 text-right space-x-2">
-                                    <a href="index.php?page=export_documents&action=generate&session_code=<?= urlencode($sess['session_code']) ?>"
-                                       class="text-blue-600 hover:text-blue-800 font-semibold text-xs inline-flex items-center gap-1">
-                                        <i class="fas fa-edit"></i> Edit Wizard
-                                    </a>
-                                    <a href="index.php?page=export_documents&action=preview&session_code=<?= urlencode($sess['session_code']) ?>" target="_blank"
-                                       class="text-emerald-600 hover:text-emerald-800 font-semibold text-xs inline-flex items-center gap-1">
-                                        <i class="fas fa-print"></i> Preview
-                                    </a>
+                                <td class="p-3 text-right export-session-action-cell">
+                                    <div class="relative inline-block text-left">
+                                        <button type="button"
+                                                onclick="toggleExportSessionMenu(this, event)"
+                                                class="export-session-menu-btn inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900 hover:border-gray-300 transition focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                aria-haspopup="true"
+                                                aria-expanded="false"
+                                                title="Session actions">
+                                            <i class="fas fa-ellipsis-v text-xs" aria-hidden="true"></i>
+                                        </button>
+                                        <div class="export-session-menu-panel hidden absolute right-0 mt-1 w-40 bg-white border border-gray-200 rounded-xl shadow-lg z-30 p-1 text-left space-y-0.5">
+                                            <a href="index.php?page=export_documents&action=generate&session_code=<?= urlencode($sess['session_code']) ?>"
+                                               class="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-colors">
+                                                <i class="fas fa-edit w-4 text-center text-blue-600"></i> Edit Wizard
+                                            </a>
+                                            <a href="index.php?page=export_documents&action=preview&session_code=<?= urlencode($sess['session_code']) ?>" target="_blank"
+                                               class="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 rounded-lg transition-colors">
+                                                <i class="fas fa-print w-4 text-center text-emerald-600"></i> Preview
+                                            </a>
+                                            <button type="button"
+                                                    onclick="deleteExportSession(<?= (int)$sess['id'] ?>, '<?= htmlspecialchars($sess['session_code'], ENT_QUOTES, 'UTF-8') ?>')"
+                                                    class="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 rounded-lg transition-colors text-left">
+                                                <i class="fas fa-trash-alt w-4 text-center text-red-500"></i> Delete
+                                            </button>
+                                        </div>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -609,5 +626,75 @@ document.addEventListener('DOMContentLoaded', function () {
     } else {
         refreshMatrixChecklist();
     }
+
+    window.toggleExportSessionMenu = function(button, event) {
+        if (event) event.stopPropagation();
+        if (!button) return;
+        const menu = button.nextElementSibling;
+        if (!menu) return;
+        document.querySelectorAll('.export-session-menu-panel').forEach(m => {
+            if (m !== menu) m.classList.add('hidden');
+        });
+        menu.classList.toggle('hidden');
+    };
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.export-session-action-cell')) {
+            document.querySelectorAll('.export-session-menu-panel').forEach(menu => {
+                menu.classList.add('hidden');
+            });
+        }
+    });
+
+    window.deleteExportSession = function (sessionId, sessionCode) {
+        const confirmFn = (typeof customConfirm === 'function')
+            ? customConfirm
+            : function (msg) { return Promise.resolve(window.confirm(msg)); };
+
+        confirmFn('Are you sure you want to delete session ' + sessionCode + '? All draft documents for this session will be permanently deleted.', {
+            title: 'Delete Export Session',
+            okText: 'Delete',
+            cancelText: 'Cancel'
+        }).then(function (confirmed) {
+            if (!confirmed) return;
+
+            const formData = new FormData();
+            formData.append('id', sessionId);
+
+            fetch('index.php?page=export_documents&action=delete_session', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    if (window.showPosMessageModal) {
+                        window.showPosMessageModal({
+                            title: 'Deleted',
+                            message: data.message || 'Session deleted successfully.',
+                            tone: 'success',
+                            onClose: function () { window.location.reload(); }
+                        });
+                    } else {
+                        window.location.reload();
+                    }
+                } else {
+                    if (window.showPosMessageModal) {
+                        window.showPosMessageModal({
+                            title: 'Error',
+                            message: data.message || 'Could not delete session.',
+                            tone: 'error'
+                        });
+                    } else {
+                        alert(data.message || 'Could not delete session.');
+                    }
+                }
+            })
+            .catch(err => {
+                console.error(err);
+            });
+        });
+    };
 });
 </script>

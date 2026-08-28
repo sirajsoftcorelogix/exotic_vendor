@@ -679,6 +679,9 @@ switch ($page) {
             case 'preview':
                 $controller->preview();
                 break;
+            case 'delete_session':
+                $controller->delete_session();
+                break;
             default:
                 $controller->index();
                 break;
@@ -1362,6 +1365,30 @@ switch ($page) {
                 break;
         }
         break;
+    case 'support':
+        require_once 'controllers/SupportController.php';
+        $controller = new SupportController($conn);
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'view':
+                $controller->view();
+                break;
+            case 'save':
+                $controller->save();
+                break;
+            case 'add_comment':
+                $controller->add_comment();
+                break;
+            case 'update_status':
+                $controller->update_status();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
     case 'inbounding':
         require_once 'controllers/InboundingController.php';
         $controller = new InboundingController();
@@ -1465,6 +1492,9 @@ switch ($page) {
                 break;
             case 'getItamcode':
                 $controller->getItamcode();
+                break;
+            case 'getParentProductDetails':
+                $controller->getParentProductDetailsAjax();
                 break;
             case 'searchAuthors':
                 $controller->searchAuthors();
@@ -2010,6 +2040,22 @@ switch ($page) {
 
             case 'preview':
                 $controller->preview();
+                break;
+
+            case 'einvoice-input':
+                $controller->einvoiceInput();
+                break;
+
+            case 'einvoice-submit':
+                $controller->einvoiceSubmit();
+                break;
+
+            case 'ewaybill-input':
+                $controller->ewaybillInput();
+                break;
+
+            case 'ewaybill-submit':
+                $controller->ewaybillSubmit();
                 break;
 
 

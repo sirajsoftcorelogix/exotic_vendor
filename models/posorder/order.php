@@ -746,13 +746,16 @@ class POSOrder
     }
     public function getLastImportLog()
     {
-        $sql = "SELECT * FROM order_import_log ORDER BY id DESC LIMIT 1";
+        $sql = "SELECT * FROM order_import_log WHERE max_ordered_time > 0 ORDER BY id DESC LIMIT 1";
         $stmt = $this->db->prepare($sql);
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result && $result->num_rows > 0) {
-            return $result->fetch_assoc();
+            $row = $result->fetch_assoc();
+            $stmt->close();
+            return $row;
         }
+        $stmt->close();
         return null;
     }
     public function addProducts($data)
@@ -2154,7 +2157,18 @@ class POSOrder
         $values       = [];
         $types        = '';
 
-        $addressInfo = (isset($data['address_info']) && is_array($data['address_info'])) ? $data['address_info'] : [];
+        $addressInfo = [];
+        if (isset($data['address_info']) && is_array($data['address_info'])) {
+            $addressInfo = $data['address_info'];
+        } elseif (isset($data['address']) && is_array($data['address'])) {
+            $addressInfo = $data['address'];
+        } elseif (isset($data['billing_address']) && is_array($data['billing_address'])) {
+            $addressInfo = $data['billing_address'];
+        } elseif (isset($data['shipping_address']) && is_array($data['shipping_address'])) {
+            $addressInfo = $data['shipping_address'];
+        } else {
+            $addressInfo = $data;
+        }
 
         foreach ($columns as $col) {
             if (array_key_exists($col, $addressInfo) && !in_array($col, $insertCols, true)) {
@@ -2322,17 +2336,27 @@ class POSOrder
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result && $result->num_rows > 0) {
-            return $result->fetch_assoc();
+            $row = $result->fetch_assoc();
+            $stmt->close();
+            return $row;
         }
-        return null;
+        $stmt->close();
+
+        require_once __DIR__ . '/../order/order.php';
+        $orderModel = new Order($this->db);
+        return $orderModel->autoCreateOrderInfoFromVpOrders($order_number);
     }
     public function addCustomerIfNotExists($data)
     {
-        $customer_fname = isset($data['address_info']['first_name']) ? $data['address_info']['first_name'] : '';
-        $customer_lname = isset($data['address_info']['last_name']) ? $data['address_info']['last_name'] : '';
+        $addressInfo = (isset($data['address_info']) && is_array($data['address_info'])) ? $data['address_info'] : $data;
+        $customer_fname = isset($addressInfo['first_name']) ? $addressInfo['first_name'] : ($data['first_name'] ?? '');
+        $customer_lname = isset($addressInfo['last_name']) ? $addressInfo['last_name'] : ($data['last_name'] ?? '');
         $customer_name = trim($customer_fname . ' ' . $customer_lname);
-        $customer_email = isset($data['address_info']['email']) ? $data['address_info']['email'] : '';
-        $customer_phone = isset($data['address_info']['mobile']) ? $data['address_info']['mobile'] : '';
+        if ($customer_name === '') {
+            $customer_name = trim((string)($data['customer_name'] ?? $data['name'] ?? 'Customer'));
+        }
+        $customer_email = isset($addressInfo['email']) ? $addressInfo['email'] : ($data['email'] ?? '');
+        $customer_phone = isset($addressInfo['mobile']) ? $addressInfo['mobile'] : ($data['mobile'] ?? $data['phone'] ?? '');
         // Check if customer already exists
         $sql = "SELECT id FROM vp_customers WHERE email = ? AND phone = ?";
         $stmt = $this->db->prepare($sql);

@@ -909,13 +909,16 @@ class Order
     }
     public function getLastImportLog()
     {
-        $sql = "SELECT * FROM order_import_log ORDER BY id DESC LIMIT 1";
+        $sql = "SELECT * FROM order_import_log WHERE max_ordered_time > 0 ORDER BY id DESC LIMIT 1";
         $stmt = $this->db->prepare($sql);
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result && $result->num_rows > 0) {
-            return $result->fetch_assoc();
+            $row = $result->fetch_assoc();
+            $stmt->close();
+            return $row;
         }
+        $stmt->close();
         return null;
     }
     public function addProducts($data)
@@ -2347,7 +2350,18 @@ class Order
         $values       = [];
         $types        = '';
 
-        $addressInfo = (isset($data['address_info']) && is_array($data['address_info'])) ? $data['address_info'] : [];
+        $addressInfo = [];
+        if (isset($data['address_info']) && is_array($data['address_info'])) {
+            $addressInfo = $data['address_info'];
+        } elseif (isset($data['address']) && is_array($data['address'])) {
+            $addressInfo = $data['address'];
+        } elseif (isset($data['billing_address']) && is_array($data['billing_address'])) {
+            $addressInfo = $data['billing_address'];
+        } elseif (isset($data['shipping_address']) && is_array($data['shipping_address'])) {
+            $addressInfo = $data['shipping_address'];
+        } else {
+            $addressInfo = $data;
+        }
 
         foreach ($columns as $col) {
             if (array_key_exists($col, $addressInfo) && !in_array($col, $insertCols, true)) {
@@ -2526,17 +2540,167 @@ class Order
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result && $result->num_rows > 0) {
-            return $result->fetch_assoc();
+            $row = $result->fetch_assoc();
+            $stmt->close();
+            return $row;
         }
+        $stmt->close();
+
+        return $this->autoCreateOrderInfoFromVpOrders($order_number);
+    }
+
+    public function autoCreateOrderInfoFromVpOrders($order_number)
+    {
+        $order_number = trim((string)$order_number);
+        if ($order_number === '') {
+            return null;
+        }
+
+        $stmt = $this->db->prepare('SELECT * FROM vp_orders WHERE order_number = ?');
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param('s', $order_number);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $lines = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        if (empty($lines)) {
+            return null;
+        }
+
+        $first = $lines[0];
+        $customerId = (int)($first['customer_id'] ?? 0);
+        $country = trim((string)($first['country'] ?? 'IN')) ?: 'IN';
+        $shippingCountry = trim((string)($first['shipping_country'] ?? $country)) ?: $country;
+        $paymentType = trim((string)($first['payment_type'] ?? 'offline')) ?: 'offline';
+        $currency = trim((string)($first['currency'] ?? 'INR')) ?: 'INR';
+        $storeName = trim((string)($first['store_name'] ?? '1'));
+        $customReduce = (float)($first['custom_reduce'] ?? 0);
+        $coupon = trim((string)($first['coupon'] ?? ''));
+        $couponReduce = (float)($first['coupon_reduce'] ?? 0);
+        $giftvoucher = trim((string)($first['giftvoucher'] ?? ''));
+        $giftReduce = (float)($first['giftvoucher_reduce'] ?? 0);
+        $credit = (float)($first['credit'] ?? 0);
+
+        $itemSubtotal = 0.0;
+        foreach ($lines as $line) {
+            if (strtolower(trim((string)($line['status'] ?? ''))) === 'cancelled') {
+                continue;
+            }
+            $price = (float)($line['finalprice'] ?? 0);
+            if ($price <= 0) {
+                $price = (float)($line['itemprice'] ?? 0);
+            }
+            $qty = max(1, (int)($line['quantity'] ?? 1));
+            $itemSubtotal += $price * $qty;
+        }
+        $total = max(0.0, round($itemSubtotal - $customReduce - $couponReduce - $giftReduce - $credit, 2));
+
+        $firstName = '';
+        $lastName = '';
+        $email = '';
+        $mobile = '';
+        $gstin = '';
+        $address1 = '';
+        $address2 = '';
+        $city = '';
+        $state = '';
+        $zipcode = '';
+
+        if ($customerId > 0) {
+            $custStmt = $this->db->prepare('SELECT name, email, phone FROM vp_customers WHERE id = ? LIMIT 1');
+            if ($custStmt) {
+                $custStmt->bind_param('i', $customerId);
+                $custStmt->execute();
+                $custRes = $custStmt->get_result();
+                if ($custRes && $custRow = $custRes->fetch_assoc()) {
+                    $fullName = trim((string)($custRow['name'] ?? ''));
+                    if ($fullName !== '') {
+                        $parts = explode(' ', $fullName, 2);
+                        $firstName = $parts[0] ?? '';
+                        $lastName = $parts[1] ?? '';
+                    }
+                    $email = trim((string)($custRow['email'] ?? ''));
+                    $mobile = trim((string)($custRow['phone'] ?? ''));
+                }
+                $custStmt->close();
+            }
+
+            $detStmt = $this->db->prepare('SELECT * FROM pos_customer_details WHERE customer_id = ? LIMIT 1');
+            if ($detStmt) {
+                $detStmt->bind_param('i', $customerId);
+                $detStmt->execute();
+                $detRes = $detStmt->get_result();
+                if ($detRes && $detRow = $detRes->fetch_assoc()) {
+                    $gstin = trim((string)($detRow['gstin'] ?? ''));
+                    $address1 = trim((string)($detRow['bill_address_line1'] ?? ''));
+                    $address2 = trim((string)($detRow['bill_address_line2'] ?? ''));
+                    $city = trim((string)($detRow['bill_city'] ?? ''));
+                    $state = trim((string)($detRow['bill_state'] ?? ''));
+                    $zipcode = trim((string)($detRow['bill_zip'] ?? ''));
+                }
+                $detStmt->close();
+            }
+        }
+
+        if ($firstName === '' && $lastName === '') {
+            $firstName = 'Customer';
+        }
+
+        $paymentMode = function_exists('pos_payment_resolve_order_payment_mode')
+            ? pos_payment_resolve_order_payment_mode($this->db, $order_number, $paymentType, '')
+            : $paymentType;
+
+        $insStmt = $this->db->prepare('
+            INSERT INTO vp_order_info (
+                order_number, customer_id, store_name, first_name, last_name,
+                address_line1, address_line2, city, state, country, zipcode,
+                mobile, email, gstin, total, payment_type, payment_mode, currency,
+                custom_reduce, coupon, coupon_reduce, giftvoucher, giftvoucher_reduce, credit
+            ) VALUES (
+                ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?
+            ) ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)
+        ');
+        if ($insStmt) {
+            $insStmt->bind_param(
+                'sissssssssssssdssssddddd',
+                $order_number, $customerId, $storeName, $firstName, $lastName,
+                $address1, $address2, $city, $state, $country, $zipcode,
+                $mobile, $email, $gstin, $total, $paymentType, $paymentMode, $currency,
+                $customReduce, $coupon, $couponReduce, $giftvoucher, $giftReduce, $credit
+            );
+            $insStmt->execute();
+            $insStmt->close();
+        }
+
+        $stmt = $this->db->prepare('SELECT * FROM vp_order_info WHERE order_number = ? LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('s', $order_number);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $row = ($res && $res->num_rows > 0) ? $res->fetch_assoc() : null;
+            $stmt->close();
+            return $row;
+        }
+
         return null;
     }
     public function addCustomerIfNotExists($data)
     {
-        $customer_fname = isset($data['address_info']['first_name']) ? $data['address_info']['first_name'] : '';
-        $customer_lname = isset($data['address_info']['last_name']) ? $data['address_info']['last_name'] : '';
+        $addressInfo = (isset($data['address_info']) && is_array($data['address_info'])) ? $data['address_info'] : $data;
+        $customer_fname = isset($addressInfo['first_name']) ? $addressInfo['first_name'] : ($data['first_name'] ?? '');
+        $customer_lname = isset($addressInfo['last_name']) ? $addressInfo['last_name'] : ($data['last_name'] ?? '');
         $customer_name = trim($customer_fname . ' ' . $customer_lname);
-        $customer_email = isset($data['address_info']['email']) ? $data['address_info']['email'] : '';
-        $customer_phone = isset($data['address_info']['mobile']) ? $data['address_info']['mobile'] : '';
+        if ($customer_name === '') {
+            $customer_name = trim((string)($data['customer_name'] ?? $data['name'] ?? 'Customer'));
+        }
+        $customer_email = isset($addressInfo['email']) ? $addressInfo['email'] : ($data['email'] ?? '');
+        $customer_phone = isset($addressInfo['mobile']) ? $addressInfo['mobile'] : ($data['mobile'] ?? $data['phone'] ?? '');
         // Check if customer already exists
         $sql = "SELECT id FROM vp_customers WHERE email = ? AND phone = ?";
         $stmt = $this->db->prepare($sql);
@@ -2789,7 +2953,11 @@ class Order
         $hasInfo = (bool)$stmt->get_result()->fetch_row();
         $stmt->close();
 
-        return $hasInfo;
+        if ($hasInfo) {
+            return true;
+        }
+
+        return !empty($this->getAddressInfoByOrderNumber($orderNumber));
     }
 
     /**

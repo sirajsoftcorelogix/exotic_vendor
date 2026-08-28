@@ -1,0 +1,176 @@
+---
+description: Exotic India Product Creation API specifications and JSON payload structures
+globs: controllers/InboundingController.php,models/inbounding/Inbounding.php
+alwaysApply: false
+---
+
+# Exotic India Product Creation API (`/vendor-api/product/create`)
+
+Endpoint: `https://www.exoticindia.com/vendor-api/product/create`
+Query Parameter: `new_variation=1` (use ONLY when adding new variation(s) to an existing variation-based parent).
+
+---
+
+## 1. New Item with Variations (Initial Publish)
+
+Use when creating a brand-new product that has multiple variations.
+- Endpoint: `/vendor-api/product/create` (without `new_variation=1`)
+- `item_stock_price[0]`: Parent container (`item_level = "parent"`, empty `color` and `size`).
+- `item_stock_price[1..N]`: Variations (`item_level = "variation"`).
+- `images.image_directory`: Directory name (e.g., `"saris-2025"`).
+- `images.images[0]`: Primary image for the product (e.g. `zzz991-red.jpg`).
+
+```json
+{
+    "itemcode": "ZZZ991",
+    "groupname": "textiles",
+    "category": "1162",
+    "itemtype": "product",
+    "title": "Trial new product",
+    "status": 1,
+    "optionals": "OPTIONALS_TEXTILES_SARIS",
+    "material": "silk",
+    "item_stock_price": [
+        {
+            "size": "",
+            "color": "",
+            "item_level": "parent",
+            "date_added": "2025-12-02",
+            "stock_date_added": "2025-12-02",
+            "local_stock": 10,
+            "price": 40,
+            "price_india": 800,
+            "gst": 12
+        },
+        {
+            "size": "",
+            "color": "red",
+            "item_level": "variation",
+            "date_added": "2025-12-02",
+            "stock_date_added": "2025-12-02",
+            "local_stock": 5,
+            "price": 40,
+            "price_india": 800,
+            "gst": 12
+        },
+        {
+            "size": "",
+            "color": "blue",
+            "item_level": "variation",
+            "date_added": "2025-12-02",
+            "stock_date_added": "2025-12-02",
+            "local_stock": 5,
+            "price": 40,
+            "price_india": 800,
+            "gst": 12
+        }
+    ],
+    "images": {
+        "image_directory": "saris-2025",
+        "images": [
+            "https://domain.com/images/saris/zzz991-red.jpg",
+            "https://domain.com/images/saris/zzz991-red_a01.jpg",
+            "https://domain.com/images/saris/zzz991-blue.jpg",
+            "https://domain.com/images/saris/zzz991-blue_a01.jpg"
+        ]
+    }
+}
+```
+
+---
+
+## 2. Standalone Item (No Variations)
+
+Use for single items without color/size variations.
+- Endpoint: `/vendor-api/product/create` (without `new_variation=1`)
+- `item_stock_price[0]`: Sole element with `item_level = "standalone"`, `color = ""`, `size = ""`.
+- `images.image_directory`: Directory name (e.g., `"saris-2025"`).
+
+```json
+{
+    "itemcode": "ZZZ992",
+    "groupname": "textiles",
+    "category": "1162",
+    "itemtype": "product",
+    "title": "Trial new product",
+    "status": 1,
+    "optionals": "OPTIONALS_TEXTILES_SARIS",
+    "material": "silk",
+    "item_stock_price": [
+        {
+            "size": "",
+            "color": "",
+            "item_level": "standalone",
+            "date_added": "2025-12-02",
+            "stock_date_added": "2025-12-02",
+            "local_stock": 10,
+            "price": 40,
+            "price_india": 800,
+            "gst": 12
+        }
+    ],
+    "images": {
+        "image_directory": "saris-2025",
+        "images": [
+            "https://domain.com/images/saris/zzz992.jpg",
+            "https://domain.com/images/saris/zzz992_a01.jpg",
+            "https://domain.com/images/saris/zzz992_a02.jpg"
+        ]
+    }
+}
+```
+
+---
+
+## 3. Adding ONLY Variations to Existing Item (`is_variant = 'Y'`)
+
+Use when adding new variations to an item that is already live on the website as a variation-based parent.
+- Endpoint: `/vendor-api/product/create?new_variation=1`
+- `item_stock_price[*]` elements ALL have `item_level = "variation"`. There is **NO parent node**.
+- `images.image_directory`: Must be `""` (empty string).
+
+```json
+{
+    "itemcode": "ZZZ991",
+    "groupname": "textiles",
+    "category": "1162",
+    "itemtype": "product",
+    "title": "Trial new product",
+    "status": 1,
+    "optionals": "OPTIONALS_TEXTILES_SARIS",
+    "material": "silk",
+    "item_stock_price": [
+        {
+            "size": "",
+            "color": "yellow",
+            "item_level": "variation",
+            "date_added": "2025-12-02",
+            "stock_date_added": "2025-12-02",
+            "local_stock": 5,
+            "price": 40,
+            "price_india": 800,
+            "gst": 12
+        },
+        {
+            "size": "",
+            "color": "black",
+            "item_level": "variation",
+            "date_added": "2025-12-02",
+            "stock_date_added": "2025-12-02",
+            "local_stock": 5,
+            "price": 40,
+            "price_india": 800,
+            "gst": 12
+        }
+    ],
+    "images": {
+        "image_directory": "",
+        "images": [
+            "https://domain.com/images/saris/zzz991-yellow.jpg",
+            "https://domain.com/images/saris/zzz991-black.jpg",
+            "https://domain.com/images/saris/zzz991-black_a01.jpg",
+            "https://domain.com/images/saris/zzz991-black_a02.jpg"
+        ]
+    }
+}
+```
