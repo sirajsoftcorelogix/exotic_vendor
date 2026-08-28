@@ -289,6 +289,92 @@ class ExportDocument
             }
         }
 
+        // 7a. Fetch or fallback IRN / QR code details from vp_domestic_ewb_irn or vp_invoices
+        $irnVal = export_first_non_empty($intlDetails['irn'] ?? '', $header['irn'] ?? '');
+        $qrVal = export_first_non_empty($intlDetails['qrcode_string'] ?? '', $header['qrcode_string'] ?? '');
+        $ackNum = export_first_non_empty($intlDetails['ack_number'] ?? '', $header['ack_number'] ?? '');
+        $ackDt = export_first_non_empty($intlDetails['ack_date'] ?? '', $header['ack_date'] ?? '');
+
+        if (($irnVal === '' || $qrVal === '') && $invoiceId > 0) {
+            $ewbStmt = $this->conn->prepare("SELECT * FROM vp_domestic_ewb_irn WHERE vp_invoices_id = ? LIMIT 1");
+            if ($ewbStmt) {
+                $ewbStmt->bind_param('i', $invoiceId);
+                $ewbStmt->execute();
+                $ewbRes = $ewbStmt->get_result();
+                if ($ewbRow = $ewbRes->fetch_assoc()) {
+                    if ($irnVal === '' && !empty($ewbRow['irn'])) {
+                        $irnVal = trim((string)$ewbRow['irn']);
+                    }
+                    if (!empty($ewbRow['irn_response'])) {
+                        $resp = json_decode($ewbRow['irn_response'], true);
+                        if (is_array($resp)) {
+                            if ($irnVal === '') {
+                                $irnVal = export_first_non_empty($resp['Irn'] ?? '', $resp['irn'] ?? '', $resp['InfoDtls'][0]['Desc']['Irn'] ?? '');
+                            }
+                            if ($qrVal === '') {
+                                $qrVal = export_first_non_empty($resp['SignedQRCode'] ?? '', $resp['SignedQrCode'] ?? '', $resp['signed_qr_code'] ?? '', $resp['qr_code'] ?? '');
+                            }
+                            if ($ackNum === '') {
+                                $ackNum = export_first_non_empty($resp['AckNo'] ?? '', $resp['ack_no'] ?? '', $resp['ack_number'] ?? '');
+                            }
+                            if ($ackDt === '') {
+                                $ackDt = export_first_non_empty($resp['AckDt'] ?? '', $resp['ack_date'] ?? '');
+                            }
+                        }
+                    }
+                }
+                $ewbStmt->close();
+            }
+        }
+
+        $targetOrderNum = export_first_non_empty(
+            $header['order_number'] ?? '',
+            $orderInfo['order_number'] ?? '',
+            $invoiceHeader['order_number'] ?? '',
+            $query
+        );
+
+        if (($irnVal === '' || $qrVal === '') && $targetOrderNum !== '') {
+            $ewbOrdStmt = $this->conn->prepare("SELECT d.* FROM vp_domestic_ewb_irn d 
+                                                JOIN vp_invoices i ON i.id = d.vp_invoices_id 
+                                                LEFT JOIN vp_order_info oi ON oi.id = i.vp_order_info_id 
+                                                WHERE oi.order_number = ? OR i.invoice_number = ? OR i.order_number = ? 
+                                                ORDER BY d.id DESC LIMIT 1");
+            if ($ewbOrdStmt) {
+                $ewbOrdStmt->bind_param('sss', $targetOrderNum, $targetOrderNum, $targetOrderNum);
+                $ewbOrdStmt->execute();
+                $ewbRes = $ewbOrdStmt->get_result();
+                if ($ewbRow = $ewbRes->fetch_assoc()) {
+                    if ($irnVal === '' && !empty($ewbRow['irn'])) {
+                        $irnVal = trim((string)$ewbRow['irn']);
+                    }
+                    if (!empty($ewbRow['irn_response'])) {
+                        $resp = json_decode($ewbRow['irn_response'], true);
+                        if (is_array($resp)) {
+                            if ($irnVal === '') {
+                                $irnVal = export_first_non_empty($resp['Irn'] ?? '', $resp['irn'] ?? '', $resp['InfoDtls'][0]['Desc']['Irn'] ?? '');
+                            }
+                            if ($qrVal === '') {
+                                $qrVal = export_first_non_empty($resp['SignedQRCode'] ?? '', $resp['SignedQrCode'] ?? '', $resp['signed_qr_code'] ?? '', $resp['qr_code'] ?? '');
+                            }
+                            if ($ackNum === '') {
+                                $ackNum = export_first_non_empty($resp['AckNo'] ?? '', $resp['ack_no'] ?? '', $resp['ack_number'] ?? '');
+                            }
+                            if ($ackDt === '') {
+                                $ackDt = export_first_non_empty($resp['AckDt'] ?? '', $resp['ack_date'] ?? '');
+                            }
+                        }
+                    }
+                }
+                $ewbOrdStmt->close();
+            }
+        }
+
+        $intlDetails['irn'] = $irnVal;
+        $intlDetails['qrcode_string'] = $qrVal;
+        $intlDetails['ack_number'] = $ackNum;
+        $intlDetails['ack_date'] = $ackDt;
+
         // 7b. Resolve currency and master export exchange rate from currency_master
         $currCode = export_first_non_empty(
             $intlDetails['shipping_currency'] ?? '',

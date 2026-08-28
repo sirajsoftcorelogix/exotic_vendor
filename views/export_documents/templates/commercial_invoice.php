@@ -178,19 +178,26 @@ $exchangeRate = (float)($common['exchange_rate'] ?? 83.50);
 
 <?php if (!empty($qrcodeString)): ?>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const container = document.getElementById('irnQrContainer');
-    if (container && typeof QRCode !== 'undefined') {
-        container.innerHTML = '';
-        new QRCode(container, {
-            text: <?= json_encode($qrcodeString) ?>,
-            width: 80,
-            height: 80,
-            colorDark: "#000000",
-            colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.M
-        });
+(function() {
+    function renderCommercialInvoiceQr() {
+        const container = document.getElementById('irnQrContainer');
+        if (container && typeof QRCode !== 'undefined') {
+            container.innerHTML = '';
+            new QRCode(container, {
+                text: <?= json_encode($qrcodeString) ?>,
+                width: 80,
+                height: 80,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        }
     }
-});
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', renderCommercialInvoiceQr);
+    } else {
+        renderCommercialInvoiceQr();
+    }
+})();
 </script>
 <?php endif; ?>
