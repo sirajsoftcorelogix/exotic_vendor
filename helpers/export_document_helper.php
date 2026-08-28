@@ -44,6 +44,10 @@ function getExportCourierPartners(): array
         'ups' => 'UPS',
         'dhl' => 'DHL Express',
         'fedex' => 'FedEx',
+        'aramex' => 'Aramex Express',
+        'delhivery' => 'Delhivery Express',
+        'shiprocket' => 'Shiprocket Express',
+        'bluedart' => 'Blue Dart Express',
         'other' => 'Other Courier / Freight Forwarder'
     ];
 }

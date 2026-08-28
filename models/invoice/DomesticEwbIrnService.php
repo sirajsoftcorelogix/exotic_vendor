@@ -529,10 +529,11 @@ class DomesticEwbIrnService {
                 'TotAmt' => (float)(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0)),
                 'AssAmt' => (float)(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0)),
                 'GstRt' => (int)($item['tax_rate'] ?? 0),
-                'IgstAmt' => (float)($item['tax_amount'] ?? 0),
+                //'IgstAmt' => (float)($item['tax_amount'] ?? 0), 
+                'IgstAmt' => 0,               
                 'TotItemVal' => round((float)(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0) + ($item['tax_amount'] ?? 0)), 2),
-                'CgstAmt' => 0,
-                'SgstAmt' => 0
+                'CgstAmt' => (float)($item['tax_amount']/2 ?? 0),
+                'SgstAmt' => (float)($item['tax_amount']/2 ?? 0)
             ];
         }
         
