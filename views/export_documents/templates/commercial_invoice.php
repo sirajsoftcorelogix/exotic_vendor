@@ -204,8 +204,8 @@ $exchangeRate = (float)($common['exchange_rate'] ?? 83.50);
                 container.innerHTML = '';
                 new QRCode(container, {
                     text: qrText,
-                    width: 600,
-                    height: 600,
+                    width: 260,
+                    height: 260,
                     colorDark: "#000000",
                     colorLight: "#ffffff",
                     correctLevel: QRCode.CorrectLevel.L
