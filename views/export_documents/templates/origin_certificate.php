@@ -30,17 +30,17 @@ $shipperName = $common['exporter_name'] ?? 'Exotic India Art Pvt. Ltd.';
         
         <table class="w-full text-left border-collapse border border-black text-[10px] table-fixed">
             <thead>
-                <tr class="bg-gray-100 border-b border-black font-bold text-[9px] text-black uppercase leading-tight">
-                    <th class="border border-black p-1 text-center w-[4%]">Sr. No.</th>
-                    <th class="border border-black p-1 w-[22%]">Item</th>
-                    <th class="border border-black p-1 text-center w-[9%]">CTH</th>
-                    <th class="border border-black p-1 text-center w-[10%]">State of Origin</th>
-                    <th class="border border-black p-1 text-center w-[10%]">District of Origin</th>
-                    <th class="border border-black p-1 text-center w-[10%]">SQC / Qty</th>
-                    <th class="border border-black p-1 text-center w-[13%]">Preferential Agreement</th>
-                    <th class="border border-black p-1 text-right w-[9%]">Taxable Amt (INR)</th>
-                    <th class="border border-black p-1 text-right w-[7%]">Tax Amt (INR)</th>
-                    <th class="border border-black p-1 text-right w-[6%]">Cess Amt</th>
+                <tr class="bg-gray-100 border-b border-black font-bold text-[8.5px] text-black uppercase leading-tight">
+                    <th class="border border-black p-1 text-center w-[3.5%]">Sr. No.</th>
+                    <th class="border border-black p-1 w-[26.5%]">Item</th>
+                    <th class="border border-black p-1 text-center w-[6.5%]">CTH</th>
+                    <th class="border border-black p-1 text-center w-[6.5%]">State of Origin</th>
+                    <th class="border border-black p-1 text-center w-[6.5%]">District of Origin</th>
+                    <th class="border border-black p-1 text-center w-[6.5%]">SQC / Qty</th>
+                    <th class="border border-black p-1 text-center w-[8%]">Preferential Agreement</th>
+                    <th class="border border-black p-1 text-right w-[14%]">Taxable Amt (INR)</th>
+                    <th class="border border-black p-1 text-right w-[11%]">Tax Amt (INR)</th>
+                    <th class="border border-black p-1 text-right w-[11%]">Cess Amt</th>
                 </tr>
             </thead>
             <tbody>
