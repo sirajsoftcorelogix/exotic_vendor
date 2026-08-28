@@ -616,6 +616,9 @@ document.addEventListener('DOMContentLoaded', function () {
                         <i class="fas fa-file-check text-emerald-600 mr-1.5"></i> ${docs[k]}
                      </span>`;
         });
+        html += `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50 border border-amber-200 text-amber-900 shadow-2xs" title="Air Waybill (AWB) & Customs CSB Shipping Bill are provided electronically by courier service">
+                    <i class="fas fa-info-circle text-amber-600 mr-1.5"></i> AWB & CSB Shipping Bill: Supplied by Courier Service (Skipped)
+                 </span>`;
         container.innerHTML = html;
     }
 
