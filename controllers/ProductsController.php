@@ -6414,12 +6414,58 @@ class ProductsController
                 throw new Exception('Invalid product ID.');
             }
 
+            $product = $productModel->getProduct($productId);
+            if (!$product) {
+                throw new Exception('Product not found.');
+            }
+
             $res = $productModel->updateProductAccountsGroup($productId, $accountsGroup);
             if (empty($res['success'])) {
                 throw new Exception($res['message'] ?? 'Could not update accounts group.');
             }
 
-            return $res;
+            // Sync to Exotic Product API
+            // Note per Exotic API docs:
+            // Endpoint: /vendor-api/product/modify?itemcode=<ITEMCODE>&size=<SIZE>&color=<COLOR>
+            // POST Parameter: accounts_group
+            // If field value is removed (empty), send "x" (blank value would be discarded by API).
+            $apiAccountsGroup = $accountsGroup !== '' ? $accountsGroup : 'x';
+
+            $itemCode = trim((string) ($product['item_code'] ?? ''));
+            $variants = [];
+            if ($itemCode !== '') {
+                $variants = $productModel->getVariantsByItemCode($itemCode);
+            }
+            if (empty($variants)) {
+                $variants = [$product];
+            }
+
+            $vendorSyncs = [];
+            $allSyncsOk = true;
+            $syncMessages = [];
+
+            foreach ($variants as $variant) {
+                $syncRes = $this->syncProductFieldsToVendorFrontend($variant, [
+                    'accounts_group' => $apiAccountsGroup,
+                ]);
+                $vendorSyncs[] = $syncRes;
+                if (empty($syncRes['success'])) {
+                    $allSyncsOk = false;
+                    if (!empty($syncRes['message'])) {
+                        $syncMessages[] = $syncRes['message'];
+                    }
+                }
+            }
+
+            $message = 'Accounts group updated successfully.';
+            if (!$allSyncsOk && !empty($syncMessages)) {
+                $message .= ' Exotic API sync notice: ' . implode('; ', array_unique($syncMessages));
+            }
+
+            return array_merge($res, [
+                'message' => $message,
+                'vendor_sync' => count($vendorSyncs) === 1 ? $vendorSyncs[0] : $vendorSyncs,
+            ]);
         });
     }
 
