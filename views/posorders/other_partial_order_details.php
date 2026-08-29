@@ -22,13 +22,7 @@ $total_price = 0;
 $currency = '';
 
 foreach ($order as $items => $item):
-    $lineId = (int)($item['id'] ?? 0);
-    $linePricingRow = ($linePricingByLineId ?? [])[$lineId] ?? null;
-    if (is_array($linePricingRow)) {
-        $total_price += (float)($linePricingRow['chargeable_value'] ?? 0);
-    } else {
-        $total_price += (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
-    }
+    $total_price += (float)($item['finalprice'] ?? 0) * max(1, (int)($item['quantity'] ?? 1));
 endforeach;
 $orderremarks = is_array($orderremarks ?? null) ? $orderremarks : [];
 $customerdetails = is_array($customerdetails ?? null) ? $customerdetails : [];
@@ -619,20 +613,16 @@ $proformaPrintDisabledReason = $canPrintProforma
                     <?php foreach ($order as $item):
                         $currencysymbol = vendor_currency_symbol($item['currency'] ?? $orderCurrencyCode);
                         $linePricing = ($linePricingByLineId ?? [])[(int)($item['id'] ?? 0)] ?? null;
+                        $qty = max(1, (int)($item['quantity'] ?? 1));
                         $unitListPrice = (float)($item['itemprice'] ?? 0);
-                        $netLineAmount = is_array($linePricing)
-                            ? (float)($linePricing['chargeable_value'] ?? 0)
-                            : (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
-                        $listLineAmount = is_array($linePricing)
-                            ? (float)($linePricing['list_price_incl'] ?? 0)
-                            : $unitListPrice * (int)($item['quantity'] ?? 1);
+                        $unitFinalPrice = (float)($item['finalprice'] ?? 0);
+                        if ($unitListPrice <= 0) {
+                            $unitListPrice = $unitFinalPrice;
+                        }
+                        $listLineAmount = $unitListPrice * $qty;
+                        $netLineAmount = $unitFinalPrice * $qty;
                         $headlineLineAmount = $listLineAmount > 0 ? $listLineAmount : $netLineAmount;
-                        $hasExtendedPricing = is_array($linePricing)
-                            && (((float)($linePricing['addons_total'] ?? 0)) > 0.001
-                                || ((float)($linePricing['custom_reduce'] ?? 0)) > 0.001
-                                || ((float)($linePricing['discount_amount'] ?? 0)) > 0.001
-                                || $listLineAmount > $netLineAmount + 0.001
-                                || (float)($item['itemprice'] ?? 0) > (float)($item['finalprice'] ?? 0) + 0.001);
+                        $hasExtendedPricing = ($listLineAmount > $netLineAmount + 0.001) || !empty($item['addons']);
                         $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
                         $lineId = (int)($item['id'] ?? 0);
                         $lineStatus = (string)($item['status'] ?? '');
@@ -718,7 +708,7 @@ $proformaPrintDisabledReason = $canPrintProforma
                                                     <p class="text-[11px] uppercase tracking-wide text-gray-500">List price</p>
                                                     <p class="tabular-nums font-semibold text-[13px] text-gray-500 <?php echo ($listLineAmount > $netLineAmount + 0.001) ? 'line-through' : ''; ?>"><?php echo $currencysymbol . number_format($headlineLineAmount, 2); ?></p>
                                                 </div>
-                                                <?php if ($listLineAmount > $netLineAmount + 0.001 || ((float)($linePricing['discount_amount'] ?? 0)) > 0.001): ?>
+                                                <?php if ($listLineAmount > $netLineAmount + 0.001): ?>
                                                     <div class="text-right text-[13px]">
                                                         <p class="text-[11px] uppercase tracking-wide text-emerald-700 font-semibold">Net Chargeable</p>
                                                         <p class="tabular-nums font-bold text-[14px] text-gray-900"><?php echo $currencysymbol . number_format($netLineAmount, 2); ?></p>

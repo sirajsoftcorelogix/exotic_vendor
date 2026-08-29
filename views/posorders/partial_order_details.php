@@ -3,14 +3,8 @@
     $total_price = 0;
     $courrency = '';
     foreach ($order as $items => $item):
-        $lineId = (int)($item['id'] ?? 0);
-        $linePricingRow = ($linePricingByLineId ?? [])[$lineId] ?? null;
-        if (is_array($linePricingRow)) {
-            $total_price += (float)($linePricingRow['chargeable_value'] ?? 0);
-        } else {
-            $total_price += (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
-        }
-        $currency = $item['currency'];
+        $total_price += (float)($item['finalprice'] ?? 0) * max(1, (int)($item['quantity'] ?? 1));
+        $currency = $item['currency'] ?? '';
     endforeach;
     ?>
     <div class="flex-grow space-4 bg-white p-6">
