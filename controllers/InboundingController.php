@@ -2329,7 +2329,7 @@ class InboundingController {
             }
             $seen[$upperSku] = true;
 
-            $existing = $inboundingModel->checkSkuExistsInDb($sku, '', $excludeInboundId);
+            $existing = $inboundingModel->checkSkuExistsInDb($sku, $currentItemCode, $excludeInboundId);
             if (!empty($existing)) {
                 $sourceLabel = $existing['source'] ?? 'database';
                 if ($sourceLabel === 'vp_products') {
