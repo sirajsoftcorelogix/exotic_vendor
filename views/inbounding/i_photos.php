@@ -190,7 +190,7 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
     </div>
 
     <div class="bg-white rounded-xl shadow-sm border border-gray-300 p-6">
-        <form action="<?php echo base_url('?page=inbounding&action=itmimgsave&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
+        <form id="iPhotosForm" action="<?php echo base_url('?page=inbounding&action=itmimgsave&id='.$record_id); ?>" method="POST" enctype="multipart/form-data">
             <input type="hidden" name="userid_log" value="<?php echo $_SESSION['user']['id'] ?? ''; ?>">
             
             <input type="hidden" id="current_variation_id" value="-1">
@@ -250,10 +250,15 @@ function renderImageGrid($imgs) {
             </div>
             
             <div class="flex-grow flex flex-col justify-center space-y-2 pr-7 relative">
-                <label class="text-[10px] font-bold text-gray-500 uppercase">Caption</label>
+                <div class="flex justify-between items-center">
+                    <label class="text-[10px] font-bold text-gray-500 uppercase">Caption</label>
+                    <span class="caption-counter text-[10px] font-semibold text-gray-400">0/255</span>
+                </div>
                 <input type="text" name="captions[<?php echo $img['id']; ?>]" 
                        value="<?php echo htmlspecialchars($img['image_caption'] ?? ''); ?>"
-                       class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-black outline-none">
+                       maxlength="255"
+                       placeholder="Enter caption (max 255 chars)..."
+                       class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-black outline-none caption-input">
 
                 <label class="text-[10px] font-bold text-gray-500 uppercase">Display Order</label>
                 <input type="number" name="display_orders[<?php echo $img['id']; ?>]"
@@ -282,7 +287,16 @@ function renderImageGrid($imgs) {
     // 1. SWITCH VARIATION LOGIC
     window.switchVariation = function(varId, cardElement) {
         document.querySelectorAll('.var-card').forEach(el => el.classList.remove('active', 'border-orange-500', 'bg-orange-50'));
-        cardElement.classList.add('active', 'border-orange-500', 'bg-orange-50');
+        if (!cardElement) {
+            document.querySelectorAll('.var-card').forEach(card => {
+                if (card.getAttribute('onclick') && card.getAttribute('onclick').includes(`switchVariation(${varId}`)) {
+                    cardElement = card;
+                }
+            });
+        }
+        if (cardElement) {
+            cardElement.classList.add('active', 'border-orange-500', 'bg-orange-50');
+        }
         currentVarInput.value = varId;
         document.querySelectorAll('.image-container').forEach(el => el.classList.remove('active'));
         const targetContainer = document.getElementById('container_' + varId);
@@ -396,8 +410,11 @@ function renderImageGrid($imgs) {
                 </div>
                 
                 <div class="flex-grow flex flex-col justify-center space-y-2 pr-7 relative">
-                    <label class="text-[10px] font-bold text-gray-500 uppercase">Caption</label>
-                    <input type="text" name="new_captions[]" placeholder="Enter caption..." class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-black outline-none">
+                    <div class="flex justify-between items-center">
+                        <label class="text-[10px] font-bold text-gray-500 uppercase">Caption</label>
+                        <span class="caption-counter text-[10px] font-semibold text-gray-400">0/255</span>
+                    </div>
+                    <input type="text" name="new_captions[]" placeholder="Enter caption (max 255 chars)..." maxlength="255" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-black outline-none caption-input">
 
                     <label class="text-[10px] font-bold text-gray-500 uppercase">Display Order</label>
                     <input type="number" name="new_display_orders[]" value="${displayOrder}" min="0" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-black outline-none display-order-input">
@@ -410,6 +427,8 @@ function renderImageGrid($imgs) {
             
             addDragEvents(div);
             container.appendChild(div);
+            const newInput = div.querySelector('.caption-input');
+            if (newInput) validateCaptionInput(newInput);
         }
     }
 
@@ -489,5 +508,88 @@ function renderImageGrid($imgs) {
             }
             return closest;
         }, { element: null, dist: Number.POSITIVE_INFINITY }).element;
+    }
+
+    // --- CAPTION LENGTH JS VALIDATION (MAX 255 CHARS) ---
+    function validateCaptionInput(input) {
+        if (!input) return true;
+        const maxLen = 255;
+        let val = input.value || '';
+        if (val.length > maxLen) {
+            input.value = val.substring(0, maxLen);
+            val = input.value;
+        }
+        const container = input.closest('div');
+        const counter = container ? container.querySelector('.caption-counter') : null;
+        if (counter) {
+            counter.textContent = `${val.length}/${maxLen}`;
+            if (val.length >= maxLen) {
+                counter.classList.remove('text-gray-400');
+                counter.classList.add('text-amber-600', 'font-bold');
+            } else {
+                counter.classList.remove('text-amber-600', 'font-bold');
+                counter.classList.add('text-gray-400');
+            }
+        }
+        if (val.length > maxLen) {
+            input.classList.add('border-red-500', 'ring-1', 'ring-red-500');
+            return false;
+        }
+        input.classList.remove('border-red-500', 'ring-1', 'ring-red-500');
+        return true;
+    }
+
+    // Live update on input or paste
+    document.addEventListener('input', function(e) {
+        if (e.target && e.target.classList.contains('caption-input')) {
+            validateCaptionInput(e.target);
+        }
+    });
+
+    // Initial counter setup for pre-rendered grid items
+    document.querySelectorAll('.caption-input').forEach(input => validateCaptionInput(input));
+
+    // Form Submit Handler
+    const iPhotosForm = document.getElementById('iPhotosForm');
+    if (iPhotosForm) {
+        iPhotosForm.addEventListener('submit', function(e) {
+            const captionInputs = iPhotosForm.querySelectorAll('.caption-input');
+            let firstInvalid = null;
+            let isValid = true;
+
+            captionInputs.forEach(input => {
+                const val = input.value || '';
+                if (val.length > 255) {
+                    isValid = false;
+                    input.classList.add('border-red-500', 'ring-1', 'ring-red-500');
+                    if (!firstInvalid) firstInvalid = input;
+                } else {
+                    input.classList.remove('border-red-500', 'ring-1', 'ring-red-500');
+                }
+            });
+
+            if (!isValid) {
+                e.preventDefault();
+                if (firstInvalid) {
+                    const parentContainer = firstInvalid.closest('.image-container');
+                    if (parentContainer) {
+                        const varId = parentContainer.getAttribute('data-var-id');
+                        if (varId !== null && varId !== undefined) {
+                            window.switchVariation(varId);
+                        }
+                    }
+                    firstInvalid.focus();
+                }
+                if (window.showPosMessageModal) {
+                    window.showPosMessageModal({
+                        title: 'Caption Too Long',
+                        message: 'Photo caption cannot exceed 255 characters.',
+                        tone: 'error'
+                    });
+                } else {
+                    alert('Photo caption cannot exceed 255 characters.');
+                }
+            }
+        });
     }
 </script>

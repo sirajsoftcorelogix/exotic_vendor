@@ -786,7 +786,7 @@ class InboundingController {
             if (!empty($_POST['image_ids_ordered'])) {
                 foreach ($_POST['image_ids_ordered'] as $img_id) {
                     if(isset($_POST['captions'][$img_id])) {
-                        $caption = $_POST['captions'][$img_id] ?? '';
+                        $caption = mb_substr((string)($_POST['captions'][$img_id] ?? ''), 0, 255);
                         $displayOrder = isset($_POST['display_orders'][$img_id]) ? (int)$_POST['display_orders'][$img_id] : 0;
                         $inboundingModel->update_image_meta($img_id, $caption, $displayOrder);
                     }
@@ -808,7 +808,7 @@ class InboundingController {
                         
                         // In your JS, new_image_variation_id[] and new_captions[] are 
                         // appended to the DOM, so they will follow the same index order as new_photos[]
-                        $newCaption = $_POST['new_captions'][$key] ?? '';
+                        $newCaption = mb_substr((string)($_POST['new_captions'][$key] ?? ''), 0, 255);
                         $varId = $_POST['new_image_variation_id'][$key] ?? -1;
                         $newDisplayOrder = isset($_POST['new_display_orders'][$key]) ? (int)$_POST['new_display_orders'][$key] : 0;
 
