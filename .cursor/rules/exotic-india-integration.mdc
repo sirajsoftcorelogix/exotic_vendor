@@ -53,6 +53,22 @@ Full field reference: **`docs/exotic-order-create-api.md`**.
 | `payment_type` | **`offline`** for counter sales; real mode in `store_payment_details` |
 | `checkoutdata` | Verbatim string from `/cart/retrieve`; short tokens do not include address — send all `s*` fields |
 
+## POST `/product/modify` (Product Update API)
+
+Endpoint: `https://www.exoticindia.com/vendor-api/product/modify?itemcode=<ITEMCODE>&size=<SIZE>&color=<COLOR>`
+
+| Rule / Field | Detail |
+|--------------|--------|
+| Method | POST (Content-Type: `application/x-www-form-urlencoded`) |
+| URL Query | `itemcode`, `size`, `color` |
+| Accepted POST fields | Individual elements from product creation top-level & stock-level structures |
+| Forbidden top-level fields | `itemcode`, `groupname`, `itemtype`, `images`, `discrete_vendors` |
+| Forbidden stock-level fields | `size`, `color`, `item_level` |
+| Stock options | Specify `local_stock` (direct) OR `local_stock_delta` (increment/decrement) |
+| Empty / Removing value | Send `"x"` to remove/clear a field value. Blank values are discarded (no update made). |
+| Fields NOT accepting `"x"` | `category`, `title`, `date_added`, `stock_date_added`, `local_stock`, `price`, `price_india`, `gst` |
+| Account Group field | `accounts_group` (send name or `"x"` if removed) |
+
 ## Rules
 
 - **New retail endpoints** → `RetailApiClient::call()` only.
