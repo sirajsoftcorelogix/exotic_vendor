@@ -10,13 +10,7 @@ $currency = '';
 $computedOrderTotal = 0.0;
 foreach ($order as $items => $item) {
     $currency = $item['currency'] ?? $currency;
-    $lineId = (int)($item['id'] ?? 0);
-    $linePricingRow = $linePricingByLineId[$lineId] ?? null;
-    if (is_array($linePricingRow)) {
-        $computedOrderTotal += (float)($linePricingRow['chargeable_value'] ?? 0);
-    } else {
-        $computedOrderTotal += (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
-    }
+    $computedOrderTotal += (float)($item['finalprice'] ?? 0) * max(1, (int)($item['quantity'] ?? 1));
 }
 $displayOrderTotal = $computedOrderTotal > 0 ? $computedOrderTotal : (float)($orderremarks['total'] ?? 0);
 $countries = country_array();
