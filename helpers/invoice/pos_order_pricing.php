@@ -996,7 +996,7 @@ function pos_order_line_pricing_should_override_invoice_summary(
         if (!is_array($pricing)) {
             continue;
         }
-        if (((float)($pricing['addons_total'] ?? 0)) > 0.001 || ((float)($pricing['custom_reduce'] ?? 0)) > 0.001) {
+        if (((float)($pricing['addons_total'] ?? 0)) > 0.001 || ((float)($pricing['custom_reduce'] ?? 0)) > 0.001 || ((float)($pricing['discount_amount'] ?? 0)) > 0.001) {
             return true;
         }
     }
