@@ -44,12 +44,34 @@
             <div>
                 <div class="accordion-trigger cursor-pointer border-b pb-4">
                     <div class="flex items-start space-x-4">
-                        <div class="flex-shrink-0 w-36 h-36">
-                            <?php $imageUrl = (string)($item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'); ?>
-                            <img src="<?php echo htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Product Image"
-                                class="max-w-full max-h-full object-contain rounded-lg object-cover flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity pos-order-detail-enlarge"
-                                title="Click to enlarge"
-                                data-full-image="<?php echo htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'); ?>">
+                        <div class="flex-shrink-0 w-36 flex flex-col items-center">
+                            <div class="w-36 h-36">
+                                <?php $imageUrl = (string)($item['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'); ?>
+                                <img src="<?php echo htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Product Image"
+                                    class="max-w-full max-h-full object-contain rounded-lg object-cover flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity pos-order-detail-enlarge"
+                                    title="Click to enlarge"
+                                    data-full-image="<?php echo htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'); ?>">
+                            </div>
+                            <?php
+                                $agName = trim((string)($item['accounts_group'] ?? ''));
+                                $itemCode = (string)($item['item_code'] ?? '');
+                                $productId = (int)($item['product_id'] ?? 0);
+                            ?>
+                            <div class="mt-2 w-full text-center">
+                                <div class="inline-flex items-center justify-center gap-1.5 px-2 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md text-[11px] font-medium max-w-full">
+                                    <span class="truncate accounts-group-val" data-ag-code="<?php echo htmlspecialchars($itemCode, ENT_QUOTES, 'UTF-8'); ?>" title="Accounts Group: <?php echo htmlspecialchars($agName !== '' ? $agName : 'Not set', ENT_QUOTES, 'UTF-8'); ?>">
+                                        <?php echo $agName !== '' ? htmlspecialchars($agName, ENT_QUOTES, 'UTF-8') : '—'; ?>
+                                    </span>
+                                    <button type="button" 
+                                        class="inline-flex items-center justify-center p-0.5 text-emerald-600 hover:text-emerald-900 hover:bg-emerald-100 rounded transition-colors refresh-accounts-group-btn"
+                                        data-item-code="<?php echo htmlspecialchars($itemCode, ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-product-id="<?php echo $productId; ?>"
+                                        title="Refresh accounts group from Exotic API"
+                                        onclick="refreshItemAccountsGroup(this, '<?php echo htmlspecialchars($itemCode, ENT_QUOTES, 'UTF-8'); ?>', <?php echo $productId; ?>)">
+                                        <i class="fas fa-sync-alt text-[10px]"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         <div class="flex-grow">
                             <div>
@@ -300,4 +322,70 @@
                 <!-- /Accordion Content -->
             </div>
         <?php endforeach; ?>
+
+<script>
+if (typeof window.refreshItemAccountsGroup !== 'function') {
+    window.refreshItemAccountsGroup = function(btn, itemCode, productId) {
+        if (!itemCode && !productId) return;
+        var icon = btn ? btn.querySelector('i') : null;
+        if (icon) {
+            icon.classList.add('fa-spin');
+        }
+        if (btn) btn.disabled = true;
+
+        var page = new URLSearchParams(window.location.search).get('page') || 'posorders';
+        var url = 'index.php?page=' + encodeURIComponent(page) + '&action=refresh_item_accounts_group&item_code=' + encodeURIComponent(itemCode || '') + '&product_id=' + (productId || 0);
+
+        fetch(url)
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data && data.success) {
+                    var newGroup = data.accounts_group || '—';
+                    var targets = document.querySelectorAll('[data-ag-code="' + itemCode + '"]');
+                    targets.forEach(function(el) {
+                        el.textContent = newGroup;
+                        el.title = 'Accounts Group: ' + (newGroup !== '—' ? newGroup : 'Not set');
+                    });
+                    if (window.showPosMessageModal) {
+                        window.showPosMessageModal({
+                            title: 'Accounts Group Refreshed',
+                            message: 'Accounts group for item ' + itemCode + ' is now: ' + newGroup,
+                            tone: 'success'
+                        });
+                    } else if (typeof showToast === 'function') {
+                        showToast('Accounts group updated: ' + newGroup, 'success');
+                    } else {
+                        alert('Accounts group for item ' + itemCode + ' is now: ' + newGroup);
+                    }
+                } else {
+                    var errMsg = (data && data.message) ? data.message : 'Could not refresh accounts group.';
+                    if (window.showPosMessageModal) {
+                        window.showPosMessageModal({
+                            title: 'Refresh Failed',
+                            message: errMsg,
+                            tone: 'error'
+                        });
+                    } else {
+                        alert(errMsg);
+                    }
+                }
+            })
+            .catch(function() {
+                if (window.showPosMessageModal) {
+                    window.showPosMessageModal({
+                        title: 'Network Error',
+                        message: 'An error occurred while communicating with the server.',
+                        tone: 'error'
+                    });
+                } else {
+                    alert('An error occurred while communicating with the server.');
+                }
+            })
+            .finally(function() {
+                if (icon) icon.classList.remove('fa-spin');
+                if (btn) btn.disabled = false;
+            });
+    };
+}
+</script>
     </div>

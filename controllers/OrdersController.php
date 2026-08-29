@@ -1294,6 +1294,12 @@ class OrdersController
         $posController = new PosOrdersController();
         $posController->getOrderDetailsHTML();
     }
+    public function refreshItemAccountsGroupAjax()
+    {
+        require_once __DIR__ . '/PosOrdersController.php';
+        $posController = new PosOrdersController();
+        $posController->refreshItemAccountsGroupAjax();
+    }
     public function updateImportedOrders()
     {
         global $ordersModel;
