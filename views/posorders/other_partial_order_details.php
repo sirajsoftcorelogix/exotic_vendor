@@ -619,15 +619,20 @@ $proformaPrintDisabledReason = $canPrintProforma
                     <?php foreach ($order as $item):
                         $currencysymbol = vendor_currency_symbol($item['currency'] ?? $orderCurrencyCode);
                         $linePricing = ($linePricingByLineId ?? [])[(int)($item['id'] ?? 0)] ?? null;
+                        $unitListPrice = (float)($item['itemprice'] ?? 0);
                         $netLineAmount = is_array($linePricing)
                             ? (float)($linePricing['chargeable_value'] ?? 0)
                             : (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
                         $listLineAmount = is_array($linePricing)
                             ? (float)($linePricing['list_price_incl'] ?? 0)
-                            : (float)($item['finalprice'] ?? 0) * (int)($item['quantity'] ?? 1);
+                            : $unitListPrice * (int)($item['quantity'] ?? 1);
                         $headlineLineAmount = $listLineAmount > 0 ? $listLineAmount : $netLineAmount;
                         $hasExtendedPricing = is_array($linePricing)
-                            && (((float)($linePricing['addons_total'] ?? 0)) > 0.001 || ((float)($linePricing['custom_reduce'] ?? 0)) > 0.001);
+                            && (((float)($linePricing['addons_total'] ?? 0)) > 0.001
+                                || ((float)($linePricing['custom_reduce'] ?? 0)) > 0.001
+                                || ((float)($linePricing['discount_amount'] ?? 0)) > 0.001
+                                || $listLineAmount > $netLineAmount + 0.001
+                                || (float)($item['itemprice'] ?? 0) > (float)($item['finalprice'] ?? 0) + 0.001);
                         $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
                         $lineId = (int)($item['id'] ?? 0);
                         $lineStatus = (string)($item['status'] ?? '');
@@ -715,7 +720,7 @@ $proformaPrintDisabledReason = $canPrintProforma
                                                 </div>
                                             <?php else: ?>
                                                 <div class="flex items-center gap-2 text-[13px] text-gray-500">
-                                                    <span><?php echo $currencysymbol; ?><?php echo $item['finalprice']; ?> x</span>
+                                                    <span><?php echo $currencysymbol; ?><?php echo number_format($unitListPrice, 2); ?> x</span>
                                                     <span class="rounded bg-gray-100 px-2 py-0.5 text-gray-700"><?php echo $item['quantity']; ?></span>
                                                 </div>
 
