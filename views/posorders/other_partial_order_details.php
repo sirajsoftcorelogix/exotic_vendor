@@ -712,12 +712,18 @@ $proformaPrintDisabledReason = $canPrintProforma
                                                 <?php endforeach; ?>
                                             <?php endif; ?>
                                         </div>
-                                        <div class="flex items-center gap-12">
+                                        <div class="flex items-center gap-6">
                                             <?php if ($hasExtendedPricing): ?>
                                                 <div class="text-right text-[13px] text-gray-500">
                                                     <p class="text-[11px] uppercase tracking-wide text-gray-500">List price</p>
-                                                    <p class="tabular-nums font-bold text-[14px] text-gray-900"><?php echo $currencysymbol . number_format($headlineLineAmount, 2); ?></p>
+                                                    <p class="tabular-nums font-semibold text-[13px] text-gray-500 <?php echo ($listLineAmount > $netLineAmount + 0.001) ? 'line-through' : ''; ?>"><?php echo $currencysymbol . number_format($headlineLineAmount, 2); ?></p>
                                                 </div>
+                                                <?php if ($listLineAmount > $netLineAmount + 0.001 || ((float)($linePricing['discount_amount'] ?? 0)) > 0.001): ?>
+                                                    <div class="text-right text-[13px]">
+                                                        <p class="text-[11px] uppercase tracking-wide text-emerald-700 font-semibold">Net Chargeable</p>
+                                                        <p class="tabular-nums font-bold text-[14px] text-gray-900"><?php echo $currencysymbol . number_format($netLineAmount, 2); ?></p>
+                                                    </div>
+                                                <?php endif; ?>
                                             <?php else: ?>
                                                 <div class="flex items-center gap-2 text-[13px] text-gray-500">
                                                     <span><?php echo $currencysymbol; ?><?php echo number_format($unitListPrice, 2); ?> x</span>

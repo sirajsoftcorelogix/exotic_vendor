@@ -151,30 +151,7 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
         return 0.0;
     }
 
-    // 1. POS payment snapshot (recorded at checkout/payment)
-    $stmt = $conn->prepare('SELECT MAX(order_amount) AS order_total FROM pos_payments WHERE order_number = ? AND order_amount > 0');
-    if ($stmt) {
-        $stmt->bind_param('s', $orderNumber);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        if (!empty($row['order_total']) && (float)$row['order_total'] > 0) {
-            return round((float)$row['order_total'], 2);
-        }
-    }
-
-    // 2. Compute net payable directly from vp_orders lines (prefer vp_order_info.total / finalprice)
-    $stmt = $conn->prepare('SELECT total FROM vp_order_info WHERE order_number = ? LIMIT 1');
-    if ($stmt) {
-        $stmt->bind_param('s', $orderNumber);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        if (!empty($row['total']) && (float)$row['total'] > 0) {
-            return round((float)$row['total'], 2);
-        }
-    }
-
+    // 1. Compute net payable directly from vp_orders lines (source of truth)
     $stmt = $conn->prepare('SELECT status, itemprice, finalprice, quantity, addons, custom_reduce FROM vp_orders WHERE order_number = ?');
     if ($stmt) {
         $stmt->bind_param('s', $orderNumber);
@@ -209,30 +186,54 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
                 $customReduce = max($customReduce, (float)($line['custom_reduce'] ?? 0));
             }
 
-            if ($activeCount === 0) {
-                return 0.0;
-            }
-
-            // Order-level reductions from vp_order_info
-            $couponReduce = 0.0;
-            $giftReduce = 0.0;
-            $credit = 0.0;
-            $infoStmt = $conn->prepare('SELECT coupon_reduce, giftvoucher_reduce, credit FROM vp_order_info WHERE order_number = ? LIMIT 1');
-            if ($infoStmt) {
-                $infoStmt->bind_param('s', $orderNumber);
-                $infoStmt->execute();
-                $infoRow = $infoStmt->get_result()->fetch_assoc();
-                $infoStmt->close();
-                if ($infoRow) {
-                    $couponReduce = (float)($infoRow['coupon_reduce'] ?? 0);
-                    $giftReduce = (float)($infoRow['giftvoucher_reduce'] ?? 0);
-                    $credit = (float)($infoRow['credit'] ?? 0);
+            if ($activeCount > 0) {
+                $couponReduce = 0.0;
+                $giftReduce = 0.0;
+                $credit = 0.0;
+                $infoStmt = $conn->prepare('SELECT custom_reduce, coupon_reduce, giftvoucher_reduce, credit FROM vp_order_info WHERE order_number = ? LIMIT 1');
+                if ($infoStmt) {
+                    $infoStmt->bind_param('s', $orderNumber);
+                    $infoStmt->execute();
+                    $infoRow = $infoStmt->get_result()->fetch_assoc();
+                    $infoStmt->close();
+                    if ($infoRow) {
+                        if ((float)($infoRow['custom_reduce'] ?? 0) > 0) {
+                            $customReduce = (float)$infoRow['custom_reduce'];
+                        }
+                        $couponReduce = (float)($infoRow['coupon_reduce'] ?? 0);
+                        $giftReduce = (float)($infoRow['giftvoucher_reduce'] ?? 0);
+                        $credit = (float)($infoRow['credit'] ?? 0);
+                    }
                 }
+
+                $reductions = round($customReduce + $couponReduce + $giftReduce + $credit, 2);
+
+                return max(0.0, round($gross - $reductions, 2));
             }
+        }
+    }
 
-            $reductions = round($customReduce + $couponReduce + $giftReduce + $credit, 2);
+    // 2. POS payment snapshot (recorded at checkout/payment)
+    $stmt = $conn->prepare('SELECT MAX(order_amount) AS order_total FROM pos_payments WHERE order_number = ? AND order_amount > 0');
+    if ($stmt) {
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!empty($row['order_total']) && (float)$row['order_total'] > 0) {
+            return round((float)$row['order_total'], 2);
+        }
+    }
 
-            return max(0.0, round($gross - $reductions, 2));
+    // 3. Fallback for orders without lines (vp_order_info)
+    $stmt = $conn->prepare('SELECT total FROM vp_order_info WHERE order_number = ? LIMIT 1');
+    if ($stmt) {
+        $stmt->bind_param('s', $orderNumber);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!empty($row['total']) && (float)$row['total'] > 0) {
+            return round((float)$row['total'], 2);
         }
     }
 

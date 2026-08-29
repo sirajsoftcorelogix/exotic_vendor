@@ -92,9 +92,11 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
 
     $meta = is_array($invoice) ? pos_invoice_parse_discount_meta($invoice['notes'] ?? null) : [];
 
+    $discountsAbsorbed = !empty($meta['discounts_absorbed']);
+
     $couponReduce = round((float)($meta['coupon_discount'] ?? 0), 2);
     $giftReduce = round((float)($meta['gift_discount'] ?? 0), 2);
-    $cashReduce = round((float)($meta['cash_discount'] ?? 0), 2);
+    $cashReduce = $discountsAbsorbed ? 0.0 : round((float)($meta['cash_discount'] ?? 0), 2);
     $creditReduce = round((float)($meta['credit_discount'] ?? 0), 2);
     $giftName = trim((string)($meta['gift_voucher_name'] ?? ''));
     $couponCandidates = [

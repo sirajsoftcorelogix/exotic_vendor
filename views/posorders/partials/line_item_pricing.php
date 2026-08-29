@@ -48,7 +48,7 @@ $showComponentBreakdown = count($pricingComponents) > 0 && ($customReduce > 0.00
                 <?php endforeach; ?>
             <?php elseif ($customReduce > 0.001): ?>
                 <div class="flex w-full items-center justify-between gap-4 py-1">
-                    <span class="text-gray-600">Custom Discount:</span>
+                    <span class="text-gray-600"><?php echo ((float)($linePricing['order_custom_reduce'] ?? 0)) > 0.001 ? 'Custom Discount:' : 'Discount:'; ?></span>
                     <span class="shrink-0 text-right tabular-nums font-semibold text-emerald-700"><?php echo $formatAmount($customReduce); ?></span>
                 </div>
             <?php endif; ?>
