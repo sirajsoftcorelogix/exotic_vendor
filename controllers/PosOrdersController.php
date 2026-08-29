@@ -1198,6 +1198,8 @@ class PosOrdersController
             exit;
         }
 
+        $this->enrichOrderItemsAccountsGroup($order);
+
         $resolvedOrderNumber = (string)($order[0]['order_number'] ?? $orderRef);
         $orderremarks = $ordersModel->getRemarksByOrderNumber($resolvedOrderNumber);
         $fullOrderJourny = $ordersModel->getfullOrderJournyByNumber($resolvedOrderNumber);
@@ -2881,5 +2883,134 @@ class PosOrdersController
             'order_number' => (string) ($orderval['order_number'] ?? ''),
             'item_code' => (string) ($orderval['item_code'] ?? ''),
         ], $result);
+    }
+
+    /**
+     * Enrich order line items with accounts_group from vp_products.
+     *
+     * @param array<int, array<string, mixed>> $order
+     */
+    private function enrichOrderItemsAccountsGroup(array &$order): void
+    {
+        global $conn;
+        if (empty($order) || !is_array($order)) {
+            return;
+        }
+
+        require_once __DIR__ . '/../models/product/product.php';
+        $productModel = new product($conn);
+
+        $productIds = [];
+        $itemCodes = [];
+        foreach ($order as $item) {
+            if (!empty($item['product_id']) && (int) $item['product_id'] > 0) {
+                $productIds[] = (int) $item['product_id'];
+            }
+            if (!empty($item['item_code']) && trim((string) $item['item_code']) !== '') {
+                $itemCodes[] = trim((string) $item['item_code']);
+            }
+        }
+
+        $maps = $productModel->getAccountsGroupMapByProductIdsOrItemCodes($productIds, $itemCodes);
+        $mapById = $maps['by_id'] ?? [];
+        $mapByCode = $maps['by_code'] ?? [];
+
+        foreach ($order as $key => $item) {
+            $existing = trim((string) ($item['accounts_group'] ?? ''));
+            if ($existing !== '') {
+                continue;
+            }
+            $pid = (int) ($item['product_id'] ?? 0);
+            $ic = trim((string) ($item['item_code'] ?? ''));
+            if ($pid > 0 && isset($mapById[$pid]) && $mapById[$pid] !== '') {
+                $order[$key]['accounts_group'] = $mapById[$pid];
+            } elseif ($ic !== '' && isset($mapByCode[$ic]) && $mapByCode[$ic] !== '') {
+                $order[$key]['accounts_group'] = $mapByCode[$ic];
+            } else {
+                $order[$key]['accounts_group'] = '';
+            }
+        }
+    }
+
+    /**
+     * AJAX endpoint to fetch latest accounts_group from Exotic API for an item and update vp_products DB.
+     */
+    public function refreshItemAccountsGroupAjax(): void
+    {
+        is_login();
+        header('Content-Type: application/json');
+        try {
+            global $conn, $productModel;
+            $itemCode = trim((string) ($_GET['item_code'] ?? $_POST['item_code'] ?? ''));
+            $productId = (int) ($_GET['product_id'] ?? $_POST['product_id'] ?? 0);
+
+            require_once __DIR__ . '/../models/product/product.php';
+            if (!isset($productModel) || !($productModel instanceof product)) {
+                $productModel = new product($conn);
+            }
+
+            if ($itemCode === '' && $productId > 0) {
+                $prod = $productModel->getProduct($productId);
+                if ($prod && !empty($prod['item_code'])) {
+                    $itemCode = trim((string) $prod['item_code']);
+                }
+            }
+
+            if ($itemCode === '') {
+                throw new Exception('Item code is required.');
+            }
+
+            $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($itemCode);
+            $headers = [
+                'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+                'x-adminapitest: 1',
+                'Content-Type: application/x-www-form-urlencoded',
+            ];
+
+            $ch = curl_init($url);
+            if ($ch === false) {
+                throw new Exception('cURL initialization failed.');
+            }
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            $response = curl_exec($ch);
+            $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($response === false || $httpCode < 200 || $httpCode >= 300) {
+                throw new Exception('Failed to fetch product data from Exotic API (HTTP ' . $httpCode . ').');
+            }
+
+            $decoded = json_decode($response, true);
+            if (!is_array($decoded)) {
+                throw new Exception('Invalid JSON response from Exotic API.');
+            }
+
+            $normalizedItems = product::normalizeVendorProductFetchItems($decoded);
+            if (empty($normalizedItems)) {
+                throw new Exception('Product not found in Exotic API response.');
+            }
+
+            $masterItem = $normalizedItems[0];
+            $accountsGroup = product::vendorApiAccountsGroup($masterItem);
+
+            // Sync into vp_products DB table
+            $productModel->syncAccountsGroupFromApiItem($itemCode, $masterItem);
+
+            echo json_encode([
+                'success' => true,
+                'item_code' => $itemCode,
+                'accounts_group' => $accountsGroup !== '' ? $accountsGroup : '—',
+                'message' => 'Accounts group refreshed successfully from Exotic API.',
+            ]);
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+        exit;
     }
 }

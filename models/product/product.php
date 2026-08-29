@@ -1585,6 +1585,65 @@ class product
         $stmt->close();
     }
 
+    /**
+     * Map accounts_group for lists of product IDs and item codes.
+     *
+     * @param list<int> $productIds
+     * @param list<string> $itemCodes
+     * @return array{by_id: array<int, string>, by_code: array<string, string>}
+     */
+    public function getAccountsGroupMapByProductIdsOrItemCodes(array $productIds, array $itemCodes): array
+    {
+        if (empty($productIds) && empty($itemCodes)) {
+            return ['by_id' => [], 'by_code' => []];
+        }
+
+        $where = [];
+        if (!empty($productIds)) {
+            $validIds = array_values(array_filter(array_map('intval', $productIds), static function ($id) {
+                return $id > 0;
+            }));
+            if (!empty($validIds)) {
+                $where[] = 'id IN (' . implode(',', $validIds) . ')';
+            }
+        }
+        if (!empty($itemCodes)) {
+            $escapedCodes = [];
+            foreach ($itemCodes as $c) {
+                $c = trim((string) $c);
+                if ($c !== '') {
+                    $escapedCodes[] = "'" . $this->db->real_escape_string($c) . "'";
+                }
+            }
+            if (!empty($escapedCodes)) {
+                $where[] = 'item_code IN (' . implode(',', array_unique($escapedCodes)) . ')';
+            }
+        }
+
+        if (empty($where)) {
+            return ['by_id' => [], 'by_code' => []];
+        }
+
+        $sql = 'SELECT id, item_code, accounts_group FROM vp_products WHERE ' . implode(' OR ', $where);
+        $res = $this->db->query($sql);
+
+        $mapById = [];
+        $mapByCode = [];
+        if ($res && $res->num_rows > 0) {
+            while ($row = $res->fetch_assoc()) {
+                $ag = trim((string) ($row['accounts_group'] ?? ''));
+                if (!empty($row['id'])) {
+                    $mapById[(int) $row['id']] = $ag;
+                }
+                if (!empty($row['item_code'])) {
+                    $mapByCode[trim((string) $row['item_code'])] = $ag;
+                }
+            }
+        }
+
+        return ['by_id' => $mapById, 'by_code' => $mapByCode];
+    }
+
     public function updateProductFromApi($productData, array $options = [])
     {
         $updatedCount = 0;

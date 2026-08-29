@@ -328,6 +328,9 @@ switch ($page) {
             case 'get_order_details_html':
                 $controller->getOrderDetailsHTML();
                 break;
+            case 'refresh_item_accounts_group':
+                $controller->refreshItemAccountsGroupAjax();
+                break;
             case 'search_orders':
                 $controller->searchOrdersAjax();
                 break;
@@ -2129,6 +2132,9 @@ switch ($page) {
                 break;
             case 'get_order_details_html':
                 $controller->getOrderDetailsHTML();
+                break;
+            case 'refresh_item_accounts_group':
+                $controller->refreshItemAccountsGroupAjax();
                 break;
             case 'search_orders':
                 $controller->searchOrdersAjax();
