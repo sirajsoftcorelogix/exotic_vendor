@@ -3046,10 +3046,28 @@ class Inbounding {
         }
         $excludeItemCode = strtoupper(trim($excludeItemCode));
 
+        if ($excludeItemCode === '' && $excludeInboundId > 0) {
+            $inboundRow = $this->getById($excludeInboundId);
+            if (is_array($inboundRow) && !empty($inboundRow['Item_code'])) {
+                $excludeItemCode = strtoupper(trim($inboundRow['Item_code']));
+            }
+        }
+
         // 1. Check vp_products (Published catalog)
-        $stmt = $this->conn->prepare("SELECT id, sku, item_code, title, 'vp_products' AS source FROM vp_products WHERE CONVERT(UPPER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ? LIMIT 1");
+        $prodSql = "SELECT id, sku, item_code, title, 'vp_products' AS source FROM vp_products WHERE CONVERT(UPPER(TRIM(sku)) USING utf8mb4) COLLATE utf8mb4_general_ci = ?";
+        $prodParams = [$sku];
+        $prodTypes = 's';
+
+        if ($excludeItemCode !== '') {
+            $prodSql .= " AND CONVERT(UPPER(TRIM(COALESCE(item_code, ''))) USING utf8mb4) COLLATE utf8mb4_general_ci != ?";
+            $prodParams[] = $excludeItemCode;
+            $prodTypes .= 's';
+        }
+        $prodSql .= " LIMIT 1";
+
+        $stmt = $this->conn->prepare($prodSql);
         if ($stmt) {
-            $stmt->bind_param('s', $sku);
+            $stmt->bind_param($prodTypes, ...$prodParams);
             $stmt->execute();
             $res = $stmt->get_result();
             $row = $res ? $res->fetch_assoc() : null;
@@ -3071,6 +3089,11 @@ class Inbounding {
             $varSql .= " AND v.it_id != ?";
             $params[] = $excludeInboundId;
             $types .= 'i';
+        }
+        if ($excludeItemCode !== '') {
+            $varSql .= " AND CONVERT(UPPER(TRIM(COALESCE(i.Item_code, ''))) USING utf8mb4) COLLATE utf8mb4_general_ci != ?";
+            $params[] = $excludeItemCode;
+            $types .= 's';
         }
         $varSql .= " LIMIT 1";
 
@@ -3095,6 +3118,11 @@ class Inbounding {
             $inbSql .= " AND id != ?";
             $inbParams[] = $excludeInboundId;
             $inbTypes .= 'i';
+        }
+        if ($excludeItemCode !== '') {
+            $inbSql .= " AND CONVERT(UPPER(TRIM(COALESCE(Item_code, ''))) USING utf8mb4) COLLATE utf8mb4_general_ci != ?";
+            $inbParams[] = $excludeItemCode;
+            $inbTypes .= 's';
         }
         $inbSql .= " LIMIT 1";
 
