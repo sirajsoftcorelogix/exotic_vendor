@@ -96,7 +96,6 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
 
     $couponReduce = round((float)($meta['coupon_discount'] ?? 0), 2);
     $giftReduce = round((float)($meta['gift_discount'] ?? 0), 2);
-    $cashReduce = $discountsAbsorbed ? 0.0 : round((float)($meta['cash_discount'] ?? 0), 2);
     $creditReduce = round((float)($meta['credit_discount'] ?? 0), 2);
     $giftName = trim((string)($meta['gift_voucher_name'] ?? ''));
     $couponCandidates = [
@@ -110,9 +109,6 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
         }
         if ($giftReduce <= 0) {
             $giftReduce = round((float)($orderInfo['giftvoucher_reduce'] ?? 0), 2);
-        }
-        if ($cashReduce <= 0) {
-            $cashReduce = round((float)($orderInfo['custom_reduce'] ?? 0), 2);
         }
         if ($creditReduce <= 0) {
             $creditReduce = round((float)($orderInfo['credit'] ?? 0), 2);
@@ -136,9 +132,6 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
         if ($giftReduce <= 0) {
             $giftReduce = max($giftReduce, round((float)($orderRow['giftvoucher_reduce'] ?? 0), 2));
         }
-        if ($cashReduce <= 0) {
-            $cashReduce = max($cashReduce, round((float)($orderRow['custom_reduce'] ?? 0), 2));
-        }
         if ($creditReduce <= 0) {
             $creditReduce = max($creditReduce, round((float)($orderRow['credit'] ?? 0), 2));
         }
@@ -146,6 +139,33 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
         $couponCandidates[] = $orderRow['coupon'] ?? '';
         if ($giftName === '') {
             $giftName = trim((string)($orderRow['giftvoucher'] ?? ''));
+        }
+    }
+
+    $cashReduce = 0.0;
+    if (is_array($orderInfo) && round((float)($orderInfo['custom_reduce'] ?? 0), 2) > 0) {
+        $cashReduce = round((float)$orderInfo['custom_reduce'], 2);
+    }
+    foreach ($orderLines as $orderRow) {
+        if (is_array($orderRow) && strtolower(trim((string)($orderRow['status'] ?? ''))) !== 'cancelled') {
+            $cashReduce = max($cashReduce, round((float)($orderRow['custom_reduce'] ?? 0), 2));
+        }
+    }
+    if ($cashReduce <= 0 && !$discountsAbsorbed && isset($meta['cash_discount'])) {
+        // If invoice notes have cash_discount, only use it if lines don't already reflect finalprice discounts
+        $hasLineDiff = false;
+        foreach ($orderLines as $orderRow) {
+            if (is_array($orderRow) && strtolower(trim((string)($orderRow['status'] ?? ''))) !== 'cancelled') {
+                $itemP = (float)($orderRow['itemprice'] ?? 0);
+                $finalP = (float)($orderRow['finalprice'] ?? 0);
+                if ($itemP > 0 && $finalP > 0 && abs($itemP - $finalP) > 0.01) {
+                    $hasLineDiff = true;
+                    break;
+                }
+            }
+        }
+        if (!$hasLineDiff) {
+            $cashReduce = round((float)$meta['cash_discount'], 2);
         }
     }
 
