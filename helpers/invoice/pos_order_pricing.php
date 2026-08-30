@@ -171,18 +171,10 @@ function pos_order_resolve_discount_meta(?array $invoice, ?array $orderInfo, arr
 
     $couponRaw = pos_order_pick_best_coupon_raw($couponCandidates);
 
-    if ($couponReduce > 0) {
-        $meta['coupon_discount'] = $couponReduce;
-    }
-    if ($giftReduce > 0) {
-        $meta['gift_discount'] = $giftReduce;
-    }
-    if ($cashReduce > 0) {
-        $meta['cash_discount'] = $cashReduce;
-    }
-    if ($creditReduce > 0) {
-        $meta['credit_discount'] = $creditReduce;
-    }
+    $meta['coupon_discount'] = $couponReduce;
+    $meta['gift_discount'] = $giftReduce;
+    $meta['cash_discount'] = $cashReduce;
+    $meta['credit_discount'] = $creditReduce;
     if ($couponRaw !== '') {
         $meta['coupon_display_name'] = pos_order_parse_coupon_code($couponRaw);
         $meta['coupon_raw'] = $couponRaw;
