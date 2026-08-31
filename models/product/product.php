@@ -5461,7 +5461,7 @@ class product
     }
     public function getVariantsByItemCode($item_code)
     {
-        $sql = "SELECT id, item_code, title, sku, size, color, local_stock, physical_stock
+        $sql = "SELECT id, item_code, title, sku, size, color, local_stock, physical_stock, item_level
                 FROM vp_products
                 WHERE item_code = ?
                 ORDER BY sku ASC, id ASC";

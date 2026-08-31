@@ -396,11 +396,15 @@ class Inbounding {
                 WHERE is_active = 1
                 ORDER BY name ASC";
 
-        $stmt = $this->conn->prepare($sql);
-        $stmt->execute();
-
-        $result = $stmt->get_result(); // MySQLi result
-        return $result->fetch_all(MYSQLI_ASSOC);
+        $res = $this->conn->query($sql);
+        $users = [];
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $users[] = $row;
+            }
+            $res->free();
+        }
+        return $users;
     }
     public function bulkAssign(array $ids, int $user_id){
         if (empty($ids)) {
