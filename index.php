@@ -1397,6 +1397,7 @@ switch ($page) {
         $controller = new InboundingController();
         switch ($action) {
             case 'list':
+            case 'action':
                 $controller->index();
                 break;
             case 'exportSelected':

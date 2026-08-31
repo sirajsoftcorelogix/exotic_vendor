@@ -471,8 +471,19 @@
         <?php endif; ?>
         <div class="flex flex-wrap gap-2 mt-2">
           <?php foreach ($products['variants'] as $variant): 
-            if(isset($variant['sku']) && !empty($variant['sku'])): ?>
-            <span class="px-2 py-1 border rounded text-xs"><a href="<?php echo base_url('?page=products&action=detail&id='.$variant['id']); ?>"><?php echo $variant['sku']; ?></a></span>
+            $variantSku = trim((string)($variant['sku'] ?? ''));
+            $variantItemCode = trim((string)($variant['item_code'] ?? ($products['item_code'] ?? '')));
+            $variantItemLevel = strtolower(trim((string)($variant['item_level'] ?? '')));
+
+            $isParentItem = ($variantItemLevel === 'parent')
+              || ($variantSku !== '' && $variantItemCode !== '' && strcasecmp($variantSku, $variantItemCode) === 0);
+
+            if ($isParentItem) {
+                continue;
+            }
+
+            if ($variantSku !== ''): ?>
+            <span class="px-2 py-1 border rounded text-xs"><a href="<?php echo base_url('?page=products&action=detail&id=' . (int)$variant['id']); ?>"><?php echo htmlspecialchars($variantSku, ENT_QUOTES, 'UTF-8'); ?></a></span>
           <?php endif; endforeach; ?>
         </div>
       </div>
