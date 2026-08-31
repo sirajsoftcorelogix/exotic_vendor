@@ -244,12 +244,21 @@ class Inbounding {
         $vendorMap = [];
         if (!empty($vendorCodes)) {
             $uniqueCodes = array_values(array_unique($vendorCodes));
-            $escapedCodes = array_map(function($c) {
-                return "'" . $this->conn->real_escape_string($c) . "'";
-            }, $uniqueCodes);
-            $codeList = implode(',', $escapedCodes);
+            $strCodes = [];
+            $numIds = [];
+            foreach ($uniqueCodes as $c) {
+                $strCodes[] = "'" . $this->conn->real_escape_string($c) . "'";
+                if (ctype_digit($c)) {
+                    $numIds[] = (int) $c;
+                }
+            }
 
-            $vSql = "SELECT vendor_id, id, vendor_name FROM vp_vendors WHERE vendor_id IN ($codeList) OR id IN ($codeList)";
+            $vWhereParts = ["vendor_id IN (" . implode(',', $strCodes) . ")"];
+            if (!empty($numIds)) {
+                $vWhereParts[] = "id IN (" . implode(',', $numIds) . ")";
+            }
+
+            $vSql = "SELECT vendor_id, id, vendor_name FROM vp_vendors WHERE " . implode(' OR ', $vWhereParts);
             $vRes = $this->conn->query($vSql);
             if ($vRes) {
                 while ($vRow = $vRes->fetch_assoc()) {
