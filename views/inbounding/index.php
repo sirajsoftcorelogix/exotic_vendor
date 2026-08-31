@@ -14,17 +14,23 @@ $usersModel = new User($conn);
 // 1. Processing Logic
 if (isset($inbounding_data) && is_array($inbounding_data)) {
     foreach ($inbounding_data as $key => $value) {
-        $vendor = $vendorsModel->getVendorByVendorId($value['vendor_code']);
-        if (!$vendor && $value['vendor_code'] !== '' && $value['vendor_code'] !== null && ctype_digit((string) $value['vendor_code'])) {
-            $vendor = $vendorsModel->getVendorById((int) $value['vendor_code']);
+        if (!isset($value['vendor_name']) || $value['vendor_name'] === '') {
+            $vendor = $vendorsModel->getVendorByVendorId($value['vendor_code']);
+            if (!$vendor && $value['vendor_code'] !== '' && $value['vendor_code'] !== null && ctype_digit((string) $value['vendor_code'])) {
+                $vendor = $vendorsModel->getVendorById((int) $value['vendor_code']);
+            }
+            $inbounding_data[$key]['vendor_name'] = $vendor ? $vendor['vendor_name'] : '';
         }
-        $inbounding_data[$key]['vendor_name'] = $vendor ? $vendor['vendor_name'] : '';
         
-        $userDetails = $usersModel->getUserById($value['received_by_user_id']);
-        $inbounding_data[$key]['received_name'] = $userDetails ? $userDetails['name'] : ''; 
+        if (!isset($value['received_name'])) {
+            $userDetails = $usersModel->getUserById($value['received_by_user_id']);
+            $inbounding_data[$key]['received_name'] = $userDetails ? $userDetails['name'] : ''; 
+        }
 
-        $updaterDetails = $usersModel->getUserById($value['updated_by_user_id']);
-        $inbounding_data[$key]['updated_name'] = $updaterDetails ? $updaterDetails['name'] : '-';
+        if (!isset($value['updated_name'])) {
+            $updaterDetails = $usersModel->getUserById($value['updated_by_user_id']);
+            $inbounding_data[$key]['updated_name'] = $updaterDetails ? $updaterDetails['name'] : '-';
+        }
     }
 } else {
     $inbounding_data = [];
