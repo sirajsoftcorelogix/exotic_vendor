@@ -76,27 +76,55 @@ function inbound_filter_dropdowns_to_cookie(array $data): void
         ],
     ], JSON_UNESCAPED_UNICODE);
 
+    if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5f1') {
+        die('DEBUG STEP 5f1: json_encode payload ready, length: ' . strlen((string)$payload));
+    }
+
     if ($payload === false) {
         return;
     }
 
     $encoded = inbound_filter_dropdown_encode_payload($payload);
+    if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5f2') {
+        die('DEBUG STEP 5f2: payload encoded, encoded length: ' . strlen((string)$encoded));
+    }
+
     if ($encoded === null || strlen($encoded) > INBOUND_FILTER_DD_MAX_COOKIE_BYTES) {
         return;
     }
 
     $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
-    setcookie(
-        INBOUND_FILTER_DD_COOKIE,
-        $encoded,
-        [
-            'expires' => time() + INBOUND_FILTER_DD_TTL,
-            'path' => '/',
-            'secure' => $secure,
-            'httponly' => true,
-            'samesite' => 'Lax',
-        ]
-    );
+    if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5f3') {
+        die('DEBUG STEP 5f3: Before calling setcookie()');
+    }
+
+    if (PHP_VERSION_ID >= 70300) {
+        setcookie(
+            INBOUND_FILTER_DD_COOKIE,
+            $encoded,
+            [
+                'expires' => time() + INBOUND_FILTER_DD_TTL,
+                'path' => '/',
+                'secure' => $secure,
+                'httponly' => true,
+                'samesite' => 'Lax',
+            ]
+        );
+    } else {
+        setcookie(
+            INBOUND_FILTER_DD_COOKIE,
+            $encoded,
+            time() + INBOUND_FILTER_DD_TTL,
+            '/',
+            '',
+            $secure,
+            true
+        );
+    }
+
+    if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5f4') {
+        die('DEBUG STEP 5f4: After calling setcookie() successfully');
+    }
 }
 
 /**
