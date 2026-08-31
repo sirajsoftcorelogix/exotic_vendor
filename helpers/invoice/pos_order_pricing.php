@@ -358,8 +358,8 @@ function pos_order_build_line_display_pricing_map(array $orderLines, ?array $inv
         }
 
         $meta = pos_order_line_meta_for_item($orderRow, (int)$index, $lineItemsMeta);
-        $listOverride = is_array($meta) ? (float)($meta['list_unit_incl'] ?? 0) : 0.0;
-        $discOverride = is_array($meta) ? (float)($meta['discounted_unit_incl'] ?? 0) : 0.0;
+        $listOverride = ($orderLevelDisc > 0.001 && is_array($meta)) ? (float)($meta['list_unit_incl'] ?? 0) : 0.0;
+        $discOverride = ($orderLevelDisc > 0.001 && is_array($meta)) ? (float)($meta['discounted_unit_incl'] ?? 0) : 0.0;
         if (isset($excelAdjusted[$index])) {
             $listOverride = (float)($excelAdjusted[$index]['list_incl_unit'] ?? $listOverride);
             $discOverride = (float)($excelAdjusted[$index]['disc_incl_unit'] ?? $discOverride);
