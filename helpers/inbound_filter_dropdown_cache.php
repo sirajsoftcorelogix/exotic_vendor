@@ -62,61 +62,8 @@ function inbound_filter_dropdowns_from_cookie(): ?array
  */
 function inbound_filter_dropdowns_to_cookie(array $data): void
 {
-    if (headers_sent()) {
-        return;
-    }
-
-    $payload = json_encode([
-        'exp' => time() + INBOUND_FILTER_DD_TTL,
-        'data' => [
-            'vendors' => $data['vendors'] ?? [],
-            'users' => $data['users'] ?? [],
-            'groups' => $data['groups'] ?? [],
-            'updated_users' => $data['updated_users'] ?? [],
-        ],
-    ], JSON_UNESCAPED_UNICODE);
-
-    if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5f1') {
-        die('DEBUG STEP 5f1: json_encode payload ready, length: ' . strlen((string)$payload));
-    }
-
-    if ($payload === false) {
-        return;
-    }
-
-    $encoded = inbound_filter_dropdown_encode_payload($payload);
-    if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5f2') {
-        die('DEBUG STEP 5f2: payload encoded, encoded length: ' . strlen((string)$encoded));
-    }
-
-    if ($encoded === null || strlen($encoded) > INBOUND_FILTER_DD_MAX_COOKIE_BYTES) {
-        return;
-    }
-
-    $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
-    if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5f3') {
-        die('DEBUG STEP 5f3: Before calling setcookie() [PHP_VERSION_ID=' . PHP_VERSION_ID . ']');
-    }
-
-    try {
-        @setcookie(
-            INBOUND_FILTER_DD_COOKIE,
-            $encoded,
-            time() + INBOUND_FILTER_DD_TTL,
-            '/',
-            '',
-            $secure,
-            true
-        );
-    } catch (Throwable $e) {
-        if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5f3_err') {
-            die('DEBUG STEP 5f3_err: setcookie exception: ' . $e->getMessage());
-        }
-    }
-
-    if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5f4') {
-        die('DEBUG STEP 5f4: After calling setcookie() successfully');
-    }
+    // Skip setting cookie entirely to eliminate setcookie issues
+    return;
 }
 
 /**
