@@ -95,23 +95,11 @@ function inbound_filter_dropdowns_to_cookie(array $data): void
 
     $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
     if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5f3') {
-        die('DEBUG STEP 5f3: Before calling setcookie()');
+        die('DEBUG STEP 5f3: Before calling setcookie() [PHP_VERSION_ID=' . PHP_VERSION_ID . ']');
     }
 
-    if (PHP_VERSION_ID >= 70300) {
-        setcookie(
-            INBOUND_FILTER_DD_COOKIE,
-            $encoded,
-            [
-                'expires' => time() + INBOUND_FILTER_DD_TTL,
-                'path' => '/',
-                'secure' => $secure,
-                'httponly' => true,
-                'samesite' => 'Lax',
-            ]
-        );
-    } else {
-        setcookie(
+    try {
+        @setcookie(
             INBOUND_FILTER_DD_COOKIE,
             $encoded,
             time() + INBOUND_FILTER_DD_TTL,
@@ -120,6 +108,10 @@ function inbound_filter_dropdowns_to_cookie(array $data): void
             $secure,
             true
         );
+    } catch (Throwable $e) {
+        if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5f3_err') {
+            die('DEBUG STEP 5f3_err: setcookie exception: ' . $e->getMessage());
+        }
     }
 
     if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5f4') {
