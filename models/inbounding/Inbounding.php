@@ -218,13 +218,67 @@ class Inbounding {
 
         $rowsById = [];
         $itemIds = [];
+        $vendorCodes = [];
+        $userIds = [];
+
         if ($result) {
             while ($row = $result->fetch_assoc()) {
                 $current_id = (int) $row['id'];
                 $itemIds[] = $current_id;
                 $rowsById[$current_id] = $row;
+
+                if (isset($row['vendor_code']) && trim((string)$row['vendor_code']) !== '') {
+                    $vendorCodes[] = trim((string)$row['vendor_code']);
+                }
+                if (!empty($row['received_by_user_id'])) {
+                    $userIds[] = (int) $row['received_by_user_id'];
+                }
+                if (!empty($row['updated_by_user_id'])) {
+                    $userIds[] = (int) $row['updated_by_user_id'];
+                }
             }
             $result->free();
+        }
+
+        // Batch fetch vendor names in a single query
+        $vendorMap = [];
+        if (!empty($vendorCodes)) {
+            $uniqueCodes = array_values(array_unique($vendorCodes));
+            $escapedCodes = array_map(function($c) {
+                return "'" . $this->conn->real_escape_string($c) . "'";
+            }, $uniqueCodes);
+            $codeList = implode(',', $escapedCodes);
+
+            $vSql = "SELECT vendor_id, id, vendor_name FROM vp_vendors WHERE vendor_id IN ($codeList) OR id IN ($codeList)";
+            $vRes = $this->conn->query($vSql);
+            if ($vRes) {
+                while ($vRow = $vRes->fetch_assoc()) {
+                    if (!empty($vRow['vendor_id'])) {
+                        $vendorMap[(string)$vRow['vendor_id']] = $vRow['vendor_name'];
+                    }
+                    if (!empty($vRow['id'])) {
+                        $vendorMap[(string)$vRow['id']] = $vRow['vendor_name'];
+                    }
+                }
+                $vRes->free();
+            }
+        }
+
+        // Batch fetch user names in a single query
+        $userMap = [];
+        if (!empty($userIds)) {
+            $uniqueUserIds = array_values(array_unique(array_filter($userIds)));
+            if (!empty($uniqueUserIds)) {
+                $uIdList = implode(',', $uniqueUserIds);
+                $uSql = "SELECT id, name FROM vp_users WHERE id IN ($uIdList)";
+                $uRes = $this->conn->query($uSql);
+                if ($uRes) {
+                    while ($uRow = $uRes->fetch_assoc()) {
+                        $userMap[(int)$uRow['id']] = $uRow['name'];
+                    }
+                    $uRes->free();
+                }
+            }
         }
 
         $galleryFiles = $this->getListGalleryFilesByItemIds($itemIds);
@@ -234,8 +288,14 @@ class Inbounding {
         foreach ($itemIds as $current_id) {
             $row = $rowsById[$current_id];
 
-            // If you want the main 'group_name' key to be the human readable name, uncomment this:
-            // $row['group_name'] = $row['group_name_display'];
+            $vCode = trim((string)($row['vendor_code'] ?? ''));
+            $row['vendor_name'] = $vendorMap[$vCode] ?? '';
+
+            $recId = (int)($row['received_by_user_id'] ?? 0);
+            $row['received_name'] = $userMap[$recId] ?? '';
+
+            $updId = (int)($row['updated_by_user_id'] ?? 0);
+            $row['updated_name'] = $userMap[$updId] ?? '-';
 
             $gf = trim((string) ($galleryFiles[$current_id] ?? ''));
             if ($gf !== '') {
