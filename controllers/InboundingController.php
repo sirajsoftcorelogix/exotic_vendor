@@ -101,7 +101,13 @@ class InboundingController {
         
         // 4. Fetch Dynamic Dropdown Data (cookie-cached ~5 min)
         $dropdowns = inbound_filter_dropdowns_get($inboundingModel);
+        if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5h') {
+            die('DEBUG STEP 5h: After inbound_filter_dropdowns_get() returned to controller, before inbound_profiler_step()');
+        }
         inbound_profiler_step($prof, 'getFilterDropdowns');
+        if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5i') {
+            die('DEBUG STEP 5i: After inbound_profiler_step(getFilterDropdowns)');
+        }
         if (isset($_GET['debug_step']) && (int)$_GET['debug_step'] === 5) {
             die('DEBUG STEP 5: After inbound_filter_dropdowns_get(), before getAllActiveUsers()');
         }
