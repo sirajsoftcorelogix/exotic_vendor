@@ -48,7 +48,7 @@ function isFilled($value) {
     return true;
 }
 
-// 3. THUMBNAIL HELPER FUNCTION
+// 3. THUMBNAIL HELPER FUNCTION (Safe memory & fallback check)
 function getThumbnail($filePath, $width = 150, $height = 150) {
     $cleanPath = ltrim((string) $filePath, '/');
 
@@ -61,13 +61,13 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
         if (is_file($rootPath) && is_readable($rootPath)) {
             $cleanPath = $rootPath;
         } else {
-            return '';
+            return str_replace(DIRECTORY_SEPARATOR, '/', $cleanPath);
         }
     }
 
     $fileSize = @filesize($cleanPath);
     if ($fileSize === false || $fileSize <= 0) {
-        return '';
+        return str_replace(DIRECTORY_SEPARATOR, '/', $cleanPath);
     }
 
     $dirName  = dirname($cleanPath);
@@ -80,8 +80,13 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
         return str_replace(DIRECTORY_SEPARATOR, '/', $thumbPath);
     }
 
+    // Skip heavy GD image processing if file is large (> 2MB) or directory is not writable to avoid memory/time limit 502 crashes
+    if ($fileSize > 2 * 1024 * 1024) {
+        return str_replace(DIRECTORY_SEPARATOR, '/', $cleanPath);
+    }
+
     if (!is_dir($thumbDir) && !@mkdir($thumbDir, 0777, true) && !is_dir($thumbDir)) {
-        return '';
+        return str_replace(DIRECTORY_SEPARATOR, '/', $cleanPath);
     }
 
     $info = @getimagesize($cleanPath);
