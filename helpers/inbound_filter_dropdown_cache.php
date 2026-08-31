@@ -117,7 +117,14 @@ function inbound_filter_dropdowns_get(Inbounding $model): array
     }
 
     $data = $model->getFilterDropdowns();
+    if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5f') {
+        die('DEBUG STEP 5f: Right after getFilterDropdowns() returned, before inbound_filter_dropdowns_to_cookie()');
+    }
+
     inbound_filter_dropdowns_to_cookie($data);
+    if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5g') {
+        die('DEBUG STEP 5g: Right after inbound_filter_dropdowns_to_cookie() completed');
+    }
 
     return $data;
 }
