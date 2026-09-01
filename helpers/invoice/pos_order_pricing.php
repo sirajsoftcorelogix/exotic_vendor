@@ -745,21 +745,13 @@ function pos_order_enrich_line_display_pricing(array $orderRow, array $pricing, 
         ]);
     }
 
-    $qty = max(1, (int)($orderRow['quantity'] ?? 1));
     $rawItemPrice = (float)($orderRow['itemprice'] ?? 0);
     $rawFinalPrice = (float)($orderRow['finalprice'] ?? 0);
-    $unitItemPrice = $rawItemPrice > 0 ? $rawItemPrice : pos_order_inclusive_unit_price($orderRow, 'list');
-    $unitFinalPrice = $rawFinalPrice > 0 ? $rawFinalPrice : pos_order_inclusive_unit_price($orderRow, 'disc');
-    $lineItemPrice = round($unitItemPrice * $qty, 2);
-    $lineFinalPrice = round($unitFinalPrice * $qty, 2);
-
-    $pricing['unit_itemprice'] = $unitItemPrice;
-    $pricing['unit_finalprice'] = $unitFinalPrice;
-    $pricing['line_itemprice'] = $lineItemPrice;
-    $pricing['line_finalprice'] = $lineFinalPrice;
-    $pricing['itemprice'] = $lineItemPrice;
-    $pricing['finalprice'] = $lineFinalPrice;
-    $pricing['item_final_discount'] = max(0.0, round($lineItemPrice - $lineFinalPrice, 2));
+    $itemPriceVal = $rawItemPrice > 0 ? $rawItemPrice : pos_order_inclusive_unit_price($orderRow, 'list');
+    $finalPriceVal = $rawFinalPrice > 0 ? $rawFinalPrice : pos_order_inclusive_unit_price($orderRow, 'disc');
+    $pricing['itemprice'] = $itemPriceVal;
+    $pricing['finalprice'] = $finalPriceVal;
+    $pricing['item_final_discount'] = max(0.0, round($itemPriceVal - $finalPriceVal, 2));
     $pricing['base_list_incl'] = $baseListIncl;
     $pricing['base_discount_value'] = (float)($components[0]['discount_value'] ?? 0);
     $pricing['base_discounted_incl'] = (float)($components[0]['discounted_incl'] ?? $baseListIncl);
@@ -914,15 +906,14 @@ function pos_order_aggregate_line_pricing_summary(array $linePricingByLineId, ?a
     $hasGross = false;
 
     foreach ($linePricingByLineId as $pricing) {
-        if (!is_array($pricing) || (!array_key_exists('gross_incl', $pricing) && !array_key_exists('itemprice', $pricing) && !array_key_exists('line_itemprice', $pricing))) {
+        if (!is_array($pricing) || (!array_key_exists('gross_incl', $pricing) && !array_key_exists('itemprice', $pricing))) {
             continue;
         }
         $hasGross = true;
-        $itemPriceSum = (float)($pricing['line_itemprice'] ?? $pricing['itemprice'] ?? $pricing['gross_incl'] ?? 0);
-        $finalPriceSum = (float)($pricing['line_finalprice'] ?? $pricing['finalprice'] ?? $pricing['chargeable_value'] ?? 0);
+        $itemPriceSum = (float)($pricing['itemprice'] ?? $pricing['gross_incl'] ?? 0);
         $grossIncl += $itemPriceSum;
         $totalGst += (float)($pricing['total_gst'] ?? 0);
-        $netChargeable += $finalPriceSum;
+        $netChargeable += (float)($pricing['finalprice'] ?? $pricing['chargeable_value'] ?? 0);
         $customReduce += (float)($pricing['custom_reduce'] ?? 0);
     }
 
@@ -968,27 +959,45 @@ function pos_order_build_summary_rows_from_line_pricing(array $aggregate, array 
         'is_grand' => false,
     ]];
 
-    $definedDiscountLines = pos_order_build_order_level_discount_lines($posMeta, $orderInfo);
-    $definedDiscountSum = 0.0;
+    $custom_reduce = round(max(0.0, (float)($posMeta['cash_discount'] ?? (is_array($orderInfo) ? ($orderInfo['custom_reduce'] ?? 0) : 0))), 2);
+    $coupon_reduce = round(max(0.0, (float)($posMeta['coupon_discount'] ?? (is_array($orderInfo) ? ($orderInfo['coupon_reduce'] ?? 0) : 0))), 2);
+    $giftvoucher_reduce = round(max(0.0, (float)($posMeta['gift_discount'] ?? (is_array($orderInfo) ? ($orderInfo['giftvoucher_reduce'] ?? 0) : 0))), 2);
 
-    foreach ($definedDiscountLines as $discountLine) {
-        $amt = (float)($discountLine['amount'] ?? 0);
-        $definedDiscountSum += $amt;
+    $total_reduce = round($custom_reduce + $coupon_reduce + $giftvoucher_reduce, 2);
+    $total_discount = max(0.0, round($grossIncl - $netChargeable, 2));
+    $season_discount = max(0.0, round($total_discount - $total_reduce, 2));
+
+    if ($custom_reduce > 0.001) {
         $rows[] = [
-            'label' => (string)($discountLine['label'] ?? 'Custom Discount:'),
-            'amount' => $amt,
+            'label' => 'Custom Discount',
+            'amount' => $custom_reduce,
             'note' => '',
             'is_grand' => false,
         ];
     }
 
-    $totalDiffDiscount = max(0.0, round($grossIncl - $netChargeable, 2));
-    $unallocatedDiscount = max(0.0, round($totalDiffDiscount - $definedDiscountSum, 2));
-
-    if ($unallocatedDiscount > 0.001) {
+    if ($coupon_reduce > 0.001) {
         $rows[] = [
-            'label' => 'Discount',
-            'amount' => $unallocatedDiscount,
+            'label' => 'Coupon Discount',
+            'amount' => $coupon_reduce,
+            'note' => '',
+            'is_grand' => false,
+        ];
+    }
+
+    if ($giftvoucher_reduce > 0.001) {
+        $rows[] = [
+            'label' => 'Giftvoucher Discount',
+            'amount' => $giftvoucher_reduce,
+            'note' => '',
+            'is_grand' => false,
+        ];
+    }
+
+    if ($season_discount > 0.001) {
+        $rows[] = [
+            'label' => 'Season Discount',
+            'amount' => $season_discount,
             'note' => '',
             'is_grand' => false,
         ];
