@@ -701,14 +701,6 @@ $proformaPrintDisabledReason = $canPrintProforma
                                             <?php endif; ?>
                                         </div>
                                         <div class="flex items-center gap-6">
-                                            <div class="flex items-center gap-2 text-[13px] text-gray-500">
-                                                <span><?php echo $currencysymbol; ?><?php echo number_format($unitListPrice, 2); ?> x</span>
-                                                <span class="rounded bg-gray-100 px-2 py-0.5 text-gray-700"><?php echo $item['quantity']; ?></span>
-                                            </div>
-
-                                            <div class="w-20 text-right text-[14px] font-bold text-gray-900 tabular-nums">
-                                                <?php echo $currencysymbol . number_format($netLineAmount, 2); ?>
-                                            </div>
                                             <div class="flex-shrink-0 flex flex-col items-end gap-2">
                                                 <span class="rounded-full bg-green-600 px-3 py-1 text-[11px] font-semibold text-white whitespace-nowrap"><?php echo htmlspecialchars($lineStatusLabel); ?></span>
                                                 <button type="button"
