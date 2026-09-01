@@ -621,8 +621,6 @@ $proformaPrintDisabledReason = $canPrintProforma
                         }
                         $listLineAmount = $unitListPrice * $qty;
                         $netLineAmount = $unitFinalPrice * $qty;
-                        $headlineLineAmount = $listLineAmount > 0 ? $listLineAmount : $netLineAmount;
-                        $hasExtendedPricing = ($listLineAmount > $netLineAmount + 0.001) || !empty($item['addons']);
                         $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
                         $lineId = (int)($item['id'] ?? 0);
                         $lineStatus = (string)($item['status'] ?? '');
@@ -703,27 +701,14 @@ $proformaPrintDisabledReason = $canPrintProforma
                                             <?php endif; ?>
                                         </div>
                                         <div class="flex items-center gap-6">
-                                            <?php if ($hasExtendedPricing): ?>
-                                                <div class="text-right text-[13px] text-gray-500">
-                                                    <p class="text-[11px] uppercase tracking-wide text-gray-500">List price</p>
-                                                    <p class="tabular-nums font-semibold text-[13px] text-gray-500 <?php echo ($listLineAmount > $netLineAmount + 0.001) ? 'line-through' : ''; ?>"><?php echo $currencysymbol . number_format($headlineLineAmount, 2); ?></p>
-                                                </div>
-                                                <?php if ($listLineAmount > $netLineAmount + 0.001): ?>
-                                                    <div class="text-right text-[13px]">
-                                                        <p class="text-[11px] uppercase tracking-wide text-emerald-700 font-semibold">Net Chargeable</p>
-                                                        <p class="tabular-nums font-bold text-[14px] text-gray-900"><?php echo $currencysymbol . number_format($netLineAmount, 2); ?></p>
-                                                    </div>
-                                                <?php endif; ?>
-                                            <?php else: ?>
-                                                <div class="flex items-center gap-2 text-[13px] text-gray-500">
-                                                    <span><?php echo $currencysymbol; ?><?php echo number_format($unitListPrice, 2); ?> x</span>
-                                                    <span class="rounded bg-gray-100 px-2 py-0.5 text-gray-700"><?php echo $item['quantity']; ?></span>
-                                                </div>
+                                            <div class="flex items-center gap-2 text-[13px] text-gray-500">
+                                                <span><?php echo $currencysymbol; ?><?php echo number_format($unitListPrice, 2); ?> x</span>
+                                                <span class="rounded bg-gray-100 px-2 py-0.5 text-gray-700"><?php echo $item['quantity']; ?></span>
+                                            </div>
 
-                                                <div class="w-20 text-right text-[14px] font-bold text-gray-900 tabular-nums">
-                                                    <?php echo $currencysymbol . number_format($netLineAmount, 2); ?>
-                                                </div>
-                                            <?php endif; ?>
+                                            <div class="w-20 text-right text-[14px] font-bold text-gray-900 tabular-nums">
+                                                <?php echo $currencysymbol . number_format($netLineAmount, 2); ?>
+                                            </div>
                                             <div class="flex-shrink-0 flex flex-col items-end gap-2">
                                                 <span class="rounded-full bg-green-600 px-3 py-1 text-[11px] font-semibold text-white whitespace-nowrap"><?php echo htmlspecialchars($lineStatusLabel); ?></span>
                                                 <button type="button"
