@@ -187,28 +187,7 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
             }
 
             if ($activeCount > 0) {
-                $couponReduce = 0.0;
-                $giftReduce = 0.0;
-                $credit = 0.0;
-                $infoStmt = $conn->prepare('SELECT custom_reduce, coupon_reduce, giftvoucher_reduce, credit FROM vp_order_info WHERE order_number = ? LIMIT 1');
-                if ($infoStmt) {
-                    $infoStmt->bind_param('s', $orderNumber);
-                    $infoStmt->execute();
-                    $infoRow = $infoStmt->get_result()->fetch_assoc();
-                    $infoStmt->close();
-                    if ($infoRow) {
-                        if ((float)($infoRow['custom_reduce'] ?? 0) > 0) {
-                            $customReduce = (float)$infoRow['custom_reduce'];
-                        }
-                        $couponReduce = (float)($infoRow['coupon_reduce'] ?? 0);
-                        $giftReduce = (float)($infoRow['giftvoucher_reduce'] ?? 0);
-                        $credit = (float)($infoRow['credit'] ?? 0);
-                    }
-                }
-
-                $reductions = round($customReduce + $couponReduce + $giftReduce + $credit, 2);
-
-                return max(0.0, round($gross - $reductions, 2));
+                return max(0.0, round($gross, 2));
             }
         }
     }
