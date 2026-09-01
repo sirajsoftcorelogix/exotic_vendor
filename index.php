@@ -1393,9 +1393,6 @@ switch ($page) {
         }
         break;
     case 'inbounding':
-        if (isset($_GET['debug_step']) && (int)$_GET['debug_step'] === 1) {
-            die('DEBUG STEP 1: Router reached case inbounding in index.php');
-        }
         require_once 'controllers/InboundingController.php';
         $controller = new InboundingController();
         switch ($action) {

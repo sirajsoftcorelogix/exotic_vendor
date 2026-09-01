@@ -406,9 +406,6 @@ class Inbounding {
     // --- NEW HELPER FOR DROPDOWNS ---
     // --- HELPER FOR FILTERS ---
     public function getFilterDropdowns() {
-        if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5a') {
-            die('DEBUG STEP 5a: Entered getFilterDropdowns() method in Inbounding.php');
-        }
         $data = ['vendors' => [], 'users' => [], 'groups' => [], 'updated_users' => []];
 
         // 1. Get Vendors (Only those present in vp_inbound)
@@ -423,9 +420,6 @@ class Inbounding {
                 $data['vendors'][] = $r; 
             }
         }
-        if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5b') {
-            die('DEBUG STEP 5b: After Query 1 (Vendors query) in getFilterDropdowns() [count: ' . count($data['vendors']) . ']');
-        }
 
         // 2. Get Agents / Users (Only those present in vp_inbound)
         $u_sql = "SELECT DISTINCT u.id, u.name 
@@ -438,9 +432,6 @@ class Inbounding {
                 $data['users'][] = $r; 
             }
         }
-        if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5c') {
-            die('DEBUG STEP 5c: After Query 2 (Users query) in getFilterDropdowns() [count: ' . count($data['users']) . ']');
-        }
 
         $upd_sql = "SELECT DISTINCT u.id, u.name 
                 FROM vp_users u 
@@ -451,9 +442,6 @@ class Inbounding {
             while($r = $upd_res->fetch_assoc()) { 
                 $data['updated_users'][] = $r; 
             }
-        }
-        if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5d') {
-            die('DEBUG STEP 5d: After Query 3 (Updated Users query) in getFilterDropdowns() [count: ' . count($data['updated_users']) . ']');
         }
 
         // 3. Get Groups (Joined with Category Table)
@@ -469,9 +457,6 @@ class Inbounding {
             while($r = $g_res->fetch_assoc()) { 
                 $data['groups'][] = $r; 
             }
-        }
-        if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5e') {
-            die('DEBUG STEP 5e: After Query 4 (Groups query) in getFilterDropdowns() [count: ' . count($data['groups']) . ']');
         }
 
         return $data;

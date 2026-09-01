@@ -44,13 +44,7 @@ class InboundingController {
     }
 
     public function index() {
-        if (isset($_GET['debug_step']) && (int)$_GET['debug_step'] === 2) {
-            die('DEBUG STEP 2: Inside InboundingController::index() before is_login()');
-        }
         is_login();
-        if (isset($_GET['debug_step']) && (int)$_GET['debug_step'] === 3) {
-            die('DEBUG STEP 3: After is_login(), before Inbounding::getAll()');
-        }
         global $inboundingModel;
         $prof = inbound_profiler_start('list', [
             'page_no' => isset($_GET['page_no']) ? (int) $_GET['page_no'] : 1,
@@ -95,27 +89,11 @@ class InboundingController {
             'rows' => count($pt_data['inbounding'] ?? []),
             'total_records' => (int) ($pt_data['totalRecords'] ?? 0),
         ]);
-        if (isset($_GET['debug_step']) && (int)$_GET['debug_step'] === 4) {
-            die('DEBUG STEP 4: After Inbounding::getAll() [rows: ' . count($pt_data['inbounding'] ?? []) . ', totalRecords: ' . ($pt_data['totalRecords'] ?? 0) . '], before getFilterDropdowns()');
-        }
-        
         // 4. Fetch Dynamic Dropdown Data (cookie-cached ~5 min)
         $dropdowns = inbound_filter_dropdowns_get($inboundingModel);
-        if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5h') {
-            die('DEBUG STEP 5h: After inbound_filter_dropdowns_get() returned to controller, before inbound_profiler_step()');
-        }
         inbound_profiler_step($prof, 'getFilterDropdowns');
-        if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5i') {
-            die('DEBUG STEP 5i: After inbound_profiler_step(getFilterDropdowns)');
-        }
-        if (isset($_GET['debug_step']) && (int)$_GET['debug_step'] === 5) {
-            die('DEBUG STEP 5: After inbound_filter_dropdowns_get(), before getAllActiveUsers()');
-        }
         $alluser_list = $inboundingModel->getAllActiveUsers();
         inbound_profiler_step($prof, 'getAllActiveUsers');
-        if (isset($_GET['debug_step']) && (int)$_GET['debug_step'] === 6) {
-            die('DEBUG STEP 6: After getAllActiveUsers(), before renderTemplate()');
-        }
         $data = [
             'inbounding_data' => $pt_data["inbounding"],
             'page_no'         => $page_no,
@@ -2891,6 +2869,14 @@ class InboundingController {
             $publisherApiValue = implode(',', $inboundingModel->parseInboundAuthorIds($d['publisher'] ?? ''));
             if ($publisherApiValue !== '') {
                 $API_data['publisher_vendor_id'] = $publisherApiValue;
+            }
+
+            $publisherNameApiValue = $inboundingModel->resolveInboundPublisherNames($d['publisher'] ?? '');
+            if ($publisherNameApiValue === '' && !empty($d['publisher']) && !is_numeric($d['publisher'])) {
+                $publisherNameApiValue = trim((string) $d['publisher']);
+            }
+            if ($publisherNameApiValue !== '') {
+                $API_data['publisher'] = $publisherNameApiValue;
             }
 
             $API_data['language'] = $d['language'] ?? '';

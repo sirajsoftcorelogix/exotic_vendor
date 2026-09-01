@@ -180,6 +180,14 @@ function inbound_api_build_book_details_modify_fields(array $d, Inbounding $mode
         $fields['publisher_vendor_id'] = $publisherApiValue;
     }
 
+    $publisherNameApiValue = $model->resolveInboundPublisherNames($d['publisher'] ?? '');
+    if ($publisherNameApiValue === '' && !empty($d['publisher']) && !is_numeric($d['publisher'])) {
+        $publisherNameApiValue = trim((string) $d['publisher']);
+    }
+    if ($publisherNameApiValue !== '') {
+        $fields['publisher'] = $publisherNameApiValue;
+    }
+
     $append('language', inbound_api_resolve_book_language_for_modify($d));
     $append('isbn', $d['isbn'] ?? '');
 
