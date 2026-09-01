@@ -745,13 +745,21 @@ function pos_order_enrich_line_display_pricing(array $orderRow, array $pricing, 
         ]);
     }
 
+    $qty = max(1, (int)($orderRow['quantity'] ?? 1));
     $rawItemPrice = (float)($orderRow['itemprice'] ?? 0);
     $rawFinalPrice = (float)($orderRow['finalprice'] ?? 0);
-    $itemPriceVal = $rawItemPrice > 0 ? $rawItemPrice : pos_order_inclusive_unit_price($orderRow, 'list');
-    $finalPriceVal = $rawFinalPrice > 0 ? $rawFinalPrice : pos_order_inclusive_unit_price($orderRow, 'disc');
-    $pricing['itemprice'] = $itemPriceVal;
-    $pricing['finalprice'] = $finalPriceVal;
-    $pricing['item_final_discount'] = max(0.0, round($itemPriceVal - $finalPriceVal, 2));
+    $unitItemPrice = $rawItemPrice > 0 ? $rawItemPrice : pos_order_inclusive_unit_price($orderRow, 'list');
+    $unitFinalPrice = $rawFinalPrice > 0 ? $rawFinalPrice : pos_order_inclusive_unit_price($orderRow, 'disc');
+    $lineItemPrice = round($unitItemPrice * $qty, 2);
+    $lineFinalPrice = round($unitFinalPrice * $qty, 2);
+
+    $pricing['unit_itemprice'] = $unitItemPrice;
+    $pricing['unit_finalprice'] = $unitFinalPrice;
+    $pricing['line_itemprice'] = $lineItemPrice;
+    $pricing['line_finalprice'] = $lineFinalPrice;
+    $pricing['itemprice'] = $lineItemPrice;
+    $pricing['finalprice'] = $lineFinalPrice;
+    $pricing['item_final_discount'] = max(0.0, round($lineItemPrice - $lineFinalPrice, 2));
     $pricing['base_list_incl'] = $baseListIncl;
     $pricing['base_discount_value'] = (float)($components[0]['discount_value'] ?? 0);
     $pricing['base_discounted_incl'] = (float)($components[0]['discounted_incl'] ?? $baseListIncl);
@@ -906,13 +914,15 @@ function pos_order_aggregate_line_pricing_summary(array $linePricingByLineId, ?a
     $hasGross = false;
 
     foreach ($linePricingByLineId as $pricing) {
-        if (!is_array($pricing) || !array_key_exists('gross_incl', $pricing)) {
+        if (!is_array($pricing) || (!array_key_exists('gross_incl', $pricing) && !array_key_exists('itemprice', $pricing) && !array_key_exists('line_itemprice', $pricing))) {
             continue;
         }
         $hasGross = true;
-        $grossIncl += (float)($pricing['gross_incl'] ?? 0);
+        $itemPriceSum = (float)($pricing['line_itemprice'] ?? $pricing['itemprice'] ?? $pricing['gross_incl'] ?? 0);
+        $finalPriceSum = (float)($pricing['line_finalprice'] ?? $pricing['finalprice'] ?? $pricing['chargeable_value'] ?? 0);
+        $grossIncl += $itemPriceSum;
         $totalGst += (float)($pricing['total_gst'] ?? 0);
-        $netChargeable += (float)($pricing['chargeable_value'] ?? 0);
+        $netChargeable += $finalPriceSum;
         $customReduce += (float)($pricing['custom_reduce'] ?? 0);
     }
 
