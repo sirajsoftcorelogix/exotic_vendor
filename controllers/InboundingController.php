@@ -1578,16 +1578,20 @@ class InboundingController {
 
         // --- Main Invoice File Upload Logic ---
         $invoicePath = $oldData['form1']['invoice_image'] ?? '';
-        if (isset($_FILES['invoice_image']) && $_FILES['invoice_image']['error'] === 0) {
+        if (!empty($_POST['delete_invoice']) && (string)$_POST['delete_invoice'] === '1') {
+            $invoicePath = '';
+        } elseif (isset($_FILES['invoice_image']) && $_FILES['invoice_image']['error'] === UPLOAD_ERR_OK) {
             $uploadDir = __DIR__ . '/../uploads/invoice/';
             if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
             $fileExt = strtolower(pathinfo($_FILES['invoice_image']['name'], PATHINFO_EXTENSION));
-            if (in_array($fileExt, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+            if (in_array($fileExt, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'], true)) {
                 $newFile = "IMG_" . time() . "." . $fileExt;
                 if (move_uploaded_file($_FILES['invoice_image']['tmp_name'], $uploadDir . $newFile)) {
                     $invoicePath = "uploads/invoice/" . $newFile;
                 }
             }
+        } elseif (isset($_FILES['invoice_image']) && $_FILES['invoice_image']['error'] !== UPLOAD_ERR_NO_FILE) {
+            error_log('Desktopform invoice upload error code: ' . $_FILES['invoice_image']['error']);
         }
 
         // 1. Capture Inputs — vp_inbound.is_variant is ENUM('Y','N'); empty/invalid POST causes "Data truncated".
@@ -2428,6 +2432,72 @@ class InboundingController {
             'duplicates' => $check['duplicates'],
             'message' => $check['message'],
         ]);
+        exit;
+    }
+
+    /**
+     * AJAX endpoint to upload invoice image/PDF directly for desktopform.
+     */
+    public function uploadInvoiceDesktopAjax(): void
+    {
+        global $inboundingModel;
+        is_login();
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        header('Content-Type: application/json; charset=utf-8');
+
+        $id = (int) ($_POST['id'] ?? $_POST['inbound_id'] ?? 0);
+        if ($id <= 0) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid inbound record ID.']);
+            exit;
+        }
+
+        if (!isset($_FILES['invoice_image']) || $_FILES['invoice_image']['error'] !== UPLOAD_ERR_OK) {
+            $errCode = $_FILES['invoice_image']['error'] ?? UPLOAD_ERR_NO_FILE;
+            $msg = 'No file was uploaded or upload failed.';
+            if ($errCode === UPLOAD_ERR_INI_SIZE || $errCode === UPLOAD_ERR_FORM_SIZE) {
+                $msg = 'The uploaded invoice file exceeds the maximum allowed file size.';
+            }
+            echo json_encode(['status' => 'error', 'message' => $msg]);
+            exit;
+        }
+
+        $uploadDir = __DIR__ . '/../uploads/invoice/';
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+
+        $fileTmp  = $_FILES['invoice_image']['tmp_name'];
+        $fileName = $_FILES['invoice_image']['name'];
+        $fileExt  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+        $allowed  = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+
+        if (!in_array($fileExt, $allowed, true)) {
+            echo json_encode(['status' => 'error', 'message' => 'Only JPG, PNG, WEBP, GIF and PDF invoice files are allowed.']);
+            exit;
+        }
+
+        $newFile = "IMG_" . time() . "_" . rand(100, 999) . "." . $fileExt;
+        $dest    = $uploadDir . $newFile;
+
+        if (move_uploaded_file($fileTmp, $dest)) {
+            $invoicePath = "uploads/invoice/" . $newFile;
+            $result = $inboundingModel->updatedesktopform($id, ['invoice_image' => $invoicePath]);
+            if ($result && !empty($result['success'])) {
+                echo json_encode([
+                    'status' => 'success',
+                    'message' => 'Invoice uploaded successfully.',
+                    'invoice_path' => $invoicePath,
+                    'invoice_url' => base_url($invoicePath),
+                    'is_pdf' => ($fileExt === 'pdf')
+                ]);
+            } else {
+                echo json_encode(['status' => 'error', 'message' => 'Uploaded file, but database update failed.']);
+            }
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'Failed to move uploaded file.']);
+        }
         exit;
     }
 

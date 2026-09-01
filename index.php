@@ -1449,6 +1449,9 @@ switch ($page) {
             case 'checkSkuExists':
                 $controller->checkSkuExistsAjax();
                 break;
+            case 'uploadInvoiceDesktopAjax':
+                $controller->uploadInvoiceDesktopAjax();
+                break;
             case 'duplicateSkuReport':
             case 'duplicate_sku_report':
                 $controller->duplicateSkuReport();

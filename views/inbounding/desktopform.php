@@ -1892,6 +1892,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     
                     <div class="flex-1 md:max-w-[250px]">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Upload Invoice:</label>
+                        <input type="hidden" id="delete_invoice_flag" name="delete_invoice" value="0">
                         <div class="border-2 border-dashed border-gray-300 rounded-[5px] bg-[#f9f9f9] hover:bg-[#f0f0f0] transition-colors cursor-pointer h-[100px] flex flex-col items-center justify-center gap-1 group"
                              onclick="document.getElementById('invoice_input').click()">
                             
@@ -1902,6 +1903,10 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             </div>
                             <span class="text-[11px] text-[#666] font-medium">Click to Upload</span>
                         </div>
+                        <button type="button" id="upload_invoice_btn" onclick="uploadInvoiceNow()" class="mt-2 hidden w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#d97824] text-white text-xs font-bold rounded shadow hover:bg-[#c66a1d] transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            Upload Invoice Now
+                        </button>
                     </div>
                     <div id="invoice_preview_container" class="flex-1 <?php echo $hasImage ? '' : 'hidden'; ?>">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Current Invoice:</label>
@@ -3311,6 +3316,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function previewInvoice(input) {
         if (!input.files || !input.files[0]) return;
 
+        const delFlag = document.getElementById('delete_invoice_flag');
+        if (delFlag) delFlag.value = '0';
+
+        const uploadBtn = document.getElementById('upload_invoice_btn');
+        if (uploadBtn) uploadBtn.classList.remove('hidden');
+
         const file = input.files[0];
         const isPdf = file.type === 'application/pdf' || String(file.name || '').toLowerCase().endsWith('.pdf');
         const reader = new FileReader();
@@ -3365,6 +3376,80 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         reader.readAsDataURL(file);
     }
+
+    // Explicit direct invoice upload function via AJAX
+    function uploadInvoiceNow() {
+        const input = document.getElementById('invoice_input');
+        const recordId = "<?php echo (int)($record_id ?? 0); ?>";
+        if (!input || !input.files || !input.files[0]) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({ icon: 'warning', title: 'No File Selected', text: 'Please select an invoice file first.', confirmButtonColor: '#d97824' });
+            }
+            return;
+        }
+        if (!recordId || recordId === '0') {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({ icon: 'info', title: 'Draft Notice', text: 'Invoice will be saved when you save this form as draft or save changes.', confirmButtonColor: '#d97824' });
+            }
+            return;
+        }
+
+        const btn = document.getElementById('upload_invoice_btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = 'Uploading...';
+        }
+
+        const formData = new FormData();
+        formData.append('invoice_image', input.files[0]);
+        formData.append('id', recordId);
+
+        fetch('index.php?page=inbounding&action=uploadInvoiceDesktopAjax', {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = 'Upload Invoice Now';
+            }
+            if (data && data.status === 'success') {
+                const delFlag = document.getElementById('delete_invoice_flag');
+                if (delFlag) delFlag.value = '0';
+                if (btn) btn.classList.add('hidden');
+                
+                const wrap = document.getElementById('invoiceThumbWrap');
+                if (wrap && data.invoice_url) {
+                    wrap.dataset.invoiceUrl = data.invoice_url;
+                    wrap.dataset.invoicePdf = data.is_pdf ? '1' : '0';
+                }
+                const dlBtn = document.getElementById('invoice_download_btn');
+                if (dlBtn && data.invoice_url) {
+                    dlBtn.href = data.invoice_url;
+                }
+
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({ icon: 'success', title: 'Invoice Uploaded', text: data.message || 'Invoice file uploaded successfully!', confirmButtonColor: '#d97824', timer: 2000 });
+                }
+            } else {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({ icon: 'error', title: 'Upload Failed', text: (data && data.message) ? data.message : 'Failed to upload invoice.', confirmButtonColor: '#d97824' });
+                }
+            }
+        })
+        .catch(err => {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = 'Upload Invoice Now';
+            }
+            console.error('Invoice upload error:', err);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({ icon: 'error', title: 'Upload Error', text: 'An error occurred while uploading the invoice.', confirmButtonColor: '#d97824' });
+            }
+        });
+    }
     
     // 2. Open Invoice in the Global Popup
     function openInvoicePopup() {
@@ -3395,7 +3480,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const inputVal = document.getElementById('deleteConfirmationInput').value;
         if (inputVal === 'Delete') {
             // Clear File Input
-            document.getElementById('invoice_input').value = ""; 
+            document.getElementById('invoice_input').value = "";
+            const delFlag = document.getElementById('delete_invoice_flag');
+            if (delFlag) delFlag.value = '1';
+            
+            const uploadBtn = document.getElementById('upload_invoice_btn');
+            if (uploadBtn) uploadBtn.classList.add('hidden');
             
             const wrap = document.getElementById('invoiceThumbWrap');
             if (wrap) {
@@ -3413,7 +3503,14 @@ document.addEventListener('DOMContentLoaded', function() {
             // Close Popup
             closeDeletePopup();
         } else {
-            alert("Please type 'Delete' exactly to confirm.");
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Confirmation Required',
+                    text: "Please type 'Delete' exactly to confirm.",
+                    confirmButtonColor: '#d97824'
+                });
+            }
         }
     }
     // 5. Close Delete Popup
