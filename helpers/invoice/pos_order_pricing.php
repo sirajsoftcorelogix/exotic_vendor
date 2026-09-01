@@ -281,12 +281,16 @@ function pos_order_line_display_pricing(array $orderRow, array $options = []): a
         $totalGst = 0.0;
     }
 
+    $finalPriceTotal = round(pos_order_inclusive_unit_price($orderRow, 'disc') * $qty, 2);
+
     return [
         'listing_price_unit' => $listingPriceUnit,
         'taxable_value' => $taxableValue,
         'total_gst' => $totalGst,
         'discount_amount' => $discountAmount,
         'chargeable_value' => $chargeableValue,
+        'finalprice' => $finalPriceTotal,
+        'final_price' => $finalPriceTotal,
     ];
 }
 
@@ -741,6 +745,9 @@ function pos_order_enrich_line_display_pricing(array $orderRow, array $pricing, 
         ]);
     }
 
+    $finalPriceTotal = round(pos_order_inclusive_unit_price($orderRow, 'disc') * max(1, (int)($orderRow['quantity'] ?? 1)), 2);
+    $pricing['finalprice'] = $finalPriceTotal;
+    $pricing['final_price'] = $finalPriceTotal;
     $pricing['base_list_incl'] = $baseListIncl;
     $pricing['base_discount_value'] = (float)($components[0]['discount_value'] ?? 0);
     $pricing['base_discounted_incl'] = (float)($components[0]['discounted_incl'] ?? $baseListIncl);
