@@ -745,9 +745,13 @@ function pos_order_enrich_line_display_pricing(array $orderRow, array $pricing, 
         ]);
     }
 
-    $finalPriceTotal = round(pos_order_inclusive_unit_price($orderRow, 'disc') * max(1, (int)($orderRow['quantity'] ?? 1)), 2);
-    $pricing['finalprice'] = $finalPriceTotal;
-    $pricing['final_price'] = $finalPriceTotal;
+    $rawItemPrice = (float)($orderRow['itemprice'] ?? 0);
+    $rawFinalPrice = (float)($orderRow['finalprice'] ?? 0);
+    $itemPriceVal = $rawItemPrice > 0 ? $rawItemPrice : pos_order_inclusive_unit_price($orderRow, 'list');
+    $finalPriceVal = $rawFinalPrice > 0 ? $rawFinalPrice : pos_order_inclusive_unit_price($orderRow, 'disc');
+    $pricing['itemprice'] = $itemPriceVal;
+    $pricing['finalprice'] = $finalPriceVal;
+    $pricing['item_final_discount'] = max(0.0, round($itemPriceVal - $finalPriceVal, 2));
     $pricing['base_list_incl'] = $baseListIncl;
     $pricing['base_discount_value'] = (float)($components[0]['discount_value'] ?? 0);
     $pricing['base_discounted_incl'] = (float)($components[0]['discounted_incl'] ?? $baseListIncl);
