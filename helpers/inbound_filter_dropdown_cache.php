@@ -73,25 +73,11 @@ function inbound_filter_dropdowns_get(Inbounding $model): array
 {
     $cached = inbound_filter_dropdowns_from_cookie();
     if ($cached !== null) {
-        if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5_cache') {
-            die('DEBUG STEP 5_cache: Loaded filter dropdowns from Cookie cache!');
-        }
         return $cached;
     }
 
-    if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5_nocache') {
-        die('DEBUG STEP 5_nocache: Cookie cache MISS, proceeding to run SQL queries in getFilterDropdowns()');
-    }
-
     $data = $model->getFilterDropdowns();
-    if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5f') {
-        die('DEBUG STEP 5f: Right after getFilterDropdowns() returned, before inbound_filter_dropdowns_to_cookie()');
-    }
-
     inbound_filter_dropdowns_to_cookie($data);
-    if (isset($_GET['debug_step']) && $_GET['debug_step'] === '5g') {
-        die('DEBUG STEP 5g: Right after inbound_filter_dropdowns_to_cookie() completed');
-    }
 
     return $data;
 }

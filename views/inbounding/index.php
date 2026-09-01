@@ -1,7 +1,4 @@
 <?php
-if (isset($_GET['debug_step']) && (int)$_GET['debug_step'] === 7) {
-    die('DEBUG STEP 7: Top of views/inbounding/index.php view file');
-}
 require_once 'settings/database/database.php';
 require_once 'models/vendor/vendor.php';
 require_once 'models/user/user.php';
@@ -605,11 +602,6 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
     </div>
 
     <?php if (!empty($inbounding_data)): ?>
-        <?php
-        if (isset($_GET['debug_step']) && (int)$_GET['debug_step'] === 8) {
-            die('DEBUG STEP 8: Inside views/inbounding/index.php before rendering ' . count($inbounding_data) . ' items');
-        }
-        ?>
         <?php foreach ($inbounding_data as $index => $tc): ?>
             <?php
             // Calculation Logic
@@ -902,11 +894,6 @@ function getThumbnail($filePath, $width = 150, $height = 150) {
                 </div>
             </div> 
         <?php endforeach; ?>
-        <?php
-        if (isset($_GET['debug_step']) && (int)$_GET['debug_step'] === 9) {
-            die('DEBUG STEP 9: Finished rendering all item cards in views/inbounding/index.php');
-        }
-        ?>
     <?php else: ?>
         <div class="bg-white rounded-[16px] p-10 text-center text-gray-500 shadow-sm border border-gray-200">
             <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-4 text-gray-300"></i>
