@@ -1903,10 +1903,6 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             </div>
                             <span class="text-[11px] text-[#666] font-medium">Click to Upload</span>
                         </div>
-                        <button type="button" id="upload_invoice_btn" onclick="uploadInvoiceNow()" class="mt-2 hidden w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#d97824] text-white text-xs font-bold rounded shadow hover:bg-[#c66a1d] transition">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                            Upload Invoice Now
-                        </button>
                     </div>
                     <div id="invoice_preview_container" class="flex-1 <?php echo $hasImage ? '' : 'hidden'; ?>">
                         <label class="block text-xs font-bold text-[#222] mb-[5px]">Current Invoice:</label>
@@ -1930,6 +1926,10 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                                 </div>
                             </div>
                             <div class="flex flex-col gap-2 justify-center">
+                                <button type="button" id="upload_invoice_btn" onclick="uploadInvoiceNow()" class="hidden flex items-center gap-2 text-[12px] font-bold text-[#d97824] hover:text-[#bf7326] transition">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                    Upload Invoice Now
+                                </button>
                                 <a id="invoice_download_btn" href="<?php echo $imageSrc; ?>" download="Invoice_Image" class="flex items-center gap-2 text-[12px] font-bold text-[#d97824] hover:text-[#bf7326] transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                                     Download
