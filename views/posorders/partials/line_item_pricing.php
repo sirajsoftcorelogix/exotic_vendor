@@ -71,7 +71,7 @@ $showComponentBreakdown = count($pricingComponents) > 0 && ($customReduce > 0.00
     <div class="mt-3 border-t border-gray-200 pt-3">
         <div class="flex w-full items-center justify-between gap-4">
             <span class="font-semibold text-gray-800">Net chargeable amount</span>
-            <span class="shrink-0 text-right tabular-nums text-[15px] font-bold text-gray-900"><?php echo $formatAmount((float)($linePricing['chargeable_value'] ?? 0)); ?></span>
+            <span class="shrink-0 text-right tabular-nums text-[15px] font-bold text-gray-900"><?php echo $formatAmount((float)($linePricing['finalprice'] ?? $linePricing['final_price'] ?? $linePricing['base_discounted_incl'] ?? $linePricing['chargeable_value'] ?? 0)); ?></span>
         </div>
     </div>
 </div>
