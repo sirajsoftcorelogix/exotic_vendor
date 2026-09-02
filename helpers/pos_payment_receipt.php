@@ -151,7 +151,19 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
         return 0.0;
     }
 
-    // 1. Compute net payable directly from vp_orders lines (source of truth)
+    // 1. Check vp_order_info.total first
+    $infoStmt = $conn->prepare('SELECT total FROM vp_order_info WHERE order_number = ? LIMIT 1');
+    if ($infoStmt) {
+        $infoStmt->bind_param('s', $orderNumber);
+        $infoStmt->execute();
+        $infoRow = $infoStmt->get_result()->fetch_assoc();
+        $infoStmt->close();
+        if (!empty($infoRow['total']) && (float)$infoRow['total'] > 0) {
+            return round((float)$infoRow['total'], 2);
+        }
+    }
+
+    // 2. Compute net payable directly from vp_orders lines
     $stmt = $conn->prepare('SELECT status, itemprice, finalprice, quantity, addons, custom_reduce FROM vp_orders WHERE order_number = ?');
     if ($stmt) {
         $stmt->bind_param('s', $orderNumber);
