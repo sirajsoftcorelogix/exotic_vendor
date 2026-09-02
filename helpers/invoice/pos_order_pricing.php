@@ -502,13 +502,19 @@ function pos_order_build_pricing_components(array $orderRow, float $baseListIncl
 function pos_order_resolve_order_custom_reduce(array $orderLines, ?array $orderInfo = null): float
 {
     if (is_array($orderInfo)) {
-        $fromInfo = round((float)($orderInfo['custom_reduce'] ?? 0), 2);
+        $fromInfo = round((float)($orderInfo['custom_reduce'] ?? 0), 2)
+            + round((float)($orderInfo['coupon_reduce'] ?? 0), 2)
+            + round((float)($orderInfo['giftvoucher_reduce'] ?? 0), 2)
+            + round((float)($orderInfo['credit'] ?? 0), 2);
         if ($fromInfo > 0) {
             return $fromInfo;
         }
     }
 
-    $max = 0.0;
+    $customReduce = 0.0;
+    $couponReduce = 0.0;
+    $giftReduce = 0.0;
+    $creditReduce = 0.0;
     foreach ($orderLines as $orderRow) {
         if (!is_array($orderRow)) {
             continue;
@@ -516,10 +522,13 @@ function pos_order_resolve_order_custom_reduce(array $orderLines, ?array $orderI
         if (strtolower(trim((string)($orderRow['status'] ?? ''))) === 'cancelled') {
             continue;
         }
-        $max = max($max, round((float)($orderRow['custom_reduce'] ?? 0), 2));
+        $customReduce = max($customReduce, round((float)($orderRow['custom_reduce'] ?? 0), 2));
+        $couponReduce = max($couponReduce, round((float)($orderRow['coupon_reduce'] ?? 0), 2));
+        $giftReduce = max($giftReduce, round((float)($orderRow['giftvoucher_reduce'] ?? 0), 2));
+        $creditReduce = max($creditReduce, round((float)($orderRow['credit'] ?? 0), 2));
     }
 
-    return $max;
+    return round($customReduce + $couponReduce + $giftReduce + $creditReduce, 2);
 }
 
 /**
@@ -751,7 +760,6 @@ function pos_order_enrich_line_display_pricing(array $orderRow, array $pricing, 
     $finalPriceVal = $rawFinalPrice > 0 ? $rawFinalPrice : pos_order_inclusive_unit_price($orderRow, 'disc');
     $pricing['itemprice'] = $itemPriceVal;
     $pricing['finalprice'] = $finalPriceVal;
-    $pricing['item_final_discount'] = max(0.0, round($itemPriceVal - $finalPriceVal, 2));
     $pricing['base_list_incl'] = $baseListIncl;
     $pricing['base_discount_value'] = (float)($components[0]['discount_value'] ?? 0);
     $pricing['base_discounted_incl'] = (float)($components[0]['discounted_incl'] ?? $baseListIncl);
@@ -762,6 +770,7 @@ function pos_order_enrich_line_display_pricing(array $orderRow, array $pricing, 
     $pricing['gross_incl'] = $grossIncl;
     $pricing['chargeable_value'] = $netChargeable;
     $pricing['discount_amount'] = max(0.0, round($grossIncl - $netChargeable, 2));
+    $pricing['item_final_discount'] = $pricing['discount_amount'];
     $pricing['list_price_incl'] = pos_order_line_list_price_incl($orderRow);
     $pricing['taxable_value'] = $taxResult['taxable_value'];
     $pricing['total_gst'] = $taxResult['total_gst'];

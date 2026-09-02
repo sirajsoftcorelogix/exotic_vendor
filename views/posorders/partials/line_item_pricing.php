@@ -13,9 +13,9 @@ $formatAmount = static function (float $amount) use ($currencySymbol): string {
 
 $pricingComponents = is_array($linePricing['pricing_components'] ?? null) ? $linePricing['pricing_components'] : [];
 
-$itemPriceTotal = (float)($linePricing['itemprice'] ?? $linePricing['list_price_incl'] ?? $linePricing['gross_incl'] ?? 0);
-$finalPriceTotal = (float)($linePricing['finalprice'] ?? $linePricing['chargeable_value'] ?? 0);
-$discountAmount = (float)($linePricing['item_final_discount'] ?? max(0.0, round($itemPriceTotal - $finalPriceTotal, 2)));
+$itemPriceTotal = (float)($linePricing['gross_incl'] ?? $linePricing['itemprice'] ?? $linePricing['list_price_incl'] ?? 0);
+$finalPriceTotal = (float)($linePricing['chargeable_value'] ?? $linePricing['finalprice'] ?? 0);
+$discountAmount = (float)($linePricing['discount_amount'] ?? $linePricing['custom_reduce'] ?? $linePricing['item_final_discount'] ?? 0);
 
 $showComponentBreakdown = count($pricingComponents) > 0;
 ?>
