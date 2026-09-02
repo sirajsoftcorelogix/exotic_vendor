@@ -505,6 +505,15 @@ function exotic_cart_normalize_line_for_local_persist(?mysqli $conn, array $cart
     $cartRow['exotic_cart_code'] = $resolved['code'];
     $cartRow['exotic_cart_variation'] = $resolved['variation'];
 
+    $priceRaw = exotic_cart_pick_line_field($cartRow, ['itemprice', 'item_price', 'unit_price', 'price']);
+    if ($priceRaw !== '') {
+        $cartRow['itemprice'] = (float)$priceRaw;
+    }
+    $finalPriceRaw = exotic_cart_pick_line_field($cartRow, ['finalprice', 'final_price']);
+    if ($finalPriceRaw !== '') {
+        $cartRow['finalprice'] = (float)$finalPriceRaw;
+    }
+
     return $cartRow;
 }
 
