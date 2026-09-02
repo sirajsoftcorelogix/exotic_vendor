@@ -828,7 +828,7 @@ class Payment
     public function sumPaidByOrderNumber(string $orderNumber): float
     {
         $stmt = $this->db->prepare(
-            'SELECT IFNULL(SUM(payment_amount), 0) AS paid FROM pos_payments WHERE order_number = ? AND LOWER(TRIM(payment_mode)) <> \'cod\''
+            'SELECT IFNULL(SUM(payment_amount), 0) AS paid FROM pos_payments WHERE order_number = ?'
         );
         if (!$stmt) {
             return 0.0;
