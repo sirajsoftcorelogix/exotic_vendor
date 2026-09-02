@@ -967,8 +967,9 @@ function pos_order_build_summary_rows_from_line_pricing(array $aggregate, array 
     $custom_reduce = round(max(0.0, (float)($posMeta['cash_discount'] ?? (is_array($orderInfo) ? ($orderInfo['custom_reduce'] ?? 0) : 0))), 2);
     $coupon_reduce = round(max(0.0, (float)($posMeta['coupon_discount'] ?? (is_array($orderInfo) ? ($orderInfo['coupon_reduce'] ?? 0) : 0))), 2);
     $giftvoucher_reduce = round(max(0.0, (float)($posMeta['gift_discount'] ?? (is_array($orderInfo) ? ($orderInfo['giftvoucher_reduce'] ?? 0) : 0))), 2);
+    $credit_reduce = round(max(0.0, (float)($posMeta['credit_discount'] ?? (is_array($orderInfo) ? ($orderInfo['credit'] ?? 0) : 0))), 2);
 
-    $total_reduce = round($custom_reduce + $coupon_reduce + $giftvoucher_reduce, 2);
+    $total_reduce = round($custom_reduce + $coupon_reduce + $giftvoucher_reduce + $credit_reduce, 2);
     $total_discount = max(0.0, round($grossIncl - $netChargeable, 2));
     $season_discount = max(0.0, round($total_discount - $total_reduce, 2));
 
@@ -994,6 +995,15 @@ function pos_order_build_summary_rows_from_line_pricing(array $aggregate, array 
         $rows[] = [
             'label' => 'Giftvoucher Discount',
             'amount' => $giftvoucher_reduce,
+            'note' => '',
+            'is_grand' => false,
+        ];
+    }
+
+    if ($credit_reduce > 0.001) {
+        $rows[] = [
+            'label' => 'Credit Discount',
+            'amount' => $credit_reduce,
             'note' => '',
             'is_grand' => false,
         ];
