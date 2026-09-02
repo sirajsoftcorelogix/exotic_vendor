@@ -251,17 +251,14 @@ function pos_local_checkout_persist_order(
         $key = pos_local_checkout_line_key($itemCode, $size, $color);
         $qty = max(1, (int)($row['qty'] ?? $row['quantity'] ?? 1));
 
-        $listUnit = (float)($row['itemprice'] ?? $row['item_price'] ?? $row['unit_price'] ?? $row['price'] ?? 0);
-        if ($listUnit <= 0) {
-            $lineTotal = (float)($row['linetotal'] ?? $row['line_total'] ?? $row['finalprice'] ?? 0);
-            if ($lineTotal > 0) {
-                $listUnit = $lineTotal / $qty;
-            }
-        }
+        $itemprice = (float)($row['itemprice'] ?? 0);
+        $finalprice = (float)($invoiceByKey[$key]['price'] ?? $row['finalprice'] ?? 0);
 
-        $finalUnit = (float)($invoiceByKey[$key]['price'] ?? $row['finalprice'] ?? $row['final_price'] ?? 0);
-        if ($finalUnit <= 0) {
-            $finalUnit = $listUnit;
+        if ($itemprice <= 0 && $finalprice > 0) {
+            $itemprice = $finalprice;
+        }
+        if ($finalprice <= 0 && $itemprice > 0) {
+            $finalprice = $itemprice;
         }
 
         $rdata = [
@@ -276,8 +273,8 @@ function pos_local_checkout_persist_order(
             'groupname' => trim((string)($row['groupname'] ?? '')),
             'subcategories' => trim((string)($row['subcategories'] ?? '')),
             'currency' => trim((string)($row['currency'] ?? 'INR')),
-            'itemprice' => number_format(max(0, $listUnit), 2, '.', ''),
-            'finalprice' => number_format(max(0, $finalUnit), 2, '.', ''),
+            'itemprice' => number_format(max(0, $itemprice), 2, '.', ''),
+            'finalprice' => number_format(max(0, $finalprice), 2, '.', ''),
             'image' => pos_local_checkout_resolve_line_image($conn, $row, $itemCode),
             'marketplace_vendor' => trim((string)($row['marketplace_vendor'] ?? 'exoticindia')),
             'quantity' => (string)$qty,
