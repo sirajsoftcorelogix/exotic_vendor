@@ -462,7 +462,8 @@ function pos_order_build_pricing_components(array $orderRow, float $baseListIncl
         $baseName = 'Base item';
     }
 
-    $baseListIncl = round(max(0.0, $baseListIncl), 2);
+    $addonsTotal = pos_order_line_addons_total($orderRow);
+    $baseListIncl = round(max(0.0, $baseListIncl - $addonsTotal), 2);
     if ($baseDiscIncl <= 0.0) {
         $baseDiscIncl = pos_order_inclusive_line_total($orderRow, 'disc');
     }
