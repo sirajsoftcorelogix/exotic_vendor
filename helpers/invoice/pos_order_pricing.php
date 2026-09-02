@@ -654,7 +654,7 @@ function pos_order_apply_proportional_custom_reduce(array $components, float $cu
         }
 
         $row['custom_reduce_allocated'] = $customReduceAllocated;
-        $row['discount_value'] = round($baseDiscValue + $customReduceAllocated, 2);
+        $row['discount_value'] = round(max($baseDiscValue, $customReduceAllocated), 2);
         $row['discounted_incl'] = round(max(0.0, $listIncl - (float)$row['discount_value']), 2);
 
         $result[] = $row;

@@ -263,9 +263,6 @@ function pos_local_checkout_persist_order(
         if ($finalUnit <= 0) {
             $finalUnit = $listUnit;
         }
-        if ($finalUnit <= 0 && $listUnit > 0) {
-            $finalUnit = $listUnit;
-        }
 
         $rdata = [
             'sku' => trim((string)($row['sku'] ?? '')),
