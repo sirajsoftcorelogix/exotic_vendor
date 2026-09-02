@@ -926,6 +926,9 @@ function pos_order_aggregate_line_pricing_summary(array $linePricingByLineId, ?a
         if ($fromInfo > 0) {
             $customReduce = $fromInfo;
         }
+        if (isset($orderInfo['total']) && (float)$orderInfo['total'] > 0) {
+            $netChargeable = (float)$orderInfo['total'];
+        }
     }
 
     return [
@@ -950,7 +953,9 @@ function pos_order_build_summary_rows_from_line_pricing(array $aggregate, array 
 
     $absorbedNote = '(included in line totals)';
     $grossIncl = (float)$aggregate['gross_incl'];
-    $netChargeable = (float)$aggregate['net_chargeable'];
+    $netChargeable = (is_array($orderInfo) && isset($orderInfo['total']) && (float)$orderInfo['total'] > 0)
+        ? (float)$orderInfo['total']
+        : (float)$aggregate['net_chargeable'];
 
     $rows = [[
         'label' => 'Total Before Discount (incl. GST)',
