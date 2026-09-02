@@ -602,37 +602,54 @@ function pos_order_compute_order_component_tax_rows(array $components, bool $app
  */
 function pos_order_apply_proportional_custom_reduce(array $components, float $customReduce): array
 {
-    $totalList = 0.0;
+    $baseListTotal = 0.0;
+    $baseCount = 0;
     foreach ($components as $component) {
-        $totalList += (float)($component['list_incl'] ?? 0);
+        if (($component['type'] ?? 'base') === 'base') {
+            $baseListTotal += (float)($component['list_incl'] ?? 0);
+            $baseCount++;
+        }
     }
-    $totalList = round($totalList, 2);
+    $baseListTotal = round($baseListTotal, 2);
     $customReduce = max(0.0, round($customReduce, 2));
 
-    if ($totalList <= 0.0) {
+    if ($baseListTotal <= 0.0) {
+        foreach ($components as $component) {
+            $baseListTotal += (float)($component['list_incl'] ?? 0);
+            $baseCount++;
+        }
+        $baseListTotal = round($baseListTotal, 2);
+    }
+
+    if ($baseListTotal <= 0.0) {
         return $components;
     }
 
     $allocated = 0.0;
-    $count = count($components);
+    $baseProcessed = 0;
     $result = [];
 
-    foreach ($components as $index => $component) {
+    foreach ($components as $component) {
         $listIncl = round((float)($component['list_incl'] ?? 0), 2);
         $baseDiscValue = isset($component['base_discount_value'])
             ? round((float)$component['base_discount_value'], 2)
             : max(0.0, round($listIncl - (float)($component['base_discounted_incl'] ?? $listIncl), 2));
 
         $row = $component;
-        $row['discount_pct'] = round(100 * $listIncl / $totalList, 4);
+        $type = $component['type'] ?? 'base';
 
-        if ($customReduce <= 0.0) {
-            $customReduceAllocated = 0.0;
-        } elseif ($index === $count - 1) {
-            $customReduceAllocated = round($customReduce - $allocated, 2);
+        if ($type === 'base' && $customReduce > 0.0) {
+            $baseProcessed++;
+            if ($baseProcessed === $baseCount) {
+                $customReduceAllocated = round($customReduce - $allocated, 2);
+            } else {
+                $customReduceAllocated = round($customReduce * ($listIncl / $baseListTotal), 2);
+                $allocated += $customReduceAllocated;
+            }
+            $row['discount_pct'] = round(100 * $listIncl / $baseListTotal, 4);
         } else {
-            $customReduceAllocated = round($customReduce * ($listIncl / $totalList), 2);
-            $allocated += $customReduceAllocated;
+            $customReduceAllocated = 0.0;
+            $row['discount_pct'] = 0.0;
         }
 
         $row['custom_reduce_allocated'] = $customReduceAllocated;
