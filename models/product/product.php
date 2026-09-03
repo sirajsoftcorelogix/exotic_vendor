@@ -1576,6 +1576,9 @@ class product
             return;
         }
         $value = self::vendorApiAccountsGroup($apiItem);
+        if ($value === '') {
+            return;
+        }
         $stmt = $this->db->prepare('UPDATE vp_products SET accounts_group = ? WHERE item_code = ?');
         if (!$stmt) {
             return;
@@ -1758,7 +1761,12 @@ class product
                     $youtube_links = isset($product['youtube_links']) ? $product['youtube_links'] : '';
                     $sketchfab_links = isset($product['sketchfab_links']) ? $product['sketchfab_links'] : '';
                     $dimensions = isset($product['dimensions']) ? $product['dimensions'] : '';
+                    $accountsGroup = self::vendorApiAccountsGroup($product);
+                    $hasAccountsGroupCol = $this->vpProductsHasColumn('accounts_group');
                     $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 8) . str_repeat('s', 4) . 'sssisiissssssssssssssiiiddiissss';
+                    if ($hasAccountsGroupCol) {
+                        $bt .= 's';
+                    }
                     $bindValues = [
                         $asin,
                         $localStock,
@@ -1819,6 +1827,9 @@ class product
                         $sketchfab_links,
                         $dimensions,
                     ];
+                    if ($hasAccountsGroupCol) {
+                        $bindValues[] = $accountsGroup;
+                    }
                     if ($targetProductId > 0) {
                         $bindValues[] = $targetProductId;
                         $bt .= 'i';
@@ -2092,9 +2103,9 @@ class product
                             $youtube_links = isset($variation['youtube_links']) ? $variation['youtube_links'] : (isset($product['youtube_links']) ? $product['youtube_links'] : '');
                             $sketchfab_links = isset($variation['sketchfab_links']) ? $variation['sketchfab_links'] : (isset($product['sketchfab_links']) ? $product['sketchfab_links'] : '');
                             $dimensions = isset($variation['dimensions']) ? $variation['dimensions'] : (isset($product['dimensions']) ? $product['dimensions'] : '');
-                            $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 8) . str_repeat('s', 4) . 'sssisiissssssssssssssiiiddiissss' . str_repeat('s', 3);
-                            $stmt->bind_param(
-                                $bt,
+                            $variationAccountsGroup = self::vendorApiAccountsGroup(array_merge($product, $variation));
+                            $bt = 'siss' . str_repeat('i', 9) . 's' . str_repeat('d', 8) . str_repeat('s', 4) . 'sssisiissssssssssssssiiiddiissss';
+                            $varBindValues = [
                                 $asin,
                                 $localStock,
                                 $upc,
@@ -2153,10 +2164,16 @@ class product
                                 $youtube_links,
                                 $sketchfab_links,
                                 $dimensions,
-                                $product['itemcode'],
-                                $whereSize,
-                                $whereColor
-                            );
+                            ];
+                            if ($hasAccountsGroupCol) {
+                                $bt .= 's';
+                                $varBindValues[] = $variationAccountsGroup;
+                            }
+                            $varBindValues[] = $product['itemcode'];
+                            $varBindValues[] = $whereSize;
+                            $varBindValues[] = $whereColor;
+                            $bt .= str_repeat('s', 3);
+                            $stmt->bind_param($bt, ...$varBindValues);
                             if ($this->executeVpProductsStmt($stmt)) {
                                 $updatedCount++;
                                 $this->syncBookFieldsFromVendorApiRow(
@@ -2539,6 +2556,9 @@ class product
     private function apiRefreshCatalogUpdateSql(bool $whereByProductId): string
     {
         $sql = 'UPDATE vp_products SET asin = ?, local_stock = ?, upc = ?, location = ?, fba_in = ?, fba_us = ?, leadtime = ?, instock_leadtime = ?, permanently_available = ?, numsold = ?, numsold_india = ?, numsold_global = ?, lastsold = ?, vendor = ?, shippingfee = ?, sourcingfee = ?, price = ?, price_india = ?, mrp_india = ?, permanent_discount = ?, discount_global = ?, discount_india = ?, hsn = ?, image = COALESCE(NULLIF(TRIM(?), \'\'), image), updated_at = ?, sku = ?, category = ?, itemtype = ?, snippet_description = ?, india_net_qty = ?, keywords = ?, usblock = ?, indiablock = ?, hscode = ?, date_first_added = COALESCE(NULLIF(TRIM(?), \'\'), date_first_added), search_term = ?, search_category = ?, long_description = ?, long_description_india = ?, aplus_content_ids = ?, item_level = ?, marketplace_vendor = ?, colormap = ?, flex_status = ?, vendor_us = ?, today_global = ?, today_india = ?, topurchase = ?, backorder_percent = ?, backorder_weeks = ?, cp = ?, usd = ?, amazon_sold = ?, amazon_leadtime = ?, amazon_itemcode_alias = ?, youtube_links = ?, sketchfab_links = ?, dimensions = ?';
+        if ($this->vpProductsHasColumn('accounts_group')) {
+            $sql .= ', accounts_group = COALESCE(NULLIF(TRIM(?), \'\'), accounts_group)';
+        }
         if ($this->vpProductsHasColumn('update_flag')) {
             $sql .= ', update_flag = 1';
         }
