@@ -5226,30 +5226,39 @@ class ProductsController
             $movementType = strtoupper(trim((string)($data['type'] ?? 'OUT')));
             $quantity = (int)($data['quantity'] ?? 0);
             $warehouseId = (int)($data['warehouse_id'] ?? 0);
+            $adjustPhysicalStock = isset($data['adjust_physical_stock']) ? (bool)$data['adjust_physical_stock'] : true;
+            $adjustLocalStock = isset($data['adjust_local_stock']) ? (bool)$data['adjust_local_stock'] : true;
+
+            if (!$adjustPhysicalStock && !$adjustLocalStock) {
+                throw new Exception('Please select at least one stock adjustment option (Adjust Physical Stock or Adjust Local Stock).');
+            }
+
             if ($quantity <= 0) {
                 throw new Exception('Please enter a valid quantity.');
             }
-            if ($warehouseId <= 0) {
+            if ($adjustPhysicalStock && $warehouseId <= 0) {
                 throw new Exception('Please select a warehouse.');
             }
 
             // Decrease must not exceed available running stock at the selected warehouse.
-            $strictStockCheck = ($movementType === 'OUT');
+            $strictStockCheck = ($adjustPhysicalStock && $movementType === 'OUT');
 
             // Merge submitted data with product details
             $insertData = [
-                'product_id'    => (int)$product['id'],
-                'sku'           => $product['sku'],
-                'item_code'     => $product['item_code'],
-                'size'          => $product['size'],
-                'color'         => $product['color'],
-                'quantity'      => $quantity,
-                'reason'        => $data['reason'],
-                'update_by_user' => $sessionUserId,
-                'movement_type' => $movementType,
-                'warehouse_id'  => $warehouseId,
-                'location'      => $data['location'],
-                'strict_stock_check' => $strictStockCheck,
+                'product_id'            => (int)$product['id'],
+                'sku'                   => $product['sku'],
+                'item_code'             => $product['item_code'],
+                'size'                  => $product['size'],
+                'color'                 => $product['color'],
+                'quantity'              => $quantity,
+                'reason'                => $data['reason'] ?? '',
+                'update_by_user'        => $sessionUserId,
+                'movement_type'         => $movementType,
+                'warehouse_id'          => $warehouseId,
+                'location'              => $data['location'] ?? '',
+                'strict_stock_check'    => $strictStockCheck,
+                'adjust_physical_stock' => $adjustPhysicalStock,
+                'adjust_local_stock'    => $adjustLocalStock,
             ];
 
             $result = $productModel->insertStockMovement($insertData);
