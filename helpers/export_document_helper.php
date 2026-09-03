@@ -389,7 +389,8 @@ function resolveExportSessionIrnDetails(\mysqli $db, array $session, array $comm
             $stmt = $db->prepare("SELECT d.irn, d.irn_response FROM vp_domestic_ewb_irn d
                                   JOIN vp_invoices i ON i.id = d.vp_invoices_id
                                   LEFT JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
-                                  WHERE oi.order_number = ? OR i.invoice_number = ? OR i.order_number = ?
+                                  LEFT JOIN vp_invoice_items ii ON ii.invoice_id = i.id
+                                  WHERE oi.order_number = ? OR i.invoice_number = ? OR ii.order_number = ?
                                   ORDER BY d.id DESC LIMIT 1");
             if ($stmt) {
                 $stmt->bind_param('sss', $searchVal, $searchVal, $searchVal);
