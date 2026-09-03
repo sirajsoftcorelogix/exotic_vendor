@@ -89,6 +89,27 @@ class Roles {
 	}
     private function buildModulesHtml(array $currentPerms = []): string
     {
+        $srEmpModuleDescriptions = [
+            'orders' => 'Edit order unit prices & invoice numbers, order follow-up notes, cancel sales returns, view all warehouses, order JSON API & Exotic publish sync.',
+            'pos orders' => 'Edit order unit prices & invoice numbers, order follow-up notes, cancel sales returns, view all warehouses, order JSON API & Exotic publish sync.',
+            'products' => 'Bulk Stock Adjustment, Bulk Stock Refresh, and editing Product Added-on dates.',
+            'sales return' => 'Cancel finalized sales returns and process return requests.',
+            'export documents' => 'Full access to export documents and RODTEP settings.',
+            'pos invoice' => 'Edit invoice numbers and access elevated invoice management tools.',
+            'inbounding' => 'Senior inbound overrides, photo/stock adjustments, and multi-warehouse viewing.',
+            'reports' => 'Senior level analytics, data export options, and multi-warehouse scope.',
+            'users' => 'Elevated user management and role assignment privileges.',
+            'roles' => 'Elevated role management and permission settings.',
+            'modules' => 'Elevated module configuration and permission assignment.',
+            'pos register' => 'Bulk stock refresh, offline payment overrides, and senior cashier actions.',
+        ];
+
+        $topMgmtModuleDescriptions = [
+            'orders' => 'Executive level oversight of orders, financial overrides, and top management reports across all stores.',
+            'pos orders' => 'Executive level oversight of POS orders, financial overrides, and top management reports across all stores.',
+            'reports' => 'Executive level financial, sales, and management reporting across all departments.',
+        ];
+
         $modules_str = "";
         $modules = $this->conn->query("SELECT DISTINCT module_name FROM vp_permissions ORDER BY module_name ASC");
         if ($modules) {
@@ -116,6 +137,9 @@ class Roles {
                     $actionsHtml = "";
                     $totalActions = count($groupedActions);
                     $checkedActions = 0;
+                    $infoNotes = [];
+
+                    $modKey = strtolower(trim($moduleName));
 
                     foreach ($groupedActions as $actionName => $pids) {
                         $pidsStr = implode(',', $pids);
@@ -124,14 +148,31 @@ class Roles {
                             $checked = 'checked';
                             $checkedActions++;
                         }
-                        $actionsHtml .= "<label class='me-3 mb-2 d-inline-block text-sm font-medium text-gray-700 cursor-pointer'>
-                                <input type='checkbox' name='permissions[]' class='module-permission-checkbox me-1' value='{$pidsStr}' {$checked} onchange='updateModuleSelectAll(this)'> " . ucfirst(htmlspecialchars($actionName)) . "
+
+                        $actionLower = strtolower(trim($actionName));
+                        $extraBadge = '';
+                        $tooltipAttr = '';
+
+                        if (strpos($actionLower, 'sr emp') !== false || strpos($actionLower, 'sr. emp') !== false) {
+                            $desc = $srEmpModuleDescriptions[$modKey] ?? 'Senior Employee tier privileges, multi-warehouse visibility, and elevated administrative actions for this module.';
+                            $infoNotes[] = ['tier' => 'Sr. Emp Access', 'desc' => $desc];
+                            $tooltipAttr = 'title="Covered in Sr. Emp Access: ' . htmlspecialchars($desc, ENT_QUOTES, 'UTF-8') . '"';
+                            $extraBadge = "<span class='ms-1 inline-flex items-center text-xs font-semibold text-indigo-700 bg-indigo-100 rounded px-1.5 py-0.5' {$tooltipAttr}>ℹ Sr. Emp Tier</span>";
+                        } elseif (strpos($actionLower, 'top management') !== false) {
+                            $desc = $topMgmtModuleDescriptions[$modKey] ?? 'Top Management executive privileges (includes all Sr. Emp features plus executive oversight for this module).';
+                            $infoNotes[] = ['tier' => 'Top Management Access', 'desc' => $desc];
+                            $tooltipAttr = 'title="Covered in Top Management Access: ' . htmlspecialchars($desc, ENT_QUOTES, 'UTF-8') . '"';
+                            $extraBadge = "<span class='ms-1 inline-flex items-center text-xs font-semibold text-purple-700 bg-purple-100 rounded px-1.5 py-0.5' {$tooltipAttr}>ℹ Top Mgmt Tier</span>";
+                        }
+
+                        $actionsHtml .= "<label class='me-3 mb-2 d-inline-block text-sm font-medium text-gray-700 cursor-pointer' {$tooltipAttr}>
+                                <input type='checkbox' name='permissions[]' class='module-permission-checkbox me-1' value='{$pidsStr}' {$checked} onchange='updateModuleSelectAll(this)'> " . ucfirst(htmlspecialchars($actionName)) . "{$extraBadge}
                             </label>";
                     }
 
                     $allChecked = ($totalActions > 0 && $checkedActions === $totalActions) ? 'checked' : '';
 
-                    $modules_str .= "<div class='module-permission-group border rounded p-2.5 mb-3 bg-white text-sm font-medium text-gray-700'>";
+                    $modules_str .= "<div class='module-permission-group border rounded p-2.5 mb-3 bg-white text-sm font-medium text-gray-700 shadow-sm'>";
                     $modules_str .= "<div class='flex items-center justify-between border-b pb-1.5 mb-2'>";
                     $modules_str .= "<strong>" . ucfirst(htmlspecialchars($moduleName)) . "</strong>";
                     $modules_str .= "<label class='text-xs font-semibold text-indigo-600 cursor-pointer select-none me-1 flex items-center gap-1'>";
@@ -139,6 +180,16 @@ class Roles {
                     $modules_str .= "</label>";
                     $modules_str .= "</div>";
                     $modules_str .= "<div>" . $actionsHtml . "</div>";
+
+                    if (!empty($infoNotes)) {
+                        foreach ($infoNotes as $note) {
+                            $modules_str .= "<div class='mt-2 pt-2 border-t border-gray-100 text-xs text-indigo-800 bg-indigo-50/70 p-2 rounded flex items-start gap-1.5'>";
+                            $modules_str .= "<svg class='w-4 h-4 text-indigo-600 shrink-0 mt-0.5' fill='currentColor' viewBox='0 0 20 20'><path fill-rule='evenodd' d='M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z' clip-rule='evenodd'></path></svg>";
+                            $modules_str .= "<div><strong>Covered in " . htmlspecialchars($note['tier']) . ":</strong> " . htmlspecialchars($note['desc']) . "</div>";
+                            $modules_str .= "</div>";
+                        }
+                    }
+
                     $modules_str .= "</div>";
                 }
             }
