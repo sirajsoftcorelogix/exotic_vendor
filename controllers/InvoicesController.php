@@ -378,7 +378,7 @@ class InvoicesController
             $irnPayload = [
                 'invoice_number' => $invoice['invoice_number'] ?? '',
                 'invoice_date' => $invoice['invoice_date'] ? date('Y-m-d', strtotime($invoice['invoice_date'])) : date('Y-m-d'),
-                'seller_gstin' => '07AGAPA5363L002',
+                'seller_gstin' => '07AADCE1400C1ZJ',
                 'seller_name' => $firm['firm_name'] ?? '',
                 'seller_address' => $firm['address'] ?? '',
                 'seller_city' => $firm['city'] ?? '',
@@ -572,7 +572,7 @@ class InvoicesController
             $irnPayload = [
                 'invoice_number' => $invoice['invoice_number'] ?? '',
                 'invoice_date' => $invoice['invoice_date'] ?? date('Y-m-d'),
-                'seller_gstin' => $alankitConfig['gstin'] ?? '07AGAPA5363L002',
+                'seller_gstin' => $alankitConfig['gstin'] ?? '07AADCE1400C1ZJ',
                 'seller_name' => $firm['firm_name'] ?? '',
                 'seller_address' => $firm['address'] ?? '',
                 'seller_city' => $firm['city'] ?? '',

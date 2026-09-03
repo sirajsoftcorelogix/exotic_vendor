@@ -441,10 +441,10 @@ class DomesticEwbIrnService {
                 //'Distance' => $distance,
                 'Distance' => 0,
                 'TransMode' => $transMode,
-                'VehNo' => 'ka123456',// Hardcoded for testing; replace with actual logic as needed
-                'VehType' => 'R',// Hardcoded for testing; replace with actual logic as needed
-                //'VehNo' => trim((string)($ewbData['veh_no'] ?? '')),
-                //'VehType' => trim((string)($ewbData['veh_type'] ?? '')),
+                //'VehNo' => 'ka123456',// Hardcoded for testing; replace with actual logic as needed
+                //'VehType' => 'R',// Hardcoded for testing; replace with actual logic as needed
+                'VehNo' => trim((string)($ewbData['veh_no'] ?? '')),
+                'VehType' => trim((string)($ewbData['veh_type'] ?? '')),
                 'TransDocNo' => trim((string)($ewbData['trans_doc_no'] ?? $invoiceNo)),
                 'TransDocDt' => trim((string)($ewbData['trn_doc_dt'] ?? date('d/m/Y'))),
             ];
@@ -637,8 +637,8 @@ class DomesticEwbIrnService {
         
         // Determine buyer and shipping details
         $isBusiness = (trim($customer['country'] ?? '') === 'IN');
-        //$buyerGstin = $isBusiness ? ($customer['gstin'] ?? '') : 'URP';
-        $buyerGstin = '07AAACE1288P2Z8'; // Hardcoded GSTIN for testing; replace with actual logic as needed
+        $buyerGstin = $isBusiness ? ($customer['gstin'] ?? '') : 'URP';
+        //$buyerGstin = '07AAACE1288P2Z8'; // Hardcoded GSTIN for testing; replace with actual logic as needed
 
         $buyerStateCode = $isBusiness ? trim($customer['state_code']) : '';
         $buyerPincode = $isBusiness ? (trim($customer['zipcode'] ?? '') ?: '000000') : '999999';
@@ -652,7 +652,7 @@ class DomesticEwbIrnService {
                 'SupTyp' => $isBusiness ? 'B2B' : 'B2C',
                 'RegRev' => 'N',
                 //'EcmGstin' => $firm['gst'] ?? '',
-                //'EcmGstin' => $alankitConfig['gstin'] ?? '07AGAPA5363L002',
+                //'EcmGstin' => $alankitConfig['gstin'] ?? '07AADCE1400C1ZJ',
                 'IgstOnIntra' => 'N'
             ],
             'DocDtls' => [
@@ -661,7 +661,7 @@ class DomesticEwbIrnService {
                 'Dt' => $invoice['invoice_date'] ? date('d/m/Y', strtotime($invoice['invoice_date'])) : date('d/m/Y')
             ],
             'SellerDtls' => [
-                'Gstin' => $alankitConfig['gstin'] ?? '07AGAPA5363L002',
+                'Gstin' => $alankitConfig['gstin'] ?? '07AADCE1400C1ZJ',
                 'LglNm' => $firm['firm_name'] ?? '',
                 'TrdNm' => $firm['firm_name'] ?? '',
                 'Addr1' => $firm['address'] ?? '',
@@ -724,13 +724,13 @@ class DomesticEwbIrnService {
             'EwbDtls' => !empty($ewbData['veh_no']) && !empty($ewbData['veh_type']) ? [
                 //'TransId' => substr(preg_replace('/\s+/', '', (string)($ewbData['trans_id'] ?? '')), 0, 15),
                 //'TransName' => (string)($ewbData['trans_name'] ?? ''),
-                'Distance' => (int)($ewbData['distance'] ?? 100),
+                'Distance' => (int)($ewbData['distance'] ?? 0),
                 'TransDocNo' => (string)$invoiceNumber,
                 'TransDocDt' => (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')),
-                //'VehNo' => (string)($ewbData['veh_no'] ?? ''),
-                //'VehType' => (string)($ewbData['veh_type'] ?? 'R'),
-                'VehNo' => 'ka123456', // Hardcoded for testing; replace with actual logic as needed
-                'VehType' => 'R', // Hardcoded for testing; replace with actual logic as needed
+                'VehNo' => (string)($ewbData['veh_no'] ?? ''),
+                'VehType' => (string)($ewbData['veh_type'] ?? 'R'),
+                //'VehNo' => 'ka123456', // Hardcoded for testing; replace with actual logic as needed
+                //'VehType' => 'R', // Hardcoded for testing; replace with actual logic as needed
                 'TransMode' => (string)($ewbData['trans_mode'] ?? '1')
             ] : null
         ];
