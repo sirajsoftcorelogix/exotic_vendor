@@ -222,6 +222,12 @@ class Payment
             $types .= 'd';
         }
 
+        if (isset($filters['warehouse_id']) && $filters['warehouse_id'] !== '') {
+            $sql .= ' AND p.warehouse_id = ?';
+            $params[] = (int)$filters['warehouse_id'];
+            $types .= 'i';
+        }
+
         return ['sql' => $sql, 'params' => $params, 'types' => $types];
     }
 
@@ -853,6 +859,37 @@ class Payment
         $stmt->close();
 
         return trim((string)($row['order_number'] ?? ''));
+    }
+
+    public function getWarehouseIdByPaymentId(int $paymentId): int
+    {
+        $stmt = $this->db->prepare('SELECT warehouse_id FROM pos_payments WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->bind_param('i', $paymentId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return (int)($row['warehouse_id'] ?? 0);
+    }
+
+    /**
+     * @return array<int, array{id: int, address_title: string}>
+     */
+    public function getWarehouses(): array
+    {
+        $res = $this->db->query("SELECT id, address_title FROM exotic_address WHERE is_active = 1 ORDER BY is_default DESC, order_no ASC, address_title ASC");
+        if (!$res) {
+            return [];
+        }
+        $rows = [];
+        while ($row = $res->fetch_assoc()) {
+            $rows[] = $row;
+        }
+
+        return $rows;
     }
 
     public function updatePayment(

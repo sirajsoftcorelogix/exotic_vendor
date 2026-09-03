@@ -34,7 +34,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
 
             <input type="hidden" id="payments_filter_order_id" value="<?= htmlspecialchars($paymentsPrefillOrderId, ENT_QUOTES, 'UTF-8') ?>">
 
-            <div class="grid grid-cols-7 gap-3 text-xs">
+            <div class="grid grid-cols-1 md:grid-cols-4 <?= !empty($isAdmin) ? 'lg:grid-cols-8' : 'lg:grid-cols-7' ?> gap-3 text-xs">
 
                 <div>
                     <label>Date From</label>
@@ -54,6 +54,20 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                         value="<?= htmlspecialchars($paymentsPrefillOrderNumber, ENT_QUOTES, 'UTF-8') ?>"
                         class="w-full border rounded px-2 py-2">
                 </div>
+
+                <?php if (!empty($isAdmin)): ?>
+                <div>
+                    <label>Show Room / Store</label>
+                    <select id="warehouse_id" class="w-full border rounded px-2 py-2">
+                        <option value="">All Stores</option>
+                        <?php if (!empty($warehouses) && is_array($warehouses)): ?>
+                            <?php foreach ($warehouses as $wh): ?>
+                                <option value="<?= (int)$wh['id'] ?>"><?= htmlspecialchars($wh['address_title'] ?? ('Store #' . $wh['id'])) ?></option>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </select>
+                </div>
+                <?php endif; ?>
 
                 <div>
                     <label>Payment Mode</label>
@@ -425,6 +439,8 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
 
         const oidEl = document.getElementById('payments_filter_order_id');
         const oidParam = oidEl && oidEl.value ? `&order_id=${encodeURIComponent(oidEl.value)}` : '';
+        const whEl = document.getElementById('warehouse_id');
+        const whParam = whEl && whEl.value ? `&warehouse_id=${encodeURIComponent(whEl.value)}` : '';
         let orderExactParam = '';
         try {
             const qs = new URLSearchParams(window.location.search);
@@ -432,7 +448,7 @@ $paymentsPrefillOrderNumber = isset($_GET['order_number'])
                 orderExactParam = '&order_exact=1';
             }
         } catch (e) {}
-        let url = `?page=payments&action=list_ajax&from_date=${encodeURIComponent(document.getElementById('from_date').value)}&to_date=${encodeURIComponent(document.getElementById('to_date').value)}&order_number=${encodeURIComponent(document.getElementById('order_number').value)}&payment_mode=${encodeURIComponent(document.getElementById('payment_mode').value)}&amount_min=${encodeURIComponent(document.getElementById('amount_min').value)}&amount_max=${encodeURIComponent(document.getElementById('amount_max').value)}${oidParam}${orderExactParam}`;
+        let url = `?page=payments&action=list_ajax&from_date=${encodeURIComponent(document.getElementById('from_date').value)}&to_date=${encodeURIComponent(document.getElementById('to_date').value)}&order_number=${encodeURIComponent(document.getElementById('order_number').value)}&payment_mode=${encodeURIComponent(document.getElementById('payment_mode').value)}&amount_min=${encodeURIComponent(document.getElementById('amount_min').value)}&amount_max=${encodeURIComponent(document.getElementById('amount_max').value)}${oidParam}${whParam}${orderExactParam}`;
 
 
         fetch(url)
