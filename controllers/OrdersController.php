@@ -1203,7 +1203,6 @@ class OrdersController
                     && !order_status_triggers_stock_restore((string) $previous_status)
                     && is_array($orderval)
                 ) {
-                    $this->syncLocalStockFromVendorApiForOrder($orderval);
                     global $conn;
                     $stockRestore = order_handle_status_change_stock($conn, $orderval, $new_status, (string) $previous_status);
                     $invoiceCancel = is_array($stockRestore['invoice_cancel'] ?? null) ? $stockRestore['invoice_cancel'] : null;
@@ -1938,7 +1937,6 @@ class OrdersController
                     global $conn;
                     foreach ($ordersForStockRestore as $orderRow) {
                         $previousStatus = (string) ($orderRow['status'] ?? '');
-                        $this->syncLocalStockFromVendorApiForOrder($orderRow);
                         $stockResult = order_handle_status_change_stock($conn, $orderRow, $new_status, $previousStatus);
                         $stockMessage = order_status_stock_summary_message($stockResult);
                         if ($stockMessage !== '') {
@@ -2988,54 +2986,6 @@ class OrdersController
     private function isCancelledOrderStatus(string $status): bool
     {
         return strtolower(trim($status)) === 'cancelled';
-    }
-
-    /**
-     * On order cancel: push local_stock_delta to vendor API (+qty restores website stock).
-     * Does not update vp_products.local_stock, physical_stock, or stock movements.
-     */
-    private function syncLocalStockFromVendorApiForOrder(array $orderRow): void
-    {
-        $itemCode = trim((string) ($orderRow['item_code'] ?? ''));
-        if ($itemCode === '') {
-            return;
-        }
-
-        $size = trim((string) ($orderRow['size'] ?? ''));
-        $color = trim((string) ($orderRow['color'] ?? ''));
-        $localStockDelta = (int) ($orderRow['quantity'] ?? 0);
-        if ($localStockDelta <= 0) {
-            $localStockDelta = 0;
-        }
-
-        global $productModel;
-        try {
-            $result = $productModel->applyLocalStockDeltaAndRefreshFromVendorApi(
-                $itemCode,
-                $localStockDelta,
-                $size,
-                $color
-            );
-            if (empty($result['success'])) {
-                error_log(
-                    'Order cancel local stock sync failed for item '
-                    . $itemCode
-                    . ' (order '
-                    . trim((string) ($orderRow['order_number'] ?? ''))
-                    . '): '
-                    . (string) ($result['message'] ?? 'unknown error')
-                );
-            }
-        } catch (\Throwable $e) {
-            error_log(
-                'Order cancel local stock sync failed for item '
-                . $itemCode
-                . ' (order '
-                . trim((string) ($orderRow['order_number'] ?? ''))
-                . '): '
-                . $e->getMessage()
-            );
-        }
     }
 
     public function searchFilterVendors()
