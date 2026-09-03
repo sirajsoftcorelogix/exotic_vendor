@@ -137,7 +137,6 @@ class Roles {
                     $actionsHtml = "";
                     $totalActions = count($groupedActions);
                     $checkedActions = 0;
-                    $infoNotes = [];
 
                     $modKey = strtolower(trim($moduleName));
 
@@ -154,14 +153,12 @@ class Roles {
 
                         if (strpos($actionLower, 'sr emp') !== false || strpos($actionLower, 'sr. emp') !== false) {
                             $desc = $srEmpModuleDescriptions[$modKey] ?? 'Senior Employee tier privileges, multi-warehouse visibility, and elevated administrative actions for this module.';
-                            $infoNotes[] = ['tier' => 'Sr. Emp Access', 'desc' => $desc];
                             $jsTier = htmlspecialchars(addslashes('Sr. Emp Access'), ENT_QUOTES, 'UTF-8');
                             $jsMod = htmlspecialchars(addslashes($moduleName), ENT_QUOTES, 'UTF-8');
                             $jsDesc = htmlspecialchars(addslashes($desc), ENT_QUOTES, 'UTF-8');
                             $extraBadge = "<button type='button' class='ms-1 px-1.5 py-0.5 text-xs font-semibold text-indigo-700 bg-indigo-100 hover:bg-indigo-200 rounded inline-flex items-center gap-1 transition cursor-pointer' onclick='event.preventDefault(); event.stopPropagation(); showAccessDescriptionModal(\"{$jsTier}\", \"{$jsMod}\", \"{$jsDesc}\")'><svg class=\"w-3 h-3 text-indigo-600\" fill=\"currentColor\" viewBox=\"0 0 20 20\"><path fill-rule=\"evenodd\" d=\"M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z\" clip-rule=\"evenodd\"></path></svg> Info</button>";
                         } elseif (strpos($actionLower, 'top management') !== false) {
                             $desc = $topMgmtModuleDescriptions[$modKey] ?? 'Top Management executive privileges (includes all Sr. Emp features plus executive oversight for this module).';
-                            $infoNotes[] = ['tier' => 'Top Management Access', 'desc' => $desc];
                             $jsTier = htmlspecialchars(addslashes('Top Management Access'), ENT_QUOTES, 'UTF-8');
                             $jsMod = htmlspecialchars(addslashes($moduleName), ENT_QUOTES, 'UTF-8');
                             $jsDesc = htmlspecialchars(addslashes($desc), ENT_QUOTES, 'UTF-8');
@@ -183,22 +180,6 @@ class Roles {
                     $modules_str .= "</label>";
                     $modules_str .= "</div>";
                     $modules_str .= "<div>" . $actionsHtml . "</div>";
-
-                    if (!empty($infoNotes)) {
-                        foreach ($infoNotes as $note) {
-                            $jsTier = htmlspecialchars(addslashes($note['tier']), ENT_QUOTES, 'UTF-8');
-                            $jsMod = htmlspecialchars(addslashes($moduleName), ENT_QUOTES, 'UTF-8');
-                            $jsDesc = htmlspecialchars(addslashes($note['desc']), ENT_QUOTES, 'UTF-8');
-                            $modules_str .= "<div class='mt-2 pt-2 border-t border-gray-100 text-xs text-indigo-900 bg-indigo-50/80 p-2 rounded flex items-center justify-between gap-2'>";
-                            $modules_str .= "<div class='flex items-center gap-1.5 overflow-hidden'>";
-                            $modules_str .= "<svg class='w-4 h-4 text-indigo-600 shrink-0' fill='currentColor' viewBox='0 0 20 20'><path fill-rule='evenodd' d='M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z' clip-rule='evenodd'></path></svg>";
-                            $modules_str .= "<span class='truncate'>What is covered in <strong>" . htmlspecialchars($note['tier']) . "</strong>?</span>";
-                            $modules_str .= "</div>";
-                            $modules_str .= "<button type='button' class='shrink-0 px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-semibold text-xs transition shadow-xs cursor-pointer' onclick='showAccessDescriptionModal(\"{$jsTier}\", \"{$jsMod}\", \"{$jsDesc}\")'>View Covered Details</button>";
-                            $modules_str .= "</div>";
-                        }
-                    }
-
                     $modules_str .= "</div>";
                 }
             }
