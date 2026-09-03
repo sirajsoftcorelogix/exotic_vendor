@@ -5206,6 +5206,13 @@ class product
     {
         require_once __DIR__ . '/StockMovement.php';
 
+        $adjustPhysicalStock = array_key_exists('adjust_physical_stock', $data) ? !empty($data['adjust_physical_stock']) : true;
+        $adjustLocalStock = array_key_exists('adjust_local_stock', $data) ? !empty($data['adjust_local_stock']) : true;
+
+        if (!$adjustPhysicalStock && !$adjustLocalStock) {
+            return ['success' => false, 'message' => 'Neither Physical Stock nor Local Stock was selected for adjustment.'];
+        }
+
         $this->db->begin_transaction();
         try {
             $stmt = $this->db->prepare('SELECT id FROM vp_products WHERE id = ? LIMIT 1');
@@ -5219,29 +5226,32 @@ class product
                 throw new Exception('Product not found');
             }
 
-            $movement = StockMovement::insert($this->db, $data);
+            $messages = [];
 
-            $refTypeUpper = strtoupper(trim((string) ($data['ref_type'] ?? '')));
-            if (in_array($refTypeUpper, ['SALES_RETURN', 'SALES_RETURN_CANCEL'], true)) {
-                $sku = trim((string) ($data['sku'] ?? ''));
-                $warehouseId = (int) ($data['warehouse_id'] ?? 0);
-                $lastTransId = (int) ($movement['movement_id'] ?? 0);
-                if ($sku !== '' && $warehouseId > 0) {
-                    StockMovement::syncVpStockFromRunningStock(
-                        $this->db,
-                        $sku,
-                        $warehouseId,
-                        (float) ($movement['running_stock'] ?? 0),
-                        $lastTransId
-                    );
+            if ($adjustPhysicalStock) {
+                $movement = StockMovement::insert($this->db, $data);
+
+                $refTypeUpper = strtoupper(trim((string) ($data['ref_type'] ?? '')));
+                if (in_array($refTypeUpper, ['SALES_RETURN', 'SALES_RETURN_CANCEL'], true)) {
+                    $sku = trim((string) ($data['sku'] ?? ''));
+                    $warehouseId = (int) ($data['warehouse_id'] ?? 0);
+                    $lastTransId = (int) ($movement['movement_id'] ?? 0);
+                    if ($sku !== '' && $warehouseId > 0) {
+                        StockMovement::syncVpStockFromRunningStock(
+                            $this->db,
+                            $sku,
+                            $warehouseId,
+                            (float) ($movement['running_stock'] ?? 0),
+                            $lastTransId
+                        );
+                    }
                 }
+                $messages[] = 'Physical stock updated and history recorded.';
             }
 
             $this->db->commit();
 
-            $result = ['success' => true, 'message' => 'Stock updated and history recorded.'];
-
-            if ($this->shouldSyncLocalStockDeltaForMovement($data)) {
+            if ($adjustLocalStock && $this->shouldSyncLocalStockDeltaForMovement($data)) {
                 $movementType = strtoupper(trim((string) ($data['movement_type'] ?? 'OUT')));
                 $qty = (int) ($data['quantity'] ?? 0);
                 $delta = in_array($movementType, ['IN', 'TRANSFER_IN', 'OPENING_STOCK'], true) ? $qty : -$qty;
@@ -5255,12 +5265,22 @@ class product
                         (string) ($data['color'] ?? '')
                     );
                     if (empty($apiSync['success'])) {
-                        $result['message'] .= ' Warning: ' . trim((string) ($apiSync['message'] ?? 'Storefront stock sync failed.'));
+                        $errMsg = 'Storefront stock sync failed: ' . trim((string) ($apiSync['message'] ?? 'Unknown error'));
+                        if ($adjustPhysicalStock) {
+                            $messages[] = 'Warning: ' . $errMsg;
+                        } else {
+                            return ['success' => false, 'message' => $errMsg];
+                        }
+                    } else {
+                        $messages[] = 'Storefront stock synced via API.';
                     }
                 }
             }
 
-            return $result;
+            return [
+                'success' => true,
+                'message' => implode(' ', $messages) ?: 'Stock adjustment completed.'
+            ];
         } catch (Exception $e) {
             $this->db->rollback();
             return ['success' => false, 'message' => $e->getMessage()];
