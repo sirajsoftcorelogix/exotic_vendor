@@ -1832,7 +1832,7 @@ class product
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
                     if ($this->executeVpProductsStmt($stmt)) {
                         $affected = (int) $stmt->affected_rows;
-                        $didUpdate = ($targetProductId > 0 && is_array($existingBase)) || $affected > 0;
+                        $didUpdate = is_array($existingBase) || $affected > 0;
                         if ($didUpdate) {
                             $updatedCount++;
                             if ($affected > 0) {
@@ -2776,8 +2776,9 @@ class product
             $delta = $targetQty - $current;
 
             if ($delta > 0) {
-                $movementType = $current <= 0 ? 'OPENING_STOCK' : 'IN';
-                $movementQty = $current <= 0 ? $targetQty : $delta;
+                $isUninitialized = StockMovement::isPhysicalStockUninitialized($this->db, $productId);
+                $movementType = ($current <= 0 && $isUninitialized) ? 'OPENING_STOCK' : 'IN';
+                $movementQty = ($current <= 0 && $isUninitialized) ? $targetQty : $delta;
                 StockMovement::insert($this->db, [
                     'product_id' => $productId,
                     'sku' => $sku,
