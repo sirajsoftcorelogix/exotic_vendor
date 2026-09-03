@@ -87,9 +87,56 @@ class Roles {
             'search'       => $search
         ];
 	}
+    private function buildModulesHtml(array $currentPerms = []): string
+    {
+        $modules_str = "";
+        $modules = $this->conn->query("SELECT DISTINCT module_name FROM vp_permissions ORDER BY module_name ASC");
+        if ($modules) {
+            while ($m = mysqli_fetch_assoc($modules)) {
+                $moduleName = $m['module_name'];
+                if ($moduleName === null || trim($moduleName) === '') {
+                    continue;
+                }
+                $escapedModuleName = $this->conn->real_escape_string($moduleName);
+                $permsQuery = $this->conn->query("SELECT id, action_name FROM vp_permissions WHERE module_name='{$escapedModuleName}' ORDER BY id ASC");
+                
+                $groupedActions = [];
+                if ($permsQuery) {
+                    while ($p = mysqli_fetch_assoc($permsQuery)) {
+                        $actionName = $p['action_name'];
+                        if (!isset($groupedActions[$actionName])) {
+                            $groupedActions[$actionName] = [];
+                        }
+                        $groupedActions[$actionName][] = (int)$p['id'];
+                    }
+                    $permsQuery->free();
+                }
+
+                if (!empty($groupedActions)) {
+                    $modules_str .= "<div class='border rounded p-2 mb-2 bg-white text-sm font-medium text-gray-700'>";
+                    $modules_str .= "<strong>" . ucfirst(htmlspecialchars($moduleName)) . "</strong><br>";
+                    foreach ($groupedActions as $actionName => $pids) {
+                        $pidsStr = implode(',', $pids);
+                        $checked = '';
+                        if (!empty($currentPerms) && count(array_intersect($pids, $currentPerms)) > 0) {
+                            $checked = 'checked';
+                        }
+                        $modules_str .= "<label class='me-3 mb-2 d-inline-block text-sm font-medium text-gray-700'>
+                                <input type='checkbox' name='permissions[]' value='{$pidsStr}' {$checked}> " . ucfirst(htmlspecialchars($actionName)) . "
+                            </label>";
+                    }
+                    $modules_str .= "</div>";
+                }
+            }
+            $modules->free();
+        }
+        return $modules_str;
+    }
+
     public function addRRecord($id) {
         $roles = array();
         $modules_str = "";
+        $id = (int)$id;
 
         $sql = "SELECT vr.id, vr.role_name, vr.role_description, vr.is_active FROM vp_roles as vr WHERE vr.id = $id";
         $result = $this->conn->query($sql);
@@ -99,30 +146,38 @@ class Roles {
 
             $currentPerms = [];
             $res =  $this->conn->query("SELECT permission_id FROM vp_role_permissions WHERE role_id=$id");
-            while($r=mysqli_fetch_assoc($res)) { $currentPerms[] = $r['permission_id']; }
+            while($r=mysqli_fetch_assoc($res)) { $currentPerms[] = (int)$r['permission_id']; }
 
-            $modules = $this->conn->query("SELECT DISTINCT module_name FROM vp_permissions");
-            while($m = mysqli_fetch_assoc($modules)) {
-                $modules_str .= "<div class='border rounded p-2 mb-2 bg-white text-sm font-medium text-gray-700'>";
-                $modules_str .= "<strong>".ucfirst($m['module_name'])."</strong><br>";
-                $perms = $this->conn->query("SELECT * FROM vp_permissions WHERE module_name='{$m['module_name']}'");
-                while($p = mysqli_fetch_assoc($perms)) {
-                    $checked = in_array($p['id'], $currentPerms) ? 'checked' : '';
-                    $modules_str .= "<label class='me-3 mb-2 d-inline-block text-sm font-medium text-gray-700'>
-                            <input type='checkbox' name='permissions[]' value='{$p['id']}' $checked> ".ucfirst($p['action_name'])."
-                        </label>";
-                }
-                $modules_str .= "</div>";
-            }
+            $modules_str = $this->buildModulesHtml($currentPerms);
         }
         return [
             'roles'        => $roles,
-            'modules_str'      => $modules_str
+            'modules_str'  => $modules_str
         ];
 	}
 	public function addRecord($data) {
-        $permissions = $data['permissions'] ?? [];
-        $query = "SELECT COUNT(*) AS total FROM vp_roles WHERE role_name = '".$data['addRName']."'";
+        $permissionsInput = $data['permissions'] ?? [];
+        $permissions = [];
+        foreach ($permissionsInput as $pid) {
+            if (is_array($pid)) {
+                foreach ($pid as $subPid) {
+                    foreach (explode(',', (string)$subPid) as $p) {
+                        $pVal = (int) trim($p);
+                        if ($pVal > 0 && !in_array($pVal, $permissions, true)) {
+                            $permissions[] = $pVal;
+                        }
+                    }
+                }
+            } else {
+                foreach (explode(',', (string)$pid) as $p) {
+                    $pVal = (int) trim($p);
+                    if ($pVal > 0 && !in_array($pVal, $permissions, true)) {
+                        $permissions[] = $pVal;
+                    }
+                }
+            }
+        }
+        $query = "SELECT COUNT(*) AS total FROM vp_roles WHERE role_name = '".$this->conn->real_escape_string($data['addRName'] ?? '')."'";
         $result = $this->conn->query($query);
         $exist = mysqli_fetch_assoc($result);
         if ($exist['total'] > 0) {
@@ -134,16 +189,18 @@ class Roles {
 			//print_array($data);
             $sql = "INSERT INTO vp_roles (role_name, role_description, user_id, is_active) VALUES (?, ?, ?, ?)";
             $stmt = $this->conn->prepare($sql);
+            $userId = (int)($_SESSION["user"]["id"] ?? 0);
+            $status = (int)($data['addStatus'] ?? 1);
             $stmt->bind_param('ssii',
                 $data['addRName'],
                 $data['addRDescription'],
-                $_SESSION["user"]["id"],
-                $data['addStatus']
+                $userId,
+                $status
             );
             if ($stmt->execute()) {
                 $role_id = $this->conn->insert_id;
                 foreach($permissions as $pid) {
-                    $this->conn->query("INSERT INTO vp_role_permissions (role_id, permission_id, user_id) VALUES ('$role_id', '$pid', '{$_SESSION["user"]["id"]}')");
+                    $this->conn->query("INSERT INTO vp_role_permissions (role_id, permission_id, user_id) VALUES ('$role_id', '$pid', '$userId')");
                 }
                 return ['success' => true, 'message' => 'Record added successfully.'];
             }
@@ -154,23 +211,45 @@ class Roles {
         }
     }
     public function updateRecord($id, $data) {
-        $role_id = $id;
+        $role_id = (int)$id;
         $sql = "UPDATE vp_roles SET role_name = ?, role_description = ?, user_id = ?, is_active = ? WHERE id = ?";
         $stmt = $this->conn->prepare($sql);
+        $userId = (int)($_SESSION["user"]["id"] ?? 0);
+        $status = (int)($data['editStatus'] ?? 1);
         $stmt->bind_param('ssiii',
             $data['editRName'],
             $data['editRDescription'],
-            $_SESSION["user"]["id"],
-            $data['editStatus'],
+            $userId,
+            $status,
             $role_id
         );
         if ($stmt->execute()) {
-            $permissions = $data['permissions'] ?? [];
+            $permissionsInput = $data['permissions'] ?? [];
+            $permissions = [];
+            foreach ($permissionsInput as $pid) {
+                if (is_array($pid)) {
+                    foreach ($pid as $subPid) {
+                        foreach (explode(',', (string)$subPid) as $p) {
+                            $pVal = (int) trim($p);
+                            if ($pVal > 0 && !in_array($pVal, $permissions, true)) {
+                                $permissions[] = $pVal;
+                            }
+                        }
+                    }
+                } else {
+                    foreach (explode(',', (string)$pid) as $p) {
+                        $pVal = (int) trim($p);
+                        if ($pVal > 0 && !in_array($pVal, $permissions, true)) {
+                            $permissions[] = $pVal;
+                        }
+                    }
+                }
+            }
             $sql = "DELETE FROM vp_role_permissions WHERE role_id=$role_id";
             $this->conn->query($sql);
 
             foreach($permissions as $pid) {
-                $this->conn->query("INSERT INTO vp_role_permissions (role_id, permission_id, user_id) VALUES ('$role_id', '$pid', '{$_SESSION["user"]["id"]}')");
+                $this->conn->query("INSERT INTO vp_role_permissions (role_id, permission_id, user_id) VALUES ('$role_id', '$pid', '$userId')");
             }
             return ['success' => true, 'message' => 'Record updated successfully.'];
         }
@@ -291,6 +370,7 @@ class Roles {
     public function getRecord($id) {
         $roles = array();
         $modules_str = "";
+        $id = (int)$id;
         if($id > 0){ // Edit Record
             $sql = "SELECT vr.id, vr.role_name, vr.role_description, vr.is_active FROM vp_roles as vr WHERE vr.id = $id AND vr.is_active = 1";
             $result = $this->conn->query($sql);
@@ -300,21 +380,9 @@ class Roles {
 
                 $currentPerms = [];
                 $res =  $this->conn->query("SELECT permission_id FROM vp_role_permissions WHERE role_id=$id");
-                while($r=mysqli_fetch_assoc($res)) { $currentPerms[] = $r['permission_id']; }
+                while($r=mysqli_fetch_assoc($res)) { $currentPerms[] = (int)$r['permission_id']; }
 
-                $modules = $this->conn->query("SELECT DISTINCT module_name FROM vp_permissions");
-                while($m = mysqli_fetch_assoc($modules)) {
-                    $modules_str .= "<div class='border rounded p-2 mb-2 bg-white text-sm font-medium text-gray-700'>";
-                    $modules_str .= "<strong>".ucfirst($m['module_name'])."</strong><br>";
-                    $perms = $this->conn->query("SELECT * FROM vp_permissions WHERE module_name='{$m['module_name']}'");
-                    while($p = mysqli_fetch_assoc($perms)) {
-                        $checked = in_array($p['id'], $currentPerms) ? 'checked' : '';
-                        $modules_str .= "<label class='me-3 mb-2 d-inline-block text-sm font-medium text-gray-700'>
-                                <input type='checkbox' name='permissions[]' value='{$p['id']}' $checked> ".ucfirst($p['action_name'])."
-                            </label>";
-                    }
-                    $modules_str .= "</div>";
-                }
+                $modules_str = $this->buildModulesHtml($currentPerms);
             }
         } else { // Add Record
             $sql = "SELECT vr.id, vr.role_name, vr.role_description, vr.is_active FROM vp_roles as vr WHERE vr.is_active = 1";
@@ -323,22 +391,11 @@ class Roles {
                 $roles = $result->fetch_assoc();
                 $result->free();
             }
-            $modules = $this->conn->query("SELECT DISTINCT module_name FROM vp_permissions");
-            while($m = mysqli_fetch_assoc($modules)) {
-                $modules_str .= "<div class='border rounded p-2 mb-2 bg-white text-sm font-medium text-gray-700'>";
-                $modules_str .= "<strong>".ucfirst($m['module_name'])."</strong><br>";
-                $perms = $this->conn->query("SELECT * FROM vp_permissions WHERE module_name='{$m['module_name']}'");
-                while($p = mysqli_fetch_assoc($perms)) {
-                    $modules_str .= "<label class='me-3 mb-2 d-inline-block text-sm font-medium text-gray-700'>
-                            <input type='checkbox' name='permissions[]' value='{$p['id']}'> ".ucfirst($p['action_name'])."
-                        </label>";
-                }
-                $modules_str .= "</div>";
-            }
+            $modules_str = $this->buildModulesHtml([]);
         }
         return [
             'roles'        => $roles,
-            'modules_str'      => $modules_str
+            'modules_str'  => $modules_str
         ];
 	}
 }
