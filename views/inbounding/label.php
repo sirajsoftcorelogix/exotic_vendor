@@ -1,53 +1,103 @@
 <?php
-// 1. PHP Logic & Data Fetching
-$parent_info = $form2 ?? $data['form2'] ?? [];
-$variations = $variation ?? $data['variation'] ?? [];
-$is_variant = strtoupper(trim((string) ($parent_info['is_variant'] ?? 'N'))) === 'Y';
-
-$label_data = [];
-
-if ($is_variant && !empty($variations)) {
-    // When is_variant is 'Y' and variations exist, generate labels ONLY for variations (exclude parent)
-    foreach ($variations as $value) {
-        $item = $value;
-        $item['product_photo'] = !empty($value['variation_image']) ? $value['variation_image'] : ($value['photo'] ?? '');
-        $item['Item_code'] = $parent_info['Item_code'] ?? ($value['Item_code'] ?? '');
-        $item['material_name'] = $parent_info['material_name'] ?? '';
-        $item['vendor_name'] = $parent_info['vendor_name'] ?? '';
-        $item['gate_entry_date_time'] = $parent_info['gate_entry_date_time'] ?? '';
-        foreach (['author_name', 'publishers_name', 'pages', 'cover_type', 'edition', 'isbn', 'language', 'group_name', 'received_by_user_id', 'id'] as $inheritField) {
-            if (($item[$inheritField] ?? '') === '' && ($parent_info[$inheritField] ?? '') !== '') {
-                $item[$inheritField] = $parent_info[$inheritField];
-            }
+// 1. Helper Functions
+if (!function_exists('safeInt')) {
+    function safeInt($value, int $fallback = 0): int
+    {
+        if ($value === null || $value === '') {
+            return $fallback;
         }
-        $label_data[] = $item;
-    }
-} else {
-    // When is_variant is 'N' (or if no variations exist), generate label for the main inbound record
-    if (!empty($parent_info)) {
-        $label_data[] = $parent_info;
+        return intval($value);
     }
 }
 
+if (!function_exists('safe')) {
+    function safe($value)
+    {
+        return htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8');
+    }
+}
+
+if (!function_exists('buildInboundLabelData')) {
+    function buildInboundLabelData(array $parent_info, array $variations): array
+    {
+        $is_variant = strtoupper(trim((string) ($parent_info['is_variant'] ?? 'N'))) === 'Y';
+        $label_data = [];
+
+        if ($is_variant) {
+            // When is_variant is 'Y', generate labels for ALL variations (exclude generic parent)
+            // Variant 0 is stored in $parent_info (vp_inbound main row)
+            if (!empty($parent_info)) {
+                $var0 = $parent_info;
+                $var0['product_photo'] = !empty($parent_info['product_photo']) ? $parent_info['product_photo'] : ($parent_info['photo'] ?? '');
+                $var0['Item_code'] = $parent_info['Item_code'] ?? ($parent_info['item_code'] ?? '');
+                $var0['quantity_received'] = safeInt($parent_info['quantity_received'] ?? ($parent_info['quantity'] ?? 1), 1);
+                $label_data[] = $var0;
+            }
+
+            // Variant 1..N are stored in $variations (vp_variations table rows)
+            if (!empty($variations)) {
+                foreach ($variations as $value) {
+                    $item = $value;
+                    $item['product_photo'] = !empty($value['variation_image']) ? $value['variation_image'] : (!empty($value['photo']) ? $value['photo'] : ($parent_info['product_photo'] ?? ''));
+                    $item['Item_code'] = !empty($value['Item_code']) ? $value['Item_code'] : ($parent_info['Item_code'] ?? ($parent_info['item_code'] ?? ''));
+                    $item['quantity_received'] = safeInt($value['quantity_received'] ?? ($value['quantity'] ?? 1), 1);
+
+                    foreach ([
+                        'material_name', 'vendor_name', 'gate_entry_date_time', 'group_name', 'weight_unit',
+                        'author_name', 'publishers_name', 'pages', 'cover_type', 'edition', 'isbn', 'language', 'received_by_user_id', 'id'
+                    ] as $inheritField) {
+                        if (($item[$inheritField] ?? '') === '' && ($parent_info[$inheritField] ?? '') !== '') {
+                            $item[$inheritField] = $parent_info[$inheritField];
+                        }
+                    }
+                    $label_data[] = $item;
+                }
+            }
+        } else {
+            // When is_variant is 'N' (standalone product), generate label for the main inbound record
+            if (!empty($parent_info)) {
+                $parent_info['quantity_received'] = safeInt($parent_info['quantity_received'] ?? ($parent_info['quantity'] ?? 1), 1);
+                $label_data[] = $parent_info;
+            }
+        }
+
+        return $label_data;
+    }
+}
+
+// 2. Data Fetching & Label Assembly
+$parent_info = $form2 ?? $data['form2'] ?? [];
+$variations = $variation ?? $data['variation'] ?? [];
+$label_data = buildInboundLabelData($parent_info, $variations);
+
 if (empty($label_data) && isset($_GET['id'])) {
     is_login();
-    require_once 'settings/database/database.php';
-    $conn = Database::getConnection();
+    if (!isset($conn)) {
+        require_once 'settings/database/database.php';
+        $conn = Database::getConnection();
+    }
+    if (!isset($inboundingModel)) {
+        require_once 'models/inbounding/Inbounding.php';
+        $inboundingModel = new Inbounding($conn);
+    }
+    $fetchedData = $inboundingModel->getlabeldata((int) $_GET['id']);
+    $parent_info = $fetchedData['form2'] ?? [];
+    $variations = $fetchedData['variation'] ?? $inboundingModel->getVariations((int) $_GET['id']);
+    $label_data = buildInboundLabelData($parent_info, $variations);
 }
 
 if (!isset($userDetails)) {
     require_once 'models/user/user.php';
-    if (!isset($conn)) $conn = Database::getConnection();
+    if (!isset($conn)) {
+        require_once 'settings/database/database.php';
+        $conn = Database::getConnection();
+    }
     $usersModel = new User($conn);
     $user_id = $parent_info['received_by_user_id'] ?? ($label_data[0]['received_by_user_id'] ?? ($_SESSION['user']['id'] ?? 0));
     $userDetails = $usersModel->getUserById($user_id);
     unset($usersModel);
 }
 
-function safe($value)
-{
-    return htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8');
-}
 $categoryName = '';
 $groupNameForLabel = $parent_info['group_name'] ?? ($label_data[0]['group_name'] ?? '');
 if (!empty($groupNameForLabel)) {
@@ -77,11 +127,6 @@ if ($inboundRecordId > 0) {
 }
 
 $usePostPublishLabel = !$showVendorOnLabel && $categoryName !== 'book';
-
-function safeInt($value)
-{
-    return intval($value ?? 0);
-}
 
 function labelInboundText($value, string $fallback = 'N/A'): string
 {
@@ -194,8 +239,9 @@ $currentUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
         if ($qtyToPrint < 1) $qtyToPrint = 1;
 
         // 2. Prepare Data Variables
-        $thisPhotoUrl = base_url(safe($current_label['product_photo'] ?? 'assets/images/placeholder.png'));
-        $itemCode = $current_label['Item_code'];
+        $photoPath = trim((string) ($current_label['product_photo'] ?? ''));
+        $thisPhotoUrl = $photoPath !== '' ? base_url(safe($photoPath)) : base_url('assets/images/placeholder.png');
+        $itemCode = safe($current_label['Item_code'] ?? ($current_label['item_code'] ?? ''));
 
         $w = safeInt($current_label['width']);
         $h = safeInt($current_label['height']);

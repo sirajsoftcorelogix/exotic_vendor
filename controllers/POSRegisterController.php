@@ -3127,7 +3127,8 @@ class POSRegisterController
                 }
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
                 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-                curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 12);
                 curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
                 curl_multi_add_handle($mh, $ch);
                 $handles[$code] = $ch;
@@ -3461,9 +3462,13 @@ class POSRegisterController
             $dbImageRaw = trim((string)($dbRow['image'] ?? ''));
         }
 
-        $res = $this->retailApiClient->call('/product/code', 'GET', ['code' => $code]);
+        // Prioritize local MySQL DB (vp_products). Only make remote cURL API call if item missing locally.
+        $data = [];
+        if (empty($dbRow) || (empty($dbImageRaw) && (float)($dbRow['price_india'] ?? 0) <= 0)) {
+            $res = $this->retailApiClient->call('/product/code', 'GET', ['code' => $code]);
+            $data = $this->unwrapProductApiResponse($res['data'] ?? []);
+        }
 
-        $data = $this->unwrapProductApiResponse($res['data'] ?? []);
         $apiImageRaw = $this->pickRawImageFromProductApiArray($data);
         $imageResolved = $this->fixImageUrl($apiImageRaw);
         $imageFromDb = $this->fixImageUrl($dbImageRaw);
@@ -3472,45 +3477,8 @@ class POSRegisterController
             $imageResolved = $imageFromDb;
         }
 
-        $data2 = null;
         $sellingBaseExGst = $this->mergePosProductSellingBaseExGst($data, $dbRow);
-        $variantDiffers = ($dbItemCode !== '' && strcasecmp($dbItemCode, $code) !== 0);
-        // One base item_code fetch when variant response is missing image, price, MRP, or GST (avoids 2–3 sequential /product/code calls).
-        if ($variantDiffers) {
-            $mrpFromVariant = $this->mergeMrpRupee($data, $dbRow);
-            $gstFromVariant = $this->resolveGstPercentAsNumber($data, $dbRow);
-            $needBaseFetch =
-                ($imageResolved === '')
-                || ($sellingBaseExGst <= 0)
-                || ($mrpFromVariant <= 0)
-                || ($gstFromVariant <= 0);
-            if ($needBaseFetch) {
-                $res2 = $this->retailApiClient->call('/product/code', 'GET', ['code' => $dbItemCode]);
-                $data2 = $this->unwrapProductApiResponse($res2['data'] ?? []);
-                if ($imageResolved === '') {
-                    $imgBase = $this->fixImageUrl($this->pickRawImageFromProductApiArray($data2));
-                    if ($imgBase !== '') {
-                        $imageResolved = $imgBase;
-                    }
-                }
-                if ($sellingBaseExGst <= 0) {
-                    $altSell = $this->mergePosProductSellingBaseExGst($data2, $dbRow);
-                    if ($altSell > 0) {
-                        $sellingBaseExGst = $altSell;
-                    }
-                }
-            }
-        }
-
-        if ($imageResolved === '' && $imageFromDb !== '') {
-            $imageResolved = $imageFromDb;
-        }
-
-        $gstApiForSell = $data;
-        if ($this->resolveGstPercentAsNumber($data, $dbRow) <= 0 && $data2 !== null) {
-            $gstApiForSell = $data2;
-        }
-        $sellingPrice = $this->computePosDisplayUnitPrice($data, $dbRow, $gstApiForSell, $sellingBaseExGst);
+        $sellingPrice = $this->computePosDisplayUnitPrice($data, $dbRow, $data, $sellingBaseExGst);
 
         $dimApi = $this->cleanValue($data['dimensions'] ?? '');
         $dbH = isset($dbRow['prod_height']) ? trim((string)$dbRow['prod_height']) : '';

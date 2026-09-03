@@ -28,13 +28,14 @@ class ExportDocument
         }
 
         $like = '%' . $term . '%';
-        $sql = "SELECT DISTINCT i.id AS invoice_id, i.invoice_number, COALESCE(i.order_number, oi.order_number) AS order_number,
+        $sql = "SELECT DISTINCT i.id AS invoice_id, i.invoice_number, COALESCE(oi.order_number, ii.order_number) AS order_number,
                        oi.first_name, oi.last_name, oi.shipping_first_name, oi.shipping_last_name, oi.country, oi.shipping_country
                 FROM vp_invoices i
-                LEFT JOIN vp_order_info oi ON (oi.id = i.vp_order_info_id OR ((i.vp_order_info_id IS NULL OR i.vp_order_info_id = 0) AND CONVERT(oi.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(i.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci))
+                LEFT JOIN vp_order_info oi ON oi.id = i.vp_order_info_id
+                LEFT JOIN vp_invoice_items ii ON ii.invoice_id = i.id
                 WHERE CONVERT(i.invoice_number USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE ? 
-                   OR CONVERT(i.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE ? 
-                   OR CONVERT(oi.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE ?
+                   OR CONVERT(oi.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE ? 
+                   OR CONVERT(ii.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci LIKE ?
                 ORDER BY i.id DESC
                 LIMIT ?";
 
@@ -103,17 +104,16 @@ class ExportDocument
             $stmt->close();
         }
 
-        // 2. If no invoice found by invoice_number, try to find invoice by order_number via vp_order_info, vp_invoice_items, or vp_invoices.order_number
+        // 2. If no invoice found by invoice_number, try to find invoice by order_number via vp_order_info or vp_invoice_items
         if (!$invoiceHeader) {
             $stmt = $this->conn->prepare("SELECT i.* FROM vp_invoices i 
                                           LEFT JOIN vp_order_info oi ON oi.id = i.vp_order_info_id 
                                           LEFT JOIN vp_invoice_items ii ON ii.invoice_id = i.id 
                                           WHERE CONVERT(oi.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci 
                                              OR CONVERT(ii.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci 
-                                             OR CONVERT(i.order_number USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci
                                           ORDER BY i.id DESC LIMIT 1");
             if ($stmt) {
-                $stmt->bind_param('sss', $query, $query, $query);
+                $stmt->bind_param('ss', $query, $query);
                 $stmt->execute();
                 $res = $stmt->get_result();
                 if ($row = $res->fetch_assoc()) {
@@ -338,7 +338,8 @@ class ExportDocument
             $ewbOrdStmt = $this->conn->prepare("SELECT d.* FROM vp_domestic_ewb_irn d 
                                                 JOIN vp_invoices i ON i.id = d.vp_invoices_id 
                                                 LEFT JOIN vp_order_info oi ON oi.id = i.vp_order_info_id 
-                                                WHERE oi.order_number = ? OR i.invoice_number = ? OR i.order_number = ? 
+                                                LEFT JOIN vp_invoice_items ii ON ii.invoice_id = i.id
+                                                WHERE oi.order_number = ? OR i.invoice_number = ? OR ii.order_number = ? 
                                                 ORDER BY d.id DESC LIMIT 1");
             if ($ewbOrdStmt) {
                 $ewbOrdStmt->bind_param('sss', $targetOrderNum, $targetOrderNum, $targetOrderNum);

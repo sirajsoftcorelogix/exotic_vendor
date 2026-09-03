@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../helpers/pos_payment_receipt.php';
+require_once __DIR__ . '/../helpers/html_helpers.php';
 require_once __DIR__ . '/../models/payment/Payment.php';
 
 class PaymentsController
@@ -14,12 +15,34 @@ class PaymentsController
         $this->paymentModel = new Payment($conn);
     }
 
+    private function getSessionWarehouseId(): int
+    {
+        $warehouseId = (int) ($_SESSION['warehouse_id'] ?? 0);
+        if ($warehouseId <= 0 && !empty($_SESSION['user']['warehouse_id'])) {
+            $warehouseId = (int) $_SESSION['user']['warehouse_id'];
+        }
+
+        return $warehouseId;
+    }
+
     /* =========================
        PAYMENT LIST PAGE
     ==========================*/
     public function index()
     {
-        renderTemplate('views/payments/index.php', []);
+        $isAdmin = isAdministratorUser();
+        $userWarehouseId = $this->getSessionWarehouseId();
+
+        $warehouses = [];
+        if ($isAdmin) {
+            $warehouses = $this->paymentModel->getWarehouses();
+        }
+
+        renderTemplate('views/payments/index.php', [
+            'isAdmin' => $isAdmin,
+            'userWarehouseId' => $userWarehouseId,
+            'warehouses' => $warehouses,
+        ]);
     }
 
     /* =========================
@@ -41,6 +64,12 @@ class PaymentsController
             'amount_max' => $_GET['amount_max'] ?? '',
         ];
 
+        if (!isAdministratorUser()) {
+            $filters['warehouse_id'] = $this->getSessionWarehouseId();
+        } elseif (isset($_GET['warehouse_id']) && $_GET['warehouse_id'] !== '') {
+            $filters['warehouse_id'] = (int)$_GET['warehouse_id'];
+        }
+
         echo json_encode($this->paymentModel->searchListAjax($filters));
         exit;
     }
@@ -52,6 +81,16 @@ class PaymentsController
     {
         $id = (int)($_GET['id'] ?? 0);
         $payment = $this->paymentModel->findByIdWithDetails($id);
+
+        if (!isAdministratorUser()) {
+            $userWh = $this->getSessionWarehouseId();
+            $pWh = (int)($payment['warehouse_id'] ?? 0);
+            if ($userWh > 0 && $pWh > 0 && $pWh !== $userWh) {
+                $_SESSION['error'] = 'Access denied: Payment belongs to another warehouse.';
+                header('Location: index.php?page=payments&action=list');
+                exit;
+            }
+        }
 
         renderTemplate('views/payments/view.php', [
             'payment' => $payment,
@@ -68,6 +107,14 @@ class PaymentsController
         $id = (int)($_POST['id'] ?? 0);
         if ($id <= 0) {
             vendorJsonResponse(['success' => false, 'message' => 'Payment id missing']);
+        }
+
+        if (!isAdministratorUser()) {
+            $userWh = $this->getSessionWarehouseId();
+            $paymentWarehouseId = $this->paymentModel->getWarehouseIdByPaymentId($id);
+            if ($userWh > 0 && $paymentWarehouseId > 0 && $paymentWarehouseId !== $userWh) {
+                vendorJsonResponse(['success' => false, 'message' => 'Access denied: Payment belongs to another warehouse']);
+            }
         }
 
         $orderNumber = $this->paymentModel->getOrderNumberByPaymentId($id);
@@ -154,7 +201,7 @@ class PaymentsController
         $note = trim((string)($_POST['note'] ?? ''));
 
         $user_id = pos_payment_resolve_session_user_id();
-        $warehouse_id = (int)($_SESSION['warehouse_id'] ?? 0);
+        $warehouse_id = $this->getSessionWarehouseId();
         $postOrderInt = (ctype_digit($postOrderKey) && $postOrderKey !== '') ? (int)$postOrderKey : 0;
 
         $orderNumberStr = '';
@@ -404,6 +451,15 @@ class PaymentsController
         if ($id <= 0) {
             echo json_encode(['success' => false, 'message' => 'Payment id missing']);
             exit;
+        }
+
+        if (!isAdministratorUser()) {
+            $userWh = $this->getSessionWarehouseId();
+            $paymentWarehouseId = $this->paymentModel->getWarehouseIdByPaymentId($id);
+            if ($userWh > 0 && $paymentWarehouseId > 0 && $paymentWarehouseId !== $userWh) {
+                echo json_encode(['success' => false, 'message' => 'Access denied: Payment belongs to another warehouse']);
+                exit;
+            }
         }
 
         $orderNumber = $this->paymentModel->getOrderNumberByPaymentId($id);

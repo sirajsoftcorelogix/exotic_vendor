@@ -1365,7 +1365,7 @@ class InboundingController {
      *
      * @return list<string>
      */
-    private function buildApiProductImageUrls(array $d, string $siteImageBase): array
+    private function buildApiProductImageUrls(array $d, string $siteImageBase, bool $previewOnly = false): array
     {
         $galleryRows = $d['img'] ?? [];
         if (!is_array($galleryRows) || $galleryRows === []) {
@@ -1400,7 +1400,7 @@ class InboundingController {
             if ($fn === '' || in_array($fn, $orderedFiles, true)) {
                 continue;
             }
-            if (!$this->editedImageExistsOnDisk($fn)) {
+            if (!$previewOnly && !$this->editedImageExistsOnDisk($fn)) {
                 continue;
             }
             $orderedFiles[] = $fn;
@@ -1656,14 +1656,14 @@ class InboundingController {
             }
         }
 
+        $action_clicked = $_POST['save_action'] ?? '';
         $skuCheck = $this->validateInboundSkusAgainstCatalog($skusToCheck, $item_code, $id, $is_variant);
-        if ($skuCheck['has_duplicates']) {
-            $action_clicked = $_POST['save_action'] ?? '';
+        if ($skuCheck['has_duplicates'] && $action_clicked !== 'preview_json') {
             $wantsJson = (
-                $action_clicked === 'preview_json' || ($action_clicked === 'draft' && (
+                $action_clicked === 'draft' && (
                     (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string) $_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
                     || (isset($_SERVER['HTTP_ACCEPT']) && stripos((string) $_SERVER['HTTP_ACCEPT'], 'application/json') !== false)
-                ))
+                )
             );
 
             if ($wantsJson || $action_clicked === 'preview_json') {
@@ -2750,6 +2750,8 @@ class InboundingController {
         if ($publish_status_req !== 0 && $publish_status_req !== 1) {
             $publish_status_req = 1;
         }
+        $previewOnly = !empty($GLOBALS['inbound_publish_preview_only'])
+            || (isset($_GET['preview_only']) && (int) $_GET['preview_only'] === 1);
         $API_data = array();
 
         if ($id <= 0) {
@@ -2837,6 +2839,16 @@ class InboundingController {
         // top level data
         $data1 = $inboundingModel->getpublishdata($id);
         inbound_profiler_step($prof, 'getpublishdata_initial');
+        if ($previewOnly && is_array($data1) && isset($data1['data']) && is_array($data1['data'])) {
+            if (empty($data1['data']['Item_code'])) {
+                $group_real_name = trim($inboundingModel->getGroupNameByCode($data1['data']['groupname'] ?? ($data1['data']['group_name'] ?? '')));
+                $generatedCode = $this->generateItemcode($group_real_name, $id);
+                $data1['data']['Item_code'] = !empty($generatedCode) ? $generatedCode : ('DRAFT_' . $id);
+            }
+            if (!isset($data1['data']['is_variant'])) {
+                $data1['data']['is_variant'] = 'N';
+            }
+        }
         if (
             empty($id) ||
             !is_array($data1) ||
@@ -2885,7 +2897,7 @@ class InboundingController {
         $d = $data['data'];
 
         $editedImageCheck = $this->validateEditedImagesForPublish($imageBundle, $d);
-        if (!$editedImageCheck['ok']) {
+        if (!$editedImageCheck['ok'] && !$previewOnly) {
             $logFileData = $this->logPublishProcess([
                 'item_code' => $d['Item_code'] ?? '',
                 'inbound_id' => $id,
@@ -3006,9 +3018,13 @@ class InboundingController {
         $hasVarRows = !empty($d['var_rows']) && is_array($d['var_rows']);
 
         if (!$isVariantProduct) {
-            if ($hasVarRows) {
-                // Example 1: Creating a new product with variations
-                // 1. Parent node at index 0 (item_level = 'parent', empty size & color)
+            $mainSize = trim((string) ($d['size'] ?? ''));
+            $mainColor = trim((string) ($d['color'] ?? ''));
+            $hasVariationAttributes = ($mainSize !== '' || $mainColor !== '' || $hasVarRows);
+
+            if ($hasVariationAttributes) {
+                // Product has size, color, or extra variation rows — create parent container + variation(s)
+                // 1. Parent container node at index 0 (item_level = 'parent', size = '', color = '')
                 $parentNode = $this->buildStockPriceNode($d, $d, 'parent', $current_date_formatted);
                 $parentNode['size'] = '';
                 $parentNode['color'] = '';
@@ -3018,17 +3034,21 @@ class InboundingController {
                 $stock_price_temp[] = $this->buildStockPriceNode($d, $d, 'variation', $current_date_formatted);
 
                 // 3. Extra variation rows from vp_variations (item_level = 'variation')
-                foreach ($d['var_rows'] as $varRow) {
-                    $stock_price_temp[] = $this->buildStockPriceNode($varRow, $d, 'variation', $current_date_formatted);
+                if ($hasVarRows) {
+                    foreach ($d['var_rows'] as $varRow) {
+                        $stock_price_temp[] = $this->buildStockPriceNode($varRow, $d, 'variation', $current_date_formatted);
+                    }
                 }
             } else {
-                // Example 2: Standalone product (no variations)
-                $itemLevel = ($d['groupname'] === 'book') ? 'standalone' : 'standalone';
-                $stock_price_temp[] = $this->buildStockPriceNode($d, $d, $itemLevel, $current_date_formatted);
+                // True standalone product (no size, no color, no variation rows)
+                $standaloneNode = $this->buildStockPriceNode($d, $d, 'standalone', $current_date_formatted);
+                $standaloneNode['size'] = '';
+                $standaloneNode['color'] = '';
+                $stock_price_temp[] = $standaloneNode;
             }
         } else {
             // Example 3: is_variant == 'Y' (adding ONLY variations to an existing product via ?new_variation=1)
-            $variantRows = $hasVarRows ? $d['var_rows'] : [$d];
+            $variantRows = array_merge([$d], $hasVarRows ? $d['var_rows'] : []);
             foreach ($variantRows as $rowVal) {
                 $itemLevel = ($d['groupname'] === 'book') ? 'standalone' : 'variation';
                 $stock_price_temp[] = $this->buildStockPriceNode($rowVal, $d, $itemLevel, $current_date_formatted);
@@ -3073,8 +3093,8 @@ class InboundingController {
             $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
             $httpHost = $_SERVER['HTTP_HOST'] ?? '';
             $siteImageBase = $protocol . '://' . $httpHost;
-            $images_payload['images'] = $this->buildApiProductImageUrls($d, $siteImageBase);
-            if ($images_payload['images'] === []) {
+            $images_payload['images'] = $this->buildApiProductImageUrls($d, $siteImageBase, $previewOnly);
+            if ($images_payload['images'] === [] && !$previewOnly) {
                 inbound_profiler_finish($prof, 'missing_edited_images_on_disk');
                 $this->publishJsonError(
                     'Publish blocked: edited photo files are missing from uploads/itm_img/. Re-upload via Item Photos.',

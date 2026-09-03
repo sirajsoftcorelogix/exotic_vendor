@@ -1675,6 +1675,17 @@
       </div>
     </div>
 
+    <div class="mt-5 flex flex-wrap items-center gap-6 p-3.5 bg-gray-50 rounded-xl border border-gray-200">
+      <label class="inline-flex items-center cursor-pointer gap-2 select-none text-sm font-medium text-gray-700 hover:text-gray-900">
+        <input type="checkbox" id="adj_adjust_physical_stock" checked class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
+        <span>Adjust Physical Stock</span>
+      </label>
+      <label class="inline-flex items-center cursor-pointer gap-2 select-none text-sm font-medium text-gray-700 hover:text-gray-900">
+        <input type="checkbox" id="adj_adjust_local_stock" checked class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
+        <span>Adjust Local Stock</span>
+      </label>
+    </div>
+
     <div class="mt-6">
       <label class="block text-sm font-medium text-gray-600 mb-1">
         Reason
@@ -2119,16 +2130,21 @@
       normalizeVendorProductFetchItemsClient(apiPayloadRoot)
     );
     rows.forEach(function (row) {
-      var key = refreshVariantMatchKey({
-        sku: row.sku || '',
-        size: row.size || '',
-        color: row.color || ''
-      });
-      map[key] = {
+      var val = {
         local_stock: parseApiLocalStockValue(row),
         price_india: parseApiFloatValue(row.price_india),
         price_usd: parseApiFloatValue(row.price || row.usd)
       };
+      var skuKey = refreshVariantMatchKey({
+        sku: row.sku || '',
+        size: row.size || '',
+        color: row.color || ''
+      });
+      var scKey = 'sc:' + normalizeVariantDimensionForStockMatch(row.size) + '|' + normalizeVariantDimensionForStockMatch(row.color);
+      map[skuKey] = val;
+      if (scKey !== 'sc:|') {
+        map[scKey] = val;
+      }
     });
     return map;
   }
@@ -2198,7 +2214,8 @@
       var oldLocal = Number(row.local_stock || 0);
       var physical = Number(row.physical_stock || 0);
       var oldPriceIndia = Number(row.price_india || 0);
-      var preview = apiPreviewMap[refreshVariantMatchKey(row)] || {};
+      var scKey = 'sc:' + normalizeVariantDimensionForStockMatch(row.size) + '|' + normalizeVariantDimensionForStockMatch(row.color);
+      var preview = apiPreviewMap[refreshVariantMatchKey(row)] || apiPreviewMap[scKey] || {};
       var apiLocal = preview.local_stock;
       var apiPriceIndia = preview.price_india;
       var apiLocalText = (apiLocal === null || apiLocal === undefined) ? '—' : String(apiLocal);
@@ -2492,6 +2509,10 @@
 
   function openStockModal() {
     document.getElementById('stockModal').classList.remove('hidden');
+    const physCb = document.getElementById('adj_adjust_physical_stock');
+    const localCb = document.getElementById('adj_adjust_local_stock');
+    if (physCb) physCb.checked = true;
+    if (localCb) localCb.checked = true;
     updateAdjWarehouseAvailableHint();
   }
   function closeStockModal() {
@@ -2698,19 +2719,18 @@ function closeImagePopup() {
     const warehouseId = document.getElementById('adj_warehouse').value;
     const warehouseSel = document.getElementById('adj_warehouse');
     const warehouseName = (warehouseSel.options[warehouseSel.selectedIndex] && warehouseSel.options[warehouseSel.selectedIndex].text) || 'selected warehouse';
-    const adjustmentData = {
-        product_id: <?php echo json_encode($products['id'] ?? 0); ?>,
-        user_id: document.getElementById('current_user').value,
-        sku: <?php echo json_encode($products['sku'] ?? ''); ?>,
-        type: adjType,
-        warehouse_id: warehouseId,
-        location: document.getElementById('adj_location').value,
-        quantity: qty,
-        reason: document.getElementById('adj_reason').value
-    };
+
+    const adjustPhysicalElem = document.getElementById('adj_adjust_physical_stock');
+    const adjustLocalElem = document.getElementById('adj_adjust_local_stock');
+    const adjustPhysicalStock = adjustPhysicalElem ? adjustPhysicalElem.checked : true;
+    const adjustLocalStock = adjustLocalElem ? adjustLocalElem.checked : true;
 
     // 2. Validation
-    if (!warehouseId) {
+    if (!adjustPhysicalStock && !adjustLocalStock) {
+        alert('Please select at least one adjustment option (Adjust Physical Stock or Adjust Local Stock).');
+        return;
+    }
+    if (adjustPhysicalStock && !warehouseId) {
         alert('Please select a warehouse.');
         return;
     }
@@ -2718,8 +2738,8 @@ function closeImagePopup() {
         alert('Please enter a valid quantity.');
         return;
     }
-    // Decrease: selected warehouse must have enough running stock
-    if (adjType === 'OUT') {
+    // Decrease: selected warehouse must have enough running stock if adjusting physical stock
+    if (adjustPhysicalStock && adjType === 'OUT') {
         const available = getAdjWarehouseAvailableQty();
         if (qty > available) {
             alert(
@@ -2731,6 +2751,19 @@ function closeImagePopup() {
             return;
         }
     }
+
+    const adjustmentData = {
+        product_id: <?php echo json_encode($products['id'] ?? 0); ?>,
+        user_id: document.getElementById('current_user').value,
+        sku: <?php echo json_encode($products['sku'] ?? ''); ?>,
+        type: adjType,
+        warehouse_id: warehouseId,
+        location: document.getElementById('adj_location').value,
+        quantity: qty,
+        reason: document.getElementById('adj_reason').value,
+        adjust_physical_stock: adjustPhysicalStock,
+        adjust_local_stock: adjustLocalStock
+    };
 
     // 3. Send to Server
     fetch(`index.php?page=products&action=save_stock_adjustment`, {
@@ -2748,7 +2781,7 @@ function closeImagePopup() {
     })
     .then(data => {
         if (data.success) {
-            alert('✅ Success: Stock has been updated!');
+            alert('✅ Success: ' + (data.message || 'Stock has been updated!'));
             closeStockModal();
             
             // Refresh the history table immediately
@@ -2756,8 +2789,6 @@ function closeImagePopup() {
                 filterStockHistory(1);
             }
             
-            // Optional: If you want the top stock counters to update, 
-            // you might need a page reload or another JS update function
             location.reload(); 
         } else {
             alert('❌ Failed: ' + (data.message || 'Failed to save adjustment.'));
@@ -2767,7 +2798,7 @@ function closeImagePopup() {
         console.error('Error:', error);
         alert('An unexpected error occurred. Please check the console.');
     });
-}
+  }
 </script>
 <script>
     function openProductLocationModal() {

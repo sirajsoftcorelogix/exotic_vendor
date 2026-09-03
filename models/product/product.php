@@ -1672,10 +1672,11 @@ class product
                 $now = date('Y-m-d H:i:s');
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
                 $existingBase = $this->findByItemCodeSizeColor($product['itemcode'], (string)($product['size'] ?? ''), (string)($product['color'] ?? ''));
-                $sku = isset($product['sku']) && !empty($product['sku']) ? $product['sku'] : $product['itemcode'];
+                $rawApiSku = (string) ($product['sku'] ?? '');
+                $sku = $rawApiSku !== '' ? $rawApiSku : $product['itemcode'];
                 $color = isset($product['color']) ? (string)$product['color'] : '';
                 $size = isset($product['size']) ? (string)$product['size'] : '';
-                $targetProductId = $this->resolveApiRefreshTargetProductId($options, (string) $sku, $size, $color, $apiRowCount);
+                $targetProductId = $this->resolveApiRefreshTargetProductId($options, $rawApiSku, $size, $color, $apiRowCount);
                 if ($targetProductId > 0) {
                     $existingById = $this->getProduct($targetProductId);
                     if (is_array($existingById)) {
@@ -1831,7 +1832,7 @@ class product
                     //echo "Executing update for itemcode: ".$product['itemcode']."<br/>";                          
                     if ($this->executeVpProductsStmt($stmt)) {
                         $affected = (int) $stmt->affected_rows;
-                        $didUpdate = ($targetProductId > 0 && is_array($existingBase)) || $affected > 0;
+                        $didUpdate = is_array($existingBase) || $affected > 0;
                         if ($didUpdate) {
                             $updatedCount++;
                             if ($affected > 0) {
@@ -2484,12 +2485,17 @@ class product
             if ($id <= 0) {
                 continue;
             }
-            $key = self::apiRefreshVariantMatchKey(
-                (string) ($row['sku'] ?? ''),
-                (string) ($row['size'] ?? ''),
-                (string) ($row['color'] ?? '')
-            );
-            $map[$key] = $id;
+            $sku = (string) ($row['sku'] ?? '');
+            $size = (string) ($row['size'] ?? '');
+            $color = (string) ($row['color'] ?? '');
+            if (trim($sku) !== '') {
+                $skuKey = self::apiRefreshVariantMatchKey($sku, '', '');
+                $map[$skuKey] = $id;
+            }
+            $scKey = self::apiRefreshVariantMatchKey('', $size, $color);
+            if ($scKey !== 'sc:|') {
+                $map[$scKey] = $id;
+            }
         }
 
         return $map;
@@ -2503,25 +2509,31 @@ class product
         int $apiRowCount = 1
     ): int {
         $currentProductId = (int) ($options['current_product_id'] ?? 0);
+        $map = $this->buildDetailVariantProductIdMap($options);
+
+        if ($map !== []) {
+            if (trim($sku) !== '') {
+                $skuKey = self::apiRefreshVariantMatchKey($sku, '', '');
+                if (isset($map[$skuKey])) {
+                    return (int) $map[$skuKey];
+                }
+            }
+
+            $scKey = self::apiRefreshVariantMatchKey('', $size, $color);
+            if (isset($map[$scKey])) {
+                return (int) $map[$scKey];
+            }
+
+            if (count($map) === 1) {
+                return (int) reset($map);
+            }
+        }
+
         if ($apiRowCount === 1 && $currentProductId > 0) {
             return $currentProductId;
         }
 
-        $map = $this->buildDetailVariantProductIdMap($options);
-        if ($map === []) {
-            return $currentProductId > 0 ? $currentProductId : 0;
-        }
-
-        $key = self::apiRefreshVariantMatchKey($sku, $size, $color);
-        if (isset($map[$key])) {
-            return (int) $map[$key];
-        }
-
-        if (count($map) === 1) {
-            return (int) reset($map);
-        }
-
-        return $currentProductId > 0 ? $currentProductId : 0;
+        return 0;
     }
 
     private function apiRefreshCatalogUpdateSql(bool $whereByProductId): string
@@ -2760,12 +2772,13 @@ class product
                 return;
             }
 
-            $current = (int) StockMovement::getLastRunningStock($this->db, $sku, $warehouseId);
+            $current = (int) StockMovement::getLastRunningStockByProductId($this->db, $productId, $warehouseId, $sku);
             $delta = $targetQty - $current;
 
             if ($delta > 0) {
-                $movementType = $current <= 0 ? 'OPENING_STOCK' : 'IN';
-                $movementQty = $current <= 0 ? $targetQty : $delta;
+                $isUninitialized = StockMovement::isPhysicalStockUninitialized($this->db, $productId);
+                $movementType = ($current <= 0 && $isUninitialized) ? 'OPENING_STOCK' : 'IN';
+                $movementQty = ($current <= 0 && $isUninitialized) ? $targetQty : $delta;
                 StockMovement::insert($this->db, [
                     'product_id' => $productId,
                     'sku' => $sku,
@@ -5206,6 +5219,13 @@ class product
     {
         require_once __DIR__ . '/StockMovement.php';
 
+        $adjustPhysicalStock = array_key_exists('adjust_physical_stock', $data) ? !empty($data['adjust_physical_stock']) : true;
+        $adjustLocalStock = array_key_exists('adjust_local_stock', $data) ? !empty($data['adjust_local_stock']) : true;
+
+        if (!$adjustPhysicalStock && !$adjustLocalStock) {
+            return ['success' => false, 'message' => 'Neither Physical Stock nor Local Stock was selected for adjustment.'];
+        }
+
         $this->db->begin_transaction();
         try {
             $stmt = $this->db->prepare('SELECT id FROM vp_products WHERE id = ? LIMIT 1');
@@ -5219,29 +5239,32 @@ class product
                 throw new Exception('Product not found');
             }
 
-            $movement = StockMovement::insert($this->db, $data);
+            $messages = [];
 
-            $refTypeUpper = strtoupper(trim((string) ($data['ref_type'] ?? '')));
-            if (in_array($refTypeUpper, ['SALES_RETURN', 'SALES_RETURN_CANCEL'], true)) {
-                $sku = trim((string) ($data['sku'] ?? ''));
-                $warehouseId = (int) ($data['warehouse_id'] ?? 0);
-                $lastTransId = (int) ($movement['movement_id'] ?? 0);
-                if ($sku !== '' && $warehouseId > 0) {
-                    StockMovement::syncVpStockFromRunningStock(
-                        $this->db,
-                        $sku,
-                        $warehouseId,
-                        (float) ($movement['running_stock'] ?? 0),
-                        $lastTransId
-                    );
+            if ($adjustPhysicalStock) {
+                $movement = StockMovement::insert($this->db, $data);
+
+                $refTypeUpper = strtoupper(trim((string) ($data['ref_type'] ?? '')));
+                if (in_array($refTypeUpper, ['SALES_RETURN', 'SALES_RETURN_CANCEL'], true)) {
+                    $sku = trim((string) ($data['sku'] ?? ''));
+                    $warehouseId = (int) ($data['warehouse_id'] ?? 0);
+                    $lastTransId = (int) ($movement['movement_id'] ?? 0);
+                    if ($sku !== '' && $warehouseId > 0) {
+                        StockMovement::syncVpStockFromRunningStock(
+                            $this->db,
+                            $sku,
+                            $warehouseId,
+                            (float) ($movement['running_stock'] ?? 0),
+                            $lastTransId
+                        );
+                    }
                 }
+                $messages[] = 'Physical stock updated and history recorded.';
             }
 
             $this->db->commit();
 
-            $result = ['success' => true, 'message' => 'Stock updated and history recorded.'];
-
-            if ($this->shouldSyncLocalStockDeltaForMovement($data)) {
+            if ($adjustLocalStock && $this->shouldSyncLocalStockDeltaForMovement($data)) {
                 $movementType = strtoupper(trim((string) ($data['movement_type'] ?? 'OUT')));
                 $qty = (int) ($data['quantity'] ?? 0);
                 $delta = in_array($movementType, ['IN', 'TRANSFER_IN', 'OPENING_STOCK'], true) ? $qty : -$qty;
@@ -5255,12 +5278,22 @@ class product
                         (string) ($data['color'] ?? '')
                     );
                     if (empty($apiSync['success'])) {
-                        $result['message'] .= ' Warning: ' . trim((string) ($apiSync['message'] ?? 'Storefront stock sync failed.'));
+                        $errMsg = 'Storefront stock sync failed: ' . trim((string) ($apiSync['message'] ?? 'Unknown error'));
+                        if ($adjustPhysicalStock) {
+                            $messages[] = 'Warning: ' . $errMsg;
+                        } else {
+                            return ['success' => false, 'message' => $errMsg];
+                        }
+                    } else {
+                        $messages[] = 'Storefront stock synced via API.';
                     }
                 }
             }
 
-            return $result;
+            return [
+                'success' => true,
+                'message' => implode(' ', $messages) ?: 'Stock adjustment completed.'
+            ];
         } catch (Exception $e) {
             $this->db->rollback();
             return ['success' => false, 'message' => $e->getMessage()];

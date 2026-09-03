@@ -2167,7 +2167,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 $isVariantProduct = ($data['form2']['is_variant'] ?? 'N') === 'Y';
                 $hasItemCode = !empty($data['form2']['Item_code']);
                 $canShowPublishBtn = ($hasItemCode || $isVariantProduct) && (!$is_inbound_live_published || $isVariantProduct);
-                $canShowPrintJsonBtn = ($hasItemCode || $isVariantProduct);
+                $canShowPrintJsonBtn = !empty($data['form2']['id']);
             ?>
             <?php if ($canShowPublishBtn): ?>
                 <button type="button" onclick="handlePublishClick()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
@@ -4449,10 +4449,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function handlePrintJsonClick() {
-        const isValid = performValidationOnly();
-        if (isValid) {
-            openPrintJsonPopup();
-        }
+        openPrintJsonPopup();
     }
 
     /** Sync TomSelect values into native selects so FormData includes current choices. */
