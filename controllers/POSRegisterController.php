@@ -6467,6 +6467,11 @@ class POSRegisterController
 
             $wasUnpublishedInDb = (int)($product['published'] ?? 0) === 0;
 
+            // Subtract 10 years from current date_added
+            $rawDate = trim((string)($product['date_added'] ?? $data['date_added'] ?? ''));
+            $origTs = ($rawDate !== '' && strtotime($rawDate) > 0) ? strtotime($rawDate) : time();
+            $tenYearsAgoDate = date('Y-m-d', strtotime('-10 years', $origTs));
+
             $activeCountBefore = 0;
             $conn->begin_transaction();
             try {
@@ -6481,6 +6486,7 @@ class POSRegisterController
 
                 if ($activeCountBefore === 0) {
                     $productModel->setProductPublished($resolvedProductId, 1);
+                    $productModel->setProductDateAdded($resolvedProductId, $tenYearsAgoDate);
                 }
 
                 $wasUnpubVal = $wasUnpublishedInDb ? 1 : 0;
@@ -6498,7 +6504,7 @@ class POSRegisterController
 
             $vendorSyncResult = null;
             if ($activeCountBefore === 0) {
-                $vendorSyncResult = $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 1);
+                $vendorSyncResult = $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 1, $tenYearsAgoDate);
             } else {
                 $vendorSyncResult = [
                     'success' => true,
@@ -6511,6 +6517,7 @@ class POSRegisterController
                 'message' => 'Product row lock acquired and published status set to 1.',
                 'product_id' => $resolvedProductId,
                 'published' => 1,
+                'date_added' => $tenYearsAgoDate,
                 'token' => $lockToken,
                 'active_locks' => $activeCountBefore + 1,
                 'vendor_sync' => $vendorSyncResult,
@@ -6553,8 +6560,15 @@ class POSRegisterController
 
                 $remainingLocks = (int)($resCnt['cnt'] ?? 0);
 
+                $tenYearsLaterDate = null;
                 if ($remainingLocks === 0 && $wasUnpublishedFlag) {
+                    // Add 10 years to current date_added
+                    $rawDate = trim((string)($product['date_added'] ?? ''));
+                    $curTs = ($rawDate !== '' && strtotime($rawDate) > 0) ? strtotime($rawDate) : time();
+                    $tenYearsLaterDate = date('Y-m-d', strtotime('+10 years', $curTs));
+
                     $productModel->setProductPublished($resolvedProductId, 0);
+                    $productModel->setProductDateAdded($resolvedProductId, $tenYearsLaterDate);
                 }
 
                 $conn->commit();
@@ -6568,7 +6582,7 @@ class POSRegisterController
 
             $vendorSyncResult = null;
             if ($remainingLocks === 0 && $wasUnpublishedFlag) {
-                $vendorSyncResult = $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 0);
+                $vendorSyncResult = $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 0, $tenYearsLaterDate);
                 $msg = 'Product row lock released and published status set back to 0.';
             } else {
                 $msg = 'Row lock released.';
@@ -6579,6 +6593,7 @@ class POSRegisterController
                 'message' => $msg,
                 'product_id' => $resolvedProductId,
                 'published' => ($remainingLocks === 0 ? 0 : 1),
+                'date_added' => $tenYearsLaterDate,
                 'remaining_locks' => $remainingLocks,
                 'vendor_sync' => $vendorSyncResult,
             ]);
@@ -6660,8 +6675,13 @@ class POSRegisterController
 
                     $remaining = (int)($cntRow['cnt'] ?? 0);
                     if ($remaining === 0 && $wasUnpublishedLockExists) {
+                        $rawDate = trim((string)($product['date_added'] ?? ''));
+                        $curTs = ($rawDate !== '' && strtotime($rawDate) > 0) ? strtotime($rawDate) : time();
+                        $tenYearsLaterDate = date('Y-m-d', strtotime('+10 years', $curTs));
+
                         $productModel->setProductPublished($resolvedPid, 0);
-                        $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 0);
+                        $productModel->setProductDateAdded($resolvedPid, $tenYearsLaterDate);
+                        $this->syncProductPublishedToVendorApi($syncItemCode, $syncSize, $syncColor, 0, $tenYearsLaterDate);
                     }
                 }
             }
@@ -6723,12 +6743,18 @@ class POSRegisterController
                 if ($activeCount === 0) {
                     $pRow = $productModel->getProduct($pid);
                     if ($pRow && (int)($pRow['published'] ?? 0) === 1) {
+                        $rawDate = trim((string)($pRow['date_added'] ?? ''));
+                        $curTs = ($rawDate !== '' && strtotime($rawDate) > 0) ? strtotime($rawDate) : time();
+                        $tenYearsLaterDate = date('Y-m-d', strtotime('+10 years', $curTs));
+
                         $productModel->setProductPublished($pid, 0);
+                        $productModel->setProductDateAdded($pid, $tenYearsLaterDate);
                         $this->syncProductPublishedToVendorApi(
                             trim((string)($pRow['item_code'] ?? '')),
                             trim((string)($pRow['size'] ?? '')),
                             trim((string)($pRow['color'] ?? '')),
-                            0
+                            0,
+                            $tenYearsLaterDate
                         );
                     }
                 }
@@ -6736,7 +6762,7 @@ class POSRegisterController
         }
     }
 
-    private function syncProductPublishedToVendorApi(string $itemCode, string $size, string $color, int $status): array
+    private function syncProductPublishedToVendorApi(string $itemCode, string $size, string $color, int $status, ?string $dateAdded = null): array
     {
         if ($itemCode === '') {
             return ['success' => false, 'message' => 'Missing item_code for vendor sync.'];
@@ -6748,7 +6774,12 @@ class POSRegisterController
             . '&size=' . rawurlencode($size)
             . '&color=' . rawurlencode($color);
 
-        $postBody = http_build_query(['status' => $status ? 1 : 0]);
+        $params = ['status' => $status ? 1 : 0];
+        if ($dateAdded !== null && $dateAdded !== '') {
+            $params['date_added'] = $dateAdded;
+        }
+
+        $postBody = http_build_query($params);
 
         $api = exotic_india_api_post($endpoint, $postBody, ['Content-Type: application/x-www-form-urlencoded']);
 

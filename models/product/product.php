@@ -6059,6 +6059,26 @@ class product
         return $stmt->execute();
     }
 
+    public function setProductDateAdded($productId, $dateAdded)
+    {
+        $productId = (int)$productId;
+        $dateStr = trim((string)$dateAdded);
+        if ($dateStr === '') {
+            return false;
+        }
+        $updated = false;
+        if ($this->vpProductsHasColumn('date_added')) {
+            $stmt = $this->db->prepare('UPDATE vp_products SET date_added = ? WHERE id = ?');
+            if ($stmt) {
+                $stmt->bind_param('si', $dateStr, $productId);
+                $stmt->execute();
+                $stmt->close();
+                $updated = true;
+            }
+        }
+        return $updated;
+    }
+
     public function setProductPriceIndia($productId, $priceIndia)
     {
         $productId = (int)$productId;
