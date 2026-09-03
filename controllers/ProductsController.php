@@ -9431,7 +9431,9 @@ class ProductsController
         }
         
         // Fetch up to 500 orders to update from database using offset
-        $odr = $productModel->fetchProductsForUpdateScript($currentOffset, $DB_LIMIT);
+        $hasUpdateFlag = $productModel->vpProductsHasColumn('update_flag');
+        $fetchOffset = $hasUpdateFlag ? 0 : $currentOffset;
+        $odr = $productModel->fetchProductsForUpdateScript($fetchOffset, $DB_LIMIT);
         if (!is_array($odr) || (array_key_exists('success', $odr) && $odr['success'] === false)) {
             $this->finishJsonApiResponse([
                 'success' => false,
@@ -9488,20 +9490,42 @@ class ProductsController
             $headers = [
                 'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
                 'x-adminapitest: 1',
-                'Content-Type: application/x-www-form-urlencoded'
+                'Content-Type: application/x-www-form-urlencoded',
+                'Connection: keep-alive',
             ];
 
-            // Initialize cURL for GET request
-            $ch = curl_init($apiUrl);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-            $response = curl_exec($ch);
-            //echo $apiUrl;
-            //print_array($response);
-            $error = curl_error($ch);
-            curl_close($ch);
-            
+            // Initialize cURL for GET request with retries and SSL stability
+            $response = false;
+            $error = '';
+            $maxAttempts = 3;
+            for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+                $ch = curl_init($apiUrl);
+                curl_setopt_array($ch, [
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_HTTPHEADER => $headers,
+                    CURLOPT_CONNECTTIMEOUT => 15,
+                    CURLOPT_TIMEOUT => 60,
+                    CURLOPT_SSL_VERIFYPEER => false,
+                    CURLOPT_SSL_VERIFYHOST => 0,
+                    CURLOPT_USERAGENT => 'ExoticVendorSync/1.0',
+                    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                ]);
+                $response = curl_exec($ch);
+                $error = curl_error($ch);
+                $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                if ($response !== false && $error === '' && $httpCode >= 200 && $httpCode < 400) {
+                    break;
+                }
+
+                if ($attempt < $maxAttempts) {
+                    usleep(500000); // Wait 500ms before retry
+                }
+            }
+
+            usleep(200000); // 200ms pacing between API calls to prevent server connection drops
+
             if (!empty($error)) {
                 $errors[] = "API Batch " . ($chunkIndex + 1) . " failed: " . $error;
                 continue;
