@@ -5,7 +5,7 @@ class product
     /** @var string|null */
     private $stockMovementItemCodeColumn = null;
     private $vpProductsCols = null;
-    private function vpProductsHasColumn(string $col): bool
+    public function vpProductsHasColumn(string $col): bool
     {
         if ($this->vpProductsCols === null) {
             $this->vpProductsCols = [];
