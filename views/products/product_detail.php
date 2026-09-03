@@ -2130,16 +2130,21 @@
       normalizeVendorProductFetchItemsClient(apiPayloadRoot)
     );
     rows.forEach(function (row) {
-      var key = refreshVariantMatchKey({
-        sku: row.sku || '',
-        size: row.size || '',
-        color: row.color || ''
-      });
-      map[key] = {
+      var val = {
         local_stock: parseApiLocalStockValue(row),
         price_india: parseApiFloatValue(row.price_india),
         price_usd: parseApiFloatValue(row.price || row.usd)
       };
+      var skuKey = refreshVariantMatchKey({
+        sku: row.sku || '',
+        size: row.size || '',
+        color: row.color || ''
+      });
+      var scKey = 'sc:' + normalizeVariantDimensionForStockMatch(row.size) + '|' + normalizeVariantDimensionForStockMatch(row.color);
+      map[skuKey] = val;
+      if (scKey !== 'sc:|') {
+        map[scKey] = val;
+      }
     });
     return map;
   }
@@ -2209,7 +2214,8 @@
       var oldLocal = Number(row.local_stock || 0);
       var physical = Number(row.physical_stock || 0);
       var oldPriceIndia = Number(row.price_india || 0);
-      var preview = apiPreviewMap[refreshVariantMatchKey(row)] || {};
+      var scKey = 'sc:' + normalizeVariantDimensionForStockMatch(row.size) + '|' + normalizeVariantDimensionForStockMatch(row.color);
+      var preview = apiPreviewMap[refreshVariantMatchKey(row)] || apiPreviewMap[scKey] || {};
       var apiLocal = preview.local_stock;
       var apiPriceIndia = preview.price_india;
       var apiLocalText = (apiLocal === null || apiLocal === undefined) ? '—' : String(apiLocal);
