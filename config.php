@@ -53,10 +53,10 @@ return [
   // ],
   /**Sandbox */
   'alankit' => [
-    'username' => 'AL001',
-    'password' => 'Alankit@123',
+    'username' => 'API_Yash@exoticindi',
+    'password' => 'Exotic#2040',
     'subscription_key' => 'AL6x9c9S1b7g8h9S7C',
-    'gstin' => '07AGAPA5363L002',
+    'gstin' => '07AADCE1400C1ZJ',
     'company_name' => 'EXOTIC INDIA ART PVT LTD',
     'app_key' => 'ZEtrRXA3UWRZalZqT2xtZ3IwOElFa0ZXNnRIazdUSGQ=', // encripted AppKey (Base64 encoded)
     'force_refresh_access_token' => true, // Refresh token 10 minutes before expiry

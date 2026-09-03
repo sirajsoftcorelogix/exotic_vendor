@@ -171,7 +171,7 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
           <div class="space-y-3 text-xs">
             <div>
               <label class="block font-semibold text-slate-700 mb-1">Seller GSTIN</label>
-              <input type="text" name="seller_gstin" value="<?= $h($firmData['gst'] ?? '07AGAPA5363L002') ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono font-semibold text-slate-800" />
+              <input type="text" name="seller_gstin" value="<?= $h($firmData['gst'] ?? '07AADCE1400C1ZJ') ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono font-semibold text-slate-800" />
             </div>
             <div>
               <label class="block font-semibold text-slate-700 mb-1">Legal / Trade Name</label>

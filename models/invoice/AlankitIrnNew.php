@@ -33,7 +33,9 @@ class AlankitIrnNew {
         $this->appKey = $appKey;
         $this->gstin = $gstin;
         $this->forceRefreshAccessToken = $forceRefreshAccessToken;
-        $this->baseUrl = "https://developers.eraahi.com";
+        //$this->baseUrl = "https://developers.eraahi.com"; //Sandbox 
+        $this->baseUrl = "https://www.alankitgst.com/"; // Production
+        
         $this->tokenExpiresAt = null;
         $this->sek = null;
     }
@@ -51,17 +53,15 @@ class AlankitIrnNew {
     }
     function authRequest(){
 $RequestPayload = '{
-    "UserName":"AL001",
-    "Password":"Alankit@123",
+    "UserName":"API_Yash@exoticindi",
+    "Password":"Exotic#2040",
     "AppKey":"'.$this->appKey.'",
     "ForceRefreshAccessToken": true
 }';
 
 
-// $publicKey ;
-
-
-$publicKey = '-----BEGIN PUBLIC KEY-----
+// $publicKey //sandbox;
+/*$publicKey = '-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArxd93uLDs8HTPqcSPpxZ
 rf0Dc29r3iPp0a8filjAyeX4RAH6lWm9qFt26CcE8ESYtmo1sVtswvs7VH4Bjg/F
 DlRpd+MnAlXuxChij8/vjyAwE71ucMrmZhxM8rOSfPML8fniZ8trr3I4R2o4xWh6
@@ -70,7 +70,18 @@ Qd82bUZCk9XdhSZcW/am8wBulYokITRMVHlbRXqu1pOFmQMO5oSpyZU3pXbsx+Ox
 IOc4EDX0WMa9aH4+snt18WAXVGwF2B4fmBk7AtmkFzrTmbpmyVqA3KO2IjzMZPw0
 hQIDAQAB
 -----END PUBLIC KEY-----';
+*/
 
+// $publicKey //production;
+$publicKey = '-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjo1FvyiKcQ9hDR2+vH0+
+O2XazuLbo2bPfRiiUnpaPhE3ly+Pwh05gvEuzo2UhUIDg98cX4E0vbfWOF1po2wW
+TBxb8jMY1nAJ8fz1xyHc1Wa7KZ0CeTvAGeifkMux7c22pMu6pBGJN8f3q7MnIW/u
+SJloJF6+x4DZcgvnDUlgZD3Pcoi3GJF1THbWQi5pDQ8U9hZsSJfpsuGKnz41QRsK
+s7Dz7qmcKT2WwN3ULWikgCzywfuuREWb4TVE2p3e9WuoDNPUziLZFeUfMP0NqYsi
+GVYHs1tVI25G42AwIVJoIxOWys8Zym9AMaIBV6EMVOtQUBbNIZufix/TwqTlxNPQ
+VwIDAQAB
+-----END PUBLIC KEY-----';
 
 $Base64RequestPayload = base64_encode(  $RequestPayload  );
 
@@ -285,8 +296,8 @@ return base64_encode($encryptedData);
         CURLOPT_POSTFIELDS => json_encode($data),
         CURLOPT_HTTPHEADER => array(
             'Ocp-Apim-Subscription-Key: AL6x9c9S1b7g8h9S7C',
-            'Gstin: 07AGAPA5363L002',
-            'user_name: AL001',
+            'Gstin: 07AADCE1400C1ZJ',
+            'user_name: API_Yash@exoticindi',
             'AuthToken: '.$accessToken,
             'Content-Type: application/json'
             //'Cookie: sess_map=fqcuxerztqqzbryduezaywetarayrduvcaebxuzfaubacufxccubxurxbdttrwqvrxbzcfrszstsquwezbeswaueqvbtzzxsueufyzdsqyacfefubucaqeqaeduuvyuaydbvbrsryxqubruvydafdrsxveqecbdcdyaxvawuuwaayadq'
@@ -535,7 +546,7 @@ return base64_encode($encryptedData);
             'Content-Type: application/json',
             'Accept: application/json',
             'Gstin: ' . $this->gstin,
-            'user_name: AL001',
+            'user_name: API_Yash@exoticindi',
             'Ocp-Apim-Subscription-Key: ' . $this->subscriptionKey,
             'AuthToken: ' . $accessToken
         ];
