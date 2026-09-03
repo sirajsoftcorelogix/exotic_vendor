@@ -151,21 +151,24 @@ class Roles {
 
                         $actionLower = strtolower(trim($actionName));
                         $extraBadge = '';
-                        $tooltipAttr = '';
 
                         if (strpos($actionLower, 'sr emp') !== false || strpos($actionLower, 'sr. emp') !== false) {
                             $desc = $srEmpModuleDescriptions[$modKey] ?? 'Senior Employee tier privileges, multi-warehouse visibility, and elevated administrative actions for this module.';
                             $infoNotes[] = ['tier' => 'Sr. Emp Access', 'desc' => $desc];
-                            $tooltipAttr = 'title="Covered in Sr. Emp Access: ' . htmlspecialchars($desc, ENT_QUOTES, 'UTF-8') . '"';
-                            $extraBadge = "<span class='ms-1 inline-flex items-center text-xs font-semibold text-indigo-700 bg-indigo-100 rounded px-1.5 py-0.5' {$tooltipAttr}>ℹ Sr. Emp Tier</span>";
+                            $jsTier = htmlspecialchars(addslashes('Sr. Emp Access'), ENT_QUOTES, 'UTF-8');
+                            $jsMod = htmlspecialchars(addslashes($moduleName), ENT_QUOTES, 'UTF-8');
+                            $jsDesc = htmlspecialchars(addslashes($desc), ENT_QUOTES, 'UTF-8');
+                            $extraBadge = "<button type='button' class='ms-1 px-1.5 py-0.5 text-xs font-semibold text-indigo-700 bg-indigo-100 hover:bg-indigo-200 rounded inline-flex items-center gap-1 transition cursor-pointer' onclick='event.preventDefault(); event.stopPropagation(); showAccessDescriptionModal(\"{$jsTier}\", \"{$jsMod}\", \"{$jsDesc}\")'><svg class=\"w-3 h-3 text-indigo-600\" fill=\"currentColor\" viewBox=\"0 0 20 20\"><path fill-rule=\"evenodd\" d=\"M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z\" clip-rule=\"evenodd\"></path></svg> Info</button>";
                         } elseif (strpos($actionLower, 'top management') !== false) {
                             $desc = $topMgmtModuleDescriptions[$modKey] ?? 'Top Management executive privileges (includes all Sr. Emp features plus executive oversight for this module).';
                             $infoNotes[] = ['tier' => 'Top Management Access', 'desc' => $desc];
-                            $tooltipAttr = 'title="Covered in Top Management Access: ' . htmlspecialchars($desc, ENT_QUOTES, 'UTF-8') . '"';
-                            $extraBadge = "<span class='ms-1 inline-flex items-center text-xs font-semibold text-purple-700 bg-purple-100 rounded px-1.5 py-0.5' {$tooltipAttr}>ℹ Top Mgmt Tier</span>";
+                            $jsTier = htmlspecialchars(addslashes('Top Management Access'), ENT_QUOTES, 'UTF-8');
+                            $jsMod = htmlspecialchars(addslashes($moduleName), ENT_QUOTES, 'UTF-8');
+                            $jsDesc = htmlspecialchars(addslashes($desc), ENT_QUOTES, 'UTF-8');
+                            $extraBadge = "<button type='button' class='ms-1 px-1.5 py-0.5 text-xs font-semibold text-purple-700 bg-purple-100 hover:bg-purple-200 rounded inline-flex items-center gap-1 transition cursor-pointer' onclick='event.preventDefault(); event.stopPropagation(); showAccessDescriptionModal(\"{$jsTier}\", \"{$jsMod}\", \"{$jsDesc}\")'><svg class=\"w-3 h-3 text-purple-600\" fill=\"currentColor\" viewBox=\"0 0 20 20\"><path fill-rule=\"evenodd\" d=\"M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z\" clip-rule=\"evenodd\"></path></svg> Info</button>";
                         }
 
-                        $actionsHtml .= "<label class='me-3 mb-2 d-inline-block text-sm font-medium text-gray-700 cursor-pointer' {$tooltipAttr}>
+                        $actionsHtml .= "<label class='me-3 mb-2 d-inline-block text-sm font-medium text-gray-700 cursor-pointer'>
                                 <input type='checkbox' name='permissions[]' class='module-permission-checkbox me-1' value='{$pidsStr}' {$checked} onchange='updateModuleSelectAll(this)'> " . ucfirst(htmlspecialchars($actionName)) . "{$extraBadge}
                             </label>";
                     }
@@ -183,9 +186,15 @@ class Roles {
 
                     if (!empty($infoNotes)) {
                         foreach ($infoNotes as $note) {
-                            $modules_str .= "<div class='mt-2 pt-2 border-t border-gray-100 text-xs text-indigo-800 bg-indigo-50/70 p-2 rounded flex items-start gap-1.5'>";
-                            $modules_str .= "<svg class='w-4 h-4 text-indigo-600 shrink-0 mt-0.5' fill='currentColor' viewBox='0 0 20 20'><path fill-rule='evenodd' d='M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z' clip-rule='evenodd'></path></svg>";
-                            $modules_str .= "<div><strong>Covered in " . htmlspecialchars($note['tier']) . ":</strong> " . htmlspecialchars($note['desc']) . "</div>";
+                            $jsTier = htmlspecialchars(addslashes($note['tier']), ENT_QUOTES, 'UTF-8');
+                            $jsMod = htmlspecialchars(addslashes($moduleName), ENT_QUOTES, 'UTF-8');
+                            $jsDesc = htmlspecialchars(addslashes($note['desc']), ENT_QUOTES, 'UTF-8');
+                            $modules_str .= "<div class='mt-2 pt-2 border-t border-gray-100 text-xs text-indigo-900 bg-indigo-50/80 p-2 rounded flex items-center justify-between gap-2'>";
+                            $modules_str .= "<div class='flex items-center gap-1.5 overflow-hidden'>";
+                            $modules_str .= "<svg class='w-4 h-4 text-indigo-600 shrink-0' fill='currentColor' viewBox='0 0 20 20'><path fill-rule='evenodd' d='M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z' clip-rule='evenodd'></path></svg>";
+                            $modules_str .= "<span class='truncate'>What is covered in <strong>" . htmlspecialchars($note['tier']) . "</strong>?</span>";
+                            $modules_str .= "</div>";
+                            $modules_str .= "<button type='button' class='shrink-0 px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-semibold text-xs transition shadow-xs cursor-pointer' onclick='showAccessDescriptionModal(\"{$jsTier}\", \"{$jsMod}\", \"{$jsDesc}\")'>View Covered Details</button>";
                             $modules_str .= "</div>";
                         }
                     }
@@ -213,6 +222,73 @@ class Roles {
                     const selectAll = group.querySelector('.module-select-all');
                     if (selectAll && checkboxes.length > 0) {
                         selectAll.checked = Array.from(checkboxes).every(cb => cb.checked);
+                    }
+                };
+            }
+            if (typeof window.showAccessDescriptionModal !== 'function') {
+                window.showAccessDescriptionModal = function(tierName, moduleName, description) {
+                    let modal = document.getElementById('accessDescriptionModal');
+                    if (!modal) {
+                        modal = document.createElement('div');
+                        modal.id = 'accessDescriptionModal';
+                        modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-xs z-[99999] flex items-center justify-center p-4 hidden';
+                        modal.setAttribute('role', 'dialog');
+                        modal.setAttribute('aria-modal', 'true');
+                        modal.innerHTML = `
+                            <div class=\"bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 relative border border-gray-200 transform transition-all\">
+                                <div class=\"flex items-center justify-between pb-3 border-b border-gray-200\">
+                                    <div class=\"flex items-center gap-2\">
+                                        <span id=\"accessModalBadge\" class=\"px-2.5 py-0.5 text-xs font-bold text-indigo-700 bg-indigo-100 rounded-full\"></span>
+                                        <h3 id=\"accessModalTitle\" class=\"text-base font-bold text-gray-900\"></h3>
+                                    </div>
+                                    <button type=\"button\" onclick=\"closeAccessDescriptionModal()\" class=\"text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition cursor-pointer\">
+                                        <svg class=\"w-5 h-5\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M6 18L18 6M6 6l12 12\"></path></svg>
+                                    </button>
+                                </div>
+                                <div class=\"py-4 text-sm text-gray-700 leading-relaxed max-h-[60vh] overflow-y-auto\" id=\"accessModalBody\"></div>
+                                <div class=\"flex justify-end pt-3 border-t border-gray-100\">
+                                    <button type=\"button\" onclick=\"closeAccessDescriptionModal()\" class=\"px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-lg shadow-sm transition cursor-pointer\">Got it</button>
+                                </div>
+                            </div>
+                        `;
+                        document.body.appendChild(modal);
+                        modal.addEventListener('click', function(e) {
+                            if (e.target === modal) {
+                                closeAccessDescriptionModal();
+                            }
+                        });
+                    }
+                    
+                    document.getElementById('accessModalBadge').innerText = tierName;
+                    document.getElementById('accessModalTitle').innerText = moduleName + ' Module Access';
+                    
+                    function escapeHtmlStr(str) {
+                        const div = document.createElement('div');
+                        div.innerText = str;
+                        return div.innerHTML;
+                    }
+
+                    const rawItems = description.split(/[,;\.]/).map(s => s.trim()).filter(s => s.length > 0);
+                    let bodyHtml = '<p class=\"font-semibold text-gray-900 mb-3\">Features & Privileges granted under <span class=\"text-indigo-700\">' + escapeHtmlStr(tierName) + '</span> for <span class=\"text-indigo-700\">' + escapeHtmlStr(moduleName) + '</span>:</p>';
+                    if (rawItems.length > 1) {
+                        bodyHtml += '<ul class=\"space-y-2\">';
+                        rawItems.forEach(item => {
+                            bodyHtml += '<li class=\"flex items-start gap-2.5 text-gray-700 bg-gray-50/80 p-2 rounded-lg border border-gray-100\"><svg class=\"w-4 h-4 text-emerald-600 shrink-0 mt-0.5\" fill=\"currentColor\" viewBox=\"0 0 20 20\"><path fill-rule=\"evenodd\" d=\"M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z\" clip-rule=\"evenodd\"></path></svg><span class=\"font-medium text-xs leading-relaxed\">' + escapeHtmlStr(item) + '</span></li>';
+                        });
+                        bodyHtml += '</ul>';
+                    } else {
+                        bodyHtml += '<div class=\"p-3.5 bg-gray-50 rounded-lg text-gray-700 border border-gray-100 text-xs leading-relaxed font-medium\">' + escapeHtmlStr(description) + '</div>';
+                    }
+                    
+                    document.getElementById('accessModalBody').innerHTML = bodyHtml;
+                    modal.classList.remove('hidden');
+                };
+            }
+            if (typeof window.closeAccessDescriptionModal !== 'function') {
+                window.closeAccessDescriptionModal = function() {
+                    const modal = document.getElementById('accessDescriptionModal');
+                    if (modal) {
+                        modal.classList.add('hidden');
                     }
                 };
             }
