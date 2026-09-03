@@ -3018,9 +3018,13 @@ class InboundingController {
         $hasVarRows = !empty($d['var_rows']) && is_array($d['var_rows']);
 
         if (!$isVariantProduct) {
-            if ($hasVarRows) {
-                // Example 1: Creating a new product with variations
-                // 1. Parent node at index 0 (item_level = 'parent', empty size & color)
+            $mainSize = trim((string) ($d['size'] ?? ''));
+            $mainColor = trim((string) ($d['color'] ?? ''));
+            $hasVariationAttributes = ($mainSize !== '' || $mainColor !== '' || $hasVarRows);
+
+            if ($hasVariationAttributes) {
+                // Product has size, color, or extra variation rows — create parent container + variation(s)
+                // 1. Parent container node at index 0 (item_level = 'parent', size = '', color = '')
                 $parentNode = $this->buildStockPriceNode($d, $d, 'parent', $current_date_formatted);
                 $parentNode['size'] = '';
                 $parentNode['color'] = '';
@@ -3030,17 +3034,21 @@ class InboundingController {
                 $stock_price_temp[] = $this->buildStockPriceNode($d, $d, 'variation', $current_date_formatted);
 
                 // 3. Extra variation rows from vp_variations (item_level = 'variation')
-                foreach ($d['var_rows'] as $varRow) {
-                    $stock_price_temp[] = $this->buildStockPriceNode($varRow, $d, 'variation', $current_date_formatted);
+                if ($hasVarRows) {
+                    foreach ($d['var_rows'] as $varRow) {
+                        $stock_price_temp[] = $this->buildStockPriceNode($varRow, $d, 'variation', $current_date_formatted);
+                    }
                 }
             } else {
-                // Example 2: Standalone product (no variations)
-                $itemLevel = ($d['groupname'] === 'book') ? 'standalone' : 'standalone';
-                $stock_price_temp[] = $this->buildStockPriceNode($d, $d, $itemLevel, $current_date_formatted);
+                // True standalone product (no size, no color, no variation rows)
+                $standaloneNode = $this->buildStockPriceNode($d, $d, 'standalone', $current_date_formatted);
+                $standaloneNode['size'] = '';
+                $standaloneNode['color'] = '';
+                $stock_price_temp[] = $standaloneNode;
             }
         } else {
             // Example 3: is_variant == 'Y' (adding ONLY variations to an existing product via ?new_variation=1)
-            $variantRows = $hasVarRows ? $d['var_rows'] : [$d];
+            $variantRows = array_merge([$d], $hasVarRows ? $d['var_rows'] : []);
             foreach ($variantRows as $rowVal) {
                 $itemLevel = ($d['groupname'] === 'book') ? 'standalone' : 'variation';
                 $stock_price_temp[] = $this->buildStockPriceNode($rowVal, $d, $itemLevel, $current_date_formatted);

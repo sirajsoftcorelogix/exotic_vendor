@@ -79,12 +79,16 @@ Use when creating a brand-new product that has multiple variations.
 
 ---
 
-## 2. Standalone Item (No Variations)
+## 2. Standalone Item vs Single-Variation Item with Size/Color
 
-Use for single items without color/size variations.
-- Endpoint: `/vendor-api/product/create` (without `new_variation=1`)
-- `item_stock_price[0]`: Sole element with `item_level = "standalone"`, `color = ""`, `size = ""`.
-- `images.image_directory`: Directory name (e.g., `"saris-2025"`).
+- **True Standalone Item (No Size & No Color)**:
+  - Endpoint: `/vendor-api/product/create` (without `new_variation=1`)
+  - `item_stock_price[0]`: Sole element with `item_level = "standalone"`, `color = ""`, `size = ""`.
+
+- **Single Item with Size or Color**:
+  - Standalone products **cannot** have `size` or `color`. If a product has any `size` or `color` specified, a parent container node (`item_level = "parent"`, `size = ""`, `color = ""`) **must** be created at `item_stock_price[0]`, followed by the variation node (`item_level = "variation"`, with `size`/`color`) at `item_stock_price[1]`.
+
+### Standalone Example (No Size, No Color)
 
 ```json
 {
@@ -115,6 +119,44 @@ Use for single items without color/size variations.
             "https://domain.com/images/saris/zzz992.jpg",
             "https://domain.com/images/saris/zzz992_a01.jpg",
             "https://domain.com/images/saris/zzz992_a02.jpg"
+        ]
+    }
+}
+```
+
+### Single-Variation Item Example (Has Size or Color)
+
+```json
+{
+    "itemcode": "CA0964",
+    "groupname": "textiles",
+    "category": "150,1417",
+    "itemtype": "product",
+    "title": "Black-Beauty Long Jacket",
+    "status": 1,
+    "material": "Matka Silk",
+    "item_stock_price": [
+        {
+            "size": "",
+            "color": "",
+            "item_level": "parent",
+            "local_stock": "1",
+            "price": 135,
+            "price_india": 7500
+        },
+        {
+            "size": "XL",
+            "color": "",
+            "item_level": "variation",
+            "local_stock": "1",
+            "price": 135,
+            "price_india": 7500
+        }
+    ],
+    "images": {
+        "image_directory": "clothingmore0926",
+        "images": [
+            "https://seller.exoticindia.com/uploads/itm_img/ca0964.jpg"
         ]
     }
 }
