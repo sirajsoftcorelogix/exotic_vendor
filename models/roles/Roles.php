@@ -113,23 +113,60 @@ class Roles {
                 }
 
                 if (!empty($groupedActions)) {
-                    $modules_str .= "<div class='border rounded p-2 mb-2 bg-white text-sm font-medium text-gray-700'>";
-                    $modules_str .= "<strong>" . ucfirst(htmlspecialchars($moduleName)) . "</strong><br>";
+                    $actionsHtml = "";
+                    $totalActions = count($groupedActions);
+                    $checkedActions = 0;
+
                     foreach ($groupedActions as $actionName => $pids) {
                         $pidsStr = implode(',', $pids);
                         $checked = '';
                         if (!empty($currentPerms) && count(array_intersect($pids, $currentPerms)) > 0) {
                             $checked = 'checked';
+                            $checkedActions++;
                         }
-                        $modules_str .= "<label class='me-3 mb-2 d-inline-block text-sm font-medium text-gray-700'>
-                                <input type='checkbox' name='permissions[]' value='{$pidsStr}' {$checked}> " . ucfirst(htmlspecialchars($actionName)) . "
+                        $actionsHtml .= "<label class='me-3 mb-2 d-inline-block text-sm font-medium text-gray-700 cursor-pointer'>
+                                <input type='checkbox' name='permissions[]' class='module-permission-checkbox me-1' value='{$pidsStr}' {$checked} onchange='updateModuleSelectAll(this)'> " . ucfirst(htmlspecialchars($actionName)) . "
                             </label>";
                     }
+
+                    $allChecked = ($totalActions > 0 && $checkedActions === $totalActions) ? 'checked' : '';
+
+                    $modules_str .= "<div class='module-permission-group border rounded p-2.5 mb-3 bg-white text-sm font-medium text-gray-700'>";
+                    $modules_str .= "<div class='flex items-center justify-between border-b pb-1.5 mb-2'>";
+                    $modules_str .= "<strong>" . ucfirst(htmlspecialchars($moduleName)) . "</strong>";
+                    $modules_str .= "<label class='text-xs font-semibold text-indigo-600 cursor-pointer select-none me-1 flex items-center gap-1'>";
+                    $modules_str .= "<input type='checkbox' class='module-select-all' {$allChecked} onchange='toggleModulePermissions(this)'> Select All";
+                    $modules_str .= "</label>";
+                    $modules_str .= "</div>";
+                    $modules_str .= "<div>" . $actionsHtml . "</div>";
                     $modules_str .= "</div>";
                 }
             }
             $modules->free();
         }
+
+        $modules_str .= "<script>
+            if (typeof window.toggleModulePermissions !== 'function') {
+                window.toggleModulePermissions = function(selectAllCb) {
+                    const group = selectAllCb.closest('.module-permission-group');
+                    if (!group) return;
+                    const checkboxes = group.querySelectorAll('.module-permission-checkbox');
+                    checkboxes.forEach(cb => { cb.checked = selectAllCb.checked; });
+                };
+            }
+            if (typeof window.updateModuleSelectAll !== 'function') {
+                window.updateModuleSelectAll = function(actionCb) {
+                    const group = actionCb.closest('.module-permission-group');
+                    if (!group) return;
+                    const checkboxes = group.querySelectorAll('.module-permission-checkbox');
+                    const selectAll = group.querySelector('.module-select-all');
+                    if (selectAll && checkboxes.length > 0) {
+                        selectAll.checked = Array.from(checkboxes).every(cb => cb.checked);
+                    }
+                };
+            }
+        </script>";
+
         return $modules_str;
     }
 
