@@ -1672,10 +1672,11 @@ class product
                 $now = date('Y-m-d H:i:s');
                 //echo "Updating single itemcode: ".$product['itemcode']."<br/>";           
                 $existingBase = $this->findByItemCodeSizeColor($product['itemcode'], (string)($product['size'] ?? ''), (string)($product['color'] ?? ''));
-                $sku = isset($product['sku']) && !empty($product['sku']) ? $product['sku'] : $product['itemcode'];
+                $rawApiSku = (string) ($product['sku'] ?? '');
+                $sku = $rawApiSku !== '' ? $rawApiSku : $product['itemcode'];
                 $color = isset($product['color']) ? (string)$product['color'] : '';
                 $size = isset($product['size']) ? (string)$product['size'] : '';
-                $targetProductId = $this->resolveApiRefreshTargetProductId($options, (string) $sku, $size, $color, $apiRowCount);
+                $targetProductId = $this->resolveApiRefreshTargetProductId($options, $rawApiSku, $size, $color, $apiRowCount);
                 if ($targetProductId > 0) {
                     $existingById = $this->getProduct($targetProductId);
                     if (is_array($existingById)) {
@@ -2484,12 +2485,17 @@ class product
             if ($id <= 0) {
                 continue;
             }
-            $key = self::apiRefreshVariantMatchKey(
-                (string) ($row['sku'] ?? ''),
-                (string) ($row['size'] ?? ''),
-                (string) ($row['color'] ?? '')
-            );
-            $map[$key] = $id;
+            $sku = (string) ($row['sku'] ?? '');
+            $size = (string) ($row['size'] ?? '');
+            $color = (string) ($row['color'] ?? '');
+            if (trim($sku) !== '') {
+                $skuKey = self::apiRefreshVariantMatchKey($sku, '', '');
+                $map[$skuKey] = $id;
+            }
+            $scKey = self::apiRefreshVariantMatchKey('', $size, $color);
+            if ($scKey !== 'sc:|') {
+                $map[$scKey] = $id;
+            }
         }
 
         return $map;
@@ -2503,25 +2509,31 @@ class product
         int $apiRowCount = 1
     ): int {
         $currentProductId = (int) ($options['current_product_id'] ?? 0);
+        $map = $this->buildDetailVariantProductIdMap($options);
+
+        if ($map !== []) {
+            if (trim($sku) !== '') {
+                $skuKey = self::apiRefreshVariantMatchKey($sku, '', '');
+                if (isset($map[$skuKey])) {
+                    return (int) $map[$skuKey];
+                }
+            }
+
+            $scKey = self::apiRefreshVariantMatchKey('', $size, $color);
+            if (isset($map[$scKey])) {
+                return (int) $map[$scKey];
+            }
+
+            if (count($map) === 1) {
+                return (int) reset($map);
+            }
+        }
+
         if ($apiRowCount === 1 && $currentProductId > 0) {
             return $currentProductId;
         }
 
-        $map = $this->buildDetailVariantProductIdMap($options);
-        if ($map === []) {
-            return $currentProductId > 0 ? $currentProductId : 0;
-        }
-
-        $key = self::apiRefreshVariantMatchKey($sku, $size, $color);
-        if (isset($map[$key])) {
-            return (int) $map[$key];
-        }
-
-        if (count($map) === 1) {
-            return (int) reset($map);
-        }
-
-        return $currentProductId > 0 ? $currentProductId : 0;
+        return 0;
     }
 
     private function apiRefreshCatalogUpdateSql(bool $whereByProductId): string
@@ -2760,7 +2772,7 @@ class product
                 return;
             }
 
-            $current = (int) StockMovement::getLastRunningStock($this->db, $sku, $warehouseId);
+            $current = (int) StockMovement::getLastRunningStockByProductId($this->db, $productId, $warehouseId, $sku);
             $delta = $targetQty - $current;
 
             if ($delta > 0) {
