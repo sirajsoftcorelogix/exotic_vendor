@@ -2274,7 +2274,8 @@ class Inbounding {
         }
 
         return [
-            'form2' => $labeldata ?: []
+            'form2' => $labeldata ?: [],
+            'variation' => $this->getVariations($id)
         ];
     }
     // 1. Fetch Category Name
