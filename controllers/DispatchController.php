@@ -1979,17 +1979,22 @@ class DispatchController {
                     : null;
                 $useIgst = invoice_order_info_uses_igst(is_array($orderInfo) ? $orderInfo : null, app_setting_firm_details());
 
+                $headerOverrides = [
+                    'customer_id' => (int)$customer_id,
+                    'vp_order_info_id' => $vp_order_info_id,
+                    'batch_no' => $batch_no,
+                    'status' => 'final',
+                    'created_by' => (int)($_SESSION['user']['id'] ?? $_SESSION['user_id'] ?? 0),
+                ];
+                $orderCurrency = strtoupper(trim((string)($orderInfo['currency'] ?? ($orderData['currency'] ?? ''))));
+                if ($orderCurrency !== '') {
+                    $headerOverrides['currency'] = $orderCurrency;
+                }
+
                 $customInvoiceNumber = trim((string) ($orderData['custom_invoice_number'] ?? ''));
                 $invoiceRequest = InvoiceRequestBuilder::fromOrderLines(
                     $orderLines,
-                    [
-                        'customer_id' => (int)$customer_id,
-                        'vp_order_info_id' => $vp_order_info_id,
-                        'batch_no' => $batch_no,
-                        'currency' => 'INR',
-                        'status' => 'final',
-                        'created_by' => (int)($_SESSION['user']['id'] ?? $_SESSION['user_id'] ?? 0),
-                    ],
+                    $headerOverrides,
                     [
                         'source' => 'dispatch',
                         'custom_invoice_number' => $customInvoiceNumber,
@@ -2524,6 +2529,126 @@ class DispatchController {
                             $errors[] = $this->buildShipmentErrorEntry(
                                 'Blue Dart error for order #' . $order_number . ', box #' . $box_no . ': '
                                     . ($createResult['message'] ?? 'Unknown error'),
+                                $createResult
+                            );
+                            $dispatchModel->updateDispatch($dispatchId, [
+                                'shipment_status' => 'failed',
+                                'updated_at' => date('Y-m-d H:i:s'),
+                            ]);
+                        }
+                        continue;
+                    }
+
+                    if ($partnerCode === 'aramex') {
+                        if ($courierGateway === null) {
+                            $courierGateway = new CourierGateway($GLOBALS['conn']);
+                            $courierShipmentModel = new CourierShipment($GLOBALS['conn']);
+                        }
+
+                        require_once __DIR__ . '/../helpers/courier/country_codes.php';
+                        $destCountry = normalizeCountryIso2($address['shipping_country'] ?? $address['country'] ?? 'AE', $GLOBALS['conn']);
+
+                        $aramexItems = [];
+                        foreach ($orderItems as $oi) {
+                            $aramexItems[] = [
+                                'hsn' => $oi['hsn'] ?? '',
+                                'hs_code' => $oi['hsn'] ?? '',
+                                'name' => $oi['name'] ?? 'Item',
+                                'quantity' => (int)($oi['units'] ?? 1),
+                                'unit_price' => (float)($oi['selling_price'] ?? 0),
+                            ];
+                        }
+
+                        $createRequest = [
+                            'partner_code' => 'aramex',
+                            'partner_account_id' => (int)($boxData['partner_account_id'] ?? 0),
+                            'product_group' => (string)($boxData['product_group'] ?? 'EXP'),
+                            'product_type' => (string)($boxData['product_type'] ?? 'PPX'),
+                            'order_number' => $order_number,
+                            'destination_country' => $destCountry,
+                            'destination' => [
+                                'name' => trim(($address['shipping_first_name'] ?? $billingFirstName) . ' ' . ($address['shipping_last_name'] ?? $billingLastName)),
+                                'line1' => $address['shipping_address_line1'] ?? $billingAddress1,
+                                'line2' => $address['shipping_address_line2'] ?? $billingAddress2,
+                                'city' => $address['shipping_city'] ?? $address['city'] ?? '',
+                                'state' => $address['shipping_state'] ?? $address['state'] ?? '',
+                                'postcode' => $address['shipping_zipcode'] ?? $address['zipcode'] ?? '',
+                                'country_code' => $destCountry,
+                                'phone' => $address['shipping_mobile'] ?? $address['mobile'] ?? '',
+                                'email' => $address['shipping_email'] ?? $address['email'] ?? '',
+                            ],
+                            'address' => $address,
+                            'box' => [
+                                'weight' => $weight,
+                                'volumetric_weight' => $volumetric_weight,
+                                'pieces' => 1,
+                            ],
+                            'invoice' => [
+                                'invoice_number' => $invoice['invoice_number'] ?? '',
+                                'invoice_date' => $invoice['invoice_date'] ?? date('Y-m-d'),
+                                'total_amount' => (float)($invoice['total_amount'] ?? $subTotal),
+                                'tax_amount' => (float)($invoice['tax_amount'] ?? 0),
+                                'shipping_currency' => strtoupper((string)($invoice['currency'] ?? 'USD')),
+                                'goods_description' => (string)($groupname ?? 'Goods'),
+                            ],
+                            'items' => $aramexItems,
+                            'description' => (string)($groupname ?? 'Goods'),
+                            'currency_code' => strtoupper((string)($invoice['currency'] ?? 'USD')),
+                            'customs_value' => $subTotal > 0 ? $subTotal : (float)($invoice['total_amount'] ?? 0),
+                            'tax_amount' => (float)($invoice['tax_amount'] ?? 0),
+                        ];
+
+                        $createResult = $courierGateway->createShipment($createRequest);
+                        if (!empty($createResult['success'])) {
+                            $awbCode = (string)($createResult['awb'] ?? $createResult['awb_code'] ?? '');
+                            $labelUrl = (string)($createResult['label_url'] ?? '');
+                            $trackingUrl = (string)($createResult['tracking_url'] ?? '');
+                            $courierName = (string)($boxData['courier_name'] ?? 'Aramex');
+
+                            $dispatchModel->updateDispatch($dispatchId, $this->enrichDispatchRecord([
+                                'shiprocket_order_id' => $createResult['order_id'] ?? null,
+                                'shiprocket_shipment_id' => null,
+                                'awb_code' => $awbCode !== '' ? $awbCode : null,
+                                'shipment_status' => 'created',
+                                'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                                'tracking_url' => $trackingUrl !== '' ? $trackingUrl : null,
+                                'courier_name' => $courierName,
+                                'updated_at' => date('Y-m-d H:i:s'),
+                            ], [$createResult, $boxData], [
+                                'courier_name' => $courierName,
+                                'partner_code' => 'aramex',
+                            ]));
+                            $ordersModel->updateOrderByOrderNumber($order_number, ['status' => 'Dispatched']);
+
+                            $courierShipmentModel->saveShipment([
+                                'invoice_id' => $invoiceId,
+                                'box_no' => $box_no,
+                                'order_number' => $order_number,
+                                'legacy_dispatch_id' => $dispatchId,
+                                'partner_code' => 'aramex',
+                                'partner_account_id' => (int)($boxData['partner_account_id'] ?? 0),
+                                'partner_shipment_id' => (string)($createResult['partner_shipment_id'] ?? $awbCode),
+                                'awb' => $awbCode,
+                                'tracking_url' => $trackingUrl,
+                                'product_group' => (string)($boxData['product_group'] ?? 'EXP'),
+                                'product_type' => (string)($boxData['product_type'] ?? 'PPX'),
+                                'service_level' => $courierName,
+                                'payment_mode' => 'prepaid',
+                                'is_international' => 1,
+                                'currency' => strtoupper((string)($invoice['currency'] ?? 'USD')),
+                                'label_url' => $labelUrl,
+                                'status' => 'created',
+                                'status_text' => 'Aramex shipment created',
+                                'metadata_json' => json_encode($createResult['metadata'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                            ]);
+
+                            $created_dispatches[$index]['awb_code'] = $awbCode;
+                            $created_dispatches[$index]['label_url'] = $labelUrl;
+                            $created_dispatches[$index]['partner_code'] = 'aramex';
+                        } else {
+                            $errorMsg = (string)($createResult['message'] ?? $createResult['error'] ?? 'Aramex shipment failed');
+                            $errors[] = $this->buildShipmentErrorEntry(
+                                'Aramex error for order #' . $order_number . ', box #' . $box_no . ': ' . $errorMsg,
                                 $createResult
                             );
                             $dispatchModel->updateDispatch($dispatchId, [
