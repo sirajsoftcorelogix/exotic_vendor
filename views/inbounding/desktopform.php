@@ -4950,62 +4950,84 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!recordId) return;
 
         Swal.fire({
-            title: 'Verifying Publish Status...',
-            html: '<p style="font-size:14px; color:#555;">Checking local catalog, publish logs, and Exotic India Live API...</p>',
-            allowOutsideClick: false,
-            didOpen: function () {
-                Swal.showLoading();
+            title: 'Confirm Verification',
+            html: '<p style="font-size:14px; color:#555; margin-bottom:12px;">This will check catalog &amp; live API sources and mark this product as <strong>Published (Live)</strong> if found.</p>'
+                + '<p style="font-size:13px; color:#333;">To prevent accidental clicks, please type <strong style="color:#d97824;">confirm</strong> below:</p>',
+            input: 'text',
+            inputPlaceholder: 'Type confirm',
+            showCancelButton: true,
+            confirmButtonText: 'Verify &amp; Mark',
+            confirmButtonColor: '#17a2b8',
+            cancelButtonText: 'Cancel',
+            focusConfirm: false,
+            preConfirm: function (inputValue) {
+                if (!inputValue || inputValue.trim().toLowerCase() !== 'confirm') {
+                    Swal.showValidationMessage('You must type "confirm" to proceed.');
+                    return false;
+                }
+                return true;
             }
-        });
+        }).then(function (res) {
+            if (!res.isConfirmed) return;
 
-        fetch('index.php?page=inbounding&action=verify_single_inbound_publish&id=' + encodeURIComponent(recordId), {
-            credentials: 'same-origin',
-            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
-        })
-        .then(function (response) { return response.json(); })
-        .then(function (data) {
-            if (data && data.success && data.verified) {
-                let sourceLabel = 'Exotic India Website / Catalog';
-                if (data.source === 'local_db') sourceLabel = 'Local Catalog (vp_products)';
-                else if (data.source === 'json_log') sourceLabel = 'Publish Log Files';
-                else if (data.source === 'live_exotic_api') sourceLabel = 'Live Exotic India API';
-                else if (data.source === 'already_logged') sourceLabel = 'Already Logged';
+            Swal.fire({
+                title: 'Verifying Publish Status...',
+                html: '<p style="font-size:14px; color:#555;">Checking local catalog, publish logs, and Exotic India Live API...</p>',
+                allowOutsideClick: false,
+                didOpen: function () {
+                    Swal.showLoading();
+                }
+            });
 
+            fetch('index.php?page=inbounding&action=verify_single_inbound_publish&id=' + encodeURIComponent(recordId), {
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+            })
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+                if (data && data.success && data.verified) {
+                    let sourceLabel = 'Exotic India Website / Catalog';
+                    if (data.source === 'local_db') sourceLabel = 'Local Catalog (vp_products)';
+                    else if (data.source === 'json_log') sourceLabel = 'Publish Log Files';
+                    else if (data.source === 'live_exotic_api') sourceLabel = 'Live Exotic India API';
+                    else if (data.source === 'already_logged') sourceLabel = 'Already Logged';
+
+                    Swal.fire({
+                        title: 'Verified &amp; Marked Published!',
+                        html: '<div style="text-align:center;">'
+                            + '<p style="margin-bottom:8px; font-size:15px;">Item Code: <strong>' + (data.item_code || '') + '</strong></p>'
+                            + '<p style="color:#28a745; font-weight:bold; font-size:14px;">Status updated to Published (Live)</p>'
+                            + '<p class="text-xs text-gray-500" style="margin-top:10px;">Verified via: ' + sourceLabel + '</p>'
+                            + '</div>',
+                        icon: 'success',
+                        confirmButtonColor: '#28a745'
+                    }).then(function () {
+                        window.location.reload();
+                    });
+                } else if (data && data.success && !data.verified) {
+                    Swal.fire({
+                        title: 'Not Found on Live Website',
+                        html: '<div style="text-align:center;">'
+                            + '<p style="font-size:14px;">Item Code <strong>' + (data.item_code || '') + '</strong> was not found in the live catalog or publish logs.</p>'
+                            + '<p style="margin-top:12px; font-size:13px; color:#666;">If you want to publish this product now, click the <strong>Publish Product</strong> button.</p>'
+                            + '</div>',
+                        icon: 'info',
+                        confirmButtonColor: '#d97824'
+                    });
+                } else {
+                    Swal.fire({
+                        title: 'Verification Failed',
+                        text: (data && data.message) ? data.message : 'Could not verify status.',
+                        icon: 'error'
+                    });
+                }
+            })
+            .catch(function (err) {
                 Swal.fire({
-                    title: 'Verified &amp; Marked Published!',
-                    html: '<div style="text-align:center;">'
-                        + '<p style="margin-bottom:8px; font-size:15px;">Item Code: <strong>' + (data.item_code || '') + '</strong></p>'
-                        + '<p style="color:#28a745; font-weight:bold; font-size:14px;">Status updated to Published (Live)</p>'
-                        + '<p class="text-xs text-gray-500" style="margin-top:10px;">Verified via: ' + sourceLabel + '</p>'
-                        + '</div>',
-                    icon: 'success',
-                    confirmButtonColor: '#28a745'
-                }).then(function () {
-                    window.location.reload();
-                });
-            } else if (data && data.success && !data.verified) {
-                Swal.fire({
-                    title: 'Not Found on Live Website',
-                    html: '<div style="text-align:center;">'
-                        + '<p style="font-size:14px;">Item Code <strong>' + (data.item_code || '') + '</strong> was not found in the live catalog or publish logs.</p>'
-                        + '<p style="margin-top:12px; font-size:13px; color:#666;">If you want to publish this product now, click the <strong>Publish Product</strong> button.</p>'
-                        + '</div>',
-                    icon: 'info',
-                    confirmButtonColor: '#d97824'
-                });
-            } else {
-                Swal.fire({
-                    title: 'Verification Failed',
-                    text: (data && data.message) ? data.message : 'Could not verify status.',
+                    title: 'Error',
+                    text: 'Network error while checking publish status.',
                     icon: 'error'
                 });
-            }
-        })
-        .catch(function (err) {
-            Swal.fire({
-                title: 'Error',
-                text: 'Network error while checking publish status.',
-                icon: 'error'
             });
         });
     }
