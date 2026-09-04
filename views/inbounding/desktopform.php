@@ -654,17 +654,33 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 </div>
             </div>
             <fieldset class="grow border border-[#ccc] rounded-[5px] px-3 md:px-5 pt-[15px] pb-5 bg-white md:ml-2.5 md:mr-5">
-                <?php if ($is_inbound_live_published): ?>
-                <div class="flex justify-end mb-3">
-                    <button type="button"
-                            data-section="item_linking"
-                            class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                        Update on website
-                    </button>
+                <div class="flex justify-between items-center mb-3 flex-wrap gap-2">
+                    <legend class="text-sm font-bold text-[#333] px-[5px] m-0">Item Linking</legend>
+                    <div class="flex items-center gap-2">
+                        <?php if ($is_inbound_live_published): ?>
+                            <span class="inline-flex items-center gap-1 bg-green-100 text-green-800 text-xs font-bold px-2.5 py-1 rounded-full border border-green-300">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                Published (Live)
+                            </span>
+                            <button type="button"
+                                    data-section="item_linking"
+                                    class="inbound-section-update-btn inline-flex items-center gap-2 bg-[#6f42c1] text-white border-none rounded-[4px] py-2 px-4 font-bold text-xs cursor-pointer shadow-md hover:bg-[#5a32a3] transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                Update on website
+                            </button>
+                        <?php else: ?>
+                            <?php if (!empty($data['form2']['Item_code'])): ?>
+                                <button type="button"
+                                        onclick="verifyAndMarkPublished()"
+                                        class="inline-flex items-center gap-1.5 bg-[#17a2b8] hover:bg-[#138496] text-white font-bold text-xs px-3 py-1.5 rounded shadow transition cursor-pointer"
+                                        title="Verify if this product is already live on Exotic India website/catalog and mark status">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    Verify &amp; Mark Published
+                                </button>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </div>
                 </div>
-                <?php endif; ?>
-                <legend class="text-sm font-bold text-[#333] px-[5px]">Item Linking</legend>
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 md:gap-[30px] mb-[15px] items-end">
                     <div class="flex flex-col">
                         <label class="text-xs font-bold text-[#333] mb-1.5">Variant:</label>
@@ -2173,6 +2189,12 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 <button type="button" onclick="handlePublishClick()" class="bg-[#28a745] text-white border-none rounded-[4px] py-[10px] px-[30px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#218838] transition flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                     Publish Product
+                </button>
+            <?php endif; ?>
+            <?php if ($hasItemCode && !$is_inbound_live_published): ?>
+                <button type="button" onclick="verifyAndMarkPublished()" class="bg-[#17a2b8] text-white border-none rounded-[4px] py-[10px] px-[20px] font-bold text-sm cursor-pointer shadow-md hover:bg-[#138496] transition flex items-center gap-2" title="Check if product exists on Exotic website, local catalog, or logs, and mark as Published">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    Verify &amp; Mark Published
                 </button>
             <?php endif; ?>
             <?php if ($canShowPrintJsonBtn): ?>
@@ -4921,6 +4943,71 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         return showPublishErrorDialog(data || { message: 'An error occurred during publishing.' });
+    }
+
+    function verifyAndMarkPublished() {
+        const recordId = new URLSearchParams(window.location.search).get('id');
+        if (!recordId) return;
+
+        Swal.fire({
+            title: 'Verifying Publish Status...',
+            html: '<p style="font-size:14px; color:#555;">Checking local catalog, publish logs, and Exotic India Live API...</p>',
+            allowOutsideClick: false,
+            didOpen: function () {
+                Swal.showLoading();
+            }
+        });
+
+        fetch('index.php?page=inbounding&action=verify_single_inbound_publish&id=' + encodeURIComponent(recordId), {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+        })
+        .then(function (response) { return response.json(); })
+        .then(function (data) {
+            if (data && data.success && data.verified) {
+                let sourceLabel = 'Exotic India Website / Catalog';
+                if (data.source === 'local_db') sourceLabel = 'Local Catalog (vp_products)';
+                else if (data.source === 'json_log') sourceLabel = 'Publish Log Files';
+                else if (data.source === 'live_exotic_api') sourceLabel = 'Live Exotic India API';
+                else if (data.source === 'already_logged') sourceLabel = 'Already Logged';
+
+                Swal.fire({
+                    title: 'Verified &amp; Marked Published!',
+                    html: '<div style="text-align:center;">'
+                        + '<p style="margin-bottom:8px; font-size:15px;">Item Code: <strong>' + (data.item_code || '') + '</strong></p>'
+                        + '<p style="color:#28a745; font-weight:bold; font-size:14px;">Status updated to Published (Live)</p>'
+                        + '<p class="text-xs text-gray-500" style="margin-top:10px;">Verified via: ' + sourceLabel + '</p>'
+                        + '</div>',
+                    icon: 'success',
+                    confirmButtonColor: '#28a745'
+                }).then(function () {
+                    window.location.reload();
+                });
+            } else if (data && data.success && !data.verified) {
+                Swal.fire({
+                    title: 'Not Found on Live Website',
+                    html: '<div style="text-align:center;">'
+                        + '<p style="font-size:14px;">Item Code <strong>' + (data.item_code || '') + '</strong> was not found in the live catalog or publish logs.</p>'
+                        + '<p style="margin-top:12px; font-size:13px; color:#666;">If you want to publish this product now, click the <strong>Publish Product</strong> button.</p>'
+                        + '</div>',
+                    icon: 'info',
+                    confirmButtonColor: '#d97824'
+                });
+            } else {
+                Swal.fire({
+                    title: 'Verification Failed',
+                    text: (data && data.message) ? data.message : 'Could not verify status.',
+                    icon: 'error'
+                });
+            }
+        })
+        .catch(function (err) {
+            Swal.fire({
+                title: 'Error',
+                text: 'Network error while checking publish status.',
+                icon: 'error'
+            });
+        });
     }
 
     // 3. Update Publish Controller to Save Form + Publish (apiStatus: 1 = live, 0 = local → $API_data['status'])

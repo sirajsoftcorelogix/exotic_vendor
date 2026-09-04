@@ -2781,11 +2781,15 @@ class InboundingController {
             ]);
         }
 
-        // Convert PHP warnings/notices into JSON errors and persist to publish logs.
+        // Convert PHP fatal errors into JSON errors and persist to publish logs, while logging non-fatal notices/warnings.
         $self = $this;
         set_error_handler(function ($severity, $message, $file, $line) use (&$id, &$API_data, $self) {
             if (!(error_reporting() & $severity)) {
                 return false;
+            }
+            if (in_array($severity, [E_WARNING, E_USER_WARNING, E_NOTICE, E_USER_NOTICE, E_DEPRECATED, E_USER_DEPRECATED], true)) {
+                error_log("Inbound publish notice/warning [{$severity}]: {$message} in {$file}:{$line}");
+                return true;
             }
             $logFileData = $self->logPublishProcess([
                 'item_code' => $API_data['itemcode'] ?? '',
@@ -2800,7 +2804,7 @@ class InboundingController {
             header('Content-Type: application/json');
             echo json_encode([
                 'status' => 'error',
-                'message' => 'Publish failed due to PHP warning.',
+                'message' => 'Publish failed due to PHP error.',
                 'debug' => $message . ' in ' . basename($file) . ':' . $line,
                 'log_file' => $logFileData['filename']
             ]);
@@ -3247,7 +3251,8 @@ class InboundingController {
             exit;
         }
 
-        if (is_object($result) && isset($result->status) && $result->status == 'success' && !isset($result->error)) {
+        $isSuccess = $this->isVendorApiSuccessResponse($result, $httpCode);
+        if ($isSuccess) {
             $ProductsController = new ProductsController();
             // publish log
             $publishUserId = (int)($_SESSION['user']['id'] ?? 0);
@@ -3267,16 +3272,28 @@ class InboundingController {
             $itemCode = $data['data']['Item_code'];
 
             // Inbound publish records stock via insert_stock_data(); skip API opening-stock seed here.
-            $import_response = $ProductsController->importApiCall(
-                [$itemCode],
-                ['sync_physical_stock' => false]
-            );
-            inbound_profiler_step($prof, 'importApiCall');
+            $import_response = null;
+            try {
+                $import_response = $ProductsController->importApiCall(
+                    [$itemCode],
+                    ['sync_physical_stock' => false]
+                );
+                inbound_profiler_step($prof, 'importApiCall');
+            } catch (Throwable $e) {
+                error_log('inbound_product_publish importApiCall error: ' . $e->getMessage());
+                $import_response = ['error' => $e->getMessage()];
+            }
             
             // insert stock moment
-            $stoc_data = $inboundingModel->stock_data($id);
-            $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data, (int) $id);
-            inbound_profiler_step($prof, 'insert_stock_data');
+            $insert_stock_response = null;
+            try {
+                $stoc_data = $inboundingModel->stock_data($id);
+                $insert_stock_response = $inboundingModel->insert_stock_data($stoc_data, (int) $id);
+                inbound_profiler_step($prof, 'insert_stock_data');
+            } catch (Throwable $e) {
+                error_log('inbound_product_publish insert_stock_data error: ' . $e->getMessage());
+                $insert_stock_response = ['error' => $e->getMessage()];
+            }
             
             // === LOG SUCCESS ===
             $logFileData = $this->logPublishProcess([
@@ -3473,6 +3490,77 @@ class InboundingController {
      * Handles both successful and failed publish attempts
      * Returns the log filename
      */
+    /**
+     * Determine if vendor API product creation response indicates success.
+     * Handles case-insensitive status strings, booleans, numeric status, and absence of errors.
+     *
+     * @param mixed $result Decoded JSON response (object or array)
+     * @param int $httpCode HTTP status code from cURL
+     * @return bool
+     */
+    private function isVendorApiSuccessResponse($result, int $httpCode = 200): bool
+    {
+        if ($httpCode !== 200 && $httpCode !== 201) {
+            return false;
+        }
+
+        if (is_array($result)) {
+            $result = (object) $result;
+        }
+
+        if (!is_object($result)) {
+            return false;
+        }
+
+        // Check if there is an explicit non-empty error field
+        if (isset($result->error) && $result->error !== null && $result->error !== '' && $result->error !== false && $result->error !== []) {
+            return false;
+        }
+
+        // Check status property
+        if (isset($result->status)) {
+            $statusVal = $result->status;
+            if ($statusVal === true || $statusVal === 1) {
+                return true;
+            }
+            if ($statusVal === false || $statusVal === 0) {
+                return false;
+            }
+            $statusStr = strtolower(trim((string) $statusVal));
+            if (in_array($statusStr, ['success', 'published', 'ok', '1', 'true'], true)) {
+                return true;
+            }
+            if (in_array($statusStr, ['failed', 'error', '0', 'false'], true)) {
+                return false;
+            }
+        }
+
+        // Check success property
+        if (isset($result->success)) {
+            $succVal = $result->success;
+            if ($succVal === true || $succVal === 1) {
+                return true;
+            }
+            if ($succVal === false || $succVal === 0) {
+                return false;
+            }
+            $succStr = strtolower(trim((string) $succVal));
+            if (in_array($succStr, ['true', 'success', '1'], true)) {
+                return true;
+            }
+            if (in_array($succStr, ['false', 'error', 'failed', '0'], true)) {
+                return false;
+            }
+        }
+
+        // If HTTP 200/201 and contains itemcode or id or data without error, treat as success
+        if (!empty($result->itemcode) || !empty($result->item_code) || !empty($result->id) || !empty($result->data)) {
+            return true;
+        }
+
+        return false;
+    }
+
     private function extractVendorApiErrorMessage($response): string
     {
         if (!is_string($response) || trim($response) === '') {
@@ -3946,6 +4034,74 @@ class InboundingController {
         } else {
             echo json_encode(['success' => false, 'message' => 'No duplicate inbounded products were found to delete.']);
         }
+        exit;
+    }
+
+    /**
+     * Endpoint to verify and backfill missing Published logs for inbound products.
+     * Checks local catalog, publish JSON logs, and Exotic India Live API.
+     */
+    public function backfill_published_logs(): void
+    {
+        is_login();
+        $userId = (int) ($_SESSION['user']['id'] ?? 0);
+        if (!hasTieredAccess($userId, 'Top Management Access')) {
+            while (ob_get_level() > 0) { ob_end_clean(); }
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'message' => 'Access denied. Top Management Access required.']);
+            exit;
+        }
+
+        global $inboundingModel;
+        if (!$inboundingModel) {
+            $inboundingModel = new Inbounding();
+        }
+
+        $execute = !empty($_GET['execute']) || !empty($_POST['execute']);
+        $skipApi = !empty($_GET['skip_api']) || !empty($_POST['skip_api']);
+        $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : (isset($_POST['limit']) ? (int) $_POST['limit'] : 0);
+
+        $result = $inboundingModel->verifyAndBackfillPublishedInboundLogs(
+            $execute,
+            $userId,
+            !$skipApi,
+            $limit
+        );
+
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    /**
+     * AJAX endpoint to verify and mark a single inbound item as Published (Live).
+     */
+    public function verify_single_inbound_publish(): void
+    {
+        is_login();
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        header('Content-Type: application/json; charset=utf-8');
+
+        $id = isset($_GET['id']) ? (int) $_GET['id'] : (isset($_POST['id']) ? (int) $_POST['id'] : 0);
+        if ($id <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid inbound ID.']);
+            exit;
+        }
+
+        global $inboundingModel;
+        if (!$inboundingModel) {
+            $inboundingModel = new Inbounding();
+        }
+
+        $userId = (int) ($_SESSION['user']['id'] ?? 1);
+        $result = $inboundingModel->verifyAndBackfillSingleInboundItem($id, $userId);
+
+        echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
 }
