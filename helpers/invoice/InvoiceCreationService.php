@@ -86,13 +86,21 @@ class InvoiceCreationService
             }
         }
 
-        $currency = (string)($header['currency'] ?? 'INR');
-        foreach ($lines as $line) {
-            $lineCurrency = (string)($line['currency'] ?? $currency);
+        $currency = strtoupper(trim((string)($header['currency'] ?? 'INR')));
+        if ($currency === '') {
+            $currency = 'INR';
+        }
+        foreach ($lines as &$line) {
+            $lineCurrency = strtoupper(trim((string)($line['currency'] ?? '')));
+            if ($lineCurrency === '') {
+                $lineCurrency = $currency;
+                $line['currency'] = $currency;
+            }
             if ($lineCurrency !== $currency) {
                 return ['success' => false, 'message' => 'All items must have the same currency'];
             }
         }
+        unset($line);
 
         $customInvoiceNumber = trim((string)($options['custom_invoice_number'] ?? ''));
         $reserved = is_array($options['reserved_invoice_numbers'] ?? null)

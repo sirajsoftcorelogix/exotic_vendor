@@ -69,6 +69,22 @@ class InvoiceRequestBuilder
         $useIgst = array_key_exists('use_igst', $options)
             ? !empty($options['use_igst'])
             : false;
+
+        $overrideCurrency = strtoupper(trim((string)($headerOverrides['currency'] ?? '')));
+        $primaryCurrency = $overrideCurrency;
+        if ($primaryCurrency === '') {
+            foreach ($orderItems as $order) {
+                $c = strtoupper(trim((string)($order['currency'] ?? '')));
+                if ($c !== '') {
+                    $primaryCurrency = $c;
+                    break;
+                }
+            }
+        }
+        if ($primaryCurrency === '') {
+            $primaryCurrency = 'INR';
+        }
+
         foreach ($orderItems as $order) {
             $qty = max(1, (int)($order['quantity'] ?? 1));
             $gst = (float)($order['gst'] ?? 0);
@@ -77,6 +93,8 @@ class InvoiceRequestBuilder
             $amount = $unitPretax * $qty;
             $taxAmount = ($amount * $gst) / 100;
             $gstRates = invoice_gst_component_rates($gst, $useIgst);
+
+            $itemCurrency = $primaryCurrency;
 
             $lines[] = [
                 'order_number' => (string)($order['order_number'] ?? ''),
@@ -90,7 +108,7 @@ class InvoiceRequestBuilder
                 'sgst_rate' => $gstRates['sgst_rate'],
                 'igst_rate' => $gstRates['igst_rate'],
                 'box_no' => (string)($order['box_no'] ?? ''),
-                'currency' => (string)($order['currency'] ?? 'INR'),
+                'currency' => $itemCurrency,
                 'image_url' => (string)($order['image'] ?? ''),
                 'groupname' => (string)($order['groupname'] ?? ''),
                 'size' => (string)($order['size'] ?? ''),
@@ -124,7 +142,7 @@ class InvoiceRequestBuilder
                 'tax_amount' => round($taxAmount, 2),
                 'discount_amount' => 0.0,
                 'total_amount' => round($subtotal + $taxAmount, 2),
-                'currency' => $lines[0]['currency'] ?? 'INR',
+                'currency' => $primaryCurrency,
                 'pos_flag' => (int)($options['pos_flag'] ?? 0),
                 'batch_no' => '',
                 'created_by' => (int)($options['created_by'] ?? ($_SESSION['user']['id'] ?? 0)),
