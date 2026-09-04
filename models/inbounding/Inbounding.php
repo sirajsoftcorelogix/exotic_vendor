@@ -1455,7 +1455,7 @@ class Inbounding {
         } else {
             // --- INSERT New Row ---
             $sql = "INSERT INTO `inbound_logs` (`id`, `i_id`, `stat`, `userid_log`, `created_at`, `modified_at`) 
-                    VALUES (NULL, ?, ?, ?, NOW(), NULL)";
+                    VALUES (NULL, ?, ?, ?, NOW(), NOW())";
             
             $stmt = $this->conn->prepare($sql);
             if (!$stmt) return false;
@@ -2879,6 +2879,366 @@ class Inbounding {
             }
         }
         return $blocked;
+    }
+
+    /**
+     * Find all inbound items missing a published log entry, verify if they were published
+     * via local catalog (vp_products), JSON publish logs, or Exotic India Live API,
+     * and optionally backfill inbound_logs.
+     *
+     * @param bool $execute If true, inserts 'Published (Live)' into inbound_logs for verified items.
+     * @param int $fallbackUserId User ID to log if item has no updated_by_user_id.
+     * @param bool $checkLiveApi If true, queries Exotic India API for unverified items.
+     * @param int $limit Optional limit on candidate items processed.
+     * @return array Summary of verification and backfill results.
+     */
+    public function verifyAndBackfillPublishedInboundLogs(
+        bool $execute = false,
+        int $fallbackUserId = 1,
+        bool $checkLiveApi = true,
+        int $limit = 0
+    ): array {
+        if ($fallbackUserId <= 0) {
+            $fallbackUserId = 1;
+        }
+
+        // 1. Fetch inbound candidates that lack a published log
+        $sql = "
+            SELECT vi.id, vi.Item_code, vi.updated_by_user_id
+            FROM vp_inbound vi
+            WHERE vi.Item_code IS NOT NULL AND TRIM(vi.Item_code) <> ''
+              AND vi.id NOT IN (
+                  SELECT DISTINCT i_id FROM inbound_logs
+                  WHERE LOWER(TRIM(stat)) IN ('published', 'published (live)', 'published (local)')
+              )
+            ORDER BY vi.id ASC
+        ";
+        if ($limit > 0) {
+            $sql .= " LIMIT " . (int) $limit;
+        }
+
+        $res = $this->conn->query($sql);
+        if (!$res) {
+            return ['success' => false, 'error' => $this->conn->error];
+        }
+
+        $candidates = $res->fetch_all(MYSQLI_ASSOC);
+        $res->free();
+
+        if (empty($candidates)) {
+            return [
+                'success' => true,
+                'execute' => $execute,
+                'total_candidates' => 0,
+                'verified_local_db' => 0,
+                'verified_json_logs' => 0,
+                'verified_live_api' => 0,
+                'total_verified' => 0,
+                'backfilled_count' => 0,
+                'details' => [],
+            ];
+        }
+
+        $candidatesById = [];
+        $candidatesByCode = [];
+        foreach ($candidates as $c) {
+            $id = (int) $c['id'];
+            $code = strtoupper(trim((string) $c['Item_code']));
+            if ($code === '') continue;
+            $userId = (int) ($c['updated_by_user_id'] ?? 0);
+            if ($userId <= 0) $userId = $fallbackUserId;
+
+            $itemData = [
+                'id' => $id,
+                'code' => $code,
+                'user_id' => $userId,
+                'verified' => false,
+                'source' => null,
+            ];
+            $candidatesById[$id] = $itemData;
+            $candidatesByCode[$code] = $id;
+        }
+
+        $verifiedLocalDb = 0;
+        $verifiedJsonLogs = 0;
+        $verifiedLiveApi = 0;
+
+        // Check 1: Match against local vp_products catalog
+        $codes = array_keys($candidatesByCode);
+        if (!empty($codes)) {
+            $chunks = array_chunk($codes, 500);
+            foreach ($chunks as $chunk) {
+                $escaped = array_map(function ($c) {
+                    return "'" . $this->conn->real_escape_string($c) . "'";
+                }, $chunk);
+                $sqlP = "SELECT DISTINCT UPPER(TRIM(item_code)) AS code FROM vp_products WHERE UPPER(TRIM(item_code)) IN (" . implode(',', $escaped) . ")";
+                $resP = $this->conn->query($sqlP);
+                if ($resP) {
+                    while ($rowP = $resP->fetch_assoc()) {
+                        $matchCode = strtoupper(trim((string) ($rowP['code'] ?? '')));
+                        if (isset($candidatesByCode[$matchCode])) {
+                            $cId = $candidatesByCode[$matchCode];
+                            if (!$candidatesById[$cId]['verified']) {
+                                $candidatesById[$cId]['verified'] = true;
+                                $candidatesById[$cId]['source'] = 'local_db';
+                                $verifiedLocalDb++;
+                            }
+                        }
+                    }
+                    $resP->free();
+                }
+            }
+        }
+
+        // Check 2: Match against publish_logs/*.json files
+        $dirs = [
+            dirname(__DIR__, 2) . '/log/publish_logs/',
+            rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'exotic_publish_logs' . DIRECTORY_SEPARATOR,
+        ];
+        foreach (array_unique($dirs) as $dir) {
+            if (!is_dir($dir)) continue;
+            $files = glob($dir . 'publish_*.json') ?: [];
+            foreach ($files as $file) {
+                $raw = @file_get_contents($file);
+                if (!is_string($raw) || trim($raw) === '') continue;
+                $entry = json_decode($raw, true);
+                if (!is_array($entry)) continue;
+                if (strtolower(trim((string) ($entry['status'] ?? ''))) !== 'success') continue;
+                $logInboundId = (int) ($entry['inbound_id'] ?? 0);
+                if ($logInboundId > 0 && isset($candidatesById[$logInboundId])) {
+                    if (!$candidatesById[$logInboundId]['verified']) {
+                        $candidatesById[$logInboundId]['verified'] = true;
+                        $candidatesById[$logInboundId]['source'] = 'json_log';
+                        $verifiedJsonLogs++;
+                    }
+                }
+            }
+        }
+
+        // Check 3: Query Exotic India Live API for remaining unverified candidate codes
+        if ($checkLiveApi) {
+            $unverifiedCodes = [];
+            foreach ($candidatesById as $c) {
+                if (!$c['verified'] && !empty($c['code'])) {
+                    $unverifiedCodes[] = $c['code'];
+                }
+            }
+            if (!empty($unverifiedCodes)) {
+                $chunks = array_chunk(array_unique($unverifiedCodes), 50);
+                foreach ($chunks as $chunk) {
+                    $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode(implode(',', $chunk));
+                    $headers = [
+                        'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+                        'x-adminapitest: 1',
+                        'Accept: application/json',
+                    ];
+                    $ch = curl_init($url);
+                    curl_setopt_array($ch, [
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_HTTPHEADER => $headers,
+                        CURLOPT_CONNECTTIMEOUT => 10,
+                        CURLOPT_TIMEOUT => 30,
+                        CURLOPT_SSL_VERIFYPEER => false,
+                    ]);
+                    $response = curl_exec($ch);
+                    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    curl_close($ch);
+
+                    if ($httpCode === 200 && is_string($response) && trim($response) !== '') {
+                        $decoded = json_decode($response, true);
+                        if (is_array($decoded)) {
+                            require_once __DIR__ . '/../product/product.php';
+                            $items = product::normalizeVendorProductFetchItems($decoded);
+                            foreach ($items as $item) {
+                                if (!is_array($item)) continue;
+                                $itemCode = strtoupper(trim((string) ($item['itemcode'] ?? $item['item_code'] ?? '')));
+                                if ($itemCode !== '' && isset($candidatesByCode[$itemCode])) {
+                                    $cId = $candidatesByCode[$itemCode];
+                                    if (!$candidatesById[$cId]['verified']) {
+                                        $candidatesById[$cId]['verified'] = true;
+                                        $candidatesById[$cId]['source'] = 'live_exotic_api';
+                                        $verifiedLiveApi++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Execute Backfill if requested
+        $backfilledCount = 0;
+        if ($execute) {
+            foreach ($candidatesById as $c) {
+                if ($c['verified']) {
+                    $logData = [
+                        'i_id' => $c['id'],
+                        'userid_log' => $c['user_id'],
+                        'stat' => 'Published (Live)',
+                    ];
+                    if ($this->stat_logs($logData)) {
+                        $backfilledCount++;
+                    }
+                }
+            }
+        }
+
+        $totalVerified = $verifiedLocalDb + $verifiedJsonLogs + $verifiedLiveApi;
+
+        return [
+            'success' => true,
+            'execute' => $execute,
+            'total_candidates' => count($candidatesById),
+            'verified_local_db' => $verifiedLocalDb,
+            'verified_json_logs' => $verifiedJsonLogs,
+            'verified_live_api' => $verifiedLiveApi,
+            'total_verified' => $totalVerified,
+            'backfilled_count' => $backfilledCount,
+            'details' => array_values($candidatesById),
+        ];
+    }
+
+    /**
+     * Verify and mark a single inbound item as Published (Live).
+     *
+     * @param int $id
+     * @param int $userId
+     * @return array Result of verification and backfill
+     */
+    public function verifyAndBackfillSingleInboundItem(int $id, int $userId = 1): array
+    {
+        $id = (int) $id;
+        if ($id <= 0) {
+            return ['success' => false, 'message' => 'Invalid inbound ID.'];
+        }
+
+        $row = $this->getById($id);
+        if (!is_array($row) || empty($row['id'])) {
+            return ['success' => false, 'message' => 'Inbound record not found.'];
+        }
+
+        $code = strtoupper(trim((string) ($row['Item_code'] ?? '')));
+        if ($code === '') {
+            return ['success' => false, 'message' => 'Inbound record does not have an Item Code assigned yet. Save the form first.'];
+        }
+
+        // Check if already logged as published
+        if ($this->isInboundLivePublished($id)) {
+            return [
+                'success' => true,
+                'already_published' => true,
+                'verified' => true,
+                'item_code' => $code,
+                'source' => 'already_logged',
+                'message' => 'Product is already logged as Published (Live).',
+            ];
+        }
+
+        $verified = false;
+        $source = null;
+
+        // Check 1: Match against local vp_products catalog
+        $sqlP = "SELECT id FROM vp_products WHERE UPPER(TRIM(item_code)) = ? LIMIT 1";
+        $stmtP = $this->conn->prepare($sqlP);
+        if ($stmtP) {
+            $stmtP->bind_param('s', $code);
+            $stmtP->execute();
+            $resP = $stmtP->get_result();
+            if ($resP && $resP->num_rows > 0) {
+                $verified = true;
+                $source = 'local_db';
+            }
+            $stmtP->close();
+        }
+
+        // Check 2: Match against publish_logs/*.json files
+        if (!$verified) {
+            $dirs = [
+                dirname(__DIR__, 2) . '/log/publish_logs/',
+                rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'exotic_publish_logs' . DIRECTORY_SEPARATOR,
+            ];
+            foreach (array_unique($dirs) as $dir) {
+                if (!is_dir($dir)) continue;
+                $files = glob($dir . 'publish_*.json') ?: [];
+                foreach ($files as $file) {
+                    $raw = @file_get_contents($file);
+                    if (!is_string($raw) || trim($raw) === '') continue;
+                    $entry = json_decode($raw, true);
+                    if (!is_array($entry)) continue;
+                    if (strtolower(trim((string) ($entry['status'] ?? ''))) !== 'success') continue;
+                    $logInboundId = (int) ($entry['inbound_id'] ?? 0);
+                    if ($logInboundId === $id) {
+                        $verified = true;
+                        $source = 'json_log';
+                        break 2;
+                    }
+                }
+            }
+        }
+
+        // Check 3: Query Exotic India Live API for this item code
+        if (!$verified) {
+            $url = 'https://www.exoticindia.com/vendor-api/product/fetch?itemcodes=' . urlencode($code);
+            $headers = [
+                'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+                'x-adminapitest: 1',
+                'Accept: application/json',
+            ];
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER => $headers,
+                CURLOPT_CONNECTTIMEOUT => 10,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_SSL_VERIFYPEER => false,
+            ]);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode === 200 && is_string($response) && trim($response) !== '') {
+                $decoded = json_decode($response, true);
+                if (is_array($decoded)) {
+                    require_once __DIR__ . '/../product/product.php';
+                    $items = product::normalizeVendorProductFetchItems($decoded);
+                    foreach ($items as $item) {
+                        if (!is_array($item)) continue;
+                        $foundCode = strtoupper(trim((string) ($item['itemcode'] ?? $item['item_code'] ?? '')));
+                        if ($foundCode === $code) {
+                            $verified = true;
+                            $source = 'live_exotic_api';
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // If verified, mark in inbound_logs
+        if ($verified) {
+            $logData = [
+                'i_id' => $id,
+                'userid_log' => $userId,
+                'stat' => 'Published (Live)',
+            ];
+            $this->stat_logs($logData);
+
+            return [
+                'success' => true,
+                'verified' => true,
+                'item_code' => $code,
+                'source' => $source,
+                'message' => 'Verified successfully! Product marked as Published (Live).',
+            ];
+        }
+
+        return [
+            'success' => true,
+            'verified' => false,
+            'item_code' => $code,
+            'message' => 'Item code ' . $code . ' was not found on live website, local catalog, or publish logs.',
+        ];
     }
 
     /** @var array<int, string|null> */

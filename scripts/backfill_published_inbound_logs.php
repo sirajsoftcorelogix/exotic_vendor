@@ -1,14 +1,16 @@
 <?php
 /**
- * Backfill inbound_logs: add stat = 'Published' for vp_inbound rows that appear in
- * vp_products (live catalog) but have no Published/published log yet.
+ * Backfill inbound_logs: verify and add stat = 'Published (Live)' for vp_inbound rows
+ * that exist in vp_products (local catalog), publish JSON log files, or Exotic India Live API,
+ * but have no Published/published log in inbound_logs yet.
  *
  * CLI (from project root):
  *   php scripts/backfill_published_inbound_logs.php
  *   php scripts/backfill_published_inbound_logs.php --execute
  *   php scripts/backfill_published_inbound_logs.php --execute --user-id=1
+ *   php scripts/backfill_published_inbound_logs.php --execute --skip-api
  *
- * Web (only if config backfill_logs_web_key is set):
+ * Web (only if config backfill_logs_web_key is set or session active):
  *   /scripts/backfill_published_inbound_logs.php?key=YOUR_KEY
  *   /scripts/backfill_published_inbound_logs.php?key=YOUR_KEY&execute=1&user_id=1
  */
@@ -43,41 +45,60 @@ if (!is_file($configPath)) {
 /** @var array $config */
 $config = require $configPath;
 
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    @session_start();
+}
+
 $webKey = (string) ($config['backfill_logs_web_key'] ?? '');
+$isWebSessionUser = !empty($_SESSION['user']['id']);
+
 if (!$isCli) {
-    if ($webKey === '') {
+    if ($webKey === '' && !$isWebSessionUser) {
         http_response_code(403);
-        echo "Web access is disabled.\n\n";
-        echo "Either:\n";
-        echo "  1. Set 'backfill_logs_web_key' in config.php to a long random secret, then open this URL with ?key=...\n";
-        echo "  2. Run from SSH: php scripts/backfill_published_inbound_logs.php --execute\n";
+        echo "Web access disabled.\n\n";
+        echo "Either log in as an authorized user or set 'backfill_logs_web_key' in config.php.\n";
         exit(0);
     }
-    $given = (string) ($_GET['key'] ?? '');
-    if (!hash_equals($webKey, $given)) {
-        http_response_code(403);
-        echo "Invalid or missing key.\n";
-        exit(0);
+    if ($webKey !== '') {
+        $given = (string) ($_GET['key'] ?? '');
+        if (!hash_equals($webKey, $given) && !$isWebSessionUser) {
+            http_response_code(403);
+            echo "Invalid or missing key.\n";
+            exit(0);
+        }
     }
 }
 
 $argv = $_SERVER['argv'] ?? [];
 $execute = false;
-$fallbackUserId = 0;
+$skipApi = false;
+$limit = 0;
+$fallbackUserId = (int) ($_SESSION['user']['id'] ?? 1);
 
 if ($isCli) {
     $execute = in_array('--execute', $argv, true);
+    $skipApi = in_array('--skip-api', $argv, true);
     foreach ($argv as $arg) {
         if (preg_match('/^--user-id=(\d+)$/', $arg, $m)) {
             $fallbackUserId = (int) $m[1];
         }
+        if (preg_match('/^--limit=(\d+)$/', $arg, $m)) {
+            $limit = (int) $m[1];
+        }
     }
 } else {
     $execute = isset($_GET['execute']) && $_GET['execute'] !== '' && $_GET['execute'] !== '0';
+    $skipApi = isset($_GET['skip_api']) && $_GET['skip_api'] !== '' && $_GET['skip_api'] !== '0';
     if (isset($_GET['user_id']) && is_numeric($_GET['user_id'])) {
         $fallbackUserId = (int) $_GET['user_id'];
     }
+    if (isset($_GET['limit']) && is_numeric($_GET['limit'])) {
+        $limit = (int) $_GET['limit'];
+    }
 }
+
+require_once $root . '/models/inbounding/Inbounding.php';
+global $conn, $inboundingModel;
 
 $dbCfg = $config['db'] ?? null;
 if (!is_array($dbCfg) || empty($dbCfg['host']) || empty($dbCfg['name'])) {
@@ -100,80 +121,42 @@ try {
     backfill_fail('Database connection failed: ' . $e->getMessage());
 }
 
-$fallbackSql = (int) $fallbackUserId;
-$sql = "
-SELECT DISTINCT vi.id AS i_id,
-       COALESCE(NULLIF(vi.updated_by_user_id, 0), {$fallbackSql}) AS userid_log
-FROM vp_inbound vi
-INNER JOIN vp_products p
-  ON TRIM(p.item_code) COLLATE utf8mb4_unicode_ci = TRIM(vi.Item_code) COLLATE utf8mb4_unicode_ci
-WHERE TRIM(COALESCE(vi.Item_code, '')) <> ''
-  AND NOT EXISTS (
-    SELECT 1 FROM inbound_logs il
-    WHERE il.i_id = vi.id
-      AND LOWER(TRIM(il.stat)) IN ('published', 'published (live)', 'published (local)')
-  )
-ORDER BY vi.id
-";
+$inboundingModel = new Inbounding();
 
-try {
-    $result = $conn->query($sql);
-    $rows = $result->fetch_all(MYSQLI_ASSOC);
-    $result->free();
-} catch (Throwable $e) {
+echo "=====================================================\n";
+echo "INBOUND PUBLISHED STATUS VERIFICATION & BACKFILL TOOL\n";
+echo "=====================================================\n";
+echo "Mode: " . ($execute ? "EXECUTE (writing to inbound_logs)" : "DRY RUN (no database writes)") . "\n";
+echo "Fallback User ID: {$fallbackUserId}\n";
+echo "Check Live Exotic API: " . ($skipApi ? "NO (--skip-api set)" : "YES") . "\n";
+if ($limit > 0) {
+    echo "Limit: {$limit}\n";
+}
+echo "-----------------------------------------------------\n\n";
+
+$result = $inboundingModel->verifyAndBackfillPublishedInboundLogs(
+    $execute,
+    $fallbackUserId,
+    !$skipApi,
+    $limit
+);
+
+if (empty($result['success'])) {
     $conn->close();
-    backfill_fail('Query failed: ' . $e->getMessage());
+    backfill_fail("Backfill failed: " . ($result['error'] ?? 'Unknown error'));
 }
 
-$n = count($rows);
+echo "Total Un-logged Candidates Found: " . ($result['total_candidates'] ?? 0) . "\n";
+echo "  - Verified via Local Catalog (vp_products): " . ($result['verified_local_db'] ?? 0) . "\n";
+echo "  - Verified via Publish JSON Logs:           " . ($result['verified_json_logs'] ?? 0) . "\n";
+echo "  - Verified via Exotic Live Website API:     " . ($result['verified_live_api'] ?? 0) . "\n";
+echo "-----------------------------------------------------\n";
+echo "Total Verified Products: " . ($result['total_verified'] ?? 0) . "\n";
 
-if (!$execute) {
-    echo "DRY RUN — no database writes.";
-    if ($isCli) {
-        echo " Add --execute to insert.\n";
-    } else {
-        echo " Add &execute=1 to the URL to insert.\n";
-    }
+if ($execute) {
+    echo "Inserted / Backfilled Rows in inbound_logs: " . ($result['backfilled_count'] ?? 0) . "\n";
 } else {
-    echo "EXECUTE — inserting into inbound_logs …\n";
-}
-
-echo "Candidate rows (missing Published log, item_code in vp_products): {$n}\n";
-
-if ($n === 0) {
-    $conn->close();
-    exit(0);
-}
-
-if (!$execute) {
-    $preview = array_slice($rows, 0, 30);
-    echo "Sample (up to 30) i_id → userid_log:\n";
-    foreach ($preview as $r) {
-        echo '  ' . (int) $r['i_id'] . ' → ' . (int) $r['userid_log'] . "\n";
-    }
-    $conn->close();
-    exit(0);
-}
-
-try {
-    $stmt = $conn->prepare(
-        'INSERT INTO inbound_logs (`i_id`, `stat`, `userid_log`, `created_at`, `modified_at`) VALUES (?, ?, ?, NOW(), NULL)'
-    );
-    $stat = 'Published';
-    $inserted = 0;
-    foreach ($rows as $r) {
-        $iId = (int) $r['i_id'];
-        $uid = (int) $r['userid_log'];
-        $stmt->bind_param('isi', $iId, $stat, $uid);
-        $stmt->execute();
-        $inserted += $stmt->affected_rows;
-    }
-    $stmt->close();
-} catch (Throwable $e) {
-    $conn->close();
-    backfill_fail('Insert failed: ' . $e->getMessage());
+    echo "\nDRY RUN complete. Re-run with --execute (or &execute=1) to insert log records.\n";
 }
 
 $conn->close();
-
-echo "Done. Inserted {$inserted} row(s). stat=Published\n";

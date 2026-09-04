@@ -1424,6 +1424,12 @@ switch ($page) {
             case 'downloadPublishLog':
                 $controller->downloadPublishLog();
                 break;
+            case 'backfill_published_logs':
+                $controller->backfill_published_logs();
+                break;
+            case 'verify_single_inbound_publish':
+                $controller->verify_single_inbound_publish();
+                break;
             case 'i_photos':
                 $controller->i_photos();
                 break;
