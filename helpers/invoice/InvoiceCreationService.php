@@ -49,29 +49,32 @@ class InvoiceCreationService
             return ['success' => false, 'message' => 'Invalid parameters'];
         }
 
-        // Validate High Value Transaction Compliance (PAN / Passport / GSTIN) at Invoice Creation
-        require_once __DIR__ . '/../compliance/HighValueComplianceValidator.php';
-        $invoiceTotal = (float)($header['total_amount'] ?? 0);
-        $gstin = $this->resolveOrderGstin($header, $orderNumbers);
-        if ($gstin !== '') {
-            $header['gstin'] = $gstin;
-        }
-        $complianceEval = HighValueComplianceValidator::validateCustomerCompliance($this->conn, $customerId, $invoiceTotal, $header);
-        if (empty($complianceEval['ok'])) {
-            return [
-                'success' => false,
-                'require_compliance' => true,
-                'compliance_code' => $complianceEval['code'] ?? 'COMPLIANCE_REQUIRED',
-                'customer_id' => $customerId,
-                'customer_name' => $complianceEval['customer_name'] ?? '',
-                'invoice_total' => $invoiceTotal,
-                'limit' => $complianceEval['limit'] ?? 200000.00,
-                'missing_fields' => $complianceEval['missing_fields'] ?? [],
-                'gstin' => $complianceEval['gstin'] ?? $gstin,
-                'pan' => $complianceEval['pan'] ?? '',
-                'residency_status' => $complianceEval['residency_status'] ?? '',
-                'message' => $complianceEval['message'] ?? 'High value transaction compliance document (PAN/Passport/GSTIN) is required before creating the tax invoice.',
-            ];
+        // Validate High Value Transaction Compliance (PAN / Passport / GSTIN) for POS / Walk-in Invoice Creation
+        $isPosInvoice = !empty($header['pos_flag']) || (string)($request['source'] ?? '') === 'pos';
+        if ($isPosInvoice) {
+            require_once __DIR__ . '/../compliance/HighValueComplianceValidator.php';
+            $invoiceTotal = (float)($header['total_amount'] ?? 0);
+            $gstin = $this->resolveOrderGstin($header, $orderNumbers);
+            if ($gstin !== '') {
+                $header['gstin'] = $gstin;
+            }
+            $complianceEval = HighValueComplianceValidator::validateCustomerCompliance($this->conn, $customerId, $invoiceTotal, $header);
+            if (empty($complianceEval['ok'])) {
+                return [
+                    'success' => false,
+                    'require_compliance' => true,
+                    'compliance_code' => $complianceEval['code'] ?? 'COMPLIANCE_REQUIRED',
+                    'customer_id' => $customerId,
+                    'customer_name' => $complianceEval['customer_name'] ?? '',
+                    'invoice_total' => $invoiceTotal,
+                    'limit' => $complianceEval['limit'] ?? 200000.00,
+                    'missing_fields' => $complianceEval['missing_fields'] ?? [],
+                    'gstin' => $complianceEval['gstin'] ?? $gstin,
+                    'pan' => $complianceEval['pan'] ?? '',
+                    'residency_status' => $complianceEval['residency_status'] ?? '',
+                    'message' => $complianceEval['message'] ?? 'High value transaction compliance document (PAN/Passport/GSTIN) is required before creating the tax invoice.',
+                ];
+            }
         }
 
         if (!empty($options['duplicate_order_check'])) {
