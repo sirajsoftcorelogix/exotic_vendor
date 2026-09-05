@@ -49,9 +49,9 @@ class InvoiceCreationService
             return ['success' => false, 'message' => 'Invalid parameters'];
         }
 
-        // Validate High Value Transaction Compliance (PAN / Passport / GSTIN) for POS / Walk-in Invoice Creation
-        $isPosInvoice = !empty($header['pos_flag']) || (string)($request['source'] ?? '') === 'pos';
-        if ($isPosInvoice) {
+        // Validate High Value Transaction Compliance (PAN / Passport / GSTIN) for Offline / Cash Payments
+        $requiresCompliance = $this->isOfflineCashPayment($header, $request, $orderNumbers);
+        if ($requiresCompliance) {
             require_once __DIR__ . '/../compliance/HighValueComplianceValidator.php';
             $invoiceTotal = (float)($header['total_amount'] ?? 0);
             $gstin = $this->resolveOrderGstin($header, $orderNumbers);
@@ -337,6 +337,40 @@ class InvoiceCreationService
         $row = $this->commanModel->getRecordByField('currency_master', 'currency_code', strtoupper($code));
 
         return is_array($row) ? $row : null;
+    }
+
+    /**
+     * Resolve effective payment mode for high-value compliance check.
+     * Offline/cash transactions require compliance; online payments and COD (courier collected) bypass.
+     *
+     * @param array<string, mixed> $header
+     * @param array<string, mixed> $request
+     * @param list<string> $orderNumbers
+     */
+    private function isOfflineCashPayment(array $header, array $request, array $orderNumbers): bool
+    {
+        $rawMode = strtolower(trim((string)($header['payment_mode'] ?? $header['payment_type'] ?? $request['payment_mode'] ?? '')));
+
+        if ($rawMode === '' && $this->ordersModel && method_exists($this->ordersModel, 'getAddressInfoByOrderNumber')) {
+            foreach ($orderNumbers as $orderNumber) {
+                $info = $this->ordersModel->getAddressInfoByOrderNumber((string)$orderNumber);
+                if (is_array($info)) {
+                    $rawMode = strtolower(trim((string)($info['payment_mode'] ?? $info['payment_type'] ?? '')));
+                    if ($rawMode !== '') {
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Online payment modes (Razorpay, UPI, Bank Transfer, Card, etc.) and COD are exempt from local compliance collection
+        $onlineOrCodModes = ['upi', 'bank_transfer', 'razorpay', 'cod', 'pos_machine', 'cheque', 'online', 'card', 'credit_card', 'debit_card', 'prepaid'];
+        if ($rawMode !== '' && in_array($rawMode, $onlineOrCodModes, true)) {
+            return false;
+        }
+
+        // Default: offline/cash payments require compliance validation
+        return true;
     }
 
     /**
