@@ -14,6 +14,8 @@ class DashboardController {
             $type  = isset($_GET['type']) ? strtolower(trim($_GET['type'])) : 'orders';
             $query = isset($_GET['q']) ? trim($_GET['q']) : '';
         
+            $params = [];
+
             switch ($type) {
                 case 'purchase_orders':
                     // Purchase Orders list – search by PO number
@@ -59,23 +61,33 @@ class DashboardController {
                     }
                     break;
         
-                case 'orders':
-                default:
-                    // Orders list – search by order_number
+                case 'product':
+                    // Sales Order list – search by product (item code, SKU, product title)
                     $params = [
                         'page'   => 'orders',
                         'action' => 'list',
                     ];
                     if ($query !== '') {
-                        $params['order_number'] = $query;
+                        $params['q'] = $query;
                     }
                     break;
-           
-        
-				$redirectUrl = 'index.php?' . http_build_query($params);
-				header('Location: ' . $redirectUrl);
-				exit;
-			 }
+
+                case 'orders':
+                default:
+                    // Orders list – search sales order based on order_number, itemCode, SKU, product title, PO number
+                    $params = [
+                        'page'   => 'orders',
+                        'action' => 'list',
+                    ];
+                    if ($query !== '') {
+                        $params['q'] = $query;
+                    }
+                    break;
+            }
+
+            $redirectUrl = 'index.php?' . http_build_query($params);
+            header('Location: ' . $redirectUrl);
+            exit;
         }
     }
 ?>
