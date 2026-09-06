@@ -14,6 +14,8 @@ class DashboardController {
             $type  = isset($_GET['type']) ? strtolower(trim($_GET['type'])) : 'orders';
             $query = isset($_GET['q']) ? trim($_GET['q']) : '';
         
+            $params = [];
+
             switch ($type) {
                 case 'purchase_orders':
                     // Purchase Orders list – search by PO number
@@ -23,28 +25,6 @@ class DashboardController {
                     ];
                     if ($query !== '') {
                         $params['po_number'] = $query;
-                    }
-                    break;
-        
-                case 'invoice':
-                    // Customer invoices in dispatch – search by invoice number
-                    $params = [
-                        'page'   => 'dispatch',
-                        'action' => 'list',
-                    ];
-                    if ($query !== '') {
-                        $params['invoice_number'] = $query;
-                    }
-                    break;
-        
-                case 'awb':
-                    // Dispatch list filtered by AWB
-                    $params = [
-                        'page'   => 'dispatch',
-                        'action' => 'list',
-                    ];
-                    if ($query !== '') {
-                        $params['awb_number'] = $query;
                     }
                     break;
         
@@ -59,23 +39,33 @@ class DashboardController {
                     }
                     break;
         
+                case 'product':
+                    // Manage Listing – search product by item code, SKU, title, vendor
+                    $params = [
+                        'page'   => 'products',
+                        'action' => 'list',
+                    ];
+                    if ($query !== '') {
+                        $params['q'] = $query;
+                    }
+                    break;
+
                 case 'orders':
                 default:
-                    // Orders list – search by order_number
+                    // Orders list – search sales order based on order_number, itemCode, SKU, product title, PO number
                     $params = [
                         'page'   => 'orders',
                         'action' => 'list',
                     ];
                     if ($query !== '') {
-                        $params['order_number'] = $query;
+                        $params['q'] = $query;
                     }
                     break;
-           
-        
-				$redirectUrl = 'index.php?' . http_build_query($params);
-				header('Location: ' . $redirectUrl);
-				exit;
-			 }
+            }
+
+            $redirectUrl = 'index.php?' . http_build_query($params);
+            header('Location: ' . $redirectUrl);
+            exit;
         }
     }
 ?>

@@ -19,6 +19,9 @@ class ProductsController
         $offset = ($page_no - 1) * $limit;
         //Advanced Search Filters
         $filters = [];
+        if (!empty($_GET['q'])) {
+            $filters['q'] = trim($_GET['q']);
+        }
         if (!empty($_GET['item_code'])) {
             $filters['item_code'] = $_GET['item_code'];
         }

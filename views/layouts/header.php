@@ -57,18 +57,32 @@ $msgCnt = $notificationController->getUnreadCount();
 
             <!-- Search bar start here--> 
             <div class="flex-1 flex justify-center px-4">
+                <?php
+                    $currentSearchType = $_GET['type'] ?? '';
+                    if (empty($currentSearchType)) {
+                        $currentPage = $_GET['page'] ?? '';
+                        if ($currentPage === 'products') {
+                            $currentSearchType = 'product';
+                        } elseif ($currentPage === 'purchase_orders') {
+                            $currentSearchType = 'purchase_orders';
+                        } else {
+                            $currentSearchType = 'orders';
+                        }
+                    }
+
+                    $currentSearchQuery = $_GET['q'] ?? $_GET['order_number'] ?? $_GET['po_number'] ?? $_GET['item_code'] ?? $_GET['sku'] ?? $_GET['item_name'] ?? '';
+                ?>
                 <form class="flex w-full max-w-xl rounded-full border border-gray-300 overflow-hidden bg-white text-sm"
                       method="get"
                       action="index.php">
                     <input type="hidden" name="page" value="search" />
                     <input type="hidden" name="action" value="indexheader" />
 
-                    <div class="relative flex items-center border-r border-gray-200 w-28">
+                    <div class="relative flex items-center border-r border-gray-200 w-36">
                         <select name="type" class="w-full h-9 pl-3 pr-8 bg-transparent text-gray-700 focus:outline-none appearance-none text-sm">
-                            <option value="orders">Order</option>
-                            <option value="purchase_orders">Purchase Order</option>
-                            <option value="invoice">Customer Invoice</option>
-                            <option value="awb">AWB</option>
+                            <option value="orders" <?= $currentSearchType === 'orders' ? 'selected' : '' ?>>Order</option>
+                            <option value="product" <?= $currentSearchType === 'product' ? 'selected' : '' ?>>Product / SKU</option>
+                            <option value="purchase_orders" <?= $currentSearchType === 'purchase_orders' ? 'selected' : '' ?>>Purchase Order</option>
                         </select>
                         <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-500 text-xs">
                             ▼
@@ -76,8 +90,9 @@ $msgCnt = $notificationController->getUnreadCount();
                     </div>
                     <input
                         type="text"
-                        placeholder="Search"
+                        placeholder="Search order #, SKU, PO..."
                         name="q"
+                        value="<?= htmlspecialchars((string)$currentSearchQuery, ENT_QUOTES, 'UTF-8') ?>"
                         class="flex-1 h-9 px-3 focus:outline-none text-sm min-w-0"
                     />
                     <button

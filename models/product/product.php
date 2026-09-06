@@ -573,6 +573,10 @@ class product
         //$search = "%$search%";
 
         $search = "";
+        if (!empty($filters['q'])) {
+            $v = $this->db->real_escape_string((string) $filters['q']);
+            $search .= " AND (vp_products.item_code LIKE '%" . $v . "%' OR vp_products.sku LIKE '%" . $v . "%' OR vp_products.title LIKE '%" . $v . "%' OR vp_products.vendor LIKE '%" . $v . "%') ";
+        }
         if (!empty($filters['item_code'])) {
             $v = $this->db->real_escape_string((string) $filters['item_code']);
             $search .= "AND vp_products.item_code like '%" . $v . "%'";
@@ -638,6 +642,10 @@ class product
     public function countAllProducts($filters = [])
     {
         $search = "";
+        if (!empty($filters['q'])) {
+            $v = $this->db->real_escape_string((string) $filters['q']);
+            $search .= " AND (vp_products.item_code LIKE '%" . $v . "%' OR vp_products.sku LIKE '%" . $v . "%' OR vp_products.title LIKE '%" . $v . "%' OR vp_products.vendor LIKE '%" . $v . "%') ";
+        }
         if (!empty($filters['item_code'])) {
             $v = $this->db->real_escape_string((string) $filters['item_code']);
             $search .= "AND vp_products.item_code like '%" . $v . "%'";
