@@ -8,7 +8,7 @@ class PurchaseOrder {
         $sql = "SELECT purchase_orders.*, vp_vendors.vendor_name AS vendor_name FROM purchase_orders LEFT JOIN vp_vendors ON purchase_orders.vendor_id = vp_vendors.id WHERE 1=1";
         if (!empty($filters['search_text'])) {
             $searchText = $this->db->real_escape_string($filters['search_text']);
-            $sql .= " AND (purchase_orders.po_number LIKE '%$searchText%' OR vp_vendors.contact_name LIKE '%$searchText%')";
+            $sql .= " AND (purchase_orders.po_number LIKE '%$searchText%' OR vp_vendors.contact_name LIKE '%$searchText%' OR vp_vendors.vendor_name LIKE '%$searchText%' OR EXISTS (SELECT 1 FROM vp_orders vo WHERE (vo.po_id = purchase_orders.id OR vo.po_number = purchase_orders.po_number) AND vo.order_number LIKE '%$searchText%') OR EXISTS (SELECT 1 FROM vp_po_items poi WHERE poi.purchase_orders_id = purchase_orders.id AND poi.order_number LIKE '%$searchText%'))";
         }
         if (!empty($filters['status_filter'])) {
             $statusFilter = $this->db->real_escape_string($filters['status_filter']);
@@ -31,7 +31,12 @@ class PurchaseOrder {
         //po_number filter
         if (!empty($filters['po_number'])) {
             $poNumber = $this->db->real_escape_string($filters['po_number']);
-            $sql .= " AND purchase_orders.po_number LIKE '%$poNumber%'";
+            $sql .= " AND (purchase_orders.po_number LIKE '%$poNumber%' OR EXISTS (SELECT 1 FROM vp_orders vo WHERE (vo.po_id = purchase_orders.id OR vo.po_number = purchase_orders.po_number) AND vo.order_number LIKE '%$poNumber%') OR EXISTS (SELECT 1 FROM vp_po_items poi WHERE poi.purchase_orders_id = purchase_orders.id AND poi.order_number LIKE '%$poNumber%'))";
+        }
+        //order_number filter
+        if (!empty($filters['order_number'])) {
+            $orderNumber = $this->db->real_escape_string($filters['order_number']);
+            $sql .= " AND (EXISTS (SELECT 1 FROM vp_orders vo WHERE (vo.po_id = purchase_orders.id OR vo.po_number = purchase_orders.po_number) AND vo.order_number LIKE '%$orderNumber%') OR EXISTS (SELECT 1 FROM vp_po_items poi WHERE poi.purchase_orders_id = purchase_orders.id AND poi.order_number LIKE '%$orderNumber%'))";
         }
         //vendor_name filter
         if (!empty($filters['vendor_name'])) {

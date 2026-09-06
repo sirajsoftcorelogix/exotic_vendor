@@ -72,6 +72,9 @@ class PurchaseOrdersController
         if (!empty($_GET['po_number'])) {
             $filters['po_number'] = $_GET['po_number'];
         }
+        if (!empty($_GET['order_number'])) {
+            $filters['order_number'] = $_GET['order_number'];
+        }
         if (!empty($_GET['vendor_name'])) {
             $filters['vendor_name'] = $_GET['vendor_name'];
         }
@@ -144,6 +147,9 @@ class PurchaseOrdersController
         }
         if (!empty($_GET['po_number'])) {
             $filters['po_number'] = $_GET['po_number'];
+        }
+        if (!empty($_GET['order_number'])) {
+            $filters['order_number'] = $_GET['order_number'];
         }
         if (!empty($_GET['vendor_name'])) {
             $filters['vendor_name'] = $_GET['vendor_name'];
