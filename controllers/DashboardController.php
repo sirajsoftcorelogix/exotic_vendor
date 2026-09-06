@@ -28,28 +28,6 @@ class DashboardController {
                     }
                     break;
         
-                case 'invoice':
-                    // Customer invoices in dispatch – search by invoice number
-                    $params = [
-                        'page'   => 'dispatch',
-                        'action' => 'list',
-                    ];
-                    if ($query !== '') {
-                        $params['invoice_number'] = $query;
-                    }
-                    break;
-        
-                case 'awb':
-                    // Dispatch list filtered by AWB
-                    $params = [
-                        'page'   => 'dispatch',
-                        'action' => 'list',
-                    ];
-                    if ($query !== '') {
-                        $params['awb_number'] = $query;
-                    }
-                    break;
-        
                 case 'customer':
                     // Customer list – uses ?search=
                     $params = [
@@ -62,9 +40,9 @@ class DashboardController {
                     break;
         
                 case 'product':
-                    // Sales Order list – search by product (item code, SKU, product title)
+                    // Manage Listing – search product by item code, SKU, title, vendor
                     $params = [
-                        'page'   => 'orders',
+                        'page'   => 'products',
                         'action' => 'list',
                     ];
                     if ($query !== '') {

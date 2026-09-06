@@ -61,18 +61,16 @@ $msgCnt = $notificationController->getUnreadCount();
                     $currentSearchType = $_GET['type'] ?? '';
                     if (empty($currentSearchType)) {
                         $currentPage = $_GET['page'] ?? '';
-                        if ($currentPage === 'purchase_orders') {
+                        if ($currentPage === 'products') {
+                            $currentSearchType = 'product';
+                        } elseif ($currentPage === 'purchase_orders') {
                             $currentSearchType = 'purchase_orders';
-                        } elseif ($currentPage === 'dispatch' && !empty($_GET['invoice_number'])) {
-                            $currentSearchType = 'invoice';
-                        } elseif ($currentPage === 'dispatch' && !empty($_GET['awb_number'])) {
-                            $currentSearchType = 'awb';
                         } else {
                             $currentSearchType = 'orders';
                         }
                     }
 
-                    $currentSearchQuery = $_GET['q'] ?? $_GET['order_number'] ?? $_GET['po_number'] ?? $_GET['invoice_number'] ?? $_GET['awb_number'] ?? $_GET['item_code'] ?? $_GET['sku'] ?? $_GET['item_name'] ?? '';
+                    $currentSearchQuery = $_GET['q'] ?? $_GET['order_number'] ?? $_GET['po_number'] ?? $_GET['item_code'] ?? $_GET['sku'] ?? $_GET['item_name'] ?? '';
                 ?>
                 <form class="flex w-full max-w-xl rounded-full border border-gray-300 overflow-hidden bg-white text-sm"
                       method="get"
@@ -85,8 +83,6 @@ $msgCnt = $notificationController->getUnreadCount();
                             <option value="orders" <?= $currentSearchType === 'orders' ? 'selected' : '' ?>>Order</option>
                             <option value="product" <?= $currentSearchType === 'product' ? 'selected' : '' ?>>Product / SKU</option>
                             <option value="purchase_orders" <?= $currentSearchType === 'purchase_orders' ? 'selected' : '' ?>>Purchase Order</option>
-                            <option value="invoice" <?= $currentSearchType === 'invoice' ? 'selected' : '' ?>>Customer Invoice</option>
-                            <option value="awb" <?= $currentSearchType === 'awb' ? 'selected' : '' ?>>AWB</option>
                         </select>
                         <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-500 text-xs">
                             ▼

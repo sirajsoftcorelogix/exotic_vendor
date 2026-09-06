@@ -22,6 +22,7 @@ models/dispatch/shiprocket_http_log.txt
 shiprocket_label_response_log.txt
 /log
 logs/api_calls/*.json
+logs/inbound_profiler/*.json
 docs/Physical_Stock_and_Stock_Movements_Reference.doc
 docs/Physical_Stock_and_Stock_Movements_Reference.docx
 docs/Physical_Stock_and_Stock_Movements_Reference.htm
