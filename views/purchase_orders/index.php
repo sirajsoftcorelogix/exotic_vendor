@@ -21,7 +21,7 @@
                     </div>
                     <div class="flex flex-wrap items-left gap-4">
                         <div class="relative flex items-left gap-2">
-                            <input type="text" name="search_text" placeholder="Search by PO Number or Vendor" class="custom-input border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" style="width: 300px; height: 37px; border-radius: 5px;" value="<?php echo $data['search'] ?? '' ?>">
+                            <input type="text" name="search_text" placeholder="Search PO #, Sales Order #, or Vendor" class="custom-input border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition" style="width: 320px; height: 37px; border-radius: 5px;" value="<?php echo $data['search'] ?? '' ?>">
                         </div>
                     </div>
                      <div class="relative">
@@ -105,8 +105,8 @@
                 </div>
                 <!-- Order Number -->
                 <div>
-                    <label for="po-number" class="block text-sm font-medium text-gray-600 mb-1">PO No</label>
-                    <input type="text" value="<?= htmlspecialchars($_GET['po_number'] ?? '') ?>" name="po_number" id="po-number" placeholder="PO Number" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                    <label for="po-number" class="block text-sm font-medium text-gray-600 mb-1">PO No / Sales Order No</label>
+                    <input type="text" value="<?= htmlspecialchars($_GET['po_number'] ?? '') ?>" name="po_number" id="po-number" placeholder="PO or Sales Order Number" class="w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                 </div>
                 <div>
                     <label for="due-date" class="block text-sm font-medium text-gray-600 mb-1">Due Date</label>
