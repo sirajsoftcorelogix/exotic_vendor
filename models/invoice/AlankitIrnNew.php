@@ -568,8 +568,8 @@ return base64_encode($encryptedData);
                 'http_code' => $httpCode
             ];
         }
-        echo "Alankit EWB API Request to $url returned HTTP $httpCode. Response:\n";
-        print_r($response);
+        //echo "Alankit EWB API Request to $url returned HTTP $httpCode. Response:\n";
+        //print_r($response);
         //echo "\n";
         //echo "Decrypted SEK used for EWB encryption/decryption: " . $decryptedSek . "\n";
         //echo "Encrypted EWB Payload sent to API: " . $encryptedPayload . "\n";
