@@ -575,14 +575,14 @@ return base64_encode($encryptedData);
         //echo "Encrypted EWB Payload sent to API: " . $encryptedPayload . "\n";
         $decoded = json_decode($response, true);
         
-        if ($httpCode >= 400) {
-            error_log("Alankit EWB HTTP Error ($httpCode) for URL: $url. Response: " . substr($response, 0, 500));
-            return [
-                'status' => false,
-                'message' => 'HTTP Error ' . $httpCode,
-                'data' => $decoded
-            ];
-        }
+        // if ($httpCode >= 400) {
+        //     error_log("Alankit EWB HTTP Error ($httpCode) for URL: $url. Response: " . substr($response, 0, 500));
+        //     return [
+        //         'status' => false,
+        //         'message' => 'HTTP Error ' . $httpCode,
+        //         'data' => $decoded
+        //     ];
+        // }
         
         // Decrypt response
         if ($decoded && isset($decoded['Data'])) {
