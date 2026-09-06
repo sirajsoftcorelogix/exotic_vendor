@@ -313,6 +313,9 @@ function buildPosOrderListDebugContext(array $filters, $ordersModel): array
 function buildOrderListFiltersFromRequest(array $request): array
 {
     $filters = [];
+    if (!empty($request['q'])) {
+        $filters['q'] = trim((string) $request['q']);
+    }
     $orderNumbers = parseOrderNumberFilter($request['order_number'] ?? null);
     if ($orderNumbers !== []) {
         $filters['order_number'] = $orderNumbers;

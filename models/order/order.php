@@ -238,6 +238,15 @@ class Order
 		WHERE 1=1";
 
         $params = [];
+        if (!empty($filters['q'])) {
+            $qVal = '%' . trim((string)$filters['q']) . '%';
+            $sql .= " AND (vp_orders.order_number LIKE ? OR vp_orders.item_code LIKE ? OR vp_orders.sku LIKE ? OR vp_orders.title LIKE ? OR vp_orders.po_number LIKE ?)";
+            $params[] = $qVal;
+            $params[] = $qVal;
+            $params[] = $qVal;
+            $params[] = $qVal;
+            $params[] = $qVal;
+        }
         appendOrderNumberFilterSql($sql, $params, $filters['order_number'] ?? null);
         if (!empty($filters['item_code'])) {
             $sql .= " AND vp_orders.item_code LIKE ?";
@@ -402,6 +411,15 @@ class Order
         }
         $sql .= ' WHERE 1=1';
         $params = [];
+        if (!empty($filters['q'])) {
+            $qVal = '%' . trim((string)$filters['q']) . '%';
+            $sql .= " AND (vp_orders.order_number LIKE ? OR vp_orders.item_code LIKE ? OR vp_orders.sku LIKE ? OR vp_orders.title LIKE ? OR vp_orders.po_number LIKE ?)";
+            $params[] = $qVal;
+            $params[] = $qVal;
+            $params[] = $qVal;
+            $params[] = $qVal;
+            $params[] = $qVal;
+        }
         appendOrderNumberFilterSql($sql, $params, $filters['order_number'] ?? null);
         if (!empty($filters['item_code'])) {
             $sql .= " AND item_code LIKE ?";

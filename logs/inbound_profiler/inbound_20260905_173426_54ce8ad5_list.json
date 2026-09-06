@@ -1,0 +1,37 @@
+{
+    "timestamp": "2026-09-05 17:34:26",
+    "status": "ok",
+    "action": "list",
+    "total_ms": 30526,
+    "memory_peak_mb": 14,
+    "user_id": 12,
+    "request_uri": "/exotic_vendor/index.php?page=inbounding&action=action",
+    "meta": {
+        "page_no": 1,
+        "limit": 50
+    },
+    "steps": [
+        {
+            "step": "getAll",
+            "ms_since_start": 26439,
+            "ms_since_prev": 26439,
+            "extra": {
+                "rows": 50,
+                "total_records": 5689
+            }
+        },
+        {
+            "step": "getFilterDropdowns",
+            "ms_since_start": 29983,
+            "ms_since_prev": 3544,
+            "extra": []
+        },
+        {
+            "step": "getAllActiveUsers",
+            "ms_since_start": 29986,
+            "ms_since_prev": 3,
+            "extra": []
+        }
+    ],
+    "extra": []
+}

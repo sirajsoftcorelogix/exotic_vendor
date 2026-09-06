@@ -422,10 +422,10 @@ class DomesticEwbIrnService {
                 return ['status' => false, 'message' => $msg];
             }
 
-            $distance = isset($ewbData['distance']) ? (int)$ewbData['distance'] : 100;
-            if ($distance <= 0) {
-                $distance = 100;
-            }
+            // $distance = isset($ewbData['distance']) ? (int)$ewbData['distance'] : 100;
+            // if ($distance <= 0) {
+            //     $distance = 100;
+            // }
             $transMode = trim((string)($ewbData['trans_mode'] ?? '1'));
             if ($transMode === '') {
                 $transMode = '1';
@@ -450,6 +450,7 @@ class DomesticEwbIrnService {
             ];
 
             $ewbResponse = $alankitClient->generateEwb($ewbPayload, $accessToken, $decryptedSek);
+            print_r($ewbResponse);
             $infoDtls = null;
             if (is_array($ewbResponse) && array_key_exists('InfoDtls', $ewbResponse)) {
                 $infoDtls = is_array($ewbResponse['InfoDtls']) ? json_encode($ewbResponse['InfoDtls']) : (string)$ewbResponse['InfoDtls'];

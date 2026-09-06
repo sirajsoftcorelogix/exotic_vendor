@@ -561,6 +561,7 @@
                     </div>
                     <input type="hidden" name="page" value="orders">
                     <input type="hidden" name="action" value="list">
+                    <input type="hidden" name="q" value="<?php echo isset($_GET['q']) ? htmlspecialchars($_GET['q']) : ''; ?>">
                     <input type="hidden" name="options" id="options" value="<?php echo isset($_GET['options']) ? htmlspecialchars($_GET['options']) : ''; ?>">
                 </form>
 
