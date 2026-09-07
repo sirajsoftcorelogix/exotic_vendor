@@ -348,17 +348,18 @@ require_once __DIR__ . '/../../models/invoice/DomesticEwbIrnService.php';
                         $awbs = [];
                         if (!empty($invoice_dispatch[$invoice['id']])) {
                           foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
-                            if (!empty($dispatch['awb_code'])) {
+                            $awbCode = trim((string)($dispatch['awb_code'] ?? $dispatch['tracking_number'] ?? ''));
+                            if ($awbCode !== '') {
                               if(strtolower($dispatch['shipment_status'] ?? '') === 'cancelled' || strtolower($dispatch['shipment_status'] ?? '') === 'cancellation requested') {
-                                $link = '<span class="line-through text-red-500">' . htmlspecialchars($dispatch['awb_code']) . '</span>';
+                                $link = '<span class="line-through text-red-500">' . htmlspecialchars($awbCode) . '</span>';
                               } else {
-                                $link = !empty($dispatch['label_url']) ? '<a href="' . htmlspecialchars($dispatch['label_url']) . '" target="_blank">' . htmlspecialchars($dispatch['awb_code']) . '</a>' : htmlspecialchars($dispatch['awb_code']);
+                                $link = !empty($dispatch['label_url']) ? '<a href="' . htmlspecialchars($dispatch['label_url']) . '" target="_blank">' . htmlspecialchars($awbCode) . '</a>' : htmlspecialchars($awbCode);
                               }
                               $awbs[] = $link;
                             }
                           }
                         }
-                        echo implode(' | ', $awbs);
+                        echo !empty($awbs) ? implode(' | ', $awbs) : '-';
                       ?>
                     </p>
                     <p class="text-xs text-gray-400 mt-1"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>
@@ -418,7 +419,7 @@ require_once __DIR__ . '/../../models/invoice/DomesticEwbIrnService.php';
                             if ($sid !== '') {
                               $shipperIdParts[] = $boxPrefix . htmlspecialchars($sid);
                             } elseif (
-                              trim((string) ($shipperDispatch['awb_code'] ?? '')) !== ''
+                              trim((string) ($shipperDispatch['awb_code'] ?? $shipperDispatch['tracking_number'] ?? '')) !== ''
                               && !in_array(
                                 strtolower(trim((string) ($shipperDispatch['shipment_status'] ?? ''))),
                                 ['cancelled', 'cancellation requested'],
@@ -521,7 +522,8 @@ require_once __DIR__ . '/../../models/invoice/DomesticEwbIrnService.php';
                       $invoiceCancelled = strtolower(trim((string)($invoice['status'] ?? ''))) === 'cancelled';
                       if (!empty($invoice_dispatch[$invoice['id']])) {
                         foreach ($invoice_dispatch[$invoice['id']] as $dispatch) {
-                          if (empty($dispatch['awb_code'])) {
+                          $awbCode = trim((string)($dispatch['awb_code'] ?? $dispatch['tracking_number'] ?? ''));
+                          if ($awbCode === '') {
                             $needsRetry = true;
                             break;
                           }

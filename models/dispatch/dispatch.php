@@ -389,6 +389,16 @@ class Dispatch {
 
         return $response['json'] ?? null;
     }
+    //get order details from shiprocket
+    public function getShiprocketOrderDetails($order_id) {
+        if (!$order_id) return null;
+        $response = $this->shiprocketJsonRequest(
+            'GET',
+            '/v1/external/orders/show/' . rawurlencode((string) $order_id)
+        );
+
+        return $response['json'] ?? null;
+    }
     //get awb info from shiprocket (optional courier_id = user-selected courier from serviceability)
     public function getShiprocketAwbInfo($shipment_id, $courier_id = null) {
         $body = ['shipment_id' => $shipment_id];
@@ -562,8 +572,50 @@ class Dispatch {
 
         $stmt->bind_param('i', $invoiceId);
         if ($stmt->execute()) {
-            return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $records = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            if (!empty($records)) {
+                return $records;
+            }
         }
+
+        // Fallback: search by order_number if invoice_id link is missing
+        $orderNumbers = [];
+        $invStmt = $this->db->prepare("SELECT ii.order_number FROM vp_invoice_items ii WHERE ii.invoice_id = ? AND ii.order_number IS NOT NULL AND TRIM(ii.order_number) <> ''");
+        if ($invStmt) {
+            $invStmt->bind_param('i', $invoiceId);
+            if ($invStmt->execute()) {
+                $res = $invStmt->get_result();
+                while ($row = $res->fetch_assoc()) {
+                    $on = trim((string)$row['order_number']);
+                    if ($on !== '' && !in_array($on, $orderNumbers, true)) {
+                        $orderNumbers[] = $on;
+                    }
+                }
+            }
+            $invStmt->close();
+        }
+
+        if (!empty($orderNumbers)) {
+            $placeholders = implode(',', array_fill(0, count($orderNumbers), '?'));
+            $sql = "SELECT * FROM vp_dispatch_details WHERE order_number IN ($placeholders)";
+            $stmt = $this->db->prepare($sql);
+            if ($stmt) {
+                $types = str_repeat('s', count($orderNumbers));
+                $stmt->bind_param($types, ...$orderNumbers);
+                if ($stmt->execute()) {
+                    $records = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                    if (!empty($records)) {
+                        foreach ($records as $r) {
+                            if (empty($r['invoice_id']) || (int)$r['invoice_id'] <= 0) {
+                                $this->updateDispatch((int)$r['id'], ['invoice_id' => $invoiceId]);
+                            }
+                        }
+                        return $records;
+                    }
+                }
+            }
+        }
+
         return false;
     }
 
@@ -611,33 +663,82 @@ class Dispatch {
         if(!$dispatchRecord) {
             return ['success' => false, 'message' => 'Dispatch record not found'];
         }
-        $shipmentId = $dispatchRecord['shiprocket_shipment_id'];
-        if(!$shipmentId) {
+        $shipmentId = (int)($dispatchRecord['shiprocket_shipment_id'] ?? 0);
+        if($shipmentId <= 0) {
             return ['success' => false, 'message' => 'No Shiprocket shipment ID associated with this dispatch record'];
         }
-        //retry AWB info API call
-        $awbInfoResponse = $this->getShiprocketAwbInfo($shipmentId);
+        //retry AWB info API call with courier_company_id
+        $courierId = !empty($dispatchRecord['courier_company_id']) ? (int)$dispatchRecord['courier_company_id'] : null;
+        $awbInfoResponse = $this->getShiprocketAwbInfo($shipmentId, $courierId);
         //retry label info API call
         $labelInfoResponse = $this->getShiprocketLabels($shipmentId);
-        //update dispatch record with new AWB code and label URL if available
-        if($awbInfoResponse && isset($awbInfoResponse['awb_assign_status']) && $awbInfoResponse['awb_assign_status'] == 1) {
-            $assignment = buildShiprocketAssignmentUpdate($this->db, $awbInfoResponse, [
-                'courier_name' => (string) ($dispatchRecord['courier_name'] ?? ''),
-                'courier_id' => (string) ($dispatchRecord['courier_company_id'] ?? ''),
-                'partner_code' => 'shiprocket',
-            ]);
-            if (!empty($assignment)) {
-                $this->updateDispatchByShiprocketShipmentId((int) $shipmentId, $assignment);
-            }
-            $awbCode = $assignment['awb_code'] ?? null;
+
+        $assignment = buildShiprocketAssignmentUpdate($this->db, is_array($awbInfoResponse) ? $awbInfoResponse : [], [
+            'courier_name' => (string) ($dispatchRecord['courier_name'] ?? ''),
+            'courier_id' => (string) ($dispatchRecord['courier_company_id'] ?? ''),
+            'partner_code' => 'shiprocket',
+        ]);
+
+        $awbCode = $assignment['awb_code'] ?? null;
+        if (!empty($assignment) && (!empty($awbCode) || !empty($awbInfoResponse['awb_assign_status']) || !empty($awbInfoResponse['response']['data']['awb_assign_status']))) {
+            $this->updateDispatchByShiprocketShipmentId($shipmentId, $assignment);
         }
+
+        // Fallback 1: Check tracking endpoint if AWB code is still missing/empty
+        if (empty($awbCode)) {
+            $trackingRes = $this->getShiprocketTrackingInfo($shipmentId);
+            $trackAwb = trim((string)(
+                $trackingRes['tracking_data']['shipment_track'][0]['awb_code']
+                ?? $trackingRes['tracking_data']['track_status'][0]['awb_code']
+                ?? ''
+            ));
+            if ($trackAwb !== '' && strtoupper($trackAwb) !== 'NEW') {
+                $awbCode = $trackAwb;
+                $this->updateDispatchByShiprocketShipmentId($shipmentId, ['awb_code' => $awbCode]);
+            }
+        }
+
+        // Fallback 2: Check order show endpoint if AWB code is still missing/empty
+        $orderId = (int)($dispatchRecord['shiprocket_order_id'] ?? 0);
+        if (empty($awbCode) && $orderId > 0) {
+            $orderRes = $this->getShiprocketOrderDetails($orderId);
+            $orderAwb = trim((string)(
+                $orderRes['data']['awb_code']
+                ?? $orderRes['data']['shipments'][0]['awb']
+                ?? $orderRes['data']['shipments'][0]['awb_code']
+                ?? ''
+            ));
+            if ($orderAwb !== '' && strtoupper($orderAwb) !== 'NEW') {
+                $awbCode = $orderAwb;
+                $this->updateDispatchByShiprocketShipmentId($shipmentId, ['awb_code' => $awbCode]);
+            }
+        }
+
         if($labelInfoResponse && isset($labelInfoResponse['label_created']) && $labelInfoResponse['label_created'] == 1) {
             $labelUrl = $labelInfoResponse['label_url'] ?? null;
             if($labelUrl) {
                 $this->updateDispatchLabelUrl($shipmentId, $labelUrl);
             }
         }
-        return ['success' => true,'labelUrl' => $labelUrl ?? null, 'awbCode' => $awbCode ?? null, 'data' => ['awb_info_response' => $awbInfoResponse, 'label_info_response' => $labelInfoResponse], 'message' => 'API calls retried and dispatch record updated if new data was available'];
+
+        // Re-read updated dispatch record to get updated awb_code, label_url, and exotic_shipment_id
+        $updatedRecord = $this->getDispatchById($dispatchId);
+        $finalAwb = $updatedRecord['awb_code'] ?? null;
+        $finalLabel = $updatedRecord['label_url'] ?? null;
+        $finalExoticId = $updatedRecord['exotic_shipment_id'] ?? null;
+
+        $isSuccess = !empty($finalAwb) && strtoupper($finalAwb) !== 'NEW';
+
+        return [
+            'success' => $isSuccess,
+            'labelUrl' => $finalLabel,
+            'awbCode' => $finalAwb,
+            'exoticShipmentId' => $finalExoticId,
+            'data' => ['awb_info_response' => $awbInfoResponse, 'label_info_response' => $labelInfoResponse],
+            'message' => $isSuccess 
+                ? 'AWB and shipment details updated successfully.' 
+                : 'API calls retried, but AWB code was not returned by Shiprocket.'
+        ];
     }
     public function cancelShiprocketShipment($shiprocketOrderId) {
         //fetch dispatch record
@@ -716,32 +817,86 @@ class Dispatch {
     }
     public function getDispatchRecordsByInvoiceIds($invoiceIds) {
         if(empty($invoiceIds)) return [];
-        $placeholders = implode(',', array_fill(0, count($invoiceIds), '?'));
+        $cleanIds = array_map('intval', array_filter($invoiceIds));
+        if (empty($cleanIds)) return [];
+
+        $placeholders = implode(',', array_fill(0, count($cleanIds), '?'));
         $sql = "SELECT * FROM vp_dispatch_details WHERE invoice_id IN ($placeholders)";
         $stmt = $this->db->prepare($sql);
-        if (!$stmt) return false;
+        if (!$stmt) return [];
 
-        // Dynamically bind parameters
-        $types = str_repeat('i', count($invoiceIds));
-        $stmt->bind_param($types, ...$invoiceIds);
+        $types = str_repeat('i', count($cleanIds));
+        $stmt->bind_param($types, ...$cleanIds);
 
+        $grouped = [];
         if ($stmt->execute()) {
             $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-            $grouped = [];
             foreach ($rows as $row) {
                 $invoiceId = (int)($row['invoice_id'] ?? 0);
-                if ($invoiceId <= 0) {
-                    continue;
+                if ($invoiceId > 0) {
+                    if (!isset($grouped[$invoiceId])) {
+                        $grouped[$invoiceId] = [];
+                    }
+                    $grouped[$invoiceId][] = $row;
                 }
-                if (!isset($grouped[$invoiceId])) {
-                    $grouped[$invoiceId] = [];
-                }
-                $grouped[$invoiceId][] = $row;
             }
-
-            return $grouped;
         }
-        return false;
+
+        // Check for invoices that didn't match any dispatch records by invoice_id
+        $foundInvoiceIds = array_keys($grouped);
+        $missingInvoiceIds = array_diff($cleanIds, $foundInvoiceIds);
+        if (!empty($missingInvoiceIds)) {
+            $mPlaceholders = implode(',', array_fill(0, count($missingInvoiceIds), '?'));
+            $sql = "SELECT invoice_id, order_number FROM vp_invoice_items WHERE invoice_id IN ($mPlaceholders) AND order_number IS NOT NULL AND TRIM(order_number) <> ''";
+            $stmt = $this->db->prepare($sql);
+            if ($stmt) {
+                $mTypes = str_repeat('i', count($missingInvoiceIds));
+                $stmt->bind_param($mTypes, ...$missingInvoiceIds);
+                if ($stmt->execute()) {
+                    $itemRows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                    $orderToInvoiceMap = [];
+                    foreach ($itemRows as $itemRow) {
+                        $on = trim((string)$itemRow['order_number']);
+                        $invId = (int)$itemRow['invoice_id'];
+                        if ($on !== '' && $invId > 0) {
+                            $orderToInvoiceMap[$on] = $invId;
+                        }
+                    }
+
+                    if (!empty($orderToInvoiceMap)) {
+                        $orderNos = array_keys($orderToInvoiceMap);
+                        $oPlaceholders = implode(',', array_fill(0, count($orderNos), '?'));
+                        $oSql = "SELECT * FROM vp_dispatch_details WHERE order_number IN ($oPlaceholders)";
+                        $oStmt = $this->db->prepare($oSql);
+                        if ($oStmt) {
+                            $oTypes = str_repeat('s', count($orderNos));
+                            $oStmt->bind_param($oTypes, ...$orderNos);
+                            if ($oStmt->execute()) {
+                                $oRows = $oStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                                foreach ($oRows as $oRow) {
+                                    $on = trim((string)($oRow['order_number'] ?? ''));
+                                    if (isset($orderToInvoiceMap[$on])) {
+                                        $targetInvId = $orderToInvoiceMap[$on];
+                                        if (!isset($grouped[$targetInvId])) {
+                                            $grouped[$targetInvId] = [];
+                                        }
+                                        $grouped[$targetInvId][] = $oRow;
+
+                                        if (empty($oRow['invoice_id']) || (int)$oRow['invoice_id'] <= 0) {
+                                            $this->updateDispatch((int)$oRow['id'], ['invoice_id' => $targetInvId]);
+                                        }
+                                    }
+                                }
+                            }
+                            $oStmt->close();
+                        }
+                    }
+                }
+                $stmt->close();
+            }
+        }
+
+        return $grouped;
     }
     public function getInternationalPickupLocations() {
         // $sql = "SELECT id, location_name FROM vp_international_pickup_locations ORDER BY location_name ASC";
