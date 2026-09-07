@@ -164,11 +164,11 @@ if ($receipt_download_filename_base === '') {
                     <th class="border border-neutral-300 px-1.5 py-1 font-semibold" rowspan="2">Description of Goods</th>
                     <th class="border border-neutral-300 px-1.5 py-1 font-semibold" rowspan="2">HSN</th>
                     <th class="border border-neutral-300 px-1.5 py-1 font-semibold" rowspan="2">Qty</th>
-                    <th class="border border-neutral-300 px-1.5 py-1 font-semibold" rowspan="2">Price (₹)</th>
+                    <th class="border border-neutral-300 px-1.5 py-1 font-semibold" rowspan="2">Price (<?= $h($receipt_currency_symbol ?? '₹') ?>)</th>
                     <th class="border border-neutral-300 px-1 py-1 text-center font-semibold" colspan="2">SGST</th>
                     <th class="border border-neutral-300 px-1 py-1 text-center font-semibold" colspan="2">CGST</th>
                     <th class="border border-neutral-300 px-1 py-1 text-center font-semibold" colspan="2">IGST</th>
-                    <th class="border border-neutral-300 px-1.5 py-1 font-semibold" rowspan="2">Total ₹</th>
+                    <th class="border border-neutral-300 px-1.5 py-1 font-semibold" rowspan="2">Total <?= $h($receipt_currency_symbol ?? '₹') ?></th>
                   </tr>
                   <tr class="border-b border-neutral-800 bg-neutral-50 text-neutral-900 leading-tight">
                     <th class="border border-neutral-300 px-1 py-0.5 font-medium">%</th>
