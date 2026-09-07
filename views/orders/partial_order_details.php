@@ -158,13 +158,26 @@ $odSectionHead = static function (string $label): void {
                                         <p><span class="section-title text-gray-600">Sourcing fee</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['sourcingfee'] ?? 'N/A')); ?></span></p>
                                     </div>
                                 <?php else: ?>
-                                    <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
-                                        <p><span class="section-title text-gray-600">Color</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['color'] ?? '')); ?></span></p>
-                                        <p><span class="section-title text-gray-600">Size</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['size'] ?? '')); ?></span></p>
-                                    </div>
-                                    <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3">
-                                        <p><span class="section-title text-gray-600">Material</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars((string)($item['material'] ?? '')); ?></span></p>
-                                    </div>
+                                    <?php
+                                    $itemColor = trim((string)($item['color'] ?? ''));
+                                    $itemSize = trim((string)($item['size'] ?? ''));
+                                    $itemMaterial = trim((string)($item['material'] ?? ''));
+                                    ?>
+                                    <?php if ($itemColor !== '' || $itemSize !== ''): ?>
+                                        <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3 space-y-2">
+                                            <?php if ($itemColor !== ''): ?>
+                                                <p><span class="section-title text-gray-600">Color</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars($itemColor); ?></span></p>
+                                            <?php endif; ?>
+                                            <?php if ($itemSize !== ''): ?>
+                                                <p><span class="section-title text-gray-600">Size</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars($itemSize); ?></span></p>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if ($itemMaterial !== ''): ?>
+                                        <div class="rounded-lg bg-slate-50 border border-slate-200/80 p-3">
+                                            <p><span class="section-title text-gray-600">Material</span><br><span class="section-value font-medium text-gray-900"><?php echo htmlspecialchars($itemMaterial); ?></span></p>
+                                        </div>
+                                    <?php endif; ?>
                                 <?php endif; ?>
                             </div>
                         </div>
