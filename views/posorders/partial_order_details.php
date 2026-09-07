@@ -194,16 +194,26 @@
                                 </p>
                             </div>
                         <?php } else { ?>
-                            <div>
-                                <p><strong class="section-title">Color : </strong><span class="section-value"><?php echo $item['color']; ?></span>
-                                </p>
-                                <p><strong class="section-title">Size : </strong><span class="section-value"><?php echo $item['size']; ?></span>
-                                </p>
-                            </div>
-                            <div>
-                                <p><strong class="section-title">Material : </strong><span class="section-value"><?php echo $item['material']; ?></span>
-                                </p>
-                            </div>
+                            <?php
+                            $itemColor = trim((string)($item['color'] ?? ''));
+                            $itemSize = trim((string)($item['size'] ?? ''));
+                            $itemMaterial = trim((string)($item['material'] ?? ''));
+                            ?>
+                            <?php if ($itemColor !== '' || $itemSize !== ''): ?>
+                                <div>
+                                    <?php if ($itemColor !== ''): ?>
+                                        <p><strong class="section-title">Color : </strong><span class="section-value"><?php echo htmlspecialchars($itemColor); ?></span></p>
+                                    <?php endif; ?>
+                                    <?php if ($itemSize !== ''): ?>
+                                        <p><strong class="section-title">Size : </strong><span class="section-value"><?php echo htmlspecialchars($itemSize); ?></span></p>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endif; ?>
+                            <?php if ($itemMaterial !== ''): ?>
+                                <div>
+                                    <p><strong class="section-title">Material : </strong><span class="section-value"><?php echo htmlspecialchars($itemMaterial); ?></span></p>
+                                </div>
+                            <?php endif; ?>
                         <?php } ?>
                     </div>
                     <div class="bg-green-200 p-4 rounded-lg grid grid-cols-2 gap-x-8">
