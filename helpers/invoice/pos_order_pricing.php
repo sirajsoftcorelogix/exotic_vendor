@@ -913,6 +913,12 @@ function pos_order_line_discount_lines(array $discountMeta, float $lineAllocated
  */
 function pos_order_line_list_price_incl(array $orderRow): float
 {
+    $qty = max(1, (int)($orderRow['quantity'] ?? 1));
+    $rawListUnit = (float)($orderRow['itemprice'] ?? 0);
+    if ($rawListUnit > 0) {
+        return round($rawListUnit * $qty, 2);
+    }
+
     return pos_order_inclusive_line_total($orderRow, 'list');
 }
 
