@@ -41,11 +41,13 @@ function validateShippingAddressForDispatch(array $orderInfo): array
     }
     $isDomestic = $country === '' || in_array($country, ['IN', 'IND', 'INDIA'], true);
 
+    $orderNo = (string) ($orderInfo['order_number'] ?? 'N/A');
+    $displayCountry = $country !== '' ? $country : 'Unspecified';
+
     if ($line1 === '') {
         return [
             'valid' => false,
-            'message' => 'Order #' . ($orderInfo['order_number'] ?? '')
-                . ' has no shipping address. Update the order shipping address before dispatch.',
+            'message' => "Order #{$orderNo} has no shipping address line 1. Please edit the order shipping address and add street details before dispatching.",
             'address' => '',
             'pincode' => '',
         ];
@@ -54,28 +56,27 @@ function validateShippingAddressForDispatch(array $orderInfo): array
     if ($pin === '') {
         return [
             'valid' => false,
-            'message' => 'Order #' . ($orderInfo['order_number'] ?? '')
-                . ' has no shipping pincode / postal code. Update the order before adding to dispatch.',
+            'message' => "Order #{$orderNo} has no shipping pincode / postal code (Country: {$displayCountry}). Please edit the order shipping address and enter a valid postal code.",
             'address' => '',
             'pincode' => '',
         ];
     }
 
     if ($isDomestic && !preg_match('/^\d{6}$/', $pin)) {
+        $foundPin = $pinRaw !== '' ? $pinRaw : '(empty)';
         return [
             'valid' => false,
-            'message' => 'Order #' . ($orderInfo['order_number'] ?? '')
-                . ' has an invalid India pincode. A valid 6-digit pincode is required for dispatch.',
+            'message' => "Order #{$orderNo} has an invalid India pincode ('{$foundPin}'). A valid 6-digit numeric pincode is required for domestic dispatch.",
             'address' => '',
             'pincode' => $pin,
         ];
     }
 
     if (!$isDomestic && strlen($pin) < 3) {
+        $foundPin = $pinRaw !== '' ? $pinRaw : '(empty)';
         return [
             'valid' => false,
-            'message' => 'Order #' . ($orderInfo['order_number'] ?? '')
-                . ' has an invalid international postal code for dispatch.',
+            'message' => "Order #{$orderNo} has an invalid international postal code ('{$foundPin}' for Country: {$displayCountry}). A valid postal code (min 3 characters) is required for international dispatch.",
             'address' => '',
             'pincode' => $pin,
         ];
