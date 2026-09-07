@@ -24,6 +24,12 @@ function exotic_india_resolve_sale_no(string $invoiceNumber): int
         return (int) $invoiceNumber;
     }
 
+    // Extract numeric series from prefixes like 'NS0000105' -> 105 or 'NS101' -> 101
+    $digits = preg_replace('/[^0-9]/', '', $invoiceNumber);
+    if ($digits !== '') {
+        return (int) $digits;
+    }
+
     return 0;
 }
 
@@ -408,7 +414,30 @@ function exotic_india_shipment_add_preview($conn, array $dispatch): array
 
     $payload = $conn instanceof mysqli ? exotic_india_build_shipment_payload($conn, $dispatch) : null;
     if ($payload === null && $issues === []) {
-        $issues[] = 'Could not build shipment payload (check invoice sale_no/sale_date, box_items, or line items).';
+        $invoiceId = (int) ($dispatch['invoice_id'] ?? 0);
+        if ($conn instanceof mysqli && $invoiceId > 0) {
+            $stmt = $conn->prepare('SELECT id, invoice_number, invoice_date FROM vp_invoices WHERE id = ? LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('i', $invoiceId);
+                $stmt->execute();
+                $inv = $stmt->get_result()?->fetch_assoc();
+                $stmt->close();
+                if (!$inv) {
+                    $issues[] = "Invoice record #{$invoiceId} was not found in database.";
+                } else {
+                    $saleNo = exotic_india_resolve_sale_no((string) ($inv['invoice_number'] ?? ''));
+                    if ($saleNo <= 0) {
+                        $issues[] = "Invoice number '" . ($inv['invoice_number'] ?? '') . "' could not be resolved to a numeric sale_no.";
+                    }
+                    if (exotic_india_format_api_date($inv['invoice_date'] ?? '') === '') {
+                        $issues[] = "Invoice date is missing or invalid on invoice " . ($inv['invoice_number'] ?? '') . ".";
+                    }
+                }
+            }
+        }
+        if ($issues === []) {
+            $issues[] = 'Could not build shipment payload (check invoice sale_no/sale_date, box_items, or line items).';
+        }
     }
 
     return [

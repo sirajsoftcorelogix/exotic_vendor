@@ -226,6 +226,17 @@ class InvoiceCreationService
         }
 
         $international = $request['international'] ?? null;
+        if (!is_array($international) && $currency !== '' && $currency !== 'INR') {
+            require_once __DIR__ . '/../international_invoice_defaults.php';
+            $orderInfoRow = null;
+            if (!empty($invoiceData['vp_order_info_id']) && $this->commanModel !== null) {
+                $orderInfoRow = $this->commanModel->getRecordById('vp_order_info', (int)$invoiceData['vp_order_info_id']);
+            }
+            $firmDetails = function_exists('app_setting_firm_details') ? app_setting_firm_details() : [];
+            $international = buildInternationalInvoiceDefaults([], is_array($orderInfoRow) ? $orderInfoRow : null, $firmDetails, $this->commanModel, $this->conn);
+            $international['shipping_currency'] = $currency;
+        }
+
         if (is_array($international) && method_exists($this->invoiceModel, 'insert_international_invoice_data')) {
             $international['invoice_id'] = $invoiceId;
             $this->invoiceModel->insert_international_invoice_data($international);
