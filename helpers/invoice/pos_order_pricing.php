@@ -462,13 +462,21 @@ function pos_order_build_pricing_components(array $orderRow, float $baseListIncl
         $baseName = 'Base item';
     }
 
-    $addonsTotal = pos_order_line_addons_total($orderRow);
-    $baseListIncl = round(max(0.0, $baseListIncl - $addonsTotal), 2);
-    if ($baseDiscIncl <= 0.0) {
-        $baseDiscIncl = pos_order_inclusive_line_total($orderRow, 'disc');
+    $qty = max(1, (int)($orderRow['quantity'] ?? 1));
+    $rawListUnit = (float)($orderRow['itemprice'] ?? 0);
+    $rawFinalUnit = (float)($orderRow['finalprice'] ?? 0);
+
+    if ($baseListIncl <= 0.0) {
+        $baseListIncl = $rawListUnit > 0 ? round($rawListUnit * $qty, 2) : ($rawFinalUnit > 0 ? round($rawFinalUnit * $qty, 2) : 0.0);
+    } else {
+        $baseListIncl = round($baseListIncl, 2);
     }
-    if ($baseDiscIncl <= 0.0 || $baseDiscIncl > $baseListIncl) {
-        $baseDiscIncl = $baseListIncl;
+
+    if ($baseDiscIncl <= 0.0) {
+        $baseDiscIncl = $rawFinalUnit > 0 ? round($rawFinalUnit * $qty, 2) : $baseListIncl;
+    }
+    if ($baseDiscIncl > $baseListIncl) {
+        $baseListIncl = $baseDiscIncl;
     }
     $baseDiscIncl = round($baseDiscIncl, 2);
     $baseDiscVal = round(max(0.0, $baseListIncl - $baseDiscIncl), 2);
