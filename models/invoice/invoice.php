@@ -525,4 +525,17 @@ class Invoice
         }
         return $items;
     }
+
+    public function updateInvoiceNotes(int $invoiceId, string $notesJson): bool
+    {
+        $stmt = $this->db->prepare('UPDATE vp_invoices SET notes = ? WHERE id = ?');
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('si', $notesJson, $invoiceId);
+        $ok = $stmt->execute();
+        $stmt->close();
+
+        return (bool)$ok;
+    }
 }
