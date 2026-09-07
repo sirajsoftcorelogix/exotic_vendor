@@ -3069,26 +3069,38 @@ class PosInvoiceController
         }
 
         // Fetch currency exchange rate and add conversion row
-        $currency = $invoice['currency'] ?? 'INR';
+        $currency = strtoupper(trim((string)($invoice['currency'] ?? '')));
+        if (($currency === '' || $currency === 'INR') && !empty($invoice['vp_order_info_id']) && $commanModel !== null) {
+            $orderInfoRow = $commanModel->getRecordById('vp_order_info', (int)$invoice['vp_order_info_id']);
+            $orderCurr = strtoupper(trim((string)($orderInfoRow['currency'] ?? '')));
+            if ($orderCurr !== '') {
+                $currency = $orderCurr;
+            }
+        }
+        if ($currency === '') {
+            $currency = 'INR';
+        }
+
         $exchangeRate = 1;
         $convertedAmount = $totalAmount;
 
-        if ($currency && $currency !== 'INR') {
-            if ($type === 'tax_invoice') {
-                $exchangeText = $invoice['exchange_text'] ?? '';
-                $convertedAmount = $invoice['converted_amount'] ?? 0;
+        if ($currency !== 'INR') {
+            if ($type === 'tax_invoice' && !empty($invoice['exchange_text'])) {
+                $exchangeText = $invoice['exchange_text'];
+                $convertedAmount = (float)($invoice['converted_amount'] ?? 0);
             } else {
                 $currencyRecord = $this->getCurrencyByCode($currency);
                 if (!empty($currencyRecord)) {
                     $exchangeRate = floatval($currencyRecord['rate_export'] ?? 1);
                     $convertedAmount = $totalAmount * $exchangeRate;
                 } else {
-                    //if currancy record not found then USD exchange rate will be considered if currency is not INR
+                    // if currency record not found then USD exchange rate will be considered
                     $currencyRecord = $this->getCurrencyByCode('USD');
                     $exchangeRate = floatval($currencyRecord['rate_export'] ?? 1);
                     $convertedAmount = $totalAmount * $exchangeRate;
                 }
-                $exchangeText = 'Exchange Rate (' . $currencyRecord['currency_unit'] . ' to INR): ' . number_format($exchangeRate, 6);
+                $unitLabel = !empty($currencyRecord['currency_unit']) ? $currencyRecord['currency_unit'] : $currency;
+                $exchangeText = 'Exchange Rate (' . $unitLabel . ' to INR): ' . number_format($exchangeRate, 6);
             }
 
             $summaryrows .= '
