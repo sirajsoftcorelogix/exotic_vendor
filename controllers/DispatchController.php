@@ -788,28 +788,46 @@ class DispatchController {
 
         $retried = 0;
         $failed = 0;
+        $attempted = 0;
         $errors = [];
         $results = [];
         foreach ($records as $record) {
-            // Only retry if awb_code is missing
-            if (empty($record['awb_code'])) {
+            $awb = trim((string)($record['awb_code'] ?? ''));
+            // Retry if awb_code is missing or 'NEW'
+            if ($awb === '' || strtoupper($awb) === 'NEW') {
+                $attempted++;
                 $result = $dispatchModel->retryShiprocketApiCalls($record['id']);
                 $results[] = $result;
-                if ($result && isset($result['success']) && $result['success']) {
+                if ($result && !empty($result['success'])) {
                     $retried++;
                 } else {
                     $failed++;
-                    $errors[] = 'Dispatch ID ' . $record['id'] . ': ' . ($result['message'] ?? 'Unknown error');
+                    $errors[] = 'Box #' . ($record['box_no'] ?? '1') . ': ' . ($result['message'] ?? 'Unknown error');
                 }
             }
         }
-        //update dispatch status
+
+        // Update dispatch status
         foreach ($records as $record) {
-            if (isset($record['awb_code']) && !empty($record['awb_code'])) {
+            $updated = $dispatchModel->getDispatchById($record['id']);
+            $awb = trim((string)($updated['awb_code'] ?? ''));
+            if ($awb !== '' && strtoupper($awb) !== 'NEW') {
                 $dispatchModel->updateDispatchStatus($record['id'], 'Dispatched');
-            }else {
+            } else {
                 $dispatchModel->updateDispatchStatus($record['id'], 'Dispatch Failed');
             }
+        }
+
+        if ($attempted === 0) {
+            echo json_encode([
+                'success' => true,
+                'message' => 'All dispatches for this invoice already have AWB numbers assigned.',
+                'retried' => 0,
+                'failed' => 0,
+                'results' => [],
+                'errors' => []
+            ]);
+            exit();
         }
 
         if ($retried > 0) {
@@ -822,8 +840,14 @@ class DispatchController {
                 'results' => $results
             ]);
         } else {
-            http_response_code(400);
-            echo json_encode(['success' => false, 'message' => 'No retries needed or all retries failed', 'errors' => $errors]);
+            echo json_encode([
+                'success' => false,
+                'message' => !empty($errors) ? implode('; ', $errors) : 'All AWB retry attempts failed.',
+                'retried' => 0,
+                'failed' => $failed,
+                'errors' => $errors,
+                'results' => $results
+            ]);
         }
         exit();
     }

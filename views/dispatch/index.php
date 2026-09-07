@@ -888,36 +888,45 @@ if (bulkPrintBtn) {
       })
       .then(res => res.json())
       .then(data => {
-          if (data.success) {
-              const results = Array.isArray(data.results) ? data.results : [];
-              const contentHtml = results.map((res, idx) => {
+          const results = Array.isArray(data.results) ? data.results : [];
+          const errors = Array.isArray(data.errors) ? data.errors : [];
+
+          let contentHtml = '';
+          if (errors.length > 0) {
+              contentHtml += `<div class="mb-3 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-xs font-medium">
+                  <strong>Errors:</strong><br>${errors.map(e => escapeHtml(e)).join('<br>')}
+              </div>`;
+          }
+
+          if (results.length > 0) {
+              contentHtml += results.map((res, idx) => {
                   const awb = res?.data?.awb_info_response;
                   const label = res?.data?.label_info_response;
-                  const awbmsg = awb?.response?.data || '';
-                  const labelmsg = label?.response || '';
+                  const awbmsg = typeof awb?.response?.data === 'string' ? awb?.response?.data : (awb?.message || '');
+                  const labelmsg = typeof label?.response === 'string' ? label?.response : (label?.message || '');
                   return `
-                    <div class="mb-4">
-                      <div class="font-semibold mb-2">Dispatch #${idx + 1}</div>
-                      <p class="text-sm text-gray-700"><strong>AWB Response:</strong> ${escapeHtml(awbmsg)}</p>                     
-                      <details class="mb-2">
-                        <summary class="cursor-pointer font-medium">AWB Info</summary>
-                        <pre class="whitespace-pre-wrap text-xs mt-1">${escapeHtml(JSON.stringify(awb, null, 2))}</pre>
+                    <div class="mb-4 p-3 bg-gray-50 border border-gray-200 rounded">
+                      <div class="font-semibold mb-2">Dispatch #${idx + 1} - Status: ${res.success ? '<span class="text-green-600">Success</span>' : '<span class="text-red-600">Failed</span>'}</div>
+                      ${res.awbCode ? `<p class="text-xs text-gray-800 mb-1"><strong>AWB Code:</strong> ${escapeHtml(res.awbCode)}</p>` : ''}
+                      ${res.exoticShipmentId ? `<p class="text-xs text-gray-800 mb-1"><strong>Exotic Shipper ID:</strong> ${escapeHtml(res.exoticShipmentId)}</p>` : ''}
+                      <p class="text-xs text-gray-700 mt-1"><strong>AWB Response:</strong> ${escapeHtml(awbmsg || res.message || 'No message')}</p>                     
+                      <details class="mb-2 mt-1">
+                        <summary class="cursor-pointer font-medium text-xs text-indigo-600">View Raw AWB Info JSON</summary>
+                        <pre class="whitespace-pre-wrap text-[11px] bg-white p-2 border rounded mt-1 overflow-x-auto">${escapeHtml(JSON.stringify(awb, null, 2))}</pre>
                       </details>
-                      <p class="text-sm text-gray-700"><strong>Label Response:</strong> ${escapeHtml(labelmsg)}</p>
-                      <details>
-                        <summary class="cursor-pointer font-medium">Label Info</summary>
-                        <pre class="whitespace-pre-wrap text-xs mt-1">${escapeHtml(JSON.stringify(label, null, 2))}</pre>
+                      <p class="text-xs text-gray-700"><strong>Label Response:</strong> ${escapeHtml(labelmsg || 'No message')}</p>
+                      <details class="mt-1">
+                        <summary class="cursor-pointer font-medium text-xs text-indigo-600">View Raw Label Info JSON</summary>
+                        <pre class="whitespace-pre-wrap text-[11px] bg-white p-2 border rounded mt-1 overflow-x-auto">${escapeHtml(JSON.stringify(label, null, 2))}</pre>
                       </details>
                     </div>`;
               }).join('');
+          }
 
-              if (contentHtml) {
-                  showModal('Retry Shipment Results', contentHtml);
-              } else {
-                  showAlert('Retry initiated successfully. No API response data available.', 'success');
-              }
+          if (contentHtml) {
+              showModal(data.success ? 'Retry Shipment Results' : 'Retry Shipment Results (Failed)', contentHtml);
           } else {
-              alert('Error: ' + (data.message || 'Failed to retry dispatch'));
+              alert(data.message || 'No retries were required or no response data was returned.');
           }
       })
       .catch(err => {

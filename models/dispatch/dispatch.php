@@ -729,6 +729,17 @@ class Dispatch {
 
         $isSuccess = !empty($finalAwb) && strtoupper($finalAwb) !== 'NEW';
 
+        $errMsg = 'API calls retried, but AWB code was not returned by Shiprocket.';
+        if (is_array($awbInfoResponse)) {
+            if (!empty($awbInfoResponse['message']) && is_string($awbInfoResponse['message'])) {
+                $errMsg = $awbInfoResponse['message'];
+            } elseif (!empty($awbInfoResponse['response']['data']) && is_string($awbInfoResponse['response']['data'])) {
+                $errMsg = $awbInfoResponse['response']['data'];
+            } elseif (!empty($awbInfoResponse['response']['data']['message']) && is_string($awbInfoResponse['response']['data']['message'])) {
+                $errMsg = $awbInfoResponse['response']['data']['message'];
+            }
+        }
+
         return [
             'success' => $isSuccess,
             'labelUrl' => $finalLabel,
@@ -737,7 +748,7 @@ class Dispatch {
             'data' => ['awb_info_response' => $awbInfoResponse, 'label_info_response' => $labelInfoResponse],
             'message' => $isSuccess 
                 ? 'AWB and shipment details updated successfully.' 
-                : 'API calls retried, but AWB code was not returned by Shiprocket.'
+                : $errMsg
         ];
     }
     public function cancelShiprocketShipment($shiprocketOrderId) {
