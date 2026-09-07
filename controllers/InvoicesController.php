@@ -1103,10 +1103,11 @@ class InvoicesController
                 </tr>';
         }
 
+        $grandTotalLabel = 'GRAND Total' . ($currency !== '' ? ' (' . htmlspecialchars($currency) . ')' : '');
         $summaryrows .= '
                     <tr style="background: #f0f0f0; border-top: 2px solid #000;">
-                        <td colspan="12" class="right bold" style="text-align: right;">Grand Total:</td>                      
-                        <td class="right bold" style="border: 1px solid #000; padding: 8px;">' . $grandTotalDisplay . '</td>
+                        <td colspan="12" class="right bold" style="text-align: right;">' . $grandTotalLabel . ':</td>                      
+                        <td class="right bold" style="border: 1px solid #000; padding: 8px;">' . number_format($totalAmount, 2) . '</td>
                     </tr>
         ';
 
