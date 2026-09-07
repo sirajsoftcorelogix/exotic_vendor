@@ -1071,8 +1071,7 @@ class InvoicesController
             $currency = 'INR';
         }
 
-        $exchangeRate = 1;
-        $convertedAmount = $totalAmount;
+        $grandTotalDisplay = ($currency !== 'INR' ? htmlspecialchars($currency) . ' ' : '') . number_format($totalAmount, 2);
 
         if ($currency !== 'INR') {
             if ($type === 'tax_invoice' && !empty($invoice['exchange_text'])) {
@@ -1107,7 +1106,7 @@ class InvoicesController
         $summaryrows .= '
                     <tr style="background: #f0f0f0; border-top: 2px solid #000;">
                         <td colspan="12" class="right bold" style="text-align: right;">Grand Total:</td>                      
-                        <td class="right bold" style="border: 1px solid #000; padding: 8px;">' . number_format($totalAmount, 2) . '</td>
+                        <td class="right bold" style="border: 1px solid #000; padding: 8px;">' . $grandTotalDisplay . '</td>
                     </tr>
         ';
 
@@ -1150,6 +1149,12 @@ class InvoicesController
             $footerPaymentModel
         );
 
+        require_once __DIR__ . '/../helpers/currency_display.php';
+        $currSymbol = trim(vendor_currency_symbol($currency));
+        if ($currSymbol === '') {
+            $currSymbol = $currency;
+        }
+
         // Replace placeholders
         $html = str_replace(
             [
@@ -1162,6 +1167,8 @@ class InvoicesController
                 '{{AMOUNT_IN_WORDS}}',
                 '{{TERMS_AND_CONDITIONS_BLOCK}}',
                 '{{EXCLUSIVE_STORES_HEADER}}',
+                '{{CURRENCY_SYMBOL}}',
+                '<th>Total ₹</th>',
             ],
             [
                 htmlspecialchars($invoice['invoice_number'] ?? 'N/A'),
@@ -1173,6 +1180,8 @@ class InvoicesController
                 numberToWords($totalAmount ?? 0),
                 invoice_format_terms_and_conditions_block($invoice['terms_and_conditions'] ?? ''),
                 $exclusiveStoresHeader,
+                htmlspecialchars($currSymbol),
+                '<th>Total ' . htmlspecialchars($currSymbol) . '</th>',
             ],
             $temphtml
         );
