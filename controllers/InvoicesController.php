@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once 'models/invoice/invoice.php';
 require_once 'models/order/order.php';
 require_once 'models/user/user.php';
@@ -819,375 +819,17 @@ class InvoicesController
 
     public function generatePdf()
     {
-        is_login();
-        global $invoiceModel;
-
-        try {
-            // Clear any output buffers
-            if (ob_get_level()) {
-                ob_end_clean();
-            }
-
-            $invoice_id = isset($_GET['invoice_id']) ? (int)$_GET['invoice_id'] : 0;
-            if (!$invoice_id) {
-                $input = json_decode(file_get_contents('php://input'), true);
-                $invoice_id = isset($input['invoice_id']) ? (int)$input['invoice_id'] : 0;
-            }
-            if ($invoice_id <= 0) {
-                http_response_code(400);
-                header('Content-Type: application/json');
-                echo json_encode(['success' => false, 'message' => 'Invalid invoice ID']);
-                exit;
-            }
-
-            $invoice = $invoiceModel->getInvoiceById($invoice_id);
-            $items = $invoiceModel->getInvoiceItems($invoice_id);
-
-            if (!$invoice) {
-                http_response_code(404);
-                header('Content-Type: application/json');
-                echo json_encode(['success' => false, 'message' => 'Invoice not found']);
-                exit;
-            }
-
-            if (strtolower(trim((string)($invoice['status'] ?? ''))) === 'cancelled') {
-                http_response_code(403);
-                if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
-                    header('Content-Type: application/json');
-                    echo json_encode(['success' => false, 'message' => 'This invoice was cancelled and cannot be downloaded.']);
-                } else {
-                    header('Content-Type: text/plain; charset=utf-8');
-                    echo 'This invoice was cancelled and cannot be downloaded.';
-                }
-                exit;
-            }
-
-            //term and conditions fetch
-            require_once __DIR__ . '/../helpers/app_settings.php';
-            $firmSettings = app_setting_global_settings();
-            $invoice['terms_and_conditions'] = $firmSettings['terms_and_conditions'] ?? '';
-
-            // Generate HTML for PDF
-            $html = $this->generateInvoiceHtml($invoice, $items, 'tax_invoice');
-
-            if (empty($html)) {
-                throw new Exception('Failed to generate invoice HTML');
-            }
-
-            // Create mPDF instance
-            require_once 'vendor/autoload.php';
-
-            $filename = '' . $invoice['invoice_number'] . '.pdf';
-
-            $mpdf = new \Mpdf\Mpdf([
-                'mode' => 'utf-8',
-                'format' => 'A4',
-                'margin_left' => 10,
-                'margin_right' => 10,
-                'margin_top' => 10,
-                'margin_bottom' => 10,
-                'tempDir' => sys_get_temp_dir()
-            ]);
-
-            $mpdf->WriteHTML($html);
-
-            // Set headers before output
-            header('Content-Type: application/pdf; charset=utf-8');
-            header('Content-Disposition: attachment; filename="' . $filename . '"');
-            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-            header('Pragma: no-cache');
-            header('Expires: 0');
-
-            // Output PDF to browser
-            $mpdf->Output($filename, 'D');
-            exit;
-        } catch (Exception $e) {
-            // Clear any output buffers for error response
-            if (ob_get_level()) {
-                ob_end_clean();
-            }
-            http_response_code(500);
-            header('Content-Type: application/json');
-            echo json_encode([
-                'success' => false,
-                'message' => 'Error generating PDF: ' . $e->getMessage(),
-                'error' => $e->getTraceAsString()
-            ]);
-            exit;
-        }
+        $this->posInvoiceController()->generatePdf();
     }
 
-    private function generateInvoiceHtml($invoice, $items, $type = '')
+    /**
+     * Shared POS invoice HTML renderer (tax / proforma / preview).
+     */
+    private function posInvoiceController(): PosInvoiceController
     {
-        global $commanModel, $conn;
+        require_once __DIR__ . '/PosInvoiceController.php';
 
-        // Initialize variables
-        $itemsrows = '';
-        $summaryrows = '';
-        $totalSubtotal = 0;
-        $totalTax = 0;
-        $totalAmount = $invoice['total_amount'] ?? 0;
-        $totalQuantity = 0;
-        $totalGstAmount = 0;
-        $totalSgstAmt = 0;
-        $totalCgstAmt = 0;
-        $totalIgstAmt = 0;
-        $totalTaxableAmt = 0;
-
-        require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
-        require_once __DIR__ . '/../helpers/invoice/invoice_box_variant.php';
-        $resolvedUseIgst = invoice_resolve_uses_igst_for_invoice($invoice, $commanModel);
-
-        // Build item rows
-        foreach ($items as $idx => $item) {
-            // $amount = $item['quantity'] * $item['unit_price'];
-            // $taxAmount = ($amount * $item['tax_rate']) / 100;
-            // $lineTotal = $amount + $taxAmount;
-
-            // $totalSubtotal += $amount;
-            // $totalTax += $taxAmount;
-            // $totalAmount += $lineTotal;
-            $totalQuantity += $item['quantity'];
-            $totalGstAmount += $item['tax_amount'];
-
-            $qtyInt = max(1, (int)($item['quantity'] ?? 1));
-            $taxRate = (float)($item['tax_rate'] ?? 0);
-            $unitPrice = (float)($item['unit_price'] ?? 0);
-
-            if ($resolvedUseIgst !== null) {
-                $taxBreakdown = invoice_compute_tax_breakdown_from_pretax(
-                    $unitPrice,
-                    $qtyInt,
-                    $taxRate,
-                    $resolvedUseIgst
-                );
-                $sgstAmt = $taxBreakdown['sgst'];
-                $cgstAmt = $taxBreakdown['cgst'];
-                $igstAmt = $taxBreakdown['igst'];
-                $sgstRate = $taxBreakdown['sgst_rate'];
-                $cgstRate = $taxBreakdown['cgst_rate'];
-                $igstRate = $taxBreakdown['igst_rate'];
-            } elseif ((float)($item['igst'] ?? 0) > 0) {
-                $sgstAmt = 0.0;
-                $cgstAmt = 0.0;
-                $igstAmt = (float)$item['igst'];
-                $igstRate = $unitPrice > 0 ? ($igstAmt / $qtyInt) / ($unitPrice / 100) : 0;
-                $sgstRate = 0;
-                $cgstRate = 0;
-            } else {
-                $sgstAmt = (float)$item['sgst'];
-                $cgstAmt = (float)$item['cgst'];
-                $igstAmt = 0.0;
-                $sgstRate = $unitPrice > 0 ? ($sgstAmt / $qtyInt) / ($unitPrice / 100) : 0;
-                $cgstRate = $unitPrice > 0 ? ($cgstAmt / $qtyInt) / ($unitPrice / 100) : 0;
-                $igstRate = 0;
-            }
-
-            $totalSgstAmt += $sgstAmt;
-            $totalCgstAmt += $cgstAmt;
-            $totalIgstAmt += $igstAmt;
-            $totalTaxableAmt += ($qtyInt * $unitPrice);
-            $itemsrows .= '
-                    <tr>
-                        <td>' . ($idx + 1) . '</td>
-                        <td class="desc">' . htmlspecialchars($item['item_name'] ?? '') . '</td>
-                        <td>' . invoice_format_box_variant_cell($item, $conn) . '</td>
-                        <td>' . htmlspecialchars($item['hsn'] ?? '') . '</td>
-                        <td>' . $item['quantity'] . '</td>
-                        <td class="right">' . number_format($item['unit_price'], 2) . '</td>
-                        <td class="right">' . number_format($sgstRate, 2) . '</td>
-                        <td class="right">' . number_format($sgstAmt, 2) . '</td>
-                        <td class="right">' . number_format($cgstRate, 2) . '</td>
-                        <td class="right">' . number_format($cgstAmt, 2) . '</td>
-                        <td class="right">' . number_format($igstRate, 2) . '</td>
-                        <td class="right">' . number_format($igstAmt, 2) . '</td>
-                        <td class="right bold">' . number_format($item['line_total'], 2) . '</td>
-                    </tr>
-            ';
-        }
-        if (count($items) < 3) {
-            // Add empty rows to maintain table height
-            $rowsToAdd = 3 - count($items);
-            for ($i = 0; $i < $rowsToAdd; $i++) {
-                $itemsrows .= '
-                    <tr>
-                        <td>&nbsp;</td>
-                        <td class="desc">&nbsp;</td>
-                        <td>&nbsp;</td>
-                        <td>&nbsp;</td>
-                        <td>&nbsp;</td>
-                        <td class="right">&nbsp;</td>
-                        <td class="right">&nbsp;</td>
-                        <td class="right">&nbsp;</td>
-                        <td class="right">&nbsp;</td>
-                        <td class="right">&nbsp;</td>
-                        <td class="right">&nbsp;</td>
-                        <td class="right">&nbsp;</td>
-                        <td class="right bold">&nbsp;</td>
-                    </tr>
-            ';
-            }
-        }
-        // Build summary rows with tax totals
-        $discount = $invoice['discount_amount'] ?? 0;
-
-        // Add row for tax amount totals (below each SGST/CGST/IGST column)
-        $summaryrows .= '
-                    <tr style="background: #e8e8e8; border-top: 2px solid #000;">
-                        <td colspan="4" class="right bold">Total:</td>
-                        <td class="right bold">' . $totalQuantity . '</td>
-                        <td class="right bold">' . number_format($totalTaxableAmt, 2) . '</td>
-                        <td class="right bold"></td>
-                        <td class="right bold">' . number_format($totalSgstAmt, 2) . '</td>
-                        <td class="right bold"></td>
-                        <td class="right bold">' . number_format($totalCgstAmt, 2) . '</td>
-                        <td class="right bold"></td>
-                        <td class="right bold">' . number_format($totalIgstAmt, 2) . '</td>
-                        <td class="right bold">' . number_format($totalAmount, 2) . '</td>
-                    </tr>
-        ';
-
-
-        if ($discount > 0) {
-            $summaryrows .= '
-                    <tr style="background: #f9f9f9;">
-                        <td colspan="10"></td>
-                        <td class="right bold">Discount:</td>
-                        <td class="right bold">-' . number_format($discount, 2) . '</td>
-                    </tr>';
-            $totalAmount -= $discount;
-        }
-
-        // Fetch currency exchange rate and add conversion row
-        $currency = strtoupper(trim((string)($invoice['currency'] ?? '')));
-        if (($currency === '' || $currency === 'INR') && !empty($invoice['vp_order_info_id']) && $commanModel !== null) {
-            $orderInfoRow = $commanModel->getRecordById('vp_order_info', (int)$invoice['vp_order_info_id']);
-            $orderCurr = strtoupper(trim((string)($orderInfoRow['currency'] ?? '')));
-            if ($orderCurr !== '') {
-                $currency = $orderCurr;
-            }
-        }
-        if ($currency === '') {
-            $currency = 'INR';
-        }
-
-        $grandTotalDisplay = ($currency !== 'INR' ? htmlspecialchars($currency) . ' ' : '') . number_format($totalAmount, 2);
-
-        if ($currency !== 'INR') {
-            if ($type === 'tax_invoice' && !empty($invoice['exchange_text'])) {
-                $exchangeText = $invoice['exchange_text'];
-                $convertedAmount = (float)($invoice['converted_amount'] ?? 0);
-            } else {
-                $currencyRecord = $this->getCurrencyByCode($currency);
-                if (!empty($currencyRecord)) {
-                    $exchangeRate = floatval($currencyRecord['rate_export'] ?? 1);
-                    $convertedAmount = $totalAmount * $exchangeRate;
-                } else {
-                    // if currency record not found then USD exchange rate will be considered
-                    $currencyRecord = $this->getCurrencyByCode('USD');
-                    $exchangeRate = floatval($currencyRecord['rate_export'] ?? 1);
-                    $convertedAmount = $totalAmount * $exchangeRate;
-                }
-                $unitLabel = !empty($currencyRecord['currency_unit']) ? $currencyRecord['currency_unit'] : $currency;
-                $exchangeText = 'Exchange Rate (' . $unitLabel . ' to INR): ' . number_format($exchangeRate, 6);
-            }
-
-            $summaryrows .= '
-                <tr style="background: #f9f9f9;">
-                    <td colspan="13" style="padding: 20px;" class="right bold">' . htmlspecialchars($exchangeText) . '</td>
-                    
-                </tr>
-                <tr style="background: #f9f9f9;">
-                    <td colspan="12" class="right bold" style="text-align: right;">Converted Amount (INR)</td>
-                    <td class="right bold">' . number_format($convertedAmount, 2) . '</td>
-                </tr>';
-        }
-
-        $grandTotalLabel = 'GRAND Total' . ($currency !== '' ? ' (' . htmlspecialchars($currency) . ')' : '');
-        $summaryrows .= '
-                    <tr style="background: #f0f0f0; border-top: 2px solid #000;">
-                        <td colspan="12" class="right bold" style="text-align: right;">' . $grandTotalLabel . ':</td>                      
-                        <td class="right bold" style="border: 1px solid #000; padding: 8px;">' . number_format($totalAmount, 2) . '</td>
-                    </tr>
-        ';
-
-        // Fetch customer and address information
-        require_once __DIR__ . '/../helpers/invoice/invoice_address_html.php';
-        $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
-        if ((!$customer || !is_array($customer)) && !empty($invoice['order_number'])) {
-            global $ordersModel;
-            if ($ordersModel) {
-                $customer = $ordersModel->getAddressInfoByOrderNumber($invoice['order_number']);
-            }
-        }
-        global $conn;
-        $addressBlocks = invoice_resolve_bill_ship_html(is_array($customer) ? $customer : null, $conn ?? null);
-        $billToInfo = $addressBlocks['bill'];
-        $shipToInfo = $addressBlocks['ship'];
-        //print_r($billToInfo);
-        // Load template
-        $templatePath = __DIR__ . '/../templates/invoices/tax_invoice.html';
-        if (!file_exists($templatePath)) {
-            return '<p>Error: Invoice template not found at ' . htmlspecialchars($templatePath) . '</p>';
-        }
-
-        $temphtml = file_get_contents($templatePath);
-
-        require_once __DIR__ . '/../helpers/invoice/invoice_address_html.php';
-        require_once __DIR__ . '/../helpers/invoice/invoice_footer_html.php';
-        require_once __DIR__ . '/../helpers/invoice/invoice_terms_html.php';
-
-        $footerPaymentModel = null;
-        if (!empty($invoice['pos_flag'])) {
-            require_once __DIR__ . '/../models/payment/Payment.php';
-            global $conn;
-            $footerPaymentModel = new Payment($conn);
-        }
-        $exclusiveStoresHeader = invoice_resolve_exclusive_stores_footer_html(
-            $invoice,
-            $items,
-            $commanModel,
-            $footerPaymentModel
-        );
-
-        require_once __DIR__ . '/../helpers/currency_display.php';
-        $currSymbol = trim(vendor_currency_symbol($currency));
-        if ($currSymbol === '') {
-            $currSymbol = $currency;
-        }
-
-        // Replace placeholders
-        $html = str_replace(
-            [
-                '{{INVOICE_NUMBER}}',
-                '{{INVOICE_DATE}}',
-                '{{BILL_TO_INFO}}',
-                '{{SHIP_TO_INFO}}',
-                '{{ITEM_ROWS}}',
-                '{{SUMMARY_ROWS}}',
-                '{{AMOUNT_IN_WORDS}}',
-                '{{TERMS_AND_CONDITIONS_BLOCK}}',
-                '{{EXCLUSIVE_STORES_HEADER}}',
-                '{{CURRENCY_SYMBOL}}',
-                '<th>Total ₹</th>',
-            ],
-            [
-                htmlspecialchars($invoice['invoice_number'] ?? 'N/A'),
-                date('d M Y', strtotime($invoice['invoice_date'])),
-                $billToInfo,
-                $shipToInfo,
-                $itemsrows,
-                $summaryrows,
-                numberToWords($totalAmount ?? 0),
-                invoice_format_terms_and_conditions_block($invoice['terms_and_conditions'] ?? ''),
-                $exclusiveStoresHeader,
-                htmlspecialchars($currSymbol),
-                '<th>Total ' . htmlspecialchars($currSymbol) . '</th>',
-            ],
-            $temphtml
-        );
-
-        return $html;
+        return new PosInvoiceController();
     }
 
     public function previewInvoice()
@@ -1217,7 +859,7 @@ class InvoicesController
 
                 $items = $invoiceModel->getInvoiceItems($invoice['id']);
 
-                $html = $this->generateInvoiceHtml($invoice, $items, 'preview');
+                $html = $this->posInvoiceController()->generateInvoiceHtml($invoice, $items, 'preview');
 
                 echo json_encode([
                     'success' => true,
@@ -1299,7 +941,7 @@ class InvoicesController
             }
 
             // Generate the invoice HTML using the tax invoice template
-            $html = $this->generateInvoiceHtml($invoice, $invoiceItems, 'preview');
+            $html = $this->posInvoiceController()->generateInvoiceHtml($invoice, $invoiceItems, 'preview');
 
             if (empty($html)) {
                 echo json_encode(['success' => false, 'message' => 'Failed to generate preview HTML']);
@@ -1397,12 +1039,6 @@ class InvoicesController
         exit;
     }
 
-    // Helper method to get currency by code
-    private function getCurrencyByCode($code)
-    {
-        global $commanModel;
-        return $commanModel->getRecordByField('currency_master', 'currency_code', strtoupper($code));
-    }
     public function create_auto_from_order()
     {
         is_login();

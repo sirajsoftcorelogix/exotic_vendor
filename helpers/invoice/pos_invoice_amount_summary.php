@@ -106,6 +106,16 @@ function pos_order_custom_discount_display_label(array $posMeta = []): string
     return 'Custom Discount:';
 }
 
+function pos_invoice_grand_total_label(array $posMeta): string
+{
+    $currency = strtoupper(trim((string)($posMeta['currency'] ?? '')));
+    if ($currency !== '' && $currency !== 'INR') {
+        return 'GRAND Total (' . $currency . ')';
+    }
+
+    return 'GRAND Total';
+}
+
 /**
  * @return list<array{label: string, amount: float, note: string, is_grand: bool}>
  */
@@ -217,12 +227,12 @@ function pos_invoice_build_amount_summary_rows(
                 'is_grand' => false,
             ];
         }
-        $rows[] = [
-            'label' => 'GRAND Total' . (!empty($posMeta['currency']) && strtoupper($posMeta['currency']) !== 'INR' ? ' (' . strtoupper($posMeta['currency']) . ')' : ''),
-            'amount' => $grandTotal,
-            'note' => '',
-            'is_grand' => true,
-        ];
+    $rows[] = [
+        'label' => pos_invoice_grand_total_label($posMeta),
+        'amount' => $grandTotal,
+        'note' => '',
+        'is_grand' => true,
+    ];
 
         return $rows;
     }
@@ -283,7 +293,7 @@ function pos_invoice_build_amount_summary_rows(
         'is_grand' => false,
     ];
     $rows[] = [
-        'label' => 'GRAND Total',
+        'label' => pos_invoice_grand_total_label($posMeta),
         'amount' => $grandTotal,
         'note' => '',
         'is_grand' => true,

@@ -1458,6 +1458,18 @@ class PosInvoiceController
                 exit;
             }
 
+            if (strtolower(trim((string)($invoice['status'] ?? ''))) === 'cancelled') {
+                http_response_code(403);
+                if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => false, 'message' => 'This invoice was cancelled and cannot be downloaded.']);
+                } else {
+                    header('Content-Type: text/plain; charset=utf-8');
+                    echo 'This invoice was cancelled and cannot be downloaded.';
+                }
+                exit;
+            }
+
             //term and conditions fetch
             require_once __DIR__ . '/../helpers/app_settings.php';
             $firmSettings = app_setting_global_settings();
@@ -2635,7 +2647,10 @@ class PosInvoiceController
         );
     }
 
-    private function generateInvoiceHtml($invoice, $items, $type = '')
+    /**
+     * Shared tax/proforma invoice HTML renderer (used by POS and vendor invoice routes).
+     */
+    public function generateInvoiceHtml($invoice, $items, $type = '')
     {
         global $commanModel, $invoiceModel, $conn, $ordersModel;
 
@@ -2981,6 +2996,22 @@ class PosInvoiceController
             ? round($sumLineTotals, 2)
             : round((float)$totalAmount, 2);
 
+        $currency = strtoupper(trim((string)($invoice['currency'] ?? '')));
+        if (($currency === '' || $currency === 'INR') && !empty($invoice['vp_order_info_id']) && $commanModel !== null) {
+            $orderInfoRow = $commanModel->getRecordById('vp_order_info', (int)$invoice['vp_order_info_id']);
+            $orderCurr = strtoupper(trim((string)($orderInfoRow['currency'] ?? '')));
+            if ($orderCurr !== '') {
+                $currency = $orderCurr;
+            }
+        }
+        if ($currency === '') {
+            $currency = 'INR';
+        }
+        if (!is_array($posDiscountMeta)) {
+            $posDiscountMeta = [];
+        }
+        $posDiscountMeta['currency'] = $currency;
+
         // Add row for tax amount totals (below each SGST/CGST/IGST Amount column)
         if ($usePosItemRowLayout) {
             if ($showDiscPriceColumn) {
@@ -3052,7 +3083,7 @@ class PosInvoiceController
                 $totalAmount -= $discount;
             }
 
-            $grandTotalLabel = 'GRAND Total' . ($currency !== '' ? ' (' . htmlspecialchars($currency) . ')' : '');
+            $grandTotalLabel = pos_invoice_grand_total_label($posDiscountMeta);
             $summaryrows .= '
                     <tr style="background: #f0f0f0; border-top: 2px solid #000;">
                         <td colspan="' . ($tableColCount - 1) . '" class="right bold" style="text-align: right;">' . $grandTotalLabel . ':</td>                      
@@ -3067,19 +3098,6 @@ class PosInvoiceController
             if ($paymentCollectionRows !== []) {
                 $summaryrows .= pos_invoice_render_amount_summary_html($paymentCollectionRows, $tableColCount, 'Payment');
             }
-        }
-
-        // Fetch currency exchange rate and add conversion row
-        $currency = strtoupper(trim((string)($invoice['currency'] ?? '')));
-        if (($currency === '' || $currency === 'INR') && !empty($invoice['vp_order_info_id']) && $commanModel !== null) {
-            $orderInfoRow = $commanModel->getRecordById('vp_order_info', (int)$invoice['vp_order_info_id']);
-            $orderCurr = strtoupper(trim((string)($orderInfoRow['currency'] ?? '')));
-            if ($orderCurr !== '') {
-                $currency = $orderCurr;
-            }
-        }
-        if ($currency === '') {
-            $currency = 'INR';
         }
 
         $exchangeRate = 1;
