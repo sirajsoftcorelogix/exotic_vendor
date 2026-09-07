@@ -37,30 +37,44 @@ class Invoice
 
     public function createInvoice($data)
     {
-        $sql = "INSERT INTO vp_invoices (invoice_number, invoice_date, customer_id, vp_order_info_id, currency, subtotal, tax_amount, discount_amount, total_amount, status, created_by, created_at, exchange_text, converted_amount, batch_no,warehouse_id,pos_flag) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)";
+        $sql = "INSERT INTO vp_invoices (invoice_number, invoice_date, customer_id, vp_order_info_id, currency, subtotal, tax_amount, discount_amount, total_amount, status, created_by, created_at, exchange_text, converted_amount, batch_no, warehouse_id, pos_flag) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
-        $warehouse_id = $_SESSION['warehouse_id'] ?? 0;
-        $invoice_number = 'INV-' . date('Ymd') . '-' . mt_rand(1000, 9999);
-        $batch_no = $data['batch_no'] ?? null;
-        $pos_flag = $data['pos_flag'] ?? 0;
+        $warehouse_id = (int)($_SESSION['warehouse_id'] ?? 0);
+        $pos_flag = (int)($data['pos_flag'] ?? 0);
+        $customer_id = (int)($data['customer_id'] ?? 0);
+        $vp_order_info_id = (int)($data['vp_order_info_id'] ?? 0);
+        $batch_no = (string)($data['batch_no'] ?? '');
+        $invoice_number = (string)($data['invoice_number'] ?? '');
+        $invoice_date = (string)($data['invoice_date'] ?? '');
+        $currency = (string)($data['currency'] ?? '');
+        $subtotal = (float)($data['subtotal'] ?? 0);
+        $tax_amount = (float)($data['tax_amount'] ?? 0);
+        $discount_amount = (float)($data['discount_amount'] ?? 0);
+        $total_amount = (float)($data['total_amount'] ?? 0);
+        $status = (string)($data['status'] ?? '');
+        $created_by = (int)($data['created_by'] ?? 0);
+        $created_at = (string)($data['created_at'] ?? '');
+        $exchange_text = (string)($data['exchange_text'] ?? '');
+        $converted_amount = (float)($data['converted_amount'] ?? 0);
+
         $stmt->bind_param(
-            'ssisssdddsdsdssii',
-            $data['invoice_number'],
-            $data['invoice_date'],
-            $data['customer_id'],
-            $data['vp_order_info_id'],
-            $data['currency'],
-            $data['subtotal'],
-            $data['tax_amount'],
-            $data['discount_amount'],
-            $data['total_amount'],
-            $data['status'],
-            $data['created_by'],
-            $data['created_at'],
-            $data['exchange_text'],
-            $data['converted_amount'],
+            'ssiisddddsissdsii',
+            $invoice_number,
+            $invoice_date,
+            $customer_id,
+            $vp_order_info_id,
+            $currency,
+            $subtotal,
+            $tax_amount,
+            $discount_amount,
+            $total_amount,
+            $status,
+            $created_by,
+            $created_at,
+            $exchange_text,
+            $converted_amount,
             $batch_no,
             $warehouse_id,
             $pos_flag
@@ -241,28 +255,48 @@ class Invoice
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 
+        $shippingPort = (string)($data['shipping_port'] ?? $data['shipping_port_code'] ?? 'INABG1');
+        $preCarriage = (string)($data['pre_carriage_by'] ?? 'Air');
+        $portLoading = (string)($data['port_of_loading'] ?? 'New Delhi');
+        $portDischarge = (string)($data['port_of_discharge'] ?? '');
+        $countryOrigin = (string)($data['country_of_origin'] ?? 'India');
+        $countryFinal = (string)($data['country_of_final_destination'] ?? '');
+        $finalDest = (string)($data['final_destination'] ?? '');
+        $usdRate = (float)($data['usd_export_rate'] ?? 0);
+        $apCost = (float)($data['ap_cost'] ?? 0);
+        $freightCharge = (float)($data['freight_charge'] ?? 0);
+        $insuranceCharge = (float)($data['insurance_charge'] ?? 0);
+        $shippingBillNo = (string)($data['shipping_bill_number'] ?? '');
+        $shippingBillDate = (string)($data['shipping_bill_date'] ?? date('Y-m-d'));
+        $shippingRefClm = (string)($data['shipping_ref_clm'] ?? 'N');
+        $shippingCurrency = (string)($data['shipping_currency'] ?? 'USD');
+        $shippingCountryCode = (string)($data['shipping_country_code'] ?? '');
+        $shippingExpDuty = (float)($data['shipping_exp_duty'] ?? 0);
+        $irn = (string)($data['irn'] ?? '');
+        $qrcodeString = (string)($data['qrcode_string'] ?? '');
+
         $stmt->bind_param(
             'issssssddddssssssdss',
             $data['invoice_id'],
-            $data['pre_carriage_by'],
-            $data['port_of_loading'],
-            $data['port_of_discharge'],
-            $data['country_of_origin'],
-            $data['country_of_final_destination'],
-            $data['final_destination'],
-            $data['usd_export_rate'],
-            $data['ap_cost'],
-            $data['freight_charge'],
-            $data['insurance_charge'],
-            $data['shipping_bill_number'],
-            $data['shipping_bill_date'],
-            $data['shipping_port_code'],
-            $data['shipping_ref_clm'],
-            $data['shipping_currency'],
-            $data['shipping_country_code'],
-            $data['shipping_exp_duty'],
-            $data['irn'],
-            $data['qrcode_string']
+            $preCarriage,
+            $portLoading,
+            $portDischarge,
+            $countryOrigin,
+            $countryFinal,
+            $finalDest,
+            $usdRate,
+            $apCost,
+            $freightCharge,
+            $insuranceCharge,
+            $shippingBillNo,
+            $shippingBillDate,
+            $shippingPort,
+            $shippingRefClm,
+            $shippingCurrency,
+            $shippingCountryCode,
+            $shippingExpDuty,
+            $irn,
+            $qrcodeString
         );
 
         if ($stmt->execute()) {
