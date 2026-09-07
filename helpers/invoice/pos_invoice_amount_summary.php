@@ -218,7 +218,7 @@ function pos_invoice_build_amount_summary_rows(
             ];
         }
         $rows[] = [
-            'label' => 'GRAND Total',
+            'label' => 'GRAND Total' . (!empty($posMeta['currency']) && strtoupper($posMeta['currency']) !== 'INR' ? ' (' . strtoupper($posMeta['currency']) . ')' : ''),
             'amount' => $grandTotal,
             'note' => '',
             'is_grand' => true,
