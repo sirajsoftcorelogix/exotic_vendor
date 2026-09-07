@@ -698,19 +698,60 @@ class Dispatch {
             }
         }
 
-        // Fallback 2: Check order show endpoint if AWB code is still missing/empty
+        // Fallback 2: Check order show endpoint if AWB code, courier, or shipment_id is missing
         $orderId = (int)($dispatchRecord['shiprocket_order_id'] ?? 0);
-        if (empty($awbCode) && $orderId > 0) {
+        if ($orderId > 0) {
             $orderRes = $this->getShiprocketOrderDetails($orderId);
-            $orderAwb = trim((string)(
-                $orderRes['data']['awb_code']
-                ?? $orderRes['data']['shipments'][0]['awb']
-                ?? $orderRes['data']['shipments'][0]['awb_code']
-                ?? ''
-            ));
-            if ($orderAwb !== '' && strtoupper($orderAwb) !== 'NEW') {
-                $awbCode = $orderAwb;
-                $this->updateDispatchByShiprocketShipmentId($shipmentId, ['awb_code' => $awbCode]);
+            if (is_array($orderRes) && !empty($orderRes['data'])) {
+                $orderData = $orderRes['data'];
+                $shipments = $orderData['shipments'] ?? [];
+                $firstShipment = is_array($shipments) && !empty($shipments[0]) ? $shipments[0] : [];
+
+                $orderAwb = trim((string)(
+                    $orderData['awb_code']
+                    ?? $firstShipment['awb']
+                    ?? $firstShipment['awb_code']
+                    ?? $firstShipment['courier_awb']
+                    ?? ''
+                ));
+
+                $orderCourierName = trim((string)(
+                    $orderData['courier_name']
+                    ?? $firstShipment['courier_name']
+                    ?? $firstShipment['courier']
+                    ?? ''
+                ));
+
+                $orderCourierId = (int)(
+                    $orderData['courier_company_id']
+                    ?? $firstShipment['courier_company_id']
+                    ?? 0
+                );
+
+                $orderStatus = trim((string)(
+                    $orderData['status']
+                    ?? $firstShipment['status']
+                    ?? ''
+                ));
+
+                $updates = [];
+                if ($orderAwb !== '' && strtoupper($orderAwb) !== 'NEW') {
+                    $awbCode = $orderAwb;
+                    $updates['awb_code'] = $awbCode;
+                }
+                if ($orderCourierName !== '') {
+                    $updates['courier_name'] = $orderCourierName;
+                }
+                if ($orderCourierId > 0) {
+                    $updates['courier_company_id'] = $orderCourierId;
+                }
+                if ($orderStatus !== '') {
+                    $updates['shipment_status'] = $orderStatus;
+                }
+
+                if (!empty($updates)) {
+                    $this->updateDispatch($dispatchId, $updates);
+                }
             }
         }
 
