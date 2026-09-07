@@ -70,11 +70,18 @@ function buildShiprocketAssignmentUpdate($conn, array $awbInfoResponse, array $f
 {
     $data = is_array($awbInfoResponse['response']['data'] ?? null)
         ? $awbInfoResponse['response']['data']
-        : [];
+        : (is_array($awbInfoResponse['data'] ?? null) ? $awbInfoResponse['data'] : []);
 
     $payload = [];
-    $awb = trim((string) ($data['awb_code'] ?? $awbInfoResponse['awb_code'] ?? ''));
-    if ($awb !== '') {
+    $awb = trim((string) (
+        $data['awb_code']
+        ?? $awbInfoResponse['awb_code']
+        ?? $awbInfoResponse['response']['awb_code']
+        ?? $awbInfoResponse['response']['data']['awb_code']
+        ?? $awbInfoResponse['data']['awb_code']
+        ?? ''
+    ));
+    if ($awb !== '' && strtoupper($awb) !== 'NEW') {
         $payload['awb_code'] = $awb;
     }
 

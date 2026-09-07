@@ -316,23 +316,8 @@ class Invoice
         $stmt->bind_param($bindTypes, ...$bindParams);
         return $stmt->execute();
     }
-    public function getInvoicesCount()
+    private function buildInvoiceWhereClause($filters = [])
     {
-        $sql = "SELECT COUNT(*) AS cnt FROM vp_invoices";
-        $result = $this->db->query($sql);
-        if ($result) {
-            $row = $result->fetch_assoc();
-            return isset($row['cnt']) ? (int)$row['cnt'] : 0;
-        }
-        return 0;
-    }
-    public function  getAllInvoicesPaginated($limit, $offset, $filters = [])
-    {
-        // join dispatch details so we can filter on its columns
-        $sql  = "SELECT DISTINCT i.*, c.id AS customer_id, c.name, c.email, c.phone
-                FROM vp_invoices i
-                LEFT JOIN vp_customers c ON i.customer_id = c.id
-                LEFT JOIN vp_dispatch_details d ON d.invoice_id = i.id ";
         $whereClause = [];
 
         if (isset($filters['customer_name']) && $filters['customer_name'] !== '') {
@@ -348,17 +333,18 @@ class Invoice
             $whereClause[] = "i.invoice_number LIKE '%" . $this->db->real_escape_string($filters['invoice_number']) . "%'";
         }
 
-        // dispatch‑table filters
+        // dispatch-table & multi-field filters
         if (isset($filters['awb_number']) && $filters['awb_number'] !== '') {
-            $whereClause[] = "d.awb_code LIKE '%" . $this->db->real_escape_string($filters['awb_number']) . "%'";
+            $escapedAwb = $this->db->real_escape_string($filters['awb_number']);
+            $whereClause[] = "(d.awb_code LIKE '%" . $escapedAwb . "%' OR d.tracking_url LIKE '%" . $escapedAwb . "%')";
         }
         if (isset($filters['order_number']) && $filters['order_number'] !== '') {
-            $whereClause[] = "d.order_number LIKE '%" . $this->db->real_escape_string($filters['order_number']) . "%'";
+            $escapedOrder = $this->db->real_escape_string($filters['order_number']);
+            $whereClause[] = "(d.order_number LIKE '%" . $escapedOrder . "%' OR i.id IN (SELECT invoice_id FROM vp_invoice_items WHERE order_number LIKE '%" . $escapedOrder . "%') OR i.vp_order_info_id IN (SELECT id FROM vp_order_info WHERE order_number LIKE '%" . $escapedOrder . "%'))";
         }
         if (isset($filters['box_size']) && $filters['box_size'] !== '') {
             if ($filters['box_size'] === 'R-1') {
                 $whereClause[] = "d.length >= 22 AND d.width >= 17 AND d.height >= 5";
-                //$whereClause[] = "d.box_size NOT IN ('R-1', 'R-2', 'R-3', 'R-4', 'R-5', 'R-6', 'R-7', 'R-8', 'R-9', 'R-10', 'R-11', 'R-12', 'R-13', 'R-14')";
             } elseif ($filters['box_size'] === 'R-2') {
                 $whereClause[] = "d.length >= 16 AND d.width >= 13 AND d.height >= 13";
             } elseif ($filters['box_size'] === 'R-3') {
@@ -385,17 +371,6 @@ class Invoice
                 $whereClause[] = "d.length >= 7 AND d.width >= 5 AND d.height >= 3";
             } elseif ($filters['box_size'] === 'R-14') {
                 $whereClause[] = "d.length >= 14 AND d.width >= 12 AND d.height >= 10";
-            } else {
-                // custom size filter
-                // expected format: LxWxH (e.g. 20x15x10)
-                // $parts = explode('x', $filters['box_size']);
-                // if (count($parts) == 3) {
-                //     $length = (int)$parts[0];
-                //     $width = (int)$parts[1];
-                //     $height = (int)$parts[2];
-
-                //     $whereClause[] = "d.length >= $length AND d.width >= $width AND d.height >= $height";
-                // }
             }
         }
 
@@ -429,13 +404,45 @@ class Invoice
         if (isset($filters['item_name']) && $filters['item_name'] !== '') {
             $whereClause[] = "i.id IN (SELECT invoice_id FROM vp_invoice_items WHERE item_name LIKE '%" . $this->db->real_escape_string($filters['item_name']) . "%')";
         }
-        //Box Weight
         if (isset($filters['box_weight_min']) && is_numeric($filters['box_weight_min'])) {
             $whereClause[] = "i.id IN (SELECT invoice_id FROM vp_dispatch_details WHERE weight >= " . floatval($filters['box_weight_min']) . ")";
         }
         if (isset($filters['box_weight_max']) && is_numeric($filters['box_weight_max'])) {
             $whereClause[] = "i.id IN (SELECT invoice_id FROM vp_dispatch_details WHERE weight <= " . floatval($filters['box_weight_max']) . ")";
         }
+
+        return $whereClause;
+    }
+
+    public function getInvoicesCount($filters = [])
+    {
+        $sql = "SELECT COUNT(DISTINCT i.id) AS cnt
+                FROM vp_invoices i
+                LEFT JOIN vp_customers c ON i.customer_id = c.id
+                LEFT JOIN vp_dispatch_details d ON d.invoice_id = i.id ";
+
+        $whereClause = $this->buildInvoiceWhereClause($filters);
+        if (!empty($whereClause)) {
+            $sql .= "WHERE " . implode(" AND ", $whereClause);
+        }
+
+        $result = $this->db->query($sql);
+        if ($result) {
+            $row = $result->fetch_assoc();
+            return isset($row['cnt']) ? (int)$row['cnt'] : 0;
+        }
+        return 0;
+    }
+
+    public function  getAllInvoicesPaginated($limit, $offset, $filters = [])
+    {
+        // join dispatch details so we can filter on its columns
+        $sql  = "SELECT DISTINCT i.*, c.id AS customer_id, c.name, c.email, c.phone
+                FROM vp_invoices i
+                LEFT JOIN vp_customers c ON i.customer_id = c.id
+                LEFT JOIN vp_dispatch_details d ON d.invoice_id = i.id ";
+
+        $whereClause = $this->buildInvoiceWhereClause($filters);
 
 
         if (!empty($whereClause)) {

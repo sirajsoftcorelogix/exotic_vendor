@@ -62,13 +62,15 @@ class DispatchController {
         if ($shipmentId <= 0 || !is_array($awbInfoResponse)) {
             return;
         }
-        if (empty($awbInfoResponse['awb_assign_status']) || (int) $awbInfoResponse['awb_assign_status'] !== 1) {
-            return;
-        }
 
         global $conn;
         $assignment = buildShiprocketAssignmentUpdate($conn, $awbInfoResponse, $fallback);
-        if (!empty($assignment)) {
+
+        $hasAssignStatus = !empty($awbInfoResponse['awb_assign_status']) && (int) $awbInfoResponse['awb_assign_status'] === 1;
+        $hasNestedStatus = !empty($awbInfoResponse['response']['data']['awb_assign_status']) && (int) $awbInfoResponse['response']['data']['awb_assign_status'] === 1;
+        $hasAwbCode = !empty($assignment['awb_code']);
+
+        if (($hasAssignStatus || $hasNestedStatus || $hasAwbCode) && !empty($assignment)) {
             $dispatchModel->updateDispatchByShiprocketShipmentId($shipmentId, $assignment);
         }
     }
@@ -2704,10 +2706,12 @@ class DispatchController {
                     
                     // Update dispatch record with Shiprocket response
                     if ($shiprocketResponse && isset($shiprocketResponse['json']['order_id']) && ($shiprocketResponse['json']['status'] ?? '') === 'NEW') {
+                        $srAwbRaw = trim((string)($shiprocketResponse['json']['awb_code'] ?? ''));
+                        $srAwb = ($srAwbRaw !== '' && strtoupper($srAwbRaw) !== 'NEW') ? $srAwbRaw : null;
                         $updateData = $this->enrichDispatchRecord([
                             'shiprocket_order_id' => $shiprocketResponse['json']['order_id'] ?? null,
                             'shiprocket_shipment_id' => $shiprocketResponse['json']['shipment_id'] ?? null,
-                            'awb_code' => $shiprocketResponse['json']['awb_code'] ?? null,
+                            'awb_code' => $srAwb,
                             'shipment_status' => $shiprocketResponse['json']['status'] ?? 'NEW',
                             'label_url' => $shiprocketResponse['json']['label_url'] ?? null,
                             'tracking_url' => $shiprocketResponse['json']['tracking_url'] ?? null,
