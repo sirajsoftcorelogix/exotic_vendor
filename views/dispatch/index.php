@@ -243,6 +243,44 @@ require_once __DIR__ . '/../../models/invoice/DomesticEwbIrnService.php';
                     <p class="text-xs text-gray-500 mt-1"><?php echo date('d M Y', strtotime($invoice['invoice_date'] ?? '')); ?></p>                 
                     </div>
 
+                    <?php
+                      $firstOrderNum = !empty($orderNumbers) ? (string) array_key_first($orderNumbers) : '';
+                      $ewbIrnData = !empty($firstOrderNum) ? DomesticEwbIrnService::getEwbIrnStatusByOrderNumber($GLOBALS['conn'], $firstOrderNum) : null;
+                      $irnVal = trim((string)($ewbIrnData['irn'] ?? $ewbIrnData['inv_irn'] ?? ''));
+                      $ewbVal = trim((string)($ewbIrnData['ewb'] ?? $ewbIrnData['ewb_no'] ?? $ewbIrnData['inv_ewb'] ?? ''));
+                    ?>
+                    <?php if ($irnVal !== ''): ?>
+                      <div class="mt-2.5 pt-2 border-t border-gray-100">
+                        <p class="text-[11px] font-semibold text-gray-500 flex items-center gap-1">
+                          <i class="fas fa-file-invoice text-blue-600 text-[10px]" aria-hidden="true"></i> E-Invoice (IRN):
+                        </p>
+                        <p class="text-xs font-mono font-medium text-gray-800 break-all leading-tight select-all mt-0.5" title="<?= htmlspecialchars($irnVal, ENT_QUOTES, 'UTF-8') ?>">
+                          <?= htmlspecialchars($irnVal, ENT_QUOTES, 'UTF-8') ?>
+                        </p>
+                        <div class="mt-1">
+                          <a href="<?= htmlspecialchars(base_url('?page=invoices&action=generate_pdf&invoice_id=' . (int)$invoice['id']), ENT_QUOTES, 'UTF-8') ?>" target="_blank" class="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline">
+                            <i class="fas fa-download text-[10px]" aria-hidden="true"></i> Download PDF
+                          </a>
+                        </div>
+                      </div>
+                    <?php endif; ?>
+
+                    <?php if ($ewbVal !== ''): ?>
+                      <div class="mt-2 pt-2 border-t border-gray-100">
+                        <p class="text-[11px] font-semibold text-gray-500 flex items-center gap-1">
+                          <i class="fas fa-truck-loading text-emerald-600 text-[10px]" aria-hidden="true"></i> E-Way Bill No:
+                        </p>
+                        <p class="text-xs font-mono font-semibold text-emerald-700 leading-tight mt-0.5 select-all">
+                          <?= htmlspecialchars($ewbVal, ENT_QUOTES, 'UTF-8') ?>
+                        </p>
+                        <div class="mt-1">
+                          <a href="<?= htmlspecialchars(base_url('?page=invoices&action=generate_pdf&invoice_id=' . (int)$invoice['id']), ENT_QUOTES, 'UTF-8') ?>" target="_blank" class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-800 hover:underline">
+                            <i class="fas fa-file-pdf text-[10px]" aria-hidden="true"></i> E-Way Bill Document
+                          </a>
+                        </div>
+                      </div>
+                    <?php endif; ?>
+
                     <!-- <p class="text-xs text-gray-500">Shiprocket Shipment ID</p>
                     <p class="text-blue-600 font-semibold">
                       <?php 
@@ -265,7 +303,15 @@ require_once __DIR__ . '/../../models/invoice/DomesticEwbIrnService.php';
                 <div class="flex flex-col gap-2">
                 <div>
                   <p class="text-xs text-gray-500">Invoice Total</p>
-                  <p class="font-semibold text-gray-800">₹ <?php echo number_format($invoice['total_amount'] ?? 0, 2); ?></p>
+                  <?php 
+                    $displayTotal = isset($invoice['order_info_total']) && (float)$invoice['order_info_total'] > 0 
+                        ? (float)$invoice['order_info_total'] 
+                        : (float)($invoice['total_amount'] ?? 0);
+                    $currencySymbol = !empty($invoice['currency']) && strtoupper($invoice['currency']) !== 'INR' 
+                        ? htmlspecialchars($invoice['currency']) . ' ' 
+                        : '₹ ';
+                  ?>
+                  <p class="font-semibold text-gray-800"><?php echo $currencySymbol . number_format($displayTotal, 2); ?></p>
                   <div class="flex gap-2 mt-2">
                     <?php if (isset($invoice['status']) && strtolower($invoice['status']) == 'cod'): ?>
                       <span class="bg-red-100 text-red-600 text-xs px-2 py-1 rounded">COD</span>

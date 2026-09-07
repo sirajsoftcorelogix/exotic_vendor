@@ -470,11 +470,12 @@ class Invoice
 
     public function  getAllInvoicesPaginated($limit, $offset, $filters = [])
     {
-        // join dispatch details so we can filter on its columns
-        $sql  = "SELECT DISTINCT i.*, c.id AS customer_id, c.name, c.email, c.phone
+        // join dispatch details and vp_order_info so we can get order info total
+        $sql  = "SELECT DISTINCT i.*, c.id AS customer_id, c.name, c.email, c.phone, oi.total AS order_info_total
                 FROM vp_invoices i
                 LEFT JOIN vp_customers c ON i.customer_id = c.id
-                LEFT JOIN vp_dispatch_details d ON d.invoice_id = i.id ";
+                LEFT JOIN vp_dispatch_details d ON d.invoice_id = i.id
+                LEFT JOIN vp_order_info oi ON oi.id = i.vp_order_info_id ";
 
         $whereClause = $this->buildInvoiceWhereClause($filters);
 
