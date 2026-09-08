@@ -7,15 +7,21 @@ require_once __DIR__ . '/../models/product/StockMovement.php';
  * Book purchase / stock replenishment algorithm (order import + product preview).
  *
  * numsold <= 1  → buy order quantity
- * numsold > 1   → if physical stock <= 25% of lookback sales, buy 50% of lookback sales
+ * numsold > 1   → compare physical stock with lookback sales using global percentages:
+ *   min stock %              → low-stock threshold
+ *   purchase threshold %     → generate PO for vp_products.replenishment_buy_qty
+ * Fallback buy qty when replenishment_buy_qty is 0: 50% of lookback sales.
  */
 class BookPurchaseReplenishment
 {
     private const NUMSOLD_THRESHOLD = 1;
-    private const STOCK_LOW_RATIO = 0.25;
+    private const DEFAULT_MIN_STOCK_PERCENT = 50;
+    private const DEFAULT_PURCHASE_THRESHOLD_PERCENT = 25;
     private const BUY_RATIO = 0.50;
 
     private mysqli $conn;
+
+    private ?AppSettings $appSettings = null;
 
     public function __construct(mysqli $conn)
     {
@@ -46,7 +52,10 @@ class BookPurchaseReplenishment
             'lookback_months' => 0,
             'lookback_source' => '',
             'total_sold_lookback' => 0,
+            'min_stock_percent' => 0,
+            'purchase_threshold_percent' => 0,
             'stock_threshold' => 0,
+            'purchase_threshold' => 0,
             'recommended_buy_qty' => 0,
             'should_buy' => false,
             'branch' => 'none',
@@ -83,24 +92,44 @@ class BookPurchaseReplenishment
         }
 
         $totalSold = $this->fetchTotalSoldForLookback($product, $lookback['months']);
+        $minStockPercent = $this->getPercentSetting(
+            'stock_replenishment_min_stock_percent',
+            self::DEFAULT_MIN_STOCK_PERCENT
+        );
+        $purchaseThresholdPercent = $this->getPercentSetting(
+            'stock_replenishment_purchase_threshold_percent',
+            self::DEFAULT_PURCHASE_THRESHOLD_PERCENT
+        );
+
         $base['total_sold_lookback'] = $totalSold;
         $base['branch'] = 'demand_based';
+        $base['min_stock_percent'] = $minStockPercent;
+        $base['purchase_threshold_percent'] = $purchaseThresholdPercent;
+        $base['stock_threshold'] = (int) floor($totalSold * ($minStockPercent / 100));
+        $base['purchase_threshold'] = (int) floor($totalSold * ($purchaseThresholdPercent / 100));
 
-        $threshold = (int) floor($totalSold * self::STOCK_LOW_RATIO);
-        $base['stock_threshold'] = $threshold;
-
-        if ($physicalStock > $threshold) {
-            $base['reason'] = 'Physical stock is above 25% of lookback sales — no replenishment needed.';
+        if ($physicalStock > $base['purchase_threshold']) {
+            $base['reason'] = 'Physical stock is above ' . $purchaseThresholdPercent
+                . '% of lookback sales — no purchase order needed.';
 
             return $base;
         }
 
-        $buyQty = (int) max(0, round($totalSold * self::BUY_RATIO));
+        $storedBuyQty = max(0, (int) ($product['replenishment_buy_qty'] ?? 0));
+        $buyQty = $storedBuyQty > 0
+            ? $storedBuyQty
+            : (int) max(0, round($totalSold * self::BUY_RATIO));
         $base['recommended_buy_qty'] = $buyQty;
         $base['should_buy'] = $buyQty > 0;
         $base['reason'] = $buyQty > 0
-            ? 'Physical stock is at or below 25% of lookback sales — buy 50% of lookback sales.'
-            : 'Lookback sales are zero — nothing to buy.';
+            ? (
+                $storedBuyQty > 0
+                    ? 'Physical stock is at or below ' . $purchaseThresholdPercent
+                        . '% of lookback sales — generate PO for replenishment buy qty.'
+                    : 'Physical stock is at or below ' . $purchaseThresholdPercent
+                        . '% of lookback sales — buy 50% of lookback sales.'
+            )
+            : 'Lookback sales are zero and no replenishment buy qty is set — nothing to buy.';
 
         return $base;
     }
@@ -229,8 +258,7 @@ class BookPurchaseReplenishment
             return ['months' => $vendorMonths, 'source' => 'vendor'];
         }
 
-        $settings = new AppSettings($this->conn);
-        $globalMonths = max(0, (int) $settings->get('stock_replenishment_months', 1));
+        $globalMonths = max(0, (int) $this->settings()->get('stock_replenishment_months', 1));
         if ($globalMonths > 0) {
             return ['months' => $globalMonths, 'source' => 'global'];
         }
@@ -298,6 +326,20 @@ class BookPurchaseReplenishment
         $stmt->close();
 
         return max(0, (int) ($row['total_qty'] ?? 0));
+    }
+
+    private function settings(): AppSettings
+    {
+        if ($this->appSettings === null) {
+            $this->appSettings = new AppSettings($this->conn);
+        }
+
+        return $this->appSettings;
+    }
+
+    private function getPercentSetting(string $key, int $default): int
+    {
+        return max(0, min(100, (int) $this->settings()->get($key, $default)));
     }
 
     private function resolvePhysicalStock(array $product): int

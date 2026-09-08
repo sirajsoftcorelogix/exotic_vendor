@@ -436,18 +436,22 @@ class DomesticEwbIrnService {
                 $invoiceNo = (string)$invoiceId;
             }
 
+            $transId = trim((string)($ewbData['trans_id'] ?? ''));
             $ewbPayload = [
                 'Irn' => $irn,
                 //'Distance' => $distance,
                 'Distance' => 0,
-                'TransMode' => $transMode,
-                //'VehNo' => 'ka123456',// Hardcoded for testing; replace with actual logic as needed
-                //'VehType' => 'R',// Hardcoded for testing; replace with actual logic as needed
-                'VehNo' => trim((string)($ewbData['veh_no'] ?? '')),
-                'VehType' => trim((string)($ewbData['veh_type'] ?? '')),
-                'TransDocNo' => trim((string)($ewbData['trans_doc_no'] ?? $invoiceNo)),
-                'TransDocDt' => trim((string)($ewbData['trn_doc_dt'] ?? date('d/m/Y'))),
             ];
+            if ($transId === '') {
+                $ewbPayload['TransMode'] = $transMode;
+                $ewbPayload['VehNo'] = trim((string)($ewbData['veh_no'] ?? ''));
+                $ewbPayload['VehType'] = trim((string)($ewbData['veh_type'] ?? ''));
+                $ewbPayload['TransDocNo'] = trim((string)($ewbData['trans_doc_no'] ?? $invoiceNo));
+                $ewbPayload['TransDocDt'] = trim((string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')));
+            } else {
+                $ewbPayload['TransId'] = substr(preg_replace('/\s+/', '', $transId), 0, 15);
+                $ewbPayload['TransName'] = trim((string)($ewbData['trans_name'] ?? ''));
+            }
 
             $ewbResponse = $alankitClient->generateEwb($ewbPayload, $accessToken, $decryptedSek);
             //print_r($ewbResponse);
@@ -464,7 +468,7 @@ class DomesticEwbIrnService {
 
             $errorMessage = null;
             if ($ewbStatus !== 'generated') {
-                $errorMessage = trim((string)($ewbResponse['message'] ?? $ewbResponse['ErrorMessage'] ?? 'EWB regeneration failed'));
+                $errorMessage = trim((string)(json_encode($ewbResponse['ErrorMessage']) ?? 'EWB regeneration failed'));
             }
 
             $this->updateEwbStatus(
@@ -646,6 +650,24 @@ class DomesticEwbIrnService {
         $shippingState = $isBusiness ? trim($customer['shipping_state'] ?? '') : trim($customer['state'] ?? '');
         $shippingPincode = $isBusiness ? (trim($customer['shipping_zipcode'] ?? '') ?: trim($customer['zipcode'])) : '999999';
         $shippingStateCode = $isBusiness ? trim($customer['shipping_state_code']) : trim($customer['state_code']);
+        $ewbDtls = null;
+        if (!empty($ewbData['veh_no']) || !empty($ewbData['trans_id'])) {
+            $ewbDtls = [
+                'Distance' => (int)($ewbData['distance'] ?? 0),
+            ];
+            $transId = trim((string)($ewbData['trans_id'] ?? ''));
+            if ($transId === '') {
+                $ewbDtls['VehNo'] = (string)($ewbData['veh_no'] ?? '');
+                $ewbDtls['VehType'] = (string)($ewbData['veh_type'] ?? 'R');
+                $ewbDtls['TransMode'] = (string)($ewbData['trans_mode'] ?? '1');
+                $ewbDtls['TransDocNo'] = (string)($ewbData['trans_doc_no'] ?? $invoiceNumber);
+                $ewbDtls['TransDocDt'] = (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y'));
+            } else {
+                $ewbDtls['TransId'] = substr(preg_replace('/\s+/', '', $transId), 0, 15);
+                $ewbDtls['TransName'] = (string)($ewbData['trans_name'] ?? '');
+            }
+        }
+
         return [
             'Version' => '1.1',
             'TranDtls' => [
@@ -722,18 +744,7 @@ class DomesticEwbIrnService {
             'PayDtls' => null,
             'RefDtls' => null,
             'AddlDocDtls' => null,
-            'EwbDtls' => !empty($ewbData['veh_no']) && !empty($ewbData['veh_type']) ? [
-                //'TransId' => substr(preg_replace('/\s+/', '', (string)($ewbData['trans_id'] ?? '')), 0, 15),
-                //'TransName' => (string)($ewbData['trans_name'] ?? ''),
-                'Distance' => (int)($ewbData['distance'] ?? 0),
-                'TransDocNo' => (string)$invoiceNumber,
-                'TransDocDt' => (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')),
-                'VehNo' => (string)($ewbData['veh_no'] ?? ''),
-                'VehType' => (string)($ewbData['veh_type'] ?? 'R'),
-                //'VehNo' => 'ka123456', // Hardcoded for testing; replace with actual logic as needed
-                //'VehType' => 'R', // Hardcoded for testing; replace with actual logic as needed
-                'TransMode' => (string)($ewbData['trans_mode'] ?? '1')
-            ] : null
+            'EwbDtls' => $ewbDtls
         ];
     }
     
@@ -741,12 +752,9 @@ class DomesticEwbIrnService {
      * Prepare E-way bill payload
      */
     private function prepareEwbPayload($irn, $ewbData, $invoice, $customer) {
-        return [
+        $payload = [
             'Irn' => $irn,
             'Distance' => (int)($ewbData['distance'] ?? 100),
-            'TransId' => substr(preg_replace('/\s+/', '', (string)($ewbData['trans_id'] ?? '')), 0, 15),
-            'TransName' => (string)($ewbData['trans_name'] ?? 'Transport'),
-            'TrnDocDt' => (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')),
             'DispDtls' => [
                 'Nm' => $customer['first_name'] ?? 'Buyer',
                 'Addr1' => ($customer['shipping_address_line1'] ?? '') . ' ' . ($customer['shipping_address_line2'] ?? ''),
@@ -763,6 +771,19 @@ class DomesticEwbIrnService {
                 'Stcd' => (string)($invoice['seller_state_code'] ?? '')
             ]
         ];
+        $transId = trim((string)($ewbData['trans_id'] ?? ''));
+        if ($transId === '') {
+            $payload['TransMode'] = (string)($ewbData['trans_mode'] ?? '1');
+            $payload['VehNo'] = trim((string)($ewbData['veh_no'] ?? ''));
+            $payload['VehType'] = trim((string)($ewbData['veh_type'] ?? 'R'));
+            $payload['TransDocNo'] = trim((string)($ewbData['trans_doc_no'] ?? ''));
+            $payload['TrnDocDt'] = (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y'));
+        } else {
+            $payload['TransId'] = substr(preg_replace('/\s+/', '', $transId), 0, 15);
+            $payload['TransName'] = (string)($ewbData['trans_name'] ?? 'Transport');
+        }
+
+        return $payload;
     }
     
     /**
@@ -821,6 +842,14 @@ class DomesticEwbIrnService {
      * Update E-way bill status and data
      */
     private function updateEwbStatus($invoiceId, $status, $error = null, $payload = null, $response = null, $ewb = null, $vehNo = null, $vehType = null, $ewbNo = null, $ewbDate = null, $ewbValidTill = null, $genGstin = null, $infoDtls = null) {
+        $transId = '';
+        $transName = '';
+        if (is_array($payload)) {
+            $ewbPayload = is_array($payload['EwbDtls'] ?? null) ? $payload['EwbDtls'] : $payload;
+            $transId = trim((string)($ewbPayload['TransId'] ?? $ewbPayload['trans_id'] ?? ''));
+            $transName = trim((string)($ewbPayload['TransName'] ?? $ewbPayload['trans_name'] ?? ''));
+        }
+
         $query = "UPDATE vp_domestic_ewb_irn
                   SET ewb_status = ?,
                       ewb_error = ?,
@@ -834,6 +863,8 @@ class DomesticEwbIrnService {
                       ewb_valid_till = ?,
                       gen_gstin = ?,
                       info_dtls = ?,
+                      trans_id = ?,
+                      trans_name = ?,
                       ewb_generated_at = NOW()
                   WHERE vp_invoices_id = ?";
         $stmt = $this->db->prepare($query);
@@ -843,7 +874,7 @@ class DomesticEwbIrnService {
         }
         $payloadJson = $payload ? json_encode($payload) : null;
         $responseJson = $response ? json_encode($response) : null;
-        $stmt->bind_param("ssssssssssssi", $status, $error, $payloadJson, $responseJson, $ewb, $vehNo, $vehType, $ewbNo, $ewbDate, $ewbValidTill, $genGstin, $infoDtls, $invoiceId);
+        $stmt->bind_param("ssssssssssssssi", $status, $error, $payloadJson, $responseJson, $ewb, $vehNo, $vehType, $ewbNo, $ewbDate, $ewbValidTill, $genGstin, $infoDtls, $transId, $transName, $invoiceId);
         return $stmt->execute();
     }
 
@@ -857,13 +888,30 @@ class DomesticEwbIrnService {
 
         $this->infoDtlsColumnChecked = true;
         $check = $this->db->query("SHOW COLUMNS FROM vp_domestic_ewb_irn LIKE 'info_dtls'");
-        if ($check && $check->num_rows > 0) {
-            return;
+        if (!$check || $check->num_rows === 0) {
+            $alter = "ALTER TABLE vp_domestic_ewb_irn ADD COLUMN info_dtls LONGTEXT NULL COMMENT 'InfoDtls from Alankit IRN/EWB response' AFTER gen_gstin";
+            if (!$this->db->query($alter)) {
+                error_log("Domestic EWB: Failed to add info_dtls column: " . $this->db->error);
+            }
+        }
+        if ($check) {
+            $check->free();
         }
 
-        $alter = "ALTER TABLE vp_domestic_ewb_irn ADD COLUMN info_dtls LONGTEXT NULL COMMENT 'InfoDtls from Alankit IRN/EWB response' AFTER gen_gstin";
-        if (!$this->db->query($alter)) {
-            error_log("Domestic EWB: Failed to add info_dtls column: " . $this->db->error);
+        $transporterColumns = [
+            'trans_id' => "ALTER TABLE vp_domestic_ewb_irn ADD COLUMN trans_id VARCHAR(20) NULL COMMENT 'Transporter GSTIN/ID for E-way bill' AFTER veh_type",
+            'trans_name' => "ALTER TABLE vp_domestic_ewb_irn ADD COLUMN trans_name VARCHAR(120) NULL COMMENT 'Transporter name for E-way bill' AFTER trans_id",
+        ];
+        foreach ($transporterColumns as $column => $alterTransporter) {
+            $columnCheck = $this->db->query("SHOW COLUMNS FROM vp_domestic_ewb_irn LIKE '" . $column . "'");
+            if (!$columnCheck || $columnCheck->num_rows === 0) {
+                if (!$this->db->query($alterTransporter)) {
+                    error_log("Domestic EWB: Failed to add {$column} column: " . $this->db->error);
+                }
+            }
+            if ($columnCheck) {
+                $columnCheck->free();
+            }
         }
     }
 

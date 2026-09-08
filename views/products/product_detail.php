@@ -711,6 +711,7 @@
           $replenishmentLookbackMonths = (int)($bookReplenishment['lookback_months'] ?? 0);
           $replenishmentLookbackSource = (string)($bookReplenishment['lookback_source'] ?? '');
           $replenishmentStockThreshold = (int)($bookReplenishment['stock_threshold'] ?? 0);
+          $replenishmentMinStockPercent = (int)($bookReplenishment['min_stock_percent'] ?? 50);
           $replenishmentBuyQty = (int)($bookReplenishment['recommended_buy_qty'] ?? 0);
           $replenishmentReason = (string)($bookReplenishment['reason'] ?? '');
           $replenishmentBranch = (string)($bookReplenishment['branch'] ?? 'none');
@@ -744,7 +745,7 @@
           </div>
 
           <?php if ($replenishmentBranch === 'demand_based'): ?>
-          <div class="<?php echo $invCard; ?> border-rose-100 bg-rose-50/80" title="Replenish when physical stock is at or below this level (25% of lookback sales)">
+          <div class="<?php echo $invCard; ?> border-rose-100 bg-rose-50/80" title="Minimum stock level (<?php echo htmlspecialchars((string)$replenishmentMinStockPercent, ENT_QUOTES, 'UTF-8'); ?>% of lookback sales)">
             <div class="<?php echo $invBody; ?>">
               <p class="<?php echo $invLbl; ?>">Low Stock Threshold</p>
               <p class="<?php echo $invVal; ?> text-rose-700"><?php echo htmlspecialchars((string)$replenishmentStockThreshold, ENT_QUOTES, 'UTF-8'); ?></p>

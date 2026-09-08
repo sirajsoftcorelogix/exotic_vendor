@@ -231,6 +231,14 @@ class InvoiceRequestBuilder
         }
 
         return [
+            'transport_selection' => trim((string)($post['transport_selection'] ?? 'mode')),
+            'trans_mode' => trim((string)($post['trans_mode'] ?? '')),
+            'veh_no' => trim((string)($post['veh_no'] ?? '')),
+            'veh_type' => trim((string)($post['veh_type'] ?? '')),
+            'trans_doc_no' => trim((string)($post['trans_doc_no'] ?? '')),
+            'trans_doc_dt' => trim((string)($post['trans_doc_dt'] ?? '')),
+            'trans_id' => strtoupper(trim((string)($post['trans_id'] ?? ''))),
+            'trans_name' => trim((string)($post['trans_name'] ?? '')),
             'pre_carriage_by' => trim((string)($post['pre_carriage_by'] ?? '')),
             'port_of_loading' => trim((string)($post['port_of_loading'] ?? '')),
             'port_of_discharge' => trim((string)($post['port_of_discharge'] ?? '')),

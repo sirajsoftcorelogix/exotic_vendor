@@ -474,13 +474,9 @@ return base64_encode($encryptedData);
      * @return array Formatted payload matching Alankit specifications
      */
     public function prepareEwbPayload($ewbData) {
-        return [
+        $payload = [
             'Irn' => $ewbData['irn'] ?? '',
             'Distance' => (int)($ewbData['distance'] ?? 100),
-            //'TransMode' => (string)($ewbData['trans_mode'] ?? '1'),
-            'TransId' => substr(preg_replace('/\s+/', '', (string)($ewbData['trans_id'] ?? '')), 0, 15),
-            'TransName' => (string)($ewbData['trans_name'] ?? 'trans name'),
-            'TrnDocDt' => (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')),            
             'DispDtls' => [
                 'Nm' => (string)($ewbData['Nm'] ?? 'ABC company pvt ltd'),
                 'Addr1' => (string)($ewbData['Addr1'] ?? ''),
@@ -498,11 +494,21 @@ return base64_encode($encryptedData);
                 'Pin' => (int)($ewbData['Pin'] ?? 0),
                 'Stcd' => (string)($ewbData['Stcd'] ?? '')
             ]
-            
-            //'TrnDocNo' => (string)($ewbData['trn_doc_no'] ?? ''),            
-            //'VehNo' => (string)($ewbData['veh_no'] ?? 'KA12ER1234'),
-            //'VehType' => (string)($ewbData['veh_type'] ?? 'R')
         ];
+
+        $transId = trim((string)($ewbData['trans_id'] ?? ''));
+        if ($transId === '') {
+            $payload['TransMode'] = (string)($ewbData['trans_mode'] ?? '1');
+            $payload['VehNo'] = trim((string)($ewbData['veh_no'] ?? ''));
+            $payload['VehType'] = trim((string)($ewbData['veh_type'] ?? 'R'));
+            $payload['TrnDocNo'] = trim((string)($ewbData['trn_doc_no'] ?? ''));
+            $payload['TrnDocDt'] = (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y'));
+        } else {
+            $payload['TransId'] = substr(preg_replace('/\s+/', '', $transId), 0, 15);
+            $payload['TransName'] = (string)($ewbData['trans_name'] ?? 'trans name');
+        }
+
+        return $payload;
     }
 
     /**

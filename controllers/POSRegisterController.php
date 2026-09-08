@@ -1,6 +1,7 @@
 <?php
 require_once 'models/pos/pos.php';
 require_once 'models/user/user.php';
+require_once 'models/courier/CourierPartner.php';
 require_once dirname(__DIR__) . '/helpers/pos_payment_receipt.php';
 require_once dirname(__DIR__) . '/integrations/exotic/Clients/RetailApiClient.php';
 require_once dirname(__DIR__) . '/integrations/exotic/Support/CartResponseParser.php';
@@ -780,8 +781,8 @@ class POSRegisterController
             // Build E-way bill data based on transport mode
             $transportMode = trim((string)($payload['ewb_veh_type'] ?? '1'));
             $ewbData = [
-                // 'trans_id' => '',
-                // 'trans_name' => '',
+                'trans_id' => trim((string)($payload['ewb_transporter_id'] ?? '')),
+                'trans_name' => trim((string)($payload['ewb_transporter_name'] ?? '')),
                 'distance' => 0,
                 'trans_mode' => $transportMode, // 1=Road, 2=Rail, 3=Air, 4=Ship, 5=Road cum Ship
             ];
@@ -828,6 +829,16 @@ class POSRegisterController
                 $ewbData['veh_type'] = 'R';
                 $ewbData['trans_doc_no'] = date('YmdHis');
                 $ewbData['trn_doc_dt'] = date('d/m/Y');
+            }
+
+            if (trim((string)($ewbData['trans_id'] ?? '')) !== '') {
+                unset(
+                    $ewbData['trans_mode'],
+                    $ewbData['veh_no'],
+                    $ewbData['veh_type'],
+                    $ewbData['trans_doc_no'],
+                    $ewbData['trn_doc_dt']
+                );
             }
 
             // Load and call DomesticEwbIrnService
@@ -1164,6 +1175,11 @@ class POSRegisterController
 
         $posStorePincode = $conn instanceof mysqli ? $this->resolveStorePincodeForPos($conn) : '';
 
+        $ewayTransporters = [];
+        if ($conn instanceof mysqli) {
+            $ewayTransporters = (new CourierPartner($conn))->getEwayTransporters();
+        }
+
         $countryPhoneCodes = [];
         if ($conn instanceof mysqli) {
             $phoneRes = $conn->query(
@@ -1186,6 +1202,7 @@ class POSRegisterController
             'categories' => $categoryData,
             'warehouse_name' => $warehouseName,
             'pos_store_pincode' => $posStorePincode,
+            'eway_transporters' => $ewayTransporters,
             // Minimal placeholder until new cart; view must not depend on Exotic retrieve shape.
             'cartData' => [
                 'items' => [],
@@ -5191,6 +5208,13 @@ class POSRegisterController
 
         $trackingRow = $this->fetchIrnEwbTrackingRowByInvoiceId($conn, $invoiceId);
         if (is_array($trackingRow)) {
+            $transId = trim((string)($trackingRow['trans_id'] ?? ''));
+            $transName = trim((string)($trackingRow['trans_name'] ?? ''));
+            if ($transId !== '') {
+                $regenPayload['ewb_transporter_id'] = $transId;
+                $regenPayload['ewb_transporter_name'] = $transName;
+            }
+
             $vehNo = trim((string)($trackingRow['veh_no'] ?? ''));
             $vehType = strtoupper(trim((string)($trackingRow['veh_type'] ?? '')));
 
