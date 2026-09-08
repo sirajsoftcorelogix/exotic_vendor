@@ -318,16 +318,20 @@ class PosInvoiceController
         $transId = strtoupper(trim((string) ($payload['trans_id'] ?? '')));
         $transName = trim((string) ($payload['trans_name'] ?? ''));
 
-        return [
+        $ewbData = [
             'distance' => max(1, (int) ($payload['distance'] ?? 100)),
-            'trans_mode' => $mode,
-            'veh_no' => $vehNo,
-            'veh_type' => $vehType,
             'trans_id' => $transId,
             'trans_name' => $transName,
-            'trans_doc_no' => trim((string) ($payload['trans_doc_no'] ?? $invoiceRef)),
-            'trn_doc_dt' => trim((string) ($payload['trans_doc_dt'] ?? date('d/m/Y'))),
         ];
+        if ($transId === '') {
+            $ewbData['trans_mode'] = $mode;
+            $ewbData['veh_no'] = $vehNo;
+            $ewbData['veh_type'] = $vehType;
+            $ewbData['trans_doc_no'] = trim((string) ($payload['trans_doc_no'] ?? $invoiceRef));
+            $ewbData['trn_doc_dt'] = trim((string) ($payload['trans_doc_dt'] ?? date('d/m/Y')));
+        }
+
+        return $ewbData;
     }
 
     /** @return array<string,mixed> */

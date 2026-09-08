@@ -831,6 +831,16 @@ class POSRegisterController
                 $ewbData['trn_doc_dt'] = date('d/m/Y');
             }
 
+            if (trim((string)($ewbData['trans_id'] ?? '')) !== '') {
+                unset(
+                    $ewbData['trans_mode'],
+                    $ewbData['veh_no'],
+                    $ewbData['veh_type'],
+                    $ewbData['trans_doc_no'],
+                    $ewbData['trn_doc_dt']
+                );
+            }
+
             // Load and call DomesticEwbIrnService
             require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
             
@@ -5198,6 +5208,13 @@ class POSRegisterController
 
         $trackingRow = $this->fetchIrnEwbTrackingRowByInvoiceId($conn, $invoiceId);
         if (is_array($trackingRow)) {
+            $transId = trim((string)($trackingRow['trans_id'] ?? ''));
+            $transName = trim((string)($trackingRow['trans_name'] ?? ''));
+            if ($transId !== '') {
+                $regenPayload['ewb_transporter_id'] = $transId;
+                $regenPayload['ewb_transporter_name'] = $transName;
+            }
+
             $vehNo = trim((string)($trackingRow['veh_no'] ?? ''));
             $vehType = strtoupper(trim((string)($trackingRow['veh_type'] ?? '')));
 

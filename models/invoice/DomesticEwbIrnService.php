@@ -436,19 +436,20 @@ class DomesticEwbIrnService {
                 $invoiceNo = (string)$invoiceId;
             }
 
+            $transId = trim((string)($ewbData['trans_id'] ?? ''));
             $ewbPayload = [
                 'Irn' => $irn,
                 //'Distance' => $distance,
                 'Distance' => 0,
-                'TransDocNo' => trim((string)($ewbData['trans_doc_no'] ?? $invoiceNo)),
-                'TransDocDt' => trim((string)($ewbData['trn_doc_dt'] ?? date('d/m/Y'))),
             ];
-            if (trim((string)($ewbData['trans_id'] ?? '')) === '') {
+            if ($transId === '') {
                 $ewbPayload['TransMode'] = $transMode;
                 $ewbPayload['VehNo'] = trim((string)($ewbData['veh_no'] ?? ''));
                 $ewbPayload['VehType'] = trim((string)($ewbData['veh_type'] ?? ''));
+                $ewbPayload['TransDocNo'] = trim((string)($ewbData['trans_doc_no'] ?? $invoiceNo));
+                $ewbPayload['TransDocDt'] = trim((string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')));
             } else {
-                $ewbPayload['TransId'] = substr(preg_replace('/\s+/', '', (string)$ewbData['trans_id']), 0, 15);
+                $ewbPayload['TransId'] = substr(preg_replace('/\s+/', '', $transId), 0, 15);
                 $ewbPayload['TransName'] = trim((string)($ewbData['trans_name'] ?? ''));
             }
 
@@ -653,15 +654,16 @@ class DomesticEwbIrnService {
         if (!empty($ewbData['veh_no']) || !empty($ewbData['trans_id'])) {
             $ewbDtls = [
                 'Distance' => (int)($ewbData['distance'] ?? 0),
-                'TransDocNo' => (string)($ewbData['trans_doc_no'] ?? $invoiceNumber),
-                'TransDocDt' => (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')),
             ];
-            if (trim((string)($ewbData['trans_id'] ?? '')) === '') {
+            $transId = trim((string)($ewbData['trans_id'] ?? ''));
+            if ($transId === '') {
                 $ewbDtls['VehNo'] = (string)($ewbData['veh_no'] ?? '');
                 $ewbDtls['VehType'] = (string)($ewbData['veh_type'] ?? 'R');
                 $ewbDtls['TransMode'] = (string)($ewbData['trans_mode'] ?? '1');
+                $ewbDtls['TransDocNo'] = (string)($ewbData['trans_doc_no'] ?? $invoiceNumber);
+                $ewbDtls['TransDocDt'] = (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y'));
             } else {
-                $ewbDtls['TransId'] = substr(preg_replace('/\s+/', '', (string)$ewbData['trans_id']), 0, 15);
+                $ewbDtls['TransId'] = substr(preg_replace('/\s+/', '', $transId), 0, 15);
                 $ewbDtls['TransName'] = (string)($ewbData['trans_name'] ?? '');
             }
         }
@@ -753,8 +755,6 @@ class DomesticEwbIrnService {
         $payload = [
             'Irn' => $irn,
             'Distance' => (int)($ewbData['distance'] ?? 100),
-            'TransDocNo' => trim((string)($ewbData['trans_doc_no'] ?? '')),
-            'TrnDocDt' => (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')),
             'DispDtls' => [
                 'Nm' => $customer['first_name'] ?? 'Buyer',
                 'Addr1' => ($customer['shipping_address_line1'] ?? '') . ' ' . ($customer['shipping_address_line2'] ?? ''),
@@ -771,12 +771,15 @@ class DomesticEwbIrnService {
                 'Stcd' => (string)($invoice['seller_state_code'] ?? '')
             ]
         ];
-        if (trim((string)($ewbData['trans_id'] ?? '')) === '') {
+        $transId = trim((string)($ewbData['trans_id'] ?? ''));
+        if ($transId === '') {
             $payload['TransMode'] = (string)($ewbData['trans_mode'] ?? '1');
             $payload['VehNo'] = trim((string)($ewbData['veh_no'] ?? ''));
             $payload['VehType'] = trim((string)($ewbData['veh_type'] ?? 'R'));
+            $payload['TransDocNo'] = trim((string)($ewbData['trans_doc_no'] ?? ''));
+            $payload['TrnDocDt'] = (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y'));
         } else {
-            $payload['TransId'] = substr(preg_replace('/\s+/', '', (string)$ewbData['trans_id']), 0, 15);
+            $payload['TransId'] = substr(preg_replace('/\s+/', '', $transId), 0, 15);
             $payload['TransName'] = (string)($ewbData['trans_name'] ?? 'Transport');
         }
 
