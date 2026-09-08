@@ -150,10 +150,10 @@ $existingTransName = $record['trans_name'] ?? '';
             </select>
           </div>
           <?php endif; ?>
-          <div>
+          <!-- <div>
             <label class="block font-semibold text-slate-700 mb-1">Distance in KM </label>
             <input type="number" name="distance" value="0" min="1" max="4000"  class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono font-semibold text-slate-800 focus:border-emerald-500 focus:outline-none" />
-          </div>
+          </div> -->
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Transport Doc / LR No (TransDocNo)</label>
             <input type="text" name="trans_doc_no" value="<?= $h('LR-' . rand(10000, 99999)) ?>" class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
