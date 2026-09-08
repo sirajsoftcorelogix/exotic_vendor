@@ -2,6 +2,7 @@
 require_once 'models/inbounding/Inbounding.php';
 require_once 'models/vendor/VendorReferenceCache.php';
 require_once 'models/account_group/AccountGroup.php';
+require_once 'models/size/SizeMaster.php';
 require_once 'controllers/ProductsController.php';
 require_once __DIR__ . '/../helpers/inbound_profiler.php';
 require_once __DIR__ . '/../helpers/inbound_filter_dropdown_cache.php';
@@ -376,6 +377,19 @@ class InboundingController {
         ]);
 
         $data['item_group_slug'] = $itemGroupSlug;
+
+        $sizeModel = new SizeMaster($conn);
+        $sizeOptionsByGroup = $sizeModel->getActiveGroupedByItemGroup();
+        $sizeSlug = strtolower(trim($itemGroupSlug));
+        $data['size_options_by_group'] = $sizeOptionsByGroup;
+        $data['size_options'] = ($sizeSlug !== '' && !empty($sizeOptionsByGroup[$sizeSlug]))
+            ? $sizeOptionsByGroup[$sizeSlug]
+            : [];
+        inbound_profiler_step($prof, 'getSizeMaster', [
+            'item_group_slug' => $itemGroupSlug,
+            'size_count' => count($data['size_options']),
+        ]);
+
         $data['images'] = $inboundingModel->getitem_imgs($id);
         inbound_profiler_step($prof, 'getitem_imgs', [
             'count' => count($data['images'] ?? []),
@@ -519,12 +533,24 @@ class InboundingController {
 
     public function getform3() {
         is_login();
-        global $inboundingModel;
+        global $inboundingModel, $conn;
         $id = (int) ($_GET['id'] ?? 0);
 
         // Do not create a DB row on page load — record is created on submitStep3 only.
         $data = $inboundingModel->getform2data($id > 0 ? $id : 0);
         $data['form2']['gecolormaps'] = $this->gecolormaps();
+
+        $groupName = trim((string) ($data['form2']['group_name'] ?? ''));
+        $itemGroupSlug = $inboundingModel->resolveItemGroupSlugFromGroupName($groupName);
+        $sizeModel = new SizeMaster($conn);
+        $sizeOptionsByGroup = $sizeModel->getActiveGroupedByItemGroup();
+        $sizeSlug = strtolower(trim($itemGroupSlug));
+        $data['item_group_slug'] = $itemGroupSlug;
+        $data['size_options_by_group'] = $sizeOptionsByGroup;
+        $data['size_options'] = ($sizeSlug !== '' && !empty($sizeOptionsByGroup[$sizeSlug]))
+            ? $sizeOptionsByGroup[$sizeSlug]
+            : [];
+
         renderTemplateClean('views/inbounding/form3.php', $data, 'form3 inbounding');
     }
 
