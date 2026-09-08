@@ -780,8 +780,8 @@ class POSRegisterController
             // Build E-way bill data based on transport mode
             $transportMode = trim((string)($payload['ewb_veh_type'] ?? '1'));
             $ewbData = [
-                // 'trans_id' => '',
-                // 'trans_name' => '',
+                'trans_id' => trim((string)($payload['ewb_transporter_id'] ?? '')),
+                'trans_name' => trim((string)($payload['ewb_transporter_name'] ?? '')),
                 'distance' => 0,
                 'trans_mode' => $transportMode, // 1=Road, 2=Rail, 3=Air, 4=Ship, 5=Road cum Ship
             ];

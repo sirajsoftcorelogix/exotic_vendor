@@ -702,8 +702,19 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
           <label for="generate_ewb_for_delivery" class="text-xs text-slate-600 cursor-pointer font-medium">Generate IRN and E-way bill for this shipment</label>
         </div>
         <div id="ewayBillFields" class="hidden space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div class="flex flex-wrap gap-4" role="radiogroup" aria-label="E-way bill transport selection">
+            <label class="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-700">
+              <input type="radio" name="eway_transport_selection" value="mode" id="ewayTransportModeRadio" class="h-4 w-4 border-slate-300 text-orange-600 focus:ring-orange-500" checked>
+              <span>Transport Mode</span>
+            </label>
+            <label class="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-700">
+              <input type="radio" name="eway_transport_selection" value="id" id="ewayTransportIdRadio" class="h-4 w-4 border-slate-300 text-orange-600 focus:ring-orange-500">
+              <span>Transport ID</span>
+            </label>
+          </div>
+
           <!-- Transport Mode Selection -->
-          <div>
+          <div id="transportModeSelection">
             <label for="delivery_veh_type" class="text-xs text-slate-600 font-medium">Transport Mode <span class="text-red-600">*</span></label>
             <select id="delivery_veh_type" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
               <option value="">-- Select transport mode --</option>
@@ -712,6 +723,17 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
               <option value="3">(3) Air</option>
               <option value="4">(4) Ship</option>
               <!-- <option value="5">(5) Road cum Ship</option> -->
+            </select>
+          </div>
+
+          <!-- Transporter ID Selection -->
+          <div id="transportIdSelection" class="hidden">
+            <label for="delivery_transporter_id" class="text-xs text-slate-600 font-medium">Transport ID <span class="text-red-600">*</span></label>
+            <select id="delivery_transporter_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+              <option value="">-- Select transport ID --</option>
+              <option value="06AAPCS9575E1ZR" data-transporter-name="DELHIVERY">06AAPCS9575E1ZR - DELHIVERY</option>
+              <option value="07AAECB7131Q1ZC" data-transporter-name="SHIPROCKET">07AAECB7131Q1ZC - SHIPROCKET</option>
+              <option value="27AAACB0446L1ZS" data-transporter-name="BLUEDART">27AAACB0446L1ZS - BLUEDART</option>
             </select>
           </div>
           
@@ -1855,8 +1877,10 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
         if (generateEwbCheckbox) {
           generateEwbCheckbox.checked = false;
           document.getElementById("ewayBillFields").classList.add("hidden");
+          document.getElementById("ewayTransportModeRadio").checked = true;
           document.getElementById("delivery_veh_no").value = "";
           document.getElementById("delivery_veh_type").value = "";
+          document.getElementById("delivery_transporter_id").value = "";
           document.getElementById("delivery_trans_doc_no").value = "";
           document.getElementById("delivery_trans_doc_date").value = "";
           document.getElementById("delivery_ship_veh_no").value = "";
@@ -1884,6 +1908,24 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
     roadFields.classList.toggle("hidden", !isRoad);
     railAirFields.classList.toggle("hidden", !isRailOrAir);
     shipFields.classList.toggle("hidden", !isShip);
+  }
+
+  function syncEwayTransportSelection() {
+    var modeRadio = document.getElementById("ewayTransportModeRadio");
+    var modeSelection = document.getElementById("transportModeSelection");
+    var idSelection = document.getElementById("transportIdSelection");
+    if (!modeRadio || !modeSelection || !idSelection) return;
+
+    var useMode = modeRadio.checked;
+    modeSelection.classList.toggle("hidden", !useMode);
+    idSelection.classList.toggle("hidden", useMode);
+    if (useMode) {
+      syncTransportModeFields();
+    } else {
+      document.getElementById("roadTransportFields").classList.add("hidden");
+      document.getElementById("railAirTransportFields").classList.add("hidden");
+      document.getElementById("shipTransportFields").classList.add("hidden");
+    }
   }
 
   function getSelectedPosDeliveryStatus() {
@@ -3411,12 +3453,14 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       generateEwbCheckbox.addEventListener("change", function() {
         if (this.checked) {
           ewayBillFields.classList.remove("hidden");
-          syncTransportModeFields();
+          syncEwayTransportSelection();
         } else {
           ewayBillFields.classList.add("hidden");
           // Reset all fields when unchecked
+          document.getElementById("ewayTransportModeRadio").checked = true;
           document.getElementById("delivery_veh_no").value = "";
           document.getElementById("delivery_veh_type").value = "";
+          document.getElementById("delivery_transporter_id").value = "";
           document.getElementById("delivery_trans_doc_no").value = "";
           document.getElementById("delivery_trans_doc_date").value = "";
           document.getElementById("delivery_ship_veh_no").value = "";
@@ -3434,6 +3478,12 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
       });
     }
 
+    document.querySelectorAll('input[name="eway_transport_selection"]').forEach(function(el) {
+      el.addEventListener("change", function() {
+        syncEwayTransportSelection();
+      });
+    });
+
     var deliveryStatusSubmitBtn = document.getElementById("deliveryStatusSubmitBtn");
     if (deliveryStatusSubmitBtn) {
       deliveryStatusSubmitBtn.addEventListener("click", function() {
@@ -3450,9 +3500,22 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
         // Validate E-way bill fields if checkbox is checked
         var generateEwb = document.getElementById("generate_ewb_for_delivery") && document.getElementById("generate_ewb_for_delivery").checked;
         if (generateEwb) {
+          var transportSelection = document.querySelector('input[name="eway_transport_selection"]:checked');
+          var transportSelectionValue = transportSelection ? transportSelection.value : "mode";
+          var transporterId = (document.getElementById("delivery_transporter_id").value || "").trim();
+
+          if (transportSelectionValue === "id" && !transporterId) {
+            if (err) {
+              err.textContent = "⚠ Please select a transport ID.";
+              err.classList.remove("hidden");
+            }
+            document.getElementById("delivery_transporter_id").focus();
+            return;
+          }
+
           var transportMode = (document.getElementById("delivery_veh_type").value || "").trim();
           
-          if (!transportMode) {
+          if (transportSelectionValue === "mode" && !transportMode) {
             if (err) {
               err.textContent = "⚠ Please select a transport mode.";
               err.classList.remove("hidden");
@@ -3462,7 +3525,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
           }
 
           // Validate Road mode fields (required)
-          if (transportMode === "1") {
+          if (transportSelectionValue === "mode" && transportMode === "1") {
             var vehNo = (document.getElementById("delivery_veh_no").value || "").trim();
             if (!vehNo) {
               if (err) {
@@ -3474,7 +3537,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
             }
           }
           // Validate Rail/Air mode fields (required)
-          else if (transportMode === "2" || transportMode === "3") {
+          else if (transportSelectionValue === "mode" && (transportMode === "2" || transportMode === "3")) {
             var transModeLabel = transportMode === "2" ? "Rail" : "Air";
             var transDocNo = (document.getElementById("delivery_trans_doc_no").value || "").trim();
             var transDocDate = (document.getElementById("delivery_trans_doc_date").value || "").trim();
@@ -3498,7 +3561,7 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
             }
           }
           // Validate Ship/Road cum Ship mode fields (flexible - at least one set required)
-          else if (transportMode === "4" || transportMode === "5") {
+          else if (transportSelectionValue === "mode" && (transportMode === "4" || transportMode === "5")) {
             var shipVehNo = (document.getElementById("delivery_ship_veh_no").value || "").trim();
             var shipTransDocNo = (document.getElementById("delivery_ship_trans_doc_no").value || "").trim();
             var shipTransDocDate = (document.getElementById("delivery_ship_trans_doc_date").value || "").trim();
@@ -3538,7 +3601,14 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
         // Add E-way bill data if checked
         if (generateEwb) {
           payload.generate_ewb = "1";
-          payload.ewb_veh_type = document.getElementById("delivery_veh_type").value;
+          var selectedTransportType = document.querySelector('input[name="eway_transport_selection"]:checked');
+          var useTransporterId = selectedTransportType && selectedTransportType.value === "id";
+          payload.ewb_veh_type = useTransporterId ? "1" : document.getElementById("delivery_veh_type").value;
+          if (useTransporterId) {
+            var transporterOption = document.getElementById("delivery_transporter_id").selectedOptions[0];
+            payload.ewb_transporter_id = document.getElementById("delivery_transporter_id").value;
+            payload.ewb_transporter_name = transporterOption ? (transporterOption.dataset.transporterName || "Transport") : "Transport";
+          }
           
           // Road mode: vehicle number
           if (payload.ewb_veh_type === "1") {
