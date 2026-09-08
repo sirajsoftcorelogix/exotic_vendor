@@ -440,16 +440,17 @@ class DomesticEwbIrnService {
                 'Irn' => $irn,
                 //'Distance' => $distance,
                 'Distance' => 0,
-                'TransMode' => $transMode,
-                'TransId' => substr(preg_replace('/\s+/', '', (string)($ewbData['trans_id'] ?? '')), 0, 15),
-                'TransName' => trim((string)($ewbData['trans_name'] ?? '')),
-                //'VehNo' => 'ka123456',// Hardcoded for testing; replace with actual logic as needed
-                //'VehType' => 'R',// Hardcoded for testing; replace with actual logic as needed
-                'VehNo' => trim((string)($ewbData['veh_no'] ?? '')),
-                'VehType' => trim((string)($ewbData['veh_type'] ?? '')),
                 'TransDocNo' => trim((string)($ewbData['trans_doc_no'] ?? $invoiceNo)),
                 'TransDocDt' => trim((string)($ewbData['trn_doc_dt'] ?? date('d/m/Y'))),
             ];
+            if (trim((string)($ewbData['trans_id'] ?? '')) === '') {
+                $ewbPayload['TransMode'] = $transMode;
+                $ewbPayload['VehNo'] = trim((string)($ewbData['veh_no'] ?? ''));
+                $ewbPayload['VehType'] = trim((string)($ewbData['veh_type'] ?? ''));
+            } else {
+                $ewbPayload['TransId'] = substr(preg_replace('/\s+/', '', (string)$ewbData['trans_id']), 0, 15);
+                $ewbPayload['TransName'] = trim((string)($ewbData['trans_name'] ?? ''));
+            }
 
             $ewbResponse = $alankitClient->generateEwb($ewbPayload, $accessToken, $decryptedSek);
             //print_r($ewbResponse);
@@ -648,6 +649,23 @@ class DomesticEwbIrnService {
         $shippingState = $isBusiness ? trim($customer['shipping_state'] ?? '') : trim($customer['state'] ?? '');
         $shippingPincode = $isBusiness ? (trim($customer['shipping_zipcode'] ?? '') ?: trim($customer['zipcode'])) : '999999';
         $shippingStateCode = $isBusiness ? trim($customer['shipping_state_code']) : trim($customer['state_code']);
+        $ewbDtls = null;
+        if (!empty($ewbData['veh_no']) || !empty($ewbData['trans_id'])) {
+            $ewbDtls = [
+                'Distance' => (int)($ewbData['distance'] ?? 0),
+                'TransDocNo' => (string)($ewbData['trans_doc_no'] ?? $invoiceNumber),
+                'TransDocDt' => (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')),
+            ];
+            if (trim((string)($ewbData['trans_id'] ?? '')) === '') {
+                $ewbDtls['VehNo'] = (string)($ewbData['veh_no'] ?? '');
+                $ewbDtls['VehType'] = (string)($ewbData['veh_type'] ?? 'R');
+                $ewbDtls['TransMode'] = (string)($ewbData['trans_mode'] ?? '1');
+            } else {
+                $ewbDtls['TransId'] = substr(preg_replace('/\s+/', '', (string)$ewbData['trans_id']), 0, 15);
+                $ewbDtls['TransName'] = (string)($ewbData['trans_name'] ?? '');
+            }
+        }
+
         return [
             'Version' => '1.1',
             'TranDtls' => [
@@ -724,16 +742,7 @@ class DomesticEwbIrnService {
             'PayDtls' => null,
             'RefDtls' => null,
             'AddlDocDtls' => null,
-            'EwbDtls' => (!empty($ewbData['veh_no']) || !empty($ewbData['trans_id'])) ? [
-                'Distance' => (int)($ewbData['distance'] ?? 0),
-                'TransDocNo' => (string)($ewbData['trans_doc_no'] ?? $invoiceNumber),
-                'TransDocDt' => (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')),
-                'VehNo' => (string)($ewbData['veh_no'] ?? ''),
-                'VehType' => (string)($ewbData['veh_type'] ?? 'R'),
-                'TransMode' => (string)($ewbData['trans_mode'] ?? '1'),
-                'TransId' => substr(preg_replace('/\s+/', '', (string)($ewbData['trans_id'] ?? '')), 0, 15),
-                'TransName' => (string)($ewbData['trans_name'] ?? '')
-            ] : null
+            'EwbDtls' => $ewbDtls
         ];
     }
     
@@ -741,14 +750,9 @@ class DomesticEwbIrnService {
      * Prepare E-way bill payload
      */
     private function prepareEwbPayload($irn, $ewbData, $invoice, $customer) {
-        return [
+        $payload = [
             'Irn' => $irn,
             'Distance' => (int)($ewbData['distance'] ?? 100),
-            'TransId' => substr(preg_replace('/\s+/', '', (string)($ewbData['trans_id'] ?? '')), 0, 15),
-            'TransName' => (string)($ewbData['trans_name'] ?? 'Transport'),
-            'TransMode' => (string)($ewbData['trans_mode'] ?? '1'),
-            'VehNo' => trim((string)($ewbData['veh_no'] ?? '')),
-            'VehType' => trim((string)($ewbData['veh_type'] ?? 'R')),
             'TransDocNo' => trim((string)($ewbData['trans_doc_no'] ?? '')),
             'TrnDocDt' => (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')),
             'DispDtls' => [
@@ -767,6 +771,16 @@ class DomesticEwbIrnService {
                 'Stcd' => (string)($invoice['seller_state_code'] ?? '')
             ]
         ];
+        if (trim((string)($ewbData['trans_id'] ?? '')) === '') {
+            $payload['TransMode'] = (string)($ewbData['trans_mode'] ?? '1');
+            $payload['VehNo'] = trim((string)($ewbData['veh_no'] ?? ''));
+            $payload['VehType'] = trim((string)($ewbData['veh_type'] ?? 'R'));
+        } else {
+            $payload['TransId'] = substr(preg_replace('/\s+/', '', (string)$ewbData['trans_id']), 0, 15);
+            $payload['TransName'] = (string)($ewbData['trans_name'] ?? 'Transport');
+        }
+
+        return $payload;
     }
     
     /**
