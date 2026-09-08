@@ -464,7 +464,7 @@ class DomesticEwbIrnService {
 
             $errorMessage = null;
             if ($ewbStatus !== 'generated') {
-                $errorMessage = trim((string)(json_decode(json_encode($ewbResponse['ErrorMessage']), true)?? 'EWB regeneration failed'));
+                $errorMessage = trim((string)(json_encode($ewbResponse['ErrorMessage']) ?? 'EWB regeneration failed'));
             }
 
             $this->updateEwbStatus(
