@@ -1560,9 +1560,6 @@ switch ($page) {
             case 'fetchAccountGroups':
                 $controller->fetchAccountGroupsAjax();
                 break;
-            case 'fetchSizes':
-                $controller->fetchSizesAjax();
-                break;
             case 'printInboundLabel':
                 $controller->printInboundLabel();
                 break;
