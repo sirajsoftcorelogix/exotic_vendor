@@ -559,7 +559,7 @@ class PosInvoiceController
         $irnStatus = is_array($tracking) ? strtolower(trim((string) ($tracking['irn_status'] ?? ''))) : '';
 
         if ($irn !== '' && $irnStatus === 'generated') {
-            //echo 'ewb regeneration requested for invoice #' . $invoiceId . ' with IRN ' . $irn . PHP_EOL;
+            echo 'ewb regeneration requested for invoice #' . $invoiceId . ' with IRN ' . $irn . PHP_EOL;
             $result = $service->regenerateEwbWithIrn($invoiceId, $irn, $invoice, $runtime['order_info'], $ewbData);
             $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
             $ok = !empty($result['status']) || strtolower(trim((string) ($latest['ewb_status'] ?? ''))) === 'generated';
