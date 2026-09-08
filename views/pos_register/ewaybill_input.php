@@ -128,6 +128,7 @@ $existingTransName = $record['trans_name'] ?? '';
           2. Transport &amp; Vehicle Information
         </h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+          <?php if (trim((string)$existingTransId) === ''): ?>
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Transport Mode</label>
             <select name="trans_mode" class="w-full h-9 rounded-lg border border-slate-300 px-3 bg-slate-50 font-medium text-slate-800 focus:bg-white focus:border-emerald-500 focus:outline-none">
@@ -148,9 +149,10 @@ $existingTransName = $record['trans_name'] ?? '';
               <option value="O">O - Over Dimensional Cargo (ODC)</option>
             </select>
           </div>
+          <?php endif; ?>
           <div>
-            <label class="block font-semibold text-slate-700 mb-1">Distance in KM (Required &gt; 0)</label>
-            <input type="number" name="distance" value="100" min="1" max="4000" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono font-semibold text-slate-800 focus:border-emerald-500 focus:outline-none" />
+            <label class="block font-semibold text-slate-700 mb-1">Distance in KM </label>
+            <input type="number" name="distance" value="0" min="1" max="4000"  class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono font-semibold text-slate-800 focus:border-emerald-500 focus:outline-none" />
           </div>
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Transport Doc / LR No (TransDocNo)</label>
