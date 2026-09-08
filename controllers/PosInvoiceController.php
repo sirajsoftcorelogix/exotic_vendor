@@ -315,15 +315,23 @@ class PosInvoiceController
         $vehNo = trim((string) ($payload['veh_no'] ?? ''));
         $vehTypeRaw = strtoupper(trim((string) ($payload['veh_type'] ?? 'R')));
         $vehType = ($vehTypeRaw === 'O' || $vehTypeRaw === 'ODC') ? 'ODC' : 'R';
+        $transId = strtoupper(trim((string) ($payload['trans_id'] ?? '')));
+        $transName = trim((string) ($payload['trans_name'] ?? ''));
 
-        return [
+        $ewbData = [
             'distance' => max(1, (int) ($payload['distance'] ?? 100)),
-            'trans_mode' => $mode,
-            'veh_no' => $vehNo,
-            'veh_type' => $vehType,
-            'trans_doc_no' => trim((string) ($payload['trans_doc_no'] ?? $invoiceRef)),
-            'trn_doc_dt' => trim((string) ($payload['trans_doc_dt'] ?? date('d/m/Y'))),
+            'trans_id' => $transId,
+            'trans_name' => $transName,
         ];
+        if ($transId === '') {
+            $ewbData['trans_mode'] = $mode;
+            $ewbData['veh_no'] = $vehNo;
+            $ewbData['veh_type'] = $vehType;
+            $ewbData['trans_doc_no'] = trim((string) ($payload['trans_doc_no'] ?? $invoiceRef));
+            $ewbData['trn_doc_dt'] = trim((string) ($payload['trans_doc_dt'] ?? date('d/m/Y')));
+        }
+
+        return $ewbData;
     }
 
     /** @return array<string,mixed> */
@@ -566,7 +574,9 @@ class PosInvoiceController
 
             echo json_encode([
                 'success' => $ok,
-                'message' => (string) ($result['message'] ?? ($ok ? 'E-Way bill generated successfully.' : 'Failed to generate E-Way bill.')),
+                'message' => $ok
+                ? ((string) ($result['ewb_message'] ?? 'E-Way bill generated successfully.'))
+                : ((string) ($result['message'] ?? $service->getLastError() ?? 'Failed to generate E-Way bill.')),
                 'ewb_no' => (string) ($latest['ewb_no'] ?? $latest['ewb'] ?? $result['ewb'] ?? ''),
                 'ewb_number' => (string) ($latest['ewb_no'] ?? $latest['ewb'] ?? $result['ewb'] ?? ''),
                 'ewb_date' => (string) ($latest['ewb_date'] ?? ''),

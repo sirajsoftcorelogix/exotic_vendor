@@ -29,6 +29,8 @@ $existingIrn = $record['irn'] ?? $invoiceData['irn'] ?? '';
 $existingEwb = $record['ewb_no'] ?? $record['ewb'] ?? $invoiceData['ewb_number'] ?? '';
 $existingEwbDate = $record['ewb_date'] ?? $invoiceData['ewb_date'] ?? '';
 $existingEwbValid = $record['ewb_valid_till'] ?? '';
+$existingTransId = $record['trans_id'] ?? '';
+$existingTransName = $record['trans_name'] ?? '';
 ?>
 
   <div class="max-w-5xl mx-auto px-4 py-8">
@@ -126,6 +128,7 @@ $existingEwbValid = $record['ewb_valid_till'] ?? '';
           2. Transport &amp; Vehicle Information
         </h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+          <?php if (trim((string)$existingTransId) === ''): ?>
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Transport Mode</label>
             <select name="trans_mode" class="w-full h-9 rounded-lg border border-slate-300 px-3 bg-slate-50 font-medium text-slate-800 focus:bg-white focus:border-emerald-500 focus:outline-none">
@@ -147,10 +150,6 @@ $existingEwbValid = $record['ewb_valid_till'] ?? '';
             </select>
           </div>
           <div>
-            <label class="block font-semibold text-slate-700 mb-1">Distance in KM (Required &gt; 0)</label>
-            <input type="number" name="distance" value="100" min="1" max="4000" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono font-semibold text-slate-800 focus:border-emerald-500 focus:outline-none" />
-          </div>
-          <div>
             <label class="block font-semibold text-slate-700 mb-1">Transport Doc / LR No (TransDocNo)</label>
             <input type="text" name="trans_doc_no" value="<?= $h('LR-' . rand(10000, 99999)) ?>" class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
           </div>
@@ -158,14 +157,23 @@ $existingEwbValid = $record['ewb_valid_till'] ?? '';
             <label class="block font-semibold text-slate-700 mb-1">Transport Doc Date (DD/MM/YYYY)</label>
             <input type="text" name="trans_doc_dt" value="<?= date('d/m/Y') ?>" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
           </div>
+              <?php
+                else: ?>
+
+          <!-- <div>
+            <label class="block font-semibold text-slate-700 mb-1">Distance in KM </label>
+            <input type="number" name="distance" value="0" min="1" max="4000"  class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono font-semibold text-slate-800 focus:border-emerald-500 focus:outline-none" />
+          </div> -->
+
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Transporter ID (GSTIN)</label>
-            <input type="text" name="trans_id" value="" placeholder="Optional 15-char GSTIN" class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
+            <input type="text" name="trans_id" value="<?= $h($existingTransId) ?>" placeholder="Optional 15-char GSTIN" class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
           </div>
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Transporter Name</label>
-            <input type="text" name="trans_name" value="" placeholder="Optional Name" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
+            <input type="text" name="trans_name" value="<?= $h($existingTransName) ?>" placeholder="Optional Name" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
           </div>
+          <?php endif; ?>
         </div>
       </div>
 

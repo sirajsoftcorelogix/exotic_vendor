@@ -224,6 +224,30 @@ class CourierPartner
         return $rows;
     }
 
+    /** @return list<array{trans_name:string,gstin:string}> */
+    public function getEwayTransporters(): array
+    {
+        $rows = [];
+        $res = $this->conn->query(
+            "SELECT trans_name, gstin
+             FROM courier_partners
+             WHERE gstin IS NOT NULL AND TRIM(gstin) <> ''
+             ORDER BY trans_name ASC"
+        );
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $name = trim((string)($row['trans_name'] ?? ''));
+                $gstin = strtoupper(trim((string)($row['gstin'] ?? '')));
+                if ($name !== '' && $gstin !== '') {
+                    $rows[] = ['trans_name' => $name, 'gstin' => $gstin];
+                }
+            }
+            $res->free();
+        }
+
+        return $rows;
+    }
+
     /**
      * Resolve courier_partners.id by partner_code (booking integration).
      */

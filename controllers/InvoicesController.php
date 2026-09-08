@@ -4,6 +4,7 @@ require_once 'models/order/order.php';
 require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
 require_once 'models/product/product.php';
+require_once 'models/courier/CourierPartner.php';
 require_once __DIR__ . '/../helpers/international_invoice_defaults.php';
 require_once __DIR__ . '/../helpers/app_settings.php';
 
@@ -41,7 +42,7 @@ class InvoicesController
     public function create()
     {
         is_login();
-        global $ordersModel, $usersModel, $commanModel;
+        global $ordersModel, $usersModel, $commanModel, $conn;
 
         $itemIds = isset($_POST['poitem']) ? $_POST['poitem'] : [];
         $posFlag = isset($_POST['pos_flag']) ? (int)$_POST['pos_flag'] : 0;
@@ -112,6 +113,9 @@ class InvoicesController
         $data['users'] = $usersModel->getAllUsers();
         $data['invoiceModel'] = null; // placeholder for next invoice number logic
         $data['pos_flag'] = $posFlag;
+        $data['eway_transporters'] = $conn instanceof mysqli
+            ? (new CourierPartner($conn))->getEwayTransporters()
+            : [];
 
         $firstCurrency = $data['data'][0]['currency'] ?? 'INR';
         if ($firstCurrency && $firstCurrency !== 'INR') {
