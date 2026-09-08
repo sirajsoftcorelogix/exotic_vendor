@@ -200,18 +200,11 @@
 $record_id = $_GET['id'] ?? '';
 $is_inbound_live_published = !empty($data['is_inbound_live_published']);
 $isVariantProduct = (isset($data['form2']['is_variant']) && strtoupper(trim((string) $data['form2']['is_variant'])) === 'Y');
-$sizeOptions = [
-    'XS'      => 'Extra Small (XS)(34)',
-    'S'       => 'Small (S)(36)',
-    'M'       => 'Medium (M)(38)',
-    'L'       => 'Large (L)(40)',
-    'XL'      => 'Extra Large (XL)(42)',
-    'XXL'     => 'Extra Extra Large (XXL)(44)',
-    'XXXL'    => 'Extra Extra Extra Large (XXXL)(46)',
-    'XXXXL'   => 'Extra Extra Extra Large (4xL)(48)',
-    'XXXXXL'  => 'Extra Extra Extra Large (5xL)(50)',
-    'XXXXXXL' => 'Extra Extra Extra Large (6xL)(52)',
-];
+$sizeOptionsByGroup = is_array($data['size_options_by_group'] ?? null) ? $data['size_options_by_group'] : [];
+$itemGroupSlugInitial = strtolower(trim((string) ($data['item_group_slug'] ?? '')));
+$sizeOptions = ($itemGroupSlugInitial !== '' && !empty($sizeOptionsByGroup[$itemGroupSlugInitial]))
+    ? $sizeOptionsByGroup[$itemGroupSlugInitial]
+    : (is_array($data['size_options'] ?? null) ? $data['size_options'] : []);
 $gecolormapsRef = $data['form2']['gecolormaps'] ?? [];
 $colorMapData = (is_array($gecolormapsRef) && isset($gecolormapsRef['colormaps'])) ? $gecolormapsRef['colormaps'] : [];
 function renderColorMapField($fieldName, $savedValue, $customClass = "", $showSyncIcon = false) {
@@ -240,7 +233,6 @@ function renderColorMapField($fieldName, $savedValue, $customClass = "", $showSy
         </select>
     </div>';
 }
-$is_clothing_initial = false; 
 $saved_group_id = $data['form2']['group_name'] ?? '';
 $is_book_initial = ((string) $saved_group_id === '-8');
 if (!$is_book_initial && !empty($data['category']) && !empty($saved_group_id)) {
@@ -251,23 +243,17 @@ if (!$is_book_initial && !empty($data['category']) && !empty($saved_group_id)) {
             if (strpos($catName, 'book') !== false || strpos($catDisplay, 'book') !== false) {
                 $is_book_initial = true;
             }
-            break;
-        }
-    }
-}
-if (!$is_clothing_initial && !empty($data['category']) && !empty($saved_group_id)) {
-    foreach ($data['category'] as $cat) {
-        if (isset($cat['category']) && $cat['category'] == $saved_group_id) {
-            $catName = strtolower($cat['name'] ?? '');
-            $catDisplay = strtolower($cat['display_name'] ?? '');
-            if (strpos($catName, 'clothing') !== false || strpos($catName, 'textiles') !== false || 
-                strpos($catDisplay, 'clothing') !== false || strpos($catDisplay, 'textiles') !== false) {
-                $is_clothing_initial = true;
+            if ($itemGroupSlugInitial === '') {
+                $itemGroupSlugInitial = strtolower(trim((string) ($cat['name'] ?? '')));
             }
             break;
         }
     }
 }
+if ($itemGroupSlugInitial !== '' && empty($sizeOptions) && !empty($sizeOptionsByGroup[$itemGroupSlugInitial])) {
+    $sizeOptions = $sizeOptionsByGroup[$itemGroupSlugInitial];
+}
+$has_size_dropdown = $sizeOptions !== [];
 
 $desktopform_req_star = '<span class="text-red-500" aria-hidden="true">*</span>';
 
@@ -379,22 +365,36 @@ foreach ($book_language_options as $langOpt) {
     }
 }
 $saved_combined_language = trim((string) ($formatted_book_language ?? $data['form2']['language'] ?? ''));
-function renderSizeField($fieldName, $currentValue, $isClothing, $options, $customClass = "") {
-    $html = '';
-    if ($isClothing) {
-        $html .= '<select name="' . $fieldName . '" class="size-input-field ' . $customClass . ' w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] bg-white focus:outline-none focus:border-[#d97824]">';
+function renderSizeField($fieldName, $currentValue, $useDropdown, $options, $customClass = "") {
+    $currentValue = trim((string) $currentValue);
+    $safeName = htmlspecialchars($fieldName, ENT_QUOTES, 'UTF-8');
+    $classes = trim('size-input-field ' . $customClass);
+    if ($useDropdown && is_array($options) && $options !== []) {
+        $html = '<select name="' . $safeName . '" class="' . htmlspecialchars($classes, ENT_QUOTES, 'UTF-8') . ' w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] bg-white focus:outline-none focus:border-[#d97824]">';
         $html .= '<option value="">Select Size</option>';
+        $matched = false;
         foreach ($options as $k => $v) {
-            // Strict string comparison for selected state
-            $selected = ((string)$currentValue === (string)$k) ? 'selected' : '';
-            $html .= '<option value="' . $k . '" ' . $selected . '>' . $v . '</option>';
+            $isSelected = ((string) $currentValue === (string) $k);
+            if ($isSelected) {
+                $matched = true;
+            }
+            $html .= '<option value="' . htmlspecialchars((string) $k, ENT_QUOTES, 'UTF-8') . '"'
+                . ($isSelected ? ' selected' : '') . '>'
+                . htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8')
+                . '</option>';
+        }
+        if ($currentValue !== '' && !$matched) {
+            $html .= '<option value="' . htmlspecialchars($currentValue, ENT_QUOTES, 'UTF-8') . '" selected>'
+                . htmlspecialchars($currentValue, ENT_QUOTES, 'UTF-8')
+                . '</option>';
         }
         $html .= '</select>';
-    } 
-    else {
-        $html .= '<input type="text" name="' . $fieldName . '" value="' . htmlspecialchars($currentValue) . '" class="size-input-field ' . $customClass . ' w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]">';
+        return $html;
     }
-    return $html;
+    return '<input type="text" name="' . $safeName . '" value="'
+        . htmlspecialchars($currentValue, ENT_QUOTES, 'UTF-8')
+        . '" class="' . htmlspecialchars($classes, ENT_QUOTES, 'UTF-8')
+        . ' w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]">';
 }
 $currentSize = $data['form2']['size'] ?? '';
 
@@ -887,7 +887,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                     </div>
                     <div id="main-item-size-field" class="w-full min-w-0 book-color-size-field">
                         <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
-                        <?php echo renderSizeField('size', $currentSize, $is_clothing_initial, $sizeOptions); ?>
+                        <?php echo renderSizeField('size', $currentSize, $has_size_dropdown, $sizeOptions); ?>
                     </div>
                     <div class="w-full min-w-0">
                         <label id="main-quantity-label" class="block text-xs font-bold text-[#555] mb-1">Quantity:<span class="qty-req-star text-red-500" aria-hidden="true" style="display:none">*</span></label>
@@ -1261,7 +1261,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Colour:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['color'] ?? '') ?>" name="variations[<?= $var['id'] ?>][color]"></div>
                             <div class="w-full min-w-0">
                                 <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
-                                <?php echo renderSizeField("variations[{$var['id']}][size]", $var['size'], $is_clothing_initial, $sizeOptions); ?>
+                                <?php echo renderSizeField("variations[{$var['id']}][size]", $var['size'], $has_size_dropdown, $sizeOptions); ?>
                             </div>
                             <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['quantity'] ?? $var['quantity_received'] ?? '0') ?>" name="variations[<?= $var['id'] ?>][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
                             <div class="w-full min-w-0 non-book-cp-mrp-field<?= $is_book_initial ? ' hidden' : '' ?>"><label class="block text-xs font-bold text-[#555] mb-1">CP:<?php echo $desktopform_req_star; ?></label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="<?= htmlspecialchars($var['cp'] ?? '') ?>" name="variations[<?= $var['id'] ?>][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
@@ -1369,14 +1369,7 @@ function desktopform_item_image_thumb_path(array $item_photos, array $variations
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Colour:</label><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] px-3 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][color]"></div>
                 <div class="w-full min-w-0 size-wrapper-js">
                     <label class="block text-xs font-bold text-[#555] mb-1">Size:</label>
-                    <select class="size-input-field w-full h-10 border border-[#ccc] rounded-[3px] px-2 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][size]">
-                        <option value="">Select Size</option>
-                        <?php 
-                        foreach ($sizeOptions as $dbValue => $displayLabel) {
-                            echo '<option value="' . htmlspecialchars($dbValue) . '">' . htmlspecialchars($displayLabel) . '</option>';
-                        }
-                        ?>
-                    </select>
+                    <?php echo renderSizeField('variations[INDEX][size]', '', $has_size_dropdown, $sizeOptions); ?>
                 </div>
                 <div class="w-full min-w-0"><label class="block text-xs font-bold text-[#555] mb-1">Quantity:</label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" value="0" name="variations[INDEX][quantity]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">NOS</span></div></div>
                 <div class="w-full min-w-0 non-book-cp-mrp-field"><label class="block text-xs font-bold text-[#555] mb-1">CP:<?php echo $desktopform_req_star; ?></label><div class="relative w-full"><input type="text" class="w-full h-10 border border-[#ccc] rounded-[3px] pl-3 pr-10 text-[13px] text-[#333] focus:outline-none focus:border-[#d97824]" name="variations[INDEX][cp]"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#777] pointer-events-none">INR</span></div></div>
@@ -5479,80 +5472,95 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const sizeOptionsObj = <?php echo json_encode($sizeOptions); ?>;
-    let sizeOptionsHTML = '<option value="">Select Size</option>';
-    for (const [key, value] of Object.entries(sizeOptionsObj)) {
-        sizeOptionsHTML += `<option value="${key}">${value}</option>`;
+    const sizeOptionsByGroup = <?php echo json_encode($sizeOptionsByGroup, JSON_UNESCAPED_UNICODE); ?> || {};
+
+    function escapeSizeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
     }
-    // 2. CHECK IF CATEGORY IS CLOTHING
-    function checkIsClothing() {
-        let isClothing = false;
-        // Check Group Dropdown Text
+
+    function resolveCurrentItemGroup() {
         const groupSelect = document.getElementById('group_select');
-        if (groupSelect && groupSelect.selectedIndex > 0) {
-            const groupText = groupSelect.options[groupSelect.selectedIndex].text.toLowerCase();
-            if (groupText.includes('clothing') || groupText.includes('textile')) isClothing = true;
+        if (!groupSelect) return '';
+        const val = groupSelect.value || '';
+        const opts = groupSelect.options;
+        for (let i = 0; i < opts.length; i++) {
+            if (opts[i].value === String(val)) {
+                return (opts[i].getAttribute('data-item-group') || '').toLowerCase().trim();
+            }
         }
-        const checkedBoxes = document.querySelectorAll('.checkbox-list-container input[type="checkbox"]:checked');
-        checkedBoxes.forEach(cb => {
-            const label = cb.nextElementSibling ? cb.nextElementSibling.innerText.toLowerCase() : '';
-            if (label.includes('clothing') || label.includes('textile')) isClothing = true;
-        });
-        return isClothing;
+        return '';
     }
+
+    function sizesForCurrentGroup() {
+        const slug = resolveCurrentItemGroup();
+        if (!slug) return null;
+        const map = sizeOptionsByGroup[slug];
+        if (map && Object.keys(map).length) return map;
+        return null;
+    }
+
+    function buildSizeOptionsHtml(options, currentValue) {
+        let html = '<option value="">Select Size</option>';
+        let matched = false;
+        Object.keys(options || {}).forEach(function (key) {
+            const selected = String(currentValue) === String(key);
+            if (selected) matched = true;
+            html += '<option value="' + escapeSizeHtml(key) + '"' + (selected ? ' selected' : '') + '>' + escapeSizeHtml(options[key]) + '</option>';
+        });
+        if (currentValue && !matched) {
+            html += '<option value="' + escapeSizeHtml(currentValue) + '" selected>' + escapeSizeHtml(currentValue) + '</option>';
+        }
+        return html;
+    }
+
     function toggleAllSizeFields() {
-        const isClothing = checkIsClothing();
-        const allSizeInputs = document.querySelectorAll('.size-input-field');
-        allSizeInputs.forEach(field => {
+        const options = sizesForCurrentGroup();
+        const useDropdown = !!(options && Object.keys(options).length);
+        document.querySelectorAll('.size-input-field').forEach(function (field) {
             const parent = field.parentElement;
-            const currentTag = field.tagName; // 'SELECT' or 'INPUT'
+            const currentTag = field.tagName;
             const currentValue = field.value;
             const currentName = field.name;
-            // Logic to prevent unnecessary swapping
-            if (isClothing && currentTag === 'SELECT') return;
-            if (!isClothing && currentTag === 'INPUT') return;
-            // Create New Element
+            if (useDropdown && currentTag === 'SELECT') {
+                field.innerHTML = buildSizeOptionsHtml(options, currentValue);
+                return;
+            }
+            if (!useDropdown && currentTag === 'INPUT') return;
             let newEl;
-            if (isClothing) {
+            if (useDropdown) {
                 newEl = document.createElement('select');
-                newEl.innerHTML = sizeOptionsHTML;
-                // Try to set value if it exists in options
-                newEl.value = currentValue; 
+                newEl.innerHTML = buildSizeOptionsHtml(options, currentValue);
             } else {
                 newEl = document.createElement('input');
                 newEl.type = 'text';
-                newEl.value = currentValue; // Keep text value
+                newEl.value = currentValue;
             }
-            // Copy Attributes & Classes
             newEl.name = currentName;
-            newEl.className = field.className; // Keeps styling
-            // Swap
+            newEl.className = field.className;
             field.remove();
             parent.appendChild(newEl);
         });
     }
+
     const groupSelect = document.getElementById('group_select');
-    if(groupSelect) {
-        groupSelect.addEventListener('change', toggleAllSizeFields); // Uses TomSelect change event if native
-    }
-    const groupSelectForSize = document.getElementById('group_select');
-    if (groupSelectForSize && groupSelectForSize.tomselect) {
-        groupSelectForSize.tomselect.on('change', toggleAllSizeFields);
-    }
-    // Listen to Checkbox Changes (Delegation for dynamic lists)
-    document.body.addEventListener('change', function(e) {
-        if (e.target.type === 'checkbox' && e.target.closest('.checkbox-list-container')) {
-            toggleAllSizeFields();
+    if (groupSelect) {
+        groupSelect.addEventListener('change', toggleAllSizeFields);
+        if (groupSelect.tomselect) {
+            groupSelect.tomselect.on('change', toggleAllSizeFields);
         }
-    });
+    }
     const originalAddVar = window.addNewVariation;
-    window.addNewVariation = function() {
-        // Run original function
-        originalAddVar(); 
-        
-        // After adding, force a check to update the newly added field
-        toggleAllSizeFields();
-    };
+    if (typeof originalAddVar === 'function') {
+        window.addNewVariation = function () {
+            originalAddVar();
+            toggleAllSizeFields();
+        };
+    }
+    toggleAllSizeFields();
 });
 </script>
 

@@ -583,7 +583,16 @@ return base64_encode($encryptedData);
         //         'data' => $decoded
         //     ];
         // }
-        
+        //ErrorDetails
+        if (isset($decoded['ErrorDetails'])) {
+            error_log("Alankit EWB API Error: " . json_encode($decoded['ErrorDetails']));
+            return [
+                'status' => false,
+                'message' => 'API Error',
+                'ErrorMessage' => $decoded['ErrorDetails'],
+                'Data' => $decoded['Data']
+            ];
+        }
         // Decrypt response
         if ($decoded && isset($decoded['Data'])) {
             $decryptedResponse = $this->decrypt_irn($decoded['Data'], $decryptedSek);

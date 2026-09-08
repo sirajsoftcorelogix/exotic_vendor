@@ -53,26 +53,28 @@ if (!empty($raw_categories)) {
             $iconClass = $icon_map[$cat['display_name']] ?? $icon_map['default'];
             $display_categories[] = [
                 'value' => $cat['category'],    
-                'label' => $cat['display_name'], 
+                'label' => $cat['display_name'],
+                'item_group' => trim((string) ($cat['name'] ?? '')),
                 'icon'  => $iconClass
             ];
         }
     }
 }
 //print_array($display_categories);
-// --- DEFINE SIZE OPTIONS ---
-$sizeOptions = [
-    'XS'      => 'Extra Small (XS)(34)',
-    'S'       => 'Small (S)(36)',
-    'M'       => 'Medium (M)(38)',
-    'L'       => 'Large (L)(40)',
-    'XL'      => 'Extra Large (XL)(42)',
-    'XXL'     => 'Extra Extra Large (XXL)(44)',
-    'XXXL'    => 'Extra Extra Extra Large (XXXL)(46)',
-    'XXXXL'   => 'Extra Extra Extra Large (4xL)(48)',
-    'XXXXXL'  => 'Extra Extra Extra Large (5xL)(50)',
-    'XXXXXXL' => 'Extra Extra Extra Large (6xL)(52)',
-];
+$sizeOptionsByGroup = is_array($data['size_options_by_group'] ?? null) ? $data['size_options_by_group'] : [];
+$itemGroupSlugInitial = strtolower(trim((string) ($data['item_group_slug'] ?? '')));
+foreach ($display_categories as $displayCat) {
+    if ((string) ($displayCat['value'] ?? '') === (string) $saved_category_code) {
+        if ($itemGroupSlugInitial === '') {
+            $itemGroupSlugInitial = strtolower(trim((string) ($displayCat['item_group'] ?? '')));
+        }
+        break;
+    }
+}
+$sizeOptions = ($itemGroupSlugInitial !== '' && !empty($sizeOptionsByGroup[$itemGroupSlugInitial]))
+    ? $sizeOptionsByGroup[$itemGroupSlugInitial]
+    : (is_array($data['size_options'] ?? null) ? $data['size_options'] : []);
+$has_size_dropdown = $sizeOptions !== [];
 $colorMapData = $form2['gecolormaps']['colormaps'] ?? [];
 
 function renderColorMapField($index, $value) {
@@ -89,23 +91,38 @@ function renderColorMapField($index, $value) {
     </div>';
 }
 
-function renderSizeField($index, $value, $categoryCode, $sizeOptions) {
+function renderSizeField($index, $value, $useDropdown, $sizeOptions) {
     $fieldName = "variations[$index][size]";
-    $check = strtolower(trim((string)$categoryCode));
-    $isClothing = (strpos($check, 'textiles') !== false || strpos($check, 'clothing') !== false);
+    $currentValue = trim((string) $value);
+    $options = is_array($sizeOptions) ? $sizeOptions : [];
+    $classes = 'w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white size-input';
 
-    if ($isClothing) {
-        $html = '<select name="'.$fieldName.'" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white size-input">';
+    if ($useDropdown && $options !== []) {
+        $html = '<select name="' . htmlspecialchars($fieldName, ENT_QUOTES, 'UTF-8') . '" class="' . $classes . '">';
         $html .= '<option value="">Select Size</option>';
-        foreach ($sizeOptions as $optVal => $optLabel) {
-            $isSelected = (trim((string)$value) === (string)$optVal) ? 'selected' : '';
-            $html .= '<option value="'.$optVal.'" '.$isSelected.'>'.$optLabel.'</option>';
+        $matched = false;
+        foreach ($options as $optVal => $optLabel) {
+            $isSelected = ($currentValue === (string) $optVal);
+            if ($isSelected) {
+                $matched = true;
+            }
+            $html .= '<option value="' . htmlspecialchars((string) $optVal, ENT_QUOTES, 'UTF-8') . '"'
+                . ($isSelected ? ' selected' : '') . '>'
+                . htmlspecialchars((string) $optLabel, ENT_QUOTES, 'UTF-8')
+                . '</option>';
+        }
+        if ($currentValue !== '' && !$matched) {
+            $html .= '<option value="' . htmlspecialchars($currentValue, ENT_QUOTES, 'UTF-8') . '" selected>'
+                . htmlspecialchars($currentValue, ENT_QUOTES, 'UTF-8')
+                . '</option>';
         }
         $html .= '</select>';
-    } else {
-        $html = '<input type="text" name="'.$fieldName.'" value="'.htmlspecialchars($value).'" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm  cursor-not-allowed size-input" >';
+        return $html;
     }
-    return $html;
+
+    return '<input type="text" name="' . htmlspecialchars($fieldName, ENT_QUOTES, 'UTF-8') . '" value="'
+        . htmlspecialchars($currentValue, ENT_QUOTES, 'UTF-8')
+        . '" class="' . $classes . '">';
 }
 
 // Prepare Data
@@ -297,7 +314,7 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
                     <?php if(!empty($display_categories)): ?>
                         <?php foreach ($display_categories as $item) { ?>
                             <label class="cursor-pointer group relative">
-                                <input type="radio" name="category" value="<?= $item['value'] ?>" class="peer sr-only category-radio" <?php if ($saved_category_code == $item['value']) echo 'checked'; ?>>
+                                <input type="radio" name="category" value="<?= $item['value'] ?>" data-item-group="<?= htmlspecialchars((string) ($item['item_group'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" class="peer sr-only category-radio" <?php if ($saved_category_code == $item['value']) echo 'checked'; ?>>
                                 
                                 <div class="w-24 h-28 bg-black text-white flex flex-col items-center justify-center p-2 rounded transition-all
                                               peer-checked:bg-gray-300 peer-checked:text-black border border-black shadow-sm">
@@ -548,7 +565,7 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
                                 </div>
                                 <div class="size-container">
                                     <label class="block text-xs font-bold text-black mb-1">Size:</label>
-                                    <?php echo renderSizeField($index, $var['size'], $saved_category_code, $sizeOptions); ?>
+                                    <?php echo renderSizeField($index, $var['size'], $has_size_dropdown, $sizeOptions); ?>
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold text-black mb-1">Height (inch):</label>
@@ -1379,30 +1396,52 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
         let variationCount = <?php echo count($viewVariations); ?>;
         
         // 1. DATA FROM PHP
-        const colorMapDB = <?php echo json_encode($colorMapData); ?>; 
-        
-        // Size Options
-        const sizeOptionsHTML = `
-            <option value="">Select Size</option>
-            <?php foreach ($sizeOptions as $k => $v) { echo '<option value="'.$k.'">'.$v.'</option>'; } ?>
-        `;
+        const colorMapDB = <?php echo json_encode($colorMapData); ?>;
+        const sizeOptionsByGroup = <?php echo json_encode($sizeOptionsByGroup, JSON_UNESCAPED_UNICODE); ?> || {};
+
+        function escapeSizeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function sizesForSelectedCategory() {
+            const selectedRadio = document.querySelector('input[name="category"]:checked');
+            const slug = selectedRadio ? (selectedRadio.getAttribute('data-item-group') || '').toLowerCase().trim() : '';
+            if (!slug) return null;
+            const map = sizeOptionsByGroup[slug];
+            if (map && Object.keys(map).length) return map;
+            return null;
+        }
+
+        function buildSizeOptionsHtml(options, currentValue) {
+            let html = '<option value="">Select Size</option>';
+            let matched = false;
+            Object.keys(options || {}).forEach(function (key) {
+                const selected = String(currentValue) === String(key);
+                if (selected) matched = true;
+                html += '<option value="' + escapeSizeHtml(key) + '"' + (selected ? ' selected' : '') + '>' + escapeSizeHtml(options[key]) + '</option>';
+            });
+            if (currentValue && !matched) {
+                html += '<option value="' + escapeSizeHtml(currentValue) + '" selected>' + escapeSizeHtml(currentValue) + '</option>';
+            }
+            return html;
+        }
 
         const BOOK_CATEGORY_VALUE = '-8';
 
         // 2. HELPER: Detect Category Type
         function getCategoryType() {
             const selectedRadio = document.querySelector('input[name="category"]:checked');
-            let info = { isClothing: false, mapKey: null, isBook: false };
+            const sizeMap = sizesForSelectedCategory();
+            let info = { isClothing: !!(sizeMap && Object.keys(sizeMap).length), mapKey: null, isBook: false, sizeOptions: sizeMap };
 
             if (selectedRadio) {
                 const parentLabel = selectedRadio.closest('label');
                 const labelText = parentLabel ? parentLabel.innerText.toLowerCase().trim() : '';
                 const val = selectedRadio.value.toLowerCase().trim();
-
-                // Clothing Check
-                if (labelText.includes('textile') || labelText.includes('clothing') || val.includes('textile') || val.includes('clothing')) {
-                    info.isClothing = true;
-                }
 
                 // Book Check (category value -8 or label "book")
                 if (selectedRadio.value === BOOK_CATEGORY_VALUE || labelText.includes('book') || val.includes('book')) {
@@ -1421,17 +1460,21 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
 
         // 3. TOGGLE SIZE FIELDS
         function toggleSizeFields() {
-            const { isClothing } = getCategoryType();
+            const { isClothing, sizeOptions } = getCategoryType();
             const cards = document.querySelectorAll('.variation-card');
             
             cards.forEach(card => {
                 const index = card.getAttribute('data-index');
                 const sizeContainer = card.querySelector('.size-container');
+                if (!sizeContainer) return;
                 const existingInput = sizeContainer.querySelector('.size-input');
                 
                 if (existingInput) {
                     const currentTag = existingInput.tagName;
-                    if (isClothing && currentTag === 'SELECT') return;
+                    if (isClothing && currentTag === 'SELECT') {
+                        existingInput.innerHTML = buildSizeOptionsHtml(sizeOptions, existingInput.value);
+                        return;
+                    }
                     if (!isClothing && currentTag === 'INPUT') return;
                 }
 
@@ -1441,12 +1484,12 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
                 let newField;
                 if (isClothing) {
                     newField = document.createElement('select');
-                    newField.innerHTML = sizeOptionsHTML;
+                    newField.innerHTML = buildSizeOptionsHtml(sizeOptions, currentValue);
                     newField.value = currentValue; 
                 } else {
                     newField = document.createElement('input');
                     newField.type = 'text';
-                    newField.value = ''; 
+                    newField.value = currentValue; 
                 }
 
                 newField.name = `variations[${index}][size]`;
@@ -1650,11 +1693,11 @@ foreach ($data['publishers'] ?? [] as $publisherRow) {
 
         // 5. ADD NEW VARIATION
         function createVariationCardHTML(index, count) {
-            const { isClothing } = getCategoryType();
+            const { isClothing, sizeOptions } = getCategoryType();
 
             let sizeFieldHTML;
             if (isClothing) {
-                sizeFieldHTML = `<select name="variations[${index}][size]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white size-input">${sizeOptionsHTML}</select>`;
+                sizeFieldHTML = `<select name="variations[${index}][size]" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm focus:border-black outline-none bg-white size-input">${buildSizeOptionsHtml(sizeOptions, '')}</select>`;
             } else {
                 sizeFieldHTML = `<input type="text" name="variations[${index}][size]" value="" class="w-full border border-gray-400 rounded px-2 py-1.5 text-sm size-input" >`;
             }
