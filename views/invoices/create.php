@@ -90,6 +90,73 @@
                     <input type="number" name="shipping_exp_duty" id="shipping_exp_duty" step="0.01" value="<?php echo $intlVal('shipping_exp_duty'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
                 </div>
             </div>
+        <!-- Transporter & Vehicle Information -->
+        <div class="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4" id="transportSelectionSection">
+            <h2 class="mb-3 text-sm font-semibold text-gray-800">Transporter &amp; Vehicle Information</h2>
+            <div class="mb-4 flex flex-wrap gap-5 text-sm">
+                <label class="inline-flex cursor-pointer items-center gap-2">
+                    <input type="radio" name="transport_selection" value="mode" checked class="h-4 w-4 text-orange-600" data-transport-selection>
+                    <span>Transport Mode</span>
+                </label>
+                <label class="inline-flex cursor-pointer items-center gap-2">
+                    <input type="radio" name="transport_selection" value="id" class="h-4 w-4 text-orange-600" data-transport-selection>
+                    <span>Transport ID</span>
+                </label>
+            </div>
+            <div id="transportModeFields" class="grid grid-cols-1 gap-4 md:grid-cols-4">
+                <div>
+                    <label for="invoice_trans_mode" class="block text-sm text-gray-700">Transport Mode</label>
+                    <select name="trans_mode" id="invoice_trans_mode" class="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm">
+                        <option value="1">1 - Road</option>
+                        <option value="2">2 - Rail</option>
+                        <option value="3">3 - Air</option>
+                        <option value="4">4 - Ship</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="invoice_veh_no" class="block text-sm text-gray-700">Vehicle Number</label>
+                    <input type="text" name="veh_no" id="invoice_veh_no" class="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label for="invoice_veh_type" class="block text-sm text-gray-700">Vehicle Type</label>
+                    <select name="veh_type" id="invoice_veh_type" class="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm">
+                        <option value="R">R - Regular</option>
+                        <option value="ODC">ODC - Over Dimensional Cargo</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="invoice_trans_doc_no" class="block text-sm text-gray-700">Transport Document No.</label>
+                    <input type="text" name="trans_doc_no" id="invoice_trans_doc_no" class="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label for="invoice_trans_doc_dt" class="block text-sm text-gray-700">Transport Document Date</label>
+                    <input type="text" name="trans_doc_dt" id="invoice_trans_doc_dt" value="<?= date('d/m/Y') ?>" class="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm">
+                </div>
+            </div>
+            <div id="transportIdFields" class="hidden grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                    <label for="invoice_transporter_id" class="block text-sm text-gray-700">Transport ID</label>
+                    <select name="trans_id" id="invoice_transporter_id" class="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm">
+                        <option value="">-- Select transporter --</option>
+                        <?php foreach (($eway_transporters ?? []) as $ewayTransporter): ?>
+                            <?php
+                            $transporterName = trim((string)($ewayTransporter['trans_name'] ?? ''));
+                            $transporterGstin = strtoupper(trim((string)($ewayTransporter['gstin'] ?? '')));
+                            if ($transporterName === '' || $transporterGstin === '') continue;
+                            ?>
+                            <option value="<?= htmlspecialchars($transporterGstin, ENT_QUOTES, 'UTF-8') ?>" data-transporter-name="<?= htmlspecialchars($transporterName, ENT_QUOTES, 'UTF-8') ?>">
+                                <?= htmlspecialchars($transporterName, ENT_QUOTES, 'UTF-8') ?> - <?= htmlspecialchars($transporterGstin, ENT_QUOTES, 'UTF-8') ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label for="invoice_transporter_name" class="block text-sm text-gray-700">Transporter Name</label>
+                    <input type="text" name="trans_name" id="invoice_transporter_name" readonly class="mt-1 w-full rounded-md border-gray-300 bg-gray-100 px-3 py-2 text-sm">
+                </div>
+            </div>
+        </div>
+
         <?php } ?>
         <div class="flex flex-col md:flex-row justify-between mb-8">
             <!-- Left Column -->
@@ -747,6 +814,24 @@
 
     // Initialize calculation on page load
     document.addEventListener('DOMContentLoaded', function() {
+        const transportModeFields = document.getElementById('transportModeFields');
+        const transportIdFields = document.getElementById('transportIdFields');
+        const transporterIdSelect = document.getElementById('invoice_transporter_id');
+        const transporterNameInput = document.getElementById('invoice_transporter_name');
+        document.querySelectorAll('[data-transport-selection]').forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                const useTransportId = this.value === 'id';
+                transportModeFields?.classList.toggle('hidden', useTransportId);
+                transportIdFields?.classList.toggle('hidden', !useTransportId);
+            });
+        });
+        transporterIdSelect?.addEventListener('change', function() {
+            const option = this.options[this.selectedIndex];
+            if (transporterNameInput) {
+                transporterNameInput.value = option?.dataset.transporterName || '';
+            }
+        });
+
         // Set initial GST based on default billing state
         const gstType = calculateGSTType('<?php echo $billingState; ?>');
         updateGSTFields(gstType);

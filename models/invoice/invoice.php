@@ -250,8 +250,8 @@ class Invoice
     }
     public function insert_international_invoice_data($data)
     {
-        $sql = "INSERT INTO vp_invoices_international (invoice_id, pre_carriage_by, port_of_loading, port_of_discharge, country_of_origin, country_of_final_destination, final_destination, usd_export_rate, ap_cost, freight_charge, insurance_charge, shipping_bill_number, shipping_bill_date, shipping_port, shipping_ref_clm, shipping_currency, shipping_country_code, shipping_exp_duty, irn, qrcode_string) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO vp_invoices_international (invoice_id, transport_selection, trans_mode, veh_no, veh_type, trans_doc_no, trans_doc_dt, trans_id, trans_name, pre_carriage_by, port_of_loading, port_of_discharge, country_of_origin, country_of_final_destination, final_destination, usd_export_rate, ap_cost, freight_charge, insurance_charge, shipping_bill_number, shipping_bill_date, shipping_port, shipping_ref_clm, shipping_currency, shipping_country_code, shipping_exp_duty, irn, qrcode_string)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
 
@@ -272,12 +272,28 @@ class Invoice
         $shippingCurrency = (string)($data['shipping_currency'] ?? 'USD');
         $shippingCountryCode = (string)($data['shipping_country_code'] ?? '');
         $shippingExpDuty = (float)($data['shipping_exp_duty'] ?? 0);
+        $transportSelection = (string)($data['transport_selection'] ?? 'mode');
+        $transMode = trim((string)($data['trans_mode'] ?? ''));
+        $vehNo = trim((string)($data['veh_no'] ?? ''));
+        $vehType = trim((string)($data['veh_type'] ?? ''));
+        $transDocNo = trim((string)($data['trans_doc_no'] ?? ''));
+        $transDocDt = trim((string)($data['trans_doc_dt'] ?? ''));
+        $transId = strtoupper(trim((string)($data['trans_id'] ?? '')));
+        $transName = trim((string)($data['trans_name'] ?? ''));
         $irn = (string)($data['irn'] ?? '');
         $qrcodeString = (string)($data['qrcode_string'] ?? '');
 
         $stmt->bind_param(
-            'issssssddddssssssdss',
+            'issssssssssssssddddssssssdss',
             $data['invoice_id'],
+            $transportSelection,
+            $transMode,
+            $vehNo,
+            $vehType,
+            $transDocNo,
+            $transDocDt,
+            $transId,
+            $transName,
             $preCarriage,
             $portLoading,
             $portDischarge,
@@ -321,7 +337,7 @@ class Invoice
     public function updateInvoiceInternational($invoice_id, $data)
     {
         // Build dynamic UPDATE query based on provided fields
-        $allowedFields = ['pre_carriage_by', 'port_of_loading', 'port_of_discharge', 'country_of_origin', 'country_of_final_destination', 'final_destination', 'usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_bill_number', 'shipping_bill_date', 'shipping_port', 'shipping_ref_clm', 'shipping_currency', 'shipping_country_code', 'shipping_exp_duty', 'irn', 'ack_number', 'ack_date', 'signed_invoice', 'qrcode_string', 'irn_status', 'request_payload', 'response_payload', 'irn_error_message', 'ewb_number', 'ewb_date', 'ewb_valid_till', 'ewb_request_payload', 'ewb_response_payload', 'ewb_error_message'];
+        $allowedFields = ['transport_selection', 'trans_mode', 'veh_no', 'veh_type', 'trans_doc_no', 'trans_doc_dt', 'trans_id', 'trans_name', 'pre_carriage_by', 'port_of_loading', 'port_of_discharge', 'country_of_origin', 'country_of_final_destination', 'final_destination', 'usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_bill_number', 'shipping_bill_date', 'shipping_port', 'shipping_ref_clm', 'shipping_currency', 'shipping_country_code', 'shipping_exp_duty', 'irn', 'ack_number', 'ack_date', 'signed_invoice', 'qrcode_string', 'irn_status', 'request_payload', 'response_payload', 'irn_error_message', 'ewb_number', 'ewb_date', 'ewb_valid_till', 'ewb_request_payload', 'ewb_response_payload', 'ewb_error_message'];
         $updateFields = [];
         $bindParams = [];
         $bindTypes = '';
