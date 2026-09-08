@@ -566,7 +566,9 @@ class PosInvoiceController
 
             echo json_encode([
                 'success' => $ok,
-                'message' => (string) ($result['message'] ?? ($ok ? 'E-Way bill generated successfully.' : 'Failed to generate E-Way bill.')),
+                'message' => $ok
+                ? ((string) ($result['ewb_message'] ?? 'E-Way bill generated successfully.'))
+                : ((string) ($result['message'] ?? $service->getLastError() ?? 'Failed to generate E-Way bill.')),
                 'ewb_no' => (string) ($latest['ewb_no'] ?? $latest['ewb'] ?? $result['ewb'] ?? ''),
                 'ewb_number' => (string) ($latest['ewb_no'] ?? $latest['ewb'] ?? $result['ewb'] ?? ''),
                 'ewb_date' => (string) ($latest['ewb_date'] ?? ''),
