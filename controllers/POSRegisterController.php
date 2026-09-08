@@ -1,6 +1,7 @@
 <?php
 require_once 'models/pos/pos.php';
 require_once 'models/user/user.php';
+require_once 'models/courier/CourierPartner.php';
 require_once dirname(__DIR__) . '/helpers/pos_payment_receipt.php';
 require_once dirname(__DIR__) . '/integrations/exotic/Clients/RetailApiClient.php';
 require_once dirname(__DIR__) . '/integrations/exotic/Support/CartResponseParser.php';
@@ -1164,6 +1165,11 @@ class POSRegisterController
 
         $posStorePincode = $conn instanceof mysqli ? $this->resolveStorePincodeForPos($conn) : '';
 
+        $ewayTransporters = [];
+        if ($conn instanceof mysqli) {
+            $ewayTransporters = (new CourierPartner($conn))->getEwayTransporters();
+        }
+
         $countryPhoneCodes = [];
         if ($conn instanceof mysqli) {
             $phoneRes = $conn->query(
@@ -1186,6 +1192,7 @@ class POSRegisterController
             'categories' => $categoryData,
             'warehouse_name' => $warehouseName,
             'pos_store_pincode' => $posStorePincode,
+            'eway_transporters' => $ewayTransporters,
             // Minimal placeholder until new cart; view must not depend on Exotic retrieve shape.
             'cartData' => [
                 'items' => [],

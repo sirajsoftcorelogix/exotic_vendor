@@ -731,9 +731,18 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
             <label for="delivery_transporter_id" class="text-xs text-slate-600 font-medium">Transport ID <span class="text-red-600">*</span></label>
             <select id="delivery_transporter_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
               <option value="">-- Select transport ID --</option>
-              <option value="06AAPCS9575E1ZR" data-transporter-name="DELHIVERY">06AAPCS9575E1ZR - DELHIVERY</option>
-              <option value="07AAECB7131Q1ZC" data-transporter-name="SHIPROCKET">07AAECB7131Q1ZC - SHIPROCKET</option>
-              <option value="27AAACB0446L1ZS" data-transporter-name="BLUEDART">27AAACB0446L1ZS - BLUEDART</option>
+              <?php foreach (($eway_transporters ?? []) as $ewayTransporter): ?>
+                <?php
+                $transporterName = trim((string)($ewayTransporter['trans_name'] ?? ''));
+                $transporterGstin = strtoupper(trim((string)($ewayTransporter['gstin'] ?? '')));
+                if ($transporterName === '' || $transporterGstin === '') {
+                    continue;
+                }
+                ?>
+                <option value="<?= htmlspecialchars($transporterGstin, ENT_QUOTES, 'UTF-8') ?>" data-transporter-name="<?= htmlspecialchars($transporterName, ENT_QUOTES, 'UTF-8') ?>">
+                  <?= htmlspecialchars($transporterName, ENT_QUOTES, 'UTF-8') ?> - <?= htmlspecialchars($transporterGstin, ENT_QUOTES, 'UTF-8') ?>
+                </option>
+              <?php endforeach; ?>
             </select>
           </div>
           
