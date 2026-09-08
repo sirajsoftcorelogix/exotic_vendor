@@ -450,7 +450,7 @@ class DomesticEwbIrnService {
             ];
 
             $ewbResponse = $alankitClient->generateEwb($ewbPayload, $accessToken, $decryptedSek);
-            print_r($ewbResponse);
+            //print_r($ewbResponse);
             $infoDtls = null;
             if (is_array($ewbResponse) && array_key_exists('InfoDtls', $ewbResponse)) {
                 $infoDtls = is_array($ewbResponse['InfoDtls']) ? json_encode($ewbResponse['InfoDtls']) : (string)$ewbResponse['InfoDtls'];
