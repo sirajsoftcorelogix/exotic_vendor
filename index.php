@@ -1201,6 +1201,36 @@ switch ($page) {
                 break;
         }
         break;
+    case 'sizes':
+        require_once 'controllers/SizesController.php';
+        $controller = new SizesController($conn);
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'save':
+                $controller->save();
+                break;
+            case 'details':
+                $controller->details();
+                break;
+            case 'status':
+                $controller->status();
+                break;
+            case 'delete':
+                $controller->delete();
+                break;
+            case 'checkCode':
+                $controller->checkCode();
+                break;
+            case 'nextOrder':
+                $controller->nextOrder();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
     case 'materials':
         require_once 'controllers/MaterialsController.php';
         $controller = new MaterialsController();
@@ -1529,6 +1559,9 @@ switch ($page) {
                 break;
             case 'fetchAccountGroups':
                 $controller->fetchAccountGroupsAjax();
+                break;
+            case 'fetchSizes':
+                $controller->fetchSizesAjax();
                 break;
             case 'printInboundLabel':
                 $controller->printInboundLabel();
