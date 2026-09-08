@@ -29,6 +29,8 @@ $existingIrn = $record['irn'] ?? $invoiceData['irn'] ?? '';
 $existingEwb = $record['ewb_no'] ?? $record['ewb'] ?? $invoiceData['ewb_number'] ?? '';
 $existingEwbDate = $record['ewb_date'] ?? $invoiceData['ewb_date'] ?? '';
 $existingEwbValid = $record['ewb_valid_till'] ?? '';
+$existingTransId = $record['trans_id'] ?? '';
+$existingTransName = $record['trans_name'] ?? '';
 ?>
 
   <div class="max-w-5xl mx-auto px-4 py-8">
@@ -160,11 +162,11 @@ $existingEwbValid = $record['ewb_valid_till'] ?? '';
           </div>
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Transporter ID (GSTIN)</label>
-            <input type="text" name="trans_id" value="" placeholder="Optional 15-char GSTIN" class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
+            <input type="text" name="trans_id" value="<?= $h($existingTransId) ?>" placeholder="Optional 15-char GSTIN" class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
           </div>
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Transporter Name</label>
-            <input type="text" name="trans_name" value="" placeholder="Optional Name" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
+            <input type="text" name="trans_name" value="<?= $h($existingTransName) ?>" placeholder="Optional Name" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
           </div>
         </div>
       </div>

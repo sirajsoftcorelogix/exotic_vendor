@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS `vp_domestic_ewb_irn` (
   `ewb_response` LONGTEXT COMMENT 'JSON response from E-way bill generation API',
   `veh_no` VARCHAR(20) COMMENT 'Vehicle Number for E-way bill',
   `veh_type` VARCHAR(10) COMMENT 'Vehicle Type (R/A/S for Road/Air/Ship)',
+  `trans_id` VARCHAR(20) COMMENT 'Transporter GSTIN/ID for E-way bill',
+  `trans_name` VARCHAR(120) COMMENT 'Transporter name for E-way bill',
   `irn_status` ENUM('pending', 'generated', 'failed', 'cancelled') DEFAULT 'pending' COMMENT 'Status of IRN generation',
   `ewb_status` ENUM('pending', 'generated', 'failed', 'cancelled') DEFAULT 'pending' COMMENT 'Status of E-way bill generation',
   `irn_error` TEXT COMMENT 'Error message if IRN generation failed',
@@ -40,5 +42,7 @@ ALTER TABLE `vp_domestic_ewb_irn` ADD COLUMN IF NOT EXISTS `ewb_date` DATETIME C
 ALTER TABLE `vp_domestic_ewb_irn` ADD COLUMN IF NOT EXISTS `ewb_valid_till` DATETIME COMMENT 'E-way Bill validity date/time' AFTER `ewb_date`;
 ALTER TABLE `vp_domestic_ewb_irn` ADD COLUMN IF NOT EXISTS `gen_gstin` VARCHAR(20) COMMENT 'GSTIN used to generate E-way Bill' AFTER `ewb_valid_till`;
 ALTER TABLE `vp_domestic_ewb_irn` ADD COLUMN IF NOT EXISTS `info_dtls` LONGTEXT COMMENT 'InfoDtls from Alankit IRN/EWB response' AFTER `gen_gstin`;
+ALTER TABLE `vp_domestic_ewb_irn` ADD COLUMN IF NOT EXISTS `trans_id` VARCHAR(20) COMMENT 'Transporter GSTIN/ID for E-way bill' AFTER `veh_type`;
+ALTER TABLE `vp_domestic_ewb_irn` ADD COLUMN IF NOT EXISTS `trans_name` VARCHAR(120) COMMENT 'Transporter name for E-way bill' AFTER `trans_id`;
 
 

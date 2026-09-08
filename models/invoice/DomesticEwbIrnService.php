@@ -839,6 +839,14 @@ class DomesticEwbIrnService {
      * Update E-way bill status and data
      */
     private function updateEwbStatus($invoiceId, $status, $error = null, $payload = null, $response = null, $ewb = null, $vehNo = null, $vehType = null, $ewbNo = null, $ewbDate = null, $ewbValidTill = null, $genGstin = null, $infoDtls = null) {
+        $transId = '';
+        $transName = '';
+        if (is_array($payload)) {
+            $ewbPayload = is_array($payload['EwbDtls'] ?? null) ? $payload['EwbDtls'] : $payload;
+            $transId = trim((string)($ewbPayload['TransId'] ?? $ewbPayload['trans_id'] ?? ''));
+            $transName = trim((string)($ewbPayload['TransName'] ?? $ewbPayload['trans_name'] ?? ''));
+        }
+
         $query = "UPDATE vp_domestic_ewb_irn
                   SET ewb_status = ?,
                       ewb_error = ?,
@@ -852,6 +860,8 @@ class DomesticEwbIrnService {
                       ewb_valid_till = ?,
                       gen_gstin = ?,
                       info_dtls = ?,
+                      trans_id = ?,
+                      trans_name = ?,
                       ewb_generated_at = NOW()
                   WHERE vp_invoices_id = ?";
         $stmt = $this->db->prepare($query);
@@ -861,7 +871,7 @@ class DomesticEwbIrnService {
         }
         $payloadJson = $payload ? json_encode($payload) : null;
         $responseJson = $response ? json_encode($response) : null;
-        $stmt->bind_param("ssssssssssssi", $status, $error, $payloadJson, $responseJson, $ewb, $vehNo, $vehType, $ewbNo, $ewbDate, $ewbValidTill, $genGstin, $infoDtls, $invoiceId);
+        $stmt->bind_param("ssssssssssssssi", $status, $error, $payloadJson, $responseJson, $ewb, $vehNo, $vehType, $ewbNo, $ewbDate, $ewbValidTill, $genGstin, $infoDtls, $transId, $transName, $invoiceId);
         return $stmt->execute();
     }
 
@@ -875,13 +885,30 @@ class DomesticEwbIrnService {
 
         $this->infoDtlsColumnChecked = true;
         $check = $this->db->query("SHOW COLUMNS FROM vp_domestic_ewb_irn LIKE 'info_dtls'");
-        if ($check && $check->num_rows > 0) {
-            return;
+        if (!$check || $check->num_rows === 0) {
+            $alter = "ALTER TABLE vp_domestic_ewb_irn ADD COLUMN info_dtls LONGTEXT NULL COMMENT 'InfoDtls from Alankit IRN/EWB response' AFTER gen_gstin";
+            if (!$this->db->query($alter)) {
+                error_log("Domestic EWB: Failed to add info_dtls column: " . $this->db->error);
+            }
+        }
+        if ($check) {
+            $check->free();
         }
 
-        $alter = "ALTER TABLE vp_domestic_ewb_irn ADD COLUMN info_dtls LONGTEXT NULL COMMENT 'InfoDtls from Alankit IRN/EWB response' AFTER gen_gstin";
-        if (!$this->db->query($alter)) {
-            error_log("Domestic EWB: Failed to add info_dtls column: " . $this->db->error);
+        $transporterColumns = [
+            'trans_id' => "ALTER TABLE vp_domestic_ewb_irn ADD COLUMN trans_id VARCHAR(20) NULL COMMENT 'Transporter GSTIN/ID for E-way bill' AFTER veh_type",
+            'trans_name' => "ALTER TABLE vp_domestic_ewb_irn ADD COLUMN trans_name VARCHAR(120) NULL COMMENT 'Transporter name for E-way bill' AFTER trans_id",
+        ];
+        foreach ($transporterColumns as $column => $alterTransporter) {
+            $columnCheck = $this->db->query("SHOW COLUMNS FROM vp_domestic_ewb_irn LIKE '" . $column . "'");
+            if (!$columnCheck || $columnCheck->num_rows === 0) {
+                if (!$this->db->query($alterTransporter)) {
+                    error_log("Domestic EWB: Failed to add {$column} column: " . $this->db->error);
+                }
+            }
+            if ($columnCheck) {
+                $columnCheck->free();
+            }
         }
     }
 
