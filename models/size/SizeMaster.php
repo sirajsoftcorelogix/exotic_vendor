@@ -34,7 +34,6 @@ class SizeMaster
                 INDEX idx_size_master_display_order (display_order)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci'
         );
-        $this->seedIfEmpty();
     }
 
     private function ensureModule(): void
@@ -77,53 +76,9 @@ class SizeMaster
         try {
             $stmt->execute();
         } catch (Throwable $e) {
-            // Menu insert is best-effort; table + seed still succeed.
+            // Menu insert is best-effort.
         }
         $stmt->close();
-    }
-
-    /**
-     * Clothing sizes currently hardcoded on inbound, plus extra groups.
-     *
-     * @return array<string, list<array{code:string,label:string,order:int}>>
-     */
-    public static function defaultSeedByGroup(): array
-    {
-        $clothing = [
-            ['code' => 'XS', 'label' => 'Extra Small (XS)(34)', 'order' => 10],
-            ['code' => 'S', 'label' => 'Small (S)(36)', 'order' => 20],
-            ['code' => 'M', 'label' => 'Medium (M)(38)', 'order' => 30],
-            ['code' => 'L', 'label' => 'Large (L)(40)', 'order' => 40],
-            ['code' => 'XL', 'label' => 'Extra Large (XL)(42)', 'order' => 50],
-            ['code' => 'XXL', 'label' => 'Extra Extra Large (XXL)(44)', 'order' => 60],
-            ['code' => 'XXXL', 'label' => 'Extra Extra Extra Large (XXXL)(46)', 'order' => 70],
-            ['code' => 'XXXXL', 'label' => 'Extra Extra Extra Large (4xL)(48)', 'order' => 80],
-            ['code' => 'XXXXXL', 'label' => 'Extra Extra Extra Large (5xL)(50)', 'order' => 90],
-            ['code' => 'XXXXXXL', 'label' => 'Extra Extra Extra Large (6xL)(52)', 'order' => 100],
-            ['code' => 'FS', 'label' => 'Free Size', 'order' => 110],
-            ['code' => 'OS', 'label' => 'One Size', 'order' => 120],
-        ];
-
-        $jewelry = [];
-        $order = 10;
-        for ($n = 4; $n <= 15; $n++) {
-            $jewelry[] = ['code' => (string) $n, 'label' => 'Ring Size ' . $n, 'order' => $order];
-            $order += 10;
-        }
-
-        $footwear = [];
-        $order = 10;
-        for ($n = 3; $n <= 12; $n++) {
-            $footwear[] = ['code' => (string) $n, 'label' => 'UK ' . $n, 'order' => $order];
-            $order += 10;
-        }
-
-        return [
-            'textiles' => $clothing,
-            'clothing' => $clothing,
-            'jewelry' => $jewelry,
-            'footwear' => $footwear,
-        ];
     }
 
     /**
@@ -164,40 +119,6 @@ class SizeMaster
         }
 
         return array_values(array_unique($keys));
-    }
-
-    private function seedIfEmpty(): void
-    {
-        $res = @$this->conn->query('SELECT COUNT(*) AS c FROM size_master');
-        if (!$res) {
-            return;
-        }
-        $count = (int) (($res->fetch_assoc()['c'] ?? 0));
-        if ($count > 0) {
-            return;
-        }
-        $this->seedDefaultSizes();
-    }
-
-    public function seedDefaultSizes(): void
-    {
-        $stmt = $this->conn->prepare(
-            'INSERT IGNORE INTO size_master (item_group, size_code, size_label, display_order, is_active)
-             VALUES (?, ?, ?, ?, 1)'
-        );
-        if (!$stmt) {
-            return;
-        }
-        foreach (self::defaultSeedByGroup() as $group => $rows) {
-            foreach ($rows as $row) {
-                $code = (string) $row['code'];
-                $label = (string) $row['label'];
-                $order = (int) $row['order'];
-                $stmt->bind_param('sssi', $group, $code, $label, $order);
-                $stmt->execute();
-            }
-        }
-        $stmt->close();
     }
 
     /**
