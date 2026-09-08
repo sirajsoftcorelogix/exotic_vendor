@@ -441,6 +441,8 @@ class DomesticEwbIrnService {
                 //'Distance' => $distance,
                 'Distance' => 0,
                 'TransMode' => $transMode,
+                'TransId' => substr(preg_replace('/\s+/', '', (string)($ewbData['trans_id'] ?? '')), 0, 15),
+                'TransName' => trim((string)($ewbData['trans_name'] ?? '')),
                 //'VehNo' => 'ka123456',// Hardcoded for testing; replace with actual logic as needed
                 //'VehType' => 'R',// Hardcoded for testing; replace with actual logic as needed
                 'VehNo' => trim((string)($ewbData['veh_no'] ?? '')),
@@ -722,17 +724,15 @@ class DomesticEwbIrnService {
             'PayDtls' => null,
             'RefDtls' => null,
             'AddlDocDtls' => null,
-            'EwbDtls' => !empty($ewbData['veh_no']) && !empty($ewbData['veh_type']) ? [
-                //'TransId' => substr(preg_replace('/\s+/', '', (string)($ewbData['trans_id'] ?? '')), 0, 15),
-                //'TransName' => (string)($ewbData['trans_name'] ?? ''),
+            'EwbDtls' => (!empty($ewbData['veh_no']) || !empty($ewbData['trans_id'])) ? [
                 'Distance' => (int)($ewbData['distance'] ?? 0),
-                'TransDocNo' => (string)$invoiceNumber,
+                'TransDocNo' => (string)($ewbData['trans_doc_no'] ?? $invoiceNumber),
                 'TransDocDt' => (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')),
                 'VehNo' => (string)($ewbData['veh_no'] ?? ''),
                 'VehType' => (string)($ewbData['veh_type'] ?? 'R'),
-                //'VehNo' => 'ka123456', // Hardcoded for testing; replace with actual logic as needed
-                //'VehType' => 'R', // Hardcoded for testing; replace with actual logic as needed
-                'TransMode' => (string)($ewbData['trans_mode'] ?? '1')
+                'TransMode' => (string)($ewbData['trans_mode'] ?? '1'),
+                'TransId' => substr(preg_replace('/\s+/', '', (string)($ewbData['trans_id'] ?? '')), 0, 15),
+                'TransName' => (string)($ewbData['trans_name'] ?? '')
             ] : null
         ];
     }
@@ -746,6 +746,10 @@ class DomesticEwbIrnService {
             'Distance' => (int)($ewbData['distance'] ?? 100),
             'TransId' => substr(preg_replace('/\s+/', '', (string)($ewbData['trans_id'] ?? '')), 0, 15),
             'TransName' => (string)($ewbData['trans_name'] ?? 'Transport'),
+            'TransMode' => (string)($ewbData['trans_mode'] ?? '1'),
+            'VehNo' => trim((string)($ewbData['veh_no'] ?? '')),
+            'VehType' => trim((string)($ewbData['veh_type'] ?? 'R')),
+            'TransDocNo' => trim((string)($ewbData['trans_doc_no'] ?? '')),
             'TrnDocDt' => (string)($ewbData['trn_doc_dt'] ?? date('d/m/Y')),
             'DispDtls' => [
                 'Nm' => $customer['first_name'] ?? 'Buyer',
