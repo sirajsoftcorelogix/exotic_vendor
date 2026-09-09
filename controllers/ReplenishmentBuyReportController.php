@@ -25,8 +25,14 @@ class ReplenishmentBuyReportController
             ? $this->reportModel->searchList($filters)
             : ['rows' => [], 'total' => 0, 'page' => 1, 'pages' => 1, 'limit' => 20];
 
+        $rows = [];
+        foreach ($listing['rows'] as $row) {
+            $row['run_date_display'] = $this->formatSalesDate((string) ($row['run_date'] ?? ''));
+            $rows[] = $row;
+        }
+
         renderTemplate('views/replenishment_buy_report/index.php', [
-            'rows' => $listing['rows'],
+            'rows' => $rows,
             'search' => $filters['search'],
             'sku' => $filters['sku'],
             'item_code' => $filters['item_code'],
@@ -70,9 +76,9 @@ class ReplenishmentBuyReportController
                 'SKU',
                 'Item code',
                 'Title',
-                'Yesterday sold',
+                "Y'day sold",
                 'Sold',
-                'Lookback months',
+                'Lookback',
                 'Lookback source',
                 'Period source',
                 'Available Stock',
@@ -93,7 +99,7 @@ class ReplenishmentBuyReportController
             $rowNum = 2;
             foreach ($rows as $row) {
                 $sheet->fromArray([
-                    (string) ($row['run_date'] ?? ''),
+                    $this->formatSalesDate((string) ($row['run_date'] ?? '')),
                     (string) ($row['sku'] ?? ''),
                     (string) ($row['item_code'] ?? ''),
                     (string) ($row['title'] ?? ''),
@@ -103,9 +109,8 @@ class ReplenishmentBuyReportController
                     (string) ($row['lookback_source'] ?? ''),
                     (string) ($row['numsold_source'] ?? ''),
                     (int) ($row['available_stock'] ?? 0),
-                    'Physical stock ' . (int) ($row['physical_stock'] ?? 0)
-                        . ' + Pending PO ' . (int) ($row['pending_po_qty'] ?? 0)
-                        . ' = ' . (int) ($row['available_stock'] ?? 0),
+                    'Available stock = Physical stock ' . (int) ($row['physical_stock'] ?? 0)
+                        . ' + Pending PO ' . (int) ($row['pending_po_qty'] ?? 0),
                     (int) ($row['purchase_threshold_percent'] ?? 0),
                     (int) ($row['purchase_threshold_qty'] ?? 0),
                     (int) ($row['min_stock_percent'] ?? 0),
@@ -216,6 +221,29 @@ class ReplenishmentBuyReportController
             'message' => $message,
             'summary' => $summary,
         ]);
+    }
+
+    private function formatSalesDate(string $date): string
+    {
+        $timestamp = strtotime($date);
+        if ($timestamp === false) {
+            return $date;
+        }
+
+        $day = (int) date('j', $timestamp);
+        $mod100 = $day % 100;
+        if ($mod100 >= 11 && $mod100 <= 13) {
+            $suffix = 'th';
+        } else {
+            $suffix = match ($day % 10) {
+                1 => 'st',
+                2 => 'nd',
+                3 => 'rd',
+                default => 'th',
+            };
+        }
+
+        return $day . $suffix . ' ' . date('M, y', $timestamp);
     }
 
     /**

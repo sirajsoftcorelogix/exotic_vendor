@@ -41,7 +41,7 @@ $lookbackSourceLabels = [
     'product' => 'From product',
     'publisher' => 'From publisher',
     'vendor' => 'From vendor',
-    'global' => 'From global setting',
+    'global' => 'Global',
 ];
 $thInfo = static function (string $label, string $help, bool $right = false) use ($h): string {
     $rowClass = $right ? 'inline-flex items-center justify-end gap-1.5 w-full' : 'inline-flex items-center gap-1.5';
@@ -179,8 +179,8 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                             <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Sales date', 'The sales day this row was generated for (yesterday when you click Run for yesterday).'); ?></th>
                             <th class="px-4 py-3 font-semibold"><?php echo $thInfo('SKU / Item', 'Product SKU and item code. Click the SKU to open product details.'); ?></th>
                             <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Title', 'Book title.'); ?></th>
-                            <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Lookback months', 'How many months of sales history we use. The small label under the number shows where this came from: product, publisher, vendor, or global setting. This is a time window, not units sold.'); ?></th>
-                            <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Yesterday sold', 'Units of this SKU sold on the sales date only (not the full lookback period).', true); ?></th>
+                            <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Lookback', 'How many months of sales history we use. The small label under the number shows where this came from: product, publisher, vendor, or global setting. This is a time window, not units sold.'); ?></th>
+                            <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo("Y'day sold", 'Units of this SKU sold on the sales date only (not the full lookback period).', true); ?></th>
                             <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Sold', 'Total units sold during the lookback months. Buy qty and purchase threshold are calculated from this number, not from yesterday sold.', true); ?></th>
                             <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Available Stock', 'Physical stock + pending PO. Compared with the purchase threshold. Hover the i icon on each row for that SKU’s calculation.', true); ?></th>
                             <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Purchase threshold', 'Minimum stock needed to avoid a buy: period sold × threshold %. The small % is the global setting. A buy is recommended when available stock is below this quantity.', true); ?></th>
@@ -203,10 +203,10 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                             $physicalStock = (int) ($row['physical_stock'] ?? 0);
                             $pendingPoQty = (int) ($row['pending_po_qty'] ?? 0);
                             $availableStock = (int) ($row['available_stock'] ?? 0);
-                            $availableHelp = 'Available stock = Physical stock ' . $physicalStock . ' + Pending PO ' . $pendingPoQty . ' = ' . $availableStock . '.';
+                            $availableHelp = 'Available stock = Physical stock ' . $physicalStock . ' + Pending PO ' . $pendingPoQty;
                             ?>
                             <tr>
-                                <td class="px-4 py-3 whitespace-nowrap text-gray-600"><?php echo $h($row['run_date'] ?? ''); ?></td>
+                                <td class="px-4 py-3 whitespace-nowrap text-gray-600"><?php echo $h($row['run_date_display'] ?? $row['run_date'] ?? ''); ?></td>
                                 <td class="px-4 py-3">
                                     <a class="text-amber-800 font-medium hover:underline" href="<?php echo $h(base_url('?page=products&action=detail&id=' . (int) ($row['product_id'] ?? 0))); ?>">
                                         <?php echo $h($row['sku'] ?? ''); ?>
