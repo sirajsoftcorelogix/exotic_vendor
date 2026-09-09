@@ -622,8 +622,8 @@ class InvoicesController
                 'shipping_exp_duty' => empty($internationalData['shipping_exp_duty']) ? 0 : (float)($internationalData['shipping_exp_duty'])
 
             ];
-            // echo '<br><br><pre>';
-            // print_r($irnPayload);
+             echo '<br><br><pre>';
+             print_r($irnPayload);
             $authreq = $alankitClient->authRequest();
             // call api request to auth
             // Prepare request with encrypted data
