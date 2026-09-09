@@ -1842,13 +1842,29 @@ class PurchaseOrdersController
         global $domain;
         global $productModel;
 
-        $itemIds = isset($_POST['cpoitem']) ? $_POST['cpoitem'] : [];
-        $data = [];
+        $itemIds = isset($_POST['cpoitem']) && is_array($_POST['cpoitem']) ? $_POST['cpoitem'] : [];
+        $qtyById = isset($_POST['cpoqty']) && is_array($_POST['cpoqty']) ? $_POST['cpoqty'] : [];
+        $products = [];
         foreach ($itemIds as $id) {
-            $data['data'][] = $productModel->getProduct($id);
+            $productId = (int) $id;
+            if ($productId <= 0) {
+                continue;
+            }
+            $product = $productModel->getProduct($productId);
+            if (!is_array($product) || empty($product['id'])) {
+                continue;
+            }
+            $qty = isset($qtyById[$productId]) ? (int) $qtyById[$productId] : 0;
+            if ($qty > 0) {
+                $product['quantity'] = $qty;
+            }
+            $products[] = $product;
         }
-        //print_array($data['data']);
-        //$vendors = $vendorsModel->getAllVendors();
+        $data = [];
+        $data['data'] = $products;
+        $data['po_items'] = $products;
+        $data['selected_vendor_id'] = (int) ($_POST['vendor_id'] ?? 0);
+        $data['selected_vendor_name'] = trim((string) ($_POST['vendor_name'] ?? ''));
         $data['vendors'] = $vendorsModel->getAllVendors();
         //$data['items'] = $purchaseOrdersModel->getAllPurchaseOrderItems();
         $data['domain'] = $domain;

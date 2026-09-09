@@ -44,9 +44,9 @@
                         class="mt-1 block pl-3 pr-10 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md form-input w-full md:w-[300px]"
                         placeholder="Search vendor by name..."
                         autocomplete="off"
-                        value=""
+                        value="<?php echo htmlspecialchars((string) ($selected_vendor_name ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
                     >
-                    <input type="hidden" name="vendor" id="vendor" value="">
+                    <input type="hidden" name="vendor" id="vendor" value="<?php echo (int) ($selected_vendor_id ?? 0) > 0 ? (int) $selected_vendor_id : ''; ?>">
                     <div id="vendor_suggestions" class="bg-white border rounded-md shadow-lg mt-1" style="display:none; position:absolute; left:0; right:0; z-index:50; max-height:240px; overflow:auto;"></div>
                 </div>
                 
@@ -82,12 +82,28 @@
             </tr>
             </thead>
             <tbody class="table-row-text " id="poTableBody">
-                
+            <?php
+            $poLines = [];
+            if (!empty($po_items) && is_array($po_items)) {
+                foreach ($po_items as $poRow) {
+                    if (is_array($poRow)) {
+                        $poLines[] = $poRow;
+                    }
+                }
+            }
+            if ($poLines === []) {
+                $poLines = [[]];
+            }
+            foreach ($poLines as $poItem):
+                if (!is_array($poItem)) {
+                    $poItem = [];
+                }
+            ?>
             <tr class="bg-white">
                 <td class="p-2 position-relative">
-                    <input type="hidden" name="sku[]" value="<?= $data[0]['sku'] ?? '' ?>">
-                    <input type="hidden" name="product_id[]" value="<?php echo $data[0]['id'] ?? ''; ?>">
-                    <input type="text" name="item_code[]" class="item_code w-[90px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $data[0]['item_code'] ?? ''; ?>" placeholder="Item code" onblur="fetchProductDetails(this)">
+                    <input type="hidden" name="sku[]" value="<?= $poItem['sku'] ?? '' ?>">
+                    <input type="hidden" name="product_id[]" value="<?php echo $poItem['id'] ?? ''; ?>">
+                    <input type="text" name="item_code[]" class="item_code w-[90px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $poItem['item_code'] ?? ''; ?>" placeholder="Item code" onblur="fetchProductDetails(this)">
                     <!--suggestion box-->
                     <div class="suggestion-box position-absolute z-50 w-64 bg-white border rounded-md shadow-lg mt-1" style="display:none; position:absolute; max-height:240px; overflow:auto;"></div>
                     
@@ -95,31 +111,31 @@
                 
                 <td class="p-1 ">
                         <div class="flex items-center gap-2">
-                        <textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"><?php echo $data[0]['title'] ?? ''; ?> <?= isset($data[0]['size']) ? ' size:'.$data[0]['size'] : '' ?> <?= isset($data[0]['color']) ? ' color:'.$data[0]['color'] : '' ?> <?= isset($data[0]['material']) ? ' material:'.$data[0]['material'] : '' ?></textarea>
-                        <?php //if(isset($data[0]['id']) && !empty($data[0]['id'])){ ?>
+                        <textarea name="title[]" class="w-[280px] h-[60px] border rounded-md focus:ring-0 form-input align-middle p-2"><?php echo $poItem['title'] ?? ''; ?> <?= isset($poItem['size']) ? ' size:'.$poItem['size'] : '' ?> <?= isset($poItem['color']) ? ' color:'.$poItem['color'] : '' ?> <?= isset($poItem['material']) ? ' material:'.$poItem['material'] : '' ?></textarea>
+                        <?php //if(isset($poItem['id']) && !empty($poItem['id'])){ ?>
                         <div class="relative group info-popup-container">
                             <i class="fas fa-info-circle text-blue-500 cursor-help info-icon" 
-                               data-sku="<?php echo $data[0]['sku'] ?? ''; ?>"
-                               data-item-code="<?php echo $data[0]['item_code'] ?? ''; ?>"
-                               data-color="<?php echo $data[0]['color'] ?? ''; ?>"
-                               data-size="<?php echo $data[0]['size'] ?? ''; ?>"
-                               data-image="<?php echo $data[0]['image'] ?? ''; ?>"
-                               data-cost-price="<?php echo $data[0]['cost_price'] ?? ''; ?>"
-                               data-itemprice="<?php echo $data[0]['itemprice'] ?? ''; ?>"
-                               data-local-stock="<?php echo $data[0]['local_stock'] ?? ''; ?>"
-                               data-leadtime="<?php echo $data[0]['leadtime'] ?? ''; ?>"
-                               data-numsold="<?php echo $data[0]['numsold'] ?? ''; ?>"
-                               data-numsold-india="<?php echo $data[0]['numsold_india'] ?? ''; ?>"
-                               data-numsold-global="<?php echo $data[0]['numsold_global'] ?? ''; ?>"
-                               data-lastsold="<?php echo $data[0]['lastsold'] ?? ''; ?>"
-                               data-instock-leadtime="<?php echo $data[0]['instock_leadtime'] ?? ''; ?>"
-                               data-fba-in="<?php echo $data[0]['fba_in'] ?? ''; ?>"
-                               data-fba-us="<?php echo $data[0]['fba_us'] ?? ''; ?>"></i>
+                               data-sku="<?php echo $poItem['sku'] ?? ''; ?>"
+                               data-item-code="<?php echo $poItem['item_code'] ?? ''; ?>"
+                               data-color="<?php echo $poItem['color'] ?? ''; ?>"
+                               data-size="<?php echo $poItem['size'] ?? ''; ?>"
+                               data-image="<?php echo $poItem['image'] ?? ''; ?>"
+                               data-cost-price="<?php echo $poItem['cost_price'] ?? ''; ?>"
+                               data-itemprice="<?php echo $poItem['itemprice'] ?? ''; ?>"
+                               data-local-stock="<?php echo $poItem['local_stock'] ?? ''; ?>"
+                               data-leadtime="<?php echo $poItem['leadtime'] ?? ''; ?>"
+                               data-numsold="<?php echo $poItem['numsold'] ?? ''; ?>"
+                               data-numsold-india="<?php echo $poItem['numsold_india'] ?? ''; ?>"
+                               data-numsold-global="<?php echo $poItem['numsold_global'] ?? ''; ?>"
+                               data-lastsold="<?php echo $poItem['lastsold'] ?? ''; ?>"
+                               data-instock-leadtime="<?php echo $poItem['instock_leadtime'] ?? ''; ?>"
+                               data-fba-in="<?php echo $poItem['fba_in'] ?? ''; ?>"
+                               data-fba-us="<?php echo $poItem['fba_us'] ?? ''; ?>"></i>
                             <div class="absolute top-full left-0 mt-2 opacity-0 border-2 rounded-md bg-white shadow-lg group-hover:opacity-100 transition-opacity z-10 pointer-events-none group-hover:pointer-events-auto">
                                 <div class="variation-card p-6 flex">
                                     <!-- Image -->
                                     <div class="flex-shrink-0 w-32 h-40 bg-gray-200 rounded-lg overflow-hidden mr-6">
-                                        <img src="<?php echo $data[0]['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'; ?>" alt="Product Image" class="w-full h-full object-cover popup-image">
+                                        <img src="<?php echo $poItem['image'] ?? 'https://placehold.co/100x100/e2e8f0/4a5568?text=Image'; ?>" alt="Product Image" class="w-full h-full object-cover popup-image">
                                     </div>
 
                                     <!-- Details Container -->
@@ -127,19 +143,19 @@
 
                                         <!-- Column 1 (Data) -->
                                         <div class="flex-grow grid grid-cols-[80px_10px_1fr] items-baseline gap-y-1 content-start">
-                                            <span class="grid-label">SKU</span> <span class="grid-label">:</span> <span class="grid-value popup-sku"><?php echo $data[0]['sku'] ?? 'N/A'; ?></span>
-                                            <span class="grid-label">Item code</span> <span class="grid-label">:</span> <span class="grid-value popup-item-code"><?php echo $data[0]['item_code'] ?? 'N/A'; ?></span>
-                                            <span class="grid-label">Color</span> <span class="grid-label">:</span> <span class="grid-value popup-color"><?php echo $data[0]['color'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">SKU</span> <span class="grid-label">:</span> <span class="grid-value popup-sku"><?php echo $poItem['sku'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">Item code</span> <span class="grid-label">:</span> <span class="grid-value popup-item-code"><?php echo $poItem['item_code'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">Color</span> <span class="grid-label">:</span> <span class="grid-value popup-color"><?php echo $poItem['color'] ?? 'N/A'; ?></span>
 
-                                            <span class="grid-label">Size</span> <span class="grid-label">:</span> <span class="grid-value popup-size"><?php echo $data[0]['size'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">Size</span> <span class="grid-label">:</span> <span class="grid-value popup-size"><?php echo $poItem['size'] ?? 'N/A'; ?></span>
 
-                                            <span class="grid-label">Cost Price</span> <span class="grid-label">:</span> <span class="grid-value popup-cost-price"><?php echo $data[0]['cost_price'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">Cost Price</span> <span class="grid-label">:</span> <span class="grid-value popup-cost-price"><?php echo $poItem['cost_price'] ?? 'N/A'; ?></span>
 
-                                            <span class="grid-label">Item Price</span> <span class="grid-label">:</span> <span class="grid-value popup-itemprice"><?php echo $data[0]['itemprice'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">Item Price</span> <span class="grid-label">:</span> <span class="grid-value popup-itemprice"><?php echo $poItem['itemprice'] ?? 'N/A'; ?></span>
 
-                                            <span class="grid-label">Local Stock</span> <span class="grid-label">:</span> <span class="grid-value popup-local-stock"><?php echo $data[0]['local_stock'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">Local Stock</span> <span class="grid-label">:</span> <span class="grid-value popup-local-stock"><?php echo $poItem['local_stock'] ?? 'N/A'; ?></span>
                                             
-                                            <span class="grid-label">Lead Time</span> <span class="grid-label">:</span> <span class="grid-value popup-leadtime"><?php echo $data[0]['leadtime'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">Lead Time</span> <span class="grid-label">:</span> <span class="grid-value popup-leadtime"><?php echo $poItem['leadtime'] ?? 'N/A'; ?></span>
 
                                         </div>
 
@@ -148,17 +164,17 @@
 
                                         <!-- Column 2 (Data) -->
                                         <div class="flex-grow grid grid-cols-[130px_10px_1fr] items-baseline gap-y-1 content-start">
-                                            <span class="grid-label">Num Sold</span> <span class="grid-label">:</span> <span class="grid-value popup-numsold"><?php echo $data[0]['numsold'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">Num Sold</span> <span class="grid-label">:</span> <span class="grid-value popup-numsold"><?php echo $poItem['numsold'] ?? 'N/A'; ?></span>
 
-                                            <span class="grid-label">Num Sold (India)</span> <span class="grid-label">:</span> <span class="grid-value popup-numsold-india"><?php echo $data[0]['numsold_india'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">Num Sold (India)</span> <span class="grid-label">:</span> <span class="grid-value popup-numsold-india"><?php echo $poItem['numsold_india'] ?? 'N/A'; ?></span>
 
-                                            <span class="grid-label">Num Sold (Global)</span> <span class="grid-label">:</span> <span class="grid-value popup-numsold-global"><?php echo $data[0]['numsold_global'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">Num Sold (Global)</span> <span class="grid-label">:</span> <span class="grid-value popup-numsold-global"><?php echo $poItem['numsold_global'] ?? 'N/A'; ?></span>
 
-                                            <span class="grid-label">Num Sold (Last)</span> <span class="grid-label">:</span> <span class="grid-value popup-lastsold"><?php echo $data[0]['lastsold'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">Num Sold (Last)</span> <span class="grid-label">:</span> <span class="grid-value popup-lastsold"><?php echo $poItem['lastsold'] ?? 'N/A'; ?></span>
 
-                                            <span class="grid-label">In Stock Lead Time</span> <span class="grid-label">:</span> <span class="grid-value popup-instock-leadtime"><?php echo $data[0]['instock_leadtime'] ?? 'N/A'; ?></span>
-                                            <span class="grid-label">FBA (India)</span> <span class="grid-label">:</span> <span class="grid-value popup-fba-in"><?php echo $data[0]['fba_in'] ?? 'N/A'; ?></span>
-                                            <span class="grid-label">FBA (US)</span> <span class="grid-label">:</span> <span class="grid-value popup-fba-us"><?php echo $data[0]['fba_us'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">In Stock Lead Time</span> <span class="grid-label">:</span> <span class="grid-value popup-instock-leadtime"><?php echo $poItem['instock_leadtime'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">FBA (India)</span> <span class="grid-label">:</span> <span class="grid-value popup-fba-in"><?php echo $poItem['fba_in'] ?? 'N/A'; ?></span>
+                                            <span class="grid-label">FBA (US)</span> <span class="grid-label">:</span> <span class="grid-value popup-fba-us"><?php echo $poItem['fba_us'] ?? 'N/A'; ?></span>
                                             
                                         </div>
                                         
@@ -169,11 +185,11 @@
                         <?php //} ?>
                         </div>
                 </td>
-                <td class="p-1"><input type="text" name="hsn[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $data[0]['hsn'] ?? ''; ?>"></td>
+                <td class="p-1"><input type="text" name="hsn[]" class="w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $poItem['hsn'] ?? ''; ?>"></td>
                 <td class="p-1">
-                    <?php if(isset($data[0]['image']) && !empty($data[0]['image'])){ ?>
-                       <img src="<?php echo $data[0]['image']; ?>" alt="Product Image" class="rounded-lg cursor-pointer" onclick="openImagePopup('<?php echo $data[0]['image']; ?>')" >
-                        <input type="hidden" name="img[]" value="<?php echo $data[0]['image']; ?>">
+                    <?php if(isset($poItem['image']) && !empty($poItem['image'])){ ?>
+                       <img src="<?php echo $poItem['image']; ?>" alt="Product Image" class="rounded-lg cursor-pointer" onclick="openImagePopup('<?php echo $poItem['image']; ?>')" >
+                        <input type="hidden" name="img[]" value="<?php echo $poItem['image']; ?>">
                        <?php }else{ ?>
                     <input type="hidden" name="img[]" value="">
                     <div class="flex items-center space-x-2 items-image-cpo">
@@ -183,16 +199,16 @@
                     </div>
                     <?php } ?>
                 </td>
-                <td class="p-1"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $data[0]['gst'] ?? ''; ?>" oninput="calculateTotals()" required></td>
+                <td class="p-1"><input type="number" name="gst[]" min="0" class="gst w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $poItem['gst'] ?? ''; ?>" oninput="calculateTotals()" required></td>
                 <td class="p-1">
                     <div class="flex items-center space-x-2">
-                        <input type="number" name="quantity[]" min="0" class="quantity w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $data[0]['quantity'] ?? ''; ?>" oninput="calculateTotals()" required>                       
+                        <input type="number" name="quantity[]" min="0" class="quantity w-[80px] h-[25px] text-center border rounded-md focus:ring-0 form-input" value="<?php echo $poItem['quantity'] ?? ''; ?>" oninput="calculateTotals()" required>                       
                     </div>
                 </td>
                 <!-- <td class="p-4">Nos</td> -->
                 <td class="p-1">
                     <div class="flex items-center space-x-2">
-                        <input type="number" min="0" step="0.01" inputmode="decimal" name="rate[]" value="<?php echo isset($data[0]['rate']) && $data[0]['rate'] !== '' && $data[0]['rate'] !== null ? htmlspecialchars((string) $data[0]['rate']) : htmlspecialchars((string) ($data[0]['cost_price'] ?? '')); ?>" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
+                        <input type="number" min="0" step="0.01" inputmode="decimal" name="rate[]" value="<?php echo isset($poItem['rate']) && $poItem['rate'] !== '' && $poItem['rate'] !== null ? htmlspecialchars((string) $poItem['rate']) : htmlspecialchars((string) ($poItem['cost_price'] ?? '')); ?>" oninput="calculateTotals()" required class="amount w-[105px] h-[25px] text-center border rounded-md focus:ring-0 form-input">
                         <!-- <input type="checkbox" name="gst_inclusive[]" class="gst_inclusive" value="1" onchange="calculateTotals()">
                         <label for="gst_inclusive">GST inclusive</label> -->
                         
@@ -205,7 +221,7 @@
                
                 
             </tr>
-            
+            <?php endforeach; ?>
             </tbody>
         </table>
     </div>
@@ -467,6 +483,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
         });
+    if (typeof calculateTotals === 'function') {
+        calculateTotals();
+    }
     });
 
 // function openPOPopup() {
