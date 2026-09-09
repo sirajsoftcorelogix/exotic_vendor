@@ -45,15 +45,10 @@ $lookbackSourceLabels = [
 ];
 $thInfo = static function (string $label, string $help, bool $right = false) use ($h): string {
     $rowClass = $right ? 'inline-flex items-center justify-end gap-1.5 w-full' : 'inline-flex items-center gap-1.5';
-    $tipPos = $right ? 'right-0 left-auto' : 'left-0';
     return '<span class="' . $rowClass . '">'
         . '<span>' . $h($label) . '</span>'
-        . '<span class="relative group inline-flex shrink-0">'
-        . '<i class="fas fa-info-circle text-gray-400 hover:text-amber-700 cursor-help text-[12px] normal-case tracking-normal" title="' . $h($help) . '" aria-label="' . $h($help) . '"></i>'
-        . '<span class="pointer-events-none absolute z-40 hidden group-hover:block bottom-full mb-2 ' . $tipPos . ' w-64 max-w-[16rem] normal-case font-normal tracking-normal text-left text-[11px] leading-snug text-white bg-gray-900 rounded-lg px-3 py-2 shadow-lg">'
-        . $h($help)
-        . '</span>'
-        . '</span></span>';
+        . '<i class="replenish-col-info fas fa-info-circle text-gray-400 hover:text-amber-700 cursor-help text-[12px] normal-case tracking-normal" data-help="' . $h($help) . '" aria-label="' . $h($help) . '"></i>'
+        . '</span>';
 };
 ?>
 
@@ -186,10 +181,8 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                             <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Title', 'Book title.'); ?></th>
                             <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Lookback months', 'How many months of sales history we use. The small label under the number shows where this came from: product, publisher, vendor, or global setting. This is a time window, not units sold.'); ?></th>
                             <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Yesterday sold', 'Units of this SKU sold on the sales date only (not the full lookback period).', true); ?></th>
-                            <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Sold in lookback period', 'Total units sold during the lookback months. Buy qty and purchase threshold are calculated from this number, not from yesterday sold.', true); ?></th>
-                            <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Physical stock', 'Current physical stock from stock movements.', true); ?></th>
-                            <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Pending PO', 'Quantity already on purchase orders that are pending, ordered, or draft.', true); ?></th>
-                            <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Available stock', 'Physical stock + pending PO quantity. This is compared with the purchase threshold.', true); ?></th>
+                            <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Sold', 'Total units sold during the lookback months. Buy qty and purchase threshold are calculated from this number, not from yesterday sold.', true); ?></th>
+                            <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Available Stock', 'Physical stock + pending PO. Compared with the purchase threshold. Hover the i icon on each row for that SKU’s calculation.', true); ?></th>
                             <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Purchase threshold', 'Minimum stock needed to avoid a buy: period sold × threshold %. The small % is the global setting. A buy is recommended when available stock is below this quantity.', true); ?></th>
                             <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Recommended buy qty', 'How many to buy: period sold × minimum stock %. This is saved on the product when the threshold rule is met.', true); ?></th>
                             <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Purchased', 'Mark Yes after you have purchased this item. Click to toggle.', true); ?></th>
@@ -198,7 +191,7 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                     <tbody class="divide-y divide-gray-100">
                         <?php if ($rows === []): ?>
                             <tr>
-                                <td colspan="12" class="px-4 py-8 text-center text-gray-500">No replenishment items for these filters.</td>
+                                <td colspan="10" class="px-4 py-8 text-center text-gray-500">No replenishment items for these filters.</td>
                             </tr>
                         <?php endif; ?>
                         <?php foreach ($rows as $row): ?>
@@ -207,6 +200,10 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                             $lookbackKey = strtolower(trim((string) ($row['lookback_source'] ?? '')));
                             $lookbackLabel = $lookbackSourceLabels[$lookbackKey] ?? ($lookbackKey !== '' ? ('From ' . $lookbackKey) : '—');
                             $lookbackMonths = (int) ($row['lookback_months'] ?? 0);
+                            $physicalStock = (int) ($row['physical_stock'] ?? 0);
+                            $pendingPoQty = (int) ($row['pending_po_qty'] ?? 0);
+                            $availableStock = (int) ($row['available_stock'] ?? 0);
+                            $availableHelp = 'Available stock = Physical stock ' . $physicalStock . ' + Pending PO ' . $pendingPoQty . ' = ' . $availableStock . '.';
                             ?>
                             <tr>
                                 <td class="px-4 py-3 whitespace-nowrap text-gray-600"><?php echo $h($row['run_date'] ?? ''); ?></td>
@@ -225,9 +222,12 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                                 </td>
                                 <td class="px-4 py-3 text-right"><?php echo (int) ($row['yesterday_sold_qty'] ?? 0); ?></td>
                                 <td class="px-4 py-3 text-right"><?php echo (int) ($row['numsold_replenishment'] ?? 0); ?></td>
-                                <td class="px-4 py-3 text-right"><?php echo (int) ($row['physical_stock'] ?? 0); ?></td>
-                                <td class="px-4 py-3 text-right"><?php echo (int) ($row['pending_po_qty'] ?? 0); ?></td>
-                                <td class="px-4 py-3 text-right font-semibold"><?php echo (int) ($row['available_stock'] ?? 0); ?></td>
+                                <td class="px-4 py-3 text-right">
+                                    <span class="inline-flex items-center justify-end gap-1.5 w-full">
+                                        <span class="font-semibold"><?php echo $availableStock; ?></span>
+                                        <i class="replenish-col-info fas fa-info-circle text-gray-400 hover:text-amber-700 cursor-help text-[12px]" data-help="<?php echo $h($availableHelp); ?>" aria-label="<?php echo $h($availableHelp); ?>"></i>
+                                    </span>
+                                </td>
                                 <td class="px-4 py-3 text-right whitespace-nowrap">
                                     <div><?php echo (int) ($row['purchase_threshold_qty'] ?? 0); ?></div>
                                     <div class="text-xs text-gray-400"><?php echo (int) ($row['purchase_threshold_percent'] ?? 0); ?>%</div>
@@ -352,5 +352,49 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
     }
+});
+</script>
+<div id="replenishColTip" class="hidden fixed z-[200] w-64 max-w-[16rem] text-left text-[11px] leading-snug text-white bg-gray-900 rounded-lg px-3 py-2 shadow-lg pointer-events-none"></div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var tip = document.getElementById('replenishColTip');
+    if (!tip) {
+        return;
+    }
+    var placeTip = function (icon) {
+        var help = icon.getAttribute('data-help') || '';
+        if (help === '') {
+            return;
+        }
+        tip.textContent = help;
+        tip.classList.remove('hidden');
+        var rect = icon.getBoundingClientRect();
+        var tipWidth = tip.offsetWidth || 256;
+        var tipHeight = tip.offsetHeight || 80;
+        var left = rect.left;
+        if (left + tipWidth > window.innerWidth - 8) {
+            left = window.innerWidth - tipWidth - 8;
+        }
+        if (left < 8) {
+            left = 8;
+        }
+        var top = rect.bottom + 8;
+        if (top + tipHeight > window.innerHeight - 8) {
+            top = rect.top - tipHeight - 8;
+        }
+        if (top < 8) {
+            top = 8;
+        }
+        tip.style.left = left + 'px';
+        tip.style.top = top + 'px';
+    };
+    document.querySelectorAll('.replenish-col-info').forEach(function (icon) {
+        icon.addEventListener('mouseenter', function () { placeTip(icon); });
+        icon.addEventListener('focus', function () { placeTip(icon); });
+        icon.addEventListener('mouseleave', function () { tip.classList.add('hidden'); });
+        icon.addEventListener('blur', function () { tip.classList.add('hidden'); });
+        icon.setAttribute('tabindex', '0');
+    });
+    window.addEventListener('scroll', function () { tip.classList.add('hidden'); }, true);
 });
 </script>

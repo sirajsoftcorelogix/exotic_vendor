@@ -71,13 +71,12 @@ class ReplenishmentBuyReportController
                 'Item code',
                 'Title',
                 'Yesterday sold',
-                'Sold in lookback period',
+                'Sold',
                 'Lookback months',
                 'Lookback source',
                 'Period source',
-                'Physical stock',
-                'Pending PO',
-                'Available stock',
+                'Available Stock',
+                'Available stock calculation',
                 'Threshold %',
                 'Purchase threshold qty',
                 'Min stock %',
@@ -86,8 +85,8 @@ class ReplenishmentBuyReportController
                 'Purchased at',
             ];
             $sheet->fromArray($headers, null, 'A1');
-            $sheet->getStyle('A1:R1')->getFont()->setBold(true);
-            $sheet->getStyle('A1:R1')->getFill()
+            $sheet->getStyle('A1:Q1')->getFont()->setBold(true);
+            $sheet->getStyle('A1:Q1')->getFill()
                 ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
                 ->getStartColor()->setARGB('FFF3F4F6');
 
@@ -103,9 +102,10 @@ class ReplenishmentBuyReportController
                     (int) ($row['lookback_months'] ?? 0),
                     (string) ($row['lookback_source'] ?? ''),
                     (string) ($row['numsold_source'] ?? ''),
-                    (int) ($row['physical_stock'] ?? 0),
-                    (int) ($row['pending_po_qty'] ?? 0),
                     (int) ($row['available_stock'] ?? 0),
+                    'Physical stock ' . (int) ($row['physical_stock'] ?? 0)
+                        . ' + Pending PO ' . (int) ($row['pending_po_qty'] ?? 0)
+                        . ' = ' . (int) ($row['available_stock'] ?? 0),
                     (int) ($row['purchase_threshold_percent'] ?? 0),
                     (int) ($row['purchase_threshold_qty'] ?? 0),
                     (int) ($row['min_stock_percent'] ?? 0),
@@ -116,7 +116,7 @@ class ReplenishmentBuyReportController
                 $rowNum++;
             }
 
-            foreach (range('A', 'R') as $col) {
+            foreach (range('A', 'Q') as $col) {
                 $sheet->getColumnDimension($col)->setAutoSize(true);
             }
 
