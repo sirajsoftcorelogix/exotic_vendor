@@ -295,7 +295,7 @@ class ReplenishmentBuyReport
             $countStmt->close();
         }
 
-        $sql = 'SELECT r.* FROM vp_replenishment_buy_report r' . $where
+        $sql = $this->selectListSql() . $where
             . ' ORDER BY r.run_date DESC, r.id DESC LIMIT ? OFFSET ?';
         $stmt = $this->conn->prepare($sql);
         $rows = [];
@@ -327,7 +327,7 @@ class ReplenishmentBuyReport
     {
         $maxRows = max(1, min(20000, $maxRows));
         $clause = $this->buildSearchWhere($filters);
-        $sql = 'SELECT r.* FROM vp_replenishment_buy_report r' . $clause['where']
+        $sql = $this->selectListSql() . $clause['where']
             . ' ORDER BY r.run_date DESC, r.id DESC LIMIT ?';
         $stmt = $this->conn->prepare($sql);
         $rows = [];
@@ -345,6 +345,42 @@ class ReplenishmentBuyReport
         $stmt->close();
 
         return $rows;
+    }
+
+    private function selectListSql(): string
+    {
+        return 'SELECT r.*,
+            COALESCE(
+                NULLIF((
+                    SELECT COALESCE(NULLIF(TRIM(pub.publishers), \'\'), TRIM(IFNULL(p.publisher, \'\')))
+                    FROM vp_products p
+                    LEFT JOIN vp_publishers pub ON (
+                        CAST(pub.publishers_id AS CHAR) = TRIM(IFNULL(p.publisher, \'\'))
+                        OR CAST(pub.id AS CHAR) = TRIM(IFNULL(p.publisher, \'\'))
+                        OR pub.publishers = TRIM(IFNULL(p.publisher, \'\'))
+                    )
+                    WHERE p.id = r.product_id
+                    LIMIT 1
+                ), \'\'),
+                (
+                    SELECT pub2.publishers
+                    FROM product_vendor_map pvm2
+                    INNER JOIN publisher_vendor_mapping map ON map.vendor_id = pvm2.vendor_id
+                    INNER JOIN vp_publishers pub2 ON pub2.id = map.publisher_id
+                    WHERE pvm2.item_code = r.item_code
+                    ORDER BY pvm2.priority ASC, pvm2.id ASC, map.sort_order ASC, map.id ASC
+                    LIMIT 1
+                )
+            ) AS publisher_name,
+            (
+                SELECT v.vendor_name
+                FROM product_vendor_map pvm
+                INNER JOIN vp_vendors v ON v.id = pvm.vendor_id
+                WHERE pvm.item_code = r.item_code
+                ORDER BY pvm.priority ASC, pvm.id ASC
+                LIMIT 1
+            ) AS vendor_name
+            FROM vp_replenishment_buy_report r';
     }
 
     public function setPurchased(int $id, bool $purchased, int $userId): bool

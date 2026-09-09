@@ -76,6 +76,8 @@ class ReplenishmentBuyReportController
                 'SKU',
                 'Item code',
                 'Title',
+                'Publisher',
+                'Vendor',
                 "Y'day sold",
                 'Sold',
                 'Lookback',
@@ -91,8 +93,8 @@ class ReplenishmentBuyReportController
                 'Purchased at',
             ];
             $sheet->fromArray($headers, null, 'A1');
-            $sheet->getStyle('A1:Q1')->getFont()->setBold(true);
-            $sheet->getStyle('A1:Q1')->getFill()
+            $sheet->getStyle('A1:S1')->getFont()->setBold(true);
+            $sheet->getStyle('A1:S1')->getFill()
                 ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
                 ->getStartColor()->setARGB('FFF3F4F6');
 
@@ -103,6 +105,8 @@ class ReplenishmentBuyReportController
                     (string) ($row['sku'] ?? ''),
                     (string) ($row['item_code'] ?? ''),
                     (string) ($row['title'] ?? ''),
+                    (string) ($row['publisher_name'] ?? ''),
+                    (string) ($row['vendor_name'] ?? ''),
                     (int) ($row['yesterday_sold_qty'] ?? 0),
                     (int) ($row['numsold_replenishment'] ?? 0),
                     (int) ($row['lookback_months'] ?? 0),
@@ -121,7 +125,7 @@ class ReplenishmentBuyReportController
                 $rowNum++;
             }
 
-            foreach (range('A', 'Q') as $col) {
+            foreach (range('A', 'S') as $col) {
                 $sheet->getColumnDimension($col)->setAutoSize(true);
             }
 
