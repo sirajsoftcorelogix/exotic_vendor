@@ -184,7 +184,7 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                             <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Sold', 'Total units sold during the lookback months. Buy qty and purchase threshold are calculated from this number, not from yesterday sold.', true); ?></th>
                             <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Available Stock', 'Physical stock + pending PO. Compared with the purchase threshold. Hover the i icon on each row for that SKU’s calculation.', true); ?></th>
                             <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Purchase threshold', 'Minimum stock needed to avoid a buy: period sold × threshold %. The small % is the global setting. A buy is recommended when available stock is below this quantity.', true); ?></th>
-                            <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Recommended buy qty', 'How many to buy: period sold × minimum stock %. This is saved on the product when the threshold rule is met.', true); ?></th>
+                            <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Recommended buy', 'How many to buy: period sold × minimum stock %. The small % is the global setting. This is saved on the product when the threshold rule is met.', true); ?></th>
                             <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Purchased', 'Mark Yes after you have purchased this item. Click to toggle.', true); ?></th>
                         </tr>
                     </thead>
@@ -232,7 +232,10 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                                     <div><?php echo (int) ($row['purchase_threshold_qty'] ?? 0); ?></div>
                                     <div class="text-xs text-gray-400"><?php echo (int) ($row['purchase_threshold_percent'] ?? 0); ?>%</div>
                                 </td>
-                                <td class="px-4 py-3 text-right font-semibold text-lime-800"><?php echo (int) ($row['replenishment_buy_qty'] ?? 0); ?></td>
+                                <td class="px-4 py-3 text-right whitespace-nowrap">
+                                    <div class="font-semibold text-lime-800"><?php echo (int) ($row['replenishment_buy_qty'] ?? 0); ?></div>
+                                    <div class="text-xs text-gray-400"><?php echo (int) ($row['min_stock_percent'] ?? 0); ?>%</div>
+                                </td>
                                 <td class="px-4 py-3">
                                     <button type="button"
                                         class="replenish-purchased-toggle px-3 py-1.5 rounded-lg text-xs font-semibold border <?php echo $isPurchased ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-900 border-amber-200'; ?>"
