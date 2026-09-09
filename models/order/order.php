@@ -3184,14 +3184,18 @@ class Order
             return [];
         }
 
+        $from = $salesDate . ' 00:00:00';
+        $to = $salesDate . ' 23:59:59';
+
         $sql = "SELECT TRIM(o.sku) AS sku,
                        MAX(TRIM(o.item_code)) AS item_code,
                        COALESCE(SUM(o.quantity), 0) AS yesterday_qty
                 FROM vp_orders o
                 LEFT JOIN vp_products p ON p.sku = o.sku
-                WHERE o.order_date = ?
+                WHERE o.order_date BETWEEN ? AND ?
                   AND TRIM(IFNULL(o.sku, '')) <> ''
-                  AND o.status NOT IN ('cancelled', 'returned')
+                  AND LOWER(TRIM(IFNULL(o.status, ''))) NOT IN ('cancelled', 'returned', 'return')
+                  AND LOWER(TRIM(IFNULL(o.status, ''))) NOT LIKE 'return%'
                   AND (
                       LOWER(IFNULL(o.groupname, '')) LIKE '%book%'
                       OR LOWER(IFNULL(p.groupname, '')) LIKE '%book%'
@@ -3202,7 +3206,7 @@ class Order
         if (!$stmt) {
             return [];
         }
-        $stmt->bind_param('s', $salesDate);
+        $stmt->bind_param('ss', $from, $to);
         $stmt->execute();
         $result = $stmt->get_result();
         $rows = [];

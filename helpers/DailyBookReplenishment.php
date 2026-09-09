@@ -81,8 +81,9 @@ class DailyBookReplenishment
                 continue;
             }
 
-            $product = $this->productModel->getProductByskuExact($sku);
-            if (!$product || !is_array($product) || !$this->lookback->isBookProduct($product)) {
+            $product = $this->resolveProductForSale($sku, trim((string) ($sale['item_code'] ?? '')));
+            // Yesterday's book-sales query already classified this SKU as a book.
+            if ($product === null) {
                 $summary['skipped']++;
                 continue;
             }
@@ -142,6 +143,47 @@ class DailyBookReplenishment
         }
 
         return $summary;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function resolveProductForSale(string $sku, string $itemCode): ?array
+    {
+        if ($sku !== '' && method_exists($this->productModel, 'getProductByskuExact')) {
+            $product = $this->productModel->getProductByskuExact($sku);
+            if (is_array($product) && (int) ($product['id'] ?? 0) > 0) {
+                return $product;
+            }
+        }
+
+        if ($itemCode === '' || !method_exists($this->productModel, 'getProductByItemCode')) {
+            return null;
+        }
+
+        $found = $this->productModel->getProductByItemCode($itemCode);
+        if (!is_array($found) || $found === []) {
+            return null;
+        }
+
+        if (isset($found['id'])) {
+            return $found;
+        }
+
+        $match = null;
+        foreach ($found as $row) {
+            if (!is_array($row) || (int) ($row['id'] ?? 0) <= 0) {
+                continue;
+            }
+            if ($match === null) {
+                $match = $row;
+            }
+            if ($sku !== '' && strcasecmp(trim((string) ($row['sku'] ?? '')), $sku) === 0) {
+                return $row;
+            }
+        }
+
+        return $match;
     }
 
     private function percentSetting(string $key, int $default): int
