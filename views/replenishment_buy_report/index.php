@@ -5,12 +5,13 @@ $h = static function ($value): string {
 $searchValue = $h($search ?? '');
 $skuValue = $h($sku ?? '');
 $itemCodeValue = $h($item_code ?? '');
-$titleValue = $h($title ?? '');
 $purchasedValue = (string) ($purchased ?? 'no');
 $dateFromValue = $h($date_from ?? '');
 $dateToValue = $h($date_to ?? '');
-$lookbackSourceValue = (string) ($lookback_source ?? '');
-$minBuyQtyValue = $h($min_buy_qty ?? '');
+$publisherValue = (string) ($publisher ?? '');
+$publisherIdValue = (int) ($publisher_id ?? 0);
+$vendorValue = (string) ($vendor ?? '');
+$vendorIdValue = (int) ($vendor_id ?? 0);
 $currentPage = max(1, (int) ($currentPage ?? 1));
 $totalPages = max(1, (int) ($totalPages ?? 1));
 $limit = (int) ($limit ?? 20);
@@ -25,15 +26,35 @@ $queryBase = [
     'search_text' => (string) ($search ?? ''),
     'sku' => (string) ($sku ?? ''),
     'item_code' => (string) ($item_code ?? ''),
-    'title' => (string) ($title ?? ''),
     'purchased' => $purchasedValue,
     'date_from' => (string) ($date_from ?? ''),
     'date_to' => (string) ($date_to ?? ''),
-    'lookback_source' => $lookbackSourceValue,
-    'min_buy_qty' => (string) ($min_buy_qty ?? ''),
+    'publisher' => $publisherValue,
+    'publisher_id' => $publisherIdValue,
+    'vendor' => $vendorValue,
+    'vendor_id' => $vendorIdValue,
     'limit' => $limit,
 ];
 $inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white';
+$autocompleteInputClass = $inputClass;
+$lookbackSourceLabels = [
+    'product' => 'From product',
+    'publisher' => 'From publisher',
+    'vendor' => 'From vendor',
+    'global' => 'From global setting',
+];
+$thInfo = static function (string $label, string $help, bool $right = false) use ($h): string {
+    $rowClass = $right ? 'inline-flex items-center justify-end gap-1.5 w-full' : 'inline-flex items-center gap-1.5';
+    $tipPos = $right ? 'right-0 left-auto' : 'left-0';
+    return '<span class="' . $rowClass . '">'
+        . '<span>' . $h($label) . '</span>'
+        . '<span class="relative group inline-flex shrink-0">'
+        . '<i class="fas fa-info-circle text-gray-400 hover:text-amber-700 cursor-help text-[12px] normal-case tracking-normal" title="' . $h($help) . '" aria-label="' . $h($help) . '"></i>'
+        . '<span class="pointer-events-none absolute z-40 hidden group-hover:block bottom-full mb-2 ' . $tipPos . ' w-64 max-w-[16rem] normal-case font-normal tracking-normal text-left text-[11px] leading-snug text-white bg-gray-900 rounded-lg px-3 py-2 shadow-lg">'
+        . $h($help)
+        . '</span>'
+        . '</span></span>';
+};
 ?>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
@@ -78,8 +99,8 @@ $inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-w
             <p class="mt-1">Run <code class="text-xs bg-white px-1 rounded">sql/create_replenishment_buy_report.sql</code>.</p>
         </div>
     <?php else: ?>
-        <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
-            <form method="get" class="p-5 border-b border-gray-100 space-y-4">
+        <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-visible">
+            <form method="get" class="p-5 border-b border-gray-100 space-y-4 overflow-visible">
                 <input type="hidden" name="page" value="replenishment_buy_report">
                 <input type="hidden" name="action" value="list">
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -90,17 +111,12 @@ $inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-w
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-600 mb-1">SKU</label>
-                        <input type="text" name="sku" value="<?php echo $skuValue; ?>" placeholder="Exact-ish SKU"
+                        <input type="text" name="sku" value="<?php echo $skuValue; ?>" placeholder="SKU"
                             class="<?php echo $inputClass; ?>">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-600 mb-1">Item code</label>
                         <input type="text" name="item_code" value="<?php echo $itemCodeValue; ?>" placeholder="Item code"
-                            class="<?php echo $inputClass; ?>">
-                    </div>
-                    <div class="lg:col-span-2">
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Title</label>
-                        <input type="text" name="title" value="<?php echo $titleValue; ?>" placeholder="Book title"
                             class="<?php echo $inputClass; ?>">
                     </div>
                     <div>
@@ -112,16 +128,6 @@ $inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-w
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Lookback source</label>
-                        <select name="lookback_source" class="<?php echo $inputClass; ?>">
-                            <option value="" <?php echo $lookbackSourceValue === '' ? 'selected' : ''; ?>>All sources</option>
-                            <option value="product" <?php echo $lookbackSourceValue === 'product' ? 'selected' : ''; ?>>Product</option>
-                            <option value="publisher" <?php echo $lookbackSourceValue === 'publisher' ? 'selected' : ''; ?>>Publisher</option>
-                            <option value="vendor" <?php echo $lookbackSourceValue === 'vendor' ? 'selected' : ''; ?>>Vendor</option>
-                            <option value="global" <?php echo $lookbackSourceValue === 'global' ? 'selected' : ''; ?>>Global</option>
-                        </select>
-                    </div>
-                    <div>
                         <label class="block text-xs font-semibold text-gray-600 mb-1">Date from</label>
                         <input type="date" name="date_from" value="<?php echo $dateFromValue; ?>" class="<?php echo $inputClass; ?>">
                     </div>
@@ -129,19 +135,32 @@ $inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-w
                         <label class="block text-xs font-semibold text-gray-600 mb-1">Date to</label>
                         <input type="date" name="date_to" value="<?php echo $dateToValue; ?>" class="<?php echo $inputClass; ?>">
                     </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Min buy qty</label>
-                        <input type="number" name="min_buy_qty" min="0" step="1" value="<?php echo $minBuyQtyValue; ?>" placeholder="e.g. 1"
-                            class="<?php echo $inputClass; ?>">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Rows</label>
-                        <select name="limit" class="<?php echo $inputClass; ?>">
-                            <?php foreach ([10, 20, 50, 100] as $opt): ?>
-                                <option value="<?php echo $opt; ?>" <?php echo $limit === $opt ? 'selected' : ''; ?>><?php echo $opt; ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
+                    <?php renderPartial('views/shared/partials/order_filter_autocomplete_field.php', [
+                        'field_id' => 'replenish_publisher',
+                        'field_name' => 'publisher',
+                        'field_label' => 'Publisher',
+                        'field_placeholder' => 'Type to search publisher...',
+                        'field_value' => $publisherValue,
+                        'search_url' => base_url('?page=orders&action=search_filter_publishers&q='),
+                        'hidden_id' => 'replenish_publisher_id',
+                        'hidden_name' => 'publisher_id',
+                        'hidden_value' => $publisherIdValue > 0 ? (string) $publisherIdValue : '',
+                        'input_class' => $autocompleteInputClass,
+                        'auto_search' => true,
+                    ]); ?>
+                    <?php renderPartial('views/shared/partials/order_filter_autocomplete_field.php', [
+                        'field_id' => 'replenish_vendor',
+                        'field_name' => 'vendor',
+                        'field_label' => 'Vendor',
+                        'field_placeholder' => 'Type to search vendor...',
+                        'field_value' => $vendorValue,
+                        'search_url' => base_url('?page=orders&action=search_filter_vendors&q='),
+                        'hidden_id' => 'replenish_vendor_id',
+                        'hidden_name' => 'vendor_id',
+                        'hidden_value' => $vendorIdValue > 0 ? (string) $vendorIdValue : '',
+                        'input_class' => $autocompleteInputClass,
+                        'auto_search' => true,
+                    ]); ?>
                 </div>
                 <div class="flex flex-wrap items-center gap-3">
                     <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800">
@@ -160,20 +179,20 @@ $inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-w
 
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
-                    <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+                    <thead class="bg-gray-50 text-left text-xs text-gray-600">
                         <tr>
-                            <th class="px-4 py-3 font-semibold">Sales date</th>
-                            <th class="px-4 py-3 font-semibold">SKU / Item</th>
-                            <th class="px-4 py-3 font-semibold">Title</th>
-                            <th class="px-4 py-3 font-semibold">Lookback</th>
-                            <th class="px-4 py-3 font-semibold text-right">Yday sold</th>
-                            <th class="px-4 py-3 font-semibold text-right">Period sold</th>
-                            <th class="px-4 py-3 font-semibold text-right">Physical</th>
-                            <th class="px-4 py-3 font-semibold text-right">Pending PO</th>
-                            <th class="px-4 py-3 font-semibold text-right">Available</th>
-                            <th class="px-4 py-3 font-semibold text-right">Threshold</th>
-                            <th class="px-4 py-3 font-semibold text-right">Buy qty</th>
-                            <th class="px-4 py-3 font-semibold">Purchased</th>
+                            <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Sales date', 'The sales day this row was generated for (yesterday when you click Run for yesterday).'); ?></th>
+                            <th class="px-4 py-3 font-semibold"><?php echo $thInfo('SKU / Item', 'Product SKU and item code. Click the SKU to open product details.'); ?></th>
+                            <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Title', 'Book title.'); ?></th>
+                            <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Lookback months', 'How many months of sales history we use. The small label under the number shows where this came from: product, publisher, vendor, or global setting. This is a time window, not units sold.'); ?></th>
+                            <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Yesterday sold', 'Units of this SKU sold on the sales date only (not the full lookback period).', true); ?></th>
+                            <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Sold in lookback period', 'Total units sold during the lookback months. Buy qty and purchase threshold are calculated from this number, not from yesterday sold.', true); ?></th>
+                            <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Physical stock', 'Current physical stock from stock movements.', true); ?></th>
+                            <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Pending PO', 'Quantity already on purchase orders that are pending, ordered, or draft.', true); ?></th>
+                            <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Available stock', 'Physical stock + pending PO quantity. This is compared with the purchase threshold.', true); ?></th>
+                            <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Purchase threshold', 'Minimum stock needed to avoid a buy: period sold × threshold %. The small % is the global setting. A buy is recommended when available stock is below this quantity.', true); ?></th>
+                            <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Recommended buy qty', 'How many to buy: period sold × minimum stock %. This is saved on the product when the threshold rule is met.', true); ?></th>
+                            <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Purchased', 'Mark Yes after you have purchased this item. Click to toggle.', true); ?></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
@@ -185,7 +204,8 @@ $inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-w
                         <?php foreach ($rows as $row): ?>
                             <?php
                             $isPurchased = (int) ($row['purchased'] ?? 0) === 1;
-                            $lookbackLabel = trim((string) ($row['lookback_source'] ?? ''));
+                            $lookbackKey = strtolower(trim((string) ($row['lookback_source'] ?? '')));
+                            $lookbackLabel = $lookbackSourceLabels[$lookbackKey] ?? ($lookbackKey !== '' ? ('From ' . $lookbackKey) : '—');
                             $lookbackMonths = (int) ($row['lookback_months'] ?? 0);
                             ?>
                             <tr>
@@ -200,8 +220,8 @@ $inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-w
                                     <div class="text-gray-800"><?php echo $h($row['title'] ?? ''); ?></div>
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap">
-                                    <div class="text-gray-800"><?php echo $lookbackMonths; ?> mo</div>
-                                    <div class="text-xs text-gray-400"><?php echo $h($lookbackLabel !== '' ? $lookbackLabel : '—'); ?></div>
+                                    <div class="text-gray-800"><?php echo $lookbackMonths; ?> <?php echo $lookbackMonths === 1 ? 'month' : 'months'; ?></div>
+                                    <div class="text-xs text-gray-400"><?php echo $h($lookbackLabel); ?></div>
                                 </td>
                                 <td class="px-4 py-3 text-right"><?php echo (int) ($row['yesterday_sold_qty'] ?? 0); ?></td>
                                 <td class="px-4 py-3 text-right"><?php echo (int) ($row['numsold_replenishment'] ?? 0); ?></td>
@@ -242,6 +262,9 @@ $inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-w
     <?php endif; ?>
 </div>
 
+<script>
+<?php renderPartial('views/shared/partials/order_filter_autocomplete_script.php'); ?>
+</script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const notice = function (message, tone) {

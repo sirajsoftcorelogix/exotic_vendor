@@ -30,12 +30,13 @@ class ReplenishmentBuyReportController
             'search' => $filters['search'],
             'sku' => $filters['sku'],
             'item_code' => $filters['item_code'],
-            'title' => $filters['title'],
             'purchased' => $filters['purchased'],
             'date_from' => $filters['date_from'],
             'date_to' => $filters['date_to'],
-            'lookback_source' => $filters['lookback_source'],
-            'min_buy_qty' => $filters['min_buy_qty'],
+            'publisher' => $filters['publisher'],
+            'publisher_id' => $filters['publisher_id'],
+            'vendor' => $filters['vendor'],
+            'vendor_id' => $filters['vendor_id'],
             'currentPage' => $listing['page'],
             'totalPages' => $listing['pages'],
             'totalRecords' => $listing['total'],
@@ -70,7 +71,7 @@ class ReplenishmentBuyReportController
                 'Item code',
                 'Title',
                 'Yesterday sold',
-                'Period sold',
+                'Sold in lookback period',
                 'Lookback months',
                 'Lookback source',
                 'Period source',
@@ -78,9 +79,9 @@ class ReplenishmentBuyReportController
                 'Pending PO',
                 'Available stock',
                 'Threshold %',
-                'Threshold qty',
+                'Purchase threshold qty',
                 'Min stock %',
-                'Buy qty',
+                'Recommended buy qty',
                 'Purchased',
                 'Purchased at',
             ];
@@ -235,23 +236,17 @@ class ReplenishmentBuyReportController
             $purchased = 'no';
         }
 
-        $source = strtolower(trim((string) ($_GET['lookback_source'] ?? '')));
-        if (!in_array($source, ['product', 'publisher', 'vendor', 'global'], true)) {
-            $source = '';
-        }
-
-        $minBuyQty = trim((string) ($_GET['min_buy_qty'] ?? ''));
-
         return [
             'search' => trim((string) ($_GET['search_text'] ?? '')),
             'sku' => trim((string) ($_GET['sku'] ?? '')),
             'item_code' => trim((string) ($_GET['item_code'] ?? '')),
-            'title' => trim((string) ($_GET['title'] ?? '')),
             'purchased' => $purchased,
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
-            'lookback_source' => $source,
-            'min_buy_qty' => $minBuyQty,
+            'publisher' => trim((string) ($_GET['publisher'] ?? '')),
+            'publisher_id' => (int) ($_GET['publisher_id'] ?? 0),
+            'vendor' => trim((string) ($_GET['vendor'] ?? '')),
+            'vendor_id' => (int) ($_GET['vendor_id'] ?? 0),
             'page' => max(1, (int) ($_GET['page_no'] ?? 1)),
             'limit' => (int) ($_GET['limit'] ?? 20),
         ];
@@ -269,12 +264,13 @@ class ReplenishmentBuyReportController
             'search_text' => (string) ($filters['search'] ?? ''),
             'sku' => (string) ($filters['sku'] ?? ''),
             'item_code' => (string) ($filters['item_code'] ?? ''),
-            'title' => (string) ($filters['title'] ?? ''),
             'purchased' => (string) ($filters['purchased'] ?? 'no'),
             'date_from' => (string) ($filters['date_from'] ?? ''),
             'date_to' => (string) ($filters['date_to'] ?? ''),
-            'lookback_source' => (string) ($filters['lookback_source'] ?? ''),
-            'min_buy_qty' => (string) ($filters['min_buy_qty'] ?? ''),
+            'publisher' => (string) ($filters['publisher'] ?? ''),
+            'publisher_id' => (int) ($filters['publisher_id'] ?? 0),
+            'vendor' => (string) ($filters['vendor'] ?? ''),
+            'vendor_id' => (int) ($filters['vendor_id'] ?? 0),
         ];
     }
 }
