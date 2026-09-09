@@ -307,4 +307,28 @@ class PurchaseOrder {
 
         return $out;
     }
+
+    public function getPendingQtyForSku(string $sku): int
+    {
+        $sku = trim($sku);
+        if ($sku === '') {
+            return 0;
+        }
+
+        $sql = 'SELECT COALESCE(SUM(poi.quantity), 0) AS pending_qty
+                FROM vp_po_items poi
+                INNER JOIN purchase_orders po ON po.id = poi.purchase_orders_id
+                WHERE poi.sku = ?
+                  AND po.status IN (\'pending\', \'ordered\', \'draft\')';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return 0;
+        }
+        $stmt->bind_param('s', $sku);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return max(0, (int) ($row['pending_qty'] ?? 0));
+    }
 }

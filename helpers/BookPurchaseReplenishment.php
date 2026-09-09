@@ -6,11 +6,11 @@ require_once __DIR__ . '/../models/product/StockMovement.php';
 /**
  * Book purchase / stock replenishment algorithm (order import + product preview).
  *
- * numsold <= 1  → buy order quantity
- * numsold > 1   → compare physical stock with lookback sales using global percentages:
- *   min stock %              → low-stock threshold
- *   purchase threshold %     → generate PO for vp_products.replenishment_buy_qty
- * Fallback buy qty when replenishment_buy_qty is 0: 50% of lookback sales.
+ * Logic 1 — numsold <= 1 → replenishment_buy_qty = order quantity (0 on product detail).
+ * Logic 2 — numsold > 1:
+ *   lookback months: product → primary supplier publisher/vendor mapping → global
+ *   min stock % of lookback sales → fill replenishment_buy_qty (50% of lookback sales)
+ *   purchase threshold % of lookback sales → generate PO for replenishment_buy_qty
  */
 class BookPurchaseReplenishment
 {
@@ -108,34 +108,57 @@ class BookPurchaseReplenishment
         $base['stock_threshold'] = (int) floor($totalSold * ($minStockPercent / 100));
         $base['purchase_threshold'] = (int) floor($totalSold * ($purchaseThresholdPercent / 100));
 
-        if ($physicalStock > $base['purchase_threshold']) {
-            $base['reason'] = 'Physical stock is above ' . $purchaseThresholdPercent
-                . '% of lookback sales — no purchase order needed.';
+        $computedBuyQty = 0;
+        if ($physicalStock <= $base['stock_threshold']) {
+            $computedBuyQty = (int) max(0, round($totalSold * self::BUY_RATIO));
+        }
+        $base['recommended_buy_qty'] = $computedBuyQty;
+        $base['should_buy'] = $physicalStock <= $base['purchase_threshold'] && $computedBuyQty > 0;
+
+        if ($computedBuyQty <= 0) {
+            $base['reason'] = $physicalStock > $base['stock_threshold']
+                ? 'Physical stock is above ' . $minStockPercent . '% of lookback sales — replenishment buy qty is 0.'
+                : 'Lookback sales are zero — nothing to buy.';
 
             return $base;
         }
 
-        $storedBuyQty = max(0, (int) ($product['replenishment_buy_qty'] ?? 0));
-        $buyQty = $storedBuyQty > 0
-            ? $storedBuyQty
-            : (int) max(0, round($totalSold * self::BUY_RATIO));
-        $base['recommended_buy_qty'] = $buyQty;
-        $base['should_buy'] = $buyQty > 0;
-        $base['reason'] = $buyQty > 0
-            ? (
-                $storedBuyQty > 0
-                    ? 'Physical stock is at or below ' . $purchaseThresholdPercent
-                        . '% of lookback sales — generate PO for replenishment buy qty.'
-                    : 'Physical stock is at or below ' . $purchaseThresholdPercent
-                        . '% of lookback sales — buy 50% of lookback sales.'
-            )
-            : 'Lookback sales are zero and no replenishment buy qty is set — nothing to buy.';
+        $base['reason'] = $base['should_buy']
+            ? 'Physical stock is at or below ' . $purchaseThresholdPercent
+                . '% of lookback sales — generate PO for replenishment buy qty (' . $computedBuyQty . ').'
+            : 'Physical stock is at or below ' . $minStockPercent
+                . '% of lookback sales — replenishment buy qty set to 50% of lookback sales; no PO yet.';
 
         return $base;
     }
 
     /**
-     * After a successful order import line, optionally add to purchase_list.
+     * Evaluate replenishment and persist recommended_buy_qty on vp_products.
+     *
+     * @return array<string, mixed>
+     */
+    public function evaluateAndStore(array $product, object $productModel, int $orderQty = 0, ?int $physicalStock = null): array
+    {
+        $evaluation = $this->evaluate($product, $orderQty, $physicalStock);
+        $this->persistRecommendedBuyQty($productModel, (int) ($product['id'] ?? 0), $evaluation);
+
+        return $evaluation;
+    }
+
+    public function persistRecommendedBuyQty(object $productModel, int $productId, array $evaluation): bool
+    {
+        if ($productId <= 0 || !method_exists($productModel, 'setProductReplenishmentBuyQty')) {
+            return false;
+        }
+
+        return (bool) $productModel->setProductReplenishmentBuyQty(
+            $productId,
+            (int) ($evaluation['recommended_buy_qty'] ?? 0)
+        );
+    }
+
+    /**
+     * Order-import hook. Buy qty is owned by the daily replenishment job.
      *
      * @return array<string, mixed>
      */
@@ -144,61 +167,12 @@ class BookPurchaseReplenishment
         array $orderContext,
         object $productModel
     ): array {
-        $orderQty = max(1, (int) ($orderContext['quantity'] ?? 1));
-        $evaluation = $this->evaluate($product, $orderQty);
-
-        $result = [
-            'evaluation' => $evaluation,
+        return [
+            'evaluation' => null,
             'purchase_list' => null,
+            'skipped' => true,
+            'reason' => 'Daily replenishment job owns buy qty and the buy report.',
         ];
-
-        if (!$evaluation['should_buy'] || (int) $evaluation['recommended_buy_qty'] <= 0) {
-            return $result;
-        }
-
-        $sku = trim((string) ($product['sku'] ?? $orderContext['sku'] ?? ''));
-        $orderNumber = trim((string) ($orderContext['order_number'] ?? ''));
-        $productId = (int) ($product['id'] ?? 0);
-
-        if ($sku === '' || $productId <= 0) {
-            $result['purchase_list'] = ['success' => false, 'message' => 'Missing SKU or product id.'];
-
-            return $result;
-        }
-
-        if ($this->purchaseListEntryExists($sku, $orderNumber)) {
-            $result['purchase_list'] = ['success' => true, 'message' => 'Purchase list entry already exists.', 'skipped' => true];
-
-            return $result;
-        }
-
-        $agentId = $this->resolvePurchaseAgentId($product, $orderContext);
-        if ($agentId <= 0) {
-            $result['purchase_list'] = ['success' => false, 'message' => 'No agent available for auto purchase list.'];
-
-            return $result;
-        }
-
-        $payload = [
-            'user_id' => $agentId,
-            'product_id' => $productId,
-            'order_id' => $orderNumber,
-            'sku' => $sku,
-            'date_purchased' => date('Y-m-d'),
-            'status' => 'pending',
-            'edit_by' => (int) ($orderContext['edit_by'] ?? 0),
-            'quantity' => (int) $evaluation['recommended_buy_qty'],
-        ];
-
-        if (!method_exists($productModel, 'createPurchaseList')) {
-            $result['purchase_list'] = ['success' => false, 'message' => 'createPurchaseList not available.'];
-
-            return $result;
-        }
-
-        $result['purchase_list'] = $productModel->createPurchaseList($payload);
-
-        return $result;
     }
 
     /**
@@ -242,20 +216,9 @@ class BookPurchaseReplenishment
             return ['months' => $productMonths, 'source' => 'product'];
         }
 
-        $publisherName = trim((string) ($product['publisher'] ?? ''));
-        if ($publisherName === '' && !empty($product['book_details']['publisher'])) {
-            $publisherName = trim((string) $product['book_details']['publisher']);
-        }
-        if ($publisherName !== '') {
-            $publisherMonths = $this->getPublisherReplenishmentMonths($publisherName);
-            if ($publisherMonths > 0) {
-                return ['months' => $publisherMonths, 'source' => 'publisher'];
-            }
-        }
-
-        $vendorMonths = $this->getPrimaryVendorReplenishmentMonths((string) ($product['item_code'] ?? ''));
-        if ($vendorMonths > 0) {
-            return ['months' => $vendorMonths, 'source' => 'vendor'];
+        $supplierLookback = $this->getPrimarySupplierLookbackMonths((string) ($product['item_code'] ?? ''));
+        if ($supplierLookback['months'] > 0) {
+            return $supplierLookback;
         }
 
         $globalMonths = max(0, (int) $this->settings()->get('stock_replenishment_months', 1));
@@ -352,50 +315,53 @@ class BookPurchaseReplenishment
         return max(0, (int) ($product['physical_stock'] ?? 0));
     }
 
-    private function getPublisherReplenishmentMonths(string $publisherName): int
-    {
-        $sql = 'SELECT stock_replenishment_months
-                FROM vp_publishers
-                WHERE TRIM(publishers) = ?
-                   OR TRIM(publishers) LIKE ?
-                ORDER BY (TRIM(publishers) = ?) DESC, id DESC
-                LIMIT 1';
-        $like = '%' . $publisherName . '%';
-        $stmt = $this->conn->prepare($sql);
-        if (!$stmt) {
-            return 0;
-        }
-        $stmt->bind_param('sss', $publisherName, $like, $publisherName);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-
-        return max(0, (int) ($row['stock_replenishment_months'] ?? 0));
-    }
-
-    private function getPrimaryVendorReplenishmentMonths(string $itemCode): int
+    /**
+     * P2: primary supplier from product_vendor_map.
+     * If that vendor is mapped in publisher_vendor_mapping, use publisher months;
+     * otherwise use vendor months.
+     *
+     * @return array{months:int,source:string}
+     */
+    private function getPrimarySupplierLookbackMonths(string $itemCode): array
     {
         $itemCode = trim($itemCode);
         if ($itemCode === '') {
-            return 0;
+            return ['months' => 0, 'source' => ''];
         }
 
-        $sql = 'SELECT v.stock_replenishment_months
+        $sql = 'SELECT v.stock_replenishment_months AS vendor_months,
+                       pub.stock_replenishment_months AS publisher_months
                 FROM product_vendor_map pvm
                 INNER JOIN vp_vendors v ON v.id = pvm.vendor_id
+                LEFT JOIN publisher_vendor_mapping map ON map.vendor_id = pvm.vendor_id
+                LEFT JOIN vp_publishers pub ON pub.id = map.publisher_id
                 WHERE pvm.item_code = ?
-                ORDER BY pvm.priority ASC, pvm.id ASC
+                ORDER BY pvm.priority ASC, pvm.id ASC,
+                         (map.id IS NULL) ASC, map.sort_order ASC, map.id ASC
                 LIMIT 1';
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
-            return 0;
+            return ['months' => 0, 'source' => ''];
         }
         $stmt->bind_param('s', $itemCode);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
+        if (!$row) {
+            return ['months' => 0, 'source' => ''];
+        }
 
-        return max(0, (int) ($row['stock_replenishment_months'] ?? 0));
+        $publisherMonths = max(0, (int) ($row['publisher_months'] ?? 0));
+        if ($publisherMonths > 0) {
+            return ['months' => $publisherMonths, 'source' => 'publisher'];
+        }
+
+        $vendorMonths = max(0, (int) ($row['vendor_months'] ?? 0));
+        if ($vendorMonths > 0) {
+            return ['months' => $vendorMonths, 'source' => 'vendor'];
+        }
+
+        return ['months' => 0, 'source' => ''];
     }
 
     private function purchaseListEntryExists(string $sku, string $orderNumber): bool

@@ -4980,7 +4980,15 @@ class ProductsController
 
                 require_once dirname(__DIR__) . '/helpers/BookPurchaseReplenishment.php';
                 $bookReplenishment = new BookPurchaseReplenishment($conn);
-                $order['book_replenishment'] = $bookReplenishment->evaluate($order, 0, $physicalStock);
+                $lookback = $bookReplenishment->resolveLookbackMonths($order);
+                $order['book_replenishment'] = [
+                    'lookback_months' => (int) ($lookback['months'] ?? 0),
+                    'lookback_source' => (string) ($lookback['source'] ?? ''),
+                    'recommended_buy_qty' => (int) ($order['replenishment_buy_qty'] ?? 0),
+                    'total_sold_lookback' => (int) ($order['numsold_replenishment'] ?? 0),
+                    'branch' => 'stored',
+                    'reason' => 'Set by the daily replenishment job.',
+                ];
             }
 
             require_once dirname(__DIR__) . '/models/account_group/AccountGroup.php';
@@ -5409,6 +5417,7 @@ class ProductsController
             echo json_encode([
                 'success' => true,
                 'stock_replenishment_months' => $months,
+                'replenishment_buy_qty' => (int) ($product['replenishment_buy_qty'] ?? 0),
             ]);
         } catch (Exception $e) {
             echo json_encode([
