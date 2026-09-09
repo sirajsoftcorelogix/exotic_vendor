@@ -178,8 +178,7 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                         <tr>
                             <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Sales date', 'The sales day this row was generated for (yesterday when you click Run for yesterday).'); ?></th>
                             <th class="px-4 py-3 font-semibold"><?php echo $thInfo('SKU / Item', 'Product SKU and item code. Click the SKU to open product details. Hover the item code to see the book title.'); ?></th>
-                            <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Publisher', 'Publisher for this SKU.'); ?></th>
-                            <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Vendor', 'Primary vendor from the product vendor map.'); ?></th>
+                            <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Publisher / Vendor', 'Publisher for this SKU, with the primary vendor underneath.'); ?></th>
                             <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Lookback', 'How many months of sales history we use. The small label under the number shows where this came from: product, publisher, vendor, or global setting. This is a time window, not units sold.'); ?></th>
                             <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo("Y'day sold", 'Units of this SKU sold on the sales date only (not the full lookback period).', true); ?></th>
                             <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Sold', 'Total units sold during the lookback months. Buy qty and purchase threshold are calculated from this number, not from yesterday sold.', true); ?></th>
@@ -192,7 +191,7 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                     <tbody class="divide-y divide-gray-100">
                         <?php if ($rows === []): ?>
                             <tr>
-                                <td colspan="11" class="px-4 py-8 text-center text-gray-500">No replenishment items for these filters.</td>
+                                <td colspan="10" class="px-4 py-8 text-center text-gray-500">No replenishment items for these filters.</td>
                             </tr>
                         <?php endif; ?>
                         <?php foreach ($rows as $row): ?>
@@ -217,11 +216,9 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                                     </a>
                                     <div class="text-xs text-gray-400 cursor-help" title="<?php echo $h($bookTitle); ?>"><?php echo $h($row['item_code'] ?? ''); ?></div>
                                 </td>
-                                <td class="px-4 py-3 max-w-[12rem]">
+                                <td class="px-4 py-3 max-w-[14rem]">
                                     <div class="text-gray-800 truncate" title="<?php echo $h($publisherName); ?>"><?php echo $h($publisherName !== '' ? $publisherName : '—'); ?></div>
-                                </td>
-                                <td class="px-4 py-3 max-w-[12rem]">
-                                    <div class="text-gray-800 truncate" title="<?php echo $h($vendorName); ?>"><?php echo $h($vendorName !== '' ? $vendorName : '—'); ?></div>
+                                    <div class="text-xs text-gray-400 truncate" title="<?php echo $h($vendorName); ?>"><?php echo $h($vendorName !== '' ? $vendorName : '—'); ?></div>
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap">
                                     <div class="text-gray-800"><?php echo $lookbackMonths; ?> <?php echo $lookbackMonths === 1 ? 'month' : 'months'; ?></div>
