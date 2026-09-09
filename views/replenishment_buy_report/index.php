@@ -217,8 +217,10 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                                     <div class="text-xs text-gray-400 cursor-help" title="<?php echo $h($bookTitle); ?>"><?php echo $h($row['item_code'] ?? ''); ?></div>
                                 </td>
                                 <td class="px-4 py-3 max-w-[14rem]">
-                                    <div class="text-gray-800 truncate" title="<?php echo $h($publisherName); ?>"><?php echo $h($publisherName !== '' ? $publisherName : '—'); ?></div>
-                                    <div class="text-xs text-gray-400 truncate" title="<?php echo $h($vendorName); ?>"><?php echo $h($vendorName !== '' ? $vendorName : '—'); ?></div>
+                                    <div class="text-gray-800 truncate<?php echo $publisherName !== '' ? ' replenish-col-info cursor-help' : ''; ?>"
+                                        <?php if ($publisherName !== ''): ?>data-help="<?php echo $h($publisherName); ?>"<?php endif; ?>><?php echo $h($publisherName !== '' ? $publisherName : '—'); ?></div>
+                                    <div class="text-xs text-gray-400 truncate<?php echo $vendorName !== '' ? ' replenish-col-info cursor-help' : ''; ?>"
+                                        <?php if ($vendorName !== ''): ?>data-help="<?php echo $h($vendorName); ?>"<?php endif; ?>><?php echo $h($vendorName !== '' ? $vendorName : '—'); ?></div>
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap">
                                     <div class="text-gray-800"><?php echo $lookbackMonths; ?> <?php echo $lookbackMonths === 1 ? 'month' : 'months'; ?></div>
@@ -361,7 +363,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 </script>
-<div id="replenishColTip" class="hidden fixed z-[200] w-64 max-w-[16rem] text-left text-[11px] leading-snug text-white bg-gray-900 rounded-lg px-3 py-2 shadow-lg pointer-events-none"></div>
+<div id="replenishColTip" class="hidden fixed z-[200] w-auto max-w-xs text-left text-[11px] leading-snug text-white bg-gray-900 rounded-lg px-3 py-2 shadow-lg pointer-events-none"></div>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var tip = document.getElementById('replenishColTip');
