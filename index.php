@@ -2314,4 +2314,22 @@ switch ($page) {
                 break;
         }
         break;
+    case 'replenishment_buy_report':
+        require_once 'controllers/ReplenishmentBuyReportController.php';
+        $controller = new ReplenishmentBuyReportController($conn);
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'mark_purchased':
+                $controller->markPurchased();
+                break;
+            case 'run':
+                $controller->runYesterday();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
 }
