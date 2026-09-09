@@ -25,17 +25,24 @@ class ReplenishmentBuyReportController
             ? $this->reportModel->searchList($filters)
             : ['rows' => [], 'total' => 0, 'page' => 1, 'pages' => 1, 'limit' => 20];
 
+        $rows = [];
+        foreach ($listing['rows'] as $row) {
+            $row['run_date_display'] = $this->formatSalesDate((string) ($row['run_date'] ?? ''));
+            $rows[] = $row;
+        }
+
         renderTemplate('views/replenishment_buy_report/index.php', [
-            'rows' => $listing['rows'],
+            'rows' => $rows,
             'search' => $filters['search'],
             'sku' => $filters['sku'],
             'item_code' => $filters['item_code'],
-            'title' => $filters['title'],
             'purchased' => $filters['purchased'],
             'date_from' => $filters['date_from'],
             'date_to' => $filters['date_to'],
-            'lookback_source' => $filters['lookback_source'],
-            'min_buy_qty' => $filters['min_buy_qty'],
+            'publisher' => $filters['publisher'],
+            'publisher_id' => $filters['publisher_id'],
+            'vendor' => $filters['vendor'],
+            'vendor_id' => $filters['vendor_id'],
             'currentPage' => $listing['page'],
             'totalPages' => $listing['pages'],
             'totalRecords' => $listing['total'],
@@ -69,31 +76,30 @@ class ReplenishmentBuyReportController
                 'SKU',
                 'Item code',
                 'Title',
-                'Yesterday sold',
-                'Period sold',
-                'Lookback months',
+                "Y'day sold",
+                'Sold',
+                'Lookback',
                 'Lookback source',
                 'Period source',
-                'Physical stock',
-                'Pending PO',
-                'Available stock',
+                'Available Stock',
+                'Available stock calculation',
                 'Threshold %',
-                'Threshold qty',
+                'Purchase threshold qty',
                 'Min stock %',
-                'Buy qty',
+                'Recommended buy',
                 'Purchased',
                 'Purchased at',
             ];
             $sheet->fromArray($headers, null, 'A1');
-            $sheet->getStyle('A1:R1')->getFont()->setBold(true);
-            $sheet->getStyle('A1:R1')->getFill()
+            $sheet->getStyle('A1:Q1')->getFont()->setBold(true);
+            $sheet->getStyle('A1:Q1')->getFill()
                 ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
                 ->getStartColor()->setARGB('FFF3F4F6');
 
             $rowNum = 2;
             foreach ($rows as $row) {
                 $sheet->fromArray([
-                    (string) ($row['run_date'] ?? ''),
+                    $this->formatSalesDate((string) ($row['run_date'] ?? '')),
                     (string) ($row['sku'] ?? ''),
                     (string) ($row['item_code'] ?? ''),
                     (string) ($row['title'] ?? ''),
@@ -102,9 +108,9 @@ class ReplenishmentBuyReportController
                     (int) ($row['lookback_months'] ?? 0),
                     (string) ($row['lookback_source'] ?? ''),
                     (string) ($row['numsold_source'] ?? ''),
-                    (int) ($row['physical_stock'] ?? 0),
-                    (int) ($row['pending_po_qty'] ?? 0),
                     (int) ($row['available_stock'] ?? 0),
+                    'Available stock = Physical stock ' . (int) ($row['physical_stock'] ?? 0)
+                        . ' + Pending PO ' . (int) ($row['pending_po_qty'] ?? 0),
                     (int) ($row['purchase_threshold_percent'] ?? 0),
                     (int) ($row['purchase_threshold_qty'] ?? 0),
                     (int) ($row['min_stock_percent'] ?? 0),
@@ -115,7 +121,7 @@ class ReplenishmentBuyReportController
                 $rowNum++;
             }
 
-            foreach (range('A', 'R') as $col) {
+            foreach (range('A', 'Q') as $col) {
                 $sheet->getColumnDimension($col)->setAutoSize(true);
             }
 
@@ -217,6 +223,29 @@ class ReplenishmentBuyReportController
         ]);
     }
 
+    private function formatSalesDate(string $date): string
+    {
+        $timestamp = strtotime($date);
+        if ($timestamp === false) {
+            return $date;
+        }
+
+        $day = (int) date('j', $timestamp);
+        $mod100 = $day % 100;
+        if ($mod100 >= 11 && $mod100 <= 13) {
+            $suffix = 'th';
+        } else {
+            $suffix = match ($day % 10) {
+                1 => 'st',
+                2 => 'nd',
+                3 => 'rd',
+                default => 'th',
+            };
+        }
+
+        return $day . $suffix . ' ' . date('M, y', $timestamp);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -235,23 +264,17 @@ class ReplenishmentBuyReportController
             $purchased = 'no';
         }
 
-        $source = strtolower(trim((string) ($_GET['lookback_source'] ?? '')));
-        if (!in_array($source, ['product', 'publisher', 'vendor', 'global'], true)) {
-            $source = '';
-        }
-
-        $minBuyQty = trim((string) ($_GET['min_buy_qty'] ?? ''));
-
         return [
             'search' => trim((string) ($_GET['search_text'] ?? '')),
             'sku' => trim((string) ($_GET['sku'] ?? '')),
             'item_code' => trim((string) ($_GET['item_code'] ?? '')),
-            'title' => trim((string) ($_GET['title'] ?? '')),
             'purchased' => $purchased,
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
-            'lookback_source' => $source,
-            'min_buy_qty' => $minBuyQty,
+            'publisher' => trim((string) ($_GET['publisher'] ?? '')),
+            'publisher_id' => (int) ($_GET['publisher_id'] ?? 0),
+            'vendor' => trim((string) ($_GET['vendor'] ?? '')),
+            'vendor_id' => (int) ($_GET['vendor_id'] ?? 0),
             'page' => max(1, (int) ($_GET['page_no'] ?? 1)),
             'limit' => (int) ($_GET['limit'] ?? 20),
         ];
@@ -269,12 +292,13 @@ class ReplenishmentBuyReportController
             'search_text' => (string) ($filters['search'] ?? ''),
             'sku' => (string) ($filters['sku'] ?? ''),
             'item_code' => (string) ($filters['item_code'] ?? ''),
-            'title' => (string) ($filters['title'] ?? ''),
             'purchased' => (string) ($filters['purchased'] ?? 'no'),
             'date_from' => (string) ($filters['date_from'] ?? ''),
             'date_to' => (string) ($filters['date_to'] ?? ''),
-            'lookback_source' => (string) ($filters['lookback_source'] ?? ''),
-            'min_buy_qty' => (string) ($filters['min_buy_qty'] ?? ''),
+            'publisher' => (string) ($filters['publisher'] ?? ''),
+            'publisher_id' => (int) ($filters['publisher_id'] ?? 0),
+            'vendor' => (string) ($filters['vendor'] ?? ''),
+            'vendor_id' => (int) ($filters['vendor_id'] ?? 0),
         ];
     }
 }

@@ -10,6 +10,7 @@ $hiddenId = isset($hidden_id) ? (string) $hidden_id : '';
 $hiddenName = isset($hidden_name) ? (string) $hidden_name : '';
 $hiddenValue = (string) ($hidden_value ?? '');
 $inputClass = (string) ($input_class ?? 'w-full px-2 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500');
+$autoSearch = !empty($auto_search);
 ?>
 <div class="relative">
     <label for="<?php echo htmlspecialchars($fieldId); ?>" class="block text-sm font-medium text-gray-600 mb-1">
@@ -26,6 +27,7 @@ $inputClass = (string) ($input_class ?? 'w-full px-2 py-2 text-xs border border-
         data-order-filter-autocomplete="1"
         data-search-url="<?php echo htmlspecialchars($searchUrl); ?>"
         data-suggestions-target="<?php echo htmlspecialchars($suggestionsId); ?>"
+        <?php if ($autoSearch): ?>data-auto-search="1"<?php endif; ?>
         <?php if ($hiddenId !== ''): ?>data-hidden-target="<?php echo htmlspecialchars($hiddenId); ?>"<?php endif; ?>>
     <?php if ($hiddenId !== ''): ?>
         <input
