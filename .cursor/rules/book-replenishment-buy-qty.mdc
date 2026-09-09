@@ -8,6 +8,8 @@ alwaysApply: false
 
 Job: `php scripts/run_daily_book_replenishment.php` (schedule ~1:00 AM). Processes **yesterday’s** book sales from `vp_orders`.
 
+Lookback months: `vp_products.stock_replenishment_months` if > 0, else publisher if > 0, else vendor if > 0, else `app_settings.stock_replenishment_months`.
+
 Period sales: `NumsoldReplenishment::getForProduct()` (`numsold_replenishment`). Stub uses local lookback until the Exotic API is wired in `fetchFromExoticApi()`.
 
 If `(physical stock + pending PO qty) < purchase_threshold_percent of numsold_replenishment`, set `vp_products.replenishment_buy_qty` to `min_stock_percent of numsold_replenishment` and upsert `vp_replenishment_buy_report` (purchased yes/no).

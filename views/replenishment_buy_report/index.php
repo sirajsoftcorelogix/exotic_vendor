@@ -190,20 +190,37 @@ document.addEventListener('DOMContentLoaded', function () {
             runBtn.disabled = true;
             fetch('index.php?page=replenishment_buy_report&action=run', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
             })
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
+            .then(function (res) { return res.text(); })
+            .then(function (text) {
+                var data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    throw new Error(text ? text.replace(/<[^>]+>/g, ' ').slice(0, 180) : 'Invalid server response');
+                }
                 notice(data.message || 'Job finished.', data.success ? 'success' : 'error');
                 if (data.success) {
-                    window.location.reload();
+                    var params = new URLSearchParams(window.location.search);
+                    params.set('page', 'replenishment_buy_report');
+                    params.set('action', 'list');
+                    params.set('purchased', 'no');
+                    if (data.summary && data.summary.run_date) {
+                        params.set('run_date', data.summary.run_date);
+                    }
+                    window.location.search = params.toString();
                 } else {
                     runBtn.disabled = false;
                 }
             })
-            .catch(function () {
+            .catch(function (err) {
                 runBtn.disabled = false;
-                notice('Could not run replenishment job.', 'error');
+                notice((err && err.message) ? err.message : 'Could not run replenishment job.', 'error');
             });
         });
     }
