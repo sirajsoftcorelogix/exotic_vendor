@@ -342,36 +342,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    document.querySelectorAll('.replenish-vendor-pick').forEach(function (el) {
-        el.addEventListener('click', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            var key = (el.getAttribute('data-vendor-key') || '').trim();
-            if (key === '') {
-                return;
-            }
-            var state = readSelection();
-            if (state.vendorKey && state.vendorKey !== key) {
-                notice(sameVendorOnlyMessage, 'warning');
-                return;
-            }
-            var match = null;
-            rowChecks.forEach(function (cb) {
-                if (!match && rowVendorKey(cb) === key) {
-                    match = itemFromCheckbox(cb);
-                }
-            });
-            fetchSameVendorAllPages(match || {
-                vendorKey: key,
-                vendorId: '',
-                vendorName: (el.getAttribute('data-vendor-name') || '').trim()
-            }, function (total) {
-                var vendorName = (el.getAttribute('data-vendor-name') || '').trim();
-                notice('Selected ' + total + ' items' + (vendorName !== '' ? ' from ' + vendorName : '') + ' across all pages.', 'info');
-            });
-        });
-    });
-
     document.querySelectorAll('.replenish-purchased-toggle').forEach(function (btn) {
         btn.addEventListener('click', function () {
             const id = parseInt(btn.getAttribute('data-id') || '0', 10);
