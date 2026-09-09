@@ -50,6 +50,10 @@ class ReplenishmentBuyReportController
             'table_ready' => $this->reportModel->tableExists(),
             'can_run' => function_exists('canSrEmpAccess') && canSrEmpAccess(),
             'export_query' => http_build_query($this->exportQueryParams($filters)),
+            'same_vendor_query' => http_build_query(array_merge(
+                $this->exportQueryParams($filters),
+                ['action' => 'selection_rows']
+            )),
         ], 'Replenishment Buy Report');
     }
 
@@ -181,6 +185,54 @@ class ReplenishmentBuyReportController
             'message' => $ok ? 'Updated.' : 'Could not update purchased status.',
         ]);
         exit;
+    }
+
+    public function selectionRows(): void
+    {
+        is_login();
+
+        if (!$this->reportModel->tableExists()) {
+            vendorJsonResponse(['success' => false, 'message' => 'Report table is not ready.']);
+        }
+
+        $filters = $this->filtersFromRequest();
+        $lockVendorId = (int) ($_GET['lock_vendor_id'] ?? 0);
+        $lockVendorName = trim((string) ($_GET['lock_vendor_name'] ?? ''));
+        $lockVendorKey = trim((string) ($_GET['lock_vendor_key'] ?? ''));
+        if ($lockVendorId > 0) {
+            $filters['vendor_id'] = $lockVendorId;
+            $filters['vendor'] = $lockVendorName;
+        } elseif ($lockVendorName !== '') {
+            $filters['vendor'] = $lockVendorName;
+            $filters['vendor_id'] = 0;
+        }
+
+        $rows = $this->reportModel->searchAll($filters, 10000);
+        $out = [];
+        foreach ($rows as $row) {
+            $vendorId = (int) ($row['vendor_id'] ?? 0);
+            $vendorName = trim((string) ($row['vendor_name'] ?? ''));
+            if ($vendorId > 0) {
+                $vendorKey = 'id:' . $vendorId;
+            } elseif ($vendorName !== '') {
+                $vendorKey = 'name:' . mb_strtolower($vendorName);
+            } else {
+                $vendorKey = 'row:' . (int) ($row['id'] ?? 0);
+            }
+            if ($lockVendorKey !== '' && $vendorKey !== $lockVendorKey) {
+                continue;
+            }
+            $out[] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'productId' => (int) ($row['product_id'] ?? 0),
+                'buyQty' => (int) ($row['replenishment_buy_qty'] ?? 0),
+                'vendorId' => $vendorId,
+                'vendorName' => $vendorName,
+                'vendorKey' => $vendorKey,
+            ];
+        }
+
+        vendorJsonResponse(['success' => true, 'rows' => $out]);
     }
 
     public function runYesterday(): void

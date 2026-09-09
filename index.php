@@ -2330,6 +2330,9 @@ switch ($page) {
             case 'export_excel':
                 $controller->exportExcel();
                 break;
+            case 'selection_rows':
+                $controller->selectionRows();
+                break;
             default:
                 $controller->index();
                 break;
