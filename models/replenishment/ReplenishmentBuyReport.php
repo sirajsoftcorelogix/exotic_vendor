@@ -194,7 +194,7 @@ class ReplenishmentBuyReport
                     SELECT 1 FROM product_vendor_map pvm
                     INNER JOIN publisher_vendor_mapping map ON map.vendor_id = pvm.vendor_id
                     INNER JOIN vp_publishers pub ON pub.id = map.publisher_id
-                    WHERE pvm.item_code = r.item_code
+                    WHERE ' . $this->itemCodeEquals('pvm.item_code', 'r.item_code') . '
                       AND pub.publishers_id = ?
                 )
             )';
@@ -211,8 +211,8 @@ class ReplenishmentBuyReport
                 SELECT 1 FROM vp_products p
                 LEFT JOIN vp_publishers pub
                     ON (
-                        CAST(pub.publishers_id AS CHAR) = TRIM(IFNULL(p.publisher, \'\'))
-                        OR pub.publishers = TRIM(IFNULL(p.publisher, \'\'))
+                        ' . $this->utf8('CAST(pub.publishers_id AS CHAR)') . ' = ' . $this->utf8("TRIM(IFNULL(p.publisher, ''))") . '
+                        OR ' . $this->utf8('pub.publishers') . ' = ' . $this->utf8("TRIM(IFNULL(p.publisher, ''))") . '
                     )
                 WHERE p.id = r.product_id
                   AND (
@@ -224,7 +224,7 @@ class ReplenishmentBuyReport
                 SELECT 1 FROM product_vendor_map pvm
                 INNER JOIN publisher_vendor_mapping map ON map.vendor_id = pvm.vendor_id
                 INNER JOIN vp_publishers pub2 ON pub2.id = map.publisher_id
-                WHERE pvm.item_code = r.item_code
+                WHERE ' . $this->itemCodeEquals('pvm.item_code', 'r.item_code') . '
                   AND pub2.publishers LIKE ?
             )
         )';
@@ -249,7 +249,7 @@ class ReplenishmentBuyReport
         if ($vendorId > 0) {
             $where .= ' AND EXISTS (
                 SELECT 1 FROM product_vendor_map pvm
-                WHERE pvm.item_code = r.item_code
+                WHERE ' . $this->itemCodeEquals('pvm.item_code', 'r.item_code') . '
                   AND pvm.vendor_id = ?
             )';
             $types .= 'i';
@@ -261,7 +261,7 @@ class ReplenishmentBuyReport
         $where .= ' AND EXISTS (
             SELECT 1 FROM product_vendor_map pvm
             INNER JOIN vp_vendors v ON v.id = pvm.vendor_id
-            WHERE pvm.item_code = r.item_code
+            WHERE ' . $this->itemCodeEquals('pvm.item_code', 'r.item_code') . '
               AND v.vendor_name LIKE ?
         )';
         $types .= 's';
@@ -347,18 +347,31 @@ class ReplenishmentBuyReport
         return $rows;
     }
 
+    private function utf8(string $expr): string
+    {
+        return 'CONVERT(' . $expr . ' USING utf8mb4) COLLATE utf8mb4_unicode_ci';
+    }
+
+    private function itemCodeEquals(string $left, string $right): string
+    {
+        return $this->utf8($left) . ' = ' . $this->utf8($right);
+    }
+
     private function selectListSql(): string
     {
+        $publisherKey = $this->utf8("TRIM(IFNULL(p.publisher, ''))");
+        $pubJoin = '('
+            . $this->utf8('CAST(pub.publishers_id AS CHAR)') . ' = ' . $publisherKey
+            . ' OR ' . $this->utf8('CAST(pub.id AS CHAR)') . ' = ' . $publisherKey
+            . ' OR ' . $this->utf8('pub.publishers') . ' = ' . $publisherKey
+            . ')';
+
         return 'SELECT r.*,
             COALESCE(
                 NULLIF((
                     SELECT COALESCE(NULLIF(TRIM(pub.publishers), \'\'), TRIM(IFNULL(p.publisher, \'\')))
                     FROM vp_products p
-                    LEFT JOIN vp_publishers pub ON (
-                        CAST(pub.publishers_id AS CHAR) = TRIM(IFNULL(p.publisher, \'\'))
-                        OR CAST(pub.id AS CHAR) = TRIM(IFNULL(p.publisher, \'\'))
-                        OR pub.publishers = TRIM(IFNULL(p.publisher, \'\'))
-                    )
+                    LEFT JOIN vp_publishers pub ON ' . $pubJoin . '
                     WHERE p.id = r.product_id
                     LIMIT 1
                 ), \'\'),
@@ -367,7 +380,7 @@ class ReplenishmentBuyReport
                     FROM product_vendor_map pvm2
                     INNER JOIN publisher_vendor_mapping map ON map.vendor_id = pvm2.vendor_id
                     INNER JOIN vp_publishers pub2 ON pub2.id = map.publisher_id
-                    WHERE pvm2.item_code = r.item_code
+                    WHERE ' . $this->itemCodeEquals('pvm2.item_code', 'r.item_code') . '
                     ORDER BY pvm2.priority ASC, pvm2.id ASC, map.sort_order ASC, map.id ASC
                     LIMIT 1
                 )
@@ -376,7 +389,7 @@ class ReplenishmentBuyReport
                 SELECT v.vendor_name
                 FROM product_vendor_map pvm
                 INNER JOIN vp_vendors v ON v.id = pvm.vendor_id
-                WHERE pvm.item_code = r.item_code
+                WHERE ' . $this->itemCodeEquals('pvm.item_code', 'r.item_code') . '
                 ORDER BY pvm.priority ASC, pvm.id ASC
                 LIMIT 1
             ) AS vendor_name
