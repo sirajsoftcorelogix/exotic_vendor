@@ -188,7 +188,7 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                     </button>
                 </div>
             </div>
-            <form id="replenishCreatePoForm" action="<?php echo $h(base_url('?page=purchase_orders&action=custom_po')); ?>" method="post" class="hidden"></form>
+            <form id="replenishCreatePoForm" action="<?php echo $h(base_url('?page=purchase_orders&action=custom_po')); ?>" method="post" target="_blank" class="hidden"></form>
 
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
