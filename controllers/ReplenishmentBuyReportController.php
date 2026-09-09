@@ -83,22 +83,44 @@ class ReplenishmentBuyReportController
     public function runYesterday(): void
     {
         is_login();
-        header('Content-Type: application/json; charset=utf-8');
 
         if (!function_exists('canSrEmpAccess') || !canSrEmpAccess()) {
-            echo json_encode(['success' => false, 'message' => 'Access denied.']);
-            exit;
+            vendorJsonResponse(['success' => false, 'message' => 'Access denied.']);
         }
 
-        $salesDate = date('Y-m-d', strtotime('-1 day'));
-        $job = new DailyBookReplenishment($this->conn);
-        $summary = $job->runForDate($salesDate, false);
+        @set_time_limit(300);
+        ignore_user_abort(true);
 
-        echo json_encode([
+        $salesDate = date('Y-m-d', strtotime('-1 day'));
+
+        try {
+            $job = new DailyBookReplenishment($this->conn);
+            $summary = $job->runForDate($salesDate, false);
+        } catch (Throwable $e) {
+            vendorJsonResponse([
+                'success' => false,
+                'message' => 'Replenishment job failed: ' . $e->getMessage(),
+            ], 500);
+        }
+
+        $scanned = (int) ($summary['scanned'] ?? 0);
+        $books = (int) ($summary['books'] ?? 0);
+        $triggered = (int) ($summary['triggered'] ?? 0);
+        $written = (int) ($summary['written'] ?? 0);
+
+        if ($scanned === 0) {
+            $message = 'No book sales found for ' . $salesDate . '. Import yesterday’s orders first, then run again.';
+        } elseif ($triggered === 0) {
+            $message = 'Checked ' . $books . ' book SKU(s) sold on ' . $salesDate
+                . '. None are below the purchase threshold, so nothing was added to the buy list.';
+        } else {
+            $message = 'Added ' . $written . ' book SKU(s) to the buy report for ' . $salesDate . '.';
+        }
+
+        vendorJsonResponse([
             'success' => true,
-            'message' => 'Replenishment job finished for ' . $salesDate . '.',
+            'message' => $message,
             'summary' => $summary,
         ]);
-        exit;
     }
 }

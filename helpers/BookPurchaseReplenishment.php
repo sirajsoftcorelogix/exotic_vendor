@@ -243,8 +243,8 @@ class BookPurchaseReplenishment
     public function fetchTotalSoldForLookback(array $product, int $months): int
     {
         $months = max(1, $months);
-        $fromDate = date('Y-m-d', strtotime('-' . $months . ' months'));
-        $toDate = date('Y-m-d');
+        $fromDate = date('Y-m-d 00:00:00', strtotime('-' . $months . ' months'));
+        $toDate = date('Y-m-d 23:59:59');
 
         return $this->fetchTotalSoldFromLocalOrders($product, $fromDate, $toDate);
     }
@@ -262,7 +262,8 @@ class BookPurchaseReplenishment
                     WHERE sku = ?
                       AND order_date >= ?
                       AND order_date <= ?
-                      AND status NOT IN ('cancelled', 'returned')";
+                      AND LOWER(TRIM(IFNULL(status, ''))) NOT IN ('cancelled', 'returned', 'return')
+                      AND LOWER(TRIM(IFNULL(status, ''))) NOT LIKE 'return%'";
             $stmt = $this->conn->prepare($sql);
             if (!$stmt) {
                 return 0;
@@ -286,7 +287,8 @@ class BookPurchaseReplenishment
                   AND color = ?
                   AND order_date >= ?
                   AND order_date <= ?
-                  AND status NOT IN ('cancelled', 'returned')";
+                  AND LOWER(TRIM(IFNULL(status, ''))) NOT IN ('cancelled', 'returned', 'return')
+                  AND LOWER(TRIM(IFNULL(status, ''))) NOT LIKE 'return%'";
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
             return 0;
