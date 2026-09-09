@@ -323,32 +323,56 @@ document.addEventListener('DOMContentLoaded', function () {
     const selectSummary = document.getElementById('replenishSelectSummary');
     const selectSameBtn = document.getElementById('replenishSelectSameVendor');
     const selectClearBtn = document.getElementById('replenishSelectClear');
+    const sameVendorOnlyMessage = 'You can only select items from one vendor. Clear the current selection first, then choose another vendor.';
+
+    const rowVendorKey = function (cb) {
+        var key = (cb.getAttribute('data-vendor-key') || '').trim();
+        if (key !== '') {
+            return key;
+        }
+        return 'row:' + (cb.getAttribute('data-id') || '');
+    };
 
     const checkedRows = function () {
         return Array.prototype.filter.call(rowChecks, function (cb) { return cb.checked; });
     };
 
+    const lockedVendorKey = function () {
+        var selected = checkedRows();
+        return selected.length ? rowVendorKey(selected[0]) : '';
+    };
+
+    const lockedVendorName = function () {
+        var selected = checkedRows();
+        return selected.length ? (selected[0].getAttribute('data-vendor-name') || '').trim() : '';
+    };
+
     const syncRowHighlight = function () {
+        var locked = lockedVendorKey();
         rowChecks.forEach(function (cb) {
             var tr = cb.closest('tr');
-            if (!tr) {
-                return;
-            }
-            if (cb.checked) {
-                tr.classList.add('bg-amber-50/80');
-            } else {
-                tr.classList.remove('bg-amber-50/80');
+            var otherVendor = locked !== '' && !cb.checked && rowVendorKey(cb) !== locked;
+            cb.disabled = otherVendor;
+            if (tr) {
+                tr.classList.toggle('bg-amber-50/80', cb.checked);
+                tr.classList.toggle('opacity-50', otherVendor);
             }
         });
     };
 
     const updateSelectUi = function () {
         var selected = checkedRows();
-        var total = rowChecks.length;
+        var locked = lockedVendorKey();
+        var sameVendorTotal = 0;
+        rowChecks.forEach(function (cb) {
+            if (locked !== '' && rowVendorKey(cb) === locked) {
+                sameVendorTotal++;
+            }
+        });
         var count = selected.length;
         if (selectAll) {
-            selectAll.checked = total > 0 && count === total;
-            selectAll.indeterminate = count > 0 && count < total;
+            selectAll.checked = sameVendorTotal > 0 && count === sameVendorTotal;
+            selectAll.indeterminate = count > 0 && count < sameVendorTotal;
         }
         syncRowHighlight();
         if (!selectBar || !selectSummary) {
@@ -361,30 +385,21 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         selectBar.classList.remove('hidden');
         selectBar.classList.add('flex');
-        var names = [];
-        selected.forEach(function (cb) {
-            var name = (cb.getAttribute('data-vendor-name') || '').trim();
-            if (name !== '' && names.indexOf(name) === -1) {
-                names.push(name);
-            }
-        });
+        var name = lockedVendorName();
         var label = count + (count === 1 ? ' item selected' : ' items selected');
-        if (names.length === 1) {
-            label += ' · ' + names[0];
-        } else if (names.length > 1) {
-            label += ' · ' + names.length + ' vendors';
+        if (name !== '') {
+            label += ' · ' + name;
         }
         selectSummary.textContent = label;
     };
 
-    const selectByVendorKeys = function (keys) {
-        if (!keys.length) {
+    const selectByVendorKey = function (key) {
+        if (key === '') {
             return 0;
         }
         var added = 0;
         rowChecks.forEach(function (cb) {
-            var key = cb.getAttribute('data-vendor-key') || '';
-            if (key !== '' && keys.indexOf(key) !== -1 && !cb.checked) {
+            if (rowVendorKey(cb) === key && !cb.checked) {
                 cb.checked = true;
                 added++;
             }
@@ -392,14 +407,17 @@ document.addEventListener('DOMContentLoaded', function () {
         return added;
     };
 
-    const countByVendorKey = function (key) {
-        var n = 0;
-        rowChecks.forEach(function (cb) {
-            if (cb.checked && (cb.getAttribute('data-vendor-key') || '') === key) {
-                n++;
-            }
+    const lockedVendorKeyExcept = function (exceptCb) {
+        var selected = Array.prototype.filter.call(rowChecks, function (cb) {
+            return cb.checked && cb !== exceptCb;
         });
-        return n;
+        return selected.length ? rowVendorKey(selected[0]) : '';
+    };
+
+    const rejectOtherVendor = function (cb) {
+        cb.checked = false;
+        notice(sameVendorOnlyMessage, 'warning');
+        updateSelectUi();
     };
 
     rowChecks.forEach(function (cb) {
@@ -407,12 +425,17 @@ document.addEventListener('DOMContentLoaded', function () {
             e.stopPropagation();
         });
         cb.addEventListener('change', function () {
-            var key = cb.getAttribute('data-vendor-key') || '';
-            if (cb.checked && key !== '') {
-                var added = selectByVendorKeys([key]);
+            var key = rowVendorKey(cb);
+            var locked = lockedVendorKeyExcept(cb);
+            if (cb.checked) {
+                if (locked !== '' && locked !== key) {
+                    rejectOtherVendor(cb);
+                    return;
+                }
+                var added = selectByVendorKey(key);
                 if (added > 0) {
                     var vendorName = (cb.getAttribute('data-vendor-name') || '').trim();
-                    var total = countByVendorKey(key);
+                    var total = checkedRows().length;
                     notice('Selected ' + total + ' items' + (vendorName !== '' ? ' from ' + vendorName : ' with the same vendor') + '.', 'info');
                 }
             }
@@ -422,27 +445,38 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (selectAll) {
         selectAll.addEventListener('change', function () {
-            rowChecks.forEach(function (cb) {
-                cb.checked = selectAll.checked;
-            });
+            var locked = lockedVendorKey();
+            if (!selectAll.checked) {
+                rowChecks.forEach(function (cb) { cb.checked = false; });
+                updateSelectUi();
+                return;
+            }
+            if (locked === '') {
+                var firstKey = rowChecks.length ? rowVendorKey(rowChecks[0]) : '';
+                var mixed = Array.prototype.some.call(rowChecks, function (cb) {
+                    return rowVendorKey(cb) !== firstKey;
+                });
+                if (mixed) {
+                    selectAll.checked = false;
+                    notice('Select one item first. You can only select items from a single vendor.', 'warning');
+                    updateSelectUi();
+                    return;
+                }
+                locked = firstKey;
+            }
+            selectByVendorKey(locked);
             updateSelectUi();
         });
     }
 
     if (selectSameBtn) {
         selectSameBtn.addEventListener('click', function () {
-            var keys = [];
-            checkedRows().forEach(function (cb) {
-                var key = cb.getAttribute('data-vendor-key') || '';
-                if (key !== '' && keys.indexOf(key) === -1) {
-                    keys.push(key);
-                }
-            });
-            if (!keys.length) {
+            var locked = lockedVendorKey();
+            if (locked === '') {
                 notice('Select at least one row that has a vendor.', 'warning');
                 return;
             }
-            var added = selectByVendorKeys(keys);
+            var added = selectByVendorKey(locked);
             updateSelectUi();
             notice(added > 0 ? ('Added ' + added + ' more item' + (added === 1 ? '' : 's') + ' from the same vendor.') : 'All matching vendor items on this page are already selected.', 'info');
         });
@@ -459,19 +493,20 @@ document.addEventListener('DOMContentLoaded', function () {
         el.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
-            var key = el.getAttribute('data-vendor-key') || '';
+            var key = (el.getAttribute('data-vendor-key') || '').trim();
             if (key === '') {
                 return;
             }
-            var added = selectByVendorKeys([key]);
-            var vendorName = (el.getAttribute('data-vendor-name') || '').trim();
-            var total = countByVendorKey(key);
-            updateSelectUi();
-            if (total > 0) {
-                notice('Selected ' + total + ' items' + (vendorName !== '' ? ' from ' + vendorName : ' with the same vendor') + '.', 'info');
-            } else if (added === 0) {
-                notice('No other items from this vendor on this page.', 'info');
+            var locked = lockedVendorKey();
+            if (locked !== '' && locked !== key) {
+                notice(sameVendorOnlyMessage, 'warning');
+                return;
             }
+            selectByVendorKey(key);
+            var vendorName = (el.getAttribute('data-vendor-name') || '').trim();
+            var total = checkedRows().length;
+            updateSelectUi();
+            notice('Selected ' + total + ' items' + (vendorName !== '' ? ' from ' + vendorName : ' with the same vendor') + '.', 'info');
         });
     });
 
