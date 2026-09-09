@@ -403,4 +403,4 @@ ADD COLUMN shipping_country_code VARCHAR(10) DEFAULT '';
 ALTER TABLE `vp_orders` ADD `remote_status` VARCHAR(50) NULL AFTER `custom_reduce`;
 ALTER TABLE `vp_products` ADD `update_flag` INT NULL AFTER `dimensions`;
 
-ALTER TABLE `vp_invoices_international` ADD `ewb_number` INT NULL AFTER `qrcode_string`, ADD `ewb_date` DATETIME NULL AFTER `ewb_number`, ADD `ewb_valid_till` DATETIME NULL AFTER `ewb_date`;
+ALTER TABLE `vp_invoices_international` ADD `ewb_no` VARCHAR(50) NULL AFTER `irn_error_message`, ADD `ewb_date` DATETIME NULL AFTER `ewb_no`, ADD `ewb_valid_till` DATETIME NULL AFTER `ewb_date`;
