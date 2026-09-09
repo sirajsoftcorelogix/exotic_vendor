@@ -3,10 +3,13 @@
 declare(strict_types=1);
 
 /**
- * Daily book replenishment (intended for ~1:00 AM).
+ * Daily book replenishment (schedule 1:00 PM).
  *
- * Windows Task Scheduler example:
- *   php.exe D:\xampp\htdocs\exotic_vendor\scripts\run_daily_book_replenishment.php
+ * Linux cron (1:00 PM daily):
+ *   0 13 * * * /usr/bin/php /path/to/exotic_vendor/scripts/run_daily_book_replenishment.php >> /path/to/exotic_vendor/logs/daily_book_replenishment.log 2>&1
+ *
+ * Windows Task Scheduler (1:00 PM daily):
+ *   schtasks /create /tn "Daily Book Replenishment" /sc daily /st 13:00 /tr "C:\xampp\php\php.exe D:\xampp\htdocs\exotic_vendor\scripts\run_daily_book_replenishment.php"
  *
  * Usage:
  *   php scripts/run_daily_book_replenishment.php

@@ -8,7 +8,7 @@ require_once __DIR__ . '/../models/product/StockMovement.php';
  *
  * Logic 1 — numsold <= 1 → replenishment_buy_qty = order quantity (0 on product detail).
  * Logic 2 — numsold > 1:
- *   lookback months: product → primary supplier publisher/vendor mapping → global
+ *   lookback months: product (>0) → publisher (>0) → vendor (>0) → app_settings
  *   min stock % of lookback sales → fill replenishment_buy_qty (50% of lookback sales)
  *   purchase threshold % of lookback sales → generate PO for replenishment_buy_qty
  */
@@ -207,6 +207,9 @@ class BookPurchaseReplenishment
     }
 
     /**
+     * Lookback months: product → publisher → vendor → app_settings.
+     * A value is used only when it is greater than 0.
+     *
      * @return array{months:int,source:string}
      */
     public function resolveLookbackMonths(array $product): array
@@ -216,9 +219,14 @@ class BookPurchaseReplenishment
             return ['months' => $productMonths, 'source' => 'product'];
         }
 
-        $supplierLookback = $this->getPrimarySupplierLookbackMonths((string) ($product['item_code'] ?? ''));
-        if ($supplierLookback['months'] > 0) {
-            return $supplierLookback;
+        $publisherMonths = $this->getPublisherLookbackMonths($product);
+        if ($publisherMonths > 0) {
+            return ['months' => $publisherMonths, 'source' => 'publisher'];
+        }
+
+        $vendorMonths = $this->getVendorLookbackMonths($product);
+        if ($vendorMonths > 0) {
+            return ['months' => $vendorMonths, 'source' => 'vendor'];
         }
 
         $globalMonths = max(0, (int) $this->settings()->get('stock_replenishment_months', 1));
@@ -316,52 +324,108 @@ class BookPurchaseReplenishment
     }
 
     /**
-     * P2: primary supplier from product_vendor_map.
-     * If that vendor is mapped in publisher_vendor_mapping, use publisher months;
-     * otherwise use vendor months.
-     *
-     * @return array{months:int,source:string}
+     * Publisher months from the product's publisher, then from the publisher
+     * mapped to the product's primary vendor. Zero is ignored so vendor/global can apply.
      */
-    private function getPrimarySupplierLookbackMonths(string $itemCode): array
+    private function getPublisherLookbackMonths(array $product): int
     {
-        $itemCode = trim($itemCode);
-        if ($itemCode === '') {
-            return ['months' => 0, 'source' => ''];
+        $keys = [];
+        $raw = trim((string) ($product['publisher'] ?? ''));
+        if ($raw !== '') {
+            $keys[] = $raw;
+        }
+        $selectedId = trim((string) ($product['book_detail_selected_publisher_id'] ?? ''));
+        if ($selectedId !== '' && !in_array($selectedId, $keys, true)) {
+            $keys[] = $selectedId;
         }
 
-        $sql = 'SELECT v.stock_replenishment_months AS vendor_months,
-                       pub.stock_replenishment_months AS publisher_months
-                FROM product_vendor_map pvm
-                INNER JOIN vp_vendors v ON v.id = pvm.vendor_id
-                LEFT JOIN publisher_vendor_mapping map ON map.vendor_id = pvm.vendor_id
-                LEFT JOIN vp_publishers pub ON pub.id = map.publisher_id
-                WHERE pvm.item_code = ?
-                ORDER BY pvm.priority ASC, pvm.id ASC,
-                         (map.id IS NULL) ASC, map.sort_order ASC, map.id ASC
+        foreach ($keys as $key) {
+            $months = $this->fetchPublisherMonthsByKey($key);
+            if ($months > 0) {
+                return $months;
+            }
+        }
+
+        return $this->fetchPublisherMonthsViaVendorMap(trim((string) ($product['item_code'] ?? '')));
+    }
+
+    private function fetchPublisherMonthsByKey(string $key): int
+    {
+        $key = trim($key);
+        if ($key === '') {
+            return 0;
+        }
+
+        $sql = 'SELECT stock_replenishment_months
+                FROM vp_publishers
+                WHERE CAST(publishers_id AS CHAR) = ?
+                   OR CAST(id AS CHAR) = ?
+                   OR publishers = ?
                 LIMIT 1';
         $stmt = $this->conn->prepare($sql);
         if (!$stmt) {
-            return ['months' => 0, 'source' => ''];
+            return 0;
+        }
+        $stmt->bind_param('sss', $key, $key, $key);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        return max(0, (int) ($row['stock_replenishment_months'] ?? 0));
+    }
+
+    private function fetchPublisherMonthsViaVendorMap(string $itemCode): int
+    {
+        $itemCode = trim($itemCode);
+        if ($itemCode === '') {
+            return 0;
+        }
+
+        $sql = 'SELECT pub.stock_replenishment_months AS publisher_months
+                FROM product_vendor_map pvm
+                INNER JOIN publisher_vendor_mapping map ON map.vendor_id = pvm.vendor_id
+                INNER JOIN vp_publishers pub ON pub.id = map.publisher_id
+                WHERE pvm.item_code = ?
+                ORDER BY pvm.priority ASC, pvm.id ASC, map.sort_order ASC, map.id ASC
+                LIMIT 1';
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return 0;
         }
         $stmt->bind_param('s', $itemCode);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
-        if (!$row) {
-            return ['months' => 0, 'source' => ''];
+
+        return max(0, (int) ($row['publisher_months'] ?? 0));
+    }
+
+    /**
+     * Vendor months from the product's primary supplier in product_vendor_map.
+     */
+    private function getVendorLookbackMonths(array $product): int
+    {
+        $itemCode = trim((string) ($product['item_code'] ?? ''));
+        if ($itemCode === '') {
+            return 0;
         }
 
-        $publisherMonths = max(0, (int) ($row['publisher_months'] ?? 0));
-        if ($publisherMonths > 0) {
-            return ['months' => $publisherMonths, 'source' => 'publisher'];
+        $sql = 'SELECT v.stock_replenishment_months AS vendor_months
+                FROM product_vendor_map pvm
+                INNER JOIN vp_vendors v ON v.id = pvm.vendor_id
+                WHERE pvm.item_code = ?
+                ORDER BY pvm.priority ASC, pvm.id ASC
+                LIMIT 1';
+        $stmt = $this->conn->prepare($sql);
+        if (!$stmt) {
+            return 0;
         }
+        $stmt->bind_param('s', $itemCode);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
 
-        $vendorMonths = max(0, (int) ($row['vendor_months'] ?? 0));
-        if ($vendorMonths > 0) {
-            return ['months' => $vendorMonths, 'source' => 'vendor'];
-        }
-
-        return ['months' => 0, 'source' => ''];
+        return max(0, (int) ($row['vendor_months'] ?? 0));
     }
 
     private function purchaseListEntryExists(string $sku, string $orderNumber): bool
