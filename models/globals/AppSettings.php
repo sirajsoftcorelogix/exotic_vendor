@@ -425,6 +425,9 @@ class AppSettings
             'is_active' => !empty($meta['active']) ? 1 : 0,
             'sort_order' => (int) ($meta['sort'] ?? 0),
             'options' => $meta['options'] ?? [],
+            'min' => $meta['min'] ?? null,
+            'max' => $meta['max'] ?? null,
+            'step' => $meta['step'] ?? null,
         ];
     }
 
@@ -463,7 +466,15 @@ class AppSettings
                 return ['value' => null, 'error' => 'must be a whole number.'];
             }
 
-            return ['value' => (int) $value, 'error' => null];
+            $intVal = (int) $value;
+            if ($definition['min'] !== null && $definition['min'] !== '' && $intVal < (int) $definition['min']) {
+                return ['value' => null, 'error' => 'must be at least ' . (int) $definition['min'] . '.'];
+            }
+            if ($definition['max'] !== null && $definition['max'] !== '' && $intVal > (int) $definition['max']) {
+                return ['value' => null, 'error' => 'must be at most ' . (int) $definition['max'] . '.'];
+            }
+
+            return ['value' => $intVal, 'error' => null];
         }
 
         if ($valueType === 'decimal') {

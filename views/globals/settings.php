@@ -136,10 +136,12 @@ function globals_setting_input_id(string $key): string
                                             name="values[<?php echo htmlspecialchars($key); ?>]"
                                             value="<?php echo htmlspecialchars((string) $value); ?>"
                                             <?php
-                                            if ($valueType === 'decimal') {
-                                                echo 'step="0.01" min="0.01"';
-                                            } else {
-                                                echo 'step="1" min="0"';
+                                            $step = $setting['step'] ?? ($valueType === 'decimal' ? '0.01' : '1');
+                                            $min = $setting['min'] ?? ($valueType === 'decimal' ? 0.01 : 0);
+                                            $max = $setting['max'] ?? null;
+                                            echo 'step="' . htmlspecialchars((string) $step) . '" min="' . htmlspecialchars((string) $min) . '"';
+                                            if ($max !== null && $max !== '') {
+                                                echo ' max="' . htmlspecialchars((string) $max) . '"';
                                             }
                                             ?>
                                             class="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-amber-500 focus:ring-amber-500">

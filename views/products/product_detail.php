@@ -710,8 +710,8 @@
           $bookReplenishment = is_array($products['book_replenishment'] ?? null) ? $products['book_replenishment'] : [];
           $replenishmentLookbackMonths = (int)($bookReplenishment['lookback_months'] ?? 0);
           $replenishmentLookbackSource = (string)($bookReplenishment['lookback_source'] ?? '');
-          $replenishmentStockThreshold = (int)($bookReplenishment['stock_threshold'] ?? 0);
-          $replenishmentBuyQty = (int)($bookReplenishment['recommended_buy_qty'] ?? 0);
+          $replenishmentBuyQty = (int)($products['replenishment_buy_qty'] ?? $bookReplenishment['recommended_buy_qty'] ?? 0);
+          $numsoldReplenishment = (int)($products['numsold_replenishment'] ?? $bookReplenishment['total_sold_lookback'] ?? 0);
           $replenishmentReason = (string)($bookReplenishment['reason'] ?? '');
           $replenishmentBranch = (string)($bookReplenishment['branch'] ?? 'none');
           $lookbackSourceLabels = [
@@ -743,17 +743,15 @@
             </button>
           </div>
 
-          <?php if ($replenishmentBranch === 'demand_based'): ?>
-          <div class="<?php echo $invCard; ?> border-rose-100 bg-rose-50/80" title="Replenish when physical stock is at or below this level (25% of lookback sales)">
+          <div class="<?php echo $invCard; ?> border-rose-100 bg-rose-50/80" title="Units sold over the replenishment lookback window (numsold_replenishment)">
             <div class="<?php echo $invBody; ?>">
-              <p class="<?php echo $invLbl; ?>">Low Stock Threshold</p>
-              <p class="<?php echo $invVal; ?> text-rose-700"><?php echo htmlspecialchars((string)$replenishmentStockThreshold, ENT_QUOTES, 'UTF-8'); ?></p>
+              <p class="<?php echo $invLbl; ?>">Period sold</p>
+              <p class="<?php echo $invVal; ?> text-rose-700"><?php echo htmlspecialchars((string)$numsoldReplenishment, ENT_QUOTES, 'UTF-8'); ?></p>
             </div>
             <div class="<?php echo $invIco; ?> bg-rose-100 text-rose-700">
-               <i class="fas fa-level-down-alt"></i>
+               <i class="fas fa-chart-line"></i>
             </div>
           </div>
-          <?php endif; ?>
 
           <div class="<?php echo $invCard; ?> border-lime-100 bg-lime-50/90" title="<?php echo htmlspecialchars($replenishmentReason, ENT_QUOTES, 'UTF-8'); ?>">
             <div class="<?php echo $invBody; ?>">
@@ -761,6 +759,8 @@
               <p class="<?php echo $invVal; ?> text-lime-800"><?php echo htmlspecialchars((string)$replenishmentBuyQty, ENT_QUOTES, 'UTF-8'); ?></p>
               <?php if ($replenishmentBranch === 'direct_order_qty'): ?>
                 <p class="text-[10px] sm:text-xs text-lime-900/75 mt-0.5 leading-snug">Uses order qty on import</p>
+              <?php else: ?>
+                <p class="text-[10px] sm:text-xs text-lime-900/75 mt-0.5 leading-snug">From daily replenishment job</p>
               <?php endif; ?>
             </div>
             <div class="<?php echo $invIco; ?> bg-lime-100 text-lime-800">
@@ -2933,13 +2933,8 @@ function submitStockReplenishmentMonthsUpdate() {
     .then(function (response) { return response.json(); })
     .then(function (res) {
         if (res.success) {
-            const display = document.getElementById('stockReplenishmentMonthsDisplay');
-            const months = parseInt(res.stock_replenishment_months, 10) || 0;
-            if (display) {
-                display.textContent = months > 0 ? String(months) : '—';
-            }
             closeStockReplenishmentMonthsModal();
-            alert('✅ Stock replenishment months updated!');
+            window.location.reload();
         } else {
             alert('❌ Failed: ' + (res.message || 'Could not update stock replenishment months.'));
         }

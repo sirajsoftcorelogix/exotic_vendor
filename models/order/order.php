@@ -3172,4 +3172,45 @@ class Order
             ];
         }
     }
+
+    /**
+     * Book order qty totals for one calendar day, grouped by SKU.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function sumBookSalesForDate(string $salesDate): array
+    {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $salesDate)) {
+            return [];
+        }
+
+        $sql = "SELECT TRIM(o.sku) AS sku,
+                       MAX(TRIM(o.item_code)) AS item_code,
+                       COALESCE(SUM(o.quantity), 0) AS yesterday_qty
+                FROM vp_orders o
+                LEFT JOIN vp_products p ON p.sku = o.sku
+                WHERE o.order_date = ?
+                  AND TRIM(IFNULL(o.sku, '')) <> ''
+                  AND o.status NOT IN ('cancelled', 'returned')
+                  AND (
+                      LOWER(IFNULL(o.groupname, '')) LIKE '%book%'
+                      OR LOWER(IFNULL(p.groupname, '')) LIKE '%book%'
+                  )
+                GROUP BY TRIM(o.sku)
+                ORDER BY yesterday_qty DESC, sku ASC";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('s', $salesDate);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = [];
+        while ($row = $result->fetch_assoc()) {
+            $rows[] = $row;
+        }
+        $stmt->close();
+
+        return $rows;
+    }
 }

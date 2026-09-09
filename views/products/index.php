@@ -259,6 +259,7 @@
                         <a href="?page=products&action=group_api_import" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Import Missing from API (All Groups)</a>
                         <a href="?page=products&action=bulk_import" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Bulk Import (Excel)</a>
                         <a href="?page=inbounding&action=duplicateSkuReport" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 font-semibold text-amber-800">Duplicate SKU Audit Report</a>
+                        <a href="?page=replenishment_buy_report&action=list" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 font-semibold text-amber-800">Replenishment Buy Report</a>
                         <a href="?page=products&action=stock_rebuild_guide" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Batch stock refresh</a>
                         <a href="javascript:void(0)" id="bulkUpdateBtn" title="Update stock" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Update Products</a>
                         <a href="javascript:void(0)" id="action-assign-to" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to purchase list</a>

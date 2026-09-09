@@ -6094,6 +6094,84 @@ class product
         return $stmt->execute();
     }
 
+    public function setProductReplenishmentBuyQty($productId, $qty): bool
+    {
+        $productId = (int) $productId;
+        $qty = max(0, (int) $qty);
+        if ($productId <= 0 || !$this->vpProductsHasColumn('replenishment_buy_qty')) {
+            return false;
+        }
+
+        $sql = 'UPDATE vp_products SET replenishment_buy_qty = ? WHERE id = ?';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('ii', $qty, $productId);
+
+        return $stmt->execute();
+    }
+
+    public function setProductNumsoldReplenishment($productId, $qty): bool
+    {
+        $productId = (int) $productId;
+        $qty = max(0, (int) $qty);
+        if ($productId <= 0 || !$this->vpProductsHasColumn('numsold_replenishment')) {
+            return false;
+        }
+
+        $sql = 'UPDATE vp_products SET numsold_replenishment = ? WHERE id = ?';
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+        $stmt->bind_param('ii', $qty, $productId);
+
+        return $stmt->execute();
+    }
+
+    public function countBookProductsForReplenishment(): int
+    {
+        $sql = "SELECT COUNT(*) AS cnt
+                FROM vp_products
+                WHERE LOWER(IFNULL(groupname, '')) LIKE '%book%'";
+        $res = $this->db->query($sql);
+        if (!$res) {
+            return 0;
+        }
+        $row = $res->fetch_assoc();
+
+        return max(0, (int) ($row['cnt'] ?? 0));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listBookProductsForReplenishment(int $limit, int $offset): array
+    {
+        $limit = max(1, min(500, $limit));
+        $offset = max(0, $offset);
+        $sql = "SELECT *
+                FROM vp_products
+                WHERE LOWER(IFNULL(groupname, '')) LIKE '%book%'
+                ORDER BY id ASC
+                LIMIT ? OFFSET ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('ii', $limit, $offset);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = [];
+        while ($row = $result->fetch_assoc()) {
+            $rows[] = $row;
+        }
+        $stmt->close();
+
+        return $rows;
+    }
+
     public function setProductPermanentlyAvailable($productId, $permanentlyAvailable)
     {
         $productId = (int)$productId;

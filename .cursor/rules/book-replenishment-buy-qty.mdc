@@ -1,41 +1,15 @@
 ---
-description: Book replenishment buy qty autofill — agreed rules, open A vs B decision, do not implement until user continues
-globs: helpers/BookPurchaseReplenishment.php,models/product/product.php,controllers/ProductsController.php,views/products/product_detail.php,sql/alter_vp_products_add_replenishment_buy_qty.sql
+description: Daily book replenishment buy qty and buy report
+globs: helpers/DailyBookReplenishment.php,helpers/NumsoldReplenishment.php,helpers/BookPurchaseReplenishment.php,models/replenishment/ReplenishmentBuyReport.php,controllers/ReplenishmentBuyReportController.php,scripts/run_daily_book_replenishment.php
 alwaysApply: false
 ---
 
-# Book replenishment buy qty (WIP — continue later)
+# Daily book replenishment
 
-Column exists (SQL only; **no autofill code yet**): `vp_products.replenishment_buy_qty` (`INT UNSIGNED NOT NULL DEFAULT 0`). Migration: `sql/alter_vp_products_add_replenishment_buy_qty.sql`.
+Job: `php scripts/run_daily_book_replenishment.php` (schedule ~1:00 AM). Processes **yesterday’s** book sales from `vp_orders`.
 
-Product detail **Replenishment Buy Qty** is still computed in memory by `BookPurchaseReplenishment::evaluate()` (`recommended_buy_qty`). Do not persist until the user continues this task.
+Period sales: `NumsoldReplenishment::getForProduct()` (`numsold_replenishment`). Stub uses local lookback until the Exotic API is wired in `fetchFromExoticApi()`.
 
-## Agreed autofill rules
+If `(physical stock + pending PO qty) < purchase_threshold_percent of numsold_replenishment`, set `vp_products.replenishment_buy_qty` to `min_stock_percent of numsold_replenishment` and upsert `vp_replenishment_buy_report` (purchased yes/no).
 
-**Logic 1** — if `numsold <= 1` → `replenishment_buy_qty = vp_orders.quantity` (current import line). On product detail with no order, save `0` (do not guess last order qty).
-
-**Logic 2** — if `numsold > 1`, pick first months source `> 0`:
-
-1. **P1** `vp_products.stock_replenishment_months`
-2. **P2** primary supplier from `product_vendor_map` (priority ASC)
-   - if that `vendor_id` is in `publisher_vendor_mapping` → publisher → `vp_publishers.stock_replenishment_months`
-   - else vendor → `vp_vendors.stock_replenishment_months`
-3. **P3** global setting `stock_replenishment_months`
-
-If no months source `> 0` → qty `0`. If physical stock `<= numsold × 25%` → qty = `50%` of numsold; else `0`.
-
-`numsold` live value is `vp_products.numsold` (orders may store a snapshot as `vp_orders.numsold`). Books only. Physical stock = existing `StockMovement` helper. Threshold `floor(× 0.25)`, buy qty `round(× 0.50)`.
-
-## Open decision (must confirm before coding)
-
-| | Months used as | Logic 2 `numsold` | Example (12 sold in 3 mo, lifetime 80, stock 5) |
-|---|---|---|---|
-| **A** | Gate only (`> 0`) | Lifetime `vp_products.numsold` | threshold 20, buy 40 |
-| **B (recommended)** | Lookback window | `SUM(vp_orders.quantity)` in that window | threshold 3, buy 6 |
-
-## Planned implementation (when continuing)
-
-- Model write only: `setProductReplenishmentBuyQty` on `models/product/product.php`
-- Compute + save in `BookPurchaseReplenishment` (update P2 to mapping; do not add a new service)
-- Triggers: order import + opening book product detail
-- Presenter calls model/helper; no SQL in controllers
+Report: `?page=replenishment_buy_report&action=list`
