@@ -181,8 +181,13 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                     <button type="button" id="replenishSelectClear" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xs font-medium hover:bg-gray-50">
                         Clear
                     </button>
+                    <button type="button" id="replenishCreatePoBtn" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-700 text-white text-xs font-semibold hover:bg-amber-800">
+                        <i class="fas fa-file-invoice text-[10px]" aria-hidden="true"></i>
+                        Create PO
+                    </button>
                 </div>
             </div>
+            <form id="replenishCreatePoForm" action="<?php echo $h(base_url('?page=purchase_orders&action=custom_po')); ?>" method="post" class="hidden"></form>
 
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
@@ -236,6 +241,9 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                                     <input type="checkbox"
                                         class="replenish-row-check h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
                                         data-id="<?php echo (int) ($row['id'] ?? 0); ?>"
+                                        data-product-id="<?php echo (int) ($row['product_id'] ?? 0); ?>"
+                                        data-buy-qty="<?php echo (int) ($row['replenishment_buy_qty'] ?? 0); ?>"
+                                        data-vendor-id="<?php echo $vendorId; ?>"
                                         data-vendor-key="<?php echo $h($vendorKey); ?>"
                                         data-vendor-name="<?php echo $h($vendorName); ?>"
                                         aria-label="Select row">
@@ -486,6 +494,48 @@ document.addEventListener('DOMContentLoaded', function () {
         selectClearBtn.addEventListener('click', function () {
             rowChecks.forEach(function (cb) { cb.checked = false; });
             updateSelectUi();
+        });
+    }
+
+    var createPoBtn = document.getElementById('replenishCreatePoBtn');
+    var createPoForm = document.getElementById('replenishCreatePoForm');
+    if (createPoBtn && createPoForm) {
+        createPoBtn.addEventListener('click', function () {
+            var selected = checkedRows();
+            if (!selected.length) {
+                notice('Select at least one item to create a purchase order.', 'warning');
+                return;
+            }
+            var missingProduct = selected.some(function (cb) {
+                return parseInt(cb.getAttribute('data-product-id') || '0', 10) <= 0;
+            });
+            if (missingProduct) {
+                notice('One or more selected rows are missing a product. Refresh and try again.', 'error');
+                return;
+            }
+            createPoForm.innerHTML = '';
+            var vendorId = selected[0].getAttribute('data-vendor-id') || '';
+            var vendorName = selected[0].getAttribute('data-vendor-name') || '';
+            var addHidden = function (name, value) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = name;
+                input.value = value;
+                createPoForm.appendChild(input);
+            };
+            if (vendorId !== '' && vendorId !== '0') {
+                addHidden('vendor_id', vendorId);
+            }
+            if (vendorName !== '') {
+                addHidden('vendor_name', vendorName);
+            }
+            selected.forEach(function (cb) {
+                var productId = cb.getAttribute('data-product-id') || '';
+                var buyQty = cb.getAttribute('data-buy-qty') || '0';
+                addHidden('cpoitem[]', productId);
+                addHidden('cpoqty[' + productId + ']', buyQty);
+            });
+            createPoForm.submit();
         });
     }
 
