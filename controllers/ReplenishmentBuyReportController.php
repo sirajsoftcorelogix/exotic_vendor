@@ -19,16 +19,7 @@ class ReplenishmentBuyReportController
     {
         is_login();
 
-        $filters = [
-            'search' => trim((string) ($_GET['search_text'] ?? '')),
-            'purchased' => trim((string) ($_GET['purchased'] ?? 'no')),
-            'run_date' => trim((string) ($_GET['run_date'] ?? '')),
-            'page' => max(1, (int) ($_GET['page_no'] ?? 1)),
-            'limit' => (int) ($_GET['limit'] ?? 20),
-        ];
-        if (!in_array($filters['purchased'], ['no', 'yes', 'all'], true)) {
-            $filters['purchased'] = 'no';
-        }
+        $filters = $this->filtersFromRequest();
 
         $listing = $this->reportModel->tableExists()
             ? $this->reportModel->searchList($filters)
@@ -37,15 +28,117 @@ class ReplenishmentBuyReportController
         renderTemplate('views/replenishment_buy_report/index.php', [
             'rows' => $listing['rows'],
             'search' => $filters['search'],
+            'sku' => $filters['sku'],
+            'item_code' => $filters['item_code'],
+            'title' => $filters['title'],
             'purchased' => $filters['purchased'],
-            'run_date' => $filters['run_date'],
+            'date_from' => $filters['date_from'],
+            'date_to' => $filters['date_to'],
+            'lookback_source' => $filters['lookback_source'],
+            'min_buy_qty' => $filters['min_buy_qty'],
             'currentPage' => $listing['page'],
             'totalPages' => $listing['pages'],
             'totalRecords' => $listing['total'],
             'limit' => $listing['limit'],
             'table_ready' => $this->reportModel->tableExists(),
             'can_run' => function_exists('canSrEmpAccess') && canSrEmpAccess(),
+            'export_query' => http_build_query($this->exportQueryParams($filters)),
         ], 'Replenishment Buy Report');
+    }
+
+    public function exportExcel(): void
+    {
+        is_login();
+
+        if (!$this->reportModel->tableExists()) {
+            vendorJsonResponse(['success' => false, 'message' => 'Report table is not ready.']);
+        }
+
+        $filters = $this->filtersFromRequest();
+        $rows = $this->reportModel->searchAll($filters, 10000);
+
+        require_once 'vendor/autoload.php';
+
+        try {
+            $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Buy report');
+
+            $headers = [
+                'Sales date',
+                'SKU',
+                'Item code',
+                'Title',
+                'Yesterday sold',
+                'Period sold',
+                'Lookback months',
+                'Lookback source',
+                'Period source',
+                'Physical stock',
+                'Pending PO',
+                'Available stock',
+                'Threshold %',
+                'Threshold qty',
+                'Min stock %',
+                'Buy qty',
+                'Purchased',
+                'Purchased at',
+            ];
+            $sheet->fromArray($headers, null, 'A1');
+            $sheet->getStyle('A1:R1')->getFont()->setBold(true);
+            $sheet->getStyle('A1:R1')->getFill()
+                ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                ->getStartColor()->setARGB('FFF3F4F6');
+
+            $rowNum = 2;
+            foreach ($rows as $row) {
+                $sheet->fromArray([
+                    (string) ($row['run_date'] ?? ''),
+                    (string) ($row['sku'] ?? ''),
+                    (string) ($row['item_code'] ?? ''),
+                    (string) ($row['title'] ?? ''),
+                    (int) ($row['yesterday_sold_qty'] ?? 0),
+                    (int) ($row['numsold_replenishment'] ?? 0),
+                    (int) ($row['lookback_months'] ?? 0),
+                    (string) ($row['lookback_source'] ?? ''),
+                    (string) ($row['numsold_source'] ?? ''),
+                    (int) ($row['physical_stock'] ?? 0),
+                    (int) ($row['pending_po_qty'] ?? 0),
+                    (int) ($row['available_stock'] ?? 0),
+                    (int) ($row['purchase_threshold_percent'] ?? 0),
+                    (int) ($row['purchase_threshold_qty'] ?? 0),
+                    (int) ($row['min_stock_percent'] ?? 0),
+                    (int) ($row['replenishment_buy_qty'] ?? 0),
+                    ((int) ($row['purchased'] ?? 0) === 1) ? 'Yes' : 'No',
+                    (string) ($row['purchased_at'] ?? ''),
+                ], null, 'A' . $rowNum);
+                $rowNum++;
+            }
+
+            foreach (range('A', 'R') as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
+
+            $filename = 'replenishment_buy_report_' . date('Y-m-d_His') . '.xlsx';
+
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Cache-Control: max-age=0');
+            header('Pragma: public');
+
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save('php://output');
+        } catch (Throwable $e) {
+            vendorJsonResponse([
+                'success' => false,
+                'message' => 'Could not generate Excel file.',
+            ], 500);
+        }
+        exit;
     }
 
     public function markPurchased(): void
@@ -122,5 +215,66 @@ class ReplenishmentBuyReportController
             'message' => $message,
             'summary' => $summary,
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function filtersFromRequest(): array
+    {
+        $runDate = trim((string) ($_GET['run_date'] ?? ''));
+        $dateFrom = trim((string) ($_GET['date_from'] ?? ''));
+        $dateTo = trim((string) ($_GET['date_to'] ?? ''));
+        if ($dateFrom === '' && $dateTo === '' && $runDate !== '') {
+            $dateFrom = $runDate;
+            $dateTo = $runDate;
+        }
+
+        $purchased = trim((string) ($_GET['purchased'] ?? 'no'));
+        if (!in_array($purchased, ['no', 'yes', 'all'], true)) {
+            $purchased = 'no';
+        }
+
+        $source = strtolower(trim((string) ($_GET['lookback_source'] ?? '')));
+        if (!in_array($source, ['product', 'publisher', 'vendor', 'global'], true)) {
+            $source = '';
+        }
+
+        $minBuyQty = trim((string) ($_GET['min_buy_qty'] ?? ''));
+
+        return [
+            'search' => trim((string) ($_GET['search_text'] ?? '')),
+            'sku' => trim((string) ($_GET['sku'] ?? '')),
+            'item_code' => trim((string) ($_GET['item_code'] ?? '')),
+            'title' => trim((string) ($_GET['title'] ?? '')),
+            'purchased' => $purchased,
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+            'lookback_source' => $source,
+            'min_buy_qty' => $minBuyQty,
+            'page' => max(1, (int) ($_GET['page_no'] ?? 1)),
+            'limit' => (int) ($_GET['limit'] ?? 20),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array<string, string|int>
+     */
+    private function exportQueryParams(array $filters): array
+    {
+        return [
+            'page' => 'replenishment_buy_report',
+            'action' => 'export_excel',
+            'search_text' => (string) ($filters['search'] ?? ''),
+            'sku' => (string) ($filters['sku'] ?? ''),
+            'item_code' => (string) ($filters['item_code'] ?? ''),
+            'title' => (string) ($filters['title'] ?? ''),
+            'purchased' => (string) ($filters['purchased'] ?? 'no'),
+            'date_from' => (string) ($filters['date_from'] ?? ''),
+            'date_to' => (string) ($filters['date_to'] ?? ''),
+            'lookback_source' => (string) ($filters['lookback_source'] ?? ''),
+            'min_buy_qty' => (string) ($filters['min_buy_qty'] ?? ''),
+        ];
     }
 }

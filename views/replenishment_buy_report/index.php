@@ -1,7 +1,16 @@
 <?php
-$searchValue = htmlspecialchars((string) ($search ?? ''), ENT_QUOTES, 'UTF-8');
+$h = static function ($value): string {
+    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+};
+$searchValue = $h($search ?? '');
+$skuValue = $h($sku ?? '');
+$itemCodeValue = $h($item_code ?? '');
+$titleValue = $h($title ?? '');
 $purchasedValue = (string) ($purchased ?? 'no');
-$runDateValue = htmlspecialchars((string) ($run_date ?? ''), ENT_QUOTES, 'UTF-8');
+$dateFromValue = $h($date_from ?? '');
+$dateToValue = $h($date_to ?? '');
+$lookbackSourceValue = (string) ($lookback_source ?? '');
+$minBuyQtyValue = $h($min_buy_qty ?? '');
 $currentPage = max(1, (int) ($currentPage ?? 1));
 $totalPages = max(1, (int) ($totalPages ?? 1));
 $limit = (int) ($limit ?? 20);
@@ -9,14 +18,22 @@ $totalRecords = (int) ($totalRecords ?? 0);
 $tableReady = !empty($table_ready);
 $canRun = !empty($can_run);
 $rows = is_array($rows ?? null) ? $rows : [];
+$exportQuery = (string) ($export_query ?? '');
 $queryBase = [
     'page' => 'replenishment_buy_report',
     'action' => 'list',
     'search_text' => (string) ($search ?? ''),
+    'sku' => (string) ($sku ?? ''),
+    'item_code' => (string) ($item_code ?? ''),
+    'title' => (string) ($title ?? ''),
     'purchased' => $purchasedValue,
-    'run_date' => (string) ($run_date ?? ''),
+    'date_from' => (string) ($date_from ?? ''),
+    'date_to' => (string) ($date_to ?? ''),
+    'lookback_source' => $lookbackSourceValue,
+    'min_buy_qty' => (string) ($min_buy_qty ?? ''),
     'limit' => $limit,
 ];
+$inputClass = 'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white';
 ?>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
@@ -36,13 +53,22 @@ $queryBase = [
                     Books that sold yesterday and need purchase because available stock (physical + pending PO) is below the purchase threshold of period sales.
                 </p>
             </div>
-            <?php if ($canRun): ?>
-            <button type="button" id="runReplenishmentJobBtn"
-                class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22]">
-                <i class="fas fa-play text-xs opacity-95" aria-hidden="true"></i>
-                Run for yesterday
-            </button>
-            <?php endif; ?>
+            <div class="flex flex-col sm:flex-row shrink-0 gap-2">
+                <?php if ($tableReady): ?>
+                <a href="<?php echo $h('index.php?' . $exportQuery); ?>"
+                    class="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 text-sm font-semibold hover:bg-emerald-100">
+                    <i class="fas fa-file-excel text-xs" aria-hidden="true"></i>
+                    Download Excel
+                </a>
+                <?php endif; ?>
+                <?php if ($canRun): ?>
+                <button type="button" id="runReplenishmentJobBtn"
+                    class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-b from-[#d9822b] to-[#c57526] text-white text-sm font-semibold shadow-lg shadow-amber-900/20 hover:from-[#c57526] hover:to-[#b86a22] disabled:opacity-60 disabled:cursor-not-allowed disabled:pointer-events-none">
+                    <i class="fas fa-play text-xs opacity-95" aria-hidden="true"></i>
+                    Run for yesterday
+                </button>
+                <?php endif; ?>
+            </div>
         </div>
     </div>
 
@@ -53,29 +79,82 @@ $queryBase = [
         </div>
     <?php else: ?>
         <div class="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
-            <form method="get" class="p-5 border-b border-gray-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <form method="get" class="p-5 border-b border-gray-100 space-y-4">
                 <input type="hidden" name="page" value="replenishment_buy_report">
                 <input type="hidden" name="action" value="list">
-                <div class="lg:col-span-2">
-                    <label class="block text-xs font-semibold text-gray-600 mb-1">Search</label>
-                    <input type="text" name="search_text" value="<?php echo $searchValue; ?>" placeholder="SKU, item code, title"
-                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="lg:col-span-2">
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Quick search</label>
+                        <input type="text" name="search_text" value="<?php echo $searchValue; ?>" placeholder="SKU, item code, or title"
+                            class="<?php echo $inputClass; ?>">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">SKU</label>
+                        <input type="text" name="sku" value="<?php echo $skuValue; ?>" placeholder="Exact-ish SKU"
+                            class="<?php echo $inputClass; ?>">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Item code</label>
+                        <input type="text" name="item_code" value="<?php echo $itemCodeValue; ?>" placeholder="Item code"
+                            class="<?php echo $inputClass; ?>">
+                    </div>
+                    <div class="lg:col-span-2">
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Title</label>
+                        <input type="text" name="title" value="<?php echo $titleValue; ?>" placeholder="Book title"
+                            class="<?php echo $inputClass; ?>">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Purchased</label>
+                        <select name="purchased" class="<?php echo $inputClass; ?>">
+                            <option value="no" <?php echo $purchasedValue === 'no' ? 'selected' : ''; ?>>No</option>
+                            <option value="yes" <?php echo $purchasedValue === 'yes' ? 'selected' : ''; ?>>Yes</option>
+                            <option value="all" <?php echo $purchasedValue === 'all' ? 'selected' : ''; ?>>All</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Lookback source</label>
+                        <select name="lookback_source" class="<?php echo $inputClass; ?>">
+                            <option value="" <?php echo $lookbackSourceValue === '' ? 'selected' : ''; ?>>All sources</option>
+                            <option value="product" <?php echo $lookbackSourceValue === 'product' ? 'selected' : ''; ?>>Product</option>
+                            <option value="publisher" <?php echo $lookbackSourceValue === 'publisher' ? 'selected' : ''; ?>>Publisher</option>
+                            <option value="vendor" <?php echo $lookbackSourceValue === 'vendor' ? 'selected' : ''; ?>>Vendor</option>
+                            <option value="global" <?php echo $lookbackSourceValue === 'global' ? 'selected' : ''; ?>>Global</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Date from</label>
+                        <input type="date" name="date_from" value="<?php echo $dateFromValue; ?>" class="<?php echo $inputClass; ?>">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Date to</label>
+                        <input type="date" name="date_to" value="<?php echo $dateToValue; ?>" class="<?php echo $inputClass; ?>">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Min buy qty</label>
+                        <input type="number" name="min_buy_qty" min="0" step="1" value="<?php echo $minBuyQtyValue; ?>" placeholder="e.g. 1"
+                            class="<?php echo $inputClass; ?>">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Rows</label>
+                        <select name="limit" class="<?php echo $inputClass; ?>">
+                            <?php foreach ([10, 20, 50, 100] as $opt): ?>
+                                <option value="<?php echo $opt; ?>" <?php echo $limit === $opt ? 'selected' : ''; ?>><?php echo $opt; ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-xs font-semibold text-gray-600 mb-1">Purchased</label>
-                    <select name="purchased" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white">
-                        <option value="no" <?php echo $purchasedValue === 'no' ? 'selected' : ''; ?>>No</option>
-                        <option value="yes" <?php echo $purchasedValue === 'yes' ? 'selected' : ''; ?>>Yes</option>
-                        <option value="all" <?php echo $purchasedValue === 'all' ? 'selected' : ''; ?>>All</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-gray-600 mb-1">Sales date</label>
-                    <input type="date" name="run_date" value="<?php echo $runDateValue; ?>"
-                        class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm">
-                </div>
-                <div class="flex items-end">
-                    <button type="submit" class="w-full px-4 py-2.5 rounded-lg bg-gray-900 text-white text-sm font-semibold">Filter</button>
+                <div class="flex flex-wrap items-center gap-3">
+                    <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800">
+                        <i class="fas fa-search text-xs" aria-hidden="true"></i>
+                        Search
+                    </button>
+                    <a href="?page=replenishment_buy_report&amp;action=list" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50">
+                        Reset
+                    </a>
+                    <a href="<?php echo $h('index.php?' . $exportQuery); ?>" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 text-sm font-semibold hover:bg-emerald-100">
+                        <i class="fas fa-file-excel text-xs" aria-hidden="true"></i>
+                        Download Excel
+                    </a>
                 </div>
             </form>
 
@@ -84,13 +163,15 @@ $queryBase = [
                     <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
                         <tr>
                             <th class="px-4 py-3 font-semibold">Sales date</th>
-                            <th class="px-4 py-3 font-semibold">SKU</th>
+                            <th class="px-4 py-3 font-semibold">SKU / Item</th>
                             <th class="px-4 py-3 font-semibold">Title</th>
+                            <th class="px-4 py-3 font-semibold">Lookback</th>
                             <th class="px-4 py-3 font-semibold text-right">Yday sold</th>
                             <th class="px-4 py-3 font-semibold text-right">Period sold</th>
                             <th class="px-4 py-3 font-semibold text-right">Physical</th>
                             <th class="px-4 py-3 font-semibold text-right">Pending PO</th>
                             <th class="px-4 py-3 font-semibold text-right">Available</th>
+                            <th class="px-4 py-3 font-semibold text-right">Threshold</th>
                             <th class="px-4 py-3 font-semibold text-right">Buy qty</th>
                             <th class="px-4 py-3 font-semibold">Purchased</th>
                         </tr>
@@ -98,27 +179,39 @@ $queryBase = [
                     <tbody class="divide-y divide-gray-100">
                         <?php if ($rows === []): ?>
                             <tr>
-                                <td colspan="10" class="px-4 py-8 text-center text-gray-500">No replenishment items for these filters.</td>
+                                <td colspan="12" class="px-4 py-8 text-center text-gray-500">No replenishment items for these filters.</td>
                             </tr>
                         <?php endif; ?>
                         <?php foreach ($rows as $row): ?>
-                            <?php $isPurchased = (int) ($row['purchased'] ?? 0) === 1; ?>
+                            <?php
+                            $isPurchased = (int) ($row['purchased'] ?? 0) === 1;
+                            $lookbackLabel = trim((string) ($row['lookback_source'] ?? ''));
+                            $lookbackMonths = (int) ($row['lookback_months'] ?? 0);
+                            ?>
                             <tr>
-                                <td class="px-4 py-3 whitespace-nowrap text-gray-600"><?php echo htmlspecialchars((string) ($row['run_date'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td class="px-4 py-3 whitespace-nowrap text-gray-600"><?php echo $h($row['run_date'] ?? ''); ?></td>
                                 <td class="px-4 py-3">
-                                    <a class="text-amber-800 font-medium hover:underline" href="<?php echo htmlspecialchars(base_url('?page=products&action=detail&id=' . (int) ($row['product_id'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?>">
-                                        <?php echo htmlspecialchars((string) ($row['sku'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+                                    <a class="text-amber-800 font-medium hover:underline" href="<?php echo $h(base_url('?page=products&action=detail&id=' . (int) ($row['product_id'] ?? 0))); ?>">
+                                        <?php echo $h($row['sku'] ?? ''); ?>
                                     </a>
-                                    <div class="text-xs text-gray-400"><?php echo htmlspecialchars((string) ($row['item_code'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></div>
+                                    <div class="text-xs text-gray-400"><?php echo $h($row['item_code'] ?? ''); ?></div>
                                 </td>
-                                <td class="px-4 py-3 max-w-xs truncate" title="<?php echo htmlspecialchars((string) ($row['title'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
-                                    <?php echo htmlspecialchars((string) ($row['title'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+                                <td class="px-4 py-3 max-w-sm">
+                                    <div class="text-gray-800"><?php echo $h($row['title'] ?? ''); ?></div>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <div class="text-gray-800"><?php echo $lookbackMonths; ?> mo</div>
+                                    <div class="text-xs text-gray-400"><?php echo $h($lookbackLabel !== '' ? $lookbackLabel : '—'); ?></div>
                                 </td>
                                 <td class="px-4 py-3 text-right"><?php echo (int) ($row['yesterday_sold_qty'] ?? 0); ?></td>
                                 <td class="px-4 py-3 text-right"><?php echo (int) ($row['numsold_replenishment'] ?? 0); ?></td>
                                 <td class="px-4 py-3 text-right"><?php echo (int) ($row['physical_stock'] ?? 0); ?></td>
                                 <td class="px-4 py-3 text-right"><?php echo (int) ($row['pending_po_qty'] ?? 0); ?></td>
                                 <td class="px-4 py-3 text-right font-semibold"><?php echo (int) ($row['available_stock'] ?? 0); ?></td>
+                                <td class="px-4 py-3 text-right whitespace-nowrap">
+                                    <div><?php echo (int) ($row['purchase_threshold_qty'] ?? 0); ?></div>
+                                    <div class="text-xs text-gray-400"><?php echo (int) ($row['purchase_threshold_percent'] ?? 0); ?>%</div>
+                                </td>
                                 <td class="px-4 py-3 text-right font-semibold text-lime-800"><?php echo (int) ($row['replenishment_buy_qty'] ?? 0); ?></td>
                                 <td class="px-4 py-3">
                                     <button type="button"
@@ -137,11 +230,11 @@ $queryBase = [
                 <span><?php echo (int) $totalRecords; ?> items</span>
                 <div class="flex items-center gap-2">
                     <?php if ($currentPage > 1): ?>
-                        <a class="px-3 py-1.5 rounded border border-gray-200 hover:bg-gray-50" href="<?php echo htmlspecialchars('?' . http_build_query(array_merge($queryBase, ['page_no' => $currentPage - 1])), ENT_QUOTES, 'UTF-8'); ?>">Prev</a>
+                        <a class="px-3 py-1.5 rounded border border-gray-200 hover:bg-gray-50" href="<?php echo $h('?' . http_build_query(array_merge($queryBase, ['page_no' => $currentPage - 1]))); ?>">Prev</a>
                     <?php endif; ?>
                     <span>Page <?php echo $currentPage; ?> / <?php echo $totalPages; ?></span>
                     <?php if ($currentPage < $totalPages): ?>
-                        <a class="px-3 py-1.5 rounded border border-gray-200 hover:bg-gray-50" href="<?php echo htmlspecialchars('?' . http_build_query(array_merge($queryBase, ['page_no' => $currentPage + 1])), ENT_QUOTES, 'UTF-8'); ?>">Next</a>
+                        <a class="px-3 py-1.5 rounded border border-gray-200 hover:bg-gray-50" href="<?php echo $h('?' . http_build_query(array_merge($queryBase, ['page_no' => $currentPage + 1]))); ?>">Next</a>
                     <?php endif; ?>
                 </div>
             </div>
@@ -186,6 +279,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const runBtn = document.getElementById('runReplenishmentJobBtn');
     if (runBtn) {
+        runBtn.disabled = false;
+        runBtn.removeAttribute('disabled');
         runBtn.addEventListener('click', function () {
             runBtn.disabled = true;
             fetch('index.php?page=replenishment_buy_report&action=run', {
@@ -205,18 +300,28 @@ document.addEventListener('DOMContentLoaded', function () {
                     throw new Error(text ? text.replace(/<[^>]+>/g, ' ').slice(0, 180) : 'Invalid server response');
                 }
                 notice(data.message || 'Job finished.', data.success ? 'success' : 'error');
-                if (data.success) {
-                    var params = new URLSearchParams(window.location.search);
-                    params.set('page', 'replenishment_buy_report');
-                    params.set('action', 'list');
-                    params.set('purchased', 'no');
-                    if (data.summary && data.summary.run_date) {
-                        params.set('run_date', data.summary.run_date);
-                    }
-                    window.location.search = params.toString();
-                } else {
+                if (!data.success) {
                     runBtn.disabled = false;
+                    return;
                 }
+                var params = new URLSearchParams(window.location.search);
+                params.set('page', 'replenishment_buy_report');
+                params.set('action', 'list');
+                params.set('purchased', 'no');
+                if (data.summary && data.summary.run_date) {
+                    params.set('date_from', data.summary.run_date);
+                    params.set('date_to', data.summary.run_date);
+                    params.delete('run_date');
+                }
+                var nextSearch = '?' + params.toString();
+                if (window.location.search === nextSearch) {
+                    window.location.reload();
+                    return;
+                }
+                window.location.search = nextSearch;
+                window.setTimeout(function () {
+                    runBtn.disabled = false;
+                }, 1500);
             })
             .catch(function (err) {
                 runBtn.disabled = false;
