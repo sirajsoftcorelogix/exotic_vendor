@@ -1,7 +1,7 @@
 -- Add EWB-specific columns to vp_invoices_international table if they don't exist
 -- These columns will store E-Way Bill generation request/response data and errors
 
-ALTER TABLE `vp_invoices_international` ADD `ewb_number` INT NULL AFTER `qrcode_string`, ADD `ewb_date` DATETIME NULL AFTER `ewb_number`, ADD `ewb_valid_till` DATETIME NULL AFTER `ewb_date`;
+ALTER TABLE `vp_invoices_international` ADD `ewb_no` VARCHAR(50) NULL AFTER `irn_error_message`, ADD `ewb_date` DATETIME NULL AFTER `ewb_no`, ADD `ewb_valid_till` DATETIME NULL AFTER `ewb_date`;
 
 ALTER TABLE `vp_invoices_international` 
 ADD COLUMN IF NOT EXISTS `ewb_request_payload` LONGTEXT NULL COMMENT 'EWB generation request payload (JSON)',
