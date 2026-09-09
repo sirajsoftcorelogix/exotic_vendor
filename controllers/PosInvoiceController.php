@@ -222,7 +222,29 @@ class PosInvoiceController
             return null;
         }
 
-        $stmt = $conn->prepare('SELECT * FROM vp_domestic_ewb_irn WHERE vp_invoices_id = ? LIMIT 1');
+        $currencyStmt = $conn->prepare('SELECT currency FROM vp_invoices WHERE id = ? LIMIT 1');
+        if (!$currencyStmt) {
+            return null;
+        }
+        $currencyStmt->bind_param('i', $invoiceId);
+        $currencyStmt->execute();
+        $currencyRow = $currencyStmt->get_result()->fetch_assoc();
+        $currencyStmt->close();
+
+        $currency = strtoupper(trim((string)($currencyRow['currency'] ?? 'INR')));
+        if ($currency !== '' && $currency !== 'INR') {
+            $stmt = $conn->prepare(
+                'SELECT *,
+                        ewb_number AS ewb_no,
+                        ewb_number AS ewb,
+                        CASE WHEN ewb_number IS NULL OR ewb_number = 0 THEN "pending" ELSE "generated" END AS ewb_status
+                 FROM vp_invoices_international
+                 WHERE invoice_id = ?
+                 LIMIT 1'
+            );
+        } else {
+            $stmt = $conn->prepare('SELECT * FROM vp_domestic_ewb_irn WHERE vp_invoices_id = ? LIMIT 1');
+        }
         if (!$stmt) {
             return null;
         }
