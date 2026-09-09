@@ -100,34 +100,65 @@ class ReplenishmentBuyReport
     }
 
     /**
-     * @return array{rows:array<int,array<string,mixed>>,total:int,page:int,pages:int,limit:int}
+     * @return array{where:string,types:string,params:array<int,mixed>}
      */
-    public function searchList(array $filters): array
+    private function buildSearchWhere(array $filters): array
     {
-        $page = max(1, (int) ($filters['page'] ?? 1));
-        $limit = (int) ($filters['limit'] ?? 20);
-        $limit = in_array($limit, [10, 20, 50, 100], true) ? $limit : 20;
-        $offset = ($page - 1) * $limit;
-        $search = trim((string) ($filters['search'] ?? ''));
-        $purchased = trim((string) ($filters['purchased'] ?? 'no'));
-        $runDate = trim((string) ($filters['run_date'] ?? ''));
-
         $where = ' WHERE 1=1';
         $types = '';
         $params = [];
 
+        $purchased = trim((string) ($filters['purchased'] ?? 'no'));
         if ($purchased === 'yes') {
             $where .= ' AND purchased = 1';
         } elseif ($purchased === 'no') {
             $where .= ' AND purchased = 0';
         }
 
-        if ($runDate !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $runDate)) {
-            $where .= ' AND run_date = ?';
+        $dateFrom = trim((string) ($filters['date_from'] ?? $filters['run_date'] ?? ''));
+        $dateTo = trim((string) ($filters['date_to'] ?? ''));
+        if ($dateTo === '' && trim((string) ($filters['run_date'] ?? '')) !== '' && $dateFrom === trim((string) $filters['run_date'])) {
+            $dateTo = $dateFrom;
+        }
+        $dateFromOk = preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom) === 1;
+        $dateToOk = preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo) === 1;
+        if ($dateFromOk && $dateToOk) {
+            $where .= ' AND run_date BETWEEN ? AND ?';
+            $types .= 'ss';
+            $params[] = $dateFrom;
+            $params[] = $dateTo;
+        } elseif ($dateFromOk) {
+            $where .= ' AND run_date >= ?';
             $types .= 's';
-            $params[] = $runDate;
+            $params[] = $dateFrom;
+        } elseif ($dateToOk) {
+            $where .= ' AND run_date <= ?';
+            $types .= 's';
+            $params[] = $dateTo;
         }
 
+        $sku = trim((string) ($filters['sku'] ?? ''));
+        if ($sku !== '') {
+            $where .= ' AND sku LIKE ?';
+            $types .= 's';
+            $params[] = '%' . $sku . '%';
+        }
+
+        $itemCode = trim((string) ($filters['item_code'] ?? ''));
+        if ($itemCode !== '') {
+            $where .= ' AND item_code LIKE ?';
+            $types .= 's';
+            $params[] = '%' . $itemCode . '%';
+        }
+
+        $title = trim((string) ($filters['title'] ?? ''));
+        if ($title !== '') {
+            $where .= ' AND title LIKE ?';
+            $types .= 's';
+            $params[] = '%' . $title . '%';
+        }
+
+        $search = trim((string) ($filters['search'] ?? ''));
         if ($search !== '') {
             $where .= ' AND (sku LIKE ? OR item_code LIKE ? OR title LIKE ?)';
             $like = '%' . $search . '%';
@@ -136,6 +167,37 @@ class ReplenishmentBuyReport
             $params[] = $like;
             $params[] = $like;
         }
+
+        $source = strtolower(trim((string) ($filters['lookback_source'] ?? '')));
+        if (in_array($source, ['product', 'publisher', 'vendor', 'global'], true)) {
+            $where .= ' AND lookback_source = ?';
+            $types .= 's';
+            $params[] = $source;
+        }
+
+        if (isset($filters['min_buy_qty']) && $filters['min_buy_qty'] !== '' && is_numeric($filters['min_buy_qty'])) {
+            $where .= ' AND replenishment_buy_qty >= ?';
+            $types .= 'i';
+            $params[] = max(0, (int) $filters['min_buy_qty']);
+        }
+
+        return ['where' => $where, 'types' => $types, 'params' => $params];
+    }
+
+    /**
+     * @return array{rows:array<int,array<string,mixed>>,total:int,page:int,pages:int,limit:int}
+     */
+    public function searchList(array $filters): array
+    {
+        $page = max(1, (int) ($filters['page'] ?? 1));
+        $limit = (int) ($filters['limit'] ?? 20);
+        $limit = in_array($limit, [10, 20, 50, 100], true) ? $limit : 20;
+        $offset = ($page - 1) * $limit;
+
+        $clause = $this->buildSearchWhere($filters);
+        $where = $clause['where'];
+        $types = $clause['types'];
+        $params = $clause['params'];
 
         $total = 0;
         $countSql = 'SELECT COUNT(*) AS cnt FROM vp_replenishment_buy_report' . $where;
@@ -172,6 +234,33 @@ class ReplenishmentBuyReport
             'pages' => max(1, (int) ceil($total / $limit)),
             'limit' => $limit,
         ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function searchAll(array $filters, int $maxRows = 10000): array
+    {
+        $maxRows = max(1, min(20000, $maxRows));
+        $clause = $this->buildSearchWhere($filters);
+        $sql = 'SELECT * FROM vp_replenishment_buy_report' . $clause['where']
+            . ' ORDER BY run_date DESC, id DESC LIMIT ?';
+        $stmt = $this->conn->prepare($sql);
+        $rows = [];
+        if (!$stmt) {
+            return $rows;
+        }
+        $types = $clause['types'] . 'i';
+        $params = array_merge($clause['params'], [$maxRows]);
+        $stmt->bind_param($types, ...$params);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        while ($row = $result->fetch_assoc()) {
+            $rows[] = $row;
+        }
+        $stmt->close();
+
+        return $rows;
     }
 
     public function setPurchased(int $id, bool $purchased, int $userId): bool

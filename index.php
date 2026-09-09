@@ -2327,6 +2327,9 @@ switch ($page) {
             case 'run':
                 $controller->runYesterday();
                 break;
+            case 'export_excel':
+                $controller->exportExcel();
+                break;
             default:
                 $controller->index();
                 break;
