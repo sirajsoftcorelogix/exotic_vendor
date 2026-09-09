@@ -119,7 +119,7 @@ $conn->set_charset((string) ($db['charset'] ?? 'utf8mb4'));
 
 echo "\n=== Local vp_orders ===\n";
 
-$sql = "SELECT COALESCE(SUM(quantity), 0) AS qty, COUNT(*) AS rows
+$sql = "SELECT COALESCE(SUM(quantity), 0) AS qty, COUNT(*) AS order_rows
         FROM vp_orders
         WHERE item_code = ?
           AND order_date BETWEEN ? AND ?";
@@ -129,7 +129,7 @@ $stmt->execute();
 $all = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
-$sql2 = "SELECT COALESCE(SUM(quantity), 0) AS qty, COUNT(*) AS rows
+$sql2 = "SELECT COALESCE(SUM(quantity), 0) AS qty, COUNT(*) AS order_rows
          FROM vp_orders
          WHERE item_code = ?
            AND order_date BETWEEN ? AND ?
@@ -140,7 +140,7 @@ $stmt->execute();
 $active = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
-$sql3 = "SELECT status, COALESCE(SUM(quantity), 0) AS qty, COUNT(*) AS rows
+$sql3 = "SELECT status, COALESCE(SUM(quantity), 0) AS qty, COUNT(*) AS order_rows
          FROM vp_orders
          WHERE item_code = ?
            AND order_date BETWEEN ? AND ?
@@ -153,7 +153,7 @@ $byStatus = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
 $sql4 = "SELECT TRIM(IFNULL(size,'')) AS size, TRIM(IFNULL(color,'')) AS color,
-                COALESCE(SUM(quantity), 0) AS qty, COUNT(*) AS rows
+                COALESCE(SUM(quantity), 0) AS qty, COUNT(*) AS order_rows
          FROM vp_orders
          WHERE item_code = ?
            AND order_date BETWEEN ? AND ?
@@ -168,8 +168,8 @@ $stmt->close();
 
 $localAll = (int) ($all['qty'] ?? 0);
 $localActive = (int) ($active['qty'] ?? 0);
-echo "all_statuses qty={$localAll} rows=" . (int) ($all['rows'] ?? 0) . "\n";
-echo "excluding cancelled/returned qty={$localActive} rows=" . (int) ($active['rows'] ?? 0) . "\n";
+echo "all_statuses qty={$localAll} rows=" . (int) ($all['order_rows'] ?? 0) . "\n";
+echo "excluding cancelled/returned qty={$localActive} rows=" . (int) ($active['order_rows'] ?? 0) . "\n";
 echo "by_status=" . json_encode($byStatus, JSON_UNESCAPED_UNICODE) . "\n";
 echo "by_variant=" . json_encode($byVariant, JSON_UNESCAPED_UNICODE) . "\n";
 
