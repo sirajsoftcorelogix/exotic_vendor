@@ -359,24 +359,26 @@ class ReplenishmentBuyReport
 
     private function selectListSql(): string
     {
+        $empty = $this->utf8("''");
         $publisherKey = $this->utf8("TRIM(IFNULL(p.publisher, ''))");
         $pubJoin = '('
             . $this->utf8('CAST(pub.publishers_id AS CHAR)') . ' = ' . $publisherKey
             . ' OR ' . $this->utf8('CAST(pub.id AS CHAR)') . ' = ' . $publisherKey
             . ' OR ' . $this->utf8('pub.publishers') . ' = ' . $publisherKey
             . ')';
+        $fromProduct = 'COALESCE(NULLIF(' . $this->utf8('TRIM(pub.publishers)') . ', ' . $empty . '), ' . $publisherKey . ')';
 
         return 'SELECT r.*,
             COALESCE(
                 NULLIF((
-                    SELECT COALESCE(NULLIF(TRIM(pub.publishers), \'\'), TRIM(IFNULL(p.publisher, \'\')))
+                    SELECT ' . $fromProduct . '
                     FROM vp_products p
                     LEFT JOIN vp_publishers pub ON ' . $pubJoin . '
                     WHERE p.id = r.product_id
                     LIMIT 1
-                ), \'\'),
+                ), ' . $empty . '),
                 (
-                    SELECT pub2.publishers
+                    SELECT ' . $this->utf8('pub2.publishers') . '
                     FROM product_vendor_map pvm2
                     INNER JOIN publisher_vendor_mapping map ON map.vendor_id = pvm2.vendor_id
                     INNER JOIN vp_publishers pub2 ON pub2.id = map.publisher_id
@@ -386,7 +388,7 @@ class ReplenishmentBuyReport
                 )
             ) AS publisher_name,
             (
-                SELECT v.vendor_name
+                SELECT ' . $this->utf8('v.vendor_name') . '
                 FROM product_vendor_map pvm
                 INNER JOIN vp_vendors v ON v.id = pvm.vendor_id
                 WHERE ' . $this->itemCodeEquals('pvm.item_code', 'r.item_code') . '
