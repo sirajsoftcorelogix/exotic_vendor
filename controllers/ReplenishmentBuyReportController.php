@@ -86,7 +86,7 @@ class ReplenishmentBuyReportController
                 'Threshold %',
                 'Purchase threshold qty',
                 'Min stock %',
-                'Recommended buy',
+                'Buy',
                 'Purchased',
                 'Purchased at',
             ];
