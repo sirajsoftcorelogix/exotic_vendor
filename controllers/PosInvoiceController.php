@@ -235,6 +235,7 @@ class PosInvoiceController
         if ($currency !== '' && $currency !== 'INR') {
             $stmt = $conn->prepare(
                 'SELECT *,
+                        ewb_no AS ewb,
                         CASE WHEN ewb_no IS NULL OR ewb_no = 0 THEN "pending" ELSE "generated" END AS ewb_status
                  FROM vp_invoices_international
                  WHERE invoice_id = ?
@@ -252,6 +253,83 @@ class PosInvoiceController
         $stmt->close();
 
         return is_array($row) ? $row : null;
+    }
+
+    private function syncInternationalEwbTracking(int $invoiceId): void
+    {
+        global $conn;
+
+        if ($invoiceId <= 0 || !($conn instanceof mysqli)) {
+            return;
+        }
+
+        $sourceStmt = $conn->prepare(
+            'SELECT d.irn, d.irn_status, d.ewb_no, d.ewb_date, d.ewb_valid_till,
+                    d.trans_id, d.trans_name, d.ewb_payload, d.irn_payload
+             FROM vp_domestic_ewb_irn d
+             WHERE d.vp_invoices_id = ?
+             LIMIT 1'
+        );
+        if (!$sourceStmt) {
+            return;
+        }
+        $sourceStmt->bind_param('i', $invoiceId);
+        $sourceStmt->execute();
+        $source = $sourceStmt->get_result()->fetch_assoc();
+        $sourceStmt->close();
+        if (!is_array($source)) {
+            return;
+        }
+
+        $payload = json_decode((string)($source['ewb_payload'] ?? ''), true);
+        $irnPayload = json_decode((string)($source['irn_payload'] ?? ''), true);
+        $ewbDetails = is_array($payload) ? $payload : [];
+        if ($ewbDetails === [] && is_array($irnPayload['EwbDtls'] ?? null)) {
+            $ewbDetails = $irnPayload['EwbDtls'];
+        }
+
+        $transMode = trim((string)($ewbDetails['TransMode'] ?? $ewbDetails['trans_mode'] ?? ''));
+        $vehNo = trim((string)($ewbDetails['VehNo'] ?? $ewbDetails['veh_no'] ?? $source['veh_no'] ?? ''));
+        $vehType = trim((string)($ewbDetails['VehType'] ?? $ewbDetails['veh_type'] ?? $source['veh_type'] ?? ''));
+        $transDocNo = trim((string)($ewbDetails['TransDocNo'] ?? $ewbDetails['trans_doc_no'] ?? ''));
+        $transDocDt = trim((string)($ewbDetails['TransDocDt'] ?? $ewbDetails['TrnDocDt'] ?? $ewbDetails['trn_doc_dt'] ?? ''));
+
+        $update = $conn->prepare(
+            'UPDATE vp_invoices_international
+             SET irn = ?, irn_status = ?, ewb_no = ?, ewb_date = ?, ewb_valid_till = ?,
+                 trans_mode = ?, veh_no = ?, veh_type = ?, trans_doc_no = ?, trans_doc_dt = ?,
+                 trans_id = ?, trans_name = ?, updated_at = NOW()
+             WHERE invoice_id = ?'
+        );
+        if (!$update) {
+            return;
+        }
+
+        $irn = trim((string)($source['irn'] ?? ''));
+        $irnStatus = trim((string)($source['irn_status'] ?? ''));
+        $ewbNo = trim((string)($source['ewb_no'] ?? ''));
+        $ewbDate = $source['ewb_date'] !== null ? (string)$source['ewb_date'] : null;
+        $ewbValidTill = $source['ewb_valid_till'] !== null ? (string)$source['ewb_valid_till'] : null;
+        $transId = trim((string)($source['trans_id'] ?? $ewbDetails['TransId'] ?? ''));
+        $transName = trim((string)($source['trans_name'] ?? $ewbDetails['TransName'] ?? ''));
+        $update->bind_param(
+            'ssssssssssssi',
+            $irn,
+            $irnStatus,
+            $ewbNo,
+            $ewbDate,
+            $ewbValidTill,
+            $transMode,
+            $vehNo,
+            $vehType,
+            $transDocNo,
+            $transDocDt,
+            $transId,
+            $transName,
+            $invoiceId
+        );
+        $update->execute();
+        $update->close();
     }
 
     /** @return array{invoice:array<string,mixed>,order_number:string,order_info:?array<string,mixed>}|null */
@@ -530,6 +608,7 @@ class PosInvoiceController
             $runtime['firm'],
             []
         );
+        $this->syncInternationalEwbTracking($invoiceId);
 
         $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
         $ok = !empty($result['status']) || strtolower(trim((string) ($latest['irn_status'] ?? ''))) === 'generated';
@@ -589,6 +668,7 @@ class PosInvoiceController
         if ($irn !== '' && $irnStatus === 'generated') {
             //echo 'ewb regeneration requested for invoice #' . $invoiceId . ' with IRN ' . $irn . PHP_EOL;
             $result = $service->regenerateEwbWithIrn($invoiceId, $irn, $invoice, $runtime['order_info'], $ewbData);
+            $this->syncInternationalEwbTracking($invoiceId);
             $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
             $ok = !empty($result['status']) || strtolower(trim((string) ($latest['ewb_status'] ?? ''))) === 'generated';
 
@@ -614,6 +694,7 @@ class PosInvoiceController
             $runtime['firm'],
             $ewbData
         );
+        $this->syncInternationalEwbTracking($invoiceId);
         $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
         $ok = !empty($result['status']) || strtolower(trim((string) ($latest['ewb_status'] ?? ''))) === 'generated';
 
