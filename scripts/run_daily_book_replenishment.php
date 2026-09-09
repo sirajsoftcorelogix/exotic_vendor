@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 /**
- * Daily book replenishment (schedule 1:00 PM).
+ * Daily book replenishment (schedule 1:00 AM IST).
  *
- * Linux cron (1:00 PM daily):
- *   0 13 * * * /usr/bin/php /path/to/exotic_vendor/scripts/run_daily_book_replenishment.php >> /path/to/exotic_vendor/logs/daily_book_replenishment.log 2>&1
+ * Linux cron (1:00 AM daily):
+ *   0 1 * * * /usr/bin/php /path/to/exotic_vendor/scripts/run_daily_book_replenishment.php >> /path/to/exotic_vendor/logs/daily_book_replenishment.log 2>&1
  *
- * Windows Task Scheduler (1:00 PM daily):
- *   schtasks /create /tn "Daily Book Replenishment" /sc daily /st 13:00 /tr "C:\xampp\php\php.exe D:\xampp\htdocs\exotic_vendor\scripts\run_daily_book_replenishment.php"
+ * Windows Task Scheduler (1:00 AM daily):
+ *   schtasks /create /tn "Daily Book Replenishment" /sc daily /st 01:00 /tr "C:\xampp\php\php.exe D:\xampp\htdocs\exotic_vendor\scripts\run_daily_book_replenishment.php"
  *
  * Usage:
  *   php scripts/run_daily_book_replenishment.php
@@ -26,6 +26,7 @@ if (!$isCli) {
 
 $root = dirname(__DIR__);
 chdir($root);
+date_default_timezone_set('Asia/Kolkata');
 
 function daily_replenish_fail(string $msg, int $code = 1): void
 {
@@ -134,7 +135,9 @@ require_once $root . '/helpers/DailyBookReplenishment.php';
 $job = new DailyBookReplenishment($conn);
 $summary = $job->runForDate($salesDate, $dryRun, $limit);
 
-echo ($dryRun ? "[DRY RUN] " : '') . 'run_date=' . $summary['run_date']
+echo date('Y-m-d H:i:s') . ' IST '
+    . ($dryRun ? '[DRY RUN] ' : '')
+    . 'run_date=' . $summary['run_date']
     . ' scanned=' . $summary['scanned']
     . ' books=' . $summary['books']
     . ' triggered=' . $summary['triggered']
