@@ -41,9 +41,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     event.preventDefault();
                     input.value = name;
                     if (hiddenInput) {
-                        hiddenInput.value = '';
+                        hiddenInput.value = item.id != null && String(item.id) !== '' ? String(item.id) : '';
                     }
                     hideSuggestions();
+                    if (input.getAttribute('data-auto-search') === '1') {
+                        const form = input.closest('form');
+                        if (form) {
+                            form.submit();
+                        }
+                    }
                 });
                 suggestionsBox.appendChild(option);
             });
@@ -54,7 +60,7 @@ document.addEventListener('DOMContentLoaded', function() {
         input.addEventListener('input', function() {
             const query = input.value.trim();
 
-            if (hiddenInput && query === '') {
+            if (hiddenInput) {
                 hiddenInput.value = '';
             }
 

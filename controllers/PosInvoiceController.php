@@ -235,9 +235,7 @@ class PosInvoiceController
         if ($currency !== '' && $currency !== 'INR') {
             $stmt = $conn->prepare(
                 'SELECT *,
-                        ewb_number AS ewb_no,
-                        ewb_number AS ewb,
-                        CASE WHEN ewb_number IS NULL OR ewb_number = 0 THEN "pending" ELSE "generated" END AS ewb_status
+                        CASE WHEN ewb_no IS NULL OR ewb_no = 0 THEN "pending" ELSE "generated" END AS ewb_status
                  FROM vp_invoices_international
                  WHERE invoice_id = ?
                  LIMIT 1'

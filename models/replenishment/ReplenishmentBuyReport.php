@@ -110,9 +110,9 @@ class ReplenishmentBuyReport
 
         $purchased = trim((string) ($filters['purchased'] ?? 'no'));
         if ($purchased === 'yes') {
-            $where .= ' AND purchased = 1';
+            $where .= ' AND r.purchased = 1';
         } elseif ($purchased === 'no') {
-            $where .= ' AND purchased = 0';
+            $where .= ' AND r.purchased = 0';
         }
 
         $dateFrom = trim((string) ($filters['date_from'] ?? $filters['run_date'] ?? ''));
@@ -123,44 +123,37 @@ class ReplenishmentBuyReport
         $dateFromOk = preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom) === 1;
         $dateToOk = preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo) === 1;
         if ($dateFromOk && $dateToOk) {
-            $where .= ' AND run_date BETWEEN ? AND ?';
+            $where .= ' AND r.run_date BETWEEN ? AND ?';
             $types .= 'ss';
             $params[] = $dateFrom;
             $params[] = $dateTo;
         } elseif ($dateFromOk) {
-            $where .= ' AND run_date >= ?';
+            $where .= ' AND r.run_date >= ?';
             $types .= 's';
             $params[] = $dateFrom;
         } elseif ($dateToOk) {
-            $where .= ' AND run_date <= ?';
+            $where .= ' AND r.run_date <= ?';
             $types .= 's';
             $params[] = $dateTo;
         }
 
         $sku = trim((string) ($filters['sku'] ?? ''));
         if ($sku !== '') {
-            $where .= ' AND sku LIKE ?';
+            $where .= ' AND r.sku LIKE ?';
             $types .= 's';
             $params[] = '%' . $sku . '%';
         }
 
         $itemCode = trim((string) ($filters['item_code'] ?? ''));
         if ($itemCode !== '') {
-            $where .= ' AND item_code LIKE ?';
+            $where .= ' AND r.item_code LIKE ?';
             $types .= 's';
             $params[] = '%' . $itemCode . '%';
         }
 
-        $title = trim((string) ($filters['title'] ?? ''));
-        if ($title !== '') {
-            $where .= ' AND title LIKE ?';
-            $types .= 's';
-            $params[] = '%' . $title . '%';
-        }
-
         $search = trim((string) ($filters['search'] ?? ''));
         if ($search !== '') {
-            $where .= ' AND (sku LIKE ? OR item_code LIKE ? OR title LIKE ?)';
+            $where .= ' AND (r.sku LIKE ? OR r.item_code LIKE ? OR r.title LIKE ?)';
             $like = '%' . $search . '%';
             $types .= 'sss';
             $params[] = $like;
@@ -168,20 +161,111 @@ class ReplenishmentBuyReport
             $params[] = $like;
         }
 
-        $source = strtolower(trim((string) ($filters['lookback_source'] ?? '')));
-        if (in_array($source, ['product', 'publisher', 'vendor', 'global'], true)) {
-            $where .= ' AND lookback_source = ?';
-            $types .= 's';
-            $params[] = $source;
-        }
-
-        if (isset($filters['min_buy_qty']) && $filters['min_buy_qty'] !== '' && is_numeric($filters['min_buy_qty'])) {
-            $where .= ' AND replenishment_buy_qty >= ?';
-            $types .= 'i';
-            $params[] = max(0, (int) $filters['min_buy_qty']);
-        }
+        $this->appendPublisherFilter($where, $types, $params, $filters);
+        $this->appendVendorFilter($where, $types, $params, $filters);
 
         return ['where' => $where, 'types' => $types, 'params' => $params];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @param array<int, mixed> $params
+     */
+    private function appendPublisherFilter(string &$where, string &$types, array &$params, array $filters): void
+    {
+        $publisherId = (int) ($filters['publisher_id'] ?? 0);
+        $publisherName = trim((string) ($filters['publisher'] ?? ''));
+        if ($publisherId <= 0 && $publisherName === '') {
+            return;
+        }
+
+        if ($publisherId > 0) {
+            $idStr = (string) $publisherId;
+            $where .= ' AND (
+                EXISTS (
+                    SELECT 1 FROM vp_products p
+                    WHERE p.id = r.product_id
+                      AND (
+                          TRIM(IFNULL(p.publisher, \'\')) = ?
+                          OR TRIM(IFNULL(p.publisher, \'\')) = ?
+                      )
+                )
+                OR EXISTS (
+                    SELECT 1 FROM product_vendor_map pvm
+                    INNER JOIN publisher_vendor_mapping map ON map.vendor_id = pvm.vendor_id
+                    INNER JOIN vp_publishers pub ON pub.id = map.publisher_id
+                    WHERE pvm.item_code = r.item_code
+                      AND pub.publishers_id = ?
+                )
+            )';
+            $types .= 'ssi';
+            $params[] = $idStr;
+            $params[] = $publisherName;
+            $params[] = $publisherId;
+            return;
+        }
+
+        $like = '%' . $publisherName . '%';
+        $where .= ' AND (
+            EXISTS (
+                SELECT 1 FROM vp_products p
+                LEFT JOIN vp_publishers pub
+                    ON (
+                        CAST(pub.publishers_id AS CHAR) = TRIM(IFNULL(p.publisher, \'\'))
+                        OR pub.publishers = TRIM(IFNULL(p.publisher, \'\'))
+                    )
+                WHERE p.id = r.product_id
+                  AND (
+                      TRIM(IFNULL(p.publisher, \'\')) LIKE ?
+                      OR pub.publishers LIKE ?
+                  )
+            )
+            OR EXISTS (
+                SELECT 1 FROM product_vendor_map pvm
+                INNER JOIN publisher_vendor_mapping map ON map.vendor_id = pvm.vendor_id
+                INNER JOIN vp_publishers pub2 ON pub2.id = map.publisher_id
+                WHERE pvm.item_code = r.item_code
+                  AND pub2.publishers LIKE ?
+            )
+        )';
+        $types .= 'sss';
+        $params[] = $like;
+        $params[] = $like;
+        $params[] = $like;
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @param array<int, mixed> $params
+     */
+    private function appendVendorFilter(string &$where, string &$types, array &$params, array $filters): void
+    {
+        $vendorId = (int) ($filters['vendor_id'] ?? 0);
+        $vendorName = trim((string) ($filters['vendor'] ?? ''));
+        if ($vendorId <= 0 && $vendorName === '') {
+            return;
+        }
+
+        if ($vendorId > 0) {
+            $where .= ' AND EXISTS (
+                SELECT 1 FROM product_vendor_map pvm
+                WHERE pvm.item_code = r.item_code
+                  AND pvm.vendor_id = ?
+            )';
+            $types .= 'i';
+            $params[] = $vendorId;
+            return;
+        }
+
+        $like = '%' . $vendorName . '%';
+        $where .= ' AND EXISTS (
+            SELECT 1 FROM product_vendor_map pvm
+            INNER JOIN vp_vendors v ON v.id = pvm.vendor_id
+            WHERE pvm.item_code = r.item_code
+              AND v.vendor_name LIKE ?
+        )';
+        $types .= 's';
+        $params[] = $like;
     }
 
     /**
@@ -200,7 +284,7 @@ class ReplenishmentBuyReport
         $params = $clause['params'];
 
         $total = 0;
-        $countSql = 'SELECT COUNT(*) AS cnt FROM vp_replenishment_buy_report' . $where;
+        $countSql = 'SELECT COUNT(*) AS cnt FROM vp_replenishment_buy_report r' . $where;
         $countStmt = $this->conn->prepare($countSql);
         if ($countStmt) {
             if ($types !== '') {
@@ -211,8 +295,8 @@ class ReplenishmentBuyReport
             $countStmt->close();
         }
 
-        $sql = 'SELECT * FROM vp_replenishment_buy_report' . $where
-            . ' ORDER BY run_date DESC, id DESC LIMIT ? OFFSET ?';
+        $sql = 'SELECT r.* FROM vp_replenishment_buy_report r' . $where
+            . ' ORDER BY r.run_date DESC, r.id DESC LIMIT ? OFFSET ?';
         $stmt = $this->conn->prepare($sql);
         $rows = [];
         if ($stmt) {
@@ -243,8 +327,8 @@ class ReplenishmentBuyReport
     {
         $maxRows = max(1, min(20000, $maxRows));
         $clause = $this->buildSearchWhere($filters);
-        $sql = 'SELECT * FROM vp_replenishment_buy_report' . $clause['where']
-            . ' ORDER BY run_date DESC, id DESC LIMIT ?';
+        $sql = 'SELECT r.* FROM vp_replenishment_buy_report r' . $clause['where']
+            . ' ORDER BY r.run_date DESC, r.id DESC LIMIT ?';
         $stmt = $this->conn->prepare($sql);
         $rows = [];
         if (!$stmt) {
