@@ -172,13 +172,28 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                 </div>
             </form>
 
+            <div id="replenishSelectBar" class="hidden px-5 py-3 border-b border-amber-100 bg-amber-50/70 flex-wrap items-center justify-between gap-3 text-sm">
+                <span id="replenishSelectSummary" class="font-medium text-amber-950">0 selected</span>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" id="replenishSelectSameVendor" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-900 text-xs font-semibold hover:bg-amber-50">
+                        Select same vendor
+                    </button>
+                    <button type="button" id="replenishSelectClear" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xs font-medium hover:bg-gray-50">
+                        Clear
+                    </button>
+                </div>
+            </div>
+
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
                     <thead class="bg-gray-50 text-left text-xs text-gray-600">
                         <tr>
+                            <th class="px-4 py-3 w-10">
+                                <input type="checkbox" id="replenishSelectAll" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 cursor-pointer" title="Select all on this page" aria-label="Select all on this page">
+                            </th>
                             <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Sales date', 'The sales day this row was generated for (yesterday when you click Run for yesterday).'); ?></th>
                             <th class="px-4 py-3 font-semibold"><?php echo $thInfo('SKU / Item', 'Product SKU and item code. Click the SKU to open product details. Hover the item code to see the book title.'); ?></th>
-                            <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Publisher / Vendor', 'Publisher for this SKU, with the primary vendor underneath.'); ?></th>
+                            <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Publisher / Vendor', 'Publisher for this SKU, with the primary vendor underneath. Click the vendor name to select all items from that vendor on this page.'); ?></th>
                             <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Lookback', 'How many months of sales history we use. The small label under the number shows where this came from: product, publisher, vendor, or global setting. This is a time window, not units sold.'); ?></th>
                             <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo("Y'day sold", 'Units of this SKU sold on the sales date only (not the full lookback period).', true); ?></th>
                             <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Sold', 'Total units sold during the lookback months. Buy qty and purchase threshold are calculated from this number, not from yesterday sold.', true); ?></th>
@@ -191,7 +206,7 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                     <tbody class="divide-y divide-gray-100">
                         <?php if ($rows === []): ?>
                             <tr>
-                                <td colspan="10" class="px-4 py-8 text-center text-gray-500">No replenishment items for these filters.</td>
+                                <td colspan="11" class="px-4 py-8 text-center text-gray-500">No replenishment items for these filters.</td>
                             </tr>
                         <?php endif; ?>
                         <?php foreach ($rows as $row): ?>
@@ -207,8 +222,24 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                             $publisherName = trim((string) ($row['publisher_name'] ?? ''));
                             $vendorName = trim((string) ($row['vendor_name'] ?? ''));
                             $bookTitle = trim((string) ($row['title'] ?? ''));
+                            $vendorId = (int) ($row['vendor_id'] ?? 0);
+                            if ($vendorId > 0) {
+                                $vendorKey = 'id:' . $vendorId;
+                            } elseif ($vendorName !== '') {
+                                $vendorKey = 'name:' . mb_strtolower($vendorName);
+                            } else {
+                                $vendorKey = '';
+                            }
                             ?>
-                            <tr>
+                            <tr class="replenish-report-row">
+                                <td class="px-4 py-3">
+                                    <input type="checkbox"
+                                        class="replenish-row-check h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                                        data-id="<?php echo (int) ($row['id'] ?? 0); ?>"
+                                        data-vendor-key="<?php echo $h($vendorKey); ?>"
+                                        data-vendor-name="<?php echo $h($vendorName); ?>"
+                                        aria-label="Select row">
+                                </td>
                                 <td class="px-4 py-3 whitespace-nowrap text-gray-600"><?php echo $h($row['run_date_display'] ?? $row['run_date'] ?? ''); ?></td>
                                 <td class="px-4 py-3">
                                     <a class="text-amber-800 font-medium hover:underline" href="<?php echo $h(base_url('?page=products&action=detail&id=' . (int) ($row['product_id'] ?? 0))); ?>">
@@ -219,8 +250,8 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                                 <td class="px-4 py-3 max-w-[14rem]">
                                     <div class="text-gray-800 truncate<?php echo $publisherName !== '' ? ' replenish-col-info cursor-help' : ''; ?>"
                                         <?php if ($publisherName !== ''): ?>data-help="<?php echo $h($publisherName); ?>"<?php endif; ?>><?php echo $h($publisherName !== '' ? $publisherName : '—'); ?></div>
-                                    <div class="text-xs text-gray-400 truncate<?php echo $vendorName !== '' ? ' replenish-col-info cursor-help' : ''; ?>"
-                                        <?php if ($vendorName !== ''): ?>data-help="<?php echo $h($vendorName); ?>"<?php endif; ?>><?php echo $h($vendorName !== '' ? $vendorName : '—'); ?></div>
+                                    <div class="text-xs text-gray-400 truncate<?php echo $vendorName !== '' ? ' replenish-col-info replenish-vendor-pick cursor-pointer hover:text-amber-800 hover:underline' : ''; ?>"
+                                        <?php if ($vendorName !== ''): ?>data-help="<?php echo $h($vendorName); ?>" data-vendor-key="<?php echo $h($vendorKey); ?>" data-vendor-name="<?php echo $h($vendorName); ?>"<?php endif; ?>><?php echo $h($vendorName !== '' ? $vendorName : '—'); ?></div>
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap">
                                     <div class="text-gray-800"><?php echo $lookbackMonths; ?> <?php echo $lookbackMonths === 1 ? 'month' : 'months'; ?></div>
@@ -285,6 +316,164 @@ document.addEventListener('DOMContentLoaded', function () {
             window.showPosMessageModal({ title: 'Replenishment', message: message, tone: tone || 'info' });
         }
     };
+
+    const rowChecks = document.querySelectorAll('.replenish-row-check');
+    const selectAll = document.getElementById('replenishSelectAll');
+    const selectBar = document.getElementById('replenishSelectBar');
+    const selectSummary = document.getElementById('replenishSelectSummary');
+    const selectSameBtn = document.getElementById('replenishSelectSameVendor');
+    const selectClearBtn = document.getElementById('replenishSelectClear');
+
+    const checkedRows = function () {
+        return Array.prototype.filter.call(rowChecks, function (cb) { return cb.checked; });
+    };
+
+    const syncRowHighlight = function () {
+        rowChecks.forEach(function (cb) {
+            var tr = cb.closest('tr');
+            if (!tr) {
+                return;
+            }
+            if (cb.checked) {
+                tr.classList.add('bg-amber-50/80');
+            } else {
+                tr.classList.remove('bg-amber-50/80');
+            }
+        });
+    };
+
+    const updateSelectUi = function () {
+        var selected = checkedRows();
+        var total = rowChecks.length;
+        var count = selected.length;
+        if (selectAll) {
+            selectAll.checked = total > 0 && count === total;
+            selectAll.indeterminate = count > 0 && count < total;
+        }
+        syncRowHighlight();
+        if (!selectBar || !selectSummary) {
+            return;
+        }
+        if (count === 0) {
+            selectBar.classList.add('hidden');
+            selectBar.classList.remove('flex');
+            return;
+        }
+        selectBar.classList.remove('hidden');
+        selectBar.classList.add('flex');
+        var names = [];
+        selected.forEach(function (cb) {
+            var name = (cb.getAttribute('data-vendor-name') || '').trim();
+            if (name !== '' && names.indexOf(name) === -1) {
+                names.push(name);
+            }
+        });
+        var label = count + (count === 1 ? ' item selected' : ' items selected');
+        if (names.length === 1) {
+            label += ' · ' + names[0];
+        } else if (names.length > 1) {
+            label += ' · ' + names.length + ' vendors';
+        }
+        selectSummary.textContent = label;
+    };
+
+    const selectByVendorKeys = function (keys) {
+        if (!keys.length) {
+            return 0;
+        }
+        var added = 0;
+        rowChecks.forEach(function (cb) {
+            var key = cb.getAttribute('data-vendor-key') || '';
+            if (key !== '' && keys.indexOf(key) !== -1 && !cb.checked) {
+                cb.checked = true;
+                added++;
+            }
+        });
+        return added;
+    };
+
+    const countByVendorKey = function (key) {
+        var n = 0;
+        rowChecks.forEach(function (cb) {
+            if (cb.checked && (cb.getAttribute('data-vendor-key') || '') === key) {
+                n++;
+            }
+        });
+        return n;
+    };
+
+    rowChecks.forEach(function (cb) {
+        cb.addEventListener('click', function (e) {
+            e.stopPropagation();
+        });
+        cb.addEventListener('change', function () {
+            var key = cb.getAttribute('data-vendor-key') || '';
+            if (cb.checked && key !== '') {
+                var added = selectByVendorKeys([key]);
+                if (added > 0) {
+                    var vendorName = (cb.getAttribute('data-vendor-name') || '').trim();
+                    var total = countByVendorKey(key);
+                    notice('Selected ' + total + ' items' + (vendorName !== '' ? ' from ' + vendorName : ' with the same vendor') + '.', 'info');
+                }
+            }
+            updateSelectUi();
+        });
+    });
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            rowChecks.forEach(function (cb) {
+                cb.checked = selectAll.checked;
+            });
+            updateSelectUi();
+        });
+    }
+
+    if (selectSameBtn) {
+        selectSameBtn.addEventListener('click', function () {
+            var keys = [];
+            checkedRows().forEach(function (cb) {
+                var key = cb.getAttribute('data-vendor-key') || '';
+                if (key !== '' && keys.indexOf(key) === -1) {
+                    keys.push(key);
+                }
+            });
+            if (!keys.length) {
+                notice('Select at least one row that has a vendor.', 'warning');
+                return;
+            }
+            var added = selectByVendorKeys(keys);
+            updateSelectUi();
+            notice(added > 0 ? ('Added ' + added + ' more item' + (added === 1 ? '' : 's') + ' from the same vendor.') : 'All matching vendor items on this page are already selected.', 'info');
+        });
+    }
+
+    if (selectClearBtn) {
+        selectClearBtn.addEventListener('click', function () {
+            rowChecks.forEach(function (cb) { cb.checked = false; });
+            updateSelectUi();
+        });
+    }
+
+    document.querySelectorAll('.replenish-vendor-pick').forEach(function (el) {
+        el.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var key = el.getAttribute('data-vendor-key') || '';
+            if (key === '') {
+                return;
+            }
+            var added = selectByVendorKeys([key]);
+            var vendorName = (el.getAttribute('data-vendor-name') || '').trim();
+            var total = countByVendorKey(key);
+            updateSelectUi();
+            if (total > 0) {
+                notice('Selected ' + total + ' items' + (vendorName !== '' ? ' from ' + vendorName : ' with the same vendor') + '.', 'info');
+            } else if (added === 0) {
+                notice('No other items from this vendor on this page.', 'info');
+            }
+        });
+    });
 
     document.querySelectorAll('.replenish-purchased-toggle').forEach(function (btn) {
         btn.addEventListener('click', function () {

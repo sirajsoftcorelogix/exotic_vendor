@@ -394,7 +394,15 @@ class ReplenishmentBuyReport
                 WHERE ' . $this->itemCodeEquals('pvm.item_code', 'r.item_code') . '
                 ORDER BY pvm.priority ASC, pvm.id ASC
                 LIMIT 1
-            ) AS vendor_name
+            ) AS vendor_name,
+            (
+                SELECT v.id
+                FROM product_vendor_map pvm
+                INNER JOIN vp_vendors v ON v.id = pvm.vendor_id
+                WHERE ' . $this->itemCodeEquals('pvm.item_code', 'r.item_code') . '
+                ORDER BY pvm.priority ASC, pvm.id ASC
+                LIMIT 1
+            ) AS vendor_id
             FROM vp_replenishment_buy_report r';
     }
 
