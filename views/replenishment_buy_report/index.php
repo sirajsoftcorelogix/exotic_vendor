@@ -198,8 +198,8 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                                 <input type="checkbox" id="replenishSelectAll" class="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 cursor-pointer" title="Select all on this page" aria-label="Select all on this page">
                             </th>
                             <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Sales date', 'The sales day this row was generated for (yesterday when you click Run for yesterday).'); ?></th>
-                            <th class="px-4 py-3 font-semibold"><?php echo $thInfo('SKU / Item', 'Product SKU and item code. Click the SKU to open product details. Hover the item code to see the book title.'); ?></th>
-                            <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Publisher / Vendor', 'Publisher for this SKU, with the primary vendor underneath. Click the vendor name to select all items from that vendor on this page.'); ?></th>
+                            <th class="px-4 py-3 font-semibold"><?php echo $thInfo('SKU / Item', 'Product SKU and item code. Click the SKU to open product details in a new tab. Hover the item code to see the book title.'); ?></th>
+                            <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Publisher / Vendor', 'Publisher for this SKU, with the primary vendor underneath. Click the vendor name to filter this report to that vendor.'); ?></th>
                             <th class="px-4 py-3 font-semibold"><?php echo $thInfo('Lookback', 'How many months of sales history we use. The small label under the number shows where this came from: product, publisher, vendor, or global setting. This is a time window, not units sold.'); ?></th>
                             <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo("Y'day sold", 'Units of this SKU sold on the sales date only (not the full lookback period).', true); ?></th>
                             <th class="px-4 py-3 font-semibold text-right"><?php echo $thInfo('Sold', 'Total units sold during the lookback months. Buy qty and purchase threshold are calculated from this number, not from yesterday sold.', true); ?></th>
@@ -251,7 +251,7 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap text-gray-600"><?php echo $h($row['run_date_display'] ?? $row['run_date'] ?? ''); ?></td>
                                 <td class="px-4 py-3">
-                                    <a class="text-amber-800 font-medium hover:underline" href="<?php echo $h(base_url('?page=products&action=detail&id=' . (int) ($row['product_id'] ?? 0))); ?>">
+                                    <a class="text-amber-800 font-medium hover:underline" href="<?php echo $h(base_url('?page=products&action=detail&id=' . (int) ($row['product_id'] ?? 0))); ?>" target="_blank" rel="noopener noreferrer">
                                         <?php echo $h($row['sku'] ?? ''); ?>
                                     </a>
                                     <div class="text-xs text-gray-400 cursor-help" title="<?php echo $h($bookTitle); ?>"><?php echo $h($row['item_code'] ?? ''); ?></div>
@@ -259,8 +259,20 @@ $thInfo = static function (string $label, string $help, bool $right = false) use
                                 <td class="px-4 py-3 max-w-[14rem]">
                                     <div class="text-gray-800 truncate<?php echo $publisherName !== '' ? ' replenish-col-info cursor-help' : ''; ?>"
                                         <?php if ($publisherName !== ''): ?>data-help="<?php echo $h($publisherName); ?>"<?php endif; ?>><?php echo $h($publisherName !== '' ? $publisherName : '—'); ?></div>
-                                    <div class="text-xs text-gray-400 truncate<?php echo $vendorName !== '' ? ' replenish-col-info replenish-vendor-pick cursor-pointer hover:text-amber-800 hover:underline' : ''; ?>"
-                                        <?php if ($vendorName !== ''): ?>data-help="<?php echo $h($vendorName); ?>" data-vendor-key="<?php echo $h($vendorKey); ?>" data-vendor-name="<?php echo $h($vendorName); ?>"<?php endif; ?>><?php echo $h($vendorName !== '' ? $vendorName : '—'); ?></div>
+                                    <?php if ($vendorName !== ''): ?>
+                                        <?php
+                                        $vendorFilterHref = '?' . http_build_query(array_merge($queryBase, [
+                                            'vendor' => $vendorName,
+                                            'vendor_id' => $vendorId,
+                                            'page_no' => 1,
+                                        ]));
+                                        ?>
+                                        <a href="<?php echo $h($vendorFilterHref); ?>"
+                                            class="text-xs text-gray-400 truncate block replenish-col-info cursor-pointer hover:text-amber-800 hover:underline"
+                                            data-help="<?php echo $h($vendorName); ?>"><?php echo $h($vendorName); ?></a>
+                                    <?php else: ?>
+                                        <div class="text-xs text-gray-400 truncate">—</div>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap">
                                     <div class="text-gray-800"><?php echo $lookbackMonths; ?> <?php echo $lookbackMonths === 1 ? 'month' : 'months'; ?></div>
