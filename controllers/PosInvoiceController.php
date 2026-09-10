@@ -602,7 +602,12 @@ class PosInvoiceController
         if ($tracking['is_international_invoice']) {
             require_once __DIR__ . '/InvoicesController.php';
             $controller = new InvoicesController();
-            $result = $controller->generateAlankitIrnForInvoice($invoiceId);
+            $irn = $controller->generateAlankitIrnForInvoice($invoiceId);
+            $result = [
+                'status' => $irn !== '' ? 'success' : 'error',
+                'irn' => $irn,
+                'message' => $irn !== '' ? 'IRN generated successfully.' : 'Failed to generate IRN.',
+            ];
         } else {
             require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
             $service = new DomesticEwbIrnService($conn, $alankitConfig);
@@ -627,7 +632,7 @@ class PosInvoiceController
             'success' => $ok,
             'message' => $ok
                 ? ((string) ($result['irn_message'] ?? 'E-Invoice generated successfully.'))
-                : ((string) ($result['message'] ?? $service->getLastError() ?? 'Failed to generate E-Invoice.')),
+                : ((string) ($result['message'] ?? 'Failed to generate E-Invoice.')),
             'irn' => (string) ($latest['irn'] ?? $result['irn'] ?? ''),
             'ack_number' => (string) ($latest['ack_number'] ?? ''),
             'ack_date' => (string) ($latest['ack_date'] ?? ''),
