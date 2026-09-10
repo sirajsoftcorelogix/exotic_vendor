@@ -695,6 +695,11 @@ $proformaPrintDisabledReason = $canPrintProforma
                                                 <span class="text-black">:</span>
                                                 <span class="ml-2 text-gray-700"><?php echo $item['color']; ?></span>
                                             </p>
+                                            <p>
+                                                <span class="inline-block w-16 font-bold text-black">Material</span>
+                                                <span class="text-black">:</span>
+                                                <span class="ml-2 text-gray-700"><?php echo htmlspecialchars(trim((string)($item['material'] ?? '')) !== '' ? (string)$item['material'] : '—'); ?></span>
+                                            </p>
                                             <div class="flex items-center pt-1">
                                                 <span class="inline-block w-12 font-bold text-black">Qty.</span>
                                                 <span class="text-black">:</span>
@@ -2708,6 +2713,12 @@ if ($canFollowUpOrder) {
                                     <?php endif; ?>
                                     <?php if ($size !== ''): ?>
                                         <span><strong class="text-gray-800">Size:</strong> <?php echo htmlspecialchars($size); ?></span>
+                                    <?php endif; ?>
+                                    <?php
+                                        $editMaterial = trim((string)($item['material'] ?? ''));
+                                    ?>
+                                    <?php if ($editMaterial !== ''): ?>
+                                        <span><strong class="text-gray-800">Material:</strong> <?php echo htmlspecialchars($editMaterial); ?></span>
                                     <?php endif; ?>
                                 </div>
                             </div>

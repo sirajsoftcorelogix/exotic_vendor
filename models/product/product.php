@@ -1606,7 +1606,7 @@ class product
     public function getAccountsGroupMapByProductIdsOrItemCodes(array $productIds, array $itemCodes): array
     {
         if (empty($productIds) && empty($itemCodes)) {
-            return ['by_id' => [], 'by_code' => []];
+            return ['by_id' => [], 'by_code' => [], 'material_by_id' => [], 'material_by_code' => []];
         }
 
         $where = [];
@@ -1632,27 +1632,37 @@ class product
         }
 
         if (empty($where)) {
-            return ['by_id' => [], 'by_code' => []];
+            return ['by_id' => [], 'by_code' => [], 'material_by_id' => [], 'material_by_code' => []];
         }
 
-        $sql = 'SELECT id, item_code, accounts_group FROM vp_products WHERE ' . implode(' OR ', $where);
+        $sql = 'SELECT id, item_code, accounts_group, material FROM vp_products WHERE ' . implode(' OR ', $where);
         $res = $this->db->query($sql);
 
         $mapById = [];
         $mapByCode = [];
+        $materialById = [];
+        $materialByCode = [];
         if ($res && $res->num_rows > 0) {
             while ($row = $res->fetch_assoc()) {
                 $ag = trim((string) ($row['accounts_group'] ?? ''));
+                $material = trim((string) ($row['material'] ?? ''));
                 if (!empty($row['id'])) {
                     $mapById[(int) $row['id']] = $ag;
+                    $materialById[(int) $row['id']] = $material;
                 }
                 if (!empty($row['item_code'])) {
                     $mapByCode[trim((string) $row['item_code'])] = $ag;
+                    $materialByCode[trim((string) $row['item_code'])] = $material;
                 }
             }
         }
 
-        return ['by_id' => $mapById, 'by_code' => $mapByCode];
+        return [
+            'by_id' => $mapById,
+            'by_code' => $mapByCode,
+            'material_by_id' => $materialById,
+            'material_by_code' => $materialByCode,
+        ];
     }
 
     public function updateProductFromApi($productData, array $options = [])
