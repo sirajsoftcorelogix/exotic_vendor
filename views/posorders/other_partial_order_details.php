@@ -686,6 +686,11 @@ $proformaPrintDisabledReason = $canPrintProforma
                                     <div class="flex justify-between items-start">
                                         <div class="space-y-1.5 text-[13px]">
                                             <p>
+                                                <span class="inline-block w-16 font-bold text-black">Material</span>
+                                                <span class="text-black">:</span>
+                                                <span class="ml-2 text-gray-700"><?php echo htmlspecialchars(trim((string)($item['material'] ?? '')) !== '' ? (string)$item['material'] : '—'); ?></span>
+                                            </p>
+                                            <p>
                                                 <span class="inline-block w-12 font-bold text-black">SKU</span>
                                                 <span class="text-black">:</span>
                                                 <span class="ml-2 text-gray-700"><?php echo htmlspecialchars(trim((string)($item['sku'] ?? '')) !== '' ? (string)$item['sku'] : 'â€”'); ?></span>
@@ -694,11 +699,6 @@ $proformaPrintDisabledReason = $canPrintProforma
                                                 <span class="inline-block w-12 font-bold text-black">Color</span>
                                                 <span class="text-black">:</span>
                                                 <span class="ml-2 text-gray-700"><?php echo $item['color']; ?></span>
-                                            </p>
-                                            <p>
-                                                <span class="inline-block w-16 font-bold text-black">Material</span>
-                                                <span class="text-black">:</span>
-                                                <span class="ml-2 text-gray-700"><?php echo htmlspecialchars(trim((string)($item['material'] ?? '')) !== '' ? (string)$item['material'] : '—'); ?></span>
                                             </p>
                                             <div class="flex items-center pt-1">
                                                 <span class="inline-block w-12 font-bold text-black">Qty.</span>

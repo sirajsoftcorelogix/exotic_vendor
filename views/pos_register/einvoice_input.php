@@ -458,6 +458,7 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
         resultContainer.innerHTML = `
           <div class="text-xs text-rose-800 font-semibold">Network error during E-Invoice generation. Please check server logs and try again.</div>
         `;
+        console.error('Error generating E-Invoice:', err);
         resultContainer.classList.remove('hidden');
         scrollToResult();
       } finally {
