@@ -458,7 +458,8 @@ return base64_encode($encryptedData);
             "EwbDtls" => 
                !empty($invoice['trans_id']) ? [
                 'TransId' => (string)($invoice['trans_id'] ?? ''),
-                'TransName' => (string)($invoice['trans_name'] ?? '')  
+                'TransName' => (string)($invoice['trans_name'] ?? ''),
+                'Distance' => 0
                 ] : [
                 'Distance' => 0,
                 'TransDocNo' => (string)($invoice['trans_doc_no'] ?? ''),
