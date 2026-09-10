@@ -2710,4 +2710,51 @@ class POSOrder
             'title' => $title,
         ];
     }
+
+    public function updateOrderLineMaterial(int $lineId, string $orderNumber, string $material): array
+    {
+        $orderNumber = trim($orderNumber);
+        $material = trim(preg_replace('/\s+/u', ' ', strip_tags($material)) ?? '');
+        if (function_exists('mb_substr')) {
+            $material = mb_substr($material, 0, 255);
+        } else {
+            $material = substr($material, 0, 255);
+        }
+
+        if ($lineId <= 0 || $orderNumber === '') {
+            return ['success' => false, 'message' => 'Order line is required.'];
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT id FROM vp_orders WHERE id = ? AND order_number = ? LIMIT 1'
+        );
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Could not load the order line.'];
+        }
+        $stmt->bind_param('is', $lineId, $orderNumber);
+        $stmt->execute();
+        $line = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$line) {
+            return ['success' => false, 'message' => 'Order line not found.'];
+        }
+
+        $upd = $this->db->prepare('UPDATE vp_orders SET material = ? WHERE id = ? AND order_number = ? LIMIT 1');
+        if (!$upd) {
+            return ['success' => false, 'message' => 'Could not update the material.'];
+        }
+        $upd->bind_param('sis', $material, $lineId, $orderNumber);
+        if (!$upd->execute()) {
+            $err = $upd->error;
+            $upd->close();
+            return ['success' => false, 'message' => 'Could not save the material: ' . $err];
+        }
+        $upd->close();
+
+        return [
+            'success' => true,
+            'message' => 'Material updated.',
+            'material' => $material,
+        ];
+    }
 }

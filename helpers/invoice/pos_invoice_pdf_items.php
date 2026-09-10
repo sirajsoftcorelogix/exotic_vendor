@@ -87,6 +87,10 @@ function pos_invoice_expand_items_with_addons(
             : [];
 
         if ($components === []) {
+            $invoiceItem['item_name'] = pos_order_item_title_with_material(
+                (string)($invoiceItem['item_name'] ?? $orderRow['title'] ?? ''),
+                (string)($orderRow['material'] ?? '')
+            );
             $expanded[] = $invoiceItem;
             continue;
         }
@@ -103,8 +107,15 @@ function pos_invoice_expand_items_with_addons(
             }
 
             $isAddon = (($component['type'] ?? '') === 'addon');
+            $componentName = (string)($component['name'] ?? $invoiceItem['item_name'] ?? '');
+            if (!$isAddon) {
+                $componentName = pos_order_item_title_with_material(
+                    $componentName,
+                    (string)($orderRow['material'] ?? '')
+                );
+            }
             $expanded[] = array_merge($invoiceItem, [
-                'item_name' => (string)($component['name'] ?? $invoiceItem['item_name'] ?? ''),
+                'item_name' => $componentName,
                 'hsn' => $hsn,
                 'quantity' => $qty,
                 'tax_rate' => $taxRate,

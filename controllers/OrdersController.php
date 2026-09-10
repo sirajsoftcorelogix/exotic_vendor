@@ -1306,6 +1306,13 @@ class OrdersController
         $posController = new PosOrdersController();
         $posController->updateItemTitleAjax();
     }
+
+    public function updateItemMaterialAjax()
+    {
+        require_once __DIR__ . '/PosOrdersController.php';
+        $posController = new PosOrdersController();
+        $posController->updateItemMaterialAjax();
+    }
     public function updateImportedOrders()
     {
         global $ordersModel;

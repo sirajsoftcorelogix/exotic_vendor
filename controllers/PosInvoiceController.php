@@ -418,7 +418,7 @@ class PosInvoiceController
         $transName = trim((string) ($payload['trans_name'] ?? ''));
 
         $ewbData = [
-            'distance' => max(1, (int) ($payload['distance'] ?? 100)),
+            'distance' => max(1, (int) ($payload['distance'] ?? 0)),
             'trans_id' => $transId,
             'trans_name' => $transName,
         ];
@@ -672,6 +672,29 @@ class PosInvoiceController
 
         $config = include __DIR__ . '/../config.php';
         $alankitConfig = $config['alankit'] ?? [];
+        //is_international_invoice
+        $tracking = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId);
+        if ($tracking['is_international_invoice'] ?? false) {
+            require_once __DIR__ . '/InvoicesController.php';
+            $controller = new InvoicesController();
+            $result = $controller->generateAlankitEwbForInvoice($invoiceId, $ewbData);
+            $this->syncInternationalEwbTracking($invoiceId);
+            $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
+            $ok = !empty($result['status']) || strtolower(trim((string) ($latest['ewb_status'] ?? ''))) === 'generated';
+
+            echo json_encode([
+                'success' => $ok,
+                'message' => $ok
+                    ? ((string) ($result['ewb_message'] ?? 'E-Way bill generated successfully.'))
+                    : ((string) ($result['message'] ?? 'Failed to generate E-Way bill.')),
+                'ewb_no' => (string) ($latest['ewb_no'] ?? $latest['ewb'] ?? $result['ewb'] ?? ''),
+                'ewb_number' => (string) ($latest['ewb_no'] ?? $latest['ewb'] ?? $result['ewb'] ?? ''),
+                'ewb_date' => (string) ($latest['ewb_date'] ?? ''),
+                'ewb_valid_till' => (string) ($latest['ewb_valid_till'] ?? ''),
+                'ewb_status' => (string) ($latest['ewb_status'] ?? ''),
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
         require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
         $service = new DomesticEwbIrnService($conn, $alankitConfig);
 
@@ -2971,7 +2994,7 @@ class PosInvoiceController
             $totalGstAmount += $sgstAmt + $cgstAmt + $igstAmt;
 
             if ($usePosItemRowLayout) {
-                $itemName = htmlspecialchars($item['item_name'] ?? '');
+                $itemName = nl2br(htmlspecialchars((string)($item['item_name'] ?? ''), ENT_QUOTES, 'UTF-8'), false);
                 $hsnCode = trim((string)($item['hsn'] ?? ''));
                 $descHtml = $itemName;
                 if ($hsnCode !== '') {
@@ -3009,7 +3032,7 @@ class PosInvoiceController
             $itemsrows .= '
                     <tr>
                         <td>' . ($idx + 1) . '</td>
-                        <td class="desc">' . htmlspecialchars($item['item_name'] ?? '') . '</td>
+                        <td class="desc">' . nl2br(htmlspecialchars((string)($item['item_name'] ?? ''), ENT_QUOTES, 'UTF-8'), false) . '</td>
                         <td>' . invoice_format_box_variant_cell($item, $conn) . '</td>
                         <td>' . htmlspecialchars($item['hsn'] ?? '') . '</td>
                         <td>' . $qtyInt . '</td>
