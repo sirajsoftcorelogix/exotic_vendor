@@ -619,8 +619,14 @@ class InvoicesController
                 'shipping_ref_clm' => empty($internationalData['shipping_ref_clm']) ? 'N' : $internationalData['shipping_ref_clm'],
                 'shipping_currency' => empty($internationalData['shipping_currency']) ? 'AED' : $internationalData['shipping_currency'],
                 'shipping_country_code' => empty($internationalData['shipping_country_code']) ? 'AE' : $internationalData['shipping_country_code'],
-                'shipping_exp_duty' => empty($internationalData['shipping_exp_duty']) ? 0 : (float)($internationalData['shipping_exp_duty'])
-
+                'shipping_exp_duty' => empty($internationalData['shipping_exp_duty']) ? 0 : (float)($internationalData['shipping_exp_duty']),
+                'transport_selection' => $internationalData['transport_selection'],
+                'trans_id' => $internationalData['trans_id'],
+                'trans_name' => $internationalData['trans_name'],
+                'trans_doc_no' => $internationalData['trans_doc_no'],
+                'trans_doc_dt' => $internationalData['trans_doc_dt'],
+                'veh_no' => $internationalData['veh_no'],
+                'veh_type' => $internationalData['veh_type']
             ];
             // echo '<br><br><pre>';
             // print_r($irnPayload);

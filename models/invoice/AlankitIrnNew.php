@@ -456,7 +456,7 @@ return base64_encode($encryptedData);
                 'ExpDuty' => (float)($invoice['shipping_exp_duty'] ?? 0)
             ],           
             "EwbDtls" => 
-               $invoice['trans_id'] ? [
+               !empty($invoice['trans_id']) ? [
                 'TransId' => (string)($invoice['trans_id'] ?? ''),
                 'TransName' => (string)($invoice['trans_name'] ?? '')  
                 ] : [
