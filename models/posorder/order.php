@@ -2643,4 +2643,71 @@ class POSOrder
             ];
         }
     }
+
+    /**
+     * Update a single order line title and keep matching invoice line names in sync.
+     *
+     * @return array{success: bool, message: string, title?: string}
+     */
+    public function updateOrderLineTitle(int $lineId, string $orderNumber, string $title): array
+    {
+        $orderNumber = trim($orderNumber);
+        $title = trim(preg_replace('/\s+/u', ' ', strip_tags($title)) ?? '');
+        if (function_exists('mb_substr')) {
+            $title = mb_substr($title, 0, 500);
+        } else {
+            $title = substr($title, 0, 500);
+        }
+
+        if ($lineId <= 0 || $orderNumber === '') {
+            return ['success' => false, 'message' => 'Order line is required.'];
+        }
+        if ($title === '') {
+            return ['success' => false, 'message' => 'Item name is required.'];
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT id, item_code FROM vp_orders WHERE id = ? AND order_number = ? LIMIT 1'
+        );
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Could not load the order line.'];
+        }
+        $stmt->bind_param('is', $lineId, $orderNumber);
+        $stmt->execute();
+        $line = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$line) {
+            return ['success' => false, 'message' => 'Order line not found.'];
+        }
+
+        $upd = $this->db->prepare('UPDATE vp_orders SET title = ? WHERE id = ? AND order_number = ? LIMIT 1');
+        if (!$upd) {
+            return ['success' => false, 'message' => 'Could not update the item name.'];
+        }
+        $upd->bind_param('sis', $title, $lineId, $orderNumber);
+        if (!$upd->execute()) {
+            $err = $upd->error;
+            $upd->close();
+            return ['success' => false, 'message' => 'Could not save the item name: ' . $err];
+        }
+        $upd->close();
+
+        $itemCode = trim((string)($line['item_code'] ?? ''));
+        if ($itemCode !== '') {
+            $inv = $this->db->prepare(
+                'UPDATE vp_invoice_items SET item_name = ? WHERE order_number = ? AND item_code = ?'
+            );
+            if ($inv) {
+                $inv->bind_param('sss', $title, $orderNumber, $itemCode);
+                $inv->execute();
+                $inv->close();
+            }
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Item name updated.',
+            'title' => $title,
+        ];
+    }
 }

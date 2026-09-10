@@ -351,6 +351,9 @@ switch ($page) {
             case 'update_item_prices_ajax':
                 $controller->updateItemPricesAjax();
                 break;
+            case 'update_item_title_ajax':
+                $controller->updateItemTitleAjax();
+                break;
             case 'update_import':
                 $controller->skuUpdateImportedOrders();
                 break;
@@ -2214,6 +2217,9 @@ switch ($page) {
             case 'update_item_prices':
             case 'update_item_prices_ajax':
                 $controller->updateItemPricesAjax();
+                break;
+            case 'update_item_title_ajax':
+                $controller->updateItemTitleAjax();
                 break;
             case 'update_import':
                 $controller->skuUpdateImportedOrders();

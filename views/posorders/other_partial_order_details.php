@@ -64,6 +64,7 @@ if ($orderCurrencyCode === '') {
 }
 $orderCurrencySymbol = vendor_currency_symbol($orderCurrencyCode);
 $canEditInvoiceNumber = !empty($canEditInvoiceNumber);
+$canEditItemName = !empty($canEditItemName);
 $canEditOrderPrices = !empty($canEditOrderPrices);
 $invoiceStatus = strtolower(trim((string)($invoiceDisplay['status'] ?? '')));
 $invoiceStatusBadgeClass = match ($invoiceStatus) {
@@ -665,8 +666,21 @@ $proformaPrintDisabledReason = $canPrintProforma
                                     <!-- <h4 class="mb-3 text-[12px] font-semibold leading-tight text-gray-900">
                                     <?php echo $item['groupname']; ?> / <?php echo $item['subcategories']; ?>
                                 </h4> -->
-                                    <h4 class="mb-3 text-[14px] leading-tight text-gray-900">
-                                        <?php echo $item['title']; ?>
+                                    <h4 class="mb-3 text-[14px] leading-tight text-gray-900 flex items-start gap-2">
+                                        <span id="order-item-title-<?php echo $lineId; ?>" class="order-item-title-text"><?php echo htmlspecialchars((string)($item['title'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></span>
+                                        <?php if ($canEditItemName): ?>
+                                            <button type="button"
+                                                class="inline-flex shrink-0 items-center justify-center rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-orange-600"
+                                                title="Edit item name"
+                                                data-line-id="<?php echo $lineId; ?>"
+                                                data-order-number="<?php echo htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8'); ?>"
+                                                data-title="<?php echo htmlspecialchars((string)($item['title'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                                onclick="event.stopPropagation(); openItemTitleEditPopup(this)">
+                                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                </svg>
+                                            </button>
+                                        <?php endif; ?>
                                     </h4>
 
                                     <div class="flex justify-between items-start">
@@ -1617,6 +1631,40 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
     </div>
 </div>
 <?php endif; ?>
+<?php if ($canEditItemName): ?>
+<div id="itemTitleEditPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6 relative">
+        <button type="button" onclick="closeItemTitleEditPopup()" class="absolute top-3 right-4 text-gray-500 hover:text-gray-800">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+
+        <h2 class="text-xl font-bold mb-4 text-gray-800">Edit item name</h2>
+
+        <form id="itemTitleEditForm">
+            <input type="hidden" id="edit_item_line_id" name="line_id">
+            <input type="hidden" id="edit_item_order_number" name="order_number">
+
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="new_item_title">Item name</label>
+            <textarea id="new_item_title" name="title" rows="3"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                maxlength="500" required></textarea>
+
+            <div class="mt-6 flex justify-end gap-3">
+                <button type="button" onclick="closeItemTitleEditPopup()"
+                    class="rounded-full px-5 py-2.5 bg-gray-200 text-gray-800 hover:bg-gray-300">
+                    Cancel
+                </button>
+                <button type="submit"
+                    class="rounded-full bg-[#D46B08] px-10 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700">
+                    Save
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php if ($canFetchOrderJson): ?>
 <div id="orderJsonModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[90] p-4" onclick="closeOrderJsonModal(event)">
@@ -1673,6 +1721,84 @@ window.orderJsonModalConfig = {
     function closeInvoiceNumberEditPopup() {
         document.getElementById('invoiceNumberEditPopup')?.classList.add('hidden');
     }
+
+    function showOrderDetailsMessage(title, message, tone) {
+        if (typeof window.showPosMessageModal === 'function') {
+            window.showPosMessageModal({ title: title, message: message, tone: tone || 'info' });
+            return;
+        }
+        console.error(title + ': ' + message);
+    }
+
+    function openItemTitleEditPopup(btn) {
+        if (!btn) {
+            return;
+        }
+        document.getElementById('edit_item_line_id').value = btn.getAttribute('data-line-id') || '';
+        document.getElementById('edit_item_order_number').value = btn.getAttribute('data-order-number') || '';
+        document.getElementById('new_item_title').value = btn.getAttribute('data-title') || '';
+        document.getElementById('itemTitleEditPopup').classList.remove('hidden');
+        document.getElementById('new_item_title').focus();
+        document.getElementById('new_item_title').select();
+    }
+
+    function closeItemTitleEditPopup() {
+        document.getElementById('itemTitleEditPopup')?.classList.add('hidden');
+    }
+
+    document.getElementById('itemTitleEditForm')?.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const lineId = document.getElementById('edit_item_line_id').value.trim();
+        const orderNumber = document.getElementById('edit_item_order_number').value.trim();
+        const title = document.getElementById('new_item_title').value.trim();
+        const saveBtn = this.querySelector('button[type="submit"]');
+
+        if (!lineId || !orderNumber || !title) {
+            showOrderDetailsMessage('Item name required', 'Please enter an item name.', 'warning');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('line_id', lineId);
+        formData.append('order_number', orderNumber);
+        formData.append('title', title);
+
+        if (saveBtn) {
+            saveBtn.disabled = true;
+        }
+
+        fetch(<?php echo json_encode(base_url('index.php?page=' . $orderStatusPage . '&action=update_item_title_ajax'), JSON_UNESCAPED_SLASHES); ?>, {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success) {
+                    showOrderDetailsMessage('Could not update', data.message || 'Could not update the item name.', 'error');
+                    return;
+                }
+
+                const updated = data.title || title;
+                const textEl = document.getElementById('order-item-title-' + lineId);
+                if (textEl) {
+                    textEl.textContent = updated;
+                }
+                document.querySelectorAll('button[data-line-id="' + lineId + '"][data-title]').forEach(function(editBtn) {
+                    editBtn.setAttribute('data-title', updated);
+                });
+                closeItemTitleEditPopup();
+                showOrderDetailsMessage('Item name updated', 'The item name was saved. New invoices and PDFs will use this name.', 'success');
+            })
+            .catch(function() {
+                showOrderDetailsMessage('Request failed', 'Please try again.', 'error');
+            })
+            .finally(function() {
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                }
+            });
+    });
 
     document.getElementById('invoiceNumberEditForm')?.addEventListener('submit', function(e) {
         e.preventDefault();
@@ -2140,7 +2266,10 @@ window.orderJsonModalConfig = {
                 trigger.removeEventListener('click', trigger.__accordionClick__);
             }
 
-            const handler = function() {
+            const handler = function(e) {
+                if (e.target && typeof e.target.closest === 'function' && e.target.closest('button')) {
+                    return;
+                }
                 const content = this.nextElementSibling;
                 const isOpening = !content.classList.contains('open');
 
