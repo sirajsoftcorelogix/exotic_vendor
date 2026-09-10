@@ -619,8 +619,14 @@ class InvoicesController
                 'shipping_ref_clm' => empty($internationalData['shipping_ref_clm']) ? 'N' : $internationalData['shipping_ref_clm'],
                 'shipping_currency' => empty($internationalData['shipping_currency']) ? 'AED' : $internationalData['shipping_currency'],
                 'shipping_country_code' => empty($internationalData['shipping_country_code']) ? 'AE' : $internationalData['shipping_country_code'],
-                'shipping_exp_duty' => empty($internationalData['shipping_exp_duty']) ? 0 : (float)($internationalData['shipping_exp_duty'])
-
+                'shipping_exp_duty' => empty($internationalData['shipping_exp_duty']) ? 0 : (float)($internationalData['shipping_exp_duty']),
+                'transport_selection' => $internationalData['transport_selection'],
+                'trans_id' => $internationalData['trans_id'],
+                'trans_name' => $internationalData['trans_name'],
+                'trans_doc_no' => $internationalData['trans_doc_no'],
+                'trans_doc_dt' => $internationalData['trans_doc_dt'],
+                'veh_no' => $internationalData['veh_no'],
+                'veh_type' => $internationalData['veh_type']
             ];
             // echo '<br><br><pre>';
             // print_r($irnPayload);
@@ -680,7 +686,7 @@ class InvoicesController
                     'ack_date' => $irnResponse['AckDt'] ? date('Y-m-d H:i:s', strtotime($irnResponse['AckDt'])) : null,
                     'signed_invoice' => $irnResponse['SignedInvoice'] ?? null,
                     'qrcode_string' => $irnResponse['SignedQRCode'] ?? null,
-                    'ewb_number' => $irnResponse['EwbNo'] ?? null,
+                    'ewb_no' => $irnResponse['EwbNo'] ?? null,
                     'ewb_date' => $irnResponse['EwbDt'] ? date('Y-m-d H:i:s', strtotime($irnResponse['EwbDt'])) : null,
                     'ewb_valid_till' => $irnResponse['EwbValidTill'] ? date('Y-m-d H:i:s', strtotime($irnResponse['EwbValidTill'])) : null,
                     'irn_status' => 'generated',
@@ -703,31 +709,46 @@ class InvoicesController
                         // ];
                         $ewbData = [
                             'irn' => $irnResponse['Irn'] ?? '',
-                            'Distance' => 15,
-                            'TransId' => "07AAACE1288P2Z8",
-                            'TransName' => "XYZ EXPORTS",  
-                            'TransDocDt' => date('d/m/Y'),
-                            //'VehNo' => "kb123456",
-                            //'VehType' => "R"   
-                            "DispDtls" => [ 
-                                "Nm" => "test",
-                                "Addr1" => "test",
-                                "Addr2" => "test",
-                                "Loc" => "test",
-                                "Pin" => 110034,
-                                "Stcd" => "07"
-                            ],                        
-                            "ExpShipDtls" => [
-                            "Gstin" => "07AAACE1288P2Z8",
-                            "TrdNm" => "test",
-                            "Addr1" => "test",
-                            "Addr2" => "test",
-                            "Loc" => "test",
-                            "Pin" => 110055,
-                            "Stcd" => "07"
-                            ]
-                             
+                            'Distance' => 0, 
                         ];
+                        if(!empty($internationalData['trans_id'])){
+                           $ewbData['TransId'] = $internationalData['trans_id'];
+                           $ewbData['TransName'] = $internationalData['trans_name'];
+                        }else{
+                            $ewbData['TransDocDt'] = $internationalData['trans_doc_dt'] ?? date('d/m/Y');
+                            $ewbData['VehNo'] = $internationalData['veh_no'] ?? '';
+                            $ewbData['VehType'] = $internationalData['veh_type'] ?? 'R';
+                            $ewbData['TransMode'] = $internationalData['trans_mode'] ?? '1';
+                        }
+                        $ewbData = [ 
+                            "DispDtls" => [ 
+                                "Nm" => $customer['first_name'] . ' ' . $customer['last_name'] ?? '',
+                                "Addr1" => trim($shippingAddress) ? $shippingAddress : $buyerAddress,
+                                "Addr2" => "",
+                                "Loc" => trim($customer['shipping_city']) ? $customer['shipping_city'] : $customer['city'] ?? '',
+                                "Pin" => trim($shippingPincode) ? $shippingPincode : $buyerPincode,
+                                "Stcd" => $customer['shipping_state_code'] ?? $customer['state_code'] ?? ''
+                            ],  
+                            "ExpDtls" => [
+                            'ShipBNo' => (string)($internationalData['shipping_bill_number'] ?? ''),
+                            'ShipBDt' => date('d/m/Y', strtotime($internationalData['shipping_bill_date'])),
+                            'Port' => (string)($internationalData['shipping_port_code'] ?? ''),
+                            'RefClm' => (string)($internationalData['shipping_ref_clm'] ?? ''),
+                            'ForCur' => (string)($internationalData['shipping_currency'] ?? ''),
+                            'CntCode' => (string)($internationalData['shipping_country_code'] ?? ''),
+                            'ExpDuty' => (float)($internationalData['shipping_exp_duty'] ?? 0)
+                        ],                      
+                            // "ExpShipDtls" => [
+                            // "Gstin" => "07AAACE1288P2Z8",
+                            // "TrdNm" => "test",
+                            // "Addr1" => "test",
+                            // "Addr2" => "test",
+                            // "Loc" => "test",
+                            // "Pin" => 110055,
+                            // "Stcd" => "07"
+                            // ]  
+                        ];                            
+                            
                         //echo "*Alankit EWB: Sending EWB generation request for invoice #$invoiceId\n";
                         //print_r($ewbData);
                         //echo "<br><br>";
@@ -735,7 +756,7 @@ class InvoicesController
                         //print_r($ewbResponse);
                         //echo "<br><br>*Alankit EWB\n";
                         if ($ewbResponse && isset($ewbResponse['EwbNo'])) {
-                            $updateData['ewb_number'] = $ewbResponse['EwbNo'] ?? null;
+                            $updateData['ewb_no'] = $ewbResponse['EwbNo'] ?? null;
                             $updateData['ewb_date'] = isset($ewbResponse['EwbDt']) ? date('Y-m-d H:i:s', strtotime($ewbResponse['EwbDt'])) : null;
                             $updateData['ewb_valid_till'] = isset($ewbResponse['EwbValidTill']) ? date('Y-m-d H:i:s', strtotime($ewbResponse['EwbValidTill'])) : null;
                             $updateData['ewb_request_payload'] = json_encode($ewbData);

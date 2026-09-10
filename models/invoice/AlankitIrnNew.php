@@ -454,17 +454,19 @@ return base64_encode($encryptedData);
                 'ForCur' => (string)($invoice['shipping_currency'] ?? ''),
                 'CntCode' => (string)($invoice['shipping_country_code'] ?? ''),
                 'ExpDuty' => (float)($invoice['shipping_exp_duty'] ?? 0)
-            ],
-            "EwbDtls" => [
-                'TransId' => "12AWGPV7107B1Z1",
-                'TransName' => "XYZ EXPORTS",
-                'Distance' => 100,
-                'TransDocNo' => "DOC01",
-                'TransDocDt' => "18/08/2020",
-                'VehNo' => "ka123456",
-                'VehType' => "R",
-                'TransMode' => "1"
-            ],
+            ],           
+            "EwbDtls" => 
+               !empty($invoice['trans_id']) ? [
+                'TransId' => (string)($invoice['trans_id'] ?? ''),
+                'TransName' => (string)($invoice['trans_name'] ?? '')  
+                ] : [
+                'Distance' => 0,
+                'TransDocNo' => (string)($invoice['trans_doc_no'] ?? ''),
+                'TransDocDt' => $invoice['trans_doc_dt'] ? date('d/m/Y', strtotime($invoice['trans_doc_dt'])) : date('d/m/Y'),
+                'VehNo' => (string)($invoice['veh_no'] ?? ''),
+                'VehType' => (string)($invoice['veh_type'] ?? 'R'),
+                'TransMode' => (string)($invoice['trans_mode'] ?? '1')
+                ]   
         ];
     }
 

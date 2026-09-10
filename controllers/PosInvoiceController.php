@@ -251,7 +251,8 @@ class PosInvoiceController
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
-
+        //is_international_invoice
+        $row['is_international_invoice'] = $currency !== '' && $currency !== 'INR';
         return is_array($row) ? $row : null;
     }
 
@@ -597,10 +598,15 @@ class PosInvoiceController
 
         $config = include __DIR__ . '/../config.php';
         $alankitConfig = $config['alankit'] ?? [];
-        require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
-        $service = new DomesticEwbIrnService($conn, $alankitConfig);
-
-        $result = $service->generateIrnAndEwb(
+        $tracking['is_international_invoice'] = $tracking['is_international_invoice'] ?? false;
+        if ($tracking['is_international_invoice']) {
+            require_once __DIR__ . '/InvoicesController.php';
+            $invcontroller = new InvoicesController();
+            $result = $invcontroller->generateAlankitIrnForInvoice($invoiceId);
+        } else {
+            require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
+            $service = new DomesticEwbIrnService($conn, $alankitConfig);
+            $result = $service->generateIrnAndEwb(
             $invoiceId,
             $invoice,
             $runtime['items'],
@@ -608,6 +614,9 @@ class PosInvoiceController
             $runtime['firm'],
             []
         );
+        }
+
+        
         $this->syncInternationalEwbTracking($invoiceId);
 
         $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];

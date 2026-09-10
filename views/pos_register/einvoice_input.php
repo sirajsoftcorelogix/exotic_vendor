@@ -251,15 +251,15 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
             <div>
               <label class="block font-semibold text-amber-900 mb-1">Shipping Bill Number</label>
-              <input type="text" name="shipping_bill_number" value="<?= $h($invoiceData['shipping_bill_number'] ?? 'SB-' . rand(100000, 999999)) ?>" class="w-full h-9 rounded-lg border border-amber-300 px-3 font-mono bg-white" />
+              <input type="text" name="shipping_bill_number" value="<?= $h($record['shipping_bill_number'] ?? 'SB-' . rand(100000, 999999)) ?>" class="w-full h-9 rounded-lg border border-amber-300 px-3 font-mono bg-white" />
             </div>
             <div>
               <label class="block font-semibold text-amber-900 mb-1">Shipping Bill Date (DD/MM/YYYY)</label>
-              <input type="text" name="shipping_bill_date" value="<?= date('d/m/Y') ?>" class="w-full h-9 rounded-lg border border-amber-300 px-3 bg-white" />
+              <input type="text" name="shipping_bill_date" value="<?= $h($record['shipping_bill_date'] ?? '') ?>" class="w-full h-9 rounded-lg border border-amber-300 px-3 bg-white" />
             </div>
             <div>
               <label class="block font-semibold text-amber-900 mb-1">Port Code</label>
-              <input type="text" name="shipping_port_code" value="<?= $h($invoiceData['shipping_port'] ?? 'INABG1') ?>" class="w-full h-9 rounded-lg border border-amber-300 px-3 font-mono bg-white" />
+              <input type="text" name="shipping_port_code" value="<?= $h($record['shipping_port_code'] ?? 'INABG1') ?>" class="w-full h-9 rounded-lg border border-amber-300 px-3 font-mono bg-white" />
             </div>
             <div>
               <label class="block font-semibold text-amber-900 mb-1">Foreign Currency Code</label>
