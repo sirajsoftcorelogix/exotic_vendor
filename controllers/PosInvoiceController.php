@@ -601,8 +601,8 @@ class PosInvoiceController
         $tracking['is_international_invoice'] = $tracking['is_international_invoice'] ?? false;
         if ($tracking['is_international_invoice']) {
             require_once __DIR__ . '/InvoicesController.php';
-            $invcontroller = new InvoicesController();
-            $result = $invcontroller->generateAlankitIrnForInvoice($invoiceId);
+            $controller = new InvoicesController();
+            $result = $controller->generateAlankitIrnForInvoice($invoiceId);
         } else {
             require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
             $service = new DomesticEwbIrnService($conn, $alankitConfig);
