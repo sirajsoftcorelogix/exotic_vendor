@@ -451,6 +451,26 @@ function pos_order_line_addons_total(array $orderRow): float
 }
 
 /**
+ * Invoice PDF description: title plus material from vp_orders.material.
+ */
+function pos_order_item_title_with_material(string $title, string $material): string
+{
+    $title = trim($title);
+    $material = trim(preg_replace('/\s+/u', ' ', $material) ?? '');
+    if ($title === '') {
+        return $material !== '' ? ('Material: ' . $material) : '';
+    }
+    if ($material === '') {
+        return $title;
+    }
+    if (preg_match('/(?:^|\R)\s*Material\s*:/i', $title)) {
+        return $title;
+    }
+
+    return $title . "\nMaterial: " . $material;
+}
+
+/**
  * Build base + addon list-price components (GST-inclusive, before custom_reduce).
  *
  * @return list<array{type: string, name: string, list_incl: float}>

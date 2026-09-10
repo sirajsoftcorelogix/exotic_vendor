@@ -2451,6 +2451,21 @@ class PosOrdersController
         vendorJsonResponse($ordersModel->updateOrderLineTitle($lineId, $orderNumber, $title));
     }
 
+    public function updateItemMaterialAjax()
+    {
+        is_login();
+        if (!canSrEmpAccess()) {
+            vendorJsonResponse(['success' => false, 'message' => 'Access denied. Sr Emp, Top Management, or Admin access required.']);
+        }
+
+        global $ordersModel;
+        $lineId = (int)($_POST['line_id'] ?? 0);
+        $orderNumber = trim((string)($_POST['order_number'] ?? ''));
+        $material = (string)($_POST['material'] ?? '');
+
+        vendorJsonResponse($ordersModel->updateOrderLineMaterial($lineId, $orderNumber, $material));
+    }
+
     public function updateItemPricesAjax()
     {
         is_login();

@@ -2994,7 +2994,7 @@ class PosInvoiceController
             $totalGstAmount += $sgstAmt + $cgstAmt + $igstAmt;
 
             if ($usePosItemRowLayout) {
-                $itemName = htmlspecialchars($item['item_name'] ?? '');
+                $itemName = nl2br(htmlspecialchars((string)($item['item_name'] ?? ''), ENT_QUOTES, 'UTF-8'), false);
                 $hsnCode = trim((string)($item['hsn'] ?? ''));
                 $descHtml = $itemName;
                 if ($hsnCode !== '') {
@@ -3032,7 +3032,7 @@ class PosInvoiceController
             $itemsrows .= '
                     <tr>
                         <td>' . ($idx + 1) . '</td>
-                        <td class="desc">' . htmlspecialchars($item['item_name'] ?? '') . '</td>
+                        <td class="desc">' . nl2br(htmlspecialchars((string)($item['item_name'] ?? ''), ENT_QUOTES, 'UTF-8'), false) . '</td>
                         <td>' . invoice_format_box_variant_cell($item, $conn) . '</td>
                         <td>' . htmlspecialchars($item['hsn'] ?? '') . '</td>
                         <td>' . $qtyInt . '</td>
