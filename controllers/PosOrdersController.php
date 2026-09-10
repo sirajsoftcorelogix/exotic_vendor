@@ -2930,20 +2930,29 @@ class PosOrdersController
         $maps = $productModel->getAccountsGroupMapByProductIdsOrItemCodes($productIds, $itemCodes);
         $mapById = $maps['by_id'] ?? [];
         $mapByCode = $maps['by_code'] ?? [];
+        $materialById = $maps['material_by_id'] ?? [];
+        $materialByCode = $maps['material_by_code'] ?? [];
 
         foreach ($order as $key => $item) {
-            $existing = trim((string) ($item['accounts_group'] ?? ''));
-            if ($existing !== '') {
-                continue;
-            }
             $pid = (int) ($item['product_id'] ?? 0);
             $ic = trim((string) ($item['item_code'] ?? ''));
-            if ($pid > 0 && isset($mapById[$pid]) && $mapById[$pid] !== '') {
-                $order[$key]['accounts_group'] = $mapById[$pid];
-            } elseif ($ic !== '' && isset($mapByCode[$ic]) && $mapByCode[$ic] !== '') {
-                $order[$key]['accounts_group'] = $mapByCode[$ic];
-            } else {
-                $order[$key]['accounts_group'] = '';
+            $existing = trim((string) ($item['accounts_group'] ?? ''));
+            if ($existing === '') {
+                if ($pid > 0 && isset($mapById[$pid]) && $mapById[$pid] !== '') {
+                    $order[$key]['accounts_group'] = $mapById[$pid];
+                } elseif ($ic !== '' && isset($mapByCode[$ic]) && $mapByCode[$ic] !== '') {
+                    $order[$key]['accounts_group'] = $mapByCode[$ic];
+                } else {
+                    $order[$key]['accounts_group'] = '';
+                }
+            }
+            $existingMaterial = trim((string) ($item['material'] ?? ''));
+            if ($existingMaterial === '') {
+                if ($pid > 0 && isset($materialById[$pid]) && $materialById[$pid] !== '') {
+                    $order[$key]['material'] = $materialById[$pid];
+                } elseif ($ic !== '' && isset($materialByCode[$ic]) && $materialByCode[$ic] !== '') {
+                    $order[$key]['material'] = $materialByCode[$ic];
+                }
             }
         }
     }
