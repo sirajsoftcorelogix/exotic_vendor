@@ -1356,6 +1356,7 @@ class PosOrdersController
                 'proformaPrintUrl' => (string)($proformaPrintAction['url'] ?? ''),
                 'canPrintProforma' => !empty($proformaPrintAction['can_print']),
                 'canEditInvoiceNumber' => canSrEmpAccess(),
+                'canEditItemName' => canSrEmpAccess(),
                 'canEditOrderPrices' => false,
                 'paymentSummary' => $paymentSummary,
                 'canCreateFinalInvoice' => $canCreateFinalInvoice,
@@ -2433,6 +2434,21 @@ class PosOrdersController
         $newOrderNumber = trim((string)($_POST['new_order_number'] ?? ''));
 
         vendorJsonResponse($ordersModel->renameOrderNumber($oldOrderNumber, $newOrderNumber));
+    }
+
+    public function updateItemTitleAjax()
+    {
+        is_login();
+        if (!canSrEmpAccess()) {
+            vendorJsonResponse(['success' => false, 'message' => 'Access denied. Sr Emp, Top Management, or Admin access required.']);
+        }
+
+        global $ordersModel;
+        $lineId = (int)($_POST['line_id'] ?? 0);
+        $orderNumber = trim((string)($_POST['order_number'] ?? ''));
+        $title = (string)($_POST['title'] ?? '');
+
+        vendorJsonResponse($ordersModel->updateOrderLineTitle($lineId, $orderNumber, $title));
     }
 
     public function updateItemPricesAjax()
