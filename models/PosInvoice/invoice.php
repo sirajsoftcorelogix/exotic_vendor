@@ -309,6 +309,48 @@ class POSInvoice
 
         return $stmt->execute();
     }
+
+    public function updateInvoiceInternational($invoice_id, $data)
+    {
+        $allowedFields = [
+            'transport_selection', 'trans_mode', 'veh_no', 'veh_type', 'trans_doc_no', 'trans_doc_dt',
+            'trans_id', 'trans_name', 'pre_carriage_by', 'port_of_loading', 'port_of_discharge',
+            'country_of_origin', 'country_of_final_destination', 'final_destination', 'usd_export_rate',
+            'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_bill_number', 'shipping_bill_date',
+            'shipping_port', 'shipping_ref_clm', 'shipping_currency', 'shipping_country_code',
+            'shipping_exp_duty', 'irn', 'ack_number', 'ack_date', 'signed_invoice', 'qrcode_string',
+            'irn_status', 'request_payload', 'response_payload', 'irn_error_message', 'ewb_no',
+            'ewb_date', 'ewb_valid_till', 'ewb_request_payload', 'ewb_response_payload', 'ewb_error_message'
+        ];
+
+        $updateFields = [];
+        $bindParams = [];
+        $bindTypes = '';
+
+        foreach ($allowedFields as $field) {
+            if (array_key_exists($field, $data)) {
+                $updateFields[] = "$field = ?";
+                $bindParams[] = $data[$field];
+                $bindTypes .= 's';
+            }
+        }
+
+        if (empty($updateFields)) {
+            return false;
+        }
+
+        $bindParams[] = (int)$invoice_id;
+        $bindTypes .= 'i';
+
+        $sql = "UPDATE vp_invoices_international SET " . implode(', ', $updateFields) . ", updated_at = NOW() WHERE invoice_id = ?";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return false;
+        }
+
+        $stmt->bind_param($bindTypes, ...$bindParams);
+        return $stmt->execute();
+    }
     private function buildInvoiceWhereClause($filters = [])
     {
         $whereClause = [];
