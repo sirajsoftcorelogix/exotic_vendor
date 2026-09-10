@@ -810,6 +810,165 @@ class InvoicesController
         }
     }
 
+    /**
+     * Generate an Alankit E-Way bill for a non-INR invoice.
+     *
+     * @param int $invoiceId
+     * @param array<string, mixed> $ewbData
+     * @return array<string, mixed>
+     */
+    public function generateAlankitEwbForInvoice($invoiceId, array $ewbData = [])
+    {
+        global $invoiceModel, $commanModel;
+
+        $invoiceId = (int) $invoiceId;
+        if ($invoiceId <= 0) {
+            return [
+                'status' => false,
+                'message' => 'Invalid invoice id.',
+            ];
+        }
+
+        $invoice = $invoiceModel->getInvoiceById($invoiceId);
+        $items = $invoiceModel->getInvoiceItems($invoiceId);
+        $internationalData = $invoiceModel->getInternationalInvoiceByInvoiceId($invoiceId);
+
+        if (!$invoice || empty($items)) {
+            return [
+                'status' => false,
+                'message' => 'Invoice or items not found.',
+            ];
+        }
+
+        $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
+        $firm = app_setting_firm_details();
+
+        if (!$customer || !$firm) {
+            return [
+                'status' => false,
+                'message' => 'Customer or firm data is incomplete.',
+            ];
+        }
+
+        require_once 'models/invoice/AlankitIrnNew.php';
+
+        $config = include 'config.php';
+        $alankitConfig = $config['alankit'] ?? [];
+
+        $alankitClient = new AlankitIrnNew(
+            $alankitConfig['username'],
+            $alankitConfig['password'],
+            $alankitConfig['subscription_key'],
+            $alankitConfig['app_key'],
+            $alankitConfig['gstin'],
+            $alankitConfig['force_refresh_access_token'] ?? true
+        );
+
+        $buyerAddress = trim((string) (($customer['address_line1'] ?? '') . ' ' . ($customer['address_line2'] ?? '')));
+        $shippingAddress = trim((string) (($customer['shipping_address_line1'] ?? '') . ' ' . ($customer['shipping_address_line2'] ?? '')));
+
+        $payload = [
+            'DispDtls' => [
+                'Nm' => trim((string) (($customer['first_name'] ?? '') . ' ' . ($customer['last_name'] ?? ''))),
+                'Addr1' => $shippingAddress !== '' ? $shippingAddress : $buyerAddress,
+                'Addr2' => '',
+                'Loc' => trim((string) ($customer['shipping_city'] ?? $customer['city'] ?? '')),
+                'Pin' => trim((string) ($customer['shipping_zipcode'] ?? $customer['zipcode'] ?? '')),
+                'Stcd' => trim((string) ($customer['shipping_state_code'] ?? $customer['state_code'] ?? '')),
+            ],
+            'ExpDtls' => [
+                'ShipBNo' => (string) ($internationalData['shipping_bill_number'] ?? ''),
+                'ShipBDt' => !empty($internationalData['shipping_bill_date'])
+                    ? date('d/m/Y', strtotime((string) $internationalData['shipping_bill_date']))
+                    : date('d/m/Y'),
+                'Port' => (string) ($internationalData['shipping_port'] ?? $internationalData['shipping_port_code'] ?? 'INABG1'),
+                'RefClm' => (string) ($internationalData['shipping_ref_clm'] ?? 'N'),
+                'ForCur' => (string) ($internationalData['shipping_currency'] ?? $invoice['currency'] ?? 'USD'),
+                'CntCode' => (string) ($internationalData['shipping_country_code'] ?? $customer['shipping_country'] ?? $customer['country'] ?? ''),
+                'ExpDuty' => (float) ($internationalData['shipping_exp_duty'] ?? 0),
+            ],
+        ];
+
+        if (!empty($ewbData)) {
+            if (!empty($ewbData['trans_id'])) {
+                $payload['TransId'] = trim((string) $ewbData['trans_id']);
+                $payload['TransName'] = trim((string) $ewbData['trans_name']);
+                $payload['Distance'] = 0; // Default distance; can be customized if needed
+            }else{
+                $payload['Distance'] = 0;
+                $payload['TransMode'] = trim((string) $ewbData['trans_mode']);
+                $payload['VehNo'] = trim((string) $ewbData['veh_no']);
+                $payload['VehType'] = trim((string) $ewbData['veh_type']);
+                $payload['TransDocNo'] = trim((string) $ewbData['trans_doc_no']);
+                $payload['TransDocDt'] = trim((string) $ewbData['trans_doc_dt']);
+            }
+            
+        }
+
+        try {
+            $authreq = $alankitClient->authRequest();
+            $authdata = $alankitClient->sendRequest('AUTH_ENDPOINT', ['Data' => $authreq], false);
+
+            if (!$authdata || !isset($authdata['Data']['AuthToken'])) {
+                return [
+                    'status' => false,
+                    'message' => 'Alankit authentication failed.',
+                    'details' => $authdata,
+                ];
+            }
+
+            $accessToken = $authdata['Data']['AuthToken'];
+            $sek = $authdata['Data']['Sek'];
+            $decryptedSek = $alankitClient->decryptSek($sek, $alankitConfig['app_key']);
+
+            $ewbResponse = $alankitClient->generateEwb($payload, $accessToken, $decryptedSek);
+
+            $updateData = [
+                'ewb_request_payload' => json_encode($payload),
+                'ewb_response_payload' => json_encode($ewbResponse ?? ['error' => 'No response received']),
+            ];
+
+            if ($ewbResponse && isset($ewbResponse['EwbNo'])) {
+                $updateData['ewb_no'] = $ewbResponse['EwbNo'] ?? null;
+                $updateData['ewb_date'] = !empty($ewbResponse['EwbDt'])
+                    ? date('Y-m-d H:i:s', strtotime((string) $ewbResponse['EwbDt']))
+                    : null;
+                $updateData['ewb_valid_till'] = !empty($ewbResponse['EwbValidTill'])
+                    ? date('Y-m-d H:i:s', strtotime((string) $ewbResponse['EwbValidTill']))
+                    : null;
+                $updateData['ewb_error_message'] = null;
+
+                $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
+
+                return [
+                    'status' => true,
+                    'ewb' => $ewbResponse['EwbNo'] ?? '',
+                    'ewb_no' => $ewbResponse['EwbNo'] ?? '',
+                    'ewb_date' => $updateData['ewb_date'],
+                    'ewb_valid_till' => $updateData['ewb_valid_till'],
+                    'ewb_message' => 'E-Way bill generated successfully.',
+                ];
+            }
+
+            $updateData['ewb_error_message'] = json_encode($ewbResponse['ErrorDetails'] ?? $ewbResponse['message'] ?? 'Unknown error');
+            $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
+
+            return [
+                'status' => false,
+                'message' => $ewbResponse['message'] ?? 'Failed to generate E-Way bill.',
+                'error_details' => $ewbResponse['ErrorDetails'] ?? ($ewbResponse['message'] ?? 'Unknown error'),
+            ];
+        } catch (Exception $e) {
+            error_log("Alankit EWB Exception for invoice #$invoiceId: " . $e->getMessage());
+
+            return [
+                'status' => false,
+                'message' => 'Exception generating E-Way bill.',
+                'error_details' => $e->getMessage(),
+            ];
+        }
+    }
+
     public function view()
     {
         is_login();
