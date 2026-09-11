@@ -14,7 +14,7 @@ SELECT
     'Port Master',
     'ports',
     'list',
-    '<i class="fas fa-anchor mr-2"></i>',
+    '<i class="fas fa-plane-departure mr-2"></i>',
     1,
     1,
     225
@@ -56,3 +56,8 @@ WHERE r.is_active = '1'
       WHERE rp.role_id = r.id
         AND rp.permission_id = p.id
   );
+
+-- Switch existing menu icon to air cargo (plane departure).
+UPDATE `modules`
+SET `font_awesome_icon` = '<i class="fas fa-plane-departure mr-2"></i>'
+WHERE `slug` = 'ports';

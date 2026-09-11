@@ -26,7 +26,7 @@ $queryBase = [
             <div class="min-w-0 max-w-3xl">
                 <div class="inline-flex items-center gap-2 rounded-full border border-amber-200/60 bg-white/70 px-3 py-1 text-xs font-semibold text-amber-900/90 shadow-sm backdrop-blur-sm mb-4">
                     <span class="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-700">
-                        <i class="fas fa-anchor text-[11px]" aria-hidden="true"></i>
+                        <i class="fas fa-plane-departure text-[11px]" aria-hidden="true"></i>
                     </span>
                     <span>Master data · Shipping PORTS</span>
                 </div>
