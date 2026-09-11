@@ -1,112 +1,182 @@
-<div class="bg-white p-4 md:p-8">
-    <form action="<?php echo base_url('?page=invoices&action=create_post'); ?>" id="create_invoice" method="post">
+<?php
+$is_international = false;
+$invoiceCurrency = $data[0]['currency'] ?? 'INR';
+if (!empty($invoiceCurrency) && $invoiceCurrency !== 'INR') {
+    $is_international = true;
+}
+$invoiceItemCount = (isset($data) && is_array($data)) ? count($data) : 0;
+$invoiceOrderNumbers = [];
+if (isset($data) && is_array($data)) {
+    foreach ($data as $row) {
+        $orderNo = trim((string) ($row['order_number'] ?? ''));
+        if ($orderNo !== '' && !in_array($orderNo, $invoiceOrderNumbers, true)) {
+            $invoiceOrderNumbers[] = $orderNo;
+        }
+    }
+}
+$invInputClass = 'mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200';
+$invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-500';
+?>
+<style>
+    .invoice-create-page .inv-input { height: auto; min-height: 2.5rem; line-height: 1.4; }
+    .invoice-create-page .inv-action-btn { width: auto; height: auto; }
+    .invoice-create-page .inv-table th,
+    .invoice-create-page .inv-table td { vertical-align: middle; }
+</style>
+<div class="invoice-create-page mx-auto max-w-[1400px] space-y-5 px-3 py-5 md:px-6">
+    <form action="<?php echo base_url('?page=invoices&action=create_post'); ?>" id="create_invoice" method="post" class="space-y-5">
+        <div class="flex flex-col gap-4 rounded-2xl bg-white p-5 shadow-[0px_10px_15px_-3px_#0000001A] md:flex-row md:items-center md:justify-between md:p-6">
+            <div class="flex items-start gap-4">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white shadow-[0px_10px_15px_-3px_#0000001A]">
+                    <i class="fas fa-file-invoice text-lg" aria-hidden="true"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-800">Create Invoice</h1>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Review addresses, GST, and line items before generating the invoice.
+                    </p>
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                        <?php if ($is_international): ?>
+                            <span class="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-800">Export / IRN</span>
+                        <?php else: ?>
+                            <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">Domestic</span>
+                        <?php endif; ?>
+                        <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700"><?php echo htmlspecialchars((string) $invoiceCurrency, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <span class="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-800"><?php echo (int) $invoiceItemCount; ?> item<?php echo $invoiceItemCount === 1 ? '' : 's'; ?></span>
+                        <?php foreach ($invoiceOrderNumbers as $orderNo): ?>
+                            <span class="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-200">Order <?php echo htmlspecialchars($orderNo, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Invoice date</div>
+                <div class="mt-1 text-base font-semibold text-slate-800"><?php echo date('d M Y'); ?></div>
+                <input type="hidden" id="invoice_date" name="invoice_date" value="<?php echo date('Y-m-d'); ?>">
+            </div>
+        </div>
+
         <!--international section add fields  -->
-        <?php 
-            $is_international = false;
-            if ($data[0]['currency'] && $data[0]['currency'] != 'INR') {
-                $is_international = true;
-                $intl = $international_defaults ?? [];
-                $intlVal = static function (string $key) use ($intl): string {
-                    if (!isset($intl[$key])) {
-                        return '';
+        <?php
+        if ($is_international) {
+            $intl = $international_defaults ?? [];
+            $intlVal = static function (string $key) use ($intl): string {
+                if (!isset($intl[$key])) {
+                    return '';
                 }
                 $value = $intl[$key];
-                if (is_float($value) || is_int($value)) {
-                    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
-                }
                 return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
             };
         ?>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6" id="internationalSection">
-                <div class="lg:col-span-5 mb-1">
-                    <p class="text-sm text-gray-500">Export / IRN fields are pre-filled from the order and currency master. Review before creating the invoice.</p>
+            <div class="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0px_10px_15px_-3px_#0000001A] md:p-6" id="internationalSection">
+                <div class="mb-5 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 class="text-base font-semibold text-slate-800">Export / IRN details</h2>
+                        <p class="text-sm text-gray-500">Pre-filled from the order and currency master. Review before creating the invoice.</p>
+                    </div>
+                </div>
+                <div class="mb-5">
+                    <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Shipment route</h3>
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div>
+                    <label for="pre_carriage_by" class="<?php echo $invLabelClass; ?>">Pre Carriage By</label>
+                    <input type="text" name="pre_carriage_by" id="pre_carriage_by" value="<?php echo $intlVal('pre_carriage_by'); ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
                 <div>
-                    <label for="pre_carriage_by" class="block text-gray-700 form-label text-sm">Pre Carriage By</label>
-                    <input type="text" name="pre_carriage_by" id="pre_carriage_by" value="<?php echo $intlVal('pre_carriage_by'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <label for="port_of_loading" class="<?php echo $invLabelClass; ?>">Port of Loading</label>
+                    <input type="text" name="port_of_loading" id="port_of_loading" value="<?php echo $intlVal('port_of_loading'); ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
                 <div>
-                    <label for="port_of_loading" class="block text-gray-700 form-label text-sm">Port of Loading</label>
-                    <input type="text" name="port_of_loading" id="port_of_loading" value="<?php echo $intlVal('port_of_loading'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <label for="port_of_discharge" class="<?php echo $invLabelClass; ?>">Port of Discharge</label>
+                    <input type="text" name="port_of_discharge" id="port_of_discharge" value="<?php echo $intlVal('port_of_discharge'); ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
                 <div>
-                    <label for="port_of_discharge" class="block text-gray-700 form-label text-sm">Port of Discharge</label>
-                    <input type="text" name="port_of_discharge" id="port_of_discharge" value="<?php echo $intlVal('port_of_discharge'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <label for="country_of_origin" class="<?php echo $invLabelClass; ?>">Country of Origin</label>
+                    <input type="text" name="country_of_origin" id="country_of_origin" value="<?php echo $intlVal('country_of_origin'); ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
                 <div>
-                    <label for="country_of_origin" class="block text-gray-700 form-label text-sm">Country of Origin</label>
-                    <input type="text" name="country_of_origin" id="country_of_origin" value="<?php echo $intlVal('country_of_origin'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <label for="country_of_final_destination" class="<?php echo $invLabelClass; ?>">Country of Final Destination</label>
+                    <input type="text" name="country_of_final_destination" id="country_of_final_destination" value="<?php echo $intlVal('country_of_final_destination'); ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
                 <div>
-                    <label for="country_of_final_destination" class="block text-gray-700 form-label text-sm">Country of Final Destination</label>
-                    <input type="text" name="country_of_final_destination" id="country_of_final_destination" value="<?php echo $intlVal('country_of_final_destination'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <label for="final_destination" class="<?php echo $invLabelClass; ?>">Final Destination</label>
+                    <input type="text" name="final_destination" id="final_destination" value="<?php echo $intlVal('final_destination'); ?>" class="<?php echo $invInputClass; ?> inv-input">
+                </div>
+                    </div>
+                </div>
+                <div class="mb-5 border-t border-gray-100 pt-5">
+                    <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Charges</h3>
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <div>
+                    <label for="usd_export_rate" class="<?php echo $invLabelClass; ?>">USD Export Rate</label>
+                    <input type="number" name="usd_export_rate" id="usd_export_rate" step="0.01" value="<?php echo $intlVal('usd_export_rate'); ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
                 <div>
-                    <label for="final_destination" class="block text-gray-700 form-label text-sm">Final Destination</label>
-                    <input type="text" name="final_destination" id="final_destination" value="<?php echo $intlVal('final_destination'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <label for="ap_cost" class="<?php echo $invLabelClass; ?>">AP Cost</label>
+                    <input type="number" name="ap_cost" id="ap_cost" step="0.01" value="<?php echo $intlVal('ap_cost'); ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
                 <div>
-                    <label for="usd_export_rate" class="block text-gray-700 form-label text-sm">USD Export Rate</label>
-                    <input type="number" name="usd_export_rate" id="usd_export_rate" step="0.01" value="<?php echo $intlVal('usd_export_rate'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <label for="freight_charge" class="<?php echo $invLabelClass; ?>">Freight Charge</label>
+                    <input type="number" name="freight_charge" id="freight_charge" step="0.01" value="<?php echo $intlVal('freight_charge'); ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
                 <div>
-                    <label for="ap_cost" class="block text-gray-700 form-label text-sm">AP Cost</label>
-                    <input type="number" name="ap_cost" id="ap_cost" step="0.01" value="<?php echo $intlVal('ap_cost'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <label for="insurance_charge" class="<?php echo $invLabelClass; ?>">Insurance Charge</label>
+                    <input type="number" name="insurance_charge" id="insurance_charge" step="0.01" value="<?php echo $intlVal('insurance_charge'); ?>" class="<?php echo $invInputClass; ?> inv-input">
+                </div>
+                    </div>
                 </div>
                 <div>
-                    <label for="freight_charge" class="block text-gray-700 form-label text-sm">Freight Charge</label>
-                    <input type="number" name="freight_charge" id="freight_charge" step="0.01" value="<?php echo $intlVal('freight_charge'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Shipping bill</h3>
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <div>
+                    <label for="shipping_bill_number" class="<?php echo $invLabelClass; ?>">Shipping Bill Number</label>
+                    <input type="text" name="shipping_bill_number" id="shipping_bill_number" value="<?php echo $intlVal('shipping_bill_number'); ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
                 <div>
-                    <label for="insurance_charge" class="block text-gray-700 form-label text-sm">Insurance Charge</label>
-                    <input type="number" name="insurance_charge" id="insurance_charge" step="0.01" value="<?php echo $intlVal('insurance_charge'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <label for="shipping_bill_date" class="<?php echo $invLabelClass; ?>">Shipping Bill Date</label>
+                    <input type="date" name="shipping_bill_date" id="shipping_bill_date" value="<?php echo $intlVal('shipping_bill_date'); ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
                 <div>
-                    <label for="shipping_bill_number" class="block text-gray-700 form-label text-sm">Shipping Bill Number</label>
-                    <input type="text" name="shipping_bill_number" id="shipping_bill_number" value="<?php echo $intlVal('shipping_bill_number'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <label for="shipping_port" class="<?php echo $invLabelClass; ?>">Shipping Port Code</label>
+                    <input type="text" name="shipping_port" id="shipping_port" value="<?php echo $intlVal('shipping_port'); ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
                 <div>
-                    <label for="shipping_bill_date" class="block text-gray-700 form-label text-sm">Shipping Bill Date</label>
-                    <input type="date" name="shipping_bill_date" id="shipping_bill_date" value="<?php echo $intlVal('shipping_bill_date'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <label for="shipping_ref_clm" class="<?php echo $invLabelClass; ?>">Shipping Ref CLM</label>
+                    <input type="text" name="shipping_ref_clm" id="shipping_ref_clm" value="<?php echo $intlVal('shipping_ref_clm'); ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
                 <div>
-                    <label for="shipping_port" class="block text-gray-700 form-label text-sm">Shipping Port Code</label>
-                    <input type="text" name="shipping_port" id="shipping_port" value="<?php echo $intlVal('shipping_port'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <label for="shipping_currency" class="<?php echo $invLabelClass; ?>">Shipping Currency</label>
+                    <input type="text" name="shipping_currency" id="shipping_currency" value="<?php echo $intlVal('shipping_currency'); ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
                 <div>
-                    <label for="shipping_ref_clm" class="block text-gray-700 form-label text-sm">Shipping Ref CLM</label>
-                    <input type="text" name="shipping_ref_clm" id="shipping_ref_clm" value="<?php echo $intlVal('shipping_ref_clm'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <label for="shipping_country_code" class="<?php echo $invLabelClass; ?>">Shipping Country Code</label>
+                    <input type="text" name="shipping_country_code" id="shipping_country_code" value="<?php echo $intlVal('shipping_country_code'); ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
                 <div>
-                    <label for="shipping_currency" class="block text-gray-700 form-label text-sm">Shipping Currency</label>
-                    <input type="text" name="shipping_currency" id="shipping_currency" value="<?php echo $intlVal('shipping_currency'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    <label for="shipping_exp_duty" class="<?php echo $invLabelClass; ?>">Shipping Exp Duty</label>
+                    <input type="number" name="shipping_exp_duty" id="shipping_exp_duty" step="0.01" value="<?php echo $intlVal('shipping_exp_duty'); ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
-                <div>
-                    <label for="shipping_country_code" class="block text-gray-700 form-label text-sm">Shipping Country Code</label>
-                    <input type="text" name="shipping_country_code" id="shipping_country_code" value="<?php echo $intlVal('shipping_country_code'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
-                </div>
-                <div>
-                    <label for="shipping_exp_duty" class="block text-gray-700 form-label text-sm">Shipping Exp Duty</label>
-                    <input type="number" name="shipping_exp_duty" id="shipping_exp_duty" step="0.01" value="<?php echo $intlVal('shipping_exp_duty'); ?>" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full">
+                    </div>
                 </div>
             </div>
         <!-- Transporter & Vehicle Information -->
-        <div class="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4" id="transportSelectionSection">
-            <h2 class="mb-3 text-sm font-semibold text-gray-800">Transporter &amp; Vehicle Information</h2>
-            <div class="mb-4 flex flex-wrap gap-5 text-sm">
-                <label class="inline-flex cursor-pointer items-center gap-2">
+        <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0px_10px_15px_-3px_#0000001A] md:p-6" id="transportSelectionSection">
+            <h2 class="mb-1 text-base font-semibold text-slate-800">Transporter &amp; vehicle</h2>
+            <p class="mb-4 text-sm text-gray-500">Choose transport mode or a registered transporter ID for e-way bill details.</p>
+            <div class="mb-4 inline-flex rounded-lg bg-gray-100 p-1 text-sm">
+                <label class="inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 has-[:checked]:bg-white has-[:checked]:font-semibold has-[:checked]:shadow-sm">
                     <input type="radio" name="transport_selection" value="mode" checked class="h-4 w-4 text-orange-600" data-transport-selection>
                     <span>Transport Mode</span>
                 </label>
-                <label class="inline-flex cursor-pointer items-center gap-2">
+                <label class="inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 has-[:checked]:bg-white has-[:checked]:font-semibold has-[:checked]:shadow-sm">
                     <input type="radio" name="transport_selection" value="id" class="h-4 w-4 text-orange-600" data-transport-selection>
                     <span>Transport ID</span>
                 </label>
             </div>
-            <div id="transportModeFields" class="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <div id="transportModeFields" class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
                 <div>
-                    <label for="invoice_trans_mode" class="block text-sm text-gray-700">Transport Mode</label>
-                    <select name="trans_mode" id="invoice_trans_mode" class="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm">
+                    <label for="invoice_trans_mode" class="<?php echo $invLabelClass; ?>">Transport Mode</label>
+                    <select name="trans_mode" id="invoice_trans_mode" class="<?php echo $invInputClass; ?> inv-input">
                         <option value="1">1 - Road</option>
                         <option value="2">2 - Rail</option>
                         <option value="3">3 - Air</option>
@@ -114,29 +184,29 @@
                     </select>
                 </div>
                 <div>
-                    <label for="invoice_veh_no" class="block text-sm text-gray-700">Vehicle Number</label>
-                    <input type="text" name="veh_no" id="invoice_veh_no" class="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm">
+                    <label for="invoice_veh_no" class="<?php echo $invLabelClass; ?>">Vehicle Number</label>
+                    <input type="text" name="veh_no" id="invoice_veh_no" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
                 <div>
-                    <label for="invoice_veh_type" class="block text-sm text-gray-700">Vehicle Type</label>
-                    <select name="veh_type" id="invoice_veh_type" class="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm">
+                    <label for="invoice_veh_type" class="<?php echo $invLabelClass; ?>">Vehicle Type</label>
+                    <select name="veh_type" id="invoice_veh_type" class="<?php echo $invInputClass; ?> inv-input">
                         <option value="R">R - Regular</option>
                         <option value="ODC">ODC - Over Dimensional Cargo</option>
                     </select>
                 </div>
                 <div>
-                    <label for="invoice_trans_doc_no" class="block text-sm text-gray-700">Transport Document No.</label>
-                    <input type="text" name="trans_doc_no" id="invoice_trans_doc_no" class="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm">
+                    <label for="invoice_trans_doc_no" class="<?php echo $invLabelClass; ?>">Transport Document No.</label>
+                    <input type="text" name="trans_doc_no" id="invoice_trans_doc_no" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
                 <div>
-                    <label for="invoice_trans_doc_dt" class="block text-sm text-gray-700">Transport Document Date</label>
-                    <input type="text" name="trans_doc_dt" id="invoice_trans_doc_dt" value="<?= date('d/m/Y') ?>" class="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm">
+                    <label for="invoice_trans_doc_dt" class="<?php echo $invLabelClass; ?>">Transport Document Date</label>
+                    <input type="text" name="trans_doc_dt" id="invoice_trans_doc_dt" value="<?= date('d/m/Y') ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
             </div>
             <div id="transportIdFields" class="hidden grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                    <label for="invoice_transporter_id" class="block text-sm text-gray-700">Transport ID</label>
-                    <select name="trans_id" id="invoice_transporter_id" class="mt-1 w-full rounded-md border-gray-300 px-3 py-2 text-sm">
+                    <label for="invoice_transporter_id" class="<?php echo $invLabelClass; ?>">Transport ID</label>
+                    <select name="trans_id" id="invoice_transporter_id" class="<?php echo $invInputClass; ?> inv-input">
                         <option value="">-- Select transporter --</option>
                         <?php foreach (($eway_transporters ?? []) as $ewayTransporter): ?>
                             <?php
@@ -151,26 +221,16 @@
                     </select>
                 </div>
                 <div>
-                    <label for="invoice_transporter_name" class="block text-sm text-gray-700">Transporter Name</label>
-                    <input type="text" name="trans_name" id="invoice_transporter_name" readonly class="mt-1 w-full rounded-md border-gray-300 bg-gray-100 px-3 py-2 text-sm">
+                    <label for="invoice_transporter_name" class="<?php echo $invLabelClass; ?>">Transporter Name</label>
+                    <input type="text" name="trans_name" id="invoice_transporter_name" readonly class="<?php echo $invInputClass; ?> inv-input bg-gray-100">
                 </div>
             </div>
         </div>
 
         <?php } ?>
-        <div class="flex flex-col md:flex-row justify-between mb-8">
-            <!-- Left Column -->
-            <div class="space-y-2 w-full md:w-auto mt-4 md:mt-0">
-                <div class="flex items-center">
-                    <label for="invoice-date" class="block text-gray-700 form-label">Invoice Date :<span class="text-red-500"> *</span></label>
-                    <div class="ml-2"><?php echo date('d M Y'); ?></div>
-                    <input type="hidden" id="invoice_date" name="invoice_date" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[150px]" value="<?php echo date('Y-m-d'); ?>">
-                </div>
-
-
-                <!-- Bill To and Ship To Addresses -->
-                <?php
+        <?php
                 // Helper function to format single-line address
+                if (!function_exists('formatAddress')) {
                 function formatAddress($addr)
                 {
                     $parts = [];
@@ -182,6 +242,7 @@
                     if (!empty($addr['zipcode'])) $parts[] = $addr['zipcode'];
                     if (!empty($addr['country'])) $parts[] = $addr['country'];
                     return implode(', ', $parts);
+                }
                 }
 
                 // Build Bill To addresses list (unique)
@@ -226,38 +287,87 @@
                 $defaultBillTo = !empty($billToAddresses) ? $billToAddresses[0] : '';
                 $defaultShipTo = !empty($shipToAddresses) ? $shipToAddresses[0] : '';
                 $showGSTContainer = isset($customer_address[0]['country']) && strtolower($customer_address[0]['country']) !== 'in';
+                $addr0 = (isset($customer_address) && is_array($customer_address) && isset($customer_address[0]) && is_array($customer_address[0]))
+                    ? $customer_address[0]
+                    : null;
+                $gstin = $addr0 !== null ? trim((string)($addr0['gstin'] ?? '')) : '';
                 ?>
 
-                <div class="space-y-3 text-sm">
+        <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0px_10px_15px_-3px_#0000001A] md:p-6">
+                <div class="mb-4 flex items-start justify-between gap-3">
                     <div>
-                        <label class="block text-gray-700 form-label font-semibold">Bill To : <span class="text-red-500"> *</span> <?php echo count($billToAddresses) > 0 ? '<span class="text-blue-600 cursor-pointer hover:underline" onclick="openAddressSelector()"> Change Addresses</span>' : ''; ?></label>
-
-                        <input type="hidden" name="customer_address" id="billToSelect" value="<?= htmlspecialchars($defaultBillTo) ?>">
-                        <input type="hidden" name="vp_order_info_id" id="vp_order_info_id" value="<?= $customer_address[0]['id'] ?>">
-                        <p class=" text-gray-700 mt-1"><?= htmlspecialchars($defaultBillTo) ?></p>
-
-                        <input type="hidden" id="billToDisplay" value="<?= htmlspecialchars($defaultBillTo) ?>">
+                        <h2 class="text-base font-semibold text-slate-800">Bill To <span class="text-red-500">*</span></h2>
+                        <p class="text-xs text-gray-500">Billing address used for GST and the invoice.</p>
                     </div>
-                    <div id="supplystate">Supply State : <?= $billingState ?></div>
-                    <?php if ($showGSTContainer): ?>
-                        <div id="applyGSTContainer">Apply GST <input type="checkbox" id="applyGST" name="applyGST" value="1" checked></div>
+                    <?php if (count($billToAddresses) > 0): ?>
+                        <button type="button" onclick="openAddressSelector()" class="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-800 hover:bg-orange-100">
+                            <i class="fas fa-pen" aria-hidden="true"></i> Change
+                        </button>
                     <?php endif; ?>
                 </div>
+                <input type="hidden" name="customer_address" id="billToSelect" value="<?= htmlspecialchars($defaultBillTo) ?>">
+                <input type="hidden" name="vp_order_info_id" id="vp_order_info_id" value="<?= htmlspecialchars((string) ($customer_address[0]['id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" id="billToDisplay" value="<?= htmlspecialchars($defaultBillTo) ?>">
+                <p id="billToText" class="rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-700"><?= htmlspecialchars($defaultBillTo) !== '' ? htmlspecialchars($defaultBillTo) : 'No billing address found' ?></p>
+                <div class="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                    <div id="supplystate" class="inline-flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-slate-700">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">Supply state</span>
+                        <span><?= htmlspecialchars((string) $billingState, ENT_QUOTES, 'UTF-8') ?></span>
+                    </div>
+                    <?php if ($showGSTContainer): ?>
+                        <label id="applyGSTContainer" class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5">
+                            <input type="checkbox" id="applyGST" name="applyGST" value="1" checked class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
+                            <span class="text-sm font-medium text-gray-700">Apply GST</span>
+                        </label>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0px_10px_15px_-3px_#0000001A] md:p-6">
+                <div class="mb-4">
+                    <h2 class="text-base font-semibold text-slate-800">Customer &amp; Ship To</h2>
+                    <p class="text-xs text-gray-500">Customer details and delivery address for this invoice.</p>
+                </div>
+                <div class="mb-4 rounded-xl bg-gray-50 p-4">
+                    <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Customer name <span class="text-red-500">*</span></div>
+                    <div class="mt-1">
+                        <?php if (isset($customer) && is_array($customer)): ?>
+                            <span id="invoiceCustomerName" class="font-semibold text-slate-800"><?php echo htmlspecialchars($customer['name']); ?></span>
+                            <input type="hidden" name="customer_id" value="<?php echo (int) $customer['id']; ?>">
+                        <?php else: ?>
+                            <span id="invoiceCustomerName" class="font-semibold text-red-500">Customer not found</span>
+                        <?php endif; ?>
+                    </div>
+                    <?php if ($gstin !== ''): ?>
+                        <div class="mt-2 text-sm text-gray-600">Customer GST: <?php echo htmlspecialchars($gstin, ENT_QUOTES, 'UTF-8'); ?></div>
+                    <?php endif; ?>
+                </div>
+                <div>
+                    <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Ship To</div>
+                    <p class="rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-700" id="shipToDisplay"><?= htmlspecialchars($defaultShipTo) !== '' ? htmlspecialchars($defaultShipTo) : 'Same as billing address' ?></p>
+                    <input type="hidden" id="shipToDisplayValue" value="<?= htmlspecialchars($defaultShipTo) ?>">
+                </div>
+            </div>
+        </div>
 
                 <!-- Address Selector Modal -->
-                <div id="addressSelectorModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50" onclick="closeAddressSelector()">
-                    <div class="bg-white max-w-2xl w-full max-h-[80vh] overflow-y-auto rounded-lg" onclick="event.stopPropagation()">
-                        <div class="sticky top-0 bg-gray-100 p-4 border-b flex justify-between items-center">
-                            <h2 class="text-xl font-bold">Select Delivery Address</h2>
-                            <button type="button" onclick="closeAddressSelector()" class="text-red-600 hover:text-red-800 text-2xl">&times;</button>
+                <div id="addressSelectorModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onclick="closeAddressSelector()">
+                    <div class="flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl" onclick="event.stopPropagation()">
+                        <div class="flex items-center justify-between border-b bg-white px-5 py-4">
+                            <div>
+                                <h2 class="text-lg font-bold text-slate-800">Select delivery address</h2>
+                                <p class="text-sm text-gray-500">Choose the Bill To / Ship To pair for this invoice.</p>
+                            </div>
+                            <button type="button" onclick="closeAddressSelector()" class="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 text-2xl leading-none">&times;</button>
                         </div>
-                        <div class="p-4">
-                            <table class="w-full border-collapse">
+                        <div class="overflow-y-auto p-4">
+                            <table class="w-full border-collapse text-sm">
                                 <thead>
-                                    <tr class="bg-gray-100">
-                                        <th class="border p-3 text-left w-1/12">Select</th>
-                                        <th class="border p-3 text-left w-1/2">Bill To Address</th>
-                                        <th class="border p-3 text-left w-1/2">Ship To Address</th>
+                                    <tr class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+                                        <th class="rounded-l-lg p-3 w-1/12">Select</th>
+                                        <th class="p-3 w-5/12">Bill To Address</th>
+                                        <th class="rounded-r-lg p-3 w-5/12">Ship To Address</th>
                                     </tr>
                                 </thead>
                                 <tbody id="addressTableBody">
@@ -265,220 +375,189 @@
                                 </tbody>
                             </table>
                         </div>
-                        <div class="sticky bottom-0 bg-gray-100 p-4 border-t flex justify-end space-x-2">
-                            <button type="button" onclick="closeAddressSelector()" class="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500">Close</button>
-                            <button type="button" onclick="applyAddressSelection()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Apply</button>
+                        <div class="flex justify-end gap-2 border-t bg-gray-50 px-5 py-4">
+                            <button type="button" onclick="closeAddressSelector()" class="rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-300">Close</button>
+                            <button type="button" onclick="applyAddressSelection()" class="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600">Apply</button>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Right Column -->
-            <div class="space-y-2 w-full md:w-auto">
-                <div class="flex items-center">
-                    <label for="customer-name" class="block text-gray-700 form-label">Customer Name: <span class="text-red-500"> *</span></label>
-                    <div class="ml-2">
-                        <?php if (isset($customer) && is_array($customer)): ?>
-                            <span class="font-semibold"><?php echo htmlspecialchars($customer['name']); ?></span>
-                            <input type="hidden" name="customer_id" value="<?php echo $customer['id']; ?>">
-                        <?php else: ?>
-                            <span class="text-red-500">Customer not found</span>
-                        <?php endif; ?>
-
-                    </div>
-                    <div><?php
-                            $addr0 = (isset($customer_address) && is_array($customer_address) && isset($customer_address[0]) && is_array($customer_address[0]))
-                                ? $customer_address[0]
-                                : null;
-                            $gstin = $addr0 !== null ? trim((string)($addr0['gstin'] ?? '')) : '';
-                            echo $gstin !== '' ? htmlspecialchars('Customer GST: ' . $gstin) : '';
-                            ?></div>
-                </div>
-
-                <!-- <div class="flex items-center">
-                <label for="currency" class="block text-gray-700 form-label">Currency : <span class="text-red-500"> *</span></label>
-                <select name="currency" id="currency" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[150px]">
-                    <option value="INR" selected>INR</option>
-                    <option value="USD">USD</option>
-                    <option value="EUR">EUR</option>
-                </select>
-            </div>
-
-            <div class="flex items-center">
-                <label for="status" class="block text-gray-700 form-label">Status : <span class="text-red-500"> *</span></label>
-                <select name="status" id="status" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block shadow-sm sm:text-sm border-gray-300 rounded-md form-input px-3 w-full md:w-[150px]">
-                    <option value="draft" selected>Draft</option>
-                    <option value="final">Final</option>                  
-                </select>
-            </div> -->
-
-
-                <?php if (count($shipToAddresses) > 0): ?>
-                    <div>
-                        <label class="block text-gray-700 form-label font-semibold">Ship To :</label>
-                        <p class="text-sm text-gray-700 mt-1" id="shipToDisplay"><?= htmlspecialchars($defaultShipTo) ?></p>
-
-                        <input type="hidden" id="shipToDisplay" value="<?= htmlspecialchars($defaultShipTo) ?>">
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
 
         <!-- Item Table -->
-        <div class="bg-[rgba(245,245,245,1)] p-4 rounded-lg overflow-x-auto">
-            <table class="w-full border-separate" id="invoiceTable" style="border-spacing: 0 5px;">
-                <thead class="table-header">
-                    <tr>
-                        <th class="p-2 text-left w-0.5/12">S.No</th>
-                        <th class="p-2 text-left w-1/12">SKU</th>
-                        <th class="p-2 text-left w-3/12" colspan="2">Item Name</th>
-                        <th class="p-2 text-left w-0.5/12">Variant</th>
-                        <th class="p-2 text-left w-0.5/12">HSN </th>
-                        <th class="p-2 text-left w-0.5/12">Qty</th>
-                        <th class="p-2 text-left w-1/12">Unit Price</th>
-                        <th class="p-2 text-left w-0.5/12">Discount</th>
-                        <th class="p-2 text-left w-1/12">CGST %</th>
-                        <th class="p-2 text-left w-1/12">SGST %</th>
-                        <th class="p-2 text-left w-1/12">IGST %</th>
-                        <th class="p-2 text-left w-1/12">Amount</th>
-                        <th class="p-2 text-right w-0.5/12"></th>
+        <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0px_10px_15px_-3px_#0000001A]">
+            <div class="flex flex-col gap-3 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h2 class="text-base font-semibold text-slate-800">Line items</h2>
+                    <p class="text-sm text-gray-500">GST is calculated from supply state vs firm state. Box number maps to dispatch packing.</p>
+                </div>
+                <button type="button" id="addInvoiceItemBtn" class="inv-action-btn action-button inline-flex items-center justify-center gap-2 rounded-lg bg-[rgba(208,103,6,1)] px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600">
+                    <i class="fas fa-plus" aria-hidden="true"></i> Add Item
+                </button>
+            </div>
+            <div class="overflow-x-auto p-4">
+            <table class="inv-table w-full min-w-[980px] border-separate" id="invoiceTable" style="border-spacing: 0 8px;">
+                <thead>
+                    <tr class="text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                        <th class="px-3 py-2">#</th>
+                        <th class="px-3 py-2">SKU</th>
+                        <th class="px-3 py-2" colspan="2">Item</th>
+                        <th class="px-3 py-2">Box</th>
+                        <th class="px-3 py-2">HSN</th>
+                        <th class="px-3 py-2 text-right">Qty</th>
+                        <th class="px-3 py-2 text-right">Unit Price</th>
+                        <th class="px-3 py-2 text-right">Discount</th>
+                        <th class="px-3 py-2 text-right">CGST %</th>
+                        <th class="px-3 py-2 text-right">SGST %</th>
+                        <th class="px-3 py-2 text-right">IGST %</th>
+                        <th class="px-3 py-2 text-right">Amount</th>
+                        <th class="px-3 py-2 text-right"></th>
                     </tr>
                 </thead>
-                <tbody class="table-row-text">
+                <tbody class="text-sm text-slate-700">
                     <?php
-                    //print_r($data);
                     if (isset($data) && is_array($data)) {
-                        foreach ($data as $index => $item): ?>
-                            <tr class="bg-white">
-                                <input type="hidden" name="order_number[]" value="<?= $item['order_number'] ?>">
-                                <input type="hidden" name="item_code[]" value="<?= $item['item_code'] ?>">
-                                <input type="hidden" name="gst[]" value="<?= $item['gst'] ?>">
-                                <input type="hidden" name="tax_rate[]" value="<?= $item['gst'] ?>">
-                                <input type="hidden" name="currency[]" value="<?php echo $item['currency'] ?? 'INR'; ?>">
-                                <input type="hidden" name="image_url[]" value="<?= $item['image'] ?? '' ?>">
-                                <input type="hidden" name="groupname[]" value="<?= $item['groupname'] ?? '' ?>">
-                                <td class="p-2 rounded-l-lg"><?php echo $index + 1; ?></td>
-                                <td class="p-2"><span><?= $item['sku'] ?></span></td>
-                                <td class="p-2 " colspan="2"><span><?= htmlspecialchars($item['title'] ?? '') ?></span>
+                        foreach ($data as $index => $item):
+                            $itemCurrency = $item['currency'] ?? 'INR';
+                            $itemCurrencyPrefix = ($itemCurrency === 'INR') ? '₹' : htmlspecialchars((string) $itemCurrency, ENT_QUOTES, 'UTF-8') . ' ';
+                            $itemImage = trim((string) ($item['image'] ?? ''));
+                    ?>
+                            <tr class="bg-gray-50">
+                                <input type="hidden" name="order_number[]" value="<?= htmlspecialchars((string) $item['order_number'], ENT_QUOTES, 'UTF-8') ?>">
+                                <input type="hidden" name="item_code[]" value="<?= htmlspecialchars((string) $item['item_code'], ENT_QUOTES, 'UTF-8') ?>">
+                                <input type="hidden" name="gst[]" value="<?= htmlspecialchars((string) $item['gst'], ENT_QUOTES, 'UTF-8') ?>">
+                                <input type="hidden" name="tax_rate[]" value="<?= htmlspecialchars((string) $item['gst'], ENT_QUOTES, 'UTF-8') ?>">
+                                <input type="hidden" name="currency[]" value="<?php echo htmlspecialchars((string) ($item['currency'] ?? 'INR'), ENT_QUOTES, 'UTF-8'); ?>">
+                                <input type="hidden" name="image_url[]" value="<?= htmlspecialchars((string) ($item['image'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                <input type="hidden" name="groupname[]" value="<?= htmlspecialchars((string) ($item['groupname'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                <td class="rounded-l-xl px-3 py-3 font-medium text-gray-500"><?php echo $index + 1; ?></td>
+                                <td class="px-3 py-3 font-medium text-slate-800"><span><?= htmlspecialchars((string) $item['sku'], ENT_QUOTES, 'UTF-8') ?></span></td>
+                                <td class="px-3 py-3" colspan="2">
+                                    <div class="flex items-start gap-3">
+                                        <?php if ($itemImage !== ''): ?>
+                                            <img src="<?= htmlspecialchars($itemImage, ENT_QUOTES, 'UTF-8') ?>" alt="" class="h-10 w-10 rounded-lg object-cover ring-1 ring-gray-200">
+                                        <?php endif; ?>
+                                        <span class="leading-snug"><?= htmlspecialchars($item['title'] ?? '') ?></span>
+                                    </div>
                                     <input type="hidden" name="item_name[]" value="<?= htmlspecialchars($item['title'] ?? '') ?>" required>
                                 </td>
-                                <td class="p-0">
-                                    <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>
+                                <td class="p-2">
+                                    <input type="text" name="box_no[]" class="w-16 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-center text-sm" value="1" required>
                                 </td>
-                                <td class="p-2"><span><?= $item['hsn'] ?></span>
-                                    <input type="hidden" name="hsn[]" value="<?= $item['hsn'] ?>">
+                                <td class="px-3 py-3 text-gray-600"><span><?= htmlspecialchars((string) $item['hsn'], ENT_QUOTES, 'UTF-8') ?></span>
+                                    <input type="hidden" name="hsn[]" value="<?= htmlspecialchars((string) $item['hsn'], ENT_QUOTES, 'UTF-8') ?>">
                                 </td>
-                                <td class="p-2"><span><?= $item['quantity'] ?? 1 ?></span>
-                                    <input type="hidden" name="quantity[]" value="<?= $item['quantity'] ?? 1 ?>">
+                                <td class="px-3 py-3 text-right"><span><?= htmlspecialchars((string) ($item['quantity'] ?? 1), ENT_QUOTES, 'UTF-8') ?></span>
+                                    <input type="hidden" name="quantity[]" value="<?= htmlspecialchars((string) ($item['quantity'] ?? 1), ENT_QUOTES, 'UTF-8') ?>">
                                 </td>
-                                <td class="p-2"><span><?= $item['unit_price'] ? "₹" . $item['unit_price'] : '0.00' ?></span>
-                                    <input type="hidden" name="unit_price[]" value="<?= $item['unit_price'] ?? 0 ?>">
+                                <td class="px-3 py-3 text-right tabular-nums"><span><?= $item['unit_price'] ? $itemCurrencyPrefix . $item['unit_price'] : '0.00' ?></span>
+                                    <input type="hidden" name="unit_price[]" value="<?= htmlspecialchars((string) ($item['unit_price'] ?? 0), ENT_QUOTES, 'UTF-8') ?>">
                                 </td>
-                                <td class="p-2"><span>0%</span>
+                                <td class="px-3 py-3 text-right text-gray-500"><span>0%</span>
                                     <input type="hidden" name="discount[]" value="0">
                                 </td>
-                                <td class="p-2"><span>0%</span>
+                                <td class="px-3 py-3 text-right"><span>0%</span>
                                     <input type="hidden" name="cgst[]" value="0">
                                 </td>
-                                <td class="p-2"><span>0%</span>
+                                <td class="px-3 py-3 text-right"><span>0%</span>
                                     <input type="hidden" name="sgst[]" value="0">
                                 </td>
-                                <td class="p-2"><span>0%</span>
+                                <td class="px-3 py-3 text-right"><span>0%</span>
                                     <input type="hidden" name="igst[]" value="0">
                                 </td>
-                                <td class="p-2"><span><?= $item['unit_price'] ? "₹" . $item['unit_price'] : '0.00' ?></span>
+                                <td class="px-3 py-3 text-right font-semibold tabular-nums"><span><?= $item['unit_price'] ? $itemCurrencyPrefix . $item['unit_price'] : '0.00' ?></span>
                                     <input type="hidden" name="line_total[]" step="0.01">
                                 </td>
-                                <td class="p-2 rounded-r-lg text-center">
-                                    <button type="button" onclick="removeRow(this)" class="text-red-500 hover:text-red-700">
+                                <td class="rounded-r-xl px-3 py-3 text-center">
+                                    <button type="button" onclick="removeRow(this)" class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700" title="Remove item">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </td>
-
                             </tr>
                     <?php endforeach;
                     } ?>
                 </tbody>
             </table>
+            </div>
         </div>
 
         <!-- Totals Section -->
-        <div class="mt-6 flex justify-end">
-            <!--Show total of sgst cgst igst -->
-            <div class="flex-grow" id="taxTotalsDisplay">
-                <!-- Populated by JavaScript if needed -->
-
+        <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0px_10px_15px_-3px_#0000001A] md:p-6">
+                <h2 class="mb-3 text-base font-semibold text-slate-800">GST breakdown</h2>
+                <div id="taxTotalsDisplay" class="space-y-2 text-sm text-gray-600">
+                    <p class="text-gray-400">Totals will appear after GST is calculated.</p>
+                </div>
             </div>
-            <!-- Add Item Button -->
-            <div class="flex-grow">
-                <button type="button" class="bg-[rgba(208,103,6,1)] text-white font-semibold py-2 px-4 rounded-md action-button">Add Item</button>
-            </div>
-            <div class="w-full md:w-1/3 space-y-4">
-                <div class="flex justify-between border-t pt-4">
-                    <span class="font-semibold">Subtotal:</span>
-                    <input type="number" name="subtotal" id="subtotal" step="0.01" class="w-32 text-right border rounded-md form-input" readonly>
+            <div class="rounded-2xl border border-orange-100 bg-white p-5 shadow-[0px_10px_15px_-3px_#0000001A] md:p-6">
+                <h2 class="mb-4 text-base font-semibold text-slate-800">Invoice total</h2>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between gap-4">
+                        <span class="text-sm text-gray-600">Subtotal</span>
+                        <input type="number" name="subtotal" id="subtotal" step="0.01" class="w-40 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-right text-sm font-medium tabular-nums" readonly>
+                    </div>
+                    <div class="flex items-center justify-between gap-4">
+                        <span class="text-sm text-gray-600">Tax amount</span>
+                        <input type="number" name="tax_amount" id="tax_amount" step="0.01" class="w-40 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-right text-sm font-medium tabular-nums" readonly>
+                    </div>
+                    <div class="flex items-center justify-between gap-4">
+                        <span class="text-sm text-gray-600">Discount</span>
+                        <input type="number" name="discount_amount" id="discount_amount" step="0.01" class="w-40 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-right text-sm font-medium tabular-nums" value="0" oninput="calculateTotals()" readonly>
+                    </div>
+                    <div class="flex items-center justify-between gap-4 border-t border-orange-100 pt-4">
+                        <span class="text-base font-bold text-slate-800">Total amount</span>
+                        <input type="number" name="total_amount" id="total_amount" step="0.01" class="w-40 rounded-lg border-2 border-orange-400 bg-orange-50 px-3 py-2 text-right text-base font-bold tabular-nums text-orange-800" readonly>
+                    </div>
                 </div>
-                <div class="flex justify-between">
-                    <span class="font-semibold">Tax Amount:</span>
-                    <input type="number" name="tax_amount" id="tax_amount" step="0.01" class="w-32 text-right border rounded-md form-input" readonly>
-                </div>
-                <div class="flex justify-between">
-                    <span class="font-semibold">Discount:</span>
-                    <input type="number" name="discount_amount" id="discount_amount" step="0.01" class="w-32 text-right border rounded-md form-input" value="0" oninput="calculateTotals()" readonly>
-                </div>
-                <div class="flex justify-between border-t pt-4 text-lg font-bold">
-                    <span>Total Amount:</span>
-                    <input type="number" name="total_amount" id="total_amount" step="0.01" class="w-32 text-right border-2 border-indigo-500 rounded-md form-input" readonly>
-                </div>
-
             </div>
         </div>
 
         <!-- Form Actions -->
-        <div class="mt-8 flex justify-end space-x-4 form-actions">
-            <input type="hidden" name="pos_flag" value="<?php echo $pos_flag; ?>">
-            <a href="<?php echo base_url('?page=orders&action=list'); ?>" class="px-6 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400">Cancel</a>
-            <button type="button" onclick="previewInvoice()" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Preview</button>
-            <button type="submit" id="createInvoiceButton" class="px-6 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600">Create Invoice</button>
-            <!-- Create and dispatch-->
+        <div class="sticky bottom-3 z-20 flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white/95 p-4 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between form-actions">
+            <p class="text-sm text-gray-500">Preview the tax invoice, then create it. Dispatch is available for domestic invoices.</p>
+            <div class="flex flex-wrap justify-end gap-2">
+            <input type="hidden" name="pos_flag" value="<?php echo htmlspecialchars((string) $pos_flag, ENT_QUOTES, 'UTF-8'); ?>">
+            <a href="<?php echo base_url('?page=orders&action=list'); ?>" class="rounded-lg bg-gray-200 px-5 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-300">Cancel</a>
+            <button type="button" onclick="previewInvoice()" class="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Preview</button>
+            <button type="submit" id="createInvoiceButton" class="rounded-lg bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600">Create Invoice</button>
             <?php if($is_international === false): ?>
-                <button type="button" id="createAndDispatchButton" onclick="createAndDispatch()" class="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Create & Dispatch</button>
+                <button type="button" id="createAndDispatchButton" onclick="createAndDispatch()" class="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">Create &amp; Dispatch</button>
             <?php endif; ?>
+            </div>
         </div>
     </form>
 </div>
 
 <!-- Invoice Preview Modal -->
-<div id="invoicePreviewModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50" onclick="closePreviewModal()">
-    <div class="bg-white max-w-4xl w-full max-h-[90vh] overflow-y-auto rounded-lg" onclick="event.stopPropagation()">
-        <div class="sticky top-0 bg-gray-100 p-4 border-b flex justify-between items-center">
-            <h2 class="text-xl font-bold">Invoice Preview</h2>
-            <button type="button" onclick="closePreviewModal()" class="text-red-600 hover:text-red-800 text-2xl">&times;</button>
+<div id="invoicePreviewModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onclick="closePreviewModal()">
+    <div class="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between border-b bg-white px-5 py-4">
+            <h2 class="text-lg font-bold text-slate-800">Invoice preview</h2>
+            <button type="button" onclick="closePreviewModal()" class="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 text-2xl leading-none">&times;</button>
         </div>
-        <div id="invoicePreviewContent" class="p-4"></div>
-        <div class="sticky bottom-0 bg-gray-100 p-4 border-t flex justify-end space-x-2">
-            <button type="button" onclick="closePreviewModal()" class="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500">Close</button>
-            <button type="button" onclick="window.print()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Print</button>
+        <div id="invoicePreviewContent" class="overflow-y-auto p-4"></div>
+        <div class="flex justify-end gap-2 border-t bg-gray-50 px-5 py-4">
+            <button type="button" onclick="closePreviewModal()" class="rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-300">Close</button>
+            <button type="button" onclick="window.print()" class="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600">Print</button>
         </div>
     </div>
 </div>
 <!-- Order Item Modal -->
-<div id="orderModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" style="display:none;">
-    <div class="bg-white rounded-lg shadow-lg w-full max-w-3xl p-6 relative">
-        <button type="button" class="absolute top-2 right-3 text-2xl font-bold text-gray-500 hover:text-black" id="closeOrderModal">&times;</button>
-        <h2 class="text-xl font-bold mb-4">Select Order Item</h2>
-        <input type="text" id="orderSearch" class="border p-2 w-full mb-4" placeholder="Search with order id, item code, or title...">
-        <div class="max-h-72 overflow-y-auto">
-            <table class="w-full border">
+<div id="orderModal" class="fixed inset-0 z-50 items-center justify-center bg-black/40 p-4" style="display:none;">
+    <div class="relative w-full max-w-3xl rounded-2xl bg-white p-6 shadow-xl">
+        <button type="button" class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full text-2xl font-bold text-gray-500 hover:bg-gray-100 hover:text-black" id="closeOrderModal">&times;</button>
+        <h2 class="mb-1 text-lg font-bold text-slate-800">Select order item</h2>
+        <p class="mb-4 text-sm text-gray-500">Search by order ID, SKU, or title to add another line to this invoice.</p>
+        <input type="text" id="orderSearch" class="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200" placeholder="Search with order id, item code, or title...">
+        <div class="max-h-72 overflow-y-auto rounded-xl border border-gray-100">
+            <table class="w-full text-sm">
                 <thead>
-                    <tr>
-                        <!-- <th class="p-2 text-left"> </th> -->
-                        <th class="p-2 text-left">Order ID</th>
-                        <th class="p-2 text-left">SKU</th>
-                        <th class="p-2 text-left">Title</th>
-                        <th class="p-2 text-left">Price</th>
-                        <th class="p-2 text-left">Qty</th>
-                        <th class="p-2 text-left">Action</th>
+                    <tr class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+                        <th class="p-3">Order ID</th>
+                        <th class="p-3">SKU</th>
+                        <th class="p-3">Title</th>
+                        <th class="p-3 text-right">Price</th>
+                        <th class="p-3 text-center">Qty</th>
+                        <th class="p-3 text-center">Action</th>
                     </tr>
                 </thead>
                 <tbody id="orderItemsTableBody">
@@ -523,7 +602,7 @@
 
                             return [
                                 'id' => $addr['id'],
-                                'order_number' => $addr['order_number'],
+                                'order_number' => $addr['order_number'] ?? '',
                                 'bill_to' => $billAddr,
                                 'ship_to' => $shipAddr,
                                 'state' => $addr['state'] ?? ''
@@ -547,14 +626,14 @@
 
         addressData.forEach((addr, idx) => {
             const row = document.createElement('tr');
-            row.className = 'border hover:bg-gray-50';
+            row.className = 'border-b border-gray-100 hover:bg-orange-50/40';
             row.innerHTML = `
-            <td class="border p-3 text-center">
-                <input type="radio" name="addressRadio" value="${addr.id}" data-bill-to="${addr.bill_to}" data-ship-to="${addr.ship_to}" ${addr.id == currentAddressId ? 'checked' : ''}>
-                ${addr.order_number ? `${addr.order_number}` : ''}
+            <td class="p-3 text-center align-top">
+                <input type="radio" name="addressRadio" value="${addr.id}" data-bill-to="${addr.bill_to}" data-ship-to="${addr.ship_to}" ${addr.id == currentAddressId ? 'checked' : ''} class="h-4 w-4 text-orange-600">
+                ${addr.order_number ? `<div class="mt-1 text-xs text-gray-500">${addr.order_number}</div>` : ''}
             </td>
-            <td class="border p-3 text-sm">${addr.bill_to}</td>
-            <td class="border p-3 text-sm">${addr.ship_to || '<span class="text-gray-400">No shipping address</span>'}</td>
+            <td class="p-3 text-sm text-gray-700">${addr.bill_to}</td>
+            <td class="p-3 text-sm text-gray-700">${addr.ship_to || '<span class="text-gray-400">No shipping address</span>'}</td>
         `;
             tableBody.appendChild(row);
         });
@@ -566,11 +645,25 @@
         document.getElementById('addressSelectorModal').classList.add('hidden');
     }
 
+    function invoiceNotify(message, type) {
+        if (window.showAlert) {
+            showAlert(message, type || 'info');
+        } else {
+            console.warn(message);
+        }
+    }
+
+    function invoiceCurrencyPrefix() {
+        const first = document.querySelector('#invoiceTable input[name="currency[]"]');
+        const currency = first ? String(first.value || 'INR') : 'INR';
+        return currency === 'INR' ? '₹' : currency + ' ';
+    }
+
     function applyAddressSelection() {
         const selectedRadio = document.querySelector('input[name="addressRadio"]:checked');
 
         if (!selectedRadio) {
-            alert('Please select an address');
+            invoiceNotify('Please select an address', 'warning');
             return;
         }
 
@@ -583,16 +676,18 @@
         document.getElementById('billToSelect').value = billTo;
         document.getElementById('billToDisplay').value = billTo;
 
-        // Update Bill To display text
-        const billToDisplayElements = document.querySelectorAll('.space-y-3 p.text-sm');
-        if (billToDisplayElements.length > 0) {
-            billToDisplayElements[0].textContent = billTo;
+        const billToText = document.getElementById('billToText');
+        if (billToText) {
+            billToText.textContent = billTo;
         }
 
-        // Update Ship To display if it exists
-        const shipToDisplay = Array.from(document.querySelectorAll('#shipToDisplay')).find(el => el.tagName === 'P');
+        const shipToDisplay = document.getElementById('shipToDisplay');
         if (shipToDisplay) {
             shipToDisplay.textContent = shipTo || '';
+        }
+        const shipToHidden = document.getElementById('shipToDisplayValue');
+        if (shipToHidden) {
+            shipToHidden.value = shipTo || '';
         }
 
         // Auto-populate GST fields based on state comparison
@@ -600,6 +695,11 @@
         if (selectedAddress) {
             const gstType = calculateGSTType(selectedAddress.state);
             updateGSTFields(gstType);
+            const supplyState = document.getElementById('supplystate');
+            const supplyValue = supplyState ? supplyState.querySelectorAll('span')[1] : null;
+            if (supplyValue) {
+                supplyValue.textContent = selectedAddress.state || '';
+            }
         }
 
         closeAddressSelector();
@@ -632,7 +732,7 @@
         });
 
         if (items.length === 0) {
-            alert('Please add at least one item to preview');
+            invoiceNotify('Please add at least one item to preview', 'warning');
             return;
         }
 
@@ -672,12 +772,12 @@
 
                     modal.classList.remove('hidden');
                 } else {
-                    alert('Error generating preview: ' + data.message);
+                    invoiceNotify('Error generating preview: ' + data.message, 'error');
                 }
             })
             .catch(err => {
                 console.error('Preview error:', err);
-                alert('Failed to generate preview');
+                invoiceNotify('Failed to generate preview', 'error');
             });
     }
 
@@ -751,7 +851,7 @@
                 // Update display span in parent td
                 const lineTotalDisplay = lineTotalInput.parentElement.querySelector('span');
                 if (lineTotalDisplay) {
-                    lineTotalDisplay.textContent = '₹' + lineTotal.toFixed(2);
+                    lineTotalDisplay.textContent = invoiceCurrencyPrefix() + lineTotal.toFixed(2);
                 }
                 console.log('Updated line total for row:', row, 'Line Total:', lineTotal);
             }
@@ -799,15 +899,19 @@
 
         // Update tax totals display
         const taxTotalsDisplay = document.getElementById('taxTotalsDisplay');
+        const prefix = invoiceCurrencyPrefix();
         taxTotalsDisplay.innerHTML = `
-        <div class="mb-2">
-            <span class="font-semibold">CGST Total:</span> ₹${roundToTwo(totalcgst).toFixed(2)}
+        <div class="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+            <span class="text-gray-600">CGST total</span>
+            <span class="font-semibold tabular-nums">${prefix}${roundToTwo(totalcgst).toFixed(2)}</span>
         </div>
-        <div class="mb-2">
-            <span class="font-semibold">SGST Total:</span> ₹${roundToTwo(totalsgst).toFixed(2)}
+        <div class="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+            <span class="text-gray-600">SGST total</span>
+            <span class="font-semibold tabular-nums">${prefix}${roundToTwo(totalsgst).toFixed(2)}</span>
         </div>
-        <div class="mb-2">
-            <span class="font-semibold">IGST Total:</span> ₹${roundToTwo(totaligst).toFixed(2)}
+        <div class="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+            <span class="text-gray-600">IGST total</span>
+            <span class="font-semibold tabular-nums">${prefix}${roundToTwo(totaligst).toFixed(2)}</span>
         </div>
     `;
     }
@@ -906,11 +1010,7 @@
             const field = document.getElementById(fieldInfo.id);
             if (!field || String(field.value).trim() === '') {
                 const message = fieldInfo.label + ' is required for international invoices';
-                if (window.showAlert) {
-                    showAlert(message, 'error');
-                } else {
-                    alert(message);
-                }
+                invoiceNotify(message, 'error');
                 field?.focus();
                 return false;
             }
@@ -919,11 +1019,7 @@
         const usdExportRate = parseFloat(document.getElementById('usd_export_rate').value);
         if (isNaN(usdExportRate) || usdExportRate <= 0) {
             const message = 'USD Export Rate must be a valid positive number';
-            if (window.showAlert) {
-                showAlert(message, 'error');
-            } else {
-                alert(message);
-            }
+            invoiceNotify(message, 'error');
             document.getElementById('usd_export_rate').focus();
             return false;
         }
@@ -931,11 +1027,7 @@
         const shippingExpDuty = parseFloat(document.getElementById('shipping_exp_duty').value);
         if (isNaN(shippingExpDuty) || shippingExpDuty < 0) {
             const message = 'Shipping Exp Duty must be a valid number';
-            if (window.showAlert) {
-                showAlert(message, 'error');
-            } else {
-                alert(message);
-            }
+            invoiceNotify(message, 'error');
             document.getElementById('shipping_exp_duty').focus();
             return false;
         }
@@ -958,11 +1050,12 @@
         submitBtn.innerHTML = '<span class="animate-spin">⏳</span> Processing...';
 
         // Validate customer name
-        const customerNameElement = document.querySelector('input[name="customer_id"]');
-        const customerName = document.querySelector('.space-y-2 .flex .font-semibold');
+        const customerName = document.getElementById('invoiceCustomerName');
 
-        if (!customerName || !customerName.textContent.trim() || customerName.textContent.includes('****')) {
-            showAlert('Please select a valid customer', 'error');
+        if (!customerName || !customerName.textContent.trim() || customerName.textContent.includes('****') || customerName.textContent.includes('not found')) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Create Invoice';
+            invoiceNotify('Please select a valid customer', 'error');
             return;
         }
 
@@ -1043,20 +1136,16 @@
                             });
                     }, 1000);
                 } else {
-                    if (window.showGlobalToast) {
-                        window.showAlert('Error: ' + data.message, 'error');
-                    } else {
-                        alert('Error: ' + data.message);
-                    }
+                    invoiceNotify('Error: ' + data.message, 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = 'Create Invoice';
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                if (window.showGlobalToast) {
-                    window.showGlobalToast('Network error occurred', 'error');
-                } else {
-                    alert('Network error occurred');
-                }
+                invoiceNotify('Network error occurred', 'error');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = 'Create Invoice';
             });
     });
 
@@ -1110,12 +1199,10 @@
 
     // add item
     // Show modal and fetch order items
-    document.querySelector('.action-button').addEventListener('click', function(e) {
-        if (e.target.textContent.trim() === 'Add Item') {
-            document.getElementById('orderModal').style.display = 'flex';
-            document.getElementById('orderSearch').value = '';
-            fetchOrderItems('');
-        }
+    document.getElementById('addInvoiceItemBtn').addEventListener('click', function() {
+        document.getElementById('orderModal').style.display = 'flex';
+        document.getElementById('orderSearch').value = '';
+        fetchOrderItems('');
     });
 
     // Close modal
@@ -1149,20 +1236,20 @@
                     data.items.forEach(item => {
                         const row = document.createElement('tr');
                         row.innerHTML = `                    
-                    <td class="border p-2" data-item='${JSON.stringify(item)}'>${item.order_number || ''}</td>
-                    <td class="border p-2">${item.sku || ''}</td>
-                    <td class="border p-2">${item.title || ''}</td>
-                    <td class="border p-2 text-right">${item.unit_price ? "₹"+item.unit_price : '0.00'}</td>
-                    <td class="border p-2 text-center">${item.quantity || 0}</td>
-                    <td class="border p-2 text-center">
-                        <button type="button" class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 select-item-button" id="selectItemBtn">Select</button>
+                    <td class="border-b border-gray-100 p-3" data-item='${JSON.stringify(item)}'>${item.order_number || ''}</td>
+                    <td class="border-b border-gray-100 p-3">${item.sku || ''}</td>
+                    <td class="border-b border-gray-100 p-3">${item.title || ''}</td>
+                    <td class="border-b border-gray-100 p-3 text-right">${item.unit_price ? "₹"+item.unit_price : '0.00'}</td>
+                    <td class="border-b border-gray-100 p-3 text-center">${item.quantity || 0}</td>
+                    <td class="border-b border-gray-100 p-3 text-center">
+                        <button type="button" class="select-item-button rounded-lg bg-orange-500 px-3 py-1 text-sm font-semibold text-white hover:bg-orange-600" id="selectItemBtn">Select</button>
                     </td>
                 `;
                         tbody.appendChild(row);
                     });
                 } else {
                     const row = document.createElement('tr');
-                    row.innerHTML = `<td class="border p-2 text-center" colspan="5">No items found</td>`;
+                    row.innerHTML = `<td class="p-4 text-center text-gray-500" colspan="6">No items found</td>`;
                     tbody.appendChild(row);
                 }
             })
@@ -1202,7 +1289,9 @@
             if (!itemExists) {
                 const tbody = document.querySelector('#invoiceTable tbody');
                 const newRow = document.createElement('tr');
-                newRow.className = 'bg-white';
+                newRow.className = 'bg-gray-50';
+                const addPrefix = (itemData.currency || 'INR') === 'INR' ? '₹' : (itemData.currency || 'INR') + ' ';
+                const addImage = itemData.image ? `<img src="${htmlspecialchars(itemData.image)}" alt="" class="h-10 w-10 rounded-lg object-cover ring-1 ring-gray-200">` : '';
                 newRow.innerHTML = `
                 <input type="hidden" name="order_number[]" value="${itemData.order_number || ''}">
                 <input type="hidden" name="item_code[]" value="${itemData.item_code || ''}">
@@ -1211,40 +1300,41 @@
                 <input type="hidden" name="currency[]" value="${itemData.currency || 'INR'}">
                 <input type="hidden" name="image_url[]" value="${itemData.image || ''}">
                 <input type="hidden" name="groupname[]" value="${itemData.groupname || ''}">
-                <td class="p-2 rounded-l-lg">${tbody.children.length + 1}</td>
-                <td class="p-2"><span>${itemData.sku || ''}</span></td>
-                <td class="p-2 " colspan="2">${itemData.title ? htmlspecialchars(itemData.title) : ''}
+                <td class="rounded-l-xl px-3 py-3 font-medium text-gray-500">${tbody.children.length + 1}</td>
+                <td class="px-3 py-3 font-medium text-slate-800"><span>${itemData.sku || ''}</span></td>
+                <td class="px-3 py-3" colspan="2">
+                    <div class="flex items-start gap-3">${addImage}<span class="leading-snug">${itemData.title ? htmlspecialchars(itemData.title) : ''}</span></div>
                     <input type="hidden" name="item_name[]" value="${itemData.title ? htmlspecialchars(itemData.title) : ''}" required>
                 </td>
-                <td class="p-0">
-                    <input type="text" name="box_no[]" class="w-full border rounded-md form-input p-2" value="1" required>
+                <td class="p-2">
+                    <input type="text" name="box_no[]" class="w-16 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-center text-sm" value="1" required>
                 </td>
-                <td class="p-2"><span>${itemData.hsn || ''}</span>
-                    <input type="hidden" name="hsn[]" value="${itemData.hsn || ''}" > 
+                <td class="px-3 py-3 text-gray-600"><span>${itemData.hsn || ''}</span>
+                    <input type="hidden" name="hsn[]" value="${itemData.hsn || ''}">
                 </td>
-                <td class="p-2"><span>${itemData.quantity || 0}</span>
-                    <input type="hidden" name="quantity[]"  value="${itemData.quantity || 0}">
+                <td class="px-3 py-3 text-right"><span>${itemData.quantity || 0}</span>
+                    <input type="hidden" name="quantity[]" value="${itemData.quantity || 0}">
                 </td>
-                <td class="p-2"><span>${itemData.unit_price ? "₹"+itemData.unit_price : '0.00'}</span>
-                    <input type="hidden" name="unit_price[]"  value="${itemData.unit_price || 0}" >
+                <td class="px-3 py-3 text-right tabular-nums"><span>${itemData.unit_price ? addPrefix + itemData.unit_price : '0.00'}</span>
+                    <input type="hidden" name="unit_price[]" value="${itemData.unit_price || 0}">
                 </td>
-                <td class="p-2"><span>0%</span>
-                    <input type="hidden" name="discount[]"  value="0" >
+                <td class="px-3 py-3 text-right text-gray-500"><span>0%</span>
+                    <input type="hidden" name="discount[]" value="0">
                 </td>
-                <td class="p-2"><span>0%</span>
-                    <input type="hidden" name="cgst[]"  value="0" >
-                </td>   
-                <td class="p-2"><span>0%</span>
-                    <input type="hidden" name="sgst[]"  value="0" >
+                <td class="px-3 py-3 text-right"><span>0%</span>
+                    <input type="hidden" name="cgst[]" value="0">
                 </td>
-                <td class="p-2"><span>0%</span>
-                    <input type="hidden" name="igst[]"  value="0" >
+                <td class="px-3 py-3 text-right"><span>0%</span>
+                    <input type="hidden" name="sgst[]" value="0">
                 </td>
-                <td class="p-2"><span>${itemData.unit_price ? "₹"+itemData.unit_price : '0.00'}</span>
-                    <input type="hidden" name="line_total[]" step="0.01" >
+                <td class="px-3 py-3 text-right"><span>0%</span>
+                    <input type="hidden" name="igst[]" value="0">
                 </td>
-                <td class="p-2 rounded-r-lg text-center">
-                    <button type="button" onclick="removeRow(this)" class="text-red-500 hover:text-red-700">
+                <td class="px-3 py-3 text-right font-semibold tabular-nums"><span>${itemData.unit_price ? addPrefix + itemData.unit_price : '0.00'}</span>
+                    <input type="hidden" name="line_total[]" step="0.01">
+                </td>
+                <td class="rounded-r-xl px-3 py-3 text-center">
+                    <button type="button" onclick="removeRow(this)" class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700" title="Remove item">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
@@ -1281,18 +1371,18 @@
                         if (data.invoice_id) {
                             window.location.href = '<?php echo base_url('?page=dispatch&action=create&invoice_id='); ?>' + data.invoice_id;
                         } else {
-                            alert('Failed to create invoice and dispatch');
+                            invoiceNotify('Failed to create invoice and dispatch', 'error');
                         }
                     });
                 } else {
-                    alert('Failed to create invoice and dispatch');
+                    invoiceNotify('Failed to create invoice and dispatch', 'error');
                 }
                 submitBtn2.disabled = false;
                 submitBtn2.innerHTML = 'Create & Dispatch';
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('An error occurred while creating invoice and dispatching');
+                invoiceNotify('An error occurred while creating invoice and dispatching', 'error');
             });
 
     }
