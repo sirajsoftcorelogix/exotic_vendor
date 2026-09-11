@@ -622,7 +622,7 @@ class PosInvoiceController
         }
 
         
-        $this->syncInternationalEwbTracking($invoiceId);
+        //$this->syncInternationalEwbTracking($invoiceId);
 
         $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
         $ok = !empty($result['status']) || strtolower(trim((string) ($latest['irn_status'] ?? ''))) === 'generated';
@@ -678,10 +678,10 @@ class PosInvoiceController
             require_once __DIR__ . '/InvoicesController.php';
             $controller = new InvoicesController();
             $result = $controller->generateAlankitEwbForInvoice($invoiceId, $ewbData);
-            $this->syncInternationalEwbTracking($invoiceId);
+            //$this->syncInternationalEwbTracking($invoiceId);
             $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
             $ok = !empty($result['status']) || strtolower(trim((string) ($latest['ewb_status'] ?? ''))) === 'generated';
-
+            //print_r($result);
             echo json_encode([
                 'success' => $ok,
                 'message' => $ok
@@ -705,7 +705,7 @@ class PosInvoiceController
         if ($irn !== '' && $irnStatus === 'generated') {
             //echo 'ewb regeneration requested for invoice #' . $invoiceId . ' with IRN ' . $irn . PHP_EOL;
             $result = $service->regenerateEwbWithIrn($invoiceId, $irn, $invoice, $runtime['order_info'], $ewbData);
-            $this->syncInternationalEwbTracking($invoiceId);
+            //$this->syncInternationalEwbTracking($invoiceId);
             $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
             $ok = !empty($result['status']) || strtolower(trim((string) ($latest['ewb_status'] ?? ''))) === 'generated';
 
@@ -731,7 +731,7 @@ class PosInvoiceController
             $runtime['firm'],
             $ewbData
         );
-        $this->syncInternationalEwbTracking($invoiceId);
+        //$this->syncInternationalEwbTracking($invoiceId);
         $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
         $ok = !empty($result['status']) || strtolower(trim((string) ($latest['ewb_status'] ?? ''))) === 'generated';
 

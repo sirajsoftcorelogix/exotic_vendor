@@ -772,6 +772,12 @@ class InvoicesController
 
                 // Update invoice international table with IRN details
                 $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
+                $invoiceModel->syncInvoiceEwbData($invoiceId, [
+                    'irn' => $updateData['irn'] ?? null,
+                    'ewb_number' => $updateData['ewb_no'] ?? null,
+                    'ack_number' => $updateData['ack_number'] ?? null,
+                    'ack_date' => $updateData['ack_date'] ?? null,
+                ]);
 
                 error_log("Alankit IRN generated successfully for invoice #$invoiceId: " . ($irnResponse['irn'] ?? 'No IRN'));
                 return true;
@@ -788,6 +794,12 @@ class InvoicesController
                 ];
 
                 $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
+                $invoiceModel->syncInvoiceEwbData($invoiceId, [
+                    'irn' => $updateData['irn'] ?? null,
+                    'ewb_number' => null,
+                    'ack_number' => $updateData['ack_number'] ?? null,
+                    'ack_date' => $updateData['ack_date'] ?? null,
+                ]);
                 error_log("Alankit IRN generation duplicate for invoice #$invoiceId: " . ($irnResponse['InfoDtls']['InfMsg'] ?? 'Duplicate IRN error'));
                 return true;
                 
@@ -866,43 +878,42 @@ class InvoicesController
 
         $buyerAddress = trim((string) (($customer['address_line1'] ?? '') . ' ' . ($customer['address_line2'] ?? '')));
         $shippingAddress = trim((string) (($customer['shipping_address_line1'] ?? '') . ' ' . ($customer['shipping_address_line2'] ?? '')));
-
+        $zip = trim((string) ($customer['shipping_zipcode'] ?? $customer['zipcode'] ?? ''));
         $payload = [
-            'DispDtls' => [
-                'Nm' => trim((string) (($customer['first_name'] ?? '') . ' ' . ($customer['last_name'] ?? ''))),
-                'Addr1' => $shippingAddress !== '' ? $shippingAddress : $buyerAddress,
-                'Addr2' => '',
-                'Loc' => trim((string) ($customer['shipping_city'] ?? $customer['city'] ?? '')),
-                'Pin' => trim((string) ($customer['shipping_zipcode'] ?? $customer['zipcode'] ?? '')),
-                'Stcd' => trim((string) ($customer['shipping_state_code'] ?? $customer['state_code'] ?? '')),
-            ],
-            'ExpDtls' => [
-                'ShipBNo' => (string) ($internationalData['shipping_bill_number'] ?? ''),
-                'ShipBDt' => !empty($internationalData['shipping_bill_date'])
-                    ? date('d/m/Y', strtotime((string) $internationalData['shipping_bill_date']))
-                    : date('d/m/Y'),
-                'Port' => (string) ($internationalData['shipping_port'] ?? $internationalData['shipping_port_code'] ?? 'INABG1'),
-                'RefClm' => (string) ($internationalData['shipping_ref_clm'] ?? 'N'),
-                'ForCur' => (string) ($internationalData['shipping_currency'] ?? $invoice['currency'] ?? 'USD'),
-                'CntCode' => (string) ($internationalData['shipping_country_code'] ?? $customer['shipping_country'] ?? $customer['country'] ?? ''),
-                'ExpDuty' => (float) ($internationalData['shipping_exp_duty'] ?? 0),
-            ],
+            'Irn' => (string) ($internationalData['irn'] ?? ''),
+            'Distance' => 0,
+            // 'DispDtls' => [
+            //     'Nm' => trim((string) (($customer['first_name'] ?? '') . ' ' . ($customer['last_name'] ?? ''))),
+            //     'Addr1' => $shippingAddress !== '' ? $shippingAddress : $buyerAddress,
+            //     'Addr2' => '',
+            //     'Loc' => trim((string) ($customer['shipping_city'] ?? $customer['city'] ?? '')),
+            //     'Pin' => explode('-', $zip)[0] ?? '',
+            //     'Stcd' => trim((string) ($customer['shipping_state_code'] ?? $customer['state_code'] ?? '')),
+            // ],
+            // 'ExpDtls' => [
+            //     'ShipBNo' => (string) ($internationalData['shipping_bill_number'] ?? ''),
+            //     'ShipBDt' => !empty($internationalData['shipping_bill_date'])
+            //         ? date('d/m/Y', strtotime((string) $internationalData['shipping_bill_date']))
+            //         : date('d/m/Y'),
+            //     'Port' => (string) ($internationalData['shipping_port'] ?? $internationalData['shipping_port_code'] ?? 'INABG1'),
+            //     'RefClm' => (string) ($internationalData['shipping_ref_clm'] ?? 'N'),
+            //     'ForCur' => (string) ($internationalData['shipping_currency'] ?? $invoice['currency'] ?? 'USD'),
+            //     'CntCode' => (string) ($internationalData['shipping_country_code'] ?? $customer['shipping_country'] ?? $customer['country'] ?? ''),
+            //     'ExpDuty' => (float) ($internationalData['shipping_exp_duty'] ?? 0),
+            // ],
         ];
 
         if (!empty($ewbData)) {
             if (!empty($ewbData['trans_id'])) {
                 $payload['TransId'] = trim((string) $ewbData['trans_id']);
-                $payload['TransName'] = trim((string) $ewbData['trans_name']);
-                $payload['Distance'] = 0; // Default distance; can be customized if needed
-            }else{
-                $payload['Distance'] = 0;
-                $payload['TransMode'] = trim((string) $ewbData['trans_mode']);
-                $payload['VehNo'] = trim((string) $ewbData['veh_no']);
-                $payload['VehType'] = trim((string) $ewbData['veh_type']);
-                $payload['TransDocNo'] = trim((string) $ewbData['trans_doc_no']);
-                $payload['TransDocDt'] = trim((string) $ewbData['trans_doc_dt']);
+                $payload['TransName'] = trim((string) ($ewbData['trans_name'] ?? ''));
+            } else {
+                $payload['TransMode'] = trim((string) ($ewbData['trans_mode'] ?? '1'));
+                $payload['VehNo'] = trim((string) ($ewbData['veh_no'] ?? ''));
+                $payload['VehType'] = trim((string) ($ewbData['veh_type'] ?? 'R'));
+                $payload['TransDocNo'] = trim((string) ($ewbData['trans_doc_no'] ?? ''));
+                $payload['TransDocDt'] = trim((string) ($ewbData['trans_doc_dt'] ?? date('d/m/Y')));
             }
-            
         }
 
         try {
@@ -939,6 +950,12 @@ class InvoicesController
                 $updateData['ewb_error_message'] = null;
 
                 $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
+                $invoiceModel->syncInvoiceEwbData($invoiceId, [
+                    'irn' => $internationalData['irn'] ?? null,
+                    'ewb_number' => $ewbResponse['EwbNo'] ?? null,
+                    'ack_number' => $internationalData['ack_number'] ?? null,
+                    'ack_date' => $internationalData['ack_date'] ?? null,
+                ]);
 
                 return [
                     'status' => true,
@@ -949,11 +966,13 @@ class InvoicesController
                     'ewb_message' => 'E-Way bill generated successfully.',
                 ];
             }
-
+            $updateData['irn'] = $internationalData['irn'] ?? null; 
             $updateData['ewb_error_message'] = json_encode($ewbResponse['ErrorDetails'] ?? $ewbResponse['message'] ?? 'Unknown error');
             $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
 
             return [
+                'updateInvoiceInternational' => $updateData,
+                'ewb_response' => $ewbResponse,
                 'status' => false,
                 'message' => $ewbResponse['message'] ?? 'Failed to generate E-Way bill.',
                 'error_details' => $ewbResponse['ErrorDetails'] ?? ($ewbResponse['message'] ?? 'Unknown error'),

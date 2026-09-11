@@ -166,6 +166,33 @@ class Invoice
         return $items;
     }
 
+    public function syncInvoiceEwbData($invoice_id, $data = [])
+    {
+        $stmt = $this->db->prepare(
+            "UPDATE vp_invoices
+            SET irn = COALESCE(?, irn),
+                ewb_number = COALESCE(?, ewb_number),
+                ack_number = COALESCE(?, ack_number),
+                ack_date = COALESCE(?, ack_date)
+            WHERE id = ?"
+        );
+
+        if (!$stmt) {
+            return false;
+        }
+
+        $stmt->bind_param(
+            'ssssi',
+            $data['irn'] ?? null,
+            $data['ewb_number'] ?? null,
+            $data['ack_number'] ?? null,
+            $data['ack_date'] ?? null,
+            (int) $invoice_id
+        );
+
+        return $stmt->execute();
+    }
+
     public function updateInvoiceStatus($id, $status)
     {
         $sql = "UPDATE vp_invoices SET status = ?, updated_at = NOW() WHERE id = ?";

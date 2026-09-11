@@ -240,6 +240,7 @@ class DomesticEwbIrnService {
                 //update irn if available in response
                 if (!empty($irn)) {
                     $this->updateIrnStatus($invoiceId, 'generated', null, $irnPayload, $irnResponse, $irn);
+                    $this->syncInvoiceTable($invoiceId, $irn, null, $irnResponse['InfoDtls'][0]['Desc']['AckNo'] ?? null, $irnResponse['InfoDtls'][0]['Desc']['AckDt'] ?? null);
                 }
 
                 $dupMessage = $this->resolveIrnErrorDetails($irnResponse);
@@ -279,7 +280,8 @@ class DomesticEwbIrnService {
                 $result['irn'] = $irn;
                 $result['irn_message'] = 'IRN generated successfully';                
                 // Update IRN status in database
-                $this->updateIrnStatus($invoiceId, 'generated', null, $irnPayload, $irnResponse, $irn); 
+                $this->updateIrnStatus($invoiceId, 'generated', null, $irnPayload, $irnResponse, $irn);
+                $this->syncInvoiceTable($invoiceId, $irn, isset($irnResponse['EwbNo']) ? (string)$irnResponse['EwbNo'] : null, $irnResponse['AckNo'] ?? null, $irnResponse['AckDt'] ?? null);
 
                 $ewbNo = isset($irnResponse['EwbNo']) ? (string)$irnResponse['EwbNo'] : null;
                 $genGstin = isset($irnResponse['GenGstin']) ? (string)$irnResponse['GenGstin'] : null;
@@ -488,6 +490,7 @@ class DomesticEwbIrnService {
             );
 
             if ($ewbStatus === 'generated') {
+                $this->syncInvoiceTable($invoiceId, $irn, (string)$ewbNo, null, null);
                 return [
                     'status' => true,
                     'message' => 'E-way bill regenerated successfully',
@@ -836,6 +839,27 @@ class DomesticEwbIrnService {
         $responseJson = $response ? json_encode($response) : null;
         $stmt->bind_param("sssssi", $status, $error, $payloadJson, $responseJson, $irn, $invoiceId);
         return $stmt->execute();
+    }
+
+    private function syncInvoiceTable($invoiceId, $irn = null, $ewb = null, $ackNo = null, $ackDt = null) {
+        $stmt = $this->db->prepare(
+            "UPDATE vp_invoices
+            SET irn = COALESCE(?, irn),
+                ewb_number = COALESCE(?, ewb_number),
+                ack_number = COALESCE(?, ack_number),
+                ack_date = COALESCE(?, ack_date)
+            WHERE id = ?"
+        );
+
+        if (!$stmt) {
+            error_log("Domestic EWB: Failed to prepare vp_invoices sync: " . $this->db->error);
+            return false;
+        }
+
+        $stmt->bind_param("ssssi", $irn, $ewb, $ackNo, $ackDt, $invoiceId);
+        $result = $stmt->execute();
+        $stmt->close();
+        return $result;
     }
     
     /**
