@@ -45,7 +45,10 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                         <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700"><?php echo htmlspecialchars((string) $invoiceCurrency, ENT_QUOTES, 'UTF-8'); ?></span>
                         <span class="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-800"><?php echo (int) $invoiceItemCount; ?> item<?php echo $invoiceItemCount === 1 ? '' : 's'; ?></span>
                         <?php foreach ($invoiceOrderNumbers as $orderNo): ?>
-                            <span class="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-200">Order <?php echo htmlspecialchars($orderNo, ENT_QUOTES, 'UTF-8'); ?></span>
+                            <a href="<?php echo htmlspecialchars(base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . rawurlencode($orderNo)), ENT_QUOTES, 'UTF-8'); ?>"
+                               target="_blank" rel="noopener noreferrer"
+                               class="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-medium text-orange-800 ring-1 ring-orange-200 hover:bg-orange-50 hover:underline"
+                               title="View order details">Order <?php echo htmlspecialchars($orderNo, ENT_QUOTES, 'UTF-8'); ?></a>
                         <?php endforeach; ?>
                     </div>
                 </div>
@@ -527,7 +530,18 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                                 <input type="hidden" name="image_url[]" value="<?= htmlspecialchars((string) ($item['image'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                                 <input type="hidden" name="groupname[]" value="<?= htmlspecialchars((string) ($item['groupname'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                                 <td class="rounded-l-xl px-3 py-3 font-medium text-gray-500"><?php echo $index + 1; ?></td>
-                                <td class="px-3 py-3 font-medium text-slate-800"><span><?= htmlspecialchars((string) $item['sku'], ENT_QUOTES, 'UTF-8') ?></span></td>
+                                <td class="px-3 py-3 font-medium text-slate-800">
+                                    <span><?= htmlspecialchars((string) $item['sku'], ENT_QUOTES, 'UTF-8') ?></span>
+                                    <?php
+                                    $lineOrderNo = trim((string) ($item['order_number'] ?? ''));
+                                    if ($lineOrderNo !== ''):
+                                        $lineOrderUrl = base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . rawurlencode($lineOrderNo));
+                                    ?>
+                                        <div class="mt-1">
+                                            <a href="<?= htmlspecialchars($lineOrderUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-orange-700 hover:underline" title="View order details"><?= htmlspecialchars($lineOrderNo, ENT_QUOTES, 'UTF-8') ?></a>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
                                 <td class="px-3 py-3" colspan="2">
                                     <div class="flex items-start gap-3">
                                         <?php if ($itemImage !== ''): ?>
@@ -665,7 +679,26 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
     </div>
 </div>
 <script>
-    // Helper function to round to 2 decimal places
+    const invoiceOrderDetailsUrlBase = <?php echo json_encode(base_url('?page=orders&action=get_order_details_html&type=outer&order_number=')); ?>;
+
+    function invoiceOrderDetailsUrl(orderNumber) {
+        const orderNo = String(orderNumber || '').trim();
+        if (!orderNo) {
+            return '';
+        }
+        return invoiceOrderDetailsUrlBase + encodeURIComponent(orderNo);
+    }
+
+    function invoiceOrderDetailsLink(orderNumber) {
+        const orderNo = String(orderNumber || '').trim();
+        const url = invoiceOrderDetailsUrl(orderNo);
+        if (!orderNo || !url) {
+            return '';
+        }
+        const safeNo = String(orderNo).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-orange-700 hover:underline" title="View order details" onclick="event.stopPropagation()">${safeNo}</a>`;
+    }
+
     function roundToTwo(num) {
         return Math.round(num * 100) / 100;
     }
@@ -735,7 +768,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
             row.innerHTML = `
             <td class="p-3 text-center align-top">
                 <input type="radio" name="addressRadio" value="${addr.id}" data-bill-to="${addr.bill_to}" data-ship-to="${addr.ship_to}" ${addr.id == currentAddressId ? 'checked' : ''} class="h-4 w-4 text-orange-600">
-                ${addr.order_number ? `<div class="mt-1 text-xs text-gray-500">${addr.order_number}</div>` : ''}
+                ${addr.order_number ? `<div class="mt-1">${invoiceOrderDetailsLink(addr.order_number)}</div>` : ''}
             </td>
             <td class="p-3 text-sm text-gray-700 leading-relaxed">${addr.bill_html || addr.bill_to}</td>
             <td class="p-3 text-sm text-gray-700 leading-relaxed">${addr.ship_html || addr.ship_to || '<span class="text-gray-400">No shipping address</span>'}</td>
@@ -1448,7 +1481,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                     data.items.forEach(item => {
                         const row = document.createElement('tr');
                         row.innerHTML = `                    
-                    <td class="border-b border-gray-100 p-3" data-item='${JSON.stringify(item)}'>${item.order_number || ''}</td>
+                    <td class="border-b border-gray-100 p-3" data-item='${JSON.stringify(item)}'>${invoiceOrderDetailsLink(item.order_number) || (item.order_number || '')}</td>
                     <td class="border-b border-gray-100 p-3">${item.sku || ''}</td>
                     <td class="border-b border-gray-100 p-3">${item.title || ''}</td>
                     <td class="border-b border-gray-100 p-3 text-right">${item.unit_price ? "₹"+item.unit_price : '0.00'}</td>
@@ -1513,7 +1546,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 <input type="hidden" name="image_url[]" value="${itemData.image || ''}">
                 <input type="hidden" name="groupname[]" value="${itemData.groupname || ''}">
                 <td class="rounded-l-xl px-3 py-3 font-medium text-gray-500">${tbody.children.length + 1}</td>
-                <td class="px-3 py-3 font-medium text-slate-800"><span>${itemData.sku || ''}</span></td>
+                <td class="px-3 py-3 font-medium text-slate-800"><span>${itemData.sku || ''}</span>${itemData.order_number ? `<div class="mt-1">${invoiceOrderDetailsLink(itemData.order_number)}</div>` : ''}</td>
                 <td class="px-3 py-3" colspan="2">
                     <div class="flex items-start gap-3">${addImage}<span class="leading-snug">${itemData.title ? htmlspecialchars(itemData.title) : ''}</span></div>
                     <input type="hidden" name="item_name[]" value="${itemData.title ? htmlspecialchars(itemData.title) : ''}" required>
