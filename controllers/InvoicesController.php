@@ -868,24 +868,9 @@ class InvoicesController
         $shippingAddress = trim((string) (($customer['shipping_address_line1'] ?? '') . ' ' . ($customer['shipping_address_line2'] ?? '')));
 
         $payload = [
-            'Irn' => (string) ($internationalData['irn'] ?? ''),            
-        ];
-        if (!empty($ewbData)) {
-            if (!empty($ewbData['trans_id'])) {
-                $payload['TransId'] = trim((string) $ewbData['trans_id']);
-                $payload['TransName'] = trim((string) $ewbData['trans_name']);
-                $payload['Distance'] = 0; // Default distance; can be customized if needed
-            }else{
-                $payload['Distance'] = 0;
-                $payload['TransMode'] = trim((string) $ewbData['trans_mode']);
-                $payload['VehNo'] = trim((string) $ewbData['veh_no']);
-                $payload['VehType'] = trim((string) $ewbData['veh_type']);
-                $payload['TransDocNo'] = trim((string) $ewbData['trans_doc_no']);
-                $payload['TransDocDt'] = trim((string) $ewbData['trans_doc_dt']);
-            }            
-        }
-        $payload = [
-        'DispDtls' => [
+            'Irn' => (string) ($internationalData['irn'] ?? ''),
+            'Distance' => 0,
+            'DispDtls' => [
                 'Nm' => trim((string) (($customer['first_name'] ?? '') . ' ' . ($customer['last_name'] ?? ''))),
                 'Addr1' => $shippingAddress !== '' ? $shippingAddress : $buyerAddress,
                 'Addr2' => '',
@@ -906,6 +891,19 @@ class InvoicesController
             ],
         ];
 
+        if (!empty($ewbData)) {
+            if (!empty($ewbData['trans_id'])) {
+                $payload['TransId'] = trim((string) $ewbData['trans_id']);
+                $payload['TransName'] = trim((string) ($ewbData['trans_name'] ?? ''));
+            } else {
+                $payload['TransMode'] = trim((string) ($ewbData['trans_mode'] ?? '1'));
+                $payload['VehNo'] = trim((string) ($ewbData['veh_no'] ?? ''));
+                $payload['VehType'] = trim((string) ($ewbData['veh_type'] ?? 'R'));
+                $payload['TransDocNo'] = trim((string) ($ewbData['trans_doc_no'] ?? ''));
+                $payload['TransDocDt'] = trim((string) ($ewbData['trans_doc_dt'] ?? date('d/m/Y')));
+            }
+        }
+
         try {
             $authreq = $alankitClient->authRequest();
             $authdata = $alankitClient->sendRequest('AUTH_ENDPOINT', ['Data' => $authreq], false);
@@ -921,14 +919,8 @@ class InvoicesController
             $accessToken = $authdata['Data']['AuthToken'];
             $sek = $authdata['Data']['Sek'];
             $decryptedSek = $alankitClient->decryptSek($sek, $alankitConfig['app_key']);
-            $payloadreq = base64_encode(json_encode($payload));
-            $encryptedPayload = $alankitClient->encryptBySymmetricKey($payloadreq, $decryptedSek);
-            if (!$encryptedPayload) {
-                error_log("Alankit IRN: Payload encryption failed for invoice #$invoiceId");
-                return false;
-            }
-           
-            $ewbResponse = $alankitClient->generateEwb(['Data' => $encryptedPayload], $accessToken, $decryptedSek);
+
+            $ewbResponse = $alankitClient->generateEwb($payload, $accessToken, $decryptedSek);
 
             $updateData = [
                 'ewb_request_payload' => json_encode($payload),
