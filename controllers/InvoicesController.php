@@ -866,7 +866,7 @@ class InvoicesController
 
         $buyerAddress = trim((string) (($customer['address_line1'] ?? '') . ' ' . ($customer['address_line2'] ?? '')));
         $shippingAddress = trim((string) (($customer['shipping_address_line1'] ?? '') . ' ' . ($customer['shipping_address_line2'] ?? '')));
-
+        $zip = trim((string) ($customer['shipping_zipcode'] ?? $customer['zipcode'] ?? ''));
         $payload = [
             'Irn' => (string) ($internationalData['irn'] ?? ''),
             'Distance' => 0,
@@ -875,7 +875,7 @@ class InvoicesController
                 'Addr1' => $shippingAddress !== '' ? $shippingAddress : $buyerAddress,
                 'Addr2' => '',
                 'Loc' => trim((string) ($customer['shipping_city'] ?? $customer['city'] ?? '')),
-                'Pin' => trim((string) ($customer['shipping_zipcode'] ?? $customer['zipcode'] ?? '')),
+                'Pin' => explode('-', $zip)[0] ?? '',
                 'Stcd' => trim((string) ($customer['shipping_state_code'] ?? $customer['state_code'] ?? '')),
             ],
             'ExpDtls' => [
