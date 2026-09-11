@@ -527,14 +527,16 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                             $itemImage = trim((string) ($item['image'] ?? ''));
                     ?>
                             <tr class="bg-gray-50">
-                                <input type="hidden" name="order_number[]" value="<?= htmlspecialchars((string) $item['order_number'], ENT_QUOTES, 'UTF-8') ?>">
-                                <input type="hidden" name="item_code[]" value="<?= htmlspecialchars((string) $item['item_code'], ENT_QUOTES, 'UTF-8') ?>">
-                                <input type="hidden" name="gst[]" value="<?= htmlspecialchars((string) $item['gst'], ENT_QUOTES, 'UTF-8') ?>">
-                                <input type="hidden" name="tax_rate[]" value="<?= htmlspecialchars((string) $item['gst'], ENT_QUOTES, 'UTF-8') ?>">
-                                <input type="hidden" name="currency[]" value="<?php echo htmlspecialchars((string) ($item['currency'] ?? 'INR'), ENT_QUOTES, 'UTF-8'); ?>">
-                                <input type="hidden" name="image_url[]" value="<?= htmlspecialchars((string) ($item['image'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-                                <input type="hidden" name="groupname[]" value="<?= htmlspecialchars((string) ($item['groupname'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-                                <td class="rounded-l-xl px-3 py-3 font-medium text-gray-500"><?php echo $index + 1; ?></td>
+                                <td class="rounded-l-xl px-3 py-3 font-medium text-gray-500">
+                                    <input type="hidden" name="order_number[]" value="<?= htmlspecialchars((string) $item['order_number'], ENT_QUOTES, 'UTF-8') ?>">
+                                    <input type="hidden" name="item_code[]" value="<?= htmlspecialchars((string) $item['item_code'], ENT_QUOTES, 'UTF-8') ?>">
+                                    <input type="hidden" name="gst[]" value="<?= htmlspecialchars((string) $item['gst'], ENT_QUOTES, 'UTF-8') ?>">
+                                    <input type="hidden" name="tax_rate[]" value="<?= htmlspecialchars((string) $item['gst'], ENT_QUOTES, 'UTF-8') ?>">
+                                    <input type="hidden" name="currency[]" value="<?php echo htmlspecialchars((string) ($item['currency'] ?? 'INR'), ENT_QUOTES, 'UTF-8'); ?>">
+                                    <input type="hidden" name="image_url[]" value="<?= htmlspecialchars((string) ($item['image'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                    <input type="hidden" name="groupname[]" value="<?= htmlspecialchars((string) ($item['groupname'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                    <?php echo $index + 1; ?>
+                                </td>
                                 <td class="px-3 py-3 font-medium text-slate-800">
                                     <span><?= htmlspecialchars((string) $item['sku'], ENT_QUOTES, 'UTF-8') ?></span>
                                     <?php
@@ -753,11 +755,21 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                         }, $customer_address)) ?>;
 
     // Function to determine tax type based on states
-    function calculateGSTType(billingState) {
-        if (!billingState || !firmState) return null;
+    const invoiceIsInternational = <?php echo !empty($is_international) ? 'true' : 'false'; ?>;
+    let currentBillingState = <?php echo json_encode((string) $billingState, JSON_UNESCAPED_UNICODE); ?>;
 
-        // Same state = CGST + SGST, Different state = IGST
-        return (billingState.trim().toUpperCase() === firmState.trim().toUpperCase()) ? 'same' : 'different';
+    function calculateGSTType(billingState) {
+        const state = String(billingState == null ? currentBillingState : billingState).trim();
+        const firm = String(firmState || '').trim();
+        if (!state || !firm) {
+            // Export / missing Indian state: Apply GST as IGST
+            return (invoiceIsInternational || document.getElementById('applyGST')) ? 'different' : null;
+        }
+        return (state.toUpperCase() === firm.toUpperCase()) ? 'same' : 'different';
+    }
+
+    function refreshCurrentInvoiceGst() {
+        refreshInvoiceGstFields(calculateGSTType(currentBillingState));
     }
 
     function openAddressSelector() {
@@ -839,6 +851,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
         // Auto-populate GST fields based on state comparison
         if (selectedAddress) {
             const gstType = calculateGSTType(selectedAddress.state);
+            currentBillingState = selectedAddress.state || '';
             refreshInvoiceGstFields(gstType);
             const supplyState = document.getElementById('supplystate');
             const supplyValue = supplyState ? supplyState.querySelectorAll('span')[1] : null;
@@ -960,19 +973,22 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
         const rows = document.querySelectorAll('#invoiceTable tbody tr');
 
         rows.forEach(row => {
-            const gstValue = parseFloat(row.querySelector('input[name="gst[]"]')?.value) || 0;
+            const gstValue = parseFloat(
+                row.querySelector('input[name="gst[]"]')?.value
+                || row.querySelector('input[name="tax_rate[]"]')?.value
+                || 0
+            ) || 0;
             const cgstInput = row.querySelector('input[name="cgst[]"]');
             const sgstInput = row.querySelector('input[name="sgst[]"]');
             const igstInput = row.querySelector('input[name="igst[]"]');
-            console.log('Updating GST for row:', row, 'GST Type:', gstType, 'GST Value:', gstValue);
             if (gstType === 'same') {
                 // Same state: Split GST between CGST and SGST (50% each)
                 const halfGst = gstValue / 2;
                 if (cgstInput) cgstInput.value = halfGst.toFixed(2);
                 if (sgstInput) sgstInput.value = halfGst.toFixed(2);
                 if (igstInput) igstInput.value = '0';
-            } else if (gstType === 'different') {
-                // Different state: All GST goes to IGST
+            } else {
+                // Different state / export: All GST goes to IGST
                 if (cgstInput) cgstInput.value = '0';
                 if (sgstInput) sgstInput.value = '0';
                 if (igstInput) igstInput.value = gstValue.toFixed(2);
@@ -1107,8 +1123,12 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
         });
 
         // Set initial GST based on default billing state and Apply GST checkbox
-        const gstType = calculateGSTType('<?php echo $billingState; ?>');
-        refreshInvoiceGstFields(gstType);
+        refreshCurrentInvoiceGst();
+        const applyGSTCheckbox = document.getElementById('applyGST');
+        if (applyGSTCheckbox) {
+            applyGSTCheckbox.dataset.bound = '1';
+            applyGSTCheckbox.addEventListener('change', refreshCurrentInvoiceGst);
+        }
         initShippingPortMasterFields();
         initFinalDestinationCountryField();
     });
@@ -1415,11 +1435,9 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
     // Add event listener for applyGST checkbox
     document.addEventListener('DOMContentLoaded', function() {
         const applyGSTCheckbox = document.getElementById('applyGST');
-        if (applyGSTCheckbox) {
-            applyGSTCheckbox.addEventListener('change', function() {
-                const gstType = calculateGSTType('<?php echo $billingState; ?>');
-                refreshInvoiceGstFields(gstType);
-            });
+        if (applyGSTCheckbox && applyGSTCheckbox.dataset.bound !== '1') {
+            applyGSTCheckbox.dataset.bound = '1';
+            applyGSTCheckbox.addEventListener('change', refreshCurrentInvoiceGst);
         }
     });
 
@@ -1546,14 +1564,16 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 const addPrefix = (itemData.currency || 'INR') === 'INR' ? '₹' : (itemData.currency || 'INR') + ' ';
                 const addImage = itemData.image ? `<img src="${htmlspecialchars(itemData.image)}" alt="" class="h-10 w-10 rounded-lg object-cover ring-1 ring-gray-200">` : '';
                 newRow.innerHTML = `
-                <input type="hidden" name="order_number[]" value="${itemData.order_number || ''}">
-                <input type="hidden" name="item_code[]" value="${itemData.item_code || ''}">
-                <input type="hidden" name="gst[]" value="${itemData.gst || '0'}">
-                <input type="hidden" name="tax_rate[]" value="${itemData.gst || '0'}">
-                <input type="hidden" name="currency[]" value="${itemData.currency || 'INR'}">
-                <input type="hidden" name="image_url[]" value="${itemData.image || ''}">
-                <input type="hidden" name="groupname[]" value="${itemData.groupname || ''}">
-                <td class="rounded-l-xl px-3 py-3 font-medium text-gray-500">${tbody.children.length + 1}</td>
+                <td class="rounded-l-xl px-3 py-3 font-medium text-gray-500">
+                    <input type="hidden" name="order_number[]" value="${itemData.order_number || ''}">
+                    <input type="hidden" name="item_code[]" value="${itemData.item_code || ''}">
+                    <input type="hidden" name="gst[]" value="${itemData.gst || '0'}">
+                    <input type="hidden" name="tax_rate[]" value="${itemData.gst || '0'}">
+                    <input type="hidden" name="currency[]" value="${itemData.currency || 'INR'}">
+                    <input type="hidden" name="image_url[]" value="${itemData.image || ''}">
+                    <input type="hidden" name="groupname[]" value="${itemData.groupname || ''}">
+                    ${tbody.children.length + 1}
+                </td>
                 <td class="px-3 py-3 font-medium text-slate-800"><span>${itemData.sku || ''}</span>${itemData.order_number ? `<div class="mt-1">${invoiceOrderDetailsLink(itemData.order_number)}</div>` : ''}</td>
                 <td class="px-3 py-3" colspan="2">
                     <div class="flex items-start gap-3">${addImage}<span class="leading-snug">${itemData.title ? htmlspecialchars(itemData.title) : ''}</span></div>
@@ -1596,8 +1616,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
             }
 
             // Update GST fields based on current billing state
-            const gstType = calculateGSTType('<?php echo $billingState; ?>');
-            refreshInvoiceGstFields(gstType);
+            refreshCurrentInvoiceGst();
 
             calculateTotals();
             // Close modal
