@@ -772,6 +772,12 @@ class InvoicesController
 
                 // Update invoice international table with IRN details
                 $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
+                $invoiceModel->syncInvoiceEwbData($invoiceId, [
+                    'irn' => $updateData['irn'] ?? null,
+                    'ewb_number' => $updateData['ewb_no'] ?? null,
+                    'ack_number' => $updateData['ack_number'] ?? null,
+                    'ack_date' => $updateData['ack_date'] ?? null,
+                ]);
 
                 error_log("Alankit IRN generated successfully for invoice #$invoiceId: " . ($irnResponse['irn'] ?? 'No IRN'));
                 return true;
@@ -788,6 +794,12 @@ class InvoicesController
                 ];
 
                 $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
+                $invoiceModel->syncInvoiceEwbData($invoiceId, [
+                    'irn' => $updateData['irn'] ?? null,
+                    'ewb_number' => null,
+                    'ack_number' => $updateData['ack_number'] ?? null,
+                    'ack_date' => $updateData['ack_date'] ?? null,
+                ]);
                 error_log("Alankit IRN generation duplicate for invoice #$invoiceId: " . ($irnResponse['InfoDtls']['InfMsg'] ?? 'Duplicate IRN error'));
                 return true;
                 
@@ -938,6 +950,12 @@ class InvoicesController
                 $updateData['ewb_error_message'] = null;
 
                 $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
+                $invoiceModel->syncInvoiceEwbData($invoiceId, [
+                    'irn' => $internationalData['irn'] ?? null,
+                    'ewb_number' => $ewbResponse['EwbNo'] ?? null,
+                    'ack_number' => $internationalData['ack_number'] ?? null,
+                    'ack_date' => $internationalData['ack_date'] ?? null,
+                ]);
 
                 return [
                     'status' => true,
