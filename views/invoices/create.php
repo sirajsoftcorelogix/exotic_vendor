@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../helpers/invoice/invoice_address_html.php';
 $is_international = false;
 $invoiceCurrency = $data[0]['currency'] ?? 'INR';
 if (!empty($invoiceCurrency) && $invoiceCurrency !== 'INR') {
@@ -362,6 +363,26 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
 
                 $defaultBillTo = !empty($billToAddresses) ? $billToAddresses[0] : '';
                 $defaultShipTo = !empty($shipToAddresses) ? $shipToAddresses[0] : '';
+                $invoiceAddressConn = $GLOBALS['conn'] ?? null;
+                $firstBillAddr = (isset($customer_address) && is_array($customer_address))
+                    ? (reset($customer_address) ?: null)
+                    : null;
+                $defaultBillToHtml = is_array($firstBillAddr)
+                    ? invoice_format_order_info_address_display_html($firstBillAddr, 'billing', $invoiceAddressConn)
+                    : '';
+                $defaultShipToHtml = '';
+                if (is_array($firstBillAddr)) {
+                    $defaultShipToHtml = invoice_format_order_info_address_display_html($firstBillAddr, 'shipping', $invoiceAddressConn);
+                    if ($defaultShipToHtml === '') {
+                        $defaultShipToHtml = $defaultBillToHtml;
+                    }
+                }
+                if ($defaultBillToHtml === '' && $defaultBillTo !== '') {
+                    $defaultBillToHtml = htmlspecialchars($defaultBillTo, ENT_QUOTES, 'UTF-8');
+                }
+                if ($defaultShipToHtml === '' && $defaultShipTo !== '') {
+                    $defaultShipToHtml = htmlspecialchars($defaultShipTo, ENT_QUOTES, 'UTF-8');
+                }
                 $showGSTContainer = isset($customer_address[0]['country']) && strtolower($customer_address[0]['country']) !== 'in';
                 $addr0 = (isset($customer_address) && is_array($customer_address) && isset($customer_address[0]) && is_array($customer_address[0]))
                     ? $customer_address[0]
@@ -385,7 +406,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 <input type="hidden" name="customer_address" id="billToSelect" value="<?= htmlspecialchars($defaultBillTo) ?>">
                 <input type="hidden" name="vp_order_info_id" id="vp_order_info_id" value="<?= htmlspecialchars((string) ($customer_address[0]['id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" id="billToDisplay" value="<?= htmlspecialchars($defaultBillTo) ?>">
-                <p id="billToText" class="rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-700"><?= htmlspecialchars($defaultBillTo) !== '' ? htmlspecialchars($defaultBillTo) : 'No billing address found' ?></p>
+                <p id="billToText" class="rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-700"><?= $defaultBillToHtml !== '' ? $defaultBillToHtml : 'No billing address found' ?></p>
                 <div class="mt-3 flex flex-wrap items-center gap-3 text-sm">
                     <div id="supplystate" class="inline-flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-slate-700">
                         <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">Supply state</span>
@@ -393,7 +414,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                     </div>
                     <?php if ($showGSTContainer): ?>
                         <label id="applyGSTContainer" class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5">
-                            <input type="checkbox" id="applyGST" name="applyGST" value="1" checked class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
+                            <input type="checkbox" id="applyGST" name="applyGST" value="1" class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
                             <span class="text-sm font-medium text-gray-700">Apply GST</span>
                         </label>
                     <?php endif; ?>
@@ -421,7 +442,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 </div>
                 <div>
                     <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Ship To</div>
-                    <p class="rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-700" id="shipToDisplay"><?= htmlspecialchars($defaultShipTo) !== '' ? htmlspecialchars($defaultShipTo) : 'Same as billing address' ?></p>
+                    <p class="rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-700" id="shipToDisplay"><?= $defaultShipToHtml !== '' ? $defaultShipToHtml : 'Same as billing address' ?></p>
                     <input type="hidden" id="shipToDisplayValue" value="<?= htmlspecialchars($defaultShipTo) ?>">
                 </div>
             </div>
@@ -654,6 +675,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
 
     // Store address data for modal
     const addressData = <?php echo json_encode(array_map(function ($addr) {
+                            $invoiceAddressConn = $GLOBALS['conn'] ?? null;
                             $billParts = [];
                             if (!empty($addr['first_name'])) $billParts[] = $addr['first_name'] . ' ' . $addr['last_name'];
                             if (!empty($addr['address_line1'])) $billParts[] = $addr['address_line1'];
@@ -675,12 +697,19 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                                 if (!empty($addr['shipping_country'])) $shipParts[] = $addr['shipping_country'];
                             }
                             $shipAddr = implode(', ', $shipParts);
+                            $billHtml = invoice_format_order_info_address_display_html($addr, 'billing', $invoiceAddressConn);
+                            $shipHtml = invoice_format_order_info_address_display_html($addr, 'shipping', $invoiceAddressConn);
+                            if ($shipHtml === '') {
+                                $shipHtml = $billHtml;
+                            }
 
                             return [
                                 'id' => $addr['id'],
                                 'order_number' => $addr['order_number'] ?? '',
                                 'bill_to' => $billAddr,
                                 'ship_to' => $shipAddr,
+                                'bill_html' => $billHtml,
+                                'ship_html' => $shipHtml,
                                 'state' => $addr['state'] ?? ''
                             ];
                         }, $customer_address)) ?>;
@@ -708,8 +737,8 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 <input type="radio" name="addressRadio" value="${addr.id}" data-bill-to="${addr.bill_to}" data-ship-to="${addr.ship_to}" ${addr.id == currentAddressId ? 'checked' : ''} class="h-4 w-4 text-orange-600">
                 ${addr.order_number ? `<div class="mt-1 text-xs text-gray-500">${addr.order_number}</div>` : ''}
             </td>
-            <td class="p-3 text-sm text-gray-700">${addr.bill_to}</td>
-            <td class="p-3 text-sm text-gray-700">${addr.ship_to || '<span class="text-gray-400">No shipping address</span>'}</td>
+            <td class="p-3 text-sm text-gray-700 leading-relaxed">${addr.bill_html || addr.bill_to}</td>
+            <td class="p-3 text-sm text-gray-700 leading-relaxed">${addr.ship_html || addr.ship_to || '<span class="text-gray-400">No shipping address</span>'}</td>
         `;
             tableBody.appendChild(row);
         });
@@ -746,6 +775,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
         const addressId = selectedRadio.value;
         const billTo = selectedRadio.getAttribute('data-bill-to');
         const shipTo = selectedRadio.getAttribute('data-ship-to');
+        const selectedAddress = addressData.find(a => a.id == addressId);
 
         // Update form fields
         document.getElementById('vp_order_info_id').value = addressId;
@@ -754,12 +784,16 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
 
         const billToText = document.getElementById('billToText');
         if (billToText) {
-            billToText.textContent = billTo;
+            billToText.innerHTML = (selectedAddress && selectedAddress.bill_html)
+                ? selectedAddress.bill_html
+                : (billTo || 'No billing address found');
         }
 
         const shipToDisplay = document.getElementById('shipToDisplay');
         if (shipToDisplay) {
-            shipToDisplay.textContent = shipTo || '';
+            shipToDisplay.innerHTML = (selectedAddress && selectedAddress.ship_html)
+                ? selectedAddress.ship_html
+                : (shipTo || '');
         }
         const shipToHidden = document.getElementById('shipToDisplayValue');
         if (shipToHidden) {
@@ -767,10 +801,9 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
         }
 
         // Auto-populate GST fields based on state comparison
-        const selectedAddress = addressData.find(a => a.id == addressId);
         if (selectedAddress) {
             const gstType = calculateGSTType(selectedAddress.state);
-            updateGSTFields(gstType);
+            refreshInvoiceGstFields(gstType);
             const supplyState = document.getElementById('supplystate');
             const supplyValue = supplyState ? supplyState.querySelectorAll('span')[1] : null;
             if (supplyValue) {
@@ -864,6 +897,26 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
 
     function removeRow(btn) {
         btn.closest('tr').remove();
+        calculateTotals();
+    }
+
+    function shouldApplyInvoiceGst() {
+        const applyGSTCheckbox = document.getElementById('applyGST');
+        if (!applyGSTCheckbox) {
+            return true;
+        }
+        return applyGSTCheckbox.checked;
+    }
+
+    function refreshInvoiceGstFields(gstType) {
+        if (shouldApplyInvoiceGst()) {
+            updateGSTFields(gstType);
+            return;
+        }
+        if (typeof clearGSTFields === 'function') {
+            clearGSTFields();
+            return;
+        }
         calculateTotals();
     }
 
@@ -1012,9 +1065,9 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
             }
         });
 
-        // Set initial GST based on default billing state
+        // Set initial GST based on default billing state and Apply GST checkbox
         const gstType = calculateGSTType('<?php echo $billingState; ?>');
-        updateGSTFields(gstType);
+        refreshInvoiceGstFields(gstType);
         initShippingPortMasterFields();
         initFinalDestinationCountryField();
     });
@@ -1320,21 +1373,11 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
 
     // Add event listener for applyGST checkbox
     document.addEventListener('DOMContentLoaded', function() {
-        // Set initial GST based on default billing state
-        const gstType = calculateGSTType('<?php echo $billingState; ?>');
-        updateGSTFields(gstType);
-
-        // Add listener for GST checkbox
         const applyGSTCheckbox = document.getElementById('applyGST');
         if (applyGSTCheckbox) {
             applyGSTCheckbox.addEventListener('change', function() {
-                if (this.checked) {
-                    const gstType = calculateGSTType('<?php echo $billingState; ?>');
-                    updateGSTFields(gstType);
-                } else {
-                    // Clear all GST values
-                    clearGSTFields();
-                }
+                const gstType = calculateGSTType('<?php echo $billingState; ?>');
+                refreshInvoiceGstFields(gstType);
             });
         }
     });
@@ -1513,7 +1556,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
 
             // Update GST fields based on current billing state
             const gstType = calculateGSTType('<?php echo $billingState; ?>');
-            updateGSTFields(gstType);
+            refreshInvoiceGstFields(gstType);
 
             calculateTotals();
             // Close modal
