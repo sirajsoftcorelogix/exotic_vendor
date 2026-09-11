@@ -1207,6 +1207,36 @@ switch ($page) {
                 break;
         }
         break;
+    case 'ports':
+        require_once 'controllers/PortsController.php';
+        $controller = new PortsController($conn);
+        switch ($action) {
+            case 'list':
+                $controller->index();
+                break;
+            case 'save':
+                $controller->save();
+                break;
+            case 'details':
+                $controller->details();
+                break;
+            case 'status':
+                $controller->status();
+                break;
+            case 'delete':
+                $controller->delete();
+                break;
+            case 'checkCode':
+                $controller->checkCode();
+                break;
+            case 'search':
+                $controller->search();
+                break;
+            default:
+                $controller->index();
+                break;
+        }
+        break;
     case 'sizes':
         require_once 'controllers/SizesController.php';
         $controller = new SizesController($conn);
