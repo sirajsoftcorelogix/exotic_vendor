@@ -78,13 +78,60 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 <div class="mb-5">
                     <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Shipment route</h3>
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <?php
+                $shippingPorts = is_array($shipping_ports ?? null) ? $shipping_ports : [];
+                $shippingPortTypes = is_array($shipping_port_types ?? null) ? $shipping_port_types : [];
+                $selectedPreCarriage = (string) ($intl['pre_carriage_by'] ?? 'Air');
+                $selectedLoading = (string) ($intl['port_of_loading'] ?? '');
+                $selectedShippingPort = strtoupper((string) ($intl['shipping_port'] ?? ''));
+                $preCarriageValues = class_exists('PortMaster') ? PortMaster::preCarriageValues() : [];
+                ?>
                 <div>
                     <label for="pre_carriage_by" class="<?php echo $invLabelClass; ?>">Pre Carriage By</label>
-                    <input type="text" name="pre_carriage_by" id="pre_carriage_by" value="<?php echo $intlVal('pre_carriage_by'); ?>" class="<?php echo $invInputClass; ?> inv-input">
+                    <?php if ($shippingPortTypes !== []): ?>
+                        <select name="pre_carriage_by" id="pre_carriage_by" class="<?php echo $invInputClass; ?> inv-input">
+                            <?php foreach ($shippingPortTypes as $typeKey => $typeLabel): ?>
+                                <?php
+                                $preValue = $preCarriageValues[$typeKey] ?? $typeLabel;
+                                $preSelected = strcasecmp($selectedPreCarriage, (string) $preValue) === 0
+                                    || strcasecmp($selectedPreCarriage, (string) $typeLabel) === 0
+                                    || strcasecmp($selectedPreCarriage, (string) $typeKey) === 0;
+                                ?>
+                                <option value="<?php echo htmlspecialchars((string) $preValue, ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-port-type="<?php echo htmlspecialchars((string) $typeKey, ENT_QUOTES, 'UTF-8'); ?>"
+                                    <?php echo $preSelected ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars((string) $typeLabel, ENT_QUOTES, 'UTF-8'); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    <?php else: ?>
+                        <input type="text" name="pre_carriage_by" id="pre_carriage_by" value="<?php echo $intlVal('pre_carriage_by'); ?>" class="<?php echo $invInputClass; ?> inv-input">
+                    <?php endif; ?>
                 </div>
                 <div>
                     <label for="port_of_loading" class="<?php echo $invLabelClass; ?>">Port of Loading</label>
-                    <input type="text" name="port_of_loading" id="port_of_loading" value="<?php echo $intlVal('port_of_loading'); ?>" class="<?php echo $invInputClass; ?> inv-input">
+                    <?php if ($shippingPorts !== []): ?>
+                        <select name="port_of_loading" id="port_of_loading" class="<?php echo $invInputClass; ?> inv-input">
+                            <option value="">Select port of loading</option>
+                            <?php foreach ($shippingPorts as $portRow): ?>
+                                <?php
+                                $portOption = PortMaster::formatPortOption($portRow);
+                                $portCode = strtoupper(trim((string) ($portRow['port_code'] ?? '')));
+                                $portType = (string) ($portRow['port_type'] ?? '');
+                                $isSelected = $portOption === $selectedLoading
+                                    || ($portCode !== '' && $portCode === $selectedShippingPort);
+                                ?>
+                                <option value="<?php echo htmlspecialchars($portOption, ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-port-code="<?php echo htmlspecialchars($portCode, ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-port-type="<?php echo htmlspecialchars($portType, ENT_QUOTES, 'UTF-8'); ?>"
+                                    <?php echo $isSelected ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($portOption, ENT_QUOTES, 'UTF-8'); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    <?php else: ?>
+                        <input type="text" name="port_of_loading" id="port_of_loading" value="<?php echo $intlVal('port_of_loading'); ?>" class="<?php echo $invInputClass; ?> inv-input">
+                    <?php endif; ?>
                 </div>
                 <div>
                     <label for="port_of_discharge" class="<?php echo $invLabelClass; ?>">Port of Discharge</label>
@@ -939,7 +986,77 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
         // Set initial GST based on default billing state
         const gstType = calculateGSTType('<?php echo $billingState; ?>');
         updateGSTFields(gstType);
+        initShippingPortMasterFields();
     });
+
+    function shippingPortTypeFromPreCarriage(selectEl) {
+        const selected = selectEl?.options?.[selectEl.selectedIndex];
+        const fromData = (selected?.dataset?.portType || '').toLowerCase();
+        if (fromData) {
+            return fromData;
+        }
+        const value = String(selectEl?.value || '').toLowerCase();
+        if (value.indexOf('sea') !== -1) return 'sea';
+        if (value.indexOf('inland') !== -1) return 'inland';
+        if (value.indexOf('dry') !== -1) return 'dry';
+        return 'air';
+    }
+
+    function syncShippingPortCode() {
+        const loading = document.getElementById('port_of_loading');
+        const shipping = document.getElementById('shipping_port');
+        if (!loading || !shipping || loading.tagName !== 'SELECT') {
+            return;
+        }
+        const selected = loading.options[loading.selectedIndex];
+        const code = selected?.dataset?.portCode || '';
+        if (code) {
+            shipping.value = code;
+        }
+    }
+
+    function filterPortOfLoadingByType(keepCurrent) {
+        const preCarriage = document.getElementById('pre_carriage_by');
+        const loading = document.getElementById('port_of_loading');
+        if (!preCarriage || !loading || loading.tagName !== 'SELECT') {
+            return;
+        }
+        const type = shippingPortTypeFromPreCarriage(preCarriage);
+        const current = loading.value;
+        let firstVisible = '';
+        Array.from(loading.options).forEach(function (opt) {
+            if (!opt.value) {
+                opt.hidden = false;
+                return;
+            }
+            const match = (opt.dataset.portType || '') === type;
+            opt.hidden = !match;
+            opt.disabled = !match;
+            if (match && firstVisible === '') {
+                firstVisible = opt.value;
+            }
+        });
+        const selected = loading.options[loading.selectedIndex];
+        if (!keepCurrent || !selected || selected.hidden || !selected.value) {
+            loading.value = firstVisible;
+        } else if (current) {
+            loading.value = current;
+        }
+        syncShippingPortCode();
+    }
+
+    function initShippingPortMasterFields() {
+        const preCarriage = document.getElementById('pre_carriage_by');
+        const loading = document.getElementById('port_of_loading');
+        if (!preCarriage || !loading || loading.tagName !== 'SELECT') {
+            return;
+        }
+        filterPortOfLoadingByType(true);
+        preCarriage.addEventListener('change', function () {
+            filterPortOfLoadingByType(false);
+        });
+        loading.addEventListener('change', syncShippingPortCode);
+    }
 
     // Validate international section before submitting
     function validateInternationalSection() {

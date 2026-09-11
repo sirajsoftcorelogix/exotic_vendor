@@ -173,6 +173,123 @@ class PortMaster
         ];
     }
 
+    /**
+     * Values stored on invoices as Pre Carriage By.
+     *
+     * @return array<string, string>
+     */
+    public static function preCarriageValues(): array
+    {
+        return [
+            self::TYPE_AIR => 'Air',
+            self::TYPE_SEA => 'Sea',
+            self::TYPE_INLAND => 'Inland',
+            self::TYPE_DRY => 'Dry',
+        ];
+    }
+
+    public static function preCarriageToPortType(string $preCarriage): string
+    {
+        $preCarriage = strtolower(trim($preCarriage));
+        if ($preCarriage === '') {
+            return self::TYPE_AIR;
+        }
+        $normalized = self::normalizePortType($preCarriage);
+        if ($normalized !== '') {
+            return $normalized;
+        }
+        foreach (self::preCarriageValues() as $type => $label) {
+            if (strtolower($label) === $preCarriage) {
+                return $type;
+            }
+        }
+        foreach (self::portTypeLabels() as $type => $label) {
+            if (strtolower($label) === $preCarriage) {
+                return $type;
+            }
+        }
+
+        return self::TYPE_AIR;
+    }
+
+    /**
+     * @param array<string, mixed> $port
+     */
+    public static function formatPortOption(array $port): string
+    {
+        $name = trim((string) ($port['port_name'] ?? ''));
+        $code = strtoupper(trim((string) ($port['port_code'] ?? '')));
+        $city = trim((string) ($port['city'] ?? ''));
+        $label = $name !== '' ? $name : $code;
+        if ($code !== '' && stripos($label, $code) === false) {
+            $label .= ' (' . $code . ')';
+        }
+        if ($city !== '' && stripos($label, $city) === false) {
+            $label .= ' — ' . $city;
+        }
+
+        return $label;
+    }
+
+    /**
+     * Align invoice export defaults with an active shipping port.
+     *
+     * @param array<string, mixed> $defaults
+     * @return array<string, mixed>
+     */
+    public function applyInvoiceDefaults(array $defaults): array
+    {
+        $type = self::preCarriageToPortType((string) ($defaults['pre_carriage_by'] ?? 'Air'));
+        $preCarriageValues = self::preCarriageValues();
+        $defaults['pre_carriage_by'] = $preCarriageValues[$type] ?? 'Air';
+
+        $ports = $this->getActivePorts($type, '', 200);
+        if ($ports === []) {
+            $ports = $this->getActivePorts('', '', 200);
+        }
+        if ($ports === []) {
+            return $defaults;
+        }
+
+        $wantedCode = strtoupper(trim((string) ($defaults['shipping_port'] ?? '')));
+        $wantedCity = strtolower(trim((string) ($defaults['port_of_loading'] ?? '')));
+        $match = null;
+
+        if ($wantedCode !== '' && $wantedCode !== 'INABG1') {
+            foreach ($ports as $port) {
+                if (strtoupper(trim((string) ($port['port_code'] ?? ''))) === $wantedCode) {
+                    $match = $port;
+                    break;
+                }
+            }
+        }
+        if ($match === null && $wantedCity !== '') {
+            foreach ($ports as $port) {
+                $city = strtolower(trim((string) ($port['city'] ?? '')));
+                $name = strtolower(trim((string) ($port['port_name'] ?? '')));
+                if ($city !== '' && (strpos($wantedCity, $city) !== false || strpos($city, $wantedCity) !== false)) {
+                    $match = $port;
+                    break;
+                }
+                if ($name !== '' && strpos($name, $wantedCity) !== false) {
+                    $match = $port;
+                    break;
+                }
+            }
+        }
+        if ($match === null) {
+            $match = $ports[0];
+        }
+
+        $defaults['port_of_loading'] = self::formatPortOption($match);
+        $code = strtoupper(trim((string) ($match['port_code'] ?? '')));
+        if ($code !== '') {
+            $defaults['shipping_port'] = $code;
+        }
+
+        return $defaults;
+    }
+
     public static function isValidPortType(string $type): bool
     {
         return array_key_exists($type, self::portTypeLabels());
