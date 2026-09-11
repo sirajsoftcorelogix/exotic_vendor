@@ -701,6 +701,7 @@ class DispatchController {
             // Get list of invoices for dropdown
             $invoice_id = $_GET['invoice_id'] ?? null;
             $invoices = [];
+            $dispatchRecords = [];
             $isInternational = false;
             $primaryOrderNumber = '';
             $destCountry = 'IN';
