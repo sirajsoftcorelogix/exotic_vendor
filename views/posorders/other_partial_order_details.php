@@ -1,4 +1,4 @@
-﻿<style>
+<style>
     .scrollbar-visible::-webkit-scrollbar {
         height: 6px;
     }
@@ -624,6 +624,7 @@ $proformaPrintDisabledReason = $canPrintProforma
                         $netLineAmount = $unitFinalPrice * $qty;
                         $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
                         $lineId = (int)($item['id'] ?? 0);
+                        $itemMaterial = trim((string)($item['material'] ?? ''));
                         $lineStatus = (string)($item['status'] ?? '');
                         $lineStatusLabel = (string)($statusList[$lineStatus] ?? ucwords(str_replace('_', ' ', $lineStatus)));
                         $statusOrderPayload = $buildStatusOrderPayload($item);
@@ -685,10 +686,23 @@ $proformaPrintDisabledReason = $canPrintProforma
 
                                     <div class="flex justify-between items-start">
                                         <div class="space-y-1.5 text-[13px]">
-                                            <p>
+                                            <p class="flex items-start gap-1">
                                                 <span class="inline-block w-16 font-bold text-black">Material</span>
                                                 <span class="text-black">:</span>
-                                                <span class="ml-2 text-gray-700"><?php echo htmlspecialchars(trim((string)($item['material'] ?? '')) !== '' ? (string)$item['material'] : '—'); ?></span>
+                                                <span id="order-item-material-<?php echo $lineId; ?>" class="ml-2 text-gray-700"><?php echo htmlspecialchars($itemMaterial !== '' ? $itemMaterial : '—'); ?></span>
+                                                <?php if ($canEditItemName): ?>
+                                                    <button type="button"
+                                                        class="inline-flex shrink-0 items-center justify-center rounded-md p-0.5 text-gray-400 hover:bg-gray-100 hover:text-orange-600"
+                                                        title="Edit material"
+                                                        data-line-id="<?php echo $lineId; ?>"
+                                                        data-order-number="<?php echo htmlspecialchars($displayOrderNumber, ENT_QUOTES, 'UTF-8'); ?>"
+                                                        data-material="<?php echo htmlspecialchars($itemMaterial, ENT_QUOTES, 'UTF-8'); ?>"
+                                                        onclick="event.stopPropagation(); openItemMaterialEditPopup(this)">
+                                                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                        </svg>
+                                                    </button>
+                                                <?php endif; ?>
                                             </p>
                                             <p>
                                                 <span class="inline-block w-12 font-bold text-black">SKU</span>
@@ -1670,6 +1684,40 @@ renderPartial('views/shared/partials/pos_payment_modal.php', [
     </div>
 </div>
 <?php endif; ?>
+<?php if ($canEditItemName): ?>
+<div id="itemMaterialEditPopup" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6 relative">
+        <button type="button" onclick="closeItemMaterialEditPopup()" class="absolute top-3 right-4 text-gray-500 hover:text-gray-800">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+
+        <h2 class="text-xl font-bold mb-4 text-gray-800">Edit material</h2>
+
+        <form id="itemMaterialEditForm">
+            <input type="hidden" id="edit_material_line_id" name="line_id">
+            <input type="hidden" id="edit_material_order_number" name="order_number">
+
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="new_item_material">Material</label>
+            <input type="text" id="new_item_material" name="material"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                maxlength="255">
+
+            <div class="mt-6 flex justify-end gap-3">
+                <button type="button" onclick="closeItemMaterialEditPopup()"
+                    class="rounded-full px-5 py-2.5 bg-gray-200 text-gray-800 hover:bg-gray-300">
+                    Cancel
+                </button>
+                <button type="submit"
+                    class="rounded-full bg-[#D46B08] px-10 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700">
+                    Save
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php if ($canFetchOrderJson): ?>
 <div id="orderJsonModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-[90] p-4" onclick="closeOrderJsonModal(event)">
@@ -1750,6 +1798,76 @@ window.orderJsonModalConfig = {
     function closeItemTitleEditPopup() {
         document.getElementById('itemTitleEditPopup')?.classList.add('hidden');
     }
+
+    function openItemMaterialEditPopup(btn) {
+        if (!btn) {
+            return;
+        }
+        document.getElementById('edit_material_line_id').value = btn.getAttribute('data-line-id') || '';
+        document.getElementById('edit_material_order_number').value = btn.getAttribute('data-order-number') || '';
+        document.getElementById('new_item_material').value = btn.getAttribute('data-material') || '';
+        document.getElementById('itemMaterialEditPopup').classList.remove('hidden');
+        document.getElementById('new_item_material').focus();
+        document.getElementById('new_item_material').select();
+    }
+
+    function closeItemMaterialEditPopup() {
+        document.getElementById('itemMaterialEditPopup')?.classList.add('hidden');
+    }
+
+    document.getElementById('itemMaterialEditForm')?.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const lineId = document.getElementById('edit_material_line_id').value.trim();
+        const orderNumber = document.getElementById('edit_material_order_number').value.trim();
+        const material = document.getElementById('new_item_material').value.trim();
+        const saveBtn = this.querySelector('button[type="submit"]');
+
+        if (!lineId || !orderNumber) {
+            showOrderDetailsMessage('Order line required', 'Could not identify the order line.', 'warning');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('line_id', lineId);
+        formData.append('order_number', orderNumber);
+        formData.append('material', material);
+
+        if (saveBtn) {
+            saveBtn.disabled = true;
+        }
+
+        fetch(<?php echo json_encode(base_url('index.php?page=' . $orderStatusPage . '&action=update_item_material_ajax'), JSON_UNESCAPED_SLASHES); ?>, {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success) {
+                    showOrderDetailsMessage('Could not update', data.message || 'Could not update the material.', 'error');
+                    return;
+                }
+
+                const updated = (data.material != null ? String(data.material) : material).trim();
+                const textEl = document.getElementById('order-item-material-' + lineId);
+                if (textEl) {
+                    textEl.textContent = updated !== '' ? updated : '—';
+                }
+                document.querySelectorAll('button[data-line-id="' + lineId + '"][data-material]').forEach(function(editBtn) {
+                    editBtn.setAttribute('data-material', updated);
+                });
+                closeItemMaterialEditPopup();
+                showOrderDetailsMessage('Material updated', 'Material was saved on this order line.', 'success');
+            })
+            .catch(function() {
+                showOrderDetailsMessage('Request failed', 'Please try again.', 'error');
+            })
+            .finally(function() {
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                }
+            });
+    });
 
     document.getElementById('itemTitleEditForm')?.addEventListener('submit', function(e) {
         e.preventDefault();
