@@ -565,10 +565,12 @@ class Dispatch {
         return $result;
     }
       
-    public function getDispatchRecordsByInvoiceId($invoiceId) {
+    public function getDispatchRecordsByInvoiceId($invoiceId): array {
         $sql = "SELECT * FROM vp_dispatch_details WHERE invoice_id = ?";
         $stmt = $this->db->prepare($sql);
-        if (!$stmt) return false;
+        if (!$stmt) {
+            return [];
+        }
 
         $stmt->bind_param('i', $invoiceId);
         if ($stmt->execute()) {
@@ -616,7 +618,7 @@ class Dispatch {
             }
         }
 
-        return false;
+        return [];
     }
 
     public function getDispatchRecordsByOrderNumberOrInvoiceId(string $orderNumber, int $invoiceId = 0): array

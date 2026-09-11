@@ -22,8 +22,9 @@
      <?php 
     $isInternational = !empty($is_international);
     $primaryOrderNumber = (string) ($primary_order_number ?? '');
+    $dispatchRecords = is_array($dispatchRecords ?? null) ? $dispatchRecords : [];
     //if dispatch records not found for this invoice, show form to create dispatch, else show dispatch details and labels
-    if(isset($dispatchRecords) && count($dispatchRecords) == 0) {
+    if(count($dispatchRecords) === 0) {
         //dispatch records not found, show form to create dispatch
     ?>
     <form id="dispatchForm" method="POST" action="">
