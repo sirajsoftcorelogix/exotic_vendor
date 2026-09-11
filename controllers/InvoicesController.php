@@ -6,6 +6,7 @@ require_once 'models/comman/tables.php';
 require_once 'models/product/product.php';
 require_once 'models/courier/CourierPartner.php';
 require_once 'models/port/PortMaster.php';
+require_once 'models/country/country.php';
 require_once __DIR__ . '/../helpers/international_invoice_defaults.php';
 require_once __DIR__ . '/../helpers/app_settings.php';
 
@@ -142,6 +143,8 @@ class InvoicesController
                     }
                 }
                 $data['international_defaults'] = $portModel->applyInvoiceDefaults($data['international_defaults']);
+                $countryModel = new Country($conn);
+                $data['invoice_countries'] = $countryModel->getAllCountries()['countries'] ?? [];
             }
         }
 

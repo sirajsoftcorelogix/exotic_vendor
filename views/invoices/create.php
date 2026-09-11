@@ -143,7 +143,36 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 </div>
                 <div>
                     <label for="country_of_final_destination" class="<?php echo $invLabelClass; ?>">Country of Final Destination</label>
-                    <input type="text" name="country_of_final_destination" id="country_of_final_destination" value="<?php echo $intlVal('country_of_final_destination'); ?>" class="<?php echo $invInputClass; ?> inv-input">
+                    <?php
+                    $invoiceCountries = is_array($invoice_countries ?? null) ? $invoice_countries : [];
+                    $selectedDestCountry = (string) ($intl['country_of_final_destination'] ?? '');
+                    $selectedDestCode = strtoupper((string) ($intl['shipping_country_code'] ?? ''));
+                    ?>
+                    <?php if ($invoiceCountries !== []): ?>
+                        <select name="country_of_final_destination" id="country_of_final_destination" class="<?php echo $invInputClass; ?> inv-input">
+                            <option value="">Select country</option>
+                            <?php foreach ($invoiceCountries as $countryRow): ?>
+                                <?php
+                                $countryName = trim((string) ($countryRow['name'] ?? ''));
+                                $countryCode = strtoupper(trim((string) ($countryRow['country_code'] ?? '')));
+                                if ($countryName === '') {
+                                    continue;
+                                }
+                                $countrySelected = strcasecmp($selectedDestCountry, $countryName) === 0
+                                    || ($countryCode !== '' && $countryCode === $selectedDestCode)
+                                    || ($countryCode !== '' && strcasecmp($selectedDestCountry, $countryCode) === 0);
+                                $countryLabel = $countryCode !== '' ? $countryName . ' (' . $countryCode . ')' : $countryName;
+                                ?>
+                                <option value="<?php echo htmlspecialchars($countryName, ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-country-code="<?php echo htmlspecialchars($countryCode, ENT_QUOTES, 'UTF-8'); ?>"
+                                    <?php echo $countrySelected ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($countryLabel, ENT_QUOTES, 'UTF-8'); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    <?php else: ?>
+                        <input type="text" name="country_of_final_destination" id="country_of_final_destination" value="<?php echo $intlVal('country_of_final_destination'); ?>" class="<?php echo $invInputClass; ?> inv-input">
+                    <?php endif; ?>
                 </div>
                 <div>
                     <label for="final_destination" class="<?php echo $invLabelClass; ?>">Final Destination</label>
@@ -987,6 +1016,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
         const gstType = calculateGSTType('<?php echo $billingState; ?>');
         updateGSTFields(gstType);
         initShippingPortMasterFields();
+        initFinalDestinationCountryField();
     });
 
     function shippingPortTypeFromPreCarriage(selectEl) {
@@ -1056,6 +1086,28 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
             filterPortOfLoadingByType(false);
         });
         loading.addEventListener('change', syncShippingPortCode);
+    }
+
+    function syncShippingCountryCode() {
+        const country = document.getElementById('country_of_final_destination');
+        const codeInput = document.getElementById('shipping_country_code');
+        if (!country || !codeInput || country.tagName !== 'SELECT') {
+            return;
+        }
+        const selected = country.options[country.selectedIndex];
+        const code = selected?.dataset?.countryCode || '';
+        if (code) {
+            codeInput.value = code;
+        }
+    }
+
+    function initFinalDestinationCountryField() {
+        const country = document.getElementById('country_of_final_destination');
+        if (!country || country.tagName !== 'SELECT') {
+            return;
+        }
+        syncShippingCountryCode();
+        country.addEventListener('change', syncShippingCountryCode);
     }
 
     // Validate international section before submitting
