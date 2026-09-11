@@ -17,8 +17,9 @@ class PortMaster
 
     public function ensureSchema(): void
     {
+        $this->renameLegacyTable();
         $this->conn->query(
-            "CREATE TABLE IF NOT EXISTS port_master (
+            "CREATE TABLE IF NOT EXISTS shipping_port_master (
                 id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
                 port_name VARCHAR(255) NOT NULL,
                 port_code VARCHAR(20) NOT NULL,
@@ -30,15 +31,133 @@ class PortMaster
                 user_id INT UNSIGNED NULL DEFAULT NULL,
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY uq_port_master_code (port_code),
-                INDEX idx_port_master_type (port_type),
-                INDEX idx_port_master_country (country_id),
-                INDEX idx_port_master_city (city),
-                INDEX idx_port_master_active (is_active),
-                INDEX idx_port_master_name (port_name)
+                UNIQUE KEY uq_shipping_port_master_code (port_code),
+                INDEX idx_shipping_port_master_type (port_type),
+                INDEX idx_shipping_port_master_country (country_id),
+                INDEX idx_shipping_port_master_city (city),
+                INDEX idx_shipping_port_master_active (is_active),
+                INDEX idx_shipping_port_master_name (port_name)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
         );
         $this->ensureModule();
+        $this->seedDefaultPorts();
+    }
+
+    private function renameLegacyTable(): void
+    {
+        $old = @$this->conn->query("SHOW TABLES LIKE 'port_master'");
+        $new = @$this->conn->query("SHOW TABLES LIKE 'shipping_port_master'");
+        $oldExists = $old && $old->num_rows > 0;
+        $newExists = $new && $new->num_rows > 0;
+        if ($oldExists && !$newExists) {
+            @$this->conn->query('RENAME TABLE port_master TO shipping_port_master');
+        }
+    }
+
+    /**
+     * Common Indian air-cargo ports (ICEGATE ACC codes).
+     *
+     * @return list<array{port_name:string,port_code:string,port_type:string,city:string,pincode:string}>
+     */
+    public static function defaultSeedPorts(): array
+    {
+        return [
+            [
+                'port_name' => 'Delhi Air Cargo ACC',
+                'port_code' => 'INDEL4',
+                'port_type' => self::TYPE_AIR,
+                'city' => 'Delhi',
+                'pincode' => '110037',
+            ],
+            [
+                'port_name' => 'Chennai Air Cargo ACC',
+                'port_code' => 'INMAA4',
+                'port_type' => self::TYPE_AIR,
+                'city' => 'Chennai',
+                'pincode' => '600027',
+            ],
+            [
+                'port_name' => 'Varanasi Air Cargo (Banaras)',
+                'port_code' => 'INVNS4',
+                'port_type' => self::TYPE_AIR,
+                'city' => 'Banaras',
+                'pincode' => '221006',
+            ],
+            [
+                'port_name' => 'Chennai Port',
+                'port_code' => 'INMAA1',
+                'port_type' => self::TYPE_SEA,
+                'city' => 'Chennai',
+                'pincode' => '600001',
+            ],
+            [
+                'port_name' => 'Kamarajar Port (Ennore)',
+                'port_code' => 'INENR1',
+                'port_type' => self::TYPE_SEA,
+                'city' => 'Chennai',
+                'pincode' => '600057',
+            ],
+            [
+                'port_name' => 'Kattupalli Port',
+                'port_code' => 'INKAT1',
+                'port_type' => self::TYPE_SEA,
+                'city' => 'Chennai',
+                'pincode' => '601120',
+            ],
+            [
+                'port_name' => 'JNPT Nhava Sheva',
+                'port_code' => 'INNSA1',
+                'port_type' => self::TYPE_SEA,
+                'city' => 'Navi Mumbai',
+                'pincode' => '400707',
+            ],
+            [
+                'port_name' => 'ICD Tughlakabad',
+                'port_code' => 'INTKD6',
+                'port_type' => self::TYPE_DRY,
+                'city' => 'Delhi',
+                'pincode' => '110020',
+            ],
+            [
+                'port_name' => 'ICD Patparganj',
+                'port_code' => 'INPPG6',
+                'port_type' => self::TYPE_DRY,
+                'city' => 'Delhi',
+                'pincode' => '110096',
+            ],
+            [
+                'port_name' => 'ICD Tondiarpet',
+                'port_code' => 'INTVT6',
+                'port_type' => self::TYPE_DRY,
+                'city' => 'Chennai',
+                'pincode' => '600019',
+            ],
+            [
+                'port_name' => 'ICD Varanasi (Banaras)',
+                'port_code' => 'INBSB6',
+                'port_type' => self::TYPE_DRY,
+                'city' => 'Banaras',
+                'pincode' => '221002',
+            ],
+        ];
+    }
+
+    private function seedDefaultPorts(): void
+    {
+        $countryId = $this->getDefaultCountryId();
+        if ($countryId <= 0 || !$this->countryExists($countryId)) {
+            return;
+        }
+
+        foreach (self::defaultSeedPorts() as $port) {
+            $code = strtoupper(trim((string) ($port['port_code'] ?? '')));
+            if ($code === '' || $this->portCodeExists($code)) {
+                continue;
+            }
+            $port['country_id'] = $countryId;
+            $port['is_active'] = 1;
+            $this->insertPort($port, 1);
+        }
     }
 
     /**
@@ -186,7 +305,7 @@ class PortMaster
         ];
 
         $countSql = 'SELECT COUNT(*) AS total
-                     FROM port_master pm
+                     FROM shipping_port_master pm
                      LEFT JOIN countries c ON c.id = pm.country_id'
             . $whereSql;
         $countStmt = $this->conn->prepare($countSql);
@@ -204,7 +323,7 @@ class PortMaster
                        pm.is_active, pm.user_id, pm.created_at, pm.updated_at,
                        c.name AS country_name, c.country_code,
                        u.name AS user_name
-                FROM port_master pm
+                FROM shipping_port_master pm
                 LEFT JOIN countries c ON c.id = pm.country_id
                 LEFT JOIN vp_users u ON u.id = pm.user_id'
             . $whereSql
@@ -249,7 +368,7 @@ class PortMaster
             'SELECT pm.id, pm.port_name, pm.port_code, pm.port_type, pm.city, pm.country_id, pm.pincode,
                     pm.is_active, pm.user_id, pm.created_at, pm.updated_at,
                     c.name AS country_name, c.country_code
-             FROM port_master pm
+             FROM shipping_port_master pm
              LEFT JOIN countries c ON c.id = pm.country_id
              WHERE pm.id = ?
              LIMIT 1'
@@ -302,7 +421,7 @@ class PortMaster
 
         $sql = 'SELECT pm.id, pm.port_name, pm.port_code, pm.port_type, pm.city, pm.country_id, pm.pincode,
                        c.name AS country_name, c.country_code
-                FROM port_master pm
+                FROM shipping_port_master pm
                 LEFT JOIN countries c ON c.id = pm.country_id
                 WHERE ' . implode(' AND ', $where) . '
                 ORDER BY pm.port_name ASC
@@ -337,7 +456,7 @@ class PortMaster
 
         if ($excludeId !== null && $excludeId > 0) {
             $stmt = $this->conn->prepare(
-                'SELECT id FROM port_master
+                'SELECT id FROM shipping_port_master
                  WHERE UPPER(TRIM(port_code)) = ?
                    AND id != ?
                  LIMIT 1'
@@ -345,7 +464,7 @@ class PortMaster
             $stmt->bind_param('si', $portCode, $excludeId);
         } else {
             $stmt = $this->conn->prepare(
-                'SELECT id FROM port_master
+                'SELECT id FROM shipping_port_master
                  WHERE UPPER(TRIM(port_code)) = ?
                  LIMIT 1'
             );
@@ -380,7 +499,7 @@ class PortMaster
         }
 
         $stmt = $this->conn->prepare(
-            'INSERT INTO port_master (port_name, port_code, port_type, city, country_id, pincode, is_active, user_id)
+            'INSERT INTO shipping_port_master (port_name, port_code, port_type, city, country_id, pincode, is_active, user_id)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
         );
         if (!$stmt) {
@@ -444,7 +563,7 @@ class PortMaster
         }
 
         $stmt = $this->conn->prepare(
-            'UPDATE port_master
+            'UPDATE shipping_port_master
              SET port_name = ?, port_code = ?, port_type = ?, city = ?, country_id = ?, pincode = ?, is_active = ?
              WHERE id = ?'
         );
@@ -490,7 +609,7 @@ class PortMaster
             return ['success' => false, 'message' => 'Invalid port id.'];
         }
         $isActive = $isActive ? 1 : 0;
-        $stmt = $this->conn->prepare('UPDATE port_master SET is_active = ? WHERE id = ?');
+        $stmt = $this->conn->prepare('UPDATE shipping_port_master SET is_active = ? WHERE id = ?');
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
         }
@@ -510,7 +629,7 @@ class PortMaster
             return ['success' => false, 'message' => 'Invalid port id.'];
         }
 
-        $stmt = $this->conn->prepare('DELETE FROM port_master WHERE id = ?');
+        $stmt = $this->conn->prepare('DELETE FROM shipping_port_master WHERE id = ?');
         if (!$stmt) {
             return ['success' => false, 'message' => 'Prepare failed: ' . $this->conn->error];
         }
@@ -602,9 +721,11 @@ class PortMaster
     {
         $check = @$this->conn->query("SELECT id FROM modules WHERE slug = 'ports' LIMIT 1");
         $moduleId = 0;
+        $icon = '<i class="fas fa-plane-departure mr-2"></i>';
         if ($check && ($row = $check->fetch_assoc())) {
             $moduleId = (int) ($row['id'] ?? 0);
             if ($moduleId > 0) {
+                $this->ensureMenuIcon($icon);
                 $this->ensurePermissions($moduleId);
                 return;
             }
@@ -628,7 +749,6 @@ class PortMaster
             }
         }
 
-        $icon = '<i class="fas fa-anchor mr-2"></i>';
         $stmt = $this->conn->prepare(
             'INSERT INTO modules (parent_id, module_name, slug, `action`, font_awesome_icon, active, user_id, sort_order)
              VALUES (?, ?, ?, ?, ?, 1, 1, 225)'
@@ -651,6 +771,26 @@ class PortMaster
         if ($moduleId > 0) {
             $this->ensurePermissions($moduleId);
         }
+    }
+
+    private function ensureMenuIcon(string $icon): void
+    {
+        $stmt = $this->conn->prepare(
+            "UPDATE modules
+             SET font_awesome_icon = ?
+             WHERE slug = 'ports'
+               AND (font_awesome_icon IS NULL OR font_awesome_icon NOT LIKE '%fa-plane-departure%')"
+        );
+        if (!$stmt) {
+            return;
+        }
+        $stmt->bind_param('s', $icon);
+        try {
+            $stmt->execute();
+        } catch (Throwable $e) {
+            // Icon update is best-effort.
+        }
+        $stmt->close();
     }
 
     private function ensurePermissions(int $moduleId): void
