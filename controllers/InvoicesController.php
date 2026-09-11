@@ -948,7 +948,7 @@ class InvoicesController
                     'ewb_message' => 'E-Way bill generated successfully.',
                 ];
             }
-
+            $updateData['irn'] = $internationalData['irn'] ?? null; 
             $updateData['ewb_error_message'] = json_encode($ewbResponse['ErrorDetails'] ?? $ewbResponse['message'] ?? 'Unknown error');
             $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
 
