@@ -678,10 +678,10 @@ class PosInvoiceController
             require_once __DIR__ . '/InvoicesController.php';
             $controller = new InvoicesController();
             $result = $controller->generateAlankitEwbForInvoice($invoiceId, $ewbData);
-            $this->syncInternationalEwbTracking($invoiceId);
+            //$this->syncInternationalEwbTracking($invoiceId);
             $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
             $ok = !empty($result['status']) || strtolower(trim((string) ($latest['ewb_status'] ?? ''))) === 'generated';
-
+            //print_r($result);
             echo json_encode([
                 'success' => $ok,
                 'message' => $ok

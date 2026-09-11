@@ -870,25 +870,25 @@ class InvoicesController
         $payload = [
             'Irn' => (string) ($internationalData['irn'] ?? ''),
             'Distance' => 0,
-            'DispDtls' => [
-                'Nm' => trim((string) (($customer['first_name'] ?? '') . ' ' . ($customer['last_name'] ?? ''))),
-                'Addr1' => $shippingAddress !== '' ? $shippingAddress : $buyerAddress,
-                'Addr2' => '',
-                'Loc' => trim((string) ($customer['shipping_city'] ?? $customer['city'] ?? '')),
-                'Pin' => explode('-', $zip)[0] ?? '',
-                'Stcd' => trim((string) ($customer['shipping_state_code'] ?? $customer['state_code'] ?? '')),
-            ],
-            'ExpDtls' => [
-                'ShipBNo' => (string) ($internationalData['shipping_bill_number'] ?? ''),
-                'ShipBDt' => !empty($internationalData['shipping_bill_date'])
-                    ? date('d/m/Y', strtotime((string) $internationalData['shipping_bill_date']))
-                    : date('d/m/Y'),
-                'Port' => (string) ($internationalData['shipping_port'] ?? $internationalData['shipping_port_code'] ?? 'INABG1'),
-                'RefClm' => (string) ($internationalData['shipping_ref_clm'] ?? 'N'),
-                'ForCur' => (string) ($internationalData['shipping_currency'] ?? $invoice['currency'] ?? 'USD'),
-                'CntCode' => (string) ($internationalData['shipping_country_code'] ?? $customer['shipping_country'] ?? $customer['country'] ?? ''),
-                'ExpDuty' => (float) ($internationalData['shipping_exp_duty'] ?? 0),
-            ],
+            // 'DispDtls' => [
+            //     'Nm' => trim((string) (($customer['first_name'] ?? '') . ' ' . ($customer['last_name'] ?? ''))),
+            //     'Addr1' => $shippingAddress !== '' ? $shippingAddress : $buyerAddress,
+            //     'Addr2' => '',
+            //     'Loc' => trim((string) ($customer['shipping_city'] ?? $customer['city'] ?? '')),
+            //     'Pin' => explode('-', $zip)[0] ?? '',
+            //     'Stcd' => trim((string) ($customer['shipping_state_code'] ?? $customer['state_code'] ?? '')),
+            // ],
+            // 'ExpDtls' => [
+            //     'ShipBNo' => (string) ($internationalData['shipping_bill_number'] ?? ''),
+            //     'ShipBDt' => !empty($internationalData['shipping_bill_date'])
+            //         ? date('d/m/Y', strtotime((string) $internationalData['shipping_bill_date']))
+            //         : date('d/m/Y'),
+            //     'Port' => (string) ($internationalData['shipping_port'] ?? $internationalData['shipping_port_code'] ?? 'INABG1'),
+            //     'RefClm' => (string) ($internationalData['shipping_ref_clm'] ?? 'N'),
+            //     'ForCur' => (string) ($internationalData['shipping_currency'] ?? $invoice['currency'] ?? 'USD'),
+            //     'CntCode' => (string) ($internationalData['shipping_country_code'] ?? $customer['shipping_country'] ?? $customer['country'] ?? ''),
+            //     'ExpDuty' => (float) ($internationalData['shipping_exp_duty'] ?? 0),
+            // ],
         ];
 
         if (!empty($ewbData)) {
@@ -953,6 +953,8 @@ class InvoicesController
             $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
 
             return [
+                'updateInvoiceInternational' => $updateData,
+                'ewb_response' => $ewbResponse,
                 'status' => false,
                 'message' => $ewbResponse['message'] ?? 'Failed to generate E-Way bill.',
                 'error_details' => $ewbResponse['ErrorDetails'] ?? ($ewbResponse['message'] ?? 'Unknown error'),

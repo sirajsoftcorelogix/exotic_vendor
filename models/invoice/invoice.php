@@ -361,7 +361,7 @@ class Invoice
         $sql = "UPDATE vp_invoices_international SET " . implode(', ', $updateFields) . ", updated_at = NOW() WHERE invoice_id = ?";
         $stmt = $this->db->prepare($sql);
         if (!$stmt) return false;
-        echo "Executing SQL: $sql with params: " . implode(', ', $bindParams) . "\n"; // Debugging line
+
         // Dynamically bind parameters
         $stmt->bind_param($bindTypes, ...$bindParams);
         return $stmt->execute();
