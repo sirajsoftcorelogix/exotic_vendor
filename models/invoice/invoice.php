@@ -299,7 +299,7 @@ class Invoice
         $shippingCurrency = (string)($data['shipping_currency'] ?? 'USD');
         $shippingCountryCode = (string)($data['shipping_country_code'] ?? '');
         $shippingExpDuty = (float)($data['shipping_exp_duty'] ?? 0);
-        $transportSelection = (string)($data['transport_selection'] ?? 'mode');
+        $transportSelection = (string)($data['transport_selection'] ?? 'id');
         $transMode = trim((string)($data['trans_mode'] ?? ''));
         $vehNo = trim((string)($data['veh_no'] ?? ''));
         $vehType = trim((string)($data['veh_type'] ?? ''));
