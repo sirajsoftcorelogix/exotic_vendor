@@ -211,30 +211,51 @@ class DispatchController {
     }
 
     public function create() {
-        global $commanModel, $invoiceModel, $dispatchModel;
+        global $commanModel, $invoiceModel, $dispatchModel, $ordersModel;
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
             
-            $data = $_POST;
-            $data['created_by'] = 1;
+            $rawInput = json_decode(file_get_contents('php://input'), true);
+            $data = is_array($rawInput) ? $rawInput : $_POST;
+            $data['created_by'] = $_SESSION['user']['id'] ?? 1;
             $data['created_at'] = date('Y-m-d H:i:s');
             
-            // Validate invoice_id exists
-            $invoice = $invoiceModel->getInvoiceById($data['invoice_id']);
+            $invoiceId = (int)($data['invoice_id'] ?? 0);
+            $invoice = $invoiceId > 0 ? $invoiceModel->getInvoiceById($invoiceId) : null;
             if (!$invoice) {
-                $errorMsg = 'Invoice not found';
-                //if ($isAjax) {
-                    header('Content-Type: application/json');
-                    echo json_encode(['status' => 'error', 'message' => $errorMsg]);
-                // } else {
-                //     header('Location: ' . base_url('?page=dispatch&action=create&status=error&message=' . urlencode($errorMsg)));
-                // }
+                header('Content-Type: application/json');
+                echo json_encode(['status' => 'error', 'message' => 'Invoice not found']);
                 exit();
             }
             
-            // Process box dimensions and weights
+            $invoiceItems = $invoiceModel->getInvoiceItems($invoiceId);
+            $itemsMap = [];
+            foreach ($invoiceItems as $it) {
+                $itemsMap[$it['id']] = $it;
+                if (!empty($it['item_code'])) {
+                    $itemsMap[$it['item_code']] = $it;
+                }
+            }
+
+            $firm = app_setting_firm_details() ?? [];
+            $address = $commanModel->getDispatchAddress($invoice['vp_order_info_id'] ?? 0) ?? ($invoice['address'] ?? []);
+            $destCountry = normalizeCountryIso2(
+                $address['shipping_country'] ?? $address['country'] ?? 'IN',
+                $GLOBALS['conn'] ?? null
+            );
+            $isInternationalDispatch = isInternationalShipmentCountry($destCountry, $GLOBALS['conn'] ?? null);
+            $courierGateway = new CourierGateway($GLOBALS['conn']);
+            $courierShipmentModel = new CourierShipment($GLOBALS['conn']);
+
+            // Parse boxes
             $boxes = [];
-            if (isset($_POST['box_size']) && is_array($_POST['box_size'])) {
+            if (!empty($data['boxes']) && is_array($data['boxes'])) {
+                foreach ($data['boxes'] as $idx => $boxData) {
+                    $bNo = (int)($boxData['box_no'] ?? ($idx + 1));
+                    $boxes[$bNo] = $boxData;
+                    $boxes[$bNo]['box_no'] = $bNo;
+                }
+            } elseif (isset($_POST['box_size']) && is_array($_POST['box_size'])) {
                 foreach ($_POST['box_size'] as $boxNo => $boxSize) {
                     $boxes[$boxNo] = [
                         'box_no' => $boxNo,
@@ -245,58 +266,42 @@ class DispatchController {
                         'box_weight' => (float)($_POST['box_weight'][$boxNo] ?? 0),
                         'items' => $_POST['box_items'][$boxNo] ?? [],
                         'order_numbers' => $_POST['order_numbers'][$boxNo] ?? [],
-                        'groupname' => $_POST['item_groupnames'][$boxNo][0] ?? '' // assuming all items in box have same groupname, take first one
+                        'partner_code' => $_POST['partner_code'][$boxNo] ?? 'shiprocket',
+                        'pickup_location' => $_POST['pickup_location'] ?? 'Head Off',
+                        'groupname' => $_POST['item_groupnames'][$boxNo][0] ?? ''
                     ];
                 }
             }
-            $data['boxes'] = $boxes;
-            
-            // Validate required delivery fields  'shipment_type', 'exotic_gst_no'
-            $requiredFields = ['delivery_partner', 'pickup_location'];
-            foreach ($requiredFields as $field) {
-                if (empty($data[$field])) {
-                    $errorMsg = ucfirst(str_replace('_', ' ', $field)) . ' is required';
-                    //if ($isAjax) {
-                        header('Content-Type: application/json');
-                        echo json_encode(['status' => 'error', 'message' => $errorMsg]);
-                    // } else {
-                    //     header('Location: ' . base_url('?page=dispatch&action=create&status=error&message=' . urlencode($errorMsg)));
-                    // }
-                    exit();
-                }
-            }
 
-            // Build Shiprocket payload per requested format
-            $firm = app_setting_firm_details() ?? [];
-            $address = $commanModel->getDispatchAddress($invoice['vp_order_info_id'] ?? 0) ?? ($invoice['address'] ?? []);
-            $destCountry = normalizeCountryIso2(
-                $address['shipping_country'] ?? $address['country'] ?? 'IN',
-                $GLOBALS['conn'] ?? null
-            );
-            $isInternationalDispatch = isInternationalShipmentCountry($destCountry, $GLOBALS['conn'] ?? null);
-            $courierGateway = $isInternationalDispatch ? new CourierGateway($GLOBALS['conn']) : null;
-            $courierShipmentModel = $isInternationalDispatch ? new CourierShipment($GLOBALS['conn']) : null;
-
-            // prepare order_items by mapping item ids from boxes to invoice items
-            $invoiceItems = $invoiceModel->getInvoiceItems($invoice['id'] ?? $data['invoice_id']);
-            $itemsMap = [];
-            foreach ($invoiceItems as $it) {
-                $itemsMap[$it['id']] = $it;
+            if (empty($boxes)) {
+                header('Content-Type: application/json');
+                echo json_encode(['status' => 'error', 'message' => 'At least one box is required for dispatch.']);
+                exit();
             }
 
             $shiprocketResponses = [];
             $dispatchRecords = [];
-            // print_array($boxes);
-            // print_array($data);exit;
-            // Call Shiprocket API for each box
+            $errors = [];
+
+            $box_size_mapping = [
+                'R-1' => ['length' => 22, 'width' => 17, 'height' => 5], 'R-2' => ['length' => 16, 'width' => 13, 'height' => 13],
+                'R-3' => ['length' => 16, 'width' => 11, 'height' => 7], 'R-4' => ['length' => 13, 'width' => 10, 'height' => 7],
+                'R-5' => ['length' => 21, 'width' => 11, 'height' => 7], 'R-6' => ['length' => 11, 'width' => 10, 'height' => 8],
+                'R-7' => ['length' => 8, 'width' => 6, 'height' => 5], 'R-8' => ['length' => 12, 'width' => 12, 'height' => 1.5],
+                'R-9' => ['length' => 17, 'width' => 12, 'height' => 2], 'R-10' => ['length' => 12, 'width' => 9, 'height' => 2],
+                'R-11' => ['length' => 10, 'width' => 10, 'height' => 2], 'R-12' => ['length' => 13, 'width' => 9, 'height' => 5],
+                'R-13' => ['length' => 11, 'width' => 8, 'height' => 5], 'R-14' => ['length' => 14, 'width' => 12, 'height' => 10]
+            ];
+
             foreach ($boxes as $boxNo => $box) {
                 $orderItems = [];
                 $subTotal = 0;
                 $totalBillableWeight = 0;
+                $boxItems = is_array($box['items'] ?? null) ? $box['items'] : [];
 
-                foreach ($box['items'] as $itemId) {
-                    if (!isset($itemsMap[$itemId])) continue;
-                    $it = $itemsMap[$itemId];
+                foreach ($boxItems as $itemId) {
+                    $it = $itemsMap[$itemId] ?? null;
+                    if (!$it) continue;
                     $units = isset($it['quantity']) ? (int)$it['quantity'] : 1;
                     $price = isset($it['unit_price']) ? (float)$it['unit_price'] : (isset($it['selling_price']) ? (float)$it['selling_price'] : 0);
                     $rawHsn = $it['hsn'] ?? '';
@@ -305,397 +310,573 @@ class DispatchController {
                         if (strpos($rawHsn, '.') !== false) {
                             $hsnVal = explode('.', $rawHsn)[0];
                         } else {
-                            $hsnDigits = preg_replace('/\D/', '', $rawHsn);
-                            $hsnVal = $hsnDigits;
+                            $hsnVal = preg_replace('/\D/', '', $rawHsn);
                         }
                         $hsnVal = substr(preg_replace('/\D/','', $hsnVal), 0, 4);
                     }
                     $orderItems[] = [
-                        'name' => $it['groupname'] ?? $it['sku'] ?? 'Item',
-                        'sku' => $it['item_code'] ?? '',
+                        'name' => $it['groupname'] ?? $it['item_name'] ?? $it['sku'] ?? 'Item',
+                        'sku' => $it['item_code'] ?? 'ITEM',
                         'units' => $units,
                         'selling_price' => $price,
-                        'discount' => $it['discount'] ?? '',
-                        'tax' => $it['tax_amount'] ?? '',
+                        'discount' => $it['discount'] ?? 0,
+                        'tax' => $it['tax_amount'] ?? 0,
                         'hsn' => $hsnVal
                     ];
                     $subTotal += $units * $price;
+                    $totalBillableWeight += (float)($it['weight'] ?? 0);
                 }
 
-                // Get billable weight from POST data (item_billable_weights array)
-                $billableWeights = $_POST['item_billable_weights'][$boxNo] ?? [];
-                foreach ($billableWeights as $weight) {
-                    $totalBillableWeight += (float)$weight;
+                if (empty($orderItems) && !empty($invoiceItems)) {
+                    foreach ($invoiceItems as $it) {
+                        $units = isset($it['quantity']) ? (int)$it['quantity'] : 1;
+                        $price = isset($it['unit_price']) ? (float)$it['unit_price'] : (isset($it['selling_price']) ? (float)$it['selling_price'] : 0);
+                        $rawHsn = $it['hsn'] ?? '';
+                        $hsnVal = $rawHsn !== '' ? substr(preg_replace('/\D/', '', $rawHsn), 0, 4) : '';
+                        $orderItems[] = [
+                            'name' => $it['groupname'] ?? $it['item_name'] ?? $it['sku'] ?? 'Item',
+                            'sku' => $it['item_code'] ?? 'ITEM',
+                            'units' => $units,
+                            'selling_price' => $price,
+                            'discount' => 0,
+                            'tax' => $it['tax_amount'] ?? 0,
+                            'hsn' => $hsnVal
+                        ];
+                        $subTotal += $units * $price;
+                        $totalBillableWeight += (float)($it['weight'] ?? 0);
+                    }
                 }
-                // item_shipping_charges
-                $shippingCharges = $_POST['item_shipping_charges'][$boxNo] ?? [];
-                $totalShippingCharges = array_sum($shippingCharges);
-                // Get order number for this box (first order number from order_numbers array)
+
                 $invOrderNumber = null;
                 if (!empty($box['order_numbers'])) {
                     $invOrderNumber = is_array($box['order_numbers']) ? (array_values($box['order_numbers'])[0] ?? null) : $box['order_numbers'];
                 }
-                $orderNumber = $invOrderNumber ? ($invOrderNumber . '_box_' . $boxNo) : ('order_' . $data['invoice_id'] . '_box' . $boxNo);
+                if (!$invOrderNumber) {
+                    $invOrderNumber = (string)($invoiceItems[0]['order_number'] ?? $invoice['order_number'] ?? '');
+                }
+                $orderNumber = $invOrderNumber ? $invOrderNumber : ('order_' . $invoiceId . '_box' . $boxNo);
 
-                if ($isInternationalDispatch) {
-                    $partnerCode = strtolower(trim((string) ($data['partner_code'][$boxNo] ?? '')));
-                    if ($partnerCode !== 'aramex') {
-                        header('Content-Type: application/json');
-                        echo json_encode([
-                            'status' => 'error',
-                            'message' => 'Select an Aramex courier service for Box ' . $boxNo . ' before dispatch.',
-                        ]);
-                        exit();
+                $boxSize = $box['box_size'] ?? 'R-1';
+                if ($boxSize === 'CUSTOM' || isset($box['custom_length'])) {
+                    $lengthIn = (float)($box['custom_length'] ?? $box['length'] ?? $box['box_length'] ?? 0);
+                    $widthIn = (float)($box['custom_width'] ?? $box['width'] ?? $box['box_width'] ?? 0);
+                    $heightIn = (float)($box['custom_height'] ?? $box['height'] ?? $box['box_height'] ?? 0);
+                } else {
+                    $dims = $box_size_mapping[$boxSize] ?? ['length' => 22, 'width' => 17, 'height' => 5];
+                    $lengthIn = (float)($box['length'] ?? $box['box_length'] ?? $dims['length'] ?? 22);
+                    $widthIn = (float)($box['width'] ?? $box['box_width'] ?? $dims['width'] ?? 17);
+                    $heightIn = (float)($box['height'] ?? $box['box_height'] ?? $dims['height'] ?? 5);
+                }
+                if ($lengthIn <= 0) $lengthIn = 22;
+                if ($widthIn <= 0) $widthIn = 17;
+                if ($heightIn <= 0) $heightIn = 5;
+
+                $weight = (float)($box['weight'] ?? $box['box_weight'] ?? ($totalBillableWeight > 0 ? $totalBillableWeight : 0.5));
+                if ($weight <= 0) $weight = 0.5;
+
+                $volumetric_weight = ($lengthIn * $widthIn * $heightIn) / 5000;
+                $billingWeight = max($weight, $volumetric_weight);
+
+                $pickupLoc = (string)($box['pickup_location'] ?? $data['pickup_location'] ?? 'Head Off');
+                $requestedPickupLocation = $this->resolveDefaultShiprocketPickupLocation($firm, $pickupLoc);
+
+                $partnerCode = $this->resolveShipmentPartnerCode($box);
+
+                // Initial pending dispatch row
+                $dispatchData = $this->enrichDispatchRecord([
+                    'invoice_id' => $invoiceId,
+                    'box_no' => $boxNo,
+                    'order_number' => $invOrderNumber,
+                    'pickup_location' => $requestedPickupLocation,
+                    'box_items' => implode(',', array_column($orderItems, 'sku')),
+                    'length' => $lengthIn,
+                    'width' => $widthIn,
+                    'height' => $heightIn,
+                    'weight' => $weight,
+                    'volumetric_weight' => $volumetric_weight,
+                    'billing_weight' => $billingWeight,
+                    'shipping_charges' => 0,
+                    'dispatch_date' => date('Y-m-d H:i:s'),
+                    'courier_name' => (string)($box['courier_name'] ?? $data['delivery_partner'] ?? 'Shiprocket'),
+                    'shipment_status' => 'pending',
+                    'created_by' => $_SESSION['user']['id'] ?? 1,
+                    'created_at' => date('Y-m-d H:i:s'),
+                ], [$box], [
+                    'courier_name' => (string)($box['courier_name'] ?? $data['delivery_partner'] ?? ''),
+                    'partner_code' => $partnerCode,
+                ]);
+
+                $dispatchId = $dispatchModel->createDispatch($dispatchData);
+                if (!$dispatchId) {
+                    $errors[] = 'Failed to create initial dispatch record for Box ' . $boxNo;
+                    continue;
+                }
+
+                $billingFirstName = trim($address['first_name'] ?? $address['shipping_first_name'] ?? '');
+                $billingLastName = trim($address['last_name'] ?? $address['shipping_last_name'] ?? '');
+                $billingCustomerName = $billingFirstName ?: ($billingLastName ?: 'Customer');
+                $billingAddress1 = trim($address['address_line1'] ?? $address['shipping_address_line1'] ?? '');
+                $billingAddress2 = trim($address['address_line2'] ?? $address['shipping_address_line2'] ?? '');
+
+                if ($partnerCode === 'delhivery') {
+                    $delhiveryItems = [];
+                    foreach ($orderItems as $oi) {
+                        $delhiveryItems[] = [
+                            'name' => $oi['name'] ?? 'Item',
+                            'sku' => $oi['sku'] ?? 'ITEM',
+                            'quantity' => (int)($oi['units'] ?? 1),
+                            'unit_price' => (float)($oi['selling_price'] ?? 0),
+                            'hsn' => $oi['hsn'] ?? '',
+                        ];
                     }
 
-                    $lengthIn = (float) ($box['box_length'] ?? 0);
-                    $widthIn = (float) ($box['box_width'] ?? 0);
-                    $heightIn = (float) ($box['box_height'] ?? 0);
-                    $lengthCm = $lengthIn * 2.54;
-                    $widthCm = $widthIn * 2.54;
-                    $heightCm = $heightIn * 2.54;
-                    $volumetricKg = ($lengthCm * $widthCm * $heightCm) / 5000;
-                    $actualKg = $totalBillableWeight > 0 ? $totalBillableWeight : (float) ($box['box_weight'] ?? 0);
+                    $paymentMethod = strtoupper((string)($invoice['payment_method'] ?? 'PREPAID'));
+                    $isCod = (strpos($paymentMethod, 'COD') !== false);
 
+                    $createRequest = [
+                        'partner_code' => 'delhivery',
+                        'partner_account_id' => (int)($box['partner_account_id'] ?? 0),
+                        'dispatch_id' => $dispatchId,
+                        'order_number' => $invOrderNumber,
+                        'box_no' => $boxNo,
+                        'courier_id' => (string)($box['courier_id'] ?? ''),
+                        'product_type' => (string)($box['product_type'] ?? ''),
+                        'pickup_location' => $requestedPickupLocation,
+                        'weight' => $weight,
+                        'length_cm' => $lengthIn * 2.54,
+                        'width_cm' => $widthIn * 2.54,
+                        'height_cm' => $heightIn * 2.54,
+                        'destination' => [
+                            'name' => trim(($address['shipping_first_name'] ?? $billingFirstName) . ' ' . ($address['shipping_last_name'] ?? $billingLastName)),
+                            'line1' => $address['shipping_address_line1'] ?? $billingAddress1,
+                            'city' => $address['shipping_city'] ?? $address['city'] ?? '',
+                            'state' => $address['shipping_state'] ?? $address['state'] ?? '',
+                            'postcode' => $address['shipping_zipcode'] ?? $address['zipcode'] ?? '',
+                            'phone' => $address['shipping_mobile'] ?? $address['mobile'] ?? '',
+                            'country_code' => 'IN',
+                        ],
+                        'address' => $address,
+                        'items' => $delhiveryItems,
+                        'invoice' => [
+                            'invoice_number' => $invoice['invoice_number'] ?? '',
+                            'total_amount' => (float)($invoice['total_amount'] ?? $subTotal),
+                        ],
+                        'description' => (string)($box['groupname'] ?? 'Goods'),
+                        'cod' => $isCod ? 1 : 0,
+                        'cod_amount' => $isCod ? round($subTotal, 2) : 0,
+                        'sub_total' => round($subTotal, 2),
+                        'courier_etd' => $box['courier_etd'] ?? null,
+                    ];
+
+                    $createResult = $courierGateway->createShipment($createRequest);
+                    if (!empty($createResult['success'])) {
+                        $awbCode = (string)($createResult['awb'] ?? $createResult['awb_code'] ?? '');
+                        $labelUrl = (string)($createResult['label_url'] ?? '');
+                        $trackingUrl = (string)($createResult['tracking_url'] ?? '');
+
+                        $dispatchModel->updateDispatch($dispatchId, $this->enrichDispatchRecord([
+                            'shiprocket_order_id' => $createResult['order_id'] ?? null,
+                            'shiprocket_shipment_id' => null,
+                            'awb_code' => $awbCode !== '' ? $awbCode : null,
+                            'shipment_status' => 'created',
+                            'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                            'tracking_url' => $trackingUrl !== '' ? $trackingUrl : null,
+                            'courier_name' => (string)($box['courier_name'] ?? 'Delhivery'),
+                            'updated_at' => date('Y-m-d H:i:s'),
+                        ], [$createResult, $box], [
+                            'courier_name' => (string)($box['courier_name'] ?? 'Delhivery'),
+                            'partner_code' => 'delhivery',
+                        ]));
+                        $ordersModel->updateOrderByOrderNumber($invOrderNumber, ['status' => 'Dispatched']);
+
+                        $courierShipmentModel->saveShipment([
+                            'invoice_id' => $invoiceId,
+                            'box_no' => $boxNo,
+                            'order_number' => $invOrderNumber,
+                            'legacy_dispatch_id' => $dispatchId,
+                            'partner_code' => 'delhivery',
+                            'partner_account_id' => (int)($box['partner_account_id'] ?? 0),
+                            'partner_shipment_id' => $awbCode,
+                            'awb' => $awbCode,
+                            'tracking_url' => $trackingUrl,
+                            'product_group' => (string)($createResult['metadata']['shipping_mode'] ?? ''),
+                            'service_level' => (string)($box['courier_name'] ?? 'Delhivery'),
+                            'payment_mode' => $isCod ? 'cod' : 'prepaid',
+                            'is_international' => 0,
+                            'currency' => 'INR',
+                            'label_url' => $labelUrl,
+                            'status' => 'created',
+                            'status_text' => 'Delhivery shipment created',
+                            'metadata_json' => json_encode($createResult['metadata'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                        ]);
+
+                        $dispatchRecords[] = [
+                            'id' => $dispatchId,
+                            'box_no' => $boxNo,
+                            'awb_code' => $awbCode,
+                            'label_url' => $labelUrl,
+                            'courier_name' => $box['courier_name'] ?? 'Delhivery',
+                            'partner_code' => 'delhivery',
+                            'status' => 'created'
+                        ];
+                    } else {
+                        $errors[] = 'Delhivery error for Box ' . $boxNo . ': ' . ($createResult['message'] ?? 'Unknown error');
+                        $dispatchModel->updateDispatch($dispatchId, [
+                            'shipment_status' => 'failed',
+                            'updated_at' => date('Y-m-d H:i:s'),
+                        ]);
+                    }
+                    continue;
+                }
+
+                if ($partnerCode === 'bluedart') {
+                    $blueDartItems = [];
+                    foreach ($orderItems as $oi) {
+                        $blueDartItems[] = [
+                            'name' => $oi['name'] ?? 'Item',
+                            'sku' => $oi['sku'] ?? 'ITEM',
+                            'quantity' => (int)($oi['units'] ?? 1),
+                            'unit_price' => (float)($oi['selling_price'] ?? 0),
+                            'hsn' => $oi['hsn'] ?? '',
+                        ];
+                    }
+
+                    $paymentMethod = strtoupper((string)($invoice['payment_method'] ?? 'PREPAID'));
+                    $isCod = (strpos($paymentMethod, 'COD') !== false);
+
+                    $createRequest = [
+                        'partner_code' => 'bluedart',
+                        'partner_account_id' => (int)($box['partner_account_id'] ?? 0),
+                        'dispatch_id' => $dispatchId,
+                        'order_number' => $invOrderNumber,
+                        'box_no' => $boxNo,
+                        'courier_id' => (string)($box['courier_id'] ?? ''),
+                        'product_type' => (string)($box['product_type'] ?? ''),
+                        'metadata' => is_array($box['metadata'] ?? null) ? $box['metadata'] : [],
+                        'pickup_location' => $requestedPickupLocation,
+                        'weight' => $weight,
+                        'length_cm' => $lengthIn * 2.54,
+                        'width_cm' => $widthIn * 2.54,
+                        'height_cm' => $heightIn * 2.54,
+                        'destination' => [
+                            'name' => trim(($address['shipping_first_name'] ?? $billingFirstName) . ' ' . ($address['shipping_last_name'] ?? $billingLastName)),
+                            'line1' => $address['shipping_address_line1'] ?? $billingAddress1,
+                            'city' => $address['shipping_city'] ?? $address['city'] ?? '',
+                            'state' => $address['shipping_state'] ?? $address['state'] ?? '',
+                            'postcode' => $address['shipping_zipcode'] ?? $address['zipcode'] ?? '',
+                            'phone' => $address['shipping_mobile'] ?? $address['mobile'] ?? '',
+                            'country_code' => 'IN',
+                        ],
+                        'address' => $address,
+                        'items' => $blueDartItems,
+                        'invoice' => [
+                            'invoice_number' => $invoice['invoice_number'] ?? '',
+                            'total_amount' => (float)($invoice['total_amount'] ?? $subTotal),
+                        ],
+                        'description' => (string)($box['groupname'] ?? 'Goods'),
+                        'cod' => $isCod ? 1 : 0,
+                        'cod_amount' => $isCod ? round($subTotal, 2) : 0,
+                        'sub_total' => round($subTotal, 2),
+                        'courier_etd' => $box['courier_etd'] ?? null,
+                    ];
+
+                    $createResult = $courierGateway->createShipment($createRequest);
+                    if (!empty($createResult['success'])) {
+                        $awbCode = (string)($createResult['awb'] ?? $createResult['awb_code'] ?? '');
+                        $labelUrl = (string)($createResult['label_url'] ?? '');
+                        $trackingUrl = (string)($createResult['tracking_url'] ?? '');
+
+                        $dispatchModel->updateDispatch($dispatchId, $this->enrichDispatchRecord([
+                            'shiprocket_order_id' => $createResult['order_id'] ?? null,
+                            'shiprocket_shipment_id' => null,
+                            'awb_code' => $awbCode !== '' ? $awbCode : null,
+                            'shipment_status' => 'created',
+                            'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                            'tracking_url' => $trackingUrl !== '' ? $trackingUrl : null,
+                            'courier_name' => (string)($box['courier_name'] ?? 'Blue Dart'),
+                            'updated_at' => date('Y-m-d H:i:s'),
+                        ], [$createResult, $box], [
+                            'courier_name' => (string)($box['courier_name'] ?? 'Blue Dart'),
+                            'partner_code' => 'bluedart',
+                        ]));
+                        $ordersModel->updateOrderByOrderNumber($invOrderNumber, ['status' => 'Dispatched']);
+
+                        $courierShipmentModel->saveShipment([
+                            'invoice_id' => $invoiceId,
+                            'box_no' => $boxNo,
+                            'order_number' => $invOrderNumber,
+                            'legacy_dispatch_id' => $dispatchId,
+                            'partner_code' => 'bluedart',
+                            'partner_account_id' => (int)($box['partner_account_id'] ?? 0),
+                            'partner_shipment_id' => $awbCode,
+                            'awb' => $awbCode,
+                            'tracking_url' => $trackingUrl,
+                            'product_group' => (string)($createResult['metadata']['service_code'] ?? ''),
+                            'service_level' => (string)($box['courier_name'] ?? 'Blue Dart'),
+                            'payment_mode' => $isCod ? 'cod' : 'prepaid',
+                            'is_international' => 0,
+                            'currency' => 'INR',
+                            'label_url' => $labelUrl,
+                            'status' => 'created',
+                            'status_text' => 'Blue Dart shipment created',
+                            'metadata_json' => json_encode($createResult['metadata'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                        ]);
+
+                        $dispatchRecords[] = [
+                            'id' => $dispatchId,
+                            'box_no' => $boxNo,
+                            'awb_code' => $awbCode,
+                            'label_url' => $labelUrl,
+                            'courier_name' => $box['courier_name'] ?? 'Blue Dart',
+                            'partner_code' => 'bluedart',
+                            'status' => 'created'
+                        ];
+                    } else {
+                        $errors[] = 'Blue Dart error for Box ' . $boxNo . ': ' . ($createResult['message'] ?? 'Unknown error');
+                        $dispatchModel->updateDispatch($dispatchId, [
+                            'shipment_status' => 'failed',
+                            'updated_at' => date('Y-m-d H:i:s'),
+                        ]);
+                    }
+                    continue;
+                }
+
+                if ($partnerCode === 'aramex' || $isInternationalDispatch) {
                     $aramexItems = [];
-                    foreach ($box['items'] as $itemId) {
-                        if (!isset($itemsMap[$itemId])) {
-                            continue;
-                        }
-                        $it = $itemsMap[$itemId];
+                    foreach ($orderItems as $oi) {
                         $aramexItems[] = [
-                            'hsn' => $it['hsn'] ?? '',
-                            'hs_code' => $it['hsn'] ?? '',
-                            'name' => $it['item_name'] ?? $it['title'] ?? '',
-                            'quantity' => (int) ($it['quantity'] ?? 1),
-                            'unit_price' => (float) ($it['unit_price'] ?? 0),
+                            'hsn' => $oi['hsn'] ?? '',
+                            'hs_code' => $oi['hsn'] ?? '',
+                            'name' => $oi['name'] ?? 'Item',
+                            'quantity' => (int)($oi['units'] ?? 1),
+                            'unit_price' => (float)($oi['selling_price'] ?? 0),
                         ];
                     }
 
                     $createRequest = [
                         'partner_code' => 'aramex',
-                        'partner_account_id' => (int) ($data['partner_account_id'][$boxNo] ?? 0),
-                        'product_group' => (string) ($data['product_group'][$boxNo] ?? 'EXP'),
-                        'product_type' => (string) ($data['product_type'][$boxNo] ?? 'PPX'),
-                        'order_number' => (string) ($invOrderNumber ?? $orderNumber),
+                        'partner_account_id' => (int)($box['partner_account_id'] ?? 0),
+                        'product_group' => (string)($box['product_group'] ?? 'EXP'),
+                        'product_type' => (string)($box['product_type'] ?? 'PPX'),
+                        'order_number' => $invOrderNumber,
                         'destination_country' => $destCountry,
                         'destination' => [
-                            'line1' => $address['shipping_address_line1'] ?? $address['address_line1'] ?? '',
-                            'line2' => $address['shipping_address_line2'] ?? $address['address_line2'] ?? '',
+                            'name' => trim(($address['shipping_first_name'] ?? $billingFirstName) . ' ' . ($address['shipping_last_name'] ?? $billingLastName)),
+                            'line1' => $address['shipping_address_line1'] ?? $billingAddress1,
+                            'line2' => $address['shipping_address_line2'] ?? $billingAddress2,
                             'city' => $address['shipping_city'] ?? $address['city'] ?? '',
                             'state' => $address['shipping_state'] ?? $address['state'] ?? '',
                             'postcode' => $address['shipping_zipcode'] ?? $address['zipcode'] ?? '',
                             'country_code' => $destCountry,
+                            'phone' => $address['shipping_mobile'] ?? $address['mobile'] ?? '',
+                            'email' => $address['shipping_email'] ?? $address['email'] ?? '',
                         ],
                         'address' => $address,
                         'box' => [
-                            'weight' => $actualKg,
-                            'volumetric_weight' => $volumetricKg,
+                            'weight' => $weight,
+                            'volumetric_weight' => $volumetric_weight,
                             'pieces' => 1,
                         ],
                         'invoice' => [
                             'invoice_number' => $invoice['invoice_number'] ?? '',
                             'invoice_date' => $invoice['invoice_date'] ?? date('Y-m-d'),
-                            'total_amount' => (float) ($invoice['total_amount'] ?? $subTotal),
-                            'tax_amount' => (float) ($invoice['tax_amount'] ?? 0),
-                            'shipping_currency' => $invoice['currency'] ?? 'USD',
-                            'goods_description' => (string) ($box['groupname'] ?? 'Goods'),
+                            'total_amount' => (float)($invoice['total_amount'] ?? $subTotal),
+                            'tax_amount' => (float)($invoice['tax_amount'] ?? 0),
+                            'shipping_currency' => strtoupper((string)($invoice['currency'] ?? 'USD')),
+                            'goods_description' => (string)($box['groupname'] ?? 'Goods'),
                         ],
                         'items' => $aramexItems,
-                        'description' => (string) ($box['groupname'] ?? 'Goods'),
-                        'currency_code' => $invoice['currency'] ?? 'USD',
-                        'customs_value' => $subTotal > 0 ? $subTotal : (float) ($invoice['total_amount'] ?? 0),
-                        'tax_amount' => (float) ($invoice['tax_amount'] ?? 0),
+                        'description' => (string)($box['groupname'] ?? 'Goods'),
+                        'currency_code' => strtoupper((string)($invoice['currency'] ?? 'USD')),
+                        'customs_value' => $subTotal > 0 ? $subTotal : (float)($invoice['total_amount'] ?? 0),
+                        'tax_amount' => (float)($invoice['tax_amount'] ?? 0),
                     ];
 
                     $createResult = $courierGateway->createShipment($createRequest);
-                    
-                    if (empty($createResult['success'])) {
-                        header('Content-Type: application/json');
-                        
-                        // Build detailed error message
-                        $errorMsg = (string) ($createResult['message'] ?? $createResult['error'] ?? ('Aramex shipment failed for Box ' . $boxNo));
-                        $errorDetails = [];
-                        
-                        if (!empty($createResult['errors'])) {
-                            foreach ((array)$createResult['errors'] as $err) {
-                                if (is_array($err)) {
-                                    $errorDetails[] = ($err['code'] ?? '') . ': ' . ($err['message'] ?? 'Unknown error');
-                                } elseif (is_object($err)) {
-                                    $errorDetails[] = ($err->Code ?? $err->code ?? '') . ': ' . ($err->Message ?? $err->message ?? 'Unknown error');
-                                } else {
-                                    $errorDetails[] = (string)$err;
-                                }
-                            }
-                        }
-                        
-                        echo json_encode([
-                            'status' => 'error',
-                            'message' => $errorMsg,
-                            'error_details' => $errorDetails,
-                            'debug' => $createResult['debug'] ?? $createResult['raw_response'] ?? null,
-                        ]);
-                        exit();
-                    }
+                    if (!empty($createResult['success'])) {
+                        $awbCode = (string)($createResult['awb'] ?? $createResult['awb_code'] ?? '');
+                        $labelUrl = (string)($createResult['label_url'] ?? '');
+                        $trackingUrl = (string)($createResult['tracking_url'] ?? '');
+                        $courierName = (string)($box['courier_name'] ?? 'Aramex');
 
-                    $awbCode = (string) ($createResult['awb'] ?? '');
-                    $labelUrl = (string) ($createResult['label_url'] ?? '');
-                    $courierName = (string) ($data['courier_name'][$boxNo] ?? $data['delivery_partner'] ?? 'Aramex');
-                    $billingWeight = max($actualKg, $volumetricKg);
-
-                    $dispatchData = $this->enrichDispatchRecord([
-                        'invoice_id' => $data['invoice_id'],
-                        'box_no' => $boxNo,
-                        'order_number' => $invOrderNumber,
-                        'pickup_location' => $data['pickup_location'],
-                        'box_items' => implode(',', $box['items']),
-                        'length' => $lengthIn,
-                        'width' => $widthIn,
-                        'height' => $heightIn,
-                        'weight' => $actualKg,
-                        'volumetric_weight' => $volumetricKg,
-                        'billing_weight' => $billingWeight,
-                        'shipping_charges' => $totalShippingCharges,
-                        'dispatch_date' => date('Y-m-d H:i:s'),
-                        'courier_name' => $courierName,
-                        'shiprocket_order_id' => null,
-                        'shiprocket_shipment_id' => null,
-                        'awb_code' => $awbCode !== '' ? $awbCode : null,
-                        'shipment_status' => 'created',
-                        'label_url' => $labelUrl !== '' ? $labelUrl : null,
-                        'tracking_url' => ($t = (string) ($createResult['tracking_url'] ?? '')) !== '' ? $t : null,
-                        'groupname' => $box['groupname'] ?? null,
-                        'created_by' => $_SESSION['user']['id'] ?? 0,
-                        'created_at' => date('Y-m-d H:i:s'),
-                    ], [
-                        $createResult,
-                        [
-                            'courier_etd' => $data['courier_etd'][$boxNo] ?? null,
-                        ],
-                    ], [
-                        'courier_name' => $courierName,
-                        'partner_code' => (string) ($data['partner_code'][$boxNo] ?? 'aramex'),
-                    ]);
-
-                    $dispatchId = $dispatchModel->createDispatch($dispatchData);
-                    if (!$dispatchId) {
-                        header('Content-Type: application/json');
-                        echo json_encode(['status' => 'error', 'message' => 'Failed to save dispatch record for Box ' . $boxNo]);
-                        exit();
-                    }
-
-                    if ($courierShipmentModel) {
-                        $courierShipmentModel->saveShipment([
-                            'invoice_id' => (int) $data['invoice_id'],
-                            'box_no' => (int) $boxNo,
-                            'order_number' => (string) ($invOrderNumber ?? ''),
-                            'legacy_dispatch_id' => (int) $dispatchId,
+                        $dispatchModel->updateDispatch($dispatchId, $this->enrichDispatchRecord([
+                            'shiprocket_order_id' => $createResult['order_id'] ?? null,
+                            'shiprocket_shipment_id' => null,
+                            'awb_code' => $awbCode !== '' ? $awbCode : null,
+                            'shipment_status' => 'created',
+                            'label_url' => $labelUrl !== '' ? $labelUrl : null,
+                            'tracking_url' => $trackingUrl !== '' ? $trackingUrl : null,
+                            'courier_name' => $courierName,
+                            'updated_at' => date('Y-m-d H:i:s'),
+                        ], [$createResult, $box], [
+                            'courier_name' => $courierName,
                             'partner_code' => 'aramex',
-                            'partner_account_id' => (int) ($data['partner_account_id'][$boxNo] ?? 0),
-                            'partner_shipment_id' => (string) ($createResult['partner_shipment_id'] ?? $awbCode),
+                        ]));
+                        $ordersModel->updateOrderByOrderNumber($invOrderNumber, ['status' => 'Dispatched']);
+
+                        $courierShipmentModel->saveShipment([
+                            'invoice_id' => $invoiceId,
+                            'box_no' => $boxNo,
+                            'order_number' => $invOrderNumber,
+                            'legacy_dispatch_id' => $dispatchId,
+                            'partner_code' => 'aramex',
+                            'partner_account_id' => (int)($box['partner_account_id'] ?? 0),
+                            'partner_shipment_id' => (string)($createResult['partner_shipment_id'] ?? $awbCode),
                             'awb' => $awbCode,
-                            'product_group' => (string) ($data['product_group'][$boxNo] ?? 'EXP'),
-                            'product_type' => (string) ($data['product_type'][$boxNo] ?? ''),
+                            'tracking_url' => $trackingUrl,
+                            'product_group' => (string)($box['product_group'] ?? 'EXP'),
+                            'product_type' => (string)($box['product_type'] ?? 'PPX'),
                             'service_level' => $courierName,
+                            'payment_mode' => 'prepaid',
                             'is_international' => 1,
-                            'currency' => strtoupper((string) ($invoice['currency'] ?? 'USD')),
-                            'charges_total' => $totalShippingCharges,
+                            'currency' => strtoupper((string)($invoice['currency'] ?? 'USD')),
                             'label_url' => $labelUrl,
                             'status' => 'created',
                             'status_text' => 'Aramex shipment created',
                         ]);
+
+                        $dispatchRecords[] = [
+                            'id' => $dispatchId,
+                            'box_no' => $boxNo,
+                            'awb_code' => $awbCode,
+                            'label_url' => $labelUrl,
+                            'courier_name' => $courierName,
+                            'partner_code' => 'aramex',
+                            'status' => 'created'
+                        ];
+                    } else {
+                        $errorMsg = (string)($createResult['message'] ?? $createResult['error'] ?? 'Aramex shipment failed');
+                        $errors[] = 'Aramex error for Box ' . $boxNo . ': ' . $errorMsg;
+                        $dispatchModel->updateDispatch($dispatchId, [
+                            'shipment_status' => 'failed',
+                            'updated_at' => date('Y-m-d H:i:s'),
+                        ]);
                     }
+                    continue;
+                }
 
-                    $dispatchRecords['awb'][$boxNo] = $awbCode;
-                    $dispatchRecords['labelUrl'][$boxNo] = $labelUrl;
-                    $dispatchRecords['awb_assign_status'][$boxNo] = $awbCode !== '' ? 1 : 0;
-                    $dispatchRecords['label_created'][$boxNo] = $labelUrl !== '' ? 1 : 0;
-                    $dispatchRecords['ids'][$boxNo] = $dispatchId;
-                } else {
-
+                // Shiprocket path
+                $shiprocketOrderId = $invOrderNumber . '_box_' . $boxNo . '_' . time();
                 $shiprocketPayload = [
-                    'order_id' => $orderNumber,
+                    'order_id' => $shiprocketOrderId,
                     'order_date' => date('Y-m-d H:i'),
-                    'pickup_location' => $data['pickup_location'] ?? '',
-                    'comment' => 'Box ' . $boxNo . ' | seller: ' . ($data['delivery_partner'] ?? 'Exotic India') . ', type: ' . ($data['shipment_type'] ?? 'Standard'),
-                    'billing_customer_name' => $address['first_name'] ?? '',
-                    'billing_last_name' => $address['last_name'] ?? '',
-                    'billing_address' => $address['address_line1'] ?? '',
-                    'billing_address_2' => $address['address_line2'] ?? '',
-                    'billing_city' => $address['city'] ?? '',
-                    'billing_state' => $address['state'] ?? '',
-                    'billing_country' => $address['country'] ?? '',
-                    'billing_pincode' => $address['zipcode'] ?? '',
-                    'billing_email' => $address['email'] ?? '',
-                    'billing_phone' => $address['mobile'] ?? '',
-                    'shipping_is_billing' => $address['shipping_first_name'] ? false : true,
-                    'shipping_customer_name' => $address['shipping_first_name'] ?? '',
-                    'shipping_last_name' => $address['shipping_last_name'] ?? '',
-                    'shipping_address' => $address['shipping_address_line1'] ?? '',
-                    'shipping_address_2' => $address['shipping_address_line2'] ?? '',
-                    'shipping_city' => $address['shipping_city'] ?? '',
-                    'shipping_pincode' => $address['shipping_zipcode'] ?? '',
-                    'shipping_country' => $address['shipping_country'] ?? '',
-                    'shipping_state' => $address['shipping_state'] ?? '',
-                    'shipping_email' => $address['shipping_email'] ?? '',
-                    'shipping_phone' => $address['shipping_mobile'] ?? '',
-                    'customer_gst_no' => $address['gst_number'] ?? '',
+                    'pickup_location' => $requestedPickupLocation,
+                    'comment' => 'Box ' . $boxNo . ' | invoice: ' . ($invoice['invoice_number'] ?? $invoiceId),
+                    'billing_customer_name' => $billingCustomerName,
+                    'billing_last_name' => $billingLastName,
+                    'billing_address' => $billingAddress1 ?: 'Address required',
+                    'billing_address_2' => $billingAddress2,
+                    'billing_city' => $address['city'] ?? $address['shipping_city'] ?? '',
+                    'billing_state' => $address['state'] ?? $address['shipping_state'] ?? '',
+                    'billing_country' => $destCountry === 'IN' ? 'IN' : $destCountry,
+                    'billing_pincode' => $address['zipcode'] ?? $address['shipping_zipcode'] ?? '',
+                    'billing_email' => $address['email'] ?? $address['shipping_email'] ?? '',
+                    'billing_phone' => $address['mobile'] ?? $address['shipping_mobile'] ?? '',
+                    'shipping_is_billing' => !empty($address['shipping_first_name']) || !empty($address['shipping_address_line1']) ? false : true,
+                    'shipping_customer_name' => $address['shipping_first_name'] ?? $billingFirstName,
+                    'shipping_last_name' => $address['shipping_last_name'] ?? $billingLastName,
+                    'shipping_address' => $address['shipping_address_line1'] ?? $billingAddress1,
+                    'shipping_address_2' => $address['shipping_address_line2'] ?? $billingAddress2,
+                    'shipping_city' => $address['shipping_city'] ?? $address['city'] ?? '',
+                    'shipping_pincode' => $address['shipping_zipcode'] ?? $address['zipcode'] ?? '',
+                    'shipping_country' => $destCountry === 'IN' ? 'IN' : $destCountry,
+                    'shipping_state' => $address['shipping_state'] ?? $address['state'] ?? '',
+                    'shipping_email' => $address['shipping_email'] ?? $address['email'] ?? '',
+                    'shipping_phone' => $address['shipping_mobile'] ?? $address['mobile'] ?? '',
+                    'customer_gst_no' => $address['gstin'] ?? $address['gst_number'] ?? '',
                     'order_items' => $orderItems,
                     'payment_method' => strtoupper($invoice['payment_method'] ?? 'Prepaid'),
-                    'shipping_charges' => $totalShippingCharges,
+                    'shipping_charges' => 0,
                     'giftwrap_charges' => 0,
                     'transaction_charges' => 0,
                     'total_discount' => 0,
-                    'sub_total' => $subTotal,
-                    'length' => $box['box_length'],
-                    'breadth' => $box['box_width'],
-                    'height' => $box['box_height'],
-                    'weight' => $totalBillableWeight > 0 ? $totalBillableWeight : $box['box_weight']
+                    'sub_total' => round($subTotal, 2),
+                    'length' => $lengthIn,
+                    'breadth' => $widthIn,
+                    'height' => $heightIn,
+                    'weight' => $weight
                 ];
 
-                // Call Shiprocket API
                 $shiprocketResponse = $dispatchModel->shiprocketCreateShipment($shiprocketPayload);
-                //save response in log file for debugging
-                
-                //file_put_contents('shiprocket_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Payload: " . json_encode($shiprocketPayload) . " - Response: " . json_encode($shiprocketResponse) . "\n", FILE_APPEND);
-                //chmod('shiprocket_response_log.txt', 0666); // make log file writable
-                //print_array($shiprocketResponse);
-                //exit;
-                // Validate API response
-                if($shiprocketResponse['json']['status'] != 'NEW') {
-                    $errorMsg = $shiprocketResponse['json']['status'] ?? 'Failed to create shipment for Box ' . $boxNo . ' on Shiprocket';
-                    //if ($isAjax) {
-                        header('Content-Type: application/json');
-                        echo json_encode(['status' => 'error', 'message' => $errorMsg]);
-                    // } else {
-                    //     header('Location: ' . base_url('?page=dispatch&action=create&invoice_id=' . $data['invoice_id'] . '&status=error&message=' . urlencode($errorMsg)));
-                    // }
-                    exit();
+                if ($shiprocketResponse && isset($shiprocketResponse['json']['order_id']) && ($shiprocketResponse['json']['status'] ?? '') === 'NEW') {
+                    $srAwbRaw = trim((string)($shiprocketResponse['json']['awb_code'] ?? ''));
+                    $srAwb = ($srAwbRaw !== '' && strtoupper($srAwbRaw) !== 'NEW') ? $srAwbRaw : null;
 
-                }
-                if (!$shiprocketResponse || !isset($shiprocketResponse['json']['order_id'])) {
-                    $errorMsg = $shiprocketResponse['error'] ?? 'Failed to create shipment for Box ' . $boxNo . ' on Shiprocket';
-                    //if ($isAjax) {
-                        header('Content-Type: application/json');
-                        echo json_encode(['status' => 'error', 'message' => $errorMsg]);
-                    // } else {
-                    //     header('Location: ' . base_url('?page=dispatch&action=create&invoice_id=' . $data['invoice_id'] . '&status=error&message=' . urlencode($errorMsg)));
-                    // }
-                    exit();
-                }
-                
-                $shiprocketResponses[$boxNo] = $shiprocketResponse['json'];
+                    $updateData = $this->enrichDispatchRecord([
+                        'shiprocket_order_id' => $shiprocketResponse['json']['order_id'] ?? null,
+                        'shiprocket_shipment_id' => $shiprocketResponse['json']['shipment_id'] ?? null,
+                        'awb_code' => $srAwb,
+                        'shipment_status' => $shiprocketResponse['json']['status'] ?? 'NEW',
+                        'label_url' => $shiprocketResponse['json']['label_url'] ?? null,
+                        'tracking_url' => $shiprocketResponse['json']['tracking_url'] ?? null,
+                        'courier_name' => (string)($box['courier_name'] ?? 'Shiprocket'),
+                        'updated_at' => date('Y-m-d H:i:s'),
+                    ], [$shiprocketResponse['json'] ?? [], $box], [
+                        'courier_name' => (string)($box['courier_name'] ?? 'Shiprocket'),
+                        'courier_id' => (string)($box['courier_id'] ?? ''),
+                        'partner_code' => 'shiprocket',
+                    ]);
 
-                // Create dispatch record for this box
-                $dispatchData = $this->enrichDispatchRecord([
-                    'invoice_id' => $data['invoice_id'],
-                    'box_no' => $boxNo,
-                    'order_number' => $invOrderNumber,                    
-                    'pickup_location' => $data['pickup_location'],
-                    'box_items' => implode(',', $box['items']),
-                    'length' => $shiprocketPayload['length'],
-                    'width' => $shiprocketPayload['breadth'],
-                    'height' => $shiprocketPayload['height'],
-                    'weight' => $shiprocketPayload['weight'],
-                    'volumetric_weight' => ($shiprocketPayload['length'] * $shiprocketPayload['breadth'] * $shiprocketPayload['height']) / 5000,
-                    'billing_weight' => $totalBillableWeight,
-                    'shipping_charges' => $totalShippingCharges,
-                    'dispatch_date' => date('Y-m-d H:i:s'),
-                    'courier_name' => (string) ($data['courier_name'][$boxNo] ?? $data['delivery_partner']),
-                    'shiprocket_order_id' => $shiprocketResponse['json']['order_id'] ?? null,
-                    'shiprocket_shipment_id' => $shiprocketResponse['json']['shipment_id'] ?? null,
-                    'awb_code' => $shiprocketResponse['json']['awb_code'] ?? null,
-                    'shipment_status' => $shiprocketResponse['json']['status'] ?? null,
-                    'label_url' => $shiprocketResponse['json']['label_url'] ?? null,
-                    'tracking_url' => $shiprocketResponse['json']['tracking_url'] ?? null,
-                    'groupname' => $box['groupname'] ?? null,
-                    'created_by' => $_SESSION['user']['id'] ?? 0,
-                    'created_at' => date('Y-m-d H:i:s'),
-                ], [
-                    $shiprocketResponse['json'] ?? [],
-                    [
-                        'courier_etd' => $data['courier_etd'][$boxNo] ?? null,
-                    ],
-                ], [
-                    'courier_name' => (string) ($data['courier_name'][$boxNo] ?? $data['delivery_partner']),
-                    'courier_id' => (string) ($data['courier_id'][$boxNo] ?? ''),
-                    'partner_code' => 'shiprocket',
-                ]);
+                    $dispatchModel->updateDispatch($dispatchId, $updateData);
 
-                $dispatchId = $dispatchModel->createDispatch($dispatchData);
-                //print_array($dispatchData);
-                //echo "Dispatch ID: $dispatchId";exit;
-
-                //awb api call getShiprocketAwbInfo
-                $awbInfoResponse = $dispatchModel->getShiprocketAwbInfo($shiprocketResponse['json']['shipment_id']);
-                //file_put_contents('shiprocket_awb_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Shipment ID: " . $shiprocketResponse['json']['shipment_id'] . " - AWB Info Response: " . json_encode($awbInfoResponse) . "\n", FILE_APPEND);
-                //chmod('shiprocket_awb_response_log.txt', 0666); // make log file writable
-                $dispatchRecords['awb_assign_status'][$boxNo] = $awbInfoResponse['awb_assign_status'] ?? null;
-                if($awbInfoResponse && isset($awbInfoResponse['awb_assign_status']) && $awbInfoResponse['awb_assign_status'] == 1) {
-                    $this->applyShiprocketAwbAssignment(
-                        $dispatchModel,
-                        (int) $shiprocketResponse['json']['shipment_id'],
-                        $awbInfoResponse,
-                        [
-                            'courier_name' => (string) ($data['courier_name'][$boxNo] ?? $data['delivery_partner']),
-                            'courier_id' => (string) ($data['courier_id'][$boxNo] ?? ''),
+                    // AWB lookup
+                    $awbInfoResponse = $dispatchModel->getShiprocketAwbInfo($shiprocketResponse['json']['shipment_id']);
+                    if ($awbInfoResponse && isset($awbInfoResponse['awb_assign_status']) && $awbInfoResponse['awb_assign_status'] == 1) {
+                        $this->applyShiprocketAwbAssignment($dispatchModel, (int)$shiprocketResponse['json']['shipment_id'], $awbInfoResponse, [
+                            'courier_name' => (string)($box['courier_name'] ?? 'Shiprocket'),
+                            'courier_id' => (string)($box['courier_id'] ?? ''),
                             'partner_code' => 'shiprocket',
-                        ]
-                    );
-                    $awbCode = $awbInfoResponse['response']['data']['awb_code'] ?? null;
-                    $dispatchRecords['awb'][$boxNo] = $awbCode;
-                } else {                   
-                    //file_put_contents('shiprocket_awb_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Shipment ID: " . $shiprocketResponse['json']['shipment_id'] . " - AWB code not found in response\n", FILE_APPEND);
-                    //chmod('shiprocket_awb_response_log.txt', 0666); // make log file writable
-                }
-                //label api call getShiprocketLabelInfo
-                $labelInfoResponse = $dispatchModel->getShiprocketLabels($shiprocketResponse['json']['shipment_id']);
-                $dispatchRecords['label_created'][$boxNo] = $labelInfoResponse['label_created'] ?? null;
-                //file_put_contents('shiprocket_label_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Shipment ID: " . $shiprocketResponse['json']['shipment_id'] . " - Label Info Response: " . json_encode($labelInfoResponse) . "\n", FILE_APPEND);
-                //chmod('shiprocket_label_response_log.txt', 0666); // make log file writable
-                $lableAdd = false;
-                if($labelInfoResponse && $labelInfoResponse['label_created'] == 1) {
-                    // Update dispatch record with label URL
-                    $labelUrl = $labelInfoResponse['label_url'];
-                    $lableAdd = $dispatchModel->updateDispatchLabelUrl($shiprocketResponse['json']['shipment_id'], $labelUrl);
-                    $dispatchRecords['labelUrl'][$boxNo] = $labelUrl;
+                        ]);
+                        $srAwb = $awbInfoResponse['response']['data']['awb_code'] ?? $srAwb;
+                    }
+
+                    // Label lookup
+                    $labelInfoResponse = $dispatchModel->getShiprocketLabels($shiprocketResponse['json']['shipment_id']);
+                    $labelUrl = null;
+                    if ($labelInfoResponse && !empty($labelInfoResponse['label_created'])) {
+                        $labelUrl = $labelInfoResponse['label_url'] ?? null;
+                        if ($labelUrl) {
+                            $dispatchModel->updateDispatchLabelUrl($shiprocketResponse['json']['shipment_id'], $labelUrl);
+                        }
+                    }
+
+                    $ordersModel->updateOrderByOrderNumber($invOrderNumber, ['status' => 'Dispatched']);
+
+                    $dispatchRecords[] = [
+                        'id' => $dispatchId,
+                        'box_no' => $boxNo,
+                        'awb_code' => $srAwb,
+                        'label_url' => $labelUrl,
+                        'courier_name' => $box['courier_name'] ?? 'Shiprocket',
+                        'partner_code' => 'shiprocket',
+                        'status' => 'created'
+                    ];
                 } else {
-                    //file_put_contents('shiprocket_label_response_log.txt', date('Y-m-d H:i:s') . " - Box $boxNo - Shipment ID: " . $shiprocketResponse['json']['shipment_id'] . " - Label URL ***not found*** in response\n", FILE_APPEND);
-                    //chmod('shiprocket_label_response_log.txt', 0666); // make log file writable
+                    $errStr = $shiprocketResponse['json']['status'] ?? $shiprocketResponse['error'] ?? 'Shiprocket shipment failed';
+                    $errors[] = 'Shiprocket error for Box ' . $boxNo . ': ' . $errStr;
+                    $dispatchModel->updateDispatch($dispatchId, [
+                        'shipment_status' => 'failed',
+                        'updated_at' => date('Y-m-d H:i:s'),
+                    ]);
                 }
-                //echo "Label URL update status for Box $boxNo: " . ($lableAdd ? 'Success' : 'Failed') . "\n";
-                
-                if (!$dispatchId) {
-                    $errorMsg = 'Failed to save dispatch record for Box ' . $boxNo;
-                    //if ($isAjax) {
-                        header('Content-Type: application/json');
-                        echo json_encode(['status' => 'error', 'message' => $errorMsg,'labelUrl' => $shiprocketResponse['json']['label_url'] ?? '','shipmentId' => $shiprocketResponse['json']['shipment_id'] ?? '','labelUpdateStatus' => $lableAdd,'awb' => $shiprocketResponse['json']['awb_code'] ?? '']);
-                    // } else {
-                    //     header('Location: ' . base_url('?page=dispatch&action=create&status=error&message=' . urlencode($errorMsg)));
-                    // }
-                    exit();
-                }
-                $dispatchRecords['ids'][$boxNo] = $dispatchId;
-                //update invoice with dispatch status
-                //$invoiceModel->updateInvoiceDispatchStatus($data['invoice_id'], 'Dispatched');
-                //update orders table with dispatch status using order numbers from this box
-
-                }
-
             }
-            
-            // All boxes processed successfully
-            //if ($isAjax) {
-                header('Content-Type: application/json');
+
+            header('Content-Type: application/json');
+            if (!empty($dispatchRecords)) {
                 echo json_encode([
                     'status' => 'success',
                     'message' => 'Dispatch created successfully!',
                     'dispatches' => $dispatchRecords,
-                    'invoice_id' => $data['invoice_id']                    
+                    'errors' => $errors,
+                    'invoice_id' => $invoiceId
                 ]);
-            // } else {
-            //     header('Location: ' . base_url('?page=dispatch&action=create&status=success&dispatch_ids=' . implode(',', $dispatchRecords['ids']) . '&invoice_id=' . $data['invoice_id']));
-            // }
+            } else {
+                echo json_encode([
+                    'status' => 'error',
+                    'message' => !empty($errors) ? implode('; ', $errors) : 'Failed to process dispatch.',
+                    'errors' => $errors
+                ]);
+            }
             exit();
         } else {
             // Get list of invoices for dropdown
@@ -754,12 +935,64 @@ class DispatchController {
                 $invoices[] = $invoice;
             }
             //print_array($invoice);
+            $singleOrderPayload = null;
+            if (!empty($invoice) && !empty($invoice['id'])) {
+                $custFirstName = trim((string)($invoice['address']['first_name'] ?? $invoice['address']['shipping_first_name'] ?? ''));
+                $custLastName = trim((string)($invoice['address']['last_name'] ?? $invoice['address']['shipping_last_name'] ?? ''));
+                $custName = trim($custFirstName . ' ' . $custLastName);
+                if ($custName === '') {
+                    $custName = 'Customer #' . ($invoice['customer_id'] ?? '');
+                }
+
+                $addrLine1 = trim((string)($invoice['address']['shipping_address_line1'] ?? $invoice['address']['address_line1'] ?? ''));
+                $addrLine2 = trim((string)($invoice['address']['shipping_address_line2'] ?? $invoice['address']['address_line2'] ?? ''));
+                $city = trim((string)($invoice['address']['shipping_city'] ?? $invoice['address']['city'] ?? ''));
+                $state = trim((string)($invoice['address']['shipping_state'] ?? $invoice['address']['state'] ?? ''));
+                $pincode = trim((string)($invoice['address']['shipping_zipcode'] ?? $invoice['address']['zipcode'] ?? ''));
+                $country = trim((string)($invoice['address']['shipping_country'] ?? $invoice['address']['country'] ?? ''));
+                
+                $fullAddrStr = implode(', ', array_filter([
+                    trim($custName),
+                    implode(' ', array_filter([$addrLine1, $addrLine2])),
+                    $city,
+                    $state ? ($state . ($pincode ? ' - ' . $pincode : '')) : $pincode,
+                    $country
+                ]));
+
+                $singleOrderPayload = [
+                    'invoice_id' => (int)$invoice['id'],
+                    'invoice_number' => (string)($invoice['invoice_number'] ?? ''),
+                    'order_number' => $primaryOrderNumber,
+                    'customer_id' => (int)($invoice['customer_id'] ?? 0),
+                    'customer_name' => $custName,
+                    'shipping_address' => $fullAddrStr,
+                    'is_international' => $isInternational,
+                    'payment_method' => (string)($invoice['payment_method'] ?? 'Prepaid'),
+                    'pickup_locations' => $invoice['pickup_locations'] ?? [],
+                    'items' => array_map(function($it) {
+                        return [
+                            'id' => (int)($it['id'] ?? 0),
+                            'order_number' => (string)($it['order_number'] ?? ''),
+                            'groupname' => (string)($it['groupname'] ?? $it['item_name'] ?? $it['sku'] ?? 'Item'),
+                            'item_code' => (string)($it['item_code'] ?? 'ITEM'),
+                            'quantity' => (int)($it['quantity'] ?? 1),
+                            'unit_price' => (float)($it['unit_price'] ?? 0),
+                            'weight' => (float)($it['weight'] ?? 0.5),
+                            'gst' => (float)($it['tax_amount'] ?? 0),
+                            'hsn' => (string)($it['hsn'] ?? ''),
+                            'box_no' => (int)($it['box_no'] ?? 1)
+                        ];
+                    }, $invoice['items'] ?? [])
+                ];
+            }
+
             renderTemplate('views/dispatch/create.php', [
                 'invoices' => $invoices,
                 'dispatchRecords' => $dispatchRecords,
                 'is_international' => $isInternational ?? false,
                 'primary_order_number' => $primaryOrderNumber ?? '',
                 'destination_country' => $destCountry ?? 'IN',
+                'single_order_payload' => $singleOrderPayload,
             ]);
         }
     }
