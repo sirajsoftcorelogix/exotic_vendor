@@ -28,10 +28,10 @@ $queryBase = [
                     <span class="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-700">
                         <i class="fas fa-anchor text-[11px]" aria-hidden="true"></i>
                     </span>
-                    <span>Master data · Ports</span>
+                    <span>Master data · Shipping PORTS</span>
                 </div>
                 <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
-                    Port <span class="text-amber-800">listing</span>
+                    Shipping <span class="text-amber-800">PORTS</span>
                 </h1>
                 <p class="mt-3 text-sm sm:text-base text-gray-600 leading-relaxed max-w-2xl">
                     Manage sea, air, inland, and dry ports used for shipping — including city, country, and PIN.
