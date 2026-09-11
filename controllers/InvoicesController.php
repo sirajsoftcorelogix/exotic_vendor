@@ -5,6 +5,7 @@ require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
 require_once 'models/product/product.php';
 require_once 'models/courier/CourierPartner.php';
+require_once 'models/port/PortMaster.php';
 require_once __DIR__ . '/../helpers/international_invoice_defaults.php';
 require_once __DIR__ . '/../helpers/app_settings.php';
 
@@ -130,6 +131,18 @@ class InvoicesController
                 $commanModel,
                 $GLOBALS['conn'] ?? null
             );
+            if ($conn instanceof mysqli) {
+                $portModel = new PortMaster($conn);
+                $data['shipping_ports'] = $portModel->getActivePorts('', '', 200);
+                $typeLabels = PortMaster::portTypeLabels();
+                $data['shipping_port_types'] = [];
+                foreach (['air', 'sea', 'inland', 'dry'] as $typeKey) {
+                    if (isset($typeLabels[$typeKey])) {
+                        $data['shipping_port_types'][$typeKey] = $typeLabels[$typeKey];
+                    }
+                }
+                $data['international_defaults'] = $portModel->applyInvoiceDefaults($data['international_defaults']);
+            }
         }
 
         renderTemplate('views/invoices/create.php', $data, 'Create Invoice');
