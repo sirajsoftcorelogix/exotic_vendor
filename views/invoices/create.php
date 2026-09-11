@@ -409,7 +409,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 <input type="hidden" name="customer_address" id="billToSelect" value="<?= htmlspecialchars($defaultBillTo) ?>">
                 <input type="hidden" name="vp_order_info_id" id="vp_order_info_id" value="<?= htmlspecialchars((string) ($customer_address[0]['id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" id="billToDisplay" value="<?= htmlspecialchars($defaultBillTo) ?>">
-                <p id="billToText" class="rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-700"><?= $defaultBillToHtml !== '' ? $defaultBillToHtml : 'No billing address found' ?></p>
+                <p id="billToText" class="rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-700"><?= htmlspecialchars($defaultBillTo) !== '' ? htmlspecialchars($defaultBillTo) : 'No billing address found' ?></p>
                 <div class="mt-3 flex flex-wrap items-center gap-3 text-sm">
                     <div id="supplystate" class="inline-flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-slate-700">
                         <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">Supply state</span>
@@ -817,9 +817,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
 
         const billToText = document.getElementById('billToText');
         if (billToText) {
-            billToText.innerHTML = (selectedAddress && selectedAddress.bill_html)
-                ? selectedAddress.bill_html
-                : (billTo || 'No billing address found');
+            billToText.textContent = billTo || 'No billing address found';
         }
 
         const shipToDisplay = document.getElementById('shipToDisplay');
