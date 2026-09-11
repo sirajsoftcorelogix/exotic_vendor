@@ -242,18 +242,18 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
         <!-- Transporter & Vehicle Information -->
         <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0px_10px_15px_-3px_#0000001A] md:p-6" id="transportSelectionSection">
             <h2 class="mb-1 text-base font-semibold text-slate-800">Transporter &amp; vehicle</h2>
-            <p class="mb-4 text-sm text-gray-500">Choose transport mode or a registered transporter ID for e-way bill details.</p>
+            <p class="mb-4 text-sm text-gray-500">Choose a registered transporter ID or transport mode for e-way bill details.</p>
             <div class="mb-4 inline-flex rounded-lg bg-gray-100 p-1 text-sm">
                 <label class="inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 has-[:checked]:bg-white has-[:checked]:font-semibold has-[:checked]:shadow-sm">
-                    <input type="radio" name="transport_selection" value="mode" checked class="h-4 w-4 text-orange-600" data-transport-selection>
-                    <span>Transport Mode</span>
-                </label>
-                <label class="inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 has-[:checked]:bg-white has-[:checked]:font-semibold has-[:checked]:shadow-sm">
-                    <input type="radio" name="transport_selection" value="id" class="h-4 w-4 text-orange-600" data-transport-selection>
+                    <input type="radio" name="transport_selection" value="id" checked class="h-4 w-4 text-orange-600" data-transport-selection>
                     <span>Transport ID</span>
                 </label>
+                <label class="inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 has-[:checked]:bg-white has-[:checked]:font-semibold has-[:checked]:shadow-sm">
+                    <input type="radio" name="transport_selection" value="mode" class="h-4 w-4 text-orange-600" data-transport-selection>
+                    <span>Transport Mode</span>
+                </label>
             </div>
-            <div id="transportModeFields" class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
+            <div id="transportModeFields" class="hidden grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
                 <div>
                     <label for="invoice_trans_mode" class="<?php echo $invLabelClass; ?>">Transport Mode</label>
                     <select name="trans_mode" id="invoice_trans_mode" class="<?php echo $invInputClass; ?> inv-input">
@@ -283,7 +283,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                     <input type="text" name="trans_doc_dt" id="invoice_trans_doc_dt" value="<?= date('d/m/Y') ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
             </div>
-            <div id="transportIdFields" class="hidden grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div id="transportIdFields" class="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                     <label for="invoice_transporter_id" class="<?php echo $invLabelClass; ?>">Transport ID</label>
                     <select name="trans_id" id="invoice_transporter_id" class="<?php echo $invInputClass; ?> inv-input">
@@ -1087,13 +1087,18 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
         const transportIdFields = document.getElementById('transportIdFields');
         const transporterIdSelect = document.getElementById('invoice_transporter_id');
         const transporterNameInput = document.getElementById('invoice_transporter_name');
+        function applyTransportSelection(value) {
+            const useTransportId = value === 'id';
+            transportModeFields?.classList.toggle('hidden', useTransportId);
+            transportIdFields?.classList.toggle('hidden', !useTransportId);
+        }
         document.querySelectorAll('[data-transport-selection]').forEach(function(radio) {
             radio.addEventListener('change', function() {
-                const useTransportId = this.value === 'id';
-                transportModeFields?.classList.toggle('hidden', useTransportId);
-                transportIdFields?.classList.toggle('hidden', !useTransportId);
+                applyTransportSelection(this.value);
             });
         });
+        const selectedTransport = document.querySelector('[data-transport-selection]:checked');
+        applyTransportSelection(selectedTransport ? selectedTransport.value : 'id');
         transporterIdSelect?.addEventListener('change', function() {
             const option = this.options[this.selectedIndex];
             if (transporterNameInput) {
