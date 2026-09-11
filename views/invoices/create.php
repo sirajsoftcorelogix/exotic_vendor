@@ -92,7 +92,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 </div>
                 <div>
                     <label for="country_of_origin" class="<?php echo $invLabelClass; ?>">Country of Origin</label>
-                    <input type="text" name="country_of_origin" id="country_of_origin" value="<?php echo $intlVal('country_of_origin'); ?>" class="<?php echo $invInputClass; ?> inv-input">
+                    <input type="text" name="country_of_origin" id="country_of_origin" value="India" readonly class="<?php echo $invInputClass; ?> inv-input bg-gray-100 text-gray-700">
                 </div>
                 <div>
                     <label for="country_of_final_destination" class="<?php echo $invLabelClass; ?>">Country of Final Destination</label>
