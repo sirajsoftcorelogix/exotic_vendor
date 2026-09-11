@@ -868,8 +868,24 @@ class InvoicesController
         $shippingAddress = trim((string) (($customer['shipping_address_line1'] ?? '') . ' ' . ($customer['shipping_address_line2'] ?? '')));
 
         $payload = [
-            'Irn' => (string) ($internationalData['irn'] ?? ''),
-            'DispDtls' => [
+            'Irn' => (string) ($internationalData['irn'] ?? ''),            
+        ];
+        if (!empty($ewbData)) {
+            if (!empty($ewbData['trans_id'])) {
+                $payload['TransId'] = trim((string) $ewbData['trans_id']);
+                $payload['TransName'] = trim((string) $ewbData['trans_name']);
+                $payload['Distance'] = 0; // Default distance; can be customized if needed
+            }else{
+                $payload['Distance'] = 0;
+                $payload['TransMode'] = trim((string) $ewbData['trans_mode']);
+                $payload['VehNo'] = trim((string) $ewbData['veh_no']);
+                $payload['VehType'] = trim((string) $ewbData['veh_type']);
+                $payload['TransDocNo'] = trim((string) $ewbData['trans_doc_no']);
+                $payload['TransDocDt'] = trim((string) $ewbData['trans_doc_dt']);
+            }            
+        }
+        $payload = [
+        'DispDtls' => [
                 'Nm' => trim((string) (($customer['first_name'] ?? '') . ' ' . ($customer['last_name'] ?? ''))),
                 'Addr1' => $shippingAddress !== '' ? $shippingAddress : $buyerAddress,
                 'Addr2' => '',
@@ -889,22 +905,6 @@ class InvoicesController
                 'ExpDuty' => (float) ($internationalData['shipping_exp_duty'] ?? 0),
             ],
         ];
-
-        if (!empty($ewbData)) {
-            if (!empty($ewbData['trans_id'])) {
-                $payload['TransId'] = trim((string) $ewbData['trans_id']);
-                $payload['TransName'] = trim((string) $ewbData['trans_name']);
-                $payload['Distance'] = 0; // Default distance; can be customized if needed
-            }else{
-                $payload['Distance'] = 0;
-                $payload['TransMode'] = trim((string) $ewbData['trans_mode']);
-                $payload['VehNo'] = trim((string) $ewbData['veh_no']);
-                $payload['VehType'] = trim((string) $ewbData['veh_type']);
-                $payload['TransDocNo'] = trim((string) $ewbData['trans_doc_no']);
-                $payload['TransDocDt'] = trim((string) $ewbData['trans_doc_dt']);
-            }
-            
-        }
 
         try {
             $authreq = $alankitClient->authRequest();
