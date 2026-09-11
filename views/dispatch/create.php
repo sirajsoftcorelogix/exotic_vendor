@@ -667,13 +667,25 @@ window.SINGLE_DISPATCH_PAYLOAD = <?php echo json_encode($single_order_payload ??
             const isTopPick = idx === 0;
             const currency = (courier.currency || 'INR').toUpperCase() === 'INR' ? '₹' : (courier.currency || '$');
             const priceVal = parseFloat(courier.price || 0).toFixed(2);
-            const partnerName = courier.partner_code ? courier.partner_code.toUpperCase() : 'COURIER';
+            const partnerCode = (courier.partner_code || 'shiprocket').toLowerCase();
+            const rating = courier.rating ? (courier.rating + '/5') : 'N/A';
+            const etd = courier.etd || 'N/A';
+            const etdShort = (etd === 'N/A' || etd === '' || etd == null) ? '—' : String(etd);
+
+            let providerBadge = '<span class="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800 border border-violet-200">Shiprocket</span>';
+            if (partnerCode === 'delhivery') {
+                providerBadge = '<span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800 border border-red-200">Delhivery</span>';
+            } else if (partnerCode === 'bluedart') {
+                providerBadge = '<span class="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-900 border border-sky-200">Blue Dart</span>';
+            } else if (partnerCode === 'aramex') {
+                providerBadge = '<span class="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-900 border border-orange-200">Aramex</span>';
+            }
 
             tilesHtml += `
                 <label class="relative flex flex-col justify-between p-3.5 rounded-xl border-2 border-gray-200 bg-white cursor-pointer transition ${tm.courierTileHover} ${tm.courierTileChecked}">
                     ${isTopPick ? `<span class="absolute -top-2.5 right-3 ${tm.courierTopPick} text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">Cheapest</span>` : ''}
                     <div>
-                        <div class="flex items-center justify-between gap-2 mb-1">
+                        <div class="flex items-center justify-between gap-2 mb-1.5">
                             <div class="flex items-center gap-2">
                                 <input type="radio" name="${groupName}" value="${escapeHtml(courier.id || idx)}" ${idx === 0 ? 'checked' : ''}
                                        class="courier-radio-input ${tm.courierRadio}"
@@ -685,14 +697,19 @@ window.SINGLE_DISPATCH_PAYLOAD = <?php echo json_encode($single_order_payload ??
                                        data-courier-etd="${escapeHtml(courier.etd || '')}"/>
                                 <span class="font-bold text-gray-900 text-xs">${escapeHtml(courier.name)}</span>
                             </div>
-                            <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-gray-100 text-gray-700">${partnerName}</span>
+                            ${providerBadge}
                         </div>
-                        <div class="text-[11px] text-gray-500 pl-6">
-                            ${courier.etd ? `<span>Est. Delivery: <strong>${escapeHtml(courier.etd)}</strong></span>` : ''}
+                        <div class="mt-2.5 flex flex-wrap gap-1.5">
+                            <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                                <span class="text-slate-400">ETD</span> ${escapeHtml(etdShort)}
+                            </span>
+                            <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 border border-amber-100">
+                                <span class="text-amber-500 text-[11px]">★</span> ${escapeHtml(rating)}
+                            </span>
                         </div>
                     </div>
-                    <div class="mt-2 text-right border-t border-gray-100 pt-2">
-                        <span class="text-sm font-extrabold ${tm.courierPrice}">${currency} ${priceVal}</span>
+                    <div class="mt-3 text-right border-t border-gray-100 pt-2">
+                        <span class="text-base font-extrabold ${tm.courierPrice}">${currency} ${priceVal}</span>
                     </div>
                 </label>
             `;
