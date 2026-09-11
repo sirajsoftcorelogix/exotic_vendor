@@ -868,6 +868,7 @@ class InvoicesController
         $shippingAddress = trim((string) (($customer['shipping_address_line1'] ?? '') . ' ' . ($customer['shipping_address_line2'] ?? '')));
 
         $payload = [
+            'Irn' => (string) ($internationalData['irn'] ?? ''),
             'DispDtls' => [
                 'Nm' => trim((string) (($customer['first_name'] ?? '') . ' ' . ($customer['last_name'] ?? ''))),
                 'Addr1' => $shippingAddress !== '' ? $shippingAddress : $buyerAddress,
@@ -920,8 +921,14 @@ class InvoicesController
             $accessToken = $authdata['Data']['AuthToken'];
             $sek = $authdata['Data']['Sek'];
             $decryptedSek = $alankitClient->decryptSek($sek, $alankitConfig['app_key']);
-
-            $ewbResponse = $alankitClient->generateEwb($payload, $accessToken, $decryptedSek);
+            $payloadreq = base64_encode(json_encode($payload));
+            $encryptedPayload = $alankitClient->encryptBySymmetricKey($payloadreq, $decryptedSek);
+            if (!$encryptedPayload) {
+                error_log("Alankit IRN: Payload encryption failed for invoice #$invoiceId");
+                return false;
+            }
+           
+            $ewbResponse = $alankitClient->generateEwb(['Data' => $encryptedPayload], $accessToken, $decryptedSek);
 
             $updateData = [
                 'ewb_request_payload' => json_encode($payload),
