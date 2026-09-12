@@ -634,7 +634,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
             <p class="text-sm text-gray-500">Preview the tax invoice, then create it. Dispatch is available for domestic invoices.</p>
             <div class="flex flex-wrap justify-end gap-2">
             <input type="hidden" name="pos_flag" value="<?php echo htmlspecialchars((string) $pos_flag, ENT_QUOTES, 'UTF-8'); ?>">
-            <a href="<?php echo base_url('?page=orders&action=list'); ?>" class="rounded-lg bg-gray-200 px-5 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-300">Cancel</a>
+            <a href="<?php echo base_url('?page=invoices&action=cancel_create'); ?>" class="rounded-lg bg-gray-200 px-5 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-300">Cancel</a>
             <button type="button" onclick="previewInvoice()" class="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Preview</button>
             <button type="submit" id="createInvoiceButton" class="rounded-lg bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600">Create Invoice</button>
             <?php if($is_international === false): ?>
