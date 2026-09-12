@@ -312,6 +312,9 @@ switch ($page) {
             case 'import_missing_batch':
                 $controller->importMissingBatchAjax();
                 break;
+            case 'sync_order_statuses':
+                $controller->syncOrderStatusesPage();
+                break;
             case 'sync_order_statuses_ajax':
                 $controller->syncOrderStatusAjax();
                 break;
