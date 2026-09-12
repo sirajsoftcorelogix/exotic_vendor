@@ -981,6 +981,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
             const cgstInput = row.querySelector('input[name="cgst[]"]');
             const sgstInput = row.querySelector('input[name="sgst[]"]');
             const igstInput = row.querySelector('input[name="igst[]"]');
+            const taxRateInput = row.querySelector('input[name="tax_rate[]"]');
             if (gstType === 'same') {
                 // Same state: Split GST between CGST and SGST (50% each)
                 const halfGst = gstValue / 2;
@@ -992,6 +993,9 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 if (cgstInput) cgstInput.value = '0';
                 if (sgstInput) sgstInput.value = '0';
                 if (igstInput) igstInput.value = gstValue.toFixed(2);
+            }
+            if (taxRateInput) {
+                taxRateInput.value = gstValue.toFixed(2);
             }
 
             // Update display spans
@@ -1107,6 +1111,12 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
             const useTransportId = value === 'id';
             transportModeFields?.classList.toggle('hidden', useTransportId);
             transportIdFields?.classList.toggle('hidden', !useTransportId);
+            transportModeFields?.querySelectorAll('input, select, textarea').forEach(function(el) {
+                el.disabled = useTransportId;
+            });
+            transportIdFields?.querySelectorAll('input, select, textarea').forEach(function(el) {
+                el.disabled = !useTransportId;
+            });
         }
         document.querySelectorAll('[data-transport-selection]').forEach(function(radio) {
             radio.addEventListener('change', function() {
@@ -1326,6 +1336,13 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
             return;
         }
 
+        if (typeof syncShippingPortCode === 'function') {
+            syncShippingPortCode();
+        }
+        if (typeof syncShippingCountryCode === 'function') {
+            syncShippingCountryCode();
+        }
+
         const formData = new FormData(this);
         // Disable button and show loading state
         const submitBtn = document.getElementById('createInvoiceButton');
@@ -1453,6 +1470,8 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
             if (cgstInput) cgstInput.value = '0';
             if (sgstInput) sgstInput.value = '0';
             if (igstInput) igstInput.value = '0';
+            const taxRateInput = row.querySelector('input[name="tax_rate[]"]');
+            if (taxRateInput) taxRateInput.value = '0';
 
             // Update display spans
             const cgstSpan = row.querySelector('input[name="cgst[]"]')?.previousElementSibling;

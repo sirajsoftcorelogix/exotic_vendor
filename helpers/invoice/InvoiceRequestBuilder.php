@@ -178,10 +178,14 @@ class InvoiceRequestBuilder
         foreach ($orderNumbers as $idx => $orderNumber) {
             $qty = isset($post['quantity'][$idx]) ? (int)$post['quantity'][$idx] : 0;
             $unitPrice = isset($post['unit_price'][$idx]) ? (float)$post['unit_price'][$idx] : 0.0;
-            $taxRate = isset($post['tax_rate'][$idx]) ? (float)$post['tax_rate'][$idx] : 0.0;
+            $postedTaxRate = isset($post['tax_rate'][$idx]) ? (float)$post['tax_rate'][$idx] : 0.0;
             $cgstRate = isset($post['cgst'][$idx]) ? (float)$post['cgst'][$idx] : 0.0;
             $sgstRate = isset($post['sgst'][$idx]) ? (float)$post['sgst'][$idx] : 0.0;
             $igstRate = isset($post['igst'][$idx]) ? (float)$post['igst'][$idx] : 0.0;
+            $hasGstSplit = array_key_exists($idx, (array)($post['cgst'] ?? []))
+                || array_key_exists($idx, (array)($post['sgst'] ?? []))
+                || array_key_exists($idx, (array)($post['igst'] ?? []));
+            $taxRate = $hasGstSplit ? ($cgstRate + $sgstRate + $igstRate) : $postedTaxRate;
             $amount = $qty * $unitPrice;
             $taxAmount = ($amount * $taxRate) / 100;
 
@@ -230,8 +234,14 @@ class InvoiceRequestBuilder
             return null;
         }
 
-        return [
-            'transport_selection' => trim((string)($post['transport_selection'] ?? 'id')),
+        $transportSelection = trim((string)($post['transport_selection'] ?? 'id'));
+        if ($transportSelection === '') {
+            $transportSelection = 'id';
+        }
+        $shippingPort = strtoupper(trim((string)($post['shipping_port'] ?? $post['port_code'] ?? '')));
+
+        $row = [
+            'transport_selection' => $transportSelection,
             'trans_mode' => trim((string)($post['trans_mode'] ?? '')),
             'veh_no' => trim((string)($post['veh_no'] ?? '')),
             'veh_type' => trim((string)($post['veh_type'] ?? '')),
@@ -251,11 +261,25 @@ class InvoiceRequestBuilder
             'insurance_charge' => (float)($post['insurance_charge'] ?? 0),
             'shipping_bill_number' => trim((string)($post['shipping_bill_number'] ?? '')),
             'shipping_bill_date' => trim((string)($post['shipping_bill_date'] ?? '')),
-            'shipping_port' => trim((string)($post['shipping_port'] ?? '')),
+            'shipping_port' => $shippingPort,
+            'port_code' => $shippingPort,
             'shipping_ref_clm' => trim((string)($post['shipping_ref_clm'] ?? '')),
-            'shipping_currency' => trim((string)($post['shipping_currency'] ?? '')),
-            'shipping_country_code' => trim((string)($post['shipping_country_code'] ?? '')),
+            'shipping_currency' => trim((string)($post['shipping_currency'] ?? $currency)),
+            'shipping_country_code' => strtoupper(trim((string)($post['shipping_country_code'] ?? ''))),
             'shipping_exp_duty' => (float)($post['shipping_exp_duty'] ?? 0),
         ];
+
+        if ($transportSelection === 'id') {
+            $row['trans_mode'] = '';
+            $row['veh_no'] = '';
+            $row['veh_type'] = '';
+            $row['trans_doc_no'] = '';
+            $row['trans_doc_dt'] = '';
+        } else {
+            $row['trans_id'] = '';
+            $row['trans_name'] = '';
+        }
+
+        return $row;
     }
 }

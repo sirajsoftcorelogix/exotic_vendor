@@ -358,6 +358,10 @@ class InvoicesController
                     }
                 }
 
+                if (!empty($internationalData['shipping_port'])) {
+                    $internationalData['port_code'] = strtoupper((string) $internationalData['shipping_port']);
+                }
+
                 if (!empty($internationalData)) {
                     $invoiceModel->updateInvoiceInternational($invoiceId, $internationalData);
                 }
@@ -1080,7 +1084,7 @@ class InvoicesController
         $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
         $firm = app_setting_firm_details();
         //port_code details
-        $portCode = $internationalData['port_code'] ?? '';
+        $portCode = $internationalData['port_code'] ?? $internationalData['shipping_port'] ?? '';
         //get details from shipping_port_master
         $shippingPortDetails = $commanModel->getRecordByField('shipping_port_master', 'port_code', $portCode);
         if (!$customer || !$firm) {

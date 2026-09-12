@@ -294,7 +294,10 @@ class Invoice
         $freightCharge = (float)($data['freight_charge'] ?? 0);
         $insuranceCharge = (float)($data['insurance_charge'] ?? 0);
         $shippingBillNo = (string)($data['shipping_bill_number'] ?? '');
-        $shippingBillDate = (string)($data['shipping_bill_date'] ?? date('Y-m-d'));
+        $shippingBillDate = trim((string)($data['shipping_bill_date'] ?? ''));
+        if ($shippingBillDate === '') {
+            $shippingBillDate = date('Y-m-d');
+        }
         $shippingRefClm = (string)($data['shipping_ref_clm'] ?? 'N');
         $shippingCurrency = (string)($data['shipping_currency'] ?? 'USD');
         $shippingCountryCode = (string)($data['shipping_country_code'] ?? '');
@@ -364,7 +367,7 @@ class Invoice
     public function updateInvoiceInternational($invoice_id, $data)
     {
         // Build dynamic UPDATE query based on provided fields
-        $allowedFields = ['transport_selection', 'trans_mode', 'veh_no', 'veh_type', 'trans_doc_no', 'trans_doc_dt', 'trans_id', 'trans_name', 'pre_carriage_by', 'port_of_loading', 'port_of_discharge', 'country_of_origin', 'country_of_final_destination', 'final_destination', 'usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_bill_number', 'shipping_bill_date', 'shipping_port', 'shipping_ref_clm', 'shipping_currency', 'shipping_country_code', 'shipping_exp_duty', 'irn', 'ack_number', 'ack_date', 'signed_invoice', 'qrcode_string', 'irn_status', 'request_payload', 'response_payload', 'irn_error_message', 'ewb_no', 'ewb_date', 'ewb_valid_till', 'ewb_request_payload', 'ewb_response_payload', 'ewb_error_message'];
+        $allowedFields = ['transport_selection', 'trans_mode', 'veh_no', 'veh_type', 'trans_doc_no', 'trans_doc_dt', 'trans_id', 'trans_name', 'pre_carriage_by', 'port_of_loading', 'port_of_discharge', 'port_code', 'country_of_origin', 'country_of_final_destination', 'final_destination', 'usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_bill_number', 'shipping_bill_date', 'shipping_port', 'shipping_ref_clm', 'shipping_currency', 'shipping_country_code', 'shipping_exp_duty', 'irn', 'ack_number', 'ack_date', 'signed_invoice', 'qrcode_string', 'irn_status', 'request_payload', 'response_payload', 'irn_error_message', 'ewb_no', 'ewb_date', 'ewb_valid_till', 'ewb_request_payload', 'ewb_response_payload', 'ewb_error_message'];
         $updateFields = [];
         $bindParams = [];
         $bindTypes = '';
