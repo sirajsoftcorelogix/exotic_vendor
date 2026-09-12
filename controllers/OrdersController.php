@@ -680,6 +680,28 @@ class OrdersController
     }
 
     /**
+     * Full-page runner using the standard header + left menu layout.
+     */
+    public function syncOrderStatusesPage(): void
+    {
+        is_login();
+
+        $prefillLimit = isset($_GET['limit']) ? max(1, (int) $_GET['limit']) : 250;
+        $prefillOrders = trim((string) ($_GET['order'] ?? ''));
+        $prefillMode = $prefillOrders !== '' ? 'specific' : (isset($_GET['limit']) ? 'partial' : 'all');
+        $prefillDryRun = !isset($_GET['execute']) || !in_array((string) $_GET['execute'], ['1', 'true'], true);
+
+        renderTemplate('views/orders/sync_order_statuses_ui.php', [
+            'ajaxUrl' => base_url('index.php?page=orders&action=sync_order_statuses_ajax'),
+            'prefillLimit' => $prefillLimit,
+            'prefillMode' => $prefillMode,
+            'prefillDryRun' => $prefillDryRun,
+            'prefillOrders' => $prefillOrders,
+            'ordersListUrl' => base_url('?page=orders&action=list'),
+        ], 'Sync Order Statuses');
+    }
+
+    /**
      * AJAX action: count / queue / sync one batch of non-terminal order statuses.
      */
     public function syncOrderStatusAjax(): void

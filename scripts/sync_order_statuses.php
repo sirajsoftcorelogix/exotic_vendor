@@ -2,9 +2,10 @@
 /**
  * Update Order Statuses Script
  *
- * Browser UI (recommended):
- *   /scripts/sync_order_statuses.php
- *   /scripts/sync_order_statuses.php?limit=250
+ * Browser UI (recommended, uses app header + left menu):
+ *   /index.php?page=orders&action=sync_order_statuses
+ *   /index.php?page=orders&action=sync_order_statuses&limit=250
+ *   /scripts/sync_order_statuses.php  (redirects to the app page)
  *
  * CLI:
  *   php scripts/sync_order_statuses.php --execute --limit=1000 --batch-size=50
@@ -387,18 +388,24 @@ if ($isAjax) {
     script_json(['success' => false, 'message' => 'Unknown operation.'], 400);
 }
 
-// Browser UI
-$prefillLimit = isset($_GET['limit']) ? max(1, (int) $_GET['limit']) : 250;
-$prefillOrders = trim((string) ($_GET['order'] ?? ''));
-$prefillMode = $prefillOrders !== '' ? 'specific' : (isset($_GET['limit']) ? 'partial' : 'all');
-$prefillDryRun = !isset($_GET['execute']) || !in_array((string) $_GET['execute'], ['1', 'true'], true);
+// Browser UI now lives in the standard app layout.
+$redirectQuery = [
+    'page' => 'orders',
+    'action' => 'sync_order_statuses',
+];
+if (isset($_GET['limit']) && (string) $_GET['limit'] !== '') {
+    $redirectQuery['limit'] = (int) $_GET['limit'];
+}
+if (!empty($_GET['order'])) {
+    $redirectQuery['order'] = (string) $_GET['order'];
+}
+if (isset($_GET['execute']) && (string) $_GET['execute'] !== '') {
+    $redirectQuery['execute'] = (string) $_GET['execute'];
+}
 
-$ajaxQuery = $_GET;
-$ajaxQuery['ajax'] = '1';
-unset($ajaxQuery['execute'], $ajaxQuery['format']);
-$scriptUrl = basename($_SERVER['SCRIPT_NAME'] ?? 'sync_order_statuses.php') . '?' . http_build_query($ajaxQuery);
-$jsUrl = '../assets/js/sync_order_statuses.js';
+$scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/scripts/sync_order_statuses.php'));
+$appBase = rtrim(dirname(dirname($scriptName)), '/');
+$target = ($appBase === '' ? '' : $appBase) . '/index.php?' . http_build_query($redirectQuery);
 
-header('Content-Type: text/html; charset=utf-8');
-header('X-Robots-Tag: noindex, nofollow');
-require $root . '/views/orders/sync_order_statuses_ui.php';
+header('Location: ' . $target, true, 302);
+exit;
