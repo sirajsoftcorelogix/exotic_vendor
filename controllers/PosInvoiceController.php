@@ -725,11 +725,15 @@ class PosInvoiceController
             $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
             $ok = !empty($result['status']) || strtolower(trim((string) ($latest['ewb_status'] ?? ''))) === 'generated';
             //print_r($result);
+            $errorMsg = is_string($result['message'] ?? null) ? $result['message'] : 'Failed to generate E-Way bill.';
+            $errorDetails = $result['error_details'] ?? $latest['ewb_error_message'] ?? null;
+
             echo json_encode([
                 'success' => $ok,
                 'message' => $ok
                     ? ((string) ($result['ewb_message'] ?? 'E-Way bill generated successfully.'))
-                    : ((string) ($result['message'] ?? 'Failed to generate E-Way bill.')),
+                    : $errorMsg,
+                'error_details' => $errorDetails,
                 'ewb_no' => (string) ($latest['ewb_no'] ?? $latest['ewb'] ?? $result['ewb'] ?? ''),
                 'ewb_number' => (string) ($latest['ewb_no'] ?? $latest['ewb'] ?? $result['ewb'] ?? ''),
                 'ewb_date' => (string) ($latest['ewb_date'] ?? ''),
