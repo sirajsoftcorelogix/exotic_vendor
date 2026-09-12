@@ -348,6 +348,14 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
       const submitBtn = document.getElementById('submitBtn');
       const submitBtnText = document.getElementById('submitBtnText');
       const resultContainer = document.getElementById('resultContainer');
+      const escapeResultHtml = function(value) {
+        return String(value ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      };
       const scrollToResult = function() {
         // Wait a frame so the banner is rendered and offsets are measurable.
         requestAnimationFrame(function() {
@@ -418,6 +426,8 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
           scrollToResult();
         } else {
           resultContainer.className = 'bg-rose-50 border border-rose-300 rounded-2xl p-6 mb-6';
+          const errDetail = data.error_details || data.errors || '';
+          const detailStr = typeof errDetail === 'object' ? JSON.stringify(errDetail, null, 2) : String(errDetail || '');
           resultContainer.innerHTML = `
             <div class="flex items-start gap-3">
               <div class="p-2 bg-rose-100 text-rose-700 rounded-lg shrink-0">
@@ -425,7 +435,8 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
               </div>
               <div>
                 <h3 class="text-base font-bold text-rose-900">E-Way Bill Generation Failed</h3>
-                <p class="text-xs text-rose-700 mt-1">${data.message || 'Error occurred while contacting Alankit API.'}</p>
+                <p class="text-xs text-rose-700 mt-1">${escapeResultHtml(data.message || 'Error occurred while contacting Alankit API.')}</p>
+                ${detailStr ? `<div class="mt-3 rounded-lg border border-rose-200 bg-white/70 p-3"><div class="text-xs font-semibold text-rose-800">Alankit ErrorDetails</div><pre class="mt-1 whitespace-pre-wrap break-words text-xs text-rose-900">${escapeResultHtml(detailStr)}</pre></div>` : ''}
               </div>
             </div>
           `;

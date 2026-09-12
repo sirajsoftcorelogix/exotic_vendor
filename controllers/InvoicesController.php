@@ -1270,22 +1270,33 @@ class InvoicesController
         $buyerAddress = trim((string) (($customer['address_line1'] ?? '') . ' ' . ($customer['address_line2'] ?? '')));
         $shippingAddress = trim((string) (($customer['shipping_address_line1'] ?? '') . ' ' . ($customer['shipping_address_line2'] ?? '')));
         $zip = trim((string) ($customer['shipping_zipcode'] ?? $customer['zipcode'] ?? ''));
+        $dispGstin = trim((string)($alankitConfig['gstin'] ?? $firm['gst'] ?? '07AADCE1400C1ZJ'));
+        $dispStcd = '07';
+        if (strlen($dispGstin) >= 2 && ctype_digit(substr($dispGstin, 0, 2)) && (int)substr($dispGstin, 0, 2) > 0) {
+            $dispStcd = sprintf('%02d', (int)substr($dispGstin, 0, 2));
+        } else if (!empty($firm['state_code'])) {
+            $dispStcd = sprintf('%02d', (int)$firm['state_code']);
+        }
+
+        $dispPin = (int)($firm['firm_pin'] ?? $firm['pin'] ?? 110055);
+        if ($dispPin <= 0) {
+            $dispPin = 110055;
+        }
+
         $payload = [
             'Irn' => (string) ($internationalData['irn'] ?? ''),
-            'Distance' => 0,
+            'Distance' => (int)($ewbData['distance'] ?? 0),
             'DispDtls' => [
-                'Nm' => $firm['firm_name'] ?? '',
-                'Addr1' => trim((string) ($firm['firm_address'] ?? '')),                
-                'Loc' => trim((string) ($firm['firm_city'] ?? '')),
-                'Pin' => $firm['firm_pin'] ?? '',
-                'Stcd' => trim((string) ($firm['state_code'] ?? '')),
+                'Nm' => (string)($firm['firm_name'] ?? 'Exotic India Art'),
+                'Addr1' => trim((string) ($firm['firm_address'] ?? $firm['address'] ?? 'Delhi Address')),                
+                'Loc' => trim((string) ($firm['firm_city'] ?? $firm['city'] ?? 'New Delhi')),
+                'Pin' => $dispPin,
+                'Stcd' => $dispStcd,
             ],
             "ExpShipDtls" => [
-                "Addr1" => $shippingPortDetails['port_name'] ?? 'Port Name',                
-                "Loc" => $shippingPortDetails['city'] ?? 'City',
-                "Pin" => $shippingPortDetails['pincode'] ?? 110020,
-                //"Stcd"=> trim((string) ($customer['shipping_state_code'] ?? $customer['state_code'] ?? ''))
-                //"Pin" => 110020,
+                "Addr1" => (string)($shippingPortDetails['port_name'] ?? 'Delhi Air Cargo'),                
+                "Loc" => (string)($shippingPortDetails['city'] ?? 'New Delhi'),
+                "Pin" => (int)($shippingPortDetails['pincode'] ?? 110020),
                 "Stcd"=> '07'
             ],            
         ];
@@ -1637,9 +1648,13 @@ class InvoicesController
         $ewbNo = (string)($latestIntl['ewb_no'] ?? $res['ewb'] ?? '');
         $ok = (!empty($res['status']) || $ewbNo !== '');
 
+        $errorMsg = is_string($res['message'] ?? null) ? $res['message'] : 'Failed to generate E-Way bill.';
+        $errorDetails = $res['error_details'] ?? $latestIntl['ewb_error_message'] ?? null;
+
         echo json_encode([
             'success' => $ok,
-            'message' => $ok ? 'E-Way Bill generated successfully!' : ($res['message'] ?? 'Failed to generate E-Way bill.'),
+            'message' => $ok ? 'E-Way Bill generated successfully!' : $errorMsg,
+            'error_details' => $errorDetails,
             'ewb_no' => $ewbNo,
             'ewb_number' => $ewbNo,
             'ewb_date' => (string)($latestIntl['ewb_date'] ?? ''),
