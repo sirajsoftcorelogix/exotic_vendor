@@ -252,8 +252,11 @@ class PosInvoiceController
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
         //is_international_invoice
+        if (!is_array($row)) {
+            $row = [];
+        }
         $row['is_international_invoice'] = $currency !== '' && $currency !== 'INR';
-        return is_array($row) ? $row : null;
+        return $row;
     }
 
     private function syncInternationalEwbTracking(int $invoiceId): void
@@ -573,7 +576,7 @@ class PosInvoiceController
         $invoice = $ctx['invoice'];
         $orderNumber = (string) $ctx['order_number'];
         $invoiceId = (int) ($invoice['id'] ?? 0);
-        $tracking = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId);
+        $tracking = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
         if (is_array($tracking) && strtolower(trim((string) ($tracking['irn_status'] ?? ''))) === 'generated' && trim((string) ($tracking['irn'] ?? '')) !== '') {
             echo json_encode([
                 'success' => true,
@@ -599,29 +602,42 @@ class PosInvoiceController
         $config = include __DIR__ . '/../config.php';
         $alankitConfig = $config['alankit'] ?? [];
         $tracking['is_international_invoice'] = $tracking['is_international_invoice'] ?? false;
-        if ($tracking['is_international_invoice']) {
-            require_once __DIR__ . '/InvoicesController.php';
-            $controller = new InvoicesController();
-            $irn = $controller->generateAlankitIrnForInvoice($invoiceId);
+        try {
+            if ($tracking['is_international_invoice']) {
+                require_once __DIR__ . '/InvoicesController.php';
+                $controller = new InvoicesController();
+                $irn = $controller->generateAlankitIrnForInvoice($invoiceId);
+                $result = [
+                    'status' => $irn !== '' ? 'success' : 'error',
+                    'irn' => $irn,
+                    'message' => $irn !== '' ? 'IRN generated successfully.' : 'Failed to generate IRN.',
+                ];
+            } else {
+                require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
+                $service = new DomesticEwbIrnService($conn, $alankitConfig);
+                $result = $service->generateIrnAndEwb(
+                    $invoiceId,
+                    $invoice,
+                    $runtime['items'],
+                    $runtime['order_info'],
+                    $runtime['firm'],
+                    []
+                );
+            }
+        } catch (Throwable $e) {
+            error_log('E-Invoice submit exception for invoice #' . $invoiceId . ': ' . $e->getMessage());
             $result = [
-                'status' => $irn !== '' ? 'success' : 'error',
-                'irn' => $irn,
-                'message' => $irn !== '' ? 'IRN generated successfully.' : 'Failed to generate IRN.',
+                'status' => false,
+                'message' => 'E-Invoice generation failed.',
+                'error_details' => $e->getMessage(),
             ];
-        } else {
-            require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
-            $service = new DomesticEwbIrnService($conn, $alankitConfig);
-            $result = $service->generateIrnAndEwb(
-            $invoiceId,
-            $invoice,
-            $runtime['items'],
-            $runtime['order_info'],
-            $runtime['firm'],
-            []
-        );
         }
 
-        
+        $result = is_array($result) ? $result : [
+            'status' => false,
+            'message' => 'E-Invoice generation failed.',
+        ];
+
         //$this->syncInternationalEwbTracking($invoiceId);
 
         $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
@@ -673,11 +689,35 @@ class PosInvoiceController
         $config = include __DIR__ . '/../config.php';
         $alankitConfig = $config['alankit'] ?? [];
         //is_international_invoice
-        $tracking = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId);
+        $tracking = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
         if ($tracking['is_international_invoice'] ?? false) {
             require_once __DIR__ . '/InvoicesController.php';
             $controller = new InvoicesController();
-            $result = $controller->generateAlankitEwbForInvoice($invoiceId, $ewbData);
+            $existingEwb = trim((string) ($tracking['ewb_no'] ?? $tracking['ewb'] ?? ''));
+            if ($existingEwb !== '' && $existingEwb !== '0') {
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'E-Way bill is already generated for this invoice.',
+                    'ewb_no' => $existingEwb,
+                    'ewb_number' => $existingEwb,
+                    'ewb_date' => (string) ($tracking['ewb_date'] ?? ''),
+                    'ewb_valid_till' => (string) ($tracking['ewb_valid_till'] ?? ''),
+                    'ewb_status' => 'generated',
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
+
+            try {
+                $result = $controller->generateAlankitEwbForInvoice($invoiceId, $ewbData);
+            } catch (Throwable $e) {
+                error_log('International EWB submit exception for invoice #' . $invoiceId . ': ' . $e->getMessage());
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'E-Way bill generation failed.',
+                    'error_details' => $e->getMessage(),
+                ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+                exit;
+            }
             //$this->syncInternationalEwbTracking($invoiceId);
             $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
             $ok = !empty($result['status']) || strtolower(trim((string) ($latest['ewb_status'] ?? ''))) === 'generated';
@@ -698,9 +738,24 @@ class PosInvoiceController
         require_once __DIR__ . '/../models/invoice/DomesticEwbIrnService.php';
         $service = new DomesticEwbIrnService($conn, $alankitConfig);
 
-        $tracking = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId);
+        $tracking = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
         $irn = is_array($tracking) ? trim((string) ($tracking['irn'] ?? '')) : '';
         $irnStatus = is_array($tracking) ? strtolower(trim((string) ($tracking['irn_status'] ?? ''))) : '';
+
+        $existingEwb = trim((string) ($tracking['ewb_no'] ?? $tracking['ewb'] ?? ''));
+        if ($existingEwb !== '' && $existingEwb !== '0') {
+            echo json_encode([
+                'success' => true,
+                'message' => 'E-Way bill is already generated for this invoice.',
+                'irn' => $irn,
+                'ewb_no' => $existingEwb,
+                'ewb_number' => $existingEwb,
+                'ewb_date' => (string) ($tracking['ewb_date'] ?? ''),
+                'ewb_valid_till' => (string) ($tracking['ewb_valid_till'] ?? ''),
+                'ewb_status' => 'generated',
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
 
         if ($irn !== '' && $irnStatus === 'generated') {
             //echo 'ewb regeneration requested for invoice #' . $invoiceId . ' with IRN ' . $irn . PHP_EOL;
@@ -731,6 +786,10 @@ class PosInvoiceController
             $runtime['firm'],
             $ewbData
         );
+        $result = is_array($result) ? $result : [
+            'status' => false,
+            'message' => 'E-Way bill generation failed.',
+        ];
         //$this->syncInternationalEwbTracking($invoiceId);
         $latest = $this->fetchEwbIrnTrackingByInvoiceId($invoiceId) ?? [];
         $ok = !empty($result['status']) || strtolower(trim((string) ($latest['ewb_status'] ?? ''))) === 'generated';
