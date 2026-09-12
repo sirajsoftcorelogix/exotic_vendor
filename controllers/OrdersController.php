@@ -680,6 +680,94 @@ class OrdersController
     }
 
     /**
+     * AJAX action: Fetch and update non-terminal order statuses from Exotic India Vendor API.
+     */
+    public function syncOrderStatusAjax(): void
+    {
+        is_login();
+        $this->clearBufferedHttpOutput();
+        header('Content-Type: application/json; charset=utf-8');
+
+        global $ordersModel;
+
+        $input = json_decode((string)file_get_contents('php://input'), true);
+        if (!is_array($input)) {
+            $input = array_merge($_GET, $_POST);
+        }
+
+        $dryRun = isset($input['dry_run']) ? (bool)$input['dry_run'] : false;
+        $limit = isset($input['limit']) ? max(1, min(5000, (int)$input['limit'])) : 500;
+        $batchSize = isset($input['batch_size']) ? max(1, min(200, (int)$input['batch_size'])) : 50;
+        $specificOrdersRaw = trim((string)($input['order_id'] ?? $input['orderid'] ?? $input['order'] ?? ''));
+
+        $orderNumbers = [];
+        if ($specificOrdersRaw !== '') {
+            $orderNumbers = array_filter(array_map('trim', explode(',', $specificOrdersRaw)));
+        } else {
+            $candidates = $ordersModel->getNonTerminalOrdersForStatusSync($limit);
+            foreach ($candidates as $cand) {
+                $orderNumbers[] = $cand['order_number'];
+            }
+        }
+
+        if (empty($orderNumbers)) {
+            echo json_encode([
+                'success' => true,
+                'message' => 'No non-terminal orders found awaiting status sync.',
+                'summary' => [
+                    'checked_orders' => 0,
+                    'updated_lines' => 0,
+                    'unchanged_lines' => 0,
+                    'skipped_lines' => 0,
+                    'details' => [],
+                    'errors' => []
+                ]
+            ]);
+            exit;
+        }
+
+        $userId = (int)($_SESSION['user']['id'] ?? 0);
+        $chunks = array_chunk($orderNumbers, $batchSize);
+
+        $totalChecked = 0;
+        $totalUpdated = 0;
+        $totalUnchanged = 0;
+        $totalSkipped = 0;
+        $allDetails = [];
+        $allErrors = [];
+
+        foreach ($chunks as $chunk) {
+            $res = $ordersModel->syncOrderStatusFromVendorApiBatch($chunk, $dryRun, $userId);
+            $totalChecked += $res['checked_orders'];
+            $totalUpdated += $res['updated_lines'];
+            $totalUnchanged += $res['unchanged_lines'];
+            $totalSkipped += $res['skipped_lines'];
+
+            if (!empty($res['details'])) {
+                $allDetails = array_merge($allDetails, $res['details']);
+            }
+            if (!empty($res['errors'])) {
+                $allErrors = array_merge($allErrors, $res['errors']);
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'dry_run' => $dryRun,
+            'message' => "Order status sync completed. Checked {$totalChecked} orders; {$totalUpdated} line(s) updated/changed.",
+            'summary' => [
+                'checked_orders' => $totalChecked,
+                'updated_lines' => $totalUpdated,
+                'unchanged_lines' => $totalUnchanged,
+                'skipped_lines' => $totalSkipped,
+                'details' => $allDetails,
+                'errors' => $allErrors
+            ]
+        ]);
+        exit;
+    }
+
+    /**
      * Import vendor API order payload into vp_orders (shared by cron import, POS checkout, and recovery scripts).
      */
     public function importVendorOrdersFromApiPayload(array $ordersList, ?string $onlyOrderNumber = null): array
