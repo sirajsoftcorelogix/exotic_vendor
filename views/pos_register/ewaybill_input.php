@@ -74,6 +74,9 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
 
     <!-- Existing EWB Success Banner if already generated -->
     <?php if (!empty($existingEwb)): ?>
+      <?php
+      $exportDocsUrl = base_url('index.php?page=export_documents&query=' . rawurlencode(!empty($invoiceData['invoice_number']) ? $invoiceData['invoice_number'] : $orderNumber));
+      ?>
       <div class="bg-emerald-50 border border-emerald-300 rounded-2xl p-6 mb-6">
         <div class="flex items-start gap-3">
           <div class="p-2 bg-emerald-100 text-emerald-700 rounded-lg shrink-0">
@@ -88,7 +91,13 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
               <?php if (!empty($existingEwbValid)): ?><div><span class="font-sans font-semibold text-emerald-700">Valid Till:</span> <?= $h($existingEwbValid) ?></div><?php endif; ?>
             </div>
             <div class="mt-4 flex flex-wrap gap-3">
-              <a href="<?= $h($backUrl) ?>" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-700 text-white font-semibold text-xs hover:bg-emerald-800 transition">
+              <?php if ($isExport): ?>
+                <a href="<?= $h($exportDocsUrl) ?>" target="_blank" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-600 text-white font-bold text-xs hover:bg-sky-700 shadow-md transition">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                  <span>Generate Export Documents</span>
+                </a>
+              <?php endif; ?>
+              <a href="<?= $h($backUrl) ?>" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-emerald-300 text-emerald-800 font-semibold text-xs hover:bg-emerald-50 transition">
                 <span>Return to Payment Receipt</span>
               </a>
             </div>
@@ -406,6 +415,19 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
           if (submitBtn) {
             submitBtn.style.display = 'none';
           }
+          const exportDocsUrl = 'index.php?page=export_documents&query=' + encodeURIComponent(<?= json_encode(!empty($invoiceData['invoice_number']) ? $invoiceData['invoice_number'] : $orderNumber) ?>);
+          const isExportOrder = <?= json_encode($isExport) ?>;
+          const exportBtnHtml = isExportOrder ? `<a href="${exportDocsUrl}" target="_blank" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-600 text-white font-bold text-xs hover:bg-sky-700 shadow-md transition">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10z"></path></svg>
+            <span>Generate Export Documents</span>
+          </a>` : '';
+
+          const viewInvoiceUrl = <?= json_encode(!empty($invoiceData['id']) ? base_url('?page=invoices&action=view&id=' . (int)$invoiceData['id']) : '') ?>;
+          const printEInvoiceBtnHtml = viewInvoiceUrl ? `<a href="${viewInvoiceUrl}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-700 text-white font-bold text-xs hover:bg-emerald-800 shadow-md transition">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+            <span>Print E-Invoice / View Slip</span>
+          </a>` : '';
+
           resultContainer.className = 'bg-emerald-50 border border-emerald-300 rounded-2xl p-6 mb-6';
           resultContainer.innerHTML = `
             <div class="flex items-start gap-3">
@@ -420,7 +442,9 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
                   <div><span class="font-sans font-semibold text-emerald-700">Valid Till:</span> ${data.ewb_valid_till || 'N/A'}</div>
                 </div>
                 <div class="mt-4 flex flex-wrap gap-3">
-                  <a href="<?= $h($backUrl) ?>" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-700 text-white font-semibold text-xs hover:bg-emerald-800 transition">
+                  ${printEInvoiceBtnHtml}
+                  ${exportBtnHtml}
+                  <a href="<?= $h($backUrl) ?>" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-emerald-300 text-emerald-800 font-semibold text-xs hover:bg-emerald-50 transition">
                     <span>Return to Payment Receipt</span>
                   </a>
                 </div>
