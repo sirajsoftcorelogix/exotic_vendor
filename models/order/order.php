@@ -3332,20 +3332,42 @@ class Order
         ];
     }
 
+    private function nonTerminalOrderStatusWhereSql(): string
+    {
+        return "LOWER(TRIM(COALESCE(status, ''))) NOT IN ('cancelled', 'returned', 'shipped', 'return', 'cancelled_returned')
+                  AND LOWER(TRIM(COALESCE(status, ''))) NOT LIKE 'return%'
+                  AND order_number IS NOT NULL AND TRIM(order_number) != ''";
+    }
+
+    public function countNonTerminalOrdersForStatusSync(): int
+    {
+        $sql = "SELECT COUNT(*) AS total FROM (
+                    SELECT order_number
+                    FROM vp_orders
+                    WHERE " . $this->nonTerminalOrderStatusWhereSql() . "
+                    GROUP BY order_number
+                ) AS pending_orders";
+        $res = $this->db->query($sql);
+        if (!$res) {
+            return 0;
+        }
+        $row = $res->fetch_assoc();
+
+        return (int) ($row['total'] ?? 0);
+    }
+
     /**
      * Get orders whose status is NOT in ('cancelled', 'returned', 'shipped'), ordered by order_date ASC.
      *
-     * @param int $limit Maximum candidate orders to fetch
+     * @param int $limit Maximum candidate orders to fetch. 0 = all (capped).
      * @return array<int, array{order_number: string, order_date: string, min_id: int, statuses: string}>
      */
     public function getNonTerminalOrdersForStatusSync(int $limit = 500): array
     {
-        $limit = max(1, min(10000, $limit));
+        $limit = $limit <= 0 ? 100000 : max(1, min(100000, $limit));
         $sql = "SELECT order_number, MIN(order_date) AS order_date, MIN(id) AS min_id, GROUP_CONCAT(DISTINCT status) AS statuses
                 FROM vp_orders
-                WHERE LOWER(TRIM(COALESCE(status, ''))) NOT IN ('cancelled', 'returned', 'shipped', 'return', 'cancelled_returned')
-                  AND LOWER(TRIM(COALESCE(status, ''))) NOT LIKE 'return%'
-                  AND order_number IS NOT NULL AND TRIM(order_number) != ''
+                WHERE " . $this->nonTerminalOrderStatusWhereSql() . "
                 GROUP BY order_number
                 ORDER BY MIN(order_date) ASC, MIN(id) ASC
                 LIMIT ?";

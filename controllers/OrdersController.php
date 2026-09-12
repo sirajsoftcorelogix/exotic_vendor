@@ -680,7 +680,7 @@ class OrdersController
     }
 
     /**
-     * AJAX action: Fetch and update non-terminal order statuses from Exotic India Vendor API.
+     * AJAX action: count / queue / sync one batch of non-terminal order statuses.
      */
     public function syncOrderStatusAjax(): void
     {
@@ -695,17 +695,82 @@ class OrdersController
             $input = array_merge($_GET, $_POST);
         }
 
-        $dryRun = isset($input['dry_run']) ? (bool)$input['dry_run'] : false;
-        $limit = isset($input['limit']) ? max(1, min(5000, (int)$input['limit'])) : 500;
-        $batchSize = isset($input['batch_size']) ? max(1, min(200, (int)$input['batch_size'])) : 50;
-        $specificOrdersRaw = trim((string)($input['order_id'] ?? $input['orderid'] ?? $input['order'] ?? ''));
+        $op = trim((string)($input['op'] ?? 'run'));
+        $userId = (int)($_SESSION['user']['id'] ?? 0);
 
-        $orderNumbers = [];
-        if ($specificOrdersRaw !== '') {
-            $orderNumbers = array_filter(array_map('trim', explode(',', $specificOrdersRaw)));
+        $parseIds = static function ($raw): array {
+            if (is_array($raw)) {
+                $parts = $raw;
+            } else {
+                $parts = preg_split('/[\s,]+/', (string)$raw) ?: [];
+            }
+            $out = [];
+            foreach ($parts as $part) {
+                $part = trim((string)$part);
+                if ($part !== '') {
+                    $out[] = $part;
+                }
+            }
+            return array_values(array_unique($out));
+        };
+
+        if ($op === 'count') {
+            echo json_encode([
+                'success' => true,
+                'total' => $ordersModel->countNonTerminalOrdersForStatusSync(),
+            ]);
+            exit;
+        }
+
+        if ($op === 'candidates') {
+            $mode = trim((string)($input['mode'] ?? 'partial'));
+            $specific = $parseIds($input['order_id'] ?? $input['orderid'] ?? $input['order'] ?? $input['order_numbers'] ?? []);
+            $limit = isset($input['limit']) ? max(1, min(100000, (int)$input['limit'])) : 250;
+            if ($mode === 'specific' || $specific !== []) {
+                $orderNumbers = $specific;
+                $oldest = null;
+            } else {
+                $rows = $ordersModel->getNonTerminalOrdersForStatusSync($mode === 'all' ? 0 : $limit);
+                $orderNumbers = [];
+                foreach ($rows as $row) {
+                    $orderNumbers[] = (string)$row['order_number'];
+                }
+                $oldest = $rows[0]['order_date'] ?? null;
+            }
+            echo json_encode([
+                'success' => true,
+                'mode' => $mode,
+                'total' => count($orderNumbers),
+                'oldest_order_date' => $oldest,
+                'pending_total' => $ordersModel->countNonTerminalOrdersForStatusSync(),
+                'order_numbers' => $orderNumbers,
+            ]);
+            exit;
+        }
+
+        if ($op === 'sync_batch') {
+            $orderNumbers = $parseIds($input['order_numbers'] ?? $input['order_id'] ?? []);
+            $dryRun = !empty($input['dry_run']);
+            echo json_encode([
+                'success' => true,
+                'dry_run' => $dryRun,
+                'summary' => $ordersModel->syncOrderStatusFromVendorApiBatch($orderNumbers, $dryRun, $userId),
+            ]);
+            exit;
+        }
+
+        $dryRun = !empty($input['dry_run']);
+        $limit = isset($input['limit']) ? max(1, min(100000, (int)$input['limit'])) : 500;
+        $batchSize = isset($input['batch_size']) ? max(1, min(200, (int)$input['batch_size'])) : 50;
+        $specificOrders = $parseIds($input['order_id'] ?? $input['orderid'] ?? $input['order'] ?? '');
+        $mode = trim((string)($input['mode'] ?? ($specificOrders !== [] ? 'specific' : 'partial')));
+
+        if ($specificOrders !== [] || $mode === 'specific') {
+            $orderNumbers = $specificOrders;
         } else {
-            $candidates = $ordersModel->getNonTerminalOrdersForStatusSync($limit);
-            foreach ($candidates as $cand) {
+            $rows = $ordersModel->getNonTerminalOrdersForStatusSync($mode === 'all' ? 0 : $limit);
+            $orderNumbers = [];
+            foreach ($rows as $cand) {
                 $orderNumbers[] = $cand['order_number'];
             }
         }
@@ -726,9 +791,7 @@ class OrdersController
             exit;
         }
 
-        $userId = (int)($_SESSION['user']['id'] ?? 0);
         $chunks = array_chunk($orderNumbers, $batchSize);
-
         $totalChecked = 0;
         $totalUpdated = 0;
         $totalUnchanged = 0;

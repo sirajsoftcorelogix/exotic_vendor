@@ -1079,7 +1079,10 @@ class InvoicesController
 
         $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
         $firm = app_setting_firm_details();
-
+        //port_code details
+        $portCode = $internationalData['port_code'] ?? '';
+        //get details from shipping_port_master
+        $shippingPortDetails = $commanModel->getRecordByField('shipping_port_master', 'port_code', $portCode);
         if (!$customer || !$firm) {
             return [
                 'status' => false,
@@ -1115,11 +1118,11 @@ class InvoicesController
                 'Stcd' => trim((string) ($firm['state_code'] ?? '')),
             ],
             "ExpShipDtls" => [
-                "Addr1" => $shippingAddress !== '' ? $shippingAddress : $buyerAddress,                
-                "Loc" => trim((string) ($customer['shipping_city'] ?? $customer['city'] ?? '')),
-                //"Pin" => explode('-', $zip)[0] ?? '',
+                "Addr1" => $shippingPortDetails['port_name'] ?? 'Port Name',                
+                "Loc" => $shippingPortDetails['city'] ?? 'City',
+                "Pin" => $shippingPortDetails['pincode'] ?? 110020,
                 //"Stcd"=> trim((string) ($customer['shipping_state_code'] ?? $customer['state_code'] ?? ''))
-                "Pin" => 110025,
+                //"Pin" => 110020,
                 "Stcd"=> '07'
             ],            
         ];
