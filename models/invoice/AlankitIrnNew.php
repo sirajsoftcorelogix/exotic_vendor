@@ -360,11 +360,12 @@ return base64_encode($encryptedData);
 
         $formatStcd = static function($val, string $fallback = '96'): string {
             $raw = trim((string)$val);
-            if ($raw === '' || $raw === '0') {
+            if ($raw === '' || $raw === '0' || $raw === '00') {
                 return $fallback;
             }
             if (is_numeric($raw)) {
-                return sprintf('%02d', (int)$raw);
+                $num = (int)$raw;
+                return $num > 0 ? sprintf('%02d', $num) : $fallback;
             }
             if (strlen($raw) <= 2) {
                 return strtoupper($raw);
@@ -430,7 +431,14 @@ return base64_encode($encryptedData);
             }
         }
 
-        $sellerStcd = $formatStcd($invoice['seller_state_code'] ?? '', '07');
+        $sellerGstin = trim((string)($invoice['seller_gstin'] ?? ''));
+        $sellerStcd = '';
+        if (strlen($sellerGstin) >= 2 && ctype_digit(substr($sellerGstin, 0, 2)) && (int)substr($sellerGstin, 0, 2) > 0) {
+            $sellerStcd = sprintf('%02d', (int)substr($sellerGstin, 0, 2));
+        } else {
+            $sellerStcd = $formatStcd($invoice['seller_state_code'] ?? '', '07');
+        }
+
         $buyerStcd = $formatStcd($invoice['buyer_state_code'] ?? '', $isExport ? '96' : '07');
         $shipStcd = $formatStcd($invoice['shipping_state_code'] ?? $invoice['shipping_state'] ?? '', $buyerStcd);
 

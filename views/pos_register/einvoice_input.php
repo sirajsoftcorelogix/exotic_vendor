@@ -169,6 +169,19 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         
         <!-- Seller -->
+        <?php
+        $uiSellerGstin = trim((string)($firmData['gst'] ?? $firmData['gstin'] ?? '07AADCE1400C1ZJ'));
+        if ($uiSellerGstin === '') {
+            $uiSellerGstin = '07AADCE1400C1ZJ';
+        }
+        $uiSellerStateCode = '';
+        if (strlen($uiSellerGstin) >= 2 && ctype_digit(substr($uiSellerGstin, 0, 2)) && (int)substr($uiSellerGstin, 0, 2) > 0) {
+            $uiSellerStateCode = sprintf('%02d', (int)substr($uiSellerGstin, 0, 2));
+        } else {
+            $rawSt = (int)($firmData['state_code'] ?? 7);
+            $uiSellerStateCode = sprintf('%02d', $rawSt > 0 ? $rawSt : 7);
+        }
+        ?>
         <div class="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm">
           <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 mb-4 pb-2 border-b border-slate-200 flex items-center gap-2">
             <span class="w-2 h-2 rounded-full bg-slate-500"></span>
@@ -177,7 +190,7 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
           <div class="space-y-3 text-xs">
             <div>
               <label class="block font-semibold text-slate-700 mb-1">Seller GSTIN</label>
-              <input type="text" name="seller_gstin" value="<?= $h($firmData['gst'] ?? '07AADCE1400C1ZJ') ?>" readonly class="w-full h-9 rounded-lg border border-slate-200 px-3 font-mono font-semibold bg-slate-100/70 text-slate-700 cursor-not-allowed" />
+              <input type="text" name="seller_gstin" value="<?= $h($uiSellerGstin) ?>" readonly class="w-full h-9 rounded-lg border border-slate-200 px-3 font-mono font-semibold bg-slate-100/70 text-slate-700 cursor-not-allowed" />
             </div>
             <div>
               <label class="block font-semibold text-slate-700 mb-1">Legal / Trade Name</label>
@@ -190,7 +203,7 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
               </div>
               <div>
                 <label class="block font-semibold text-slate-700 mb-1">State Code (Stcd)</label>
-                <input type="text" name="seller_state_code" value="<?= $h(!empty($firmData['state_code']) ? sprintf('%02d', (int)$firmData['state_code']) : '07') ?>" readonly class="w-full h-9 rounded-lg border border-slate-200 px-3 font-mono bg-slate-100/70 text-slate-700 cursor-not-allowed" />
+                <input type="text" name="seller_state_code" value="<?= $h($uiSellerStateCode) ?>" readonly class="w-full h-9 rounded-lg border border-slate-200 px-3 font-mono bg-slate-100/70 text-slate-700 cursor-not-allowed" />
               </div>
             </div>
             <div>
