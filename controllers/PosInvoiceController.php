@@ -548,6 +548,8 @@ class PosInvoiceController
         $tracking = $this->fetchEwbIrnTrackingByInvoiceId((int) ($invoice['id'] ?? 0));
         $invoiceId = (int) ($invoice['id'] ?? 0);
 
+        $ewayTransporters = (new CourierPartner($conn))->getEwayTransporters();
+
         renderTemplate('views/pos_register/ewaybill_input.php', [
             'order_info' => $runtime['order_info'] ?? [],
             'invoice' => $invoice,
@@ -555,6 +557,7 @@ class PosInvoiceController
             'existing_record' => $tracking ?? [],
             'eligibility' => $elig,
             'order_number' => $orderNumber,
+            'eway_transporters' => $ewayTransporters,
             'submit_url' => $this->resolveEwaybillSubmitUrl($invoiceId, $orderNumber),
             'back_url' => $this->resolveBackUrl($orderNumber),
         ], 'Generate E-Way bill');

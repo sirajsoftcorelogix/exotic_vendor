@@ -1580,6 +1580,9 @@ class InvoicesController
             'grand_total' => (float)($invoice['total_amount'] ?? 0),
         ];
 
+        global $conn;
+        $ewayTransporters = (new CourierPartner($conn))->getEwayTransporters();
+
         renderTemplate('views/pos_register/ewaybill_input.php', [
             'order_info' => $orderInfo,
             'invoice' => $invoice,
@@ -1587,6 +1590,7 @@ class InvoicesController
             'existing_record' => $intlData,
             'eligibility' => $elig,
             'order_number' => $orderNumber,
+            'eway_transporters' => $ewayTransporters,
             'submit_url' => base_url('?page=invoices&action=ewaybill-submit&id=' . $invoiceId),
             'back_url' => base_url('?page=invoices&action=view&id=' . $invoiceId),
         ], 'Generate E-Way bill');
