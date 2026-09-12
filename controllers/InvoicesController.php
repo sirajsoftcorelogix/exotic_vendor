@@ -41,42 +41,134 @@ class InvoicesController
         renderTemplate('views/invoices/index.php', $data, 'Invoices');
     }
 
+    public function cancelCreate()
+    {
+        is_login();
+        if (isset($_SESSION['invoice_items'])) {
+            unset($_SESSION['invoice_items']);
+        }
+        if (isset($_SESSION['invoice_pos_flag'])) {
+            unset($_SESSION['invoice_pos_flag']);
+        }
+        if (isset($_SESSION['pos_checkout_invoice_snapshot'])) {
+            unset($_SESSION['pos_checkout_invoice_snapshot']);
+        }
+
+        $redirect = base_url('?page=orders&action=list');
+        header('Location: ' . $redirect);
+        exit;
+    }
+
     public function create()
     {
         is_login();
         global $ordersModel, $usersModel, $commanModel, $conn;
 
-        $itemIds = isset($_POST['poitem']) ? $_POST['poitem'] : [];
-        $posFlag = isset($_POST['pos_flag']) ? (int)$_POST['pos_flag'] : 0;
-        if ($posFlag === 0 && !empty($_SESSION['invoice_pos_flag'])) {
-            $posFlag = 1;
+        $rawPoitem = $_POST['poitem'] ?? $_GET['poitem'] ?? null;
+        $rawOrderNumber = $_POST['order_number'] ?? $_GET['order_number'] ?? null;
+        $rawOrderId = $_POST['order_id'] ?? $_GET['order_id'] ?? null;
+
+        $hasExplicitInput = ($rawPoitem !== null && $rawPoitem !== '' && $rawPoitem !== [])
+            || ($rawOrderNumber !== null && trim((string)(is_array($rawOrderNumber) ? ($rawOrderNumber[0] ?? '') : $rawOrderNumber)) !== '')
+            || ($rawOrderId !== null && trim((string)(is_array($rawOrderId) ? ($rawOrderId[0] ?? '') : $rawOrderId)) !== '');
+
+        $itemIds = [];
+
+        if ($rawPoitem !== null && $rawPoitem !== '' && $rawPoitem !== []) {
+            if (is_array($rawPoitem)) {
+                foreach ($rawPoitem as $val) {
+                    $id = (int)$val;
+                    if ($id > 0) {
+                        $itemIds[] = $id;
+                    }
+                }
+            } else {
+                $parts = explode(',', (string)$rawPoitem);
+                foreach ($parts as $val) {
+                    $id = (int)trim($val);
+                    if ($id > 0) {
+                        $itemIds[] = $id;
+                    }
+                }
+            }
         }
-        if (empty($itemIds) && $posFlag === 1) {
-            $orderNumber = trim((string)($_POST['order_number'] ?? $_GET['order_number'] ?? ''));
-            if ($orderNumber !== '') {
-                $lines = $ordersModel->getOrderByOrderNumber($orderNumber);
-                if (is_array($lines)) {
-                    foreach ($lines as $line) {
-                        $id = (int)($line['id'] ?? 0);
-                        if ($id > 0) {
-                            $itemIds[] = $id;
+
+        if (empty($itemIds) && $rawOrderNumber !== null) {
+            $orderNumbers = is_array($rawOrderNumber) ? $rawOrderNumber : [$rawOrderNumber];
+            foreach ($orderNumbers as $onum) {
+                $onumStr = trim((string)$onum);
+                if ($onumStr !== '') {
+                    $lines = $ordersModel->getOrderByOrderNumber($onumStr);
+                    if (is_array($lines)) {
+                        foreach ($lines as $line) {
+                            $id = (int)($line['id'] ?? 0);
+                            if ($id > 0 && !in_array($id, $itemIds, true)) {
+                                $itemIds[] = $id;
+                            }
                         }
                     }
                 }
             }
         }
-        //print_r($itemIds);
+
+        if (empty($itemIds) && $rawOrderId !== null) {
+            $orderIds = is_array($rawOrderId) ? $rawOrderId : [$rawOrderId];
+            foreach ($orderIds as $oid) {
+                $oidVal = trim((string)$oid);
+                if ($oidVal !== '') {
+                    if (is_numeric($oidVal)) {
+                        $orderRow = $ordersModel->getOrderById((int)$oidVal);
+                        if (is_array($orderRow)) {
+                            $id = (int)($orderRow['id'] ?? 0);
+                            if ($id > 0 && !in_array($id, $itemIds, true)) {
+                                $itemIds[] = $id;
+                            }
+                            $orderNo = trim((string)($orderRow['order_number'] ?? ''));
+                            if ($orderNo !== '') {
+                                $lines = $ordersModel->getOrderByOrderNumber($orderNo);
+                                if (is_array($lines)) {
+                                    foreach ($lines as $line) {
+                                        $lid = (int)($line['id'] ?? 0);
+                                        if ($lid > 0 && !in_array($lid, $itemIds, true)) {
+                                            $itemIds[] = $lid;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        $lines = $ordersModel->getOrderByOrderNumber($oidVal);
+                        if (is_array($lines)) {
+                            foreach ($lines as $line) {
+                                $id = (int)($line['id'] ?? 0);
+                                if ($id > 0 && !in_array($id, $itemIds, true)) {
+                                    $itemIds[] = $id;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if (empty($itemIds)) {
-            if (isset($_SESSION['invoice_items']) && !empty($_SESSION['invoice_items'])) {
+            if (!$hasExplicitInput && isset($_SESSION['invoice_items']) && !empty($_SESSION['invoice_items']) && is_array($_SESSION['invoice_items'])) {
                 $itemIds = $_SESSION['invoice_items'];
             } else {
+                unset($_SESSION['invoice_items']);
+                unset($_SESSION['invoice_pos_flag']);
                 renderTemplate('views/errors/not_found.php', ['message' => 'No items selected for Invoice.'], 'No items selected');
                 exit;
             }
         }
 
+        $posFlag = isset($_POST['pos_flag']) ? (int)$_POST['pos_flag'] : (isset($_GET['pos_flag']) ? (int)$_GET['pos_flag'] : 0);
+        if ($posFlag === 0 && !empty($_SESSION['invoice_pos_flag'])) {
+            $posFlag = 1;
+        }
+
         if (!empty($itemIds)) {
-            $_SESSION['invoice_items'] = $itemIds;
+            $_SESSION['invoice_items'] = array_values(array_unique($itemIds));
         }
         if (!empty($_SESSION['invoice_pos_flag'])) {
             unset($_SESSION['invoice_pos_flag']);
@@ -86,10 +178,15 @@ class InvoicesController
         $data = [];
         foreach ($itemIds as $id) {
             $order = $ordersModel->getOrderById($id);
-            //print_r($order);
             if ($order) {
                 $data['data'][] = $order;
             }
+        }
+
+        if (empty($data['data'])) {
+            unset($_SESSION['invoice_items']);
+            renderTemplate('views/errors/not_found.php', ['message' => 'No valid order items found for Invoice.'], 'No items selected');
+            exit;
         }
         //customer info
         $orderNumber = [];

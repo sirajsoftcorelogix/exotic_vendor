@@ -716,6 +716,9 @@ switch ($page) {
             case 'create_post':
                 $controller->createPost();
                 break;
+            case 'cancel_create':
+                $controller->cancelCreate();
+                break;
             case 'view':
                 $controller->view();
                 break;
