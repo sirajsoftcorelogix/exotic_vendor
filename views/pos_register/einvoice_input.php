@@ -241,7 +241,12 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
             </div>
             <div>
               <label class="block font-semibold text-slate-700 mb-1">Address Line 1</label>
-              <input type="text" name="buyer_address" value="<?= $h(trim(($orderInfo['address_line1'] ?? '') . ' ' . ($orderInfo['address_line2'] ?? ''))) ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
+              <?php
+              $billingAddr = trim(($orderInfo['address_line1'] ?? '') . ' ' . ($orderInfo['address_line2'] ?? ''));
+              $shippingAddr = trim(($orderInfo['shipping_address_line1'] ?? '') . ' ' . ($orderInfo['shipping_address_line2'] ?? ''));
+              $buyerAddrVal = $billingAddr !== '' ? $billingAddr : ($shippingAddr !== '' ? $shippingAddr : ($isExport ? 'Export Address' : 'Delhi Address'));
+              ?>
+              <input type="text" name="buyer_address" value="<?= $h($buyerAddrVal) ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
             </div>
           </div>
         </div>
