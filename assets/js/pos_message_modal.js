@@ -71,7 +71,7 @@
       '" class="text-base font-bold text-slate-900 dark:text-white">Notice</h2>' +
       '<div id="' +
       BODY_ID +
-      '" class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300 whitespace-pre-line"></div>' +
+      '" class="mt-2 max-h-[60vh] overflow-y-auto text-sm leading-relaxed text-slate-600 dark:text-slate-300 whitespace-pre-line break-words"></div>' +
       '</div></div>' +
       '<div class="mt-6 flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-700">' +
       '<button type="button" id="' +
